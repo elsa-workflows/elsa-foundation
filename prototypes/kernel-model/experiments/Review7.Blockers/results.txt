@@ -1,0 +1,739 @@
+Review7.Blockers results
+commit 1274bb4e425688b8f43a7f91ed6ad7ce6672ff45 (tree e409f1388e0cae0a4e491a954bd926a97aa0255d, prototype tree a44c098cbb28cc204f96cda77284aa3bf0d4edcc)
+branch base (merge-base with origin/main) cfce7a2c101df16e3ff005169e2fb5fc8de8bdbb
+dotnet SDK 10.0.402, macOS 27.0.1, run 2026-11-18
+
+commands, from prototypes/kernel-model, after removing experiments/Review7.Blockers/bin and obj:
+  experiments/Review7.Blockers/run.sh -> exit 0, which runs:
+    dotnet restore experiments/Review7.Blockers --locked-mode          -> exit 0
+    dotnet build experiments/Review7.Blockers -c Release --no-restore  -> Build succeeded, 0 Warning(s), 0 Error(s)
+    each case and rule set, then --all                                -> exit codes below; 28/28 runs as expected (failed assertion ids compared)
+  dotnet experiments/Review7.Blockers/bin/Release/net10.0/Kernel.Review7.Blockers.dll --all, twice
+    -> exit 0 and 0, byte-identical output (SHA-256 aede014c5355628cf73d315fa610697f9f22874fddb860f445c24025c1b0c225), below
+
+run.sh exit codes (0 = every assertion held, 1 = an assertion failed):
+  exit 1 (nt2-handles, reviewed)
+  exit 0 (nt2-handles, repaired)
+  exit 1 (nt2-handles, negative)
+  exit 1 (nt2-at-bound, reviewed)
+  exit 0 (nt2-at-bound, repaired)
+  exit 1 (nt2-at-bound, negative)
+  exit 1 (nt2-thendelete-protected, reviewed)
+  exit 0 (nt2-thendelete-protected, repaired)
+  exit 1 (nt2-thendelete-protected, negative)
+  exit 0 (nt2-no-handles, reviewed)
+  exit 0 (nt2-no-handles, repaired)
+  exit 0 (nt2-no-handles, negative)
+  exit 1 (mx1-ticket-first, reviewed)
+  exit 0 (mx1-ticket-first, repaired)
+  exit 1 (mx1-ticket-first, negative)
+  exit 1 (mx1-ticket-first, refusal-without-prefix)
+  exit 1 (mx1-outside-first, reviewed)
+  exit 0 (mx1-outside-first, repaired)
+  exit 1 (mx1-outside-first, negative)
+  exit 1 (mx1-outside-first, refusal-without-prefix)
+  exit 1 (mx1-owner-change, reviewed)
+  exit 0 (mx1-owner-change, repaired)
+  exit 1 (mx1-owner-change, negative)
+  exit 1 (mx1-owner-change, refusal-without-prefix)
+  exit 0 (mx1-distinct, reviewed)
+  exit 0 (mx1-distinct, repaired)
+  exit 0 (mx1-distinct, negative)
+  exit 0 (mx1-distinct, refusal-without-prefix)
+
+--all output:
+== NT-2/handles | rules=reviewed ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
+  P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
+  P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
+  the grown state: 16,416,460 bytes (the reviewer's figure, the largest state the sixth round's formula admits with one child: cap - reserve - one child - 24,500); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,443,865 bytes (16,416,460 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,863): landed
+  deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
+    TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,729 > 16,457,728 (margin -27,001)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,468,327 bytes (16,440,960 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,599): not landed: StoreException (Definite): the row of 1/p was refused
+    the definite refusal fails the turn, which parks (WorkflowInstance.Park)
+    Park: P Running -> Faulted, state kept (16,416,460 bytes), 1,500 creator handles kept, registry [g2/child/1.1.1@1] kept, sends [child-finished c3_1/p_1#6.end to 0/q]; the row measures 16,443,896: landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,468,327 bytes, for P at revision 5 (Running, state 16,416,460 bytes, 1,500 handles)
+  counted terminates to G stored by a landed commit: []
+    P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
+  P ends Faulted; its state 16,416,460 bytes, 1,500 creator handles
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    FAIL [growth-parked] P's growth turn parked: the stored row after it is Running with its pre-growth state (140 bytes): False
+    FAIL [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,468,327 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x1, InMemoryStore.AddAsync x5, InMemoryStore.CommitAsync x6, Worker.TakeAsync x4, WorkflowInstance.Command x7, WorkflowInstance.Park x1, WorkflowInstance.TurnAsync x3
+RESULT NT-2/handles rules=reviewed: FAIL
+
+== NT-2/handles | rules=repaired ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 1: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 9,001 + reserve 16,384 = 25,909 <= 16,457,728 (margin 16,431,819)
+    the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
+  P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 2: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 18,001 + reserve 16,384 = 34,909 <= 16,457,728 (margin 16,422,819)
+    the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
+  P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 3: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 43,909 <= 16,457,728 (margin 16,413,819)
+    the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
+  the grown state: 16,416,460 bytes (the reviewer's figure, the largest state the sixth round's formula admits with one child: cap - reserve - one child - 24,500); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the full projection): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,729 > 16,457,728 (margin -27,001)
+    refused before the store as a definite error (over the envelope); the turn fails and parks (WorkflowInstance.Park)
+    Park: P Running -> Faulted, state kept (140 bytes), 1,500 creator handles kept, registry [g2/child/1.1.1@1] kept, sends [child-finished c3_1/p_1#5.end to 0/q]; the row measures 27,577: landed
+  deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Faulted -> Faulted, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1]; 1,500 creator handles kept (27,001 bytes)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 43,909 <= 16,457,728 (margin 16,413,819)
+  P's ending commit: the row ends Faulted, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 27,539 bytes (140 state, 27,001 CustomHandles, 0 registries, 398 other fields) <= 16,457,728 (margin 16,430,189): landed
+  deliver c3_1/p_1#6.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 27,539 bytes, for P at revision 5 (Faulted, state 140 bytes, 1,500 handles)
+  counted terminates to G stored by a landed commit: [c3_1/p_1#6.0000 (seq 1507)]
+    P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
+  P ends Faulted; its state 140 bytes, 1,500 creator handles
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    PASS [growth-parked] P's growth turn parked: the stored row after it is Faulted with its pre-growth state (140 bytes): True
+    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 27,539 <= 16,457,728: True
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 0 before, 0 kept, 0 closed
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x1, InMemoryStore.AddAsync x5, InMemoryStore.CommitAsync x6, Worker.TakeAsync x4, WorkflowInstance.Command x8, WorkflowInstance.Park x1, WorkflowInstance.TurnAsync x3
+RESULT NT-2/handles rules=repaired: PASS
+
+== NT-2/handles | rules=negative ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
+  P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
+  P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
+  the grown state: 16,416,460 bytes (the reviewer's figure, the largest state the sixth round's formula admits with one child: cap - reserve - one child - 24,500); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,443,865 bytes (16,416,460 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,863): landed
+  deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
+    TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,729 > 16,457,728 (margin -27,001)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,468,327 bytes (16,440,960 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,599): not landed: StoreException (Definite): the row of 1/p was refused
+    the definite refusal fails the turn, which parks (WorkflowInstance.Park)
+    Park: P Running -> Faulted, state kept (16,416,460 bytes), 1,500 creator handles kept, registry [g2/child/1.1.1@1] kept, sends [child-finished c3_1/p_1#6.end to 0/q]; the row measures 16,443,896: landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,468,327 bytes, for P at revision 5 (Running, state 16,416,460 bytes, 1,500 handles)
+  counted terminates to G stored by a landed commit: []
+    P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
+  P ends Faulted; its state 16,416,460 bytes, 1,500 creator handles
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    FAIL [growth-parked] P's growth turn parked: the stored row after it is Running with its pre-growth state (140 bytes): False
+    FAIL [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,468,327 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x1, InMemoryStore.AddAsync x5, InMemoryStore.CommitAsync x6, Worker.TakeAsync x4, WorkflowInstance.Command x7, WorkflowInstance.Park x1, WorkflowInstance.TurnAsync x3
+RESULT NT-2/handles rules=negative: FAIL
+
+== NT-2/at-bound | rules=reviewed ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
+  P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
+  P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
+  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,443,865 bytes (16,416,460 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,863): landed
+  deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
+    TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,729 > 16,457,728 (margin -27,001)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,468,327 bytes (16,440,960 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,599): not landed: StoreException (Definite): the row of 1/p was refused
+    the definite refusal fails the turn, which parks (WorkflowInstance.Park)
+    Park: P Running -> Faulted, state kept (16,416,460 bytes), 1,500 creator handles kept, registry [g2/child/1.1.1@1] kept, sends [child-finished c3_1/p_1#6.end to 0/q]; the row measures 16,443,896: landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,468,327 bytes, for P at revision 5 (Running, state 16,416,460 bytes, 1,500 handles)
+  counted terminates to G stored by a landed commit: []
+    P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    FAIL [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,468,327 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+    FAIL [p-cancelled] P ended Cancelled: Faulted
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x1, InMemoryStore.AddAsync x5, InMemoryStore.CommitAsync x6, Worker.TakeAsync x4, WorkflowInstance.Command x7, WorkflowInstance.Park x1, WorkflowInstance.TurnAsync x3
+RESULT NT-2/at-bound rules=reviewed: FAIL
+
+== NT-2/at-bound | rules=repaired ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 1: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 9,001 + reserve 16,384 = 25,909 <= 16,457,728 (margin 16,431,819)
+    the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
+  P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 2: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 18,001 + reserve 16,384 = 34,909 <= 16,457,728 (margin 16,422,819)
+    the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
+  P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 3: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 43,909 <= 16,457,728 (margin 16,413,819)
+    the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
+  the grown state: 16,389,459 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 27,001 CustomHandles counted); 3,500 open inboxes, 30,435 variables
+  P's growth turn: admission check of a live row (proposed, the full projection): state 16,389,459 + TerminalGrowth 24,500 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,416,864 bytes (16,389,459 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,864): landed
+  deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
+    TerminateMetadata grew P's state by 24,500 bytes (16,389,459 -> 16,413,959)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,413,959 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,441,326 bytes (16,413,959 state, 27,001 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,402): landed
+  deliver c3_1/p_1#6.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,326 bytes, for P at revision 5 (Running, state 16,389,459 bytes, 1,500 handles)
+  counted terminates to G stored by a landed commit: [c3_1/p_1#6.0000 (seq 1506)]
+    P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,326 <= 16,457,728: True
+    PASS [at-cap] the growth commit was admitted with a projected total of exactly 16,457,728 ([16,457,728]), the ending row projects to 16,457,728, and the ending commit landed with a measured row of 16,441,326 (margin 16,402)
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 3,500 closed
+    PASS [p-cancelled] P ended Cancelled: Cancelled
+  real prototype calls: ChildRegistry.Read x5, ChildRegistry.Write x1, InMemoryStore.AddAsync x5, InMemoryStore.CommitAsync x6, Worker.TakeAsync x4, WorkflowInstance.Command x8, WorkflowInstance.TurnAsync x3
+RESULT NT-2/at-bound rules=repaired: PASS
+
+== NT-2/at-bound | rules=negative ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
+  P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
+  P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
+  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,443,865 bytes (16,416,460 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,863): landed
+  deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
+    TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,729 > 16,457,728 (margin -27,001)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,468,327 bytes (16,440,960 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,599): not landed: StoreException (Definite): the row of 1/p was refused
+    the definite refusal fails the turn, which parks (WorkflowInstance.Park)
+    Park: P Running -> Faulted, state kept (16,416,460 bytes), 1,500 creator handles kept, registry [g2/child/1.1.1@1] kept, sends [child-finished c3_1/p_1#6.end to 0/q]; the row measures 16,443,896: landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,468,327 bytes, for P at revision 5 (Running, state 16,416,460 bytes, 1,500 handles)
+  counted terminates to G stored by a landed commit: []
+    P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    FAIL [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,468,327 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+    FAIL [p-cancelled] P ended Cancelled: Faulted
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x1, InMemoryStore.AddAsync x5, InMemoryStore.CommitAsync x6, Worker.TakeAsync x4, WorkflowInstance.Command x7, WorkflowInstance.Park x1, WorkflowInstance.TurnAsync x3
+RESULT NT-2/at-bound rules=negative: FAIL
+
+== NT-2/thendelete-protected | rules=reviewed ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
+  P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
+  P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
+  the grown state: 16,416,437 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,523 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,437 + TerminalGrowth 24,523 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,443,842 bytes (16,416,437 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,886): landed
+  deliver term-1 (operator's terminate with ThenDelete) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
+    TerminateMetadata grew P's state by 24,475 bytes (16,416,437 -> 16,440,912)
+    ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,912 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,681 > 16,457,728 (margin -26,953)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,468,279 bytes (16,440,912 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,551): not landed: StoreException (Definite): the row of 1/p was refused
+    the definite refusal fails the turn, which parks (WorkflowInstance.Park)
+    Park: P Running -> Faulted, state kept (16,416,437 bytes), 1,500 creator handles kept, registry [g2/child/1.1.1@1] kept, sends [child-finished c3_1/p_1#6.end to 0/q]; the row measures 16,443,873: landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,468,279 bytes, for P at revision 5 (Running, state 16,416,437 bytes, 1,500 handles)
+  counted terminates to G stored by a landed commit: []
+    P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    FAIL [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,468,279 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+    FAIL [p-cancelled] P ended Cancelled and kept: Faulted
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x1, DurableTurn x1, InMemoryStore.AddAsync x5, InMemoryStore.CommitAsync x6, NativeModel.ProtectsDeletion x1, Worker.TakeAsync x4, WorkflowInstance.Command x7, WorkflowInstance.Park x1, WorkflowInstance.TurnAsync x3
+RESULT NT-2/thendelete-protected rules=reviewed: FAIL
+
+== NT-2/thendelete-protected | rules=repaired ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 1: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 9,001 + reserve 16,384 = 25,909 <= 16,457,728 (margin 16,431,819)
+    the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
+  P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 2: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 18,001 + reserve 16,384 = 34,909 <= 16,457,728 (margin 16,422,819)
+    the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
+  P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 3: admission check of a live row (proposed, the full projection): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 43,909 <= 16,457,728 (margin 16,413,819)
+    the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
+  the grown state: 16,389,436 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,523 TerminalGrowth - 27,001 CustomHandles counted); 3,500 open inboxes, 30,435 variables
+  P's growth turn: admission check of a live row (proposed, the full projection): state 16,389,436 + TerminalGrowth 24,523 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,416,841 bytes (16,389,436 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,887): landed
+  deliver term-1 (operator's terminate with ThenDelete) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
+    TerminateMetadata grew P's state by 24,475 bytes (16,389,436 -> 16,413,911)
+    ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,413,911 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,457,680 <= 16,457,728 (margin 48)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,441,278 bytes (16,413,911 state, 27,001 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,450): landed
+  deliver c3_1/p_1#6.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,278 bytes, for P at revision 5 (Running, state 16,389,436 bytes, 1,500 handles)
+  counted terminates to G stored by a landed commit: [c3_1/p_1#6.0000 (seq 1506)]
+    P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,278 <= 16,457,728: True
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 3,500 closed
+    PASS [p-cancelled] P ended Cancelled and kept: Cancelled
+  real prototype calls: ChildRegistry.Read x5, ChildRegistry.Write x1, DurableTurn x1, InMemoryStore.AddAsync x5, InMemoryStore.CommitAsync x6, NativeModel.ProtectsDeletion x1, Worker.TakeAsync x4, WorkflowInstance.Command x8, WorkflowInstance.TurnAsync x3
+RESULT NT-2/thendelete-protected rules=repaired: PASS
+
+== NT-2/thendelete-protected | rules=negative ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  P's spawn turn 1 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 500 creator handles (9,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 1: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 9,545 bytes (140 state, 9,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,448,183): landed
+  P's spawn turn 2 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,000 creator handles (18,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 2: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 18,545 bytes (140 state, 18,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,439,183): landed
+  P's spawn turn 3 (the real Turn.Start with detached: true, 500 times): 500 start sends to 4 partitions; the sealed row holds 1,500 creator handles (27,001 bytes) and registry [g2/child/1.1.1@1]
+  P's spawn turn 3: admission check of a live row (proposed, the sixth round's formula): state 140 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,908 <= 16,457,728 (margin 16,440,820)
+    the store's row cap (proposed, the Refuses hook): the row measures 27,545 bytes (140 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 16,430,183): landed
+  the grown state: 16,416,437 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,523 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,437 + TerminalGrowth 24,523 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,443,842 bytes (16,416,437 state, 27,001 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 13,886): landed
+  deliver term-1 (operator's terminate with ThenDelete) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#6.0000 to g2/child/1.1.1, child-finished c3_1/p_1#6.end to 0/q]; 1,500 creator handles kept (27,001 bytes)
+    TerminateMetadata grew P's state by 24,475 bytes (16,416,437 -> 16,440,912)
+    ThenDelete: NativeModel.ProtectsDeletion on the terminated state: True, so P is terminated and kept; the modeled protected outcome is the ordinary terminate commit, the live row's write
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,912 + TerminalGrowth 0 + registries 384 + CustomHandles 27,001 + reserve 16,384 = 16,484,681 > 16,457,728 (margin -26,953)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,468,279 bytes (16,440,912 state, 27,001 CustomHandles, 0 registries, 366 other fields) > 16,457,728 (margin -10,551): not landed: StoreException (Definite): the row of 1/p was refused
+    the definite refusal fails the turn, which parks (WorkflowInstance.Park)
+    Park: P Running -> Faulted, state kept (16,416,437 bytes), 1,500 creator handles kept, registry [g2/child/1.1.1@1] kept, sends [child-finished c3_1/p_1#6.end to 0/q]; the row measures 16,443,873: landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,468,279 bytes, for P at revision 5 (Running, state 16,416,437 bytes, 1,500 handles)
+  counted terminates to G stored by a landed commit: []
+    P's notice: {"Child":"1/p","Status":2,"Output":null,"Creation":1}
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 1,500 creator handles (27,001 bytes; expected 1,500) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    FAIL [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,468,279 <= 16,457,728: False
+    FAIL [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 0 stored, G Running
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    FAIL [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 0 closed
+    FAIL [p-cancelled] P ended Cancelled and kept: Faulted
+  real prototype calls: ChildRegistry.Read x6, ChildRegistry.Write x1, DurableTurn x1, InMemoryStore.AddAsync x5, InMemoryStore.CommitAsync x6, NativeModel.ProtectsDeletion x1, Worker.TakeAsync x4, WorkflowInstance.Command x7, WorkflowInstance.Park x1, WorkflowInstance.TurnAsync x3
+RESULT NT-2/thendelete-protected rules=negative: FAIL
+
+== NT-2/no-handles | rules=reviewed ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  no spawn turn: P makes no detached start
+  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,416,864 bytes (16,416,460 state, 0 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,864): landed
+  deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#3.0000 to g2/child/1.1.1, child-finished c3_1/p_1#3.end to 0/q]; 0 creator handles kept (0 bytes)
+    TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,441,326 bytes (16,440,960 state, 0 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,402): landed
+  deliver c3_1/p_1#3.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,326 bytes, for P at revision 2 (Running, state 16,416,460 bytes, 0 handles)
+  counted terminates to G stored by a landed commit: [c3_1/p_1#3.0000 (seq 3)]
+    P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 0 creator handles (0 bytes; expected 0) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,326 <= 16,457,728: True
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 3,500 closed
+    PASS [p-cancelled] P ended Cancelled: Cancelled
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x3, Worker.TakeAsync x4, WorkflowInstance.Command x5
+RESULT NT-2/no-handles rules=reviewed: PASS
+
+== NT-2/no-handles | rules=repaired ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  no spawn turn: P makes no detached start
+  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the full projection): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,416,864 bytes (16,416,460 state, 0 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,864): landed
+  deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#3.0000 to g2/child/1.1.1, child-finished c3_1/p_1#3.end to 0/q]; 0 creator handles kept (0 bytes)
+    TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,441,326 bytes (16,440,960 state, 0 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,402): landed
+  deliver c3_1/p_1#3.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,326 bytes, for P at revision 2 (Running, state 16,416,460 bytes, 0 handles)
+  counted terminates to G stored by a landed commit: [c3_1/p_1#3.0000 (seq 3)]
+    P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 0 creator handles (0 bytes; expected 0) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,326 <= 16,457,728: True
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 3,500 closed
+    PASS [p-cancelled] P ended Cancelled: Cancelled
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x3, Worker.TakeAsync x4, WorkflowInstance.Command x5
+RESULT NT-2/no-handles rules=repaired: PASS
+
+== NT-2/no-handles | rules=negative ==
+invariant: every row P commits leaves room for its own terminate's ending row, so the first counted child terminate is stored by a landed commit, G ends Cancelled and one notice from P to Q is stored
+  setup: Q 0/q (parent), P 1/p (Native, Running, creation 1, children [G@1]), G g2/child/1.1.1 (Native, Running, child of P)
+  no spawn turn: P makes no detached start
+  the grown state: 16,416,460 bytes (the largest state this rule set's check admits: cap - reserve - one child - 24,500 TerminalGrowth - 0 CustomHandles counted); 3,500 open inboxes, 30,488 variables
+  P's growth turn: admission check of a live row (proposed, the sixth round's formula): state 16,416,460 + TerminalGrowth 24,500 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+    the store's row cap (proposed, the Refuses hook): the row measures 16,416,864 bytes (16,416,460 state, 0 CustomHandles, 38 registries, 366 other fields) <= 16,457,728 (margin 40,864): landed
+  deliver term-1 (operator's terminate) to P: the built terminate (WorkflowInstance.cs 179-203); P Running -> Cancelled, sends [kernel.terminate c3_1/p_1#3.0000 to g2/child/1.1.1, child-finished c3_1/p_1#3.end to 0/q]; 0 creator handles kept (0 bytes)
+    TerminateMetadata grew P's state by 24,500 bytes (16,416,460 -> 16,440,960)
+    for reference, the ending row against the full projection, its registries counted as the previous row's: state 16,440,960 + TerminalGrowth 0 + registries 384 + CustomHandles 0 + reserve 16,384 = 16,457,728 <= 16,457,728 (margin 0)
+  P's ending commit: the row ends Cancelled, so no admission projection applies; the store's row cap does
+    the store's row cap (proposed, the Refuses hook): the row measures 16,441,326 bytes (16,440,960 state, 0 CustomHandles, 0 registries, 366 other fields) <= 16,457,728 (margin 16,402): landed
+  deliver c3_1/p_1#3.0000 (terminate from 1/p) to G: the built terminate; G Running -> Cancelled; landed
+  the largest ending row of a landed P row (the real terminate run on a copy): 16,441,326 bytes, for P at revision 2 (Running, state 16,416,460 bytes, 0 handles)
+  counted terminates to G stored by a landed commit: [c3_1/p_1#3.0000 (seq 3)]
+    P's notice: {"Child":"1/p","Status":3,"Output":null,"Creation":1}
+  assertions:
+    PASS [handles-accumulated] P's stored row after the spawn commits holds 0 creator handles (0 bytes; expected 0) and its registry lists [g2/child/1.1.1@1] (expected [g2/child/1.1.1@1])
+    PASS [room-for-terminate] every row P committed leaves room for its own terminate's ending row: 16,441,326 <= 16,457,728: True
+    PASS [child-terminate] the first counted child terminate was stored by a landed commit and G ended Cancelled: 1 stored, G Cancelled
+    PASS [one-notice] notices from P to Q stored: 1 (expected 1)
+    PASS [inboxes-kept-closed] P's terminal row keeps every inbox of its pre-terminate row, each closed: 3,500 before, 3,500 kept, 3,500 closed
+    PASS [p-cancelled] P ended Cancelled: Cancelled
+  real prototype calls: ChildRegistry.Read x2, ChildRegistry.Write x1, InMemoryStore.AddAsync x2, InMemoryStore.CommitAsync x3, Worker.TakeAsync x4, WorkflowInstance.Command x5
+RESULT NT-2/no-handles rules=negative: PASS
+
+== MX-1/ticket-first | rules=reviewed ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id is the built one, the outside publish refuses no id (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000; the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=1000: before the ticket's first step, the outside caller publishes under the turn's returned id: publish (acme_topic, c8_0/acme_p_1#2.0000) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, c8_0/acme_p_1#2.0000) payload from-turn: event row exists (payload from-outside), kept; the turn's insert writes nothing; route from the stored row, payload from-outside, to W: refused, the key exists
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-outside]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, c8_0/acme_p_1#2.0000) from-outside]
+  assertions:
+    FAIL [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: New, event rows 0 -> 1, message rows 1 -> 2
+    FAIL [turn-event] the event row under the turn's id c8_0/acme_p_1#2.0000 carries the turn's payload: from-outside (expected from-turn)
+    FAIL [payloads] payloads W received, in order: [from-outside] (expected [from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/ticket-first rules=reviewed: FAIL
+
+== MX-1/ticket-first | rules=repaired ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id carries the reserved first code unit '~', the outside publish refuses an id that starts with '~' (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000, stored and returned as ~c8_0/acme_p_1#2.0000 (proposed); the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, ~c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=1000: before the ticket's first step, the outside caller publishes under the turn's returned id: publish (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-outside: refused with InvalidEventId (proposed), not retryable; nothing is written and no receipt is issued
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-turn: event row inserted; route from the stored row, payload from-turn, to W: added
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-turn]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, ~c8_0/acme_p_1#2.0000) from-turn]
+  assertions:
+    PASS [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: InvalidEventId, event rows 0 -> 0, message rows 1 -> 1
+    PASS [turn-event] the event row under the turn's id ~c8_0/acme_p_1#2.0000 carries the turn's payload: from-turn (expected from-turn)
+    PASS [payloads] payloads W received, in order: [from-turn] (expected [from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x1, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x1, InMemoryStore.PublishedMatchesAsync x1, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/ticket-first rules=repaired: PASS
+
+== MX-1/ticket-first | rules=negative ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id carries the reserved first code unit '~', the outside publish refuses no id (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000, stored and returned as ~c8_0/acme_p_1#2.0000 (proposed); the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, ~c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=1000: before the ticket's first step, the outside caller publishes under the turn's returned id: publish (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-turn: event row exists (payload from-outside), kept; the turn's insert writes nothing; route from the stored row, payload from-outside, to W: refused, the key exists
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-outside]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, ~c8_0/acme_p_1#2.0000) from-outside]
+  assertions:
+    FAIL [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: New, event rows 0 -> 1, message rows 1 -> 2
+    FAIL [turn-event] the event row under the turn's id ~c8_0/acme_p_1#2.0000 carries the turn's payload: from-outside (expected from-turn)
+    FAIL [payloads] payloads W received, in order: [from-outside] (expected [from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/ticket-first rules=negative: FAIL
+
+== MX-1/ticket-first | rules=refusal-without-prefix ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id is the built one, the outside publish refuses an id that starts with '~' (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000; the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=1000: before the ticket's first step, the outside caller publishes under the turn's returned id: publish (acme_topic, c8_0/acme_p_1#2.0000) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, c8_0/acme_p_1#2.0000) payload from-turn: event row exists (payload from-outside), kept; the turn's insert writes nothing; route from the stored row, payload from-outside, to W: refused, the key exists
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-outside]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, c8_0/acme_p_1#2.0000) from-outside]
+  assertions:
+    FAIL [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: New, event rows 0 -> 1, message rows 1 -> 2
+    FAIL [turn-event] the event row under the turn's id c8_0/acme_p_1#2.0000 carries the turn's payload: from-outside (expected from-turn)
+    FAIL [payloads] payloads W received, in order: [from-outside] (expected [from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/ticket-first rules=refusal-without-prefix: FAIL
+
+== MX-1/outside-first | rules=reviewed ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id is the built one, the outside publish refuses no id (proposed)
+  the caller predicts the id of P's next publish: a real DurableTurn.Publish on P's row at revision 1, never committed, returns c8_0/acme_p_1#2.0000; the id the turn will return: c8_0/acme_p_1#2.0000
+  t=1000: the outside caller publishes first, under the id the turn will return: publish (acme_topic, c8_0/acme_p_1#2.0000) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000; the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+    the turn's id equals the id the caller used: True
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, c8_0/acme_p_1#2.0000) payload from-turn: event row exists (payload from-outside), kept; the turn's insert writes nothing; route from the stored row, payload from-outside, to W: refused, the key exists
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-outside]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, c8_0/acme_p_1#2.0000) from-outside]
+  assertions:
+    FAIL [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: New, event rows 0 -> 1, message rows 0 -> 1
+    FAIL [turn-event] the event row under the turn's id c8_0/acme_p_1#2.0000 carries the turn's payload: from-outside (expected from-turn)
+    FAIL [payloads] payloads W received, in order: [from-outside] (expected [from-turn])
+  real prototype calls: DurableTurn x2, DurableTurn.Publish x2, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/outside-first rules=reviewed: FAIL
+
+== MX-1/outside-first | rules=repaired ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id carries the reserved first code unit '~', the outside publish refuses an id that starts with '~' (proposed)
+  the caller predicts the id of P's next publish: a real DurableTurn.Publish on P's row at revision 1, never committed, returns c8_0/acme_p_1#2.0000; the id the turn will return: ~c8_0/acme_p_1#2.0000
+  t=1000: the outside caller publishes first, under the id the turn will return: publish (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-outside: refused with InvalidEventId (proposed), not retryable; nothing is written and no receipt is issued
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000, stored and returned as ~c8_0/acme_p_1#2.0000 (proposed); the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, ~c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+    the turn's id equals the id the caller used: True
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-turn: event row inserted; route from the stored row, payload from-turn, to W: added
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-turn]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, ~c8_0/acme_p_1#2.0000) from-turn]
+  assertions:
+    PASS [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: InvalidEventId, event rows 0 -> 0, message rows 0 -> 0
+    PASS [turn-event] the event row under the turn's id ~c8_0/acme_p_1#2.0000 carries the turn's payload: from-turn (expected from-turn)
+    PASS [payloads] payloads W received, in order: [from-turn] (expected [from-turn])
+  real prototype calls: DurableTurn x2, DurableTurn.Publish x2, DurableTurn.Seal x1, Events.PublishAsync x1, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x1, InMemoryStore.PublishedMatchesAsync x1, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/outside-first rules=repaired: PASS
+
+== MX-1/outside-first | rules=negative ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id carries the reserved first code unit '~', the outside publish refuses no id (proposed)
+  the caller predicts the id of P's next publish: a real DurableTurn.Publish on P's row at revision 1, never committed, returns c8_0/acme_p_1#2.0000; the id the turn will return: ~c8_0/acme_p_1#2.0000
+  t=1000: the outside caller publishes first, under the id the turn will return: publish (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000, stored and returned as ~c8_0/acme_p_1#2.0000 (proposed); the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, ~c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+    the turn's id equals the id the caller used: True
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-turn: event row exists (payload from-outside), kept; the turn's insert writes nothing; route from the stored row, payload from-outside, to W: refused, the key exists
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-outside]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, ~c8_0/acme_p_1#2.0000) from-outside]
+  assertions:
+    FAIL [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: New, event rows 0 -> 1, message rows 0 -> 1
+    FAIL [turn-event] the event row under the turn's id ~c8_0/acme_p_1#2.0000 carries the turn's payload: from-outside (expected from-turn)
+    FAIL [payloads] payloads W received, in order: [from-outside] (expected [from-turn])
+  real prototype calls: DurableTurn x2, DurableTurn.Publish x2, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/outside-first rules=negative: FAIL
+
+== MX-1/outside-first | rules=refusal-without-prefix ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id is the built one, the outside publish refuses an id that starts with '~' (proposed)
+  the caller predicts the id of P's next publish: a real DurableTurn.Publish on P's row at revision 1, never committed, returns c8_0/acme_p_1#2.0000; the id the turn will return: c8_0/acme_p_1#2.0000
+  t=1000: the outside caller publishes first, under the id the turn will return: publish (acme_topic, c8_0/acme_p_1#2.0000) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000; the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+    the turn's id equals the id the caller used: True
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, c8_0/acme_p_1#2.0000) payload from-turn: event row exists (payload from-outside), kept; the turn's insert writes nothing; route from the stored row, payload from-outside, to W: refused, the key exists
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-outside]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, c8_0/acme_p_1#2.0000) from-outside]
+  assertions:
+    FAIL [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: New, event rows 0 -> 1, message rows 0 -> 1
+    FAIL [turn-event] the event row under the turn's id c8_0/acme_p_1#2.0000 carries the turn's payload: from-outside (expected from-turn)
+    FAIL [payloads] payloads W received, in order: [from-outside] (expected [from-turn])
+  real prototype calls: DurableTurn x2, DurableTurn.Publish x2, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/outside-first rules=refusal-without-prefix: FAIL
+
+== MX-1/owner-change | rules=reviewed ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id is the built one, the outside publish refuses no id (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000; the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=11001: n0-1's lease on partition 0 has run out; n0-5 takes it through the real Worker.TakeAsync, epoch 1 -> 2
+  t=11001: after the owner change, before the ticket's first step, the outside caller publishes under the turn's returned id: publish (acme_topic, c8_0/acme_p_1#2.0000) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=11001: the new owner's first step of the ticket (n0-5): Events.PublishAsync of (acme_topic, c8_0/acme_p_1#2.0000) payload from-turn: event row exists (payload from-outside), kept; the turn's insert writes nothing; route from the stored row, payload from-outside, to W: refused, the key exists
+    the ticket's consumption: landed
+  t=11001: W's turn consumes [from-outside]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, c8_0/acme_p_1#2.0000) from-outside]
+  assertions:
+    FAIL [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: New, event rows 0 -> 1, message rows 1 -> 2
+    FAIL [turn-event] the event row under the turn's id c8_0/acme_p_1#2.0000 carries the turn's payload: from-outside (expected from-turn)
+    FAIL [payloads] payloads W received, in order: [from-outside] (expected [from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x5
+RESULT MX-1/owner-change rules=reviewed: FAIL
+
+== MX-1/owner-change | rules=repaired ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id carries the reserved first code unit '~', the outside publish refuses an id that starts with '~' (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000, stored and returned as ~c8_0/acme_p_1#2.0000 (proposed); the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, ~c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=11001: n0-1's lease on partition 0 has run out; n0-5 takes it through the real Worker.TakeAsync, epoch 1 -> 2
+  t=11001: after the owner change, before the ticket's first step, the outside caller publishes under the turn's returned id: publish (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-outside: refused with InvalidEventId (proposed), not retryable; nothing is written and no receipt is issued
+  t=11001: the new owner's first step of the ticket (n0-5): Events.PublishAsync of (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-turn: event row inserted; route from the stored row, payload from-turn, to W: added
+    the ticket's consumption: landed
+  t=11001: W's turn consumes [from-turn]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, ~c8_0/acme_p_1#2.0000) from-turn]
+  assertions:
+    PASS [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: InvalidEventId, event rows 0 -> 0, message rows 1 -> 1
+    PASS [turn-event] the event row under the turn's id ~c8_0/acme_p_1#2.0000 carries the turn's payload: from-turn (expected from-turn)
+    PASS [payloads] payloads W received, in order: [from-turn] (expected [from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x1, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x1, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x1, InMemoryStore.PublishedMatchesAsync x1, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x5
+RESULT MX-1/owner-change rules=repaired: PASS
+
+== MX-1/owner-change | rules=negative ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id carries the reserved first code unit '~', the outside publish refuses no id (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000, stored and returned as ~c8_0/acme_p_1#2.0000 (proposed); the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, ~c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=11001: n0-1's lease on partition 0 has run out; n0-5 takes it through the real Worker.TakeAsync, epoch 1 -> 2
+  t=11001: after the owner change, before the ticket's first step, the outside caller publishes under the turn's returned id: publish (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=11001: the new owner's first step of the ticket (n0-5): Events.PublishAsync of (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-turn: event row exists (payload from-outside), kept; the turn's insert writes nothing; route from the stored row, payload from-outside, to W: refused, the key exists
+    the ticket's consumption: landed
+  t=11001: W's turn consumes [from-outside]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, ~c8_0/acme_p_1#2.0000) from-outside]
+  assertions:
+    FAIL [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: New, event rows 0 -> 1, message rows 1 -> 2
+    FAIL [turn-event] the event row under the turn's id ~c8_0/acme_p_1#2.0000 carries the turn's payload: from-outside (expected from-turn)
+    FAIL [payloads] payloads W received, in order: [from-outside] (expected [from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x5
+RESULT MX-1/owner-change rules=negative: FAIL
+
+== MX-1/owner-change | rules=refusal-without-prefix ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id is the built one, the outside publish refuses an id that starts with '~' (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000; the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=11001: n0-1's lease on partition 0 has run out; n0-5 takes it through the real Worker.TakeAsync, epoch 1 -> 2
+  t=11001: after the owner change, before the ticket's first step, the outside caller publishes under the turn's returned id: publish (acme_topic, c8_0/acme_p_1#2.0000) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=11001: the new owner's first step of the ticket (n0-5): Events.PublishAsync of (acme_topic, c8_0/acme_p_1#2.0000) payload from-turn: event row exists (payload from-outside), kept; the turn's insert writes nothing; route from the stored row, payload from-outside, to W: refused, the key exists
+    the ticket's consumption: landed
+  t=11001: W's turn consumes [from-outside]: landed, the rows are kept Done
+  stored event rows: 1 [(acme_topic, c8_0/acme_p_1#2.0000) from-outside]
+  assertions:
+    FAIL [outside-refused] the outside publish under the turn's id is refused with InvalidEventId and writes nothing: New, event rows 0 -> 1, message rows 1 -> 2
+    FAIL [turn-event] the event row under the turn's id c8_0/acme_p_1#2.0000 carries the turn's payload: from-outside (expected from-turn)
+    FAIL [payloads] payloads W received, in order: [from-outside] (expected [from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x5
+RESULT MX-1/owner-change rules=refusal-without-prefix: FAIL
+
+== MX-1/distinct | rules=reviewed ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id is the built one, the outside publish refuses no id (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000; the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=1000: before the ticket's first step, the outside caller publishes under its own id: publish (acme_topic, source-42) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, c8_0/acme_p_1#2.0000) payload from-turn: event row inserted; route from the stored row, payload from-turn, to W: added
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-outside, from-turn]: landed, the rows are kept Done
+  stored event rows: 2 [(acme_topic, source-42) from-outside, (acme_topic, c8_0/acme_p_1#2.0000) from-turn]
+  assertions:
+    PASS [outside-accepted] the outside publish under source-42 is accepted as New and its event row carries from-outside: New, from-outside
+    PASS [turn-event] the event row under the turn's id c8_0/acme_p_1#2.0000 carries the turn's payload: from-turn (expected from-turn)
+    PASS [payloads] payloads W received, in order: [from-outside ; from-turn] (expected [from-outside ; from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/distinct rules=reviewed: PASS
+
+== MX-1/distinct | rules=repaired ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id carries the reserved first code unit '~', the outside publish refuses an id that starts with '~' (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000, stored and returned as ~c8_0/acme_p_1#2.0000 (proposed); the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, ~c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=1000: before the ticket's first step, the outside caller publishes under its own id: publish (acme_topic, source-42) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-turn: event row inserted; route from the stored row, payload from-turn, to W: added
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-outside, from-turn]: landed, the rows are kept Done
+  stored event rows: 2 [(acme_topic, source-42) from-outside, (acme_topic, ~c8_0/acme_p_1#2.0000) from-turn]
+  assertions:
+    PASS [outside-accepted] the outside publish under source-42 is accepted as New and its event row carries from-outside: New, from-outside
+    PASS [turn-event] the event row under the turn's id ~c8_0/acme_p_1#2.0000 carries the turn's payload: from-turn (expected from-turn)
+    PASS [payloads] payloads W received, in order: [from-outside ; from-turn] (expected [from-outside ; from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/distinct rules=repaired: PASS
+
+== MX-1/distinct | rules=negative ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id carries the reserved first code unit '~', the outside publish refuses no id (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000, stored and returned as ~c8_0/acme_p_1#2.0000 (proposed); the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, ~c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=1000: before the ticket's first step, the outside caller publishes under its own id: publish (acme_topic, source-42) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, ~c8_0/acme_p_1#2.0000) payload from-turn: event row inserted; route from the stored row, payload from-turn, to W: added
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-outside, from-turn]: landed, the rows are kept Done
+  stored event rows: 2 [(acme_topic, source-42) from-outside, (acme_topic, ~c8_0/acme_p_1#2.0000) from-turn]
+  assertions:
+    PASS [outside-accepted] the outside publish under source-42 is accepted as New and its event row carries from-outside: New, from-outside
+    PASS [turn-event] the event row under the turn's id ~c8_0/acme_p_1#2.0000 carries the turn's payload: from-turn (expected from-turn)
+    PASS [payloads] payloads W received, in order: [from-outside ; from-turn] (expected [from-outside ; from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/distinct rules=negative: PASS
+
+== MX-1/distinct | rules=refusal-without-prefix ==
+invariant: a turn's committed publication is delivered to W with its own payload; an outside publication either has its own event row and is delivered, or is refused and writes nothing
+  setup: P 0/acme_p and W 0/acme_w (Running, creation 1, one tenant); W waits on acme_topic as W; the delivery key is the built one (Store.cs 247–251); a turn's event id is the built one, the outside publish refuses an id that starts with '~' (proposed)
+  t=1000: P's turn publishes on acme_topic with payload from-turn: DurableTurn.Publish returns c8_0/acme_p_1#2.0000; the commit lands with the publish ticket c8_0/acme_p_1#2.0000 (event (acme_topic, c8_0/acme_p_1#2.0000), payload from-turn) on n0-1
+  t=1000: before the ticket's first step, the outside caller publishes under its own id: publish (acme_topic, source-42) payload from-outside: event row inserted, receipt New; delivery of from-outside to W: added
+  t=1000: the owner's first step of the ticket (n0-1): Events.PublishAsync of (acme_topic, c8_0/acme_p_1#2.0000) payload from-turn: event row inserted; route from the stored row, payload from-turn, to W: added
+    the ticket's consumption: landed
+  t=1000: W's turn consumes [from-outside, from-turn]: landed, the rows are kept Done
+  stored event rows: 2 [(acme_topic, source-42) from-outside, (acme_topic, c8_0/acme_p_1#2.0000) from-turn]
+  assertions:
+    PASS [outside-accepted] the outside publish under source-42 is accepted as New and its event row carries from-outside: New, from-outside
+    PASS [turn-event] the event row under the turn's id c8_0/acme_p_1#2.0000 carries the turn's payload: from-turn (expected from-turn)
+    PASS [payloads] payloads W received, in order: [from-outside ; from-turn] (expected [from-outside ; from-turn])
+  real prototype calls: DurableTurn x1, DurableTurn.Publish x1, DurableTurn.Seal x1, Events.PublishAsync x2, InMemoryStore.AddAsync x1, InMemoryStore.AddEventAsync x2, InMemoryStore.CommitAsync x3, InMemoryStore.PublishAsync x2, InMemoryStore.PublishedMatchesAsync x2, InMemoryStore.SubscribeAsync x1, Worker.TakeAsync x4
+RESULT MX-1/distinct rules=refusal-without-prefix: PASS
+
+== summary ==
+nt2-handles                reviewed                 actual FAIL growth-parked,room-for-terminate,child-terminate,inboxes-kept-closed  expected FAIL growth-parked,room-for-terminate,child-terminate,inboxes-kept-closed  as expected
+nt2-handles                repaired                 actual PASS  expected PASS  as expected
+nt2-handles                negative                 actual FAIL growth-parked,room-for-terminate,child-terminate,inboxes-kept-closed  expected FAIL growth-parked,room-for-terminate,child-terminate,inboxes-kept-closed  as expected
+nt2-at-bound               reviewed                 actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  as expected
+nt2-at-bound               repaired                 actual PASS  expected PASS  as expected
+nt2-at-bound               negative                 actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  as expected
+nt2-thendelete-protected   reviewed                 actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  as expected
+nt2-thendelete-protected   repaired                 actual PASS  expected PASS  as expected
+nt2-thendelete-protected   negative                 actual FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  expected FAIL room-for-terminate,child-terminate,inboxes-kept-closed,p-cancelled  as expected
+nt2-no-handles             reviewed                 actual PASS  expected PASS  as expected
+nt2-no-handles             repaired                 actual PASS  expected PASS  as expected
+nt2-no-handles             negative                 actual PASS  expected PASS  as expected
+mx1-ticket-first           reviewed                 actual FAIL outside-refused,turn-event,payloads  expected FAIL outside-refused,turn-event,payloads  as expected
+mx1-ticket-first           repaired                 actual PASS  expected PASS  as expected
+mx1-ticket-first           negative                 actual FAIL outside-refused,turn-event,payloads  expected FAIL outside-refused,turn-event,payloads  as expected
+mx1-ticket-first           refusal-without-prefix   actual FAIL outside-refused,turn-event,payloads  expected FAIL outside-refused,turn-event,payloads  as expected
+mx1-outside-first          reviewed                 actual FAIL outside-refused,turn-event,payloads  expected FAIL outside-refused,turn-event,payloads  as expected
+mx1-outside-first          repaired                 actual PASS  expected PASS  as expected
+mx1-outside-first          negative                 actual FAIL outside-refused,turn-event,payloads  expected FAIL outside-refused,turn-event,payloads  as expected
+mx1-outside-first          refusal-without-prefix   actual FAIL outside-refused,turn-event,payloads  expected FAIL outside-refused,turn-event,payloads  as expected
+mx1-owner-change           reviewed                 actual FAIL outside-refused,turn-event,payloads  expected FAIL outside-refused,turn-event,payloads  as expected
+mx1-owner-change           repaired                 actual PASS  expected PASS  as expected
+mx1-owner-change           negative                 actual FAIL outside-refused,turn-event,payloads  expected FAIL outside-refused,turn-event,payloads  as expected
+mx1-owner-change           refusal-without-prefix   actual FAIL outside-refused,turn-event,payloads  expected FAIL outside-refused,turn-event,payloads  as expected
+mx1-distinct               reviewed                 actual PASS  expected PASS  as expected
+mx1-distinct               repaired                 actual PASS  expected PASS  as expected
+mx1-distinct               negative                 actual PASS  expected PASS  as expected
+mx1-distinct               refusal-without-prefix   actual PASS  expected PASS  as expected
+28/28 runs as expected
