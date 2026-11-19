@@ -299,12 +299,20 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     await s.select(copiedSwitch.nodeId); await sections.getByRole("tab", { name: "Slots", exact: true }).click();
     const condition = page.locator(".wf-slot-list .wf-data-reference-source");
     await expect(condition).toContainText("Payload"); await expect(condition).toContainText("enabled");
+    await expect(condition).toContainText(copiedGroup.nodeId);
     await condition.scrollIntoViewIfNeeded(); await capture(page, info, "switch-copied-condition");
     await sections.getByRole("tab", { name: "Inputs", exact: true }).click();
-    // The preserved body reads args.customer; keep its remapped producer, the copied Get Customer, in view beside it.
+    // The preserved body reads args.customer. Beside a canvas, keep its remapped producer, the copied Get Customer,
+    // in view; narrow layouts cannot show the canvas beside the inspector, so give the inspector the full width.
     await s.select(copiedPortable.nodeId);
-    await expect(page.locator(".wf-inspector-content")).toContainText("args.customer.customerId");
-    await node(copiedProducer.nodeId).scrollIntoViewIfNeeded(); await capture(page, info, "portable-copied-preserved");
+    const source = page.locator(".wf-inspector-content .studio-code-editor-preview code");
+    await expect(source).toHaveText("args.customer.customerId");
+    const narrow = page.viewportSize()!.width <= 600;
+    if (narrow) await page.getByRole("button", { name: "Maximize inspector panel", exact: true }).click();
+    else { await node(copiedProducer.nodeId).scrollIntoViewIfNeeded(); await expect(node(copiedProducer.nodeId)).toBeInViewport(); }
+    await expect.poll(() => source.evaluate(code => code.scrollWidth <= code.clientWidth), { message: "Portable source is not truncated" }).toBe(true);
+    await capture(page, info, "portable-copied-preserved");
+    if (narrow) await page.getByRole("button", { name: "Restore inspector panel", exact: true }).click();
     const minimal = process.env.UX_ACTIVITY_DATA_COMPOSITION === "minimal";
     if (minimal) {
       const descriptors = await s.api<{ items: { type: string }[] }>("/expressions/descriptors");
