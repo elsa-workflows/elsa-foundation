@@ -80,6 +80,19 @@ public sealed class ScriptValueModelRunTests
     }
 
     [Fact]
+    public async Task A_refused_lossy_result_from_a_sensitive_input_names_no_number()
+    {
+        // Spec 1229 FR-006: the fault keeps its value-free form; the stored digits are part of the protected value.
+        await using var harness = NewHarness();
+        var run = await RunAsync(harness, "return { id: args.order.id };", "({ order: variables.order })", Order, sensitive: true);
+
+        var state = run.State("node-js");
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal(new JavaScriptPrecisionException("result", []).ValueFreeMessage, state.Fault!.Message);
+        Assert.DoesNotContain("9007199254740993", state.Fault.Message);
+    }
+
+    [Fact]
     public async Task The_same_id_held_as_a_string_passes()
     {
         var run = await RunAsync("return { id: args.order.id };", "({ order: variables.order })", order: """{"id":"9007199254740993","price":10.50}""");
@@ -127,7 +140,7 @@ public sealed class ScriptValueModelRunTests
         var (_, incident) = await RunBlockedAsync("return 1;", "(() => { const o = variables.order; o.price = 1; return {}; })()", sensitive: true);
 
         Assert.Contains(JavaScriptValueDiagnostics.InputExpressionWrite, incident);
-        Assert.Contains("variable 'order'", incident);
+        Assert.Contains(new InputExpressionWriteException("order", "variables.order.price").ValueFreeMessage, incident);
         Assert.DoesNotContain("price", incident);
         Assert.DoesNotContain("9007199254740993", incident);
     }
@@ -138,7 +151,7 @@ public sealed class ScriptValueModelRunTests
         var (_, incident) = await RunBlockedAsync("return 1;", "(() => { variables['k' + variables.order.price] = 1; return {}; })()", sensitive: true);
 
         Assert.Contains(JavaScriptValueDiagnostics.InputExpressionWrite, incident);
-        Assert.Contains("a variable it names by a computed value", incident);
+        Assert.Contains(new InputExpressionWriteException("k10.5", "variables.k10", declared: false).ValueFreeMessage, incident);
         Assert.DoesNotContain("k10.5", incident);
     }
 
@@ -147,7 +160,17 @@ public sealed class ScriptValueModelRunTests
     {
         var (_, incident) = await RunBlockedAsync("return 1;", "(() => { const o = variables.order; o.price = 1; return {}; })()");
 
-        Assert.Contains("variables.order.price", incident);
+        Assert.Contains(InputExpressionWriteException.Describe("order", "variables.order.price"), incident);
+    }
+
+    [Fact]
+    public async Task An_input_expression_that_grows_a_read_value_past_the_json_limits_fails_with_the_write_diagnostic()
+    {
+        // FR-006a: the change is reported as a whole assignment, not as the JSON parser's depth error.
+        var (_, incident) = await RunBlockedAsync("return 1;",
+            "(() => { let o = variables.order; for (let i = 0; i < 200; i++) { o.n = {}; o = o.n; } return {}; })()");
+
+        Assert.Contains(InputExpressionWriteException.Describe("order", "variables.order"), incident);
     }
 
     [Fact]

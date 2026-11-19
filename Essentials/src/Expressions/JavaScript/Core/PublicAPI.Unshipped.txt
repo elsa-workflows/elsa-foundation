@@ -180,6 +180,7 @@ Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.JavaScript
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.JavaScriptPrecisionDecision(bool Allowed, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!>! Diagnostics) -> void
 Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.InputExpressionWriteException(string! variable, string! path, bool declared = true) -> void
 Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.ValueFreeMessage.get -> string!
+Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptPrecisionException.ValueFreeMessage.get -> string!
 Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.Path.get -> string!
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.JavaScriptPrecisionDiagnostic(string! Path, string! Stored, string! Written, string! Reason, string! Remedy, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDiagnosticSeverity Severity) -> void
 Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.Code.get -> string!

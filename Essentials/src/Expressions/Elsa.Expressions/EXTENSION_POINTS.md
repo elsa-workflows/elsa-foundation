@@ -53,6 +53,20 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
   catalog). The JavaScript feature registers `JavaScriptVariableReadAnalyzer`, the Liquid feature
   `LiquidVariableReadAnalyzer`.
 
+### `IValueFreeExpressionFailure` *(Core — `Elsa.Expressions.Core`)*
+
+- **Kind:** contract an expression evaluator's exception implements (spec 1228 FR-006a, spec 1229 FR-006).
+- **Contract:** `ValueFreeMessage`, the failure's message with nothing in it that can come from a value: codes, inputs and
+  declared variables only, never a member path or a name the script computed.
+- **Implementation:** `InputExpressionWriteException` (`VF-BIND-001`) and `JavaScriptPrecisionException`
+  (`VF-PREC-001`), both in `Elsa.Expressions.JavaScript.Core`.
+- **Consumer:** `RuntimePortableExpressionEvaluator` (Workflows runtime). When a value the expression read is protected
+  it would redact the whole failure; for such an exception it keeps `ValueFreeMessage` instead, so the diagnostic still
+  says what went wrong. Run JavaScript uses `JavaScriptPrecisionException.ValueFreeMessage` for its fault when
+  `ActivityExecutionContext.HasProtectedInputs` is set.
+- **Implement when:** an evaluator raises a diagnostic that stays useful without the parts a protected value could
+  supply.
+
 ### `IExecutionWarningSink` *(Core — `Elsa.Expressions.Core`)*
 
 - **Kind:** a channel, not a replacement: the runtime supplies the sink and records what is reported (spec 1228).

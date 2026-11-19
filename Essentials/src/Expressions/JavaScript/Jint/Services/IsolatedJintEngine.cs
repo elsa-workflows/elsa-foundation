@@ -249,7 +249,8 @@ internal static class IsolatedJintEngine
 
         // A value the script made unserializable (a cycle, a BigInt) or grew past the JSON limits (depth, size) was
         // changed: it is reported as changed as a whole, so an input expression fails with its write diagnostic rather
-        // than the engine's or the parser's error (spec 1228 FR-006a).
+        // than the engine's or the parser's error (spec 1228 FR-006a). The catch covers only the bridge's Collect, where an
+        // InvalidOperationException is the materializer's limit or not-persistable error for this value.
         private ScriptValueChange CollectOne(string name)
         {
             try

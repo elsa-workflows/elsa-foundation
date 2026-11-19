@@ -16,19 +16,30 @@ public static class JavaScriptValueDiagnostics
     public const string InputExpressionWrite = "VF-BIND-001";
 }
 
-/// <summary>The precision policy refused a write (FR-013). Nothing of the step is written.</summary>
-public sealed class JavaScriptPrecisionException : InvalidOperationException
+/// <summary>
+/// The precision policy refused a write (FR-013). Nothing of the step is written. Its message names each path with the
+/// stored and written number; its <see cref="ValueFreeMessage"/> names neither, for a step or expression that read a
+/// protected value (spec 1229 FR-006).
+/// </summary>
+public sealed class JavaScriptPrecisionException : InvalidOperationException, Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure
 {
     public JavaScriptPrecisionException(string target, IReadOnlyList<JavaScriptPrecisionDiagnostic> diagnostics)
         : base(Describe(target, diagnostics))
     {
         Target = target;
         Diagnostics = diagnostics;
+        ValueFreeMessage =
+            $"{JavaScriptValueDiagnostics.PrecisionLossRefused}: writing '{target}' was refused because a number would lose " +
+            "precision: an integer beyond 9007199254740991 or a decimal with more digits than a JavaScript number holds. " +
+            "The numbers and their paths are withheld because a value it read is protected. Hold such numbers as strings.";
     }
 
     public string Code => JavaScriptValueDiagnostics.PrecisionLossRefused;
     public string Target { get; }
     public IReadOnlyList<JavaScriptPrecisionDiagnostic> Diagnostics { get; }
+
+    /// <inheritdoc />
+    public string ValueFreeMessage { get; }
 
     private static string Describe(string target, IReadOnlyList<JavaScriptPrecisionDiagnostic> diagnostics)
     {

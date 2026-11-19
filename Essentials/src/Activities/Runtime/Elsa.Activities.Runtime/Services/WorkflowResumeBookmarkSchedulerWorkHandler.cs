@@ -958,7 +958,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 state.InvocationId,
                 attempt.AttemptId,
                 resumePayload.ExecutableNodeId,
-                cancellationToken).WithResolvedOperationKeys(state).WithVariables(variables).WithWarnings(warnings),
+                cancellationToken).WithResolvedOperationKeys(state).WithVariables(variables).WithWarnings(warnings)
+                .WithProtectedInputs(ProtectsAnyInput(state.InputSnapshot)),
             privateState.Value.Type,
             RequireInlinePayload(privateState.Value, "private state"),
             trigger.PayloadType,

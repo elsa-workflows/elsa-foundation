@@ -124,6 +124,22 @@ public sealed record ActivityExecutionContext
         return copy;
     }
 
+    /// <summary>
+    /// Whether an input of this step holds a protected value (sensitive, encrypted or redacted). A step's diagnostics then
+    /// use their value-free form: a member path or a number from that value is not shown (spec 1229 FR-006).
+    /// </summary>
+    public bool HasProtectedInputs => _hasProtectedInputs;
+
+    private bool _hasProtectedInputs;
+
+    /// <summary>Returns a copy whose <see cref="HasProtectedInputs"/> is <paramref name="hasProtectedInputs"/>; the runtime sets it.</summary>
+    public ActivityExecutionContext WithProtectedInputs(bool hasProtectedInputs)
+    {
+        var copy = this with { };
+        copy._hasProtectedInputs = hasProtectedInputs;
+        return copy;
+    }
+
     private sealed class DroppedWarnings : IExecutionWarningSink
     {
         public static DroppedWarnings Instance { get; } = new();
@@ -154,7 +170,7 @@ public sealed record ActivityExecutionContext
             TriggerNodeId,
             operationKey,
             targetOperationKey,
-            logicalInvocationId ?? LogicalInvocationId).WithVariables(Variables).WithWarnings(Warnings);
+            logicalInvocationId ?? LogicalInvocationId).WithVariables(Variables).WithWarnings(Warnings).WithProtectedInputs(HasProtectedInputs);
 }
 
 /// <summary>Author-facing base for a transient activity that returns one atomic typed result.</summary>

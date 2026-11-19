@@ -88,8 +88,10 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         }
         catch (JavaScriptPrecisionException exception)
         {
-            // Spec 1228 FR-013: the precision policy refused the result; the step faults and nothing of it is written.
-            return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code, exception.Message));
+            // Spec 1228 FR-013: the precision policy refused the result; the step faults and nothing of it is written. With
+            // a protected input the fault names no number and no path from it (spec 1229 FR-006).
+            return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code,
+                context.HasProtectedInputs ? exception.ValueFreeMessage : exception.Message));
         }
 
         // The selection travels next to the result; whether its names are in this node's pinned outcome set is checked

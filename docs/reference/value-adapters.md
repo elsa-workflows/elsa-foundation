@@ -52,7 +52,7 @@ A script activity's changes go to the step write path of ADR 0090 (spec 1231). A
 
 | Case | Default | Code | Diagnostic |
 |---|---|---|---|
-| A lossy number reaches a write | Refused by the precision policy | `VF-PREC-001` | Path, stored and written value; an integer "exceeds the largest integer a JavaScript number holds exactly (9007199254740991)", a decimal "has more digits than a JavaScript number holds"; remedy: hold the number as a string |
+| A lossy number reaches a write | Refused by the precision policy | `VF-PREC-001` | Path, stored and written value; an integer "exceeds the largest integer a JavaScript number holds exactly (9007199254740991)", a decimal "has more digits than a JavaScript number holds"; remedy: hold the number as a string. When the step or expression read a protected value: the target and the reason only, no number and no path |
 | A lossy element of an array written whole | Refused by the precision policy | `VF-PREC-001` | The array path, "written as a whole", each lossy element with both values; remedy: hold it as a string or do not change the array |
 | A lossy number read but not written | One warning per evaluation, recorded on the activity execution and shown in its inspection (`Warnings`) | `VF-PREC-002` | The lossy paths and why; never a value. When the evaluation or step read a protected value, and in the log, only the roots (`variables.order`, `args`): a member below can be a key of that value |
 | A lossy number passed to a host function | Not yet: the isolated engine has no host functions. When S-1 adds them: logged warning, call not refused | `VF-PREC-002` | Function and argument path |

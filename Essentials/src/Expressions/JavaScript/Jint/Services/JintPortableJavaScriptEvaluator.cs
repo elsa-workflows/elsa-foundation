@@ -78,10 +78,13 @@ internal sealed class JintPortableJavaScriptEvaluator(
 
         // Spec 1228 FR-006a, ADR 0083 binding-readonly-v1: an input expression only reads. Any change the bridge finds
         // fails the evaluation, so nothing is written and nothing is dropped silently.
-        foreach (var (name, change) in variables?.Collect() ?? [])
+        if (variables is not null)
         {
-            if (change.Kind != ScriptValueChangeKind.Unchanged)
-                throw new InputExpressionWriteException(name, change.ChangedPaths.Count > 0 ? change.ChangedPaths[0] : change.Key, variables.IsDeclared(name));
+            foreach (var (name, change) in variables.Collect())
+            {
+                if (change.Kind != ScriptValueChangeKind.Unchanged)
+                    throw new InputExpressionWriteException(name, change.ChangedPaths.Count > 0 ? change.ChangedPaths[0] : change.Key, variables.IsDeclared(name));
+            }
         }
 
         if (result.IsUndefined())

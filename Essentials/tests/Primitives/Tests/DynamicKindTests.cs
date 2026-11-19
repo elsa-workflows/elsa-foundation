@@ -59,13 +59,17 @@ public class DynamicKindTests
     }
 
     [Fact]
-    public void A_nested_collection_of_strings_is_structured_and_a_single_string_is_text()
+    public void A_nested_collection_is_structured_and_other_types_infer_as_before()
     {
         // A dictionary of string arrays (WriteHttpResponse.Headers) nests its element under a String alias (US5).
         var headers = new ValueTypeDescriptor("String", CollectionKind.Dictionary,
             element: new TypeReference("String", CollectionKind.Array));
 
         Assert.Equal(ValueRepresentation.StructuredValue, ValueRepresentationDefaults.Infer(headers));
+        Assert.Equal(ValueRepresentation.StructuredValue, ValueRepresentationDefaults.Infer(new ValueTypeDescriptor("Byte", CollectionKind.List,
+            element: new TypeReference("Byte", CollectionKind.Array))));
+        Assert.Equal(ValueRepresentation.StructuredValue, ValueRepresentationDefaults.Infer(new ValueTypeDescriptor("Stream", CollectionKind.Array,
+            element: new TypeReference("Stream", CollectionKind.Array))));
         Assert.Equal(ValueRepresentation.TextValue, ValueRepresentationDefaults.Infer(new ValueTypeDescriptor("String")));
         Assert.Equal(ValueRepresentation.BinaryContent, ValueRepresentationDefaults.Infer(new ValueTypeDescriptor("Byte", CollectionKind.Array)));
         Assert.Equal(ValueRepresentation.StructuredValue, ValueRepresentationDefaults.Infer(new ValueTypeDescriptor("Any")));
