@@ -54,7 +54,8 @@ public sealed class WorkflowDeclaredInput
         string name,
         TypeReference type,
         bool isRequired,
-        JsonElement? defaultValue = null)
+        JsonElement? defaultValue = null,
+        bool isNullable = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(type);
@@ -68,6 +69,7 @@ public sealed class WorkflowDeclaredInput
         Type = type;
         IsRequired = isRequired;
         DefaultValue = defaultValue?.Clone();
+        IsNullable = isNullable;
     }
 
     /// <summary>The case-sensitive workflow-input name.</summary>
@@ -81,4 +83,7 @@ public sealed class WorkflowDeclaredInput
 
     /// <summary>An optional, detached JSON literal default.</summary>
     public JsonElement? DefaultValue { get; }
+
+    /// <summary>Whether the input accepts null values.</summary>
+    public bool IsNullable { get; }
 }

@@ -6155,10 +6155,11 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowDeactivationSlotRequest.WorkflowDefin
 Elsa.Workflows.Runtime.Core.Models.WorkflowDeactivationSlotRequest.WorkflowDefinitionId.init -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput
 Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.DefaultValue.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.IsNullable.get -> bool
 Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.IsRequired.get -> bool
 Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.Name.get -> string!
 Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.Type.get -> Elsa.Primitives.Models.TypeReference!
-Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.WorkflowDeclaredInput(string! name, Elsa.Primitives.Models.TypeReference! type, bool isRequired, System.Text.Json.JsonElement? defaultValue = null) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.WorkflowDeclaredInput(string! name, Elsa.Primitives.Models.TypeReference! type, bool isRequired, System.Text.Json.JsonElement? defaultValue = null, bool isNullable = false) -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowDispatchAdmissionDisposition
 Elsa.Workflows.Runtime.Core.Models.WorkflowDispatchAdmissionDisposition.Admitted = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowDispatchAdmissionDisposition
 Elsa.Workflows.Runtime.Core.Models.WorkflowDispatchAdmissionDisposition.AlreadyAdmitted = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowDispatchAdmissionDisposition
