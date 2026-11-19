@@ -111,8 +111,9 @@ E9 is the evidence for the distinction. A take locks the partition row, then mes
 A process renews its lease with one heartbeat, about three times per lease, whether its partitions are busy or idle.
 The heartbeat is one transaction: it sets its node record's `seen_at` to database time and `lease_until` to database
 time plus the lease, and reads back the partitions whose `owner` is this process, with their epochs. That read writes
-nothing. The Worker stands down every partition it holds that is missing from the answer or at another epoch, as a
-refused fence makes it stand down: it drops that partition's memory and work, and a later take may claim it again at a
+nothing. The Worker stands down every partition it held at the epoch it held when it sent the heartbeat that is
+missing from the answer or at another epoch, as a refused fence makes it stand down; a partition it took after sending
+that heartbeat is judged by the next one: it drops that partition's memory and work, and a later take may claim it again at a
 new epoch. The heartbeat locks only its own node record, so it cannot wait on a partition row a take or commit holds.
 
 The heartbeat takes over both jobs of the former per-partition renewal, an empty fenced commit per idle partition: it
@@ -216,7 +217,7 @@ MongoDB (K1b), and on the providers (K4). Process P owns partitions {a, b, c}; Q
 | NL-4 | **A renewal racing a take.** P's lease expires; Q's set take reads P's node record as expired and is held before its commit while P's heartbeat commits; then Q's take commits, taking a and b and leaving c | a and b are Q's at new epochs and P stands them down; c stays P's at its epoch, and P's commits to c land | K1b, K4 |
 | NL-5 | **A flush of seen marks only.** P holds a batch with no journal rows over a and b; Q takes b; P's batch then tries to land, on every store, MongoDB included | Refused whole; no seen or trial mark of P's epoch is written in a or b. Mutation: the fence of a batch with no journal rows is a plain read (on MongoDB, the partition document is not written), so P's stale marks land in b (M1) | K1b, K4 |
 | NL-6 | **A restart under the same host.** P's process restarts as P′ (a new process name); P′ takes a | a moves at a new epoch and counts a death for P's trial messages; b and c stay P's until P's node lease expires, and are then taken. Mutation: `StableNodeName` (a restarted process keeps its predecessor's name), so P′ inherits b and c without a take | K1b |
-| NL-7 | **A take renews its taker.** Q, with a lease near expiry, takes a | Q's node record is renewed in the take's transaction, and Q's local guard deadline restarts from the take's send time | K1b, K4 |
+| NL-7 | **A take renews its taker.** Q, with a lease near expiry, takes a | Q's node record is renewed in the take's transaction. If the take's reply arrives before Q's current guard deadline, the deadline restarts from the take's send time; a reply after it leaves Q latched expired, and Q stands down as [LEASE.md](../../prototypes/kernel-model/LEASE.md) requires. A heartbeat answer read before the take does not stand a down | K1b, K4 |
 
 ## Contract and evidence
 
