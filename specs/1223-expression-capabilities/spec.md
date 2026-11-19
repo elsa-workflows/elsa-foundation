@@ -4,15 +4,15 @@
 
 **Created**: 2026-11-10 · **Rechecked**: 2026-11-19 against the initiative branch at `b6a67a880`
 
-**Status**: Draft — **provisional**, initiative #3052 spec **S-1**. Issue #3026.
+**Status**: Approved — agreed 2026-11-19 by @j03y-nxxbz as coordinator (the approval plan), with every open question decided as recommended; applies ADR 0045 §5, ADR 0083, ADR 0046, ADR 0089, ADR 0090 and ADR 0092 as merged on the initiative branch. Initiative #3052 spec **S-1**. Issue #3026.
 
 **Input**: User description: "Expression capabilities (Elsa 4) — what expressions may do for current time, randomness, GUIDs, built-in helpers, and .NET-implemented functions, and how Elsa 3 time/GUID/string functions convert faithfully."
 
 ---
 
-## Provisional status *(read first)*
+## Basis
 
-This spec is **provisional** until it is approved. Every decision it applies is agreed: D-1, D-2, D-5 and D-6 in ADR 0045 §5; the capability profile in ADR 0083; dates, the value model and the .NET interop default in the ADR 0046 amendment; reads by name in ADR 0089; writes in ADR 0090; the invocation and refresh rules of ADR 0092. It does not depend on the unagreed JSON-integrity ADR (A-5): scripts serialize only with `JSON.stringify` (FR-009). Its open questions each carry a recommended answer.
+Every decision this spec applies is agreed: D-1, D-2, D-5 and D-6 in ADR 0045 §5; the capability profile in ADR 0083; dates, the value model and the .NET interop default in the ADR 0046 amendment; reads by name in ADR 0089; writes in ADR 0090; the invocation and refresh rules of ADR 0092. It does not depend on the JSON-integrity ADR (A-5): scripts serialize only with `JSON.stringify` (FR-009).
 
 ---
 
@@ -192,18 +192,18 @@ An author uses the built-in functions and expects them to behave the same in an 
 - **Spec 1231** (activities change variables) — script writes, which this spec does not change.
 - **Spec 1230 / ADR 0093** (background eligibility) — unchanged: `RunJavaScript` stays ineligible; input bindings run on the coordinator, so functions called from them do not affect eligibility.
 
-## Open questions
+## Resolved questions
 
-Each question has a recommended answer; the spec text follows the recommendation.
+Each question was decided as recommended; the spec text follows the decision.
 
-- **OQ-2 (non-blocking)**: expression diagnostics carry no JavaScript source line/column; FR-018 quotes the offending expression instead. **Recommended:** keep quoting; thread precise coordinates through all expression diagnostics in a separate follow-up.
-- **OQ-3**: FR-024 converts a non-literal date-string parse with a behaviour warning when no source time zone is set, as ADR 0046 does for non-literal date expressions; the stricter reading refuses it. In the JTest corpus this decides 3 definitions (`javascript-date-methods`, `performance-minimal-baseline`, `composition-execute-workflow-root`). **Recommended:** refuse without a source time zone (FR-024). ADR 0046's behaviour warning covers non-literal expressions bound to date *members*; for scripts the ADR says converting needs the source time zone, and offset-less text gives a different instant. The 3 definitions convert once a source time zone is set. (The 10 Nov draft recommended the warning.)
-- **OQ-4**: a corpus scan found that a PascalCase-invocation rule refuses none of the 36 definitions, while the corpus does use .NET members in camelCase (Elsa 3's engine resolved them that way). **Recommended:** FR-016's rule — refuse member use on values the converter knows were .NET objects (direct use and plain aliases), keep the .NET-type and PascalCase rules as the publish-time net, and record indirect flows as a gap. A full data-flow analysis is rejected as too heavy for the signal.
-- **OQ-5**: Elsa 3's `toJson` wrote different text from `JSON.stringify` (escaping, dates, `undefined`, `NaN`); a value-for-value Elsa 4 helper would mean a second JSON serializer with no purpose an author would choose it for. **Recommended:** no `toJson` in Elsa 4; the converter rewrites it to `JSON.stringify` with a behaviour warning (FR-009). The stricter alternative refuses `toJson` unless its result is parsed straight back (`JSON.parse(toJson(x))`, the corpus's copy idiom), where only the `undefined`/`NaN` cases differ.
-- **OQ-6**: should the 10 Nov `now()` helper stay? **Recommended:** drop it. Elsa 3 had no `now`, native `Date` and `Temporal` cover it, and as a reserved name (FR-027) it would warn on the common `const now = new Date()`.
-- **OQ-8**: Elsa 3 handed date-typed values to scripts as a JavaScript `Date`, Elsa 4 as ISO text. **Recommended:** the converter rewrites direct reads into a `Date` (FR-032), which keeps converted scripts working; refusing every use of a date-typed value would refuse common, faithful scripts.
-- **OQ-9**: Elsa 3 used the server's culture. **Recommended:** refuse locale-dependent calls without an explicit locale (FR-033). A source-culture option beside the source time zone would let them convert, but ADR 0046 does not define one, so it would need an ADR amendment; not proposed now.
-- **OQ-7**: the profile constant is shared with the Liquid evaluator. **Recommended:** one constant, renamed everywhere (FR-031); Liquid's own filters are unchanged by this spec, and unblocking its date filters under D-1 is a separate follow-up.
+- **OQ-2 (non-blocking)**: expression diagnostics carry no JavaScript source line/column; FR-018 quotes the offending expression instead. **Decided:** keep quoting; thread precise coordinates through all expression diagnostics in a separate follow-up.
+- **OQ-3**: an Elsa 3 script that parses a non-literal date string (`new Date(input)`) without a source time zone. **Decided:** refuse (FR-024). ADR 0046's behaviour warning covers non-literal expressions bound to date *members*; for scripts the ADR says converting needs the source time zone, and offset-less text gives a different instant. No default zone is taken from the converting server: it need not be the Elsa 3 server's zone, and ADR 0046 requires an explicit, recorded interpretation. In the JTest corpus this refuses 3 definitions (`javascript-date-methods`, `performance-minimal-baseline`, `composition-execute-workflow-root`) until a source time zone is set.
+- **OQ-4**: a corpus scan found that a PascalCase-invocation rule refuses none of the 36 definitions, while the corpus does use .NET members in camelCase (Elsa 3's engine resolved them that way). **Decided:** FR-016's rule — refuse member use on values the converter knows were .NET objects (direct use and plain aliases), keep the .NET-type and PascalCase rules as the publish-time net, and record indirect flows as a gap. A full data-flow analysis is rejected as too heavy for the signal.
+- **OQ-5**: Elsa 3's `toJson` wrote different text from `JSON.stringify` (escaping, dates, `undefined`, `NaN`); a value-for-value Elsa 4 helper would mean a second JSON serializer with no purpose an author would choose it for. **Decided:** no `toJson` in Elsa 4; the converter rewrites it to `JSON.stringify` with a behaviour warning (FR-009). The stricter alternative refuses `toJson` unless its result is parsed straight back (`JSON.parse(toJson(x))`, the corpus's copy idiom), where only the `undefined`/`NaN` cases differ.
+- **OQ-6**: should the 10 Nov `now()` helper stay? **Decided:** drop it. Elsa 3 had no `now`, native `Date` and `Temporal` cover it, and as a reserved name (FR-027) it would warn on the common `const now = new Date()`.
+- **OQ-7**: the profile constant is shared with the Liquid evaluator. **Decided:** one constant, renamed everywhere (FR-031); Liquid's own filters are unchanged by this spec, and unblocking its date filters under D-1 is a separate follow-up.
+- **OQ-8**: Elsa 3 handed date-typed values to scripts as a JavaScript `Date`, Elsa 4 as ISO text. **Decided:** the converter rewrites direct reads into a `Date` (FR-032), which keeps converted scripts working; refusing every use of a date-typed value would refuse common, faithful scripts.
+- **OQ-9**: Elsa 3 used the server's culture. **Decided:** refuse locale-dependent calls without an explicit locale (FR-033). A source-culture option beside the source time zone would let them convert, but ADR 0046 does not define one, so it would need an ADR amendment; not proposed now.
 
 ## Assumptions
 

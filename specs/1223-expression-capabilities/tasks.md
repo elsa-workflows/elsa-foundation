@@ -2,7 +2,7 @@
 
 **Feature**: [spec.md](spec.md) | [plan.md](plan.md) | [data-model.md](data-model.md) | [research.md](research.md) | contracts: [host-functions](contracts/host-functions.md), [conversion-and-diagnostics](contracts/conversion-and-diagnostics.md) | [quickstart.md](quickstart.md)
 
-**Status**: Provisional until the spec is approved (initiative #3052, S-1). Regenerated 2026-11-19 against `b6a67a880`. Test cadence: not greenfield, no TDD declared — tests are risk-based and may land with or after the implementation they cover (xUnit only; **no FluentAssertions**).
+**Status**: Approved with the spec (2026-11-19; initiative #3052, S-1). Regenerated 2026-11-19 against `b6a67a880`. Test cadence: not greenfield, no TDD declared — tests are risk-based and may land with or after the implementation they cover (xUnit only; **no FluentAssertions**).
 
 **Touched code**: `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs`; `Essentials/src/Expressions/JavaScript/Core/Contracts/JavaScriptHostFunctionDeclaration.cs`; `Essentials/src/Expressions/JavaScript/Jint/Services/IsolatedJintEngine.cs`, `JintPortableJavaScriptEvaluator.cs` (+ new time-system and built-in files); `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Services/` (new analyzer, reserved names); the Design validators (`ScriptOutcomeValidator` or a sibling); `Essentials/src/Expressions/Liquid/Services/PortableLiquidExpressionHandler.cs`; `Essentials/src/Activities/Primitives/Activities/Inline.cs`; `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`, `Services/Elsa3ValueFlowLowerer.cs`, `Internal/Elsa3JavaScriptNames.cs`, `README.md`; corresponding xUnit test projects and fixtures.
 

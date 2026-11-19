@@ -3,7 +3,7 @@
 **Branch**: `claude/3052-s1-expression-capabilities` | **Date**: 2026-11-10, rechecked 2026-11-19
 **Spec**: [spec.md](spec.md) | **Initiative**: [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052) — spec **S-1** | **Issue**: [#3026](https://github.com/elsa-workflows/elsa-foundation/issues/3026)
 
-**Status**: **Provisional** until the spec is approved. Every decision it applies is agreed (ADR 0045 §5 D-1/D-5/D-6, ADR 0083, ADR 0046 as amended, ADR 0089, ADR 0090, ADR 0092). Approval of the plan is approval of the semantic approach and contracts, not an implemented API.
+**Status**: **Approved** with the spec (2026-11-19, coordinator). Every decision it applies is agreed (ADR 0045 §5 D-1/D-5/D-6, ADR 0083, ADR 0046 as amended, ADR 0089, ADR 0090, ADR 0092). Approval of the plan is approval of the semantic approach and contracts, not an implemented API.
 
 **Inspected baseline**: `initiative/3052-elsa3-to-elsa4-conversion` at `b6a67a880` (2026-11-19), after specs 1221, 1222, 1230 and 1231 were implemented.
 
