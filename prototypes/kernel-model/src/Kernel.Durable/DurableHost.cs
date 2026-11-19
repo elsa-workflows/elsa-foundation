@@ -23,7 +23,7 @@ public sealed class DurableHost : IScopeHost
     private readonly Worker? _node;
     private readonly Dictionary<int, NodeScope> _scopes = [];
     private readonly SemaphoreSlim _turn = new(1, 1);     // a pass, a gain and a loss of the node's worker never overlap
-    private long _passes, _lastAt;
+    private long _passes, _lastAt, _calls;
     private TimeSpan? _last;
 
     public DurableHost(IEnumerable<Worker> workers)
@@ -50,6 +50,9 @@ public sealed class DurableHost : IScopeHost
             options = (options ?? new()) with { OnJournal = options?.OnJournal is { } earlier ? moved => { earlier(moved); projection.Nudge(moved); } : projection.Nudge };
         return store.OwnedSetsAvailable ? new(Worker.ForNode(node, store, type, options)) : new(scope => new Worker(node, scope, store, type, options));
     }
+
+    /// <summary>Calls to a scope's pass, and the worker passes they ran; the rest were answered by the one-pass rule.</summary>
+    public (long Calls, long Passes) PassCounts => (Interlocked.Read(ref _calls), Interlocked.Read(ref _passes));
 
     /// <summary>The node's one worker, or null for a host of a worker per scope.</summary>
     public Worker? NodeWorker => _node;
@@ -79,6 +82,7 @@ public sealed class DurableHost : IScopeHost
         try
         {
             if (!node.Holds(scope.Scope)) return null;
+            _calls++;
             // Another scope's pass ran since this scope's last call, and no wake or job result came since: that pass
             // served this scope too. Its answer stands, less the time gone since; once that has run out (a timer is due,
             // or a beat), this call runs the pass, whichever scope ran the last one and whether it is still held.

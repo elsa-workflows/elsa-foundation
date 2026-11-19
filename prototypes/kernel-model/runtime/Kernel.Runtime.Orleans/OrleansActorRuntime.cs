@@ -27,6 +27,10 @@ public sealed record OrleansRuntimeOptions
 /// scope through layer 2's <see cref="IScopeHost"/>, which takes the fence or declines, and runs its passes on a grain
 /// timer, one at a time, because a grain is single-threaded. A wake hint is a one-way grain call. Orleans may activate a
 /// grain twice for a while (a network split, a silo declared dead too early); the fence lets one of them write.
+/// With layer 2's per-node host (K1 D2) a grain's activation joins the silo's owned set, served by one worker, and its
+/// deactivation leaves it. The host runs the passes of the silo's grains one at a time, and a pass flushes the dirty
+/// partitions of the whole set in one batch. Orleans' placement decides which silo holds which partition: the kernel's
+/// balancer is not used here.
 /// </summary>
 public sealed class OrleansActorRuntime(IGrainFactory grains, OrleansRuntimeOptions options) : IActorRuntime
 {

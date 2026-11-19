@@ -4,7 +4,8 @@ namespace Kernel.Runtime.Conformance;
 
 /// <summary>
 /// The suite's command line, for a runtime's own runner:
-/// <c>semantic [filter]</c>, <c>semantic-broken [filter]</c>, <c>stress [seconds] [messages]</c>, <c>stress-broken [seconds] [messages]</c>.
+/// <c>semantic [filter]</c>, <c>semantic-broken [filter]</c>, <c>stress [seconds] [messages]</c>, <c>stress-broken [seconds] [messages]</c>,
+/// <c>cost [partitions] [seconds] [tokens]</c> (<see cref="RuntimeCost"/>).
 /// The <c>-broken</c> forms break the store's fence on purpose: the fence's cases and the stress test must then fail,
 /// which shows that the runtime really did activate a scope twice at once.
 /// </summary>
@@ -34,8 +35,11 @@ public static class Cli
                 // A run that never held two activations at once, or whose fence never refused one, tested nothing.
                 if (!result.Exercised) return 1;
                 return options.BrokenFence ? result.Broken > 0 ? 0 : 1 : result.Violations == 0 ? 0 : 1;
+            case ["cost", .. var rest]:
+                int Arg(int i, int otherwise) => rest.Length > i ? int.Parse(rest[i], CultureInfo.InvariantCulture) : otherwise;
+                return await RuntimeCost.RunAsync(runtime, store, partitions: Arg(0, 16), seconds: Arg(1, 10), tokens: Arg(2, 400));
             default:
-                Console.Error.WriteLine("semantic [filter] | semantic-broken [filter] | stress [seconds] [messages] | stress-broken [seconds] [messages]");
+                Console.Error.WriteLine("semantic [filter] | semantic-broken [filter] | stress [seconds] [messages] | stress-broken [seconds] [messages] | cost [partitions] [seconds] [tokens]");
                 return 2;
         }
     }

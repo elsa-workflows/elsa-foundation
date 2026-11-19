@@ -15,10 +15,23 @@ public interface IRuntimeProvider
     Task<IRuntimeCluster> CreateAsync(RuntimeEnvironment environment);
 
     /// <summary>
-    /// Layer 2 serves each node's scopes with one worker, as one owned set (K1 D1), and the owned-set cases run. A runtime
-    /// that runs the passes of a node's scopes at once gets a worker per scope until its adapter joins (K1 slice 6).
+    /// Layer 2 serves each node's scopes with one worker, as one owned set (K1 D1), and the owned-set cases run. Its host
+    /// runs the passes, gains and losses of a node's scopes one at a time, also when the runtime calls them at once.
     /// </summary>
     bool OneWorkerPerNode => false;
+
+    /// <summary>Who decides which node holds which scope: the kernel's balancer, or the runtime's own placement (Orleans, K1 D2).</summary>
+    Placement Placement => Placement.Runtime;
+}
+
+/// <summary>Who places scopes on nodes. A case that tests one of them runs only under it.</summary>
+public enum Placement
+{
+    /// <summary>The kernel's balancer (<c>Balancer.Plan</c>): a join or a leave moves the fewest partitions.</summary>
+    Balancer,
+
+    /// <summary>The runtime's own placement. Its nodes can be asked to move a scope (<see cref="IRuntimeNode.MoveAsync"/>).</summary>
+    Runtime,
 }
 
 /// <summary>What a node gets from layer 2: the host it activates scopes through, and the membership that the built-in runtime counts nodes with. A runtime with a membership of its own ignores the second.</summary>
@@ -56,6 +69,12 @@ public interface IRuntimeNode
 
     /// <summary>A crash: the node's passes stop where they are and nothing is given up.</summary>
     Task KillAsync();
+
+    /// <summary>
+    /// Under <see cref="Placement.Runtime"/>: hand one scope this node holds over to <paramref name="to"/>, as the runtime's
+    /// own placement would. It returns once the move is asked for; the scope is given up here, then activated there.
+    /// </summary>
+    Task MoveAsync(int scope, IRuntimeNode to) => throw new NotSupportedException("this runtime places scopes with the kernel's balancer");
 }
 
 /// <summary>The reference: the built-in runtime, one <see cref="RuntimeNode"/> per node, on one wake signal per side.</summary>
@@ -63,6 +82,7 @@ public sealed class BuiltInProvider : IRuntimeProvider
 {
     public string Name => "built-in";
     public bool OneWorkerPerNode => true;
+    public Placement Placement => Placement.Balancer;
 
     public Task<IRuntimeCluster> CreateAsync(RuntimeEnvironment environment) => Task.FromResult<IRuntimeCluster>(new Cluster(environment));
 
