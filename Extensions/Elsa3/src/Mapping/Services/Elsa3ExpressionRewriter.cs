@@ -1682,4 +1682,10 @@ public static class Elsa3ImportDiagnosticCodes
 
     /// <summary>Info: a converted script selects a converter-declared catch-all for computed names outside its known set (spec 1208).</summary>
     public const string ScriptOutcomeCatchAll = "ELS3-SCRIPT-OUTCOME-CATCHALL";
+
+    /// <summary>
+    /// An untyped activity result is bound to a boolean, string or number input, and the import cannot show that Elsa 4
+    /// gives the value Elsa 3 did (spec 1228 FR-023, FR-024): refused, with guidance.
+    /// </summary>
+    public const string UntypedResultIntoTypedInput = "ELS3-UNTYPED-RESULT";
 }

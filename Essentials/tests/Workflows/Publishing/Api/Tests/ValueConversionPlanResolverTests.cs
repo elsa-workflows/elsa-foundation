@@ -141,6 +141,27 @@ public sealed class ValueConversionPlanResolverTests
     }
 
     [Theory]
+    [InlineData("Boolean")]
+    [InlineData("String")]
+    [InlineData("Int32")]
+    [InlineData("Int64")]
+    [InlineData("Double")]
+    [InlineData("Decimal")]
+    public void A_dynamic_result_binds_to_a_scalar_input_through_the_json_profile(string target)
+    {
+        // Spec 1228 FR-025, US6: an Elsa 4 dynamic value (a script result is Any) converts into a scalar input at run
+        // time when its JSON kind matches; publication plans it rather than refusing with VF-COER-001.
+        var typedResolver = new ValueConversionPlanResolver(wellKnownTypeRegistry: TestWellKnownTypeRegistry.Create());
+        var source = Type("Any");
+
+        var plan = typedResolver.Resolve(source, ValueRepresentationDefaults.Infer(source), Type(target));
+
+        Assert.Equal(ValueRepresentation.StructuredValue, plan.SourceRepresentation);
+        Assert.Equal(ValueConversionOperation.Profile, plan.Operation);
+        Assert.Equal("elsa.json", plan.Profile!.Id);
+    }
+
+    [Theory]
     [InlineData("System.Text.Json.JsonElement")]
     [InlineData("System.Text.Json.JsonElement?")]
     public void A_json_element_source_needs_a_registered_typed_target(string sourceAlias)

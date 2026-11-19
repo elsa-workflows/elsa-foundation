@@ -719,7 +719,8 @@ internal sealed class Elsa3ActivityNormalizer(
             case Elsa3ValueContract.JsonOnly:
                 if (isLiteral)
                     return IsJson(literal) ? value : Outside("must be JSON", "Use a JSON literal.");
-                if (alias is null || alias is TypeAliasConvention.AnyAlias or "JsonElement" or "JsonNode" or "JsonObject" or "ExpandoObject" or "IDictionary" or "Dictionary" or "ObjectDictionary")
+                // An Elsa 3 declaration names the dynamic kind "Object"; it reads as Any (spec 1228 FR-018).
+                if (alias is null || TypeAliasConvention.IsAny(alias) || alias is "JsonElement" or "JsonNode" or "JsonObject" or "ExpandoObject" or "IDictionary" or "Dictionary" or "ObjectDictionary")
                     return value;
                 return Outside($"must be JSON, but is declared as '{alias}'", "Produce a JSON object in the expression and declare its type as Object.");
             case Elsa3ValueContract.EnumNameToInt:

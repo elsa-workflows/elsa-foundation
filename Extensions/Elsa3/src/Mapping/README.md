@@ -122,6 +122,13 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   bound to a JSON member must therefore be declared untyped in Elsa 3 (`Object`, or a list or dictionary of objects):
   Elsa 3 converted a typed declaration's result (`Int32` turns `"5"` into 5), and Elsa 4 would take the value as
   returned, so a typed declaration is `VF-IMP-008`.
+- **Script results into typed inputs** (spec 1228 US6). A RunJavaScript result has no declared type. Elsa 3 coerced it
+  into a boolean, string or number input whatever it was (`"true"` and `1` became `true`, a fraction was rounded);
+  Elsa 4 converts only a JSON value of the matching kind. The import infers the kind from the script's completion value
+  and its top-level returns (literals, comparisons, `!`, template strings, `Boolean(…)`, `String(…)`, `Number(…)`,
+  `Math.round(…)`, …) and keeps the binding only when it matches the input (for an integral input, an integer). Any
+  other or unknown kind is `ELS3-UNTYPED-RESULT`, with guidance to state the kind in the script. Other untyped
+  producers (a loop item, an event payload) are not checked: nothing in the definition shows their kind.
 - **Literal lists.** A literal bound to a collection input whose text is a JSON array (`["Approved","Rejected"]`,
   `[200,404]`) converts to that JSON array, as Elsa 3 converted the text. Elsa 4 reads literal text for a collection
   as a comma-separated list, so the brackets and quotes would otherwise become part of the items.

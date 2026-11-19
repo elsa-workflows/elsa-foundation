@@ -546,6 +546,39 @@ public sealed class ValueConversionPlanTests
             JsonSerializer.SerializeToElement(xml),
             ValueProtectionPolicy.InstanceInline);
 
+    [Theory]
+    [InlineData("Boolean", "true", true)]
+    [InlineData("Boolean", "false", true)]
+    [InlineData("Boolean", "\"true\"", false)]
+    [InlineData("Boolean", "1", false)]
+    [InlineData("String", "\"order-1\"", true)]
+    [InlineData("String", "true", false)]
+    [InlineData("String", "42", false)]
+    [InlineData("Int32", "42", true)]
+    [InlineData("Int32", "42.5", false)]
+    [InlineData("Int32", "\"42\"", false)]
+    [InlineData("Int32", "true", false)]
+    [InlineData("Double", "42.5", true)]
+    [InlineData("Double", "\"42.5\"", false)]
+    public void A_dynamic_value_converts_into_a_scalar_only_from_the_matching_json_kind(string target, string json, bool converts)
+    {
+        // Spec 1228 FR-025 (D-12): a JSON value whose kind matches the scalar target converts; text is never parsed into a
+        // boolean or a number, and a number that does not fit an integral target is refused.
+        var source = new ValueTypeDescriptor("Any");
+        var plan = new ValueConversionPlan(1, ValueRepresentation.StructuredValue, source, new ValueTypeDescriptor(target),
+            ValueConversionMode.Auto, ValueConversionOperation.Profile, new ValueConversionProfileReference("elsa.json", "1"), null, null);
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Boolean"] = typeof(bool), ["String"] = typeof(string), ["Int32"] = typeof(int), ["Double"] = typeof(double)
+        }));
+        var value = ValueEnvelope.Inline(source, JsonSerializer.Deserialize<JsonElement>(json), ValueProtectionPolicy.InstanceInline);
+
+        if (converts)
+            Assert.Equal(json, executor.Convert(value, plan).InlineValue!.Value.GetRawText());
+        else
+            Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(value, plan));
+    }
+
     private static RuntimeValueConversionExecutor TypedExecutor() => new(new TestTypeRegistry(
         new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {

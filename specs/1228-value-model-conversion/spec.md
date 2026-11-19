@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Approved — by the coordinator on 2026-11-16. The ADR 0046 amendment it applies is merged into the initiative branch.
+**Status**: Implemented — PR #4838 (with spec 1222's Phase 8, the script body's read surface it builds on). Approved by the coordinator on 2026-11-16; the ADR 0046 amendment it applies is merged into the initiative branch.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-8**,
 analysis **A-1**, decisions **D-12**, **D-15**, **D-16** and **D-17**.

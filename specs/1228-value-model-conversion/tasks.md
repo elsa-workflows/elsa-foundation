@@ -7,7 +7,7 @@
 This work changes existing code, not greenfield: tests go with each change; no test-first cadence is declared.
 
 **Gates**:
-- User Story 6 waits on #3167 (S-0).
+- User Story 6 waited on #3167 (S-0), merged as #4832.
 - User Stories 3 and 7 needed S-4's script body read surface (spec 1222 Phase 8); it is built in the same PR (#4838),
   on S-7's step variable session.
 
@@ -92,14 +92,14 @@ Paths: `Jint/` = `Essentials/src/Expressions/JavaScript/Jint/`, `JsCore/` =
 
 ## Phase 8: User Story 6 — Elsa 3 script result into a typed input (P2)
 
-**Goal**: faithful or refused at import. **Waits on** #3167.
+**Goal**: faithful or refused at import. #3167 merged (#4832).
 **Independent Test**: spec User Story 6.
 
-- [ ] T035 [US6] Re-measure #3196 after #3167 lands; record which bindings now convert in the PR description — **Waits on** #3167 (S-0), being fixed in a parallel session.
-- [ ] T036 [US6] Record Elsa 3.6.3's coercion per JSON kind (boolean, string, number, null, object, array) into each scalar target, from the Elsa 3 source (research R-5), as a table in `specs/1228-value-model-conversion/research.md` (R-5) — **Waits on** #3167 (S-0), being fixed in a parallel session.
-- [ ] T037 [US6] Make the `elsa.json@1` route convert a JSON value of the matching kind into a scalar target, never parsing text (FR-025), in `Pub/ValueConversionPlanResolver.cs`, with tests in `Essentials/tests/Workflows/Publishing/Api/Tests/ValueConversionPlanResolverTests.cs` — **Waits on** #3167 (S-0), being fixed in a parallel session.
-- [ ] T038 [US6] Stop `TypesMatch` treating an untyped producer as compatible with a typed input; convert per T036's table or refuse with a new stable `ELS3-` code naming activity, input and guidance, in `E3/Services/Elsa3ValueFlowLowerer.cs` — **Waits on** #3167 (S-0), being fixed in a parallel session.
-- [ ] T039 [US6] End-to-end test: fixture `reusable-reads-result` imports, publishes and runs both branches; each JSON kind converts or is refused at import; no `VF-COER-001` (acceptance 1–4) in `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/ScriptResultIntoTypedInputTests.cs` — **Waits on** #3167 (S-0), being fixed in a parallel session.
+- [x] T035 [US6] Re-measure #3196 after #3167 lands; record which bindings now convert in the PR description — re-measured after #3167 (#4832) merged and with this PR's US6 check: the JTest corpus is unchanged (8 of 36 convert, 6 publish, 2 run to completion; the same refusals by stage and code); no definition there binds a script result to a typed input, so `ELS3-UNTYPED-RESULT` refuses none. The `reusable-reads-result` fixture (#3196) imports, publishes and runs (T039)
+- [x] T036 [US6] Record Elsa 3.6.3's coercion per JSON kind (boolean, string, number, null, object, array) into each scalar target, from the Elsa 3 source (research R-5), as a table in `specs/1228-value-model-conversion/research.md` (R-5) — the table is in research R-5, from Elsa 3.6.3 `ObjectConverter.ConvertTo` (`d6a57f5f88`)
+- [x] T037 [US6] Make the `elsa.json@1` route convert a JSON value of the matching kind into a scalar target, never parsing text (FR-025), in `Pub/ValueConversionPlanResolver.cs`, with tests in `Essentials/tests/Workflows/Publishing/Api/Tests/ValueConversionPlanResolverTests.cs` — the route already converts only a matching JSON kind and never parses text (`RuntimeValueConversionExecutor.ValidateJsonForType`); `Any` into a scalar now publishes through it (US4 and #3167 made `Any` structured). Tests: `ValueConversionPlanResolverTests.A_dynamic_result_binds_to_a_scalar_input_through_the_json_profile` and `ValueConversionPlanTests.A_dynamic_value_converts_into_a_scalar_only_from_the_matching_json_kind`
+- [x] T038 [US6] Stop `TypesMatch` treating an untyped producer as compatible with a typed input; convert per T036's table or refuse with a new stable `ELS3-` code naming activity, input and guidance, in `E3/Services/Elsa3ValueFlowLowerer.cs` — decided by Joey 2026-11-19: infer the kind from the script's source, refuse an unknown or other kind. `Elsa3ScriptResultKinds` infers it; `Elsa3ValueFlowLowerer.UntypedResultRefusal` keeps the binding only when it fits and refuses otherwise with `ELS3-UNTYPED-RESULT`. Only script results are checked (other untyped producers have no source that shows a kind: follow-up). Tests: `Extensions/Elsa3/tests/Mapping/Tests/Elsa3ScriptResultIntoTypedInputTests.cs`
+- [x] T039 [US6] End-to-end test: fixture `reusable-reads-result` imports, publishes and runs both branches; each JSON kind converts or is refused at import; no `VF-COER-001` (acceptance 1–4) in `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/ScriptResultIntoTypedInputTests.cs` — done in that file with fixtures `reusable-reads-result` (Approved) and a new `reusable-reads-result-false` (Rejected); the per-kind import decisions are in the converter tests (T038)
 
 ## Phase 9: User Story 7 — A script result is as protected as what it read (P3)
 
@@ -115,7 +115,7 @@ Paths: `Jint/` = `Essentials/src/Expressions/JavaScript/Jint/`, `JsCore/` =
 - [x] T044 Run the bridge benchmark on 1 KB, 100 KB and 1 MB inputs against today's engine (SC-007), keep it in the benchmark project so a later bridge can be compared, and record the result in the PR description — opt-in xunit benchmark `ScriptValueBridgeBenchmark` (no benchmark project exists and the plan adds no external dependency); the baseline is the pre-spec frozen conversion, kept in the benchmark; results in the PR
 - [x] T045 Re-run the JTest corpus measurement (SC-008) and compare with T002 — unchanged at the PR head: 8 of 36 convert and 6 of 36 publish (2 run to completion); one definition moved between refusal codes; SC-008 holds
 - [x] T046 Regenerate the dependency map and solution filters if project references changed; run the quickstart by hand — no project reference changed (only a package reference in the Jint project, whose lock files are updated), so the solution filters are unchanged and the dependency map is generated, not committed; quickstart steps 5 and 6 and the input-expression parts were run in the real app (PR description); steps 1 to 4 (the Run JavaScript body) are covered end to end by `ScriptBodyVariablesRunTests`, since the Workbench does not enable the scripting feature
-- [ ] T047 Set the spec status to `Implemented` in the finishing PR — **Waits on** US6 (#3167); the spec stays Approved, not Implemented, in this PR.
+- [x] T047 Set the spec status to `Implemented` in the finishing PR — done in PR #4838
 
 ## Dependencies
 

@@ -27,6 +27,16 @@ the selected names in order, or `Empty`). It is not registered as an expression 
 evaluate canonical input bindings, and shares only the closed `IsolatedJintEngine` implementation
 with portable expression evaluation.
 
+- **Variables** (spec 1222 FR-033, spec 1228 FR-006, FR-007): the request's `Variables`
+  (`IScriptVariableSession`, `Elsa.Expressions.JavaScript.Core`) gives the body the `variables` root and
+  `getVariable`, read through the host's session (each read recorded; the committed value plus the step's own
+  writes). After the run, each change the bridge reports goes through the precision policy and then back through
+  `Write` as a whole value (a member change patched into the stored value); every change is checked before any is
+  written. A change made without assigning the variable is still written and raises `VF-WRITE-001` (ADR 0090 C2).
+  When `HasReadProtectedValue` is set, the evaluator reports warnings in their protected form. The implementation
+  is `StepScriptVariables` in `Elsa.Activities.Scripting`, over the step's `IStepVariableSession`; without a session
+  the body has no `variables` root.
+
 - **Built-in `complete(result, outcomes)`** (spec 1208 FR-007): installed for script activities only.
   A script selects outcomes solely by *returning* `complete(result, outcomes)`, where `outcomes` is
   omitted, `undefined`, a non-blank string or an array of non-blank strings (`[]` is an explicitly

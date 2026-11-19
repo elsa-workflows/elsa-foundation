@@ -45,8 +45,11 @@ An entered value written unchanged, as a result or inside another value, is writ
 carries no loss. Any other written number that equals, as a double, a lossy entered number carries that loss
 (FR-011a). Changing `args` is local to the evaluation and never a write.
 
-A script activity's changes go to the step write path of ADR 0090 (spec 1231). An input expression never writes
-(ADR 0083 `binding-readonly-v1`).
+A script activity reads workflow variables through `variables` and `getVariable` over its step's variable session
+(spec 1222 FR-033): each read is recorded with its version and protection, and returns the committed value plus the
+step's own writes. Its changes go to the step write path of ADR 0090 (spec 1231), committed with the step; every
+change meets the precision policy before any is written. Its result takes the strongest protection among the values
+it read (spec 1228 US7). An input expression never writes (ADR 0083 `binding-readonly-v1`).
 
 ### Refusals and warnings
 
@@ -58,6 +61,8 @@ A script activity's changes go to the step write path of ADR 0090 (spec 1231). A
 | A lossy number passed to a host function | Not yet: the isolated engine has no host functions. When S-1 adds them: logged warning, call not refused | `VF-PREC-002` | Function and argument path |
 | An input expression assigns a variable or a member of one, visibly in its source | Refused at publish | `VF-BIND-001` | Node, input, variable, path; "input expressions only read"; use a script activity |
 | An input expression changes a read value in a way publication cannot see | Evaluation fails, nothing written | `VF-BIND-001` | Same; when a value it read is protected, the declared variable only, no path, and no name it computed |
+| A script activity changes a value it read without assigning the variable (`variables.order.total = 1`) | Written (a partial update); one warning recorded on the activity execution | `VF-WRITE-001` | The variable and the changed paths; when a value it read is protected, the variable only. Assign the variable to make the write explicit, or copy it (`{...variables.order}`) to change a local copy |
+| A script activity reads a name no visible variable has | Reads `undefined`; one warning | `VF-READ-001` | The name; when a value it read is protected, none |
 
 The precision policy is one replaceable host-wide component (`IJavaScriptPrecisionPolicy`, D-17). Elsa ships only
 `RefusingPrecisionPolicy`, with no options and no per-workflow or per-node override. A host that wants other handling
@@ -72,6 +77,7 @@ The bridge records its cost per evaluation on the `Elsa.Expressions.JavaScript` 
 | Direction | Accepts | Produces | Lossless | Refused |
 |---|---|---|---|---|
 | Core value → .NET input | JSON whose kind matches the input type | The .NET value, through the shared serializer baseline (S-9) | Every value the type holds | A JSON kind that does not match a scalar target; text is never parsed into a boolean or a number (D-12) |
+| Dynamic kind (`Any`, a script result) → a scalar input (`Boolean`, `String`, a number) | A JSON value of the matching kind, through `elsa.json@1`; an integral target only a number that fits | The same value | Always | Another kind, at run time (FR-025). An imported Elsa 3 script result is checked at import instead (`ELS3-UNTYPED-RESULT`, spec 1228 US6) |
 | Dynamic kind (`Any`) → `JsonElement`, `JsonElement?`, `JsonNode` | Any valid JSON | The same JSON, no conversion step | Always | — |
 | Dynamic kind → `JsonObject`, `JsonArray` | Any valid JSON at publish | The same JSON | When the shape matches | A value of another shape, at run time, with a diagnostic |
 | .NET output → core value | The output's .NET value | JSON through the shared serializer baseline | Every value the type holds | A value with no JSON form |

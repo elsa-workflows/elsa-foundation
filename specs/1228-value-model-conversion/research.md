@@ -97,8 +97,25 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 
 - **Decision**: record, per JSON kind and per typed target, what Elsa 3.6.3's `ObjectConverter.ConvertTo` produced.
   Convert where Elsa 4 gives the same value; refuse at import otherwise.
-- **To do in implementation**: read the Elsa 3 source (release/3.6.3, checked against 3.5.3), as spec 267 did, and
-  fill the table here (task T036). Fix #3167 first and re-measure; it may make the JSON route work for more cases.
+- **Source read** (T036): Elsa 3.6.3 (`d6a57f5f88`), `src/modules/Elsa.Expressions/Helpers/ObjectConverter.cs`.
+  A Jint script result reaches `ConvertTo` as a CLR value: `bool`, `double`, `string`, `null`, `ExpandoObject` (an
+  object) or `object[]` (an array). Elsa 4 hands the same result on as JSON, and the `elsa.json@1` route converts only
+  a JSON value of the matching kind (FR-025, D-12; `RuntimeValueConversionExecutor.ValidateJsonForType`).
+
+  | JSON kind of the result | `Boolean` | `String` | integral (`Int32`, `Int64`, …) | `Double`, `Decimal` |
+  |---|---|---|---|---|
+  | boolean | same (assignable) | Elsa 3: `"True"`/`"False"` (`BooleanConverter`); Elsa 4 refuses | Elsa 3: 1 or 0 (`Convert.ChangeType`); Elsa 4 refuses | Elsa 3: 1 or 0; Elsa 4 refuses |
+  | number | Elsa 3: non-zero is `true` (`Convert.ChangeType`); Elsa 4 refuses | Elsa 3: the number as text, current culture (`DoubleConverter`); Elsa 4 refuses | integer: same; a fraction: Elsa 3 rounds half to even, Elsa 4 refuses | same |
+  | string | Elsa 3: `bool.Parse` (`"true"` → `true`, other text fails); Elsa 4 refuses (no text parsing) | same | Elsa 3: parsed (`Int32Converter`); Elsa 4 refuses | Elsa 3: parsed; Elsa 4 refuses |
+  | null | Elsa 3: `null` (the input's default); Elsa 4: no value of the kind | Elsa 3: `null` | Elsa 3: `null` | Elsa 3: `null` |
+  | object, array | Elsa 3: fails (`InvalidCastException`); Elsa 4 refuses | Elsa 3: the JSON text (dictionary branch); Elsa 4 refuses | Elsa 3: fails; Elsa 4 refuses | Elsa 3: fails; Elsa 4 refuses |
+
+- **Result**: Elsa 4 gives the value Elsa 3 did exactly when the result's kind matches the target, and, for an integral
+  target, the number is an integer. The import therefore infers the kind from the script's source (decided by Joey
+  2026-11-19: infer, refuse unknown) and keeps the binding only then; any other or unknown kind is refused at import
+  with `ELS3-UNTYPED-RESULT` and guidance to state the kind (`Boolean(…)`, `String(…)`, `Number(…)`, `Math.round(…)`).
+  Only a script's result is checked: other untyped producers (a loop item, an event payload) carry no source that
+  shows a kind and keep today's binding (follow-up).
 
 ## R-6 One dynamic kind (settled)
 
