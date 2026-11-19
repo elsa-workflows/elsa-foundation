@@ -119,7 +119,9 @@ simulation's node. It runs on its own cadence, never behind a balancing round's 
 and hands the Worker its answer with the monotonic time just before it was sent. The heartbeat is one statement or
 transaction: it sets its node record's `seen_at` to database time and `lease_until` to database
 time plus the lease, and reads back the partitions whose `owner` is this process, with their epochs. That read writes
-nothing. The Worker stands down every partition it held at the epoch it held when it sent the heartbeat that is
+nothing. The membership reads that balancing needs (the live-node count, the free partitions) run after that statement
+or transaction, outside any transaction holding a node record, so a heartbeat never reads another node record while
+it holds its own. The Worker stands down every partition it held at the epoch it held when it sent the heartbeat that is
 missing from the answer or at another epoch, as a refused fence makes it stand down; a partition it took after sending
 that heartbeat is judged by the next one. The answer is also reconciled the other way: a partition it lists as this
 process's, at an epoch the Worker does not hold, and with no take of it in flight between the heartbeat's send and its
@@ -154,8 +156,9 @@ and the transient conflict is retried.
 **Liveness follows the Worker's passes.** A host renews its node record only while each of its Workers that holds a partition has
 completed a pass within the last lease; a Worker that has never held a partition, or gave its partitions up by release, is live
 and does not hold the heartbeat back, so a fresh node heartbeats and takes. A Worker that stood down because its guard
-expired is not live: its host withholds the heartbeat and takes nothing until its node lease has expired (the last
-answer's database time plus the lease), and releases none of the partitions it stood down, so another process's take
+expired is not live: its host withholds the heartbeat and takes nothing until its node lease has surely expired, measured on its
+monotonic clock: one lease after the last renewing call it sent (a heartbeat or a take, an empty or refused one
+included), plus that call's timeout, and releases none of the partitions it stood down, so another process's take
 counts their deaths. A Worker whose pass does not complete, because a commit, poll or load hangs (a dead
 connection), stops the renewal: the lease expires, another process takes the partitions, and the takeover counts the
 death the trial protocol needs, as the per-partition beat did, since that beat ran inside the same pass. A host that
