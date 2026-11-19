@@ -27,8 +27,9 @@ public static class Cases
 
     private static readonly TimeSpan Slack = TimeSpan.FromSeconds(3);
 
-    // K1 slice 7: a takeover above 1,024 partitions takes longer than the bounds were set for (a crash at 4,096 settles in
-    // minutes, slice 8 measures why), so the settling bounds and a case's time grow with the count above 1,024.
+    // K1 slice 7: above 1,024 partitions the settling bounds and a case's time grow with the count. A crash at 4,096 took
+    // minutes then; slice 8 found that in the suite's own holder read (Watcher.Holders, now one pass), and the case now
+    // takes about 14 s at every count. The scaling stays as headroom for the serial gains of larger counts.
     private static TimeSpan Scaled(int partitions, TimeSpan bound) => partitions > 1024 ? bound * (partitions / 1024.0) : bound;
 
     private static HarnessSetup WithPoll(TimeSpan poll) => Default with { Timing = Default.Timing with { PollInterval = poll } };

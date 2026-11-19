@@ -195,7 +195,7 @@ or a standalone job-actor budget. See [PgCommitWindow](../../prototypes/kernel-m
 
 | Record | Creation and update | Removal or retention boundary |
 |---|---|---|
-| Partition | Created once for each configured partition. A take changes owner, increments epoch and sets the lease; every owner commit checks the fence and renews the lease. Journal-bearing commits advance position. | Release clears owner only at the matching epoch. Partition rows are not swept. Partition count is fixed at store creation. |
+| Partition | Created once for each configured virtual partition: 1,024 by default on every store (K1). A node owns a set of them, which may be scattered. A take changes owner, increments that row's epoch and sets the lease; every owner commit checks the fence of each partition it touches and renews those rows' leases, and a beat renews every row of the set. Journal-bearing commits advance each touched partition's position. | Release clears owner only at the matching epoch, for one row or a subset; the rest of the set is untouched. Partition rows are not swept. Partition count is fixed at store creation, and a store refuses to open at another count. |
 | MongoDB inbox clock | Created at store initialization, or upserted by an outside add; increments before attempting its message insert. | Not swept. A duplicate add may advance this clock without adding another message. |
 | Node | Heartbeat inserts or updates its database-time `SeenAt` / `seenAt`. Membership counts only heartbeats inside the supplied window. | The current sweep does not delete stale node rows. Expiry from the live count is not physical deletion. |
 | Instance | Created with its first durable checkpoint; subsequent commits replace its opaque state and increment revision. Finish, fault and cancellation remain stored states. Suspension remains a checkpoint flag. | The workflow actor accepts delete only after the instance ends; the store deletion matches its expected revision and removes the row. There is no automatic completed-instance retirement in this schema. |
@@ -244,11 +244,11 @@ is which operation is authorized to write which records. An outside insert canno
 | Operation / caller | Reads and conditions | Writes |
 |---|---|---|
 | Store initialization | Existing tables/collections and partition initialization | Partitions and projection cursors; MongoDB also initializes clocks. Creates declared indexes and the provider allocator/serialization objects. Optional PostgreSQL window enforcement is installed separately by explicit opt-in. |
-| Take / runtime activation | Partition free, expired (`LeaseUntil < now`), or already held by this process name | Owner, epoch, lease and death flag; only a take from another process's expired lease increments attempts of the previous epoch's unfinished trial messages, in the same transaction. A free-partition take or same-process retake does not. |
-| Release / runtime | Matching partition epoch | Clears owner; does not record a death or delete instances. |
+| Take / runtime activation | Partition free, expired (`LeaseUntil < now`), or already held by this process name; a set take decides each row so, and keeps what it gets | Owner, epoch, lease and death flag; only a take from another process's expired lease increments attempts of the previous epoch's unfinished trial messages, in the same transaction. A free-partition take or same-process retake does not. A retake after a reset requires this node at the held epoch. |
+| Release / runtime | Matching partition epoch, per row of the released subset | Clears owner; does not record a death or delete instances. |
 | Heartbeat / runtime membership | Database time, live node count and free/expired partitions | Upserts the node's heartbeat. |
-| Commit / partition owner | Expected partition epoch and position; expected instance revision; required message affected-row counts | Checkpoints, inbox changes, outgoing inbox rows, waits and journal; partition lease and journal allocation. All-or-none transaction. |
-| Poll / owner | Partition, unseen epoch, unfinished messages, due horizon and limit | None. Returns database time even when no messages qualify. |
+| Commit / partition owner | Expected epoch and position of every partition the batch touches (the k-row fence, its rows locked in ascending id); expected instance revision; required message affected-row counts | Checkpoints, inbox changes, outgoing inbox rows, waits and journal; each touched partition's lease and journal allocation. All-or-none transaction: one stale fence rolls the whole batch back. |
+| Poll / owner | The owned set's partitions, each row's unseen mark against its own partition's epoch, unfinished messages, due horizon and limit | None. One query over the set, in order-key order. Returns database time even when no messages qualify. |
 | Load / owner | Requested actor IDs under provider equality | None; returns canonical names and checkpoints. A cold SQL Server/MySQL lookup combines these in its existing query; equivalent hot aliases share the cached slot. |
 | Add / external API | Ordinary scope-zero message identity | Inserts one inbox row unless its ordinary ID exists; supplied private scope is stripped. MongoDB first advances its separate inbox clock. |
 | AddEvent / publisher or registrar | Exact stored event/subscription match and existing receipt | Inserts a private matched delivery or returns the prior accepted target. A new event start also allocates its physical address. SQL serialization and insertion are one transaction. |
@@ -280,8 +280,8 @@ The poll's selection is intentionally smaller than the owner's full eligibility 
 Its provider predicate is:
 
 ```text
-partition = requested partition
-AND seen < current epoch
+partition IN (the owned set)
+AND seen < the epoch of the row's own partition
 AND done = false
 AND due <= databaseNow + horizon
 ORDER BY seq
@@ -289,6 +289,9 @@ LIMIT requested count
 ```
 
 MongoDB adds `_id` to the order as a tie-breaker: `ORDER BY seq, _id`.
+A set of one partition is the one-partition poll. The SQL stores write each partition's epoch into the text as a
+literal, so the text changes at every take, and SQL Server caches a new ad hoc plan each time (measured in K1 slice 8;
+parameters are K4's). MongoDB plans the set as a sort-merge over one index scan per partition (K1 slice 4).
 Its aggregate first returns the primary's time through the partition document, then unions the qualifying messages.
 SQL returns database time through a left join, including the empty-inbox result.
 There is no poll predicate on `KeepUntil`, target status, suspension, job state, attempts or trial.
@@ -401,7 +404,7 @@ Logical row growth and physical write amplification are different quantities.
 | Subscriptions | Explicit unsubscribe or instance-wide removal | Waits and start subscriptions need their owning lifecycle; sweep does not age them out. |
 | Journal | History level and explicit removal of positive rows on instance delete | Full/State append with history-bearing commits; deletion markers and other non-positive rows remain. No default journal-retention policy is implemented here. |
 | Views and membership | View removal by projector; live membership count uses heartbeat age | Projection can lag; stale node documents/rows are not removed by current sweep. |
-| Partition metadata | Fixed partition count | One ownership/cursor record per partition, plus MongoDB's outside-add clock per partition. |
+| Partition metadata | Fixed partition count | One ownership/cursor record per virtual partition (1,024 by default), plus MongoDB's outside-add clock per partition. Every owned row is renewed by its owner's beat about three times per lease: on PostgreSQL about 154 MB of WAL an hour on an idle four-node cluster at 1,024 (below). |
 | Optional commit facts, in-memory prototype only | Retained in the logical instance row; model-owned references can be released in a later commit | Unreleased captures grow the metadata map. The workflow-owned terminal fact remains until instance removal. No EF/Mongo column, TTL or measured WAL cost follows from this probe. |
 
 The [PostgreSQL write-volume measurement](../../prototypes/kernel-model/WRITES.md) supplies the following historical observations,
@@ -462,6 +465,14 @@ after an unforced 70-second interval, while total instance relation size remaine
 relations still had dead tuples. Reclaiming tuples need not shrink files, and a wait does not guarantee vacuum.
 These samples do not establish sustained vacuum capacity, production sizing, tuning defaults or steady-state bloat.
 The linked report retains the complete case data, tuple observations and source/provenance limits.
+
+The [K1 ownership costs](../../prototypes/kernel-model/PARTITIONS.md#k1-costs-ownership-of-a-set-in-the-integrated-worker-slice-8-19-november)
+(19 November, PostgreSQL 17.11, 1,024 virtual partitions, four nodes of 256) were measured in the integrated Worker for
+scattered and contiguous sets. A set take, the store's set release and a beat are one statement each over the set's
+rows (the beat and a take with deaths add one statement in their transaction); the runtime's moves, start-up and
+takeover through the runtime go one row at a time. Over 120 idle seconds the per-partition beat wrote 44.7 kB of WAL a
+second, 96 % of it on the partition rows (lock records 41 % of that), with 95 % HOT updates; autovacuum kept the
+1,024-row table at 385 kB. These are local samples, not capacity figures.
 
 Partitioning the PostgreSQL inbox by kernel partition was probed, not adopted: global ordinary-ID uniqueness still
 conflicts with a partitioned unique key that omits the partition column. Adding that column to scoped keys would
