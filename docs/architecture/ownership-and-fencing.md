@@ -173,10 +173,13 @@ death the trial protocol needs, as the per-partition beat did, since that beat r
 withholds its heartbeat also takes nothing: the gate closes every take, the Worker's gains, its retakes after a reset and
 the runtime's activations, so takes cannot renew a wedged host's lease. Every host wakes each Worker for a pass at least once per poll interval (today
 every second), and passes run on their own loop, apart from the balancing round, so a long round of moves never holds
-passes back beyond the lease. A heartbeat statement carries a timeout of a third of the lease. PostgreSQL's statement timeout
+passes back beyond the lease. A heartbeat statement carries a timeout of a third of the lease. A take's plain read of the owners' node records and
+its own-record write together carry one timeout of a third of the lease, as one command or under one deadline, and the
+take's `lease_until` is the time taken in that write, so the bound does not depend on where in a statement the
+engine reads its clock. PostgreSQL's statement timeout
 and MongoDB's `maxTimeMS` enforce it on the server; on SQL Server (attention) and MySQL (`KILL QUERY`) the client's
 timer sends the cancel, so there the bound assumes the client's timer runs, and K4 qualifies it. Under that assumption
-a heartbeat sent just before the gate closes lands within that time or not at all: the lease expires within two and a third leases
+a heartbeat or take sent just before the gate closes renews within that time or not at all: the lease expires within two and a third leases
 of the last completed pass, and the takeover follows within one lock bound (below) and one balancing round after that.
 
 A commit that stalls on a live connection holds its partition row locks until its transaction ends, and a take waits on
