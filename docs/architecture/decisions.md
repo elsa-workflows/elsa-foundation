@@ -231,6 +231,16 @@ Taken while answering the [seventh gate 2 architecture review](https://github.co
 | 18 Nov | An outside publish's insert-or-read answers a duplicate from its existing receipt first; the partition high-water mark applies only to a new insertion. This replaces the sixth-round allowance that a duplicate could be refused `InboxFull` (proposed, condition [C2](../program-goals/clean-slate-kernel.md#gate-2-conditions), K4). | Coordinator design choice, not an owner card; [observability](observability.md#recover), "Placement and admission" |
 | 18 Nov | A parent that keeps adding creator handles eventually parks on each growth turn, and termination still holds with the handles retained. A model `Recall` releases a retained handle only while the creator delivery is still pending: if the child's owner has already consumed that delivery, the recall's counted cancellation finds no row, the commit rolls back and the handle stays (`Turns.cs` 378–389 and 490–498, `Worker.cs` 1450–1455, `InMemoryStore.cs` 116–119). The operator's choices today are to discard the growing input or to terminate the parent. Whether Native prunes stale handles is a separate K6 decision, condition HA of the plan's [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) (eighth review R8-m3). | Coordinator design choice, not an owner card; [storage model](storage-model.md#physical-records) |
 
+## Owner decisions after K1 (19 November)
+
+Taken on the three cost findings K1 measured ([K1 acceptance](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7000191927), PARTITIONS.md "K1 costs"). Each is an owner card.
+
+| Date | Rule | Source |
+|---|---|---|
+| 19 Nov | The built-in runtime gains and gives up partitions in sets: one set take and one set release per balancing round, where K1's runtime moves them one row at a time (a join at 1,024 costs 796 round trips). It is built with K4's provider work, and takeover latency on a networked cluster is held to a budget at K12. | Owner card; [program plan](../program-goals/clean-slate-kernel.md#milestones) K4 and K12 |
+| 19 Nov | The per-partition lease renewal (D3: an idle four-node PostgreSQL cluster at 1,024 writes 161 MB of WAL an hour) is replaced by a node-level heartbeat: one row per node carries the lease, and fences stay per-partition epochs. A design amendment to this register and ADR 0099 comes first, with a narrow independent architecture review, and the prototype then builds it with simulation checks and mutations, two reviews, before K3 (milestone K1b). K2 may run alongside. | Owner card; [program plan](../program-goals/clean-slate-kernel.md#milestones) K1b |
+| 19 Nov | The Orleans profile does not ship until a silo-level wake brings an idle silo's set polls to about one a second; K1 measured 107 to 117 a second per idle silo at 1,024, against 1 for the built-in runtime. Nothing is built for it now: Orleans stays a reference adapter kept in tests. | Owner card; [ADR 0099](../adr/0099-clean-slate-execution-kernel.md), section 4 |
+
 ## Process
 
 | Date | Rule | Source |

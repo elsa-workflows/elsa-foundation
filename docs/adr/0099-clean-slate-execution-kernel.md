@@ -104,17 +104,18 @@ stored as a digest, while an operator command's operation id stays its outside i
 
 Persistence mode, actor runtime and provider vary independently; a profile is a named preset. **Embedded** (built-in
 runtime, one node) and **Cluster** (built-in runtime, partitions shared over nodes) ship in release 1. **Orleans** waits
-for proven demand. **Log** (replicated-log groups) is planned and not designed. A workflow behaves the same under every
+for proven demand, and before it ships a silo-level wake brings an idle silo's set polls to about one a second
+(owner, 19 November; K1 measured 107 to 117 a second per idle silo at 1,024). **Log** (replicated-log groups) is planned and not designed. A workflow behaves the same under every
 profile, and no capability flag makes it fail on one. Inline execution is chosen per workflow or route
 ([sketch, profiles](../reports/clean-slate-kernel/design-sketch-draft-5.md#deployment-profiles-not-runtimes)).
 
 ### 5. Virtual partitions and the fence
 
-1,024 fixed virtual partitions, one fence row each: decided on 16 November and not built. The prototype still has
-`VirtualPartitions.Provisional = 4096` and fences one row per commit until the Worker refactor to range ownership
-of the 1,024 virtual partitions, with a journal per virtual partition. That refactor is release 1's first milestone,
-right after design approval and before product wiring, and rebalance moves the fewest partitions, so a node's
-partitions may be scattered (owner, 17 November: PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit lands only while the
+1,024 fixed virtual partitions, one fence row each: decided on 16 November and built by K1, the Worker refactor to
+range ownership, accepted on main on 19 November at `0352a8cde`. A node's Worker owns a set of the 1,024, with a fence
+row and a journal per virtual partition, and a commit over several of them fences each of their rows, locked in
+ascending id. Rebalance moves the fewest partitions, so a node's partitions may be scattered (owner, 17 November:
+PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit lands only while the
 row still has the owner's epoch and expected position, checked in the same transaction, so a stale owner never lands a
 commit. Leases decide who should write; the fence decides who can. The kernel writes its own commit SQL on PostgreSQL,
 SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the schema, migrations and cold paths
