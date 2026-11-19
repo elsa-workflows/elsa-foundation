@@ -47,19 +47,22 @@ dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x nodelease postgr
 ## Results (`nl9.txt`)
 
 Local Docker on arm64: `postgres:17`; `mcr.microsoft.com/mssql/server:2022-latest` (amd64, emulated, run as root on
-tmpfs); `mysql:8.4`. MySQL's store runs at REPEATABLE READ and its take at READ COMMITTED (NL-C1).
+tmpfs); `mysql:8.4`. MySQL's store runs at REPEATABLE READ and its take at READ COMMITTED (NL-C1). The log is the run
+at the branch's head after merging 2a's review head (`87ec872fb`). An earlier run, before that merge, had the same
+outcomes in all 24 runs except one: in the mutual REPEATABLE READ run on SQL Server with RCSI, the engine chose b as
+the victim instead of a.
 
 | Case | Engine | Take | Forced | Deadlocks | Outcome | Time |
 |---|---|---|---|---|---|---|
-| heartbeat | SQL Server, locking | as built | yes | 0 | p's heartbeat lands first; q takes 1 and leaves the renewed p's 2 | 159 ms |
-| heartbeat | SQL Server, locking | subquery | yes | 1 | p's heartbeat is the victim (1205); q takes 1 and 2 | 3,512 ms |
-| heartbeat | SQL Server, locking | rr | yes | 0 | as built | 164 ms |
+| heartbeat | SQL Server, locking | as built | yes | 0 | p's heartbeat lands first; q takes 1 and leaves the renewed p's 2 | 169 ms |
+| heartbeat | SQL Server, locking | subquery | yes | 1 | p's heartbeat is the victim (1205); q takes 1 and 2 | 2,383 ms |
+| heartbeat | SQL Server, locking | rr | yes | 0 | as built | 170 ms |
 | heartbeat | PostgreSQL, SQL Server (RCSI), MySQL | any | no | 0 | reads take no locks, so the heartbeat never waits | about 20 s (two 10 s waits) |
-| mutual | every engine | as built | yes | 0 | a takes 3 and 4, b takes 1 and 2 | 81 to 845 ms |
-| mutual | SQL Server, locking | subquery | yes | 1 | a is the victim (1205); b takes 1 and 2 | 1,507 ms |
-| mutual | SQL Server (RCSI) | rr | yes | 1 | b is the victim (1205) | 5,161 ms |
-| mutual | SQL Server, locking | rr | yes | 1 | a is the victim (1205) | 3,021 ms |
-| mutual | PostgreSQL, MySQL; SQL Server (RCSI) with subquery | negatives | yes | 0 | both takes land | 75 to 98 ms |
+| mutual | every engine | as built | yes | 0 | a takes 3 and 4, b takes 1 and 2 | 72 to 141 ms |
+| mutual | SQL Server, locking | subquery | yes | 1 | a is the victim (1205); b takes 1 and 2 | 4,603 ms |
+| mutual | SQL Server (RCSI) | rr | yes | 1 | a is the victim (1205); b takes 1 and 2 | 780 ms |
+| mutual | SQL Server, locking | rr | yes | 1 | a is the victim (1205); b takes 1 and 2 | 2,711 ms |
+| mutual | PostgreSQL, MySQL; SQL Server (RCSI) with subquery | negatives | yes | 0 | both takes land | 69 to 119 ms |
 
 **The store as built: no deadlock on any engine, in either case.** In every run, every answer was landed, taken or
 listed. Under SQL Server's locking READ COMMITTED the take's read waits behind p's heartbeat, which holds its own node
