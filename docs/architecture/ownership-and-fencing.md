@@ -120,10 +120,11 @@ time plus the lease, and reads back the partitions whose `owner` is this process
 nothing. The Worker stands down every partition it held at the epoch it held when it sent the heartbeat that is
 missing from the answer or at another epoch, as a refused fence makes it stand down; a partition it took after sending
 that heartbeat is judged by the next one. The answer is also reconciled the other way: a partition it lists as this
-process's, at an epoch the Worker does not hold, and with no take or retake of it in flight between the heartbeat's
-send and its answer, is released at that epoch (or taken back) before the next heartbeat, so a release or retake whose
+process's, at an epoch the Worker does not hold, and with no take of it in flight between the heartbeat's send and its
+answer, is released at that epoch (or taken back) before the next heartbeat, so a release or retake whose
 answer was lost cannot leave a row owned by a live process that does not work it; a release that fails is retried at
-the next heartbeat. An answer is judged only within the Worker generation it was sent in: a Worker that reset
+the next heartbeat. The release side is skipped while a retake is in progress, since a retake runs one row at a time
+and covers its whole remaining list. An answer is judged only within the Worker generation it was sent in: a Worker that reset
 between a heartbeat's send and its answer discards that answer on both sides, so its own one-by-one retakes after a
 reset are never released or stood down by an answer from before them. When the Worker stands a partition down, it drops that partition's memory and work, and a later take may claim it
 again at a new epoch.
@@ -131,9 +132,9 @@ again at a new epoch.
 **Lock order.** A take first reads the node records of the owners it may take from, with a plain read that holds
 nothing afterwards (never a locking read or a subquery inside the update, which MySQL makes locking); then it writes
 its own node record; then it locks the partition rows in ascending id. A heartbeat writes its own node record, then
-reads partition rows. A commit locks only partition rows, in ascending id. The take's read runs at read committed on every engine, so its
-shared locks, where the engine takes them, end with the statement: MySQL pins read committed, and SQL Server's
-configured isolation must be read committed for that read. With this order no cycle forms, including
+reads partition rows. A commit locks only partition rows, in ascending id. The take's transaction runs at read committed on every engine, whatever
+the store's configured isolation, so the read's shared locks, where the engine takes them, end with the statement (MySQL
+already sets this as the take's own level). With this order no cycle forms, including
 under SQL Server without RCSI, where a plain read takes shared locks: a take reads while it holds no lock; a take or
 heartbeat that holds its own node record then waits only for partition rows, and whoever holds those never waits for
 another process's node record.
@@ -147,11 +148,18 @@ no transaction; a take's write to the taker's node document can conflict with th
 and the transient conflict is retried.
 
 **Liveness follows the Worker's passes.** A host renews its node record only while each of its Workers has completed a
-pass within the last lease. A Worker that has not, because a turn loops or a commit hangs on a dead connection, stops
-the renewal: the lease expires, another process takes the partitions, and the takeover counts the death the trial
-protocol needs, as the per-partition beat did. With one Worker per node (D1) that Worker is the node's; a fixed host
-with a Worker per partition stops renewing when any of its Workers is wedged, and so gives up all its partitions. The
-operator's forced take stays the tool for moving a partition from a live Worker ([observability](observability.md)).
+pass within the last lease. A Worker whose pass does not complete, because a commit, poll or load hangs (a dead
+connection), stops the renewal: the lease expires, another process takes the partitions, and the takeover counts the
+death the trial protocol needs, as the per-partition beat did, since that beat ran inside the same pass. A host that
+withholds its heartbeat also takes nothing: the gate closes the Worker's gains and the runtime's activations, so takes
+cannot renew a wedged host's lease. Every host wakes each Worker for a pass at least once per poll interval (today
+every second), and passes run on their own loop, apart from the balancing round, so a long round of moves never holds
+passes back beyond the lease. With one Worker per node (D1) that Worker is the node's; a fixed host with a Worker per
+partition stops renewing when any of its Workers is wedged, and so gives up all its partitions.
+
+A turn whose body loops runs off the pass, so passes keep completing; that was so under the per-partition beat too, and
+it is not a lease matter. The operator's forced take ([observability](observability.md)) or a model-level turn timeout
+moves such work.
 
 ## What the fence transaction also does
 
@@ -249,7 +257,7 @@ MongoDB (K1b), and on the providers (K4). Process P owns partitions {a, b, c}; Q
 | NL-7 | **A take renews its taker.** Q, with a lease near expiry, takes a | Q's node record is renewed in the take's transaction. If the take's reply arrives before its own send time plus the lease, Q's guard deadline becomes the later of its current deadline and that send time plus the lease; it never moves earlier. A reply after its send time plus the lease restarts nothing: a newer heartbeat's later deadline stands, and with no live deadline Q stays latched expired and stands down as [LEASE.md](../../prototypes/kernel-model/LEASE.md) requires. Schedules: a take sent at 0 with its reply at 11 while a heartbeat set the deadline to 15 leaves 15; the same reply with no newer heartbeat leaves Q expired. A heartbeat answer read before the take does not stand a down | K1b, K4 |
 | NL-8 | **A lost release or retake.** P releases b and the release's answer is lost (the store call fails after or before it lands), or P's retake of b after a reset fails; P stays live. A third run: P resets and retakes its set one partition at a time while a heartbeat sent before the reset, and one sent during the retakes, are answered | Within one heartbeat b is free, or held and worked by P at its epoch; no row stays P's while P does not work it. In the third run no retaken partition is released or stood down by either answer, and every retaken row stays owned by P at its new epoch. Mutations `KeepUnheldRows` (the answer is reconciled one way only, and b stays P's while P lives) and `ReleaseDuringTake` (the release side ignores takes in flight and the generation, and frees P's retaken rows) | K1b, K4 |
 | NL-9 | **Take, heartbeat and commit together.** One process's gain take, its heartbeat and its commit overlap with another process's take of overlapping partitions, on SQL Server with RCSI off and with RCSI, MySQL and PostgreSQL | No deadlock; every outcome is a landed or refused statement. A second run has two processes, both past their leases, whose set takes cover each other's partitions. Mutations: the take reads the owners' node records after it has locked partition rows (or as a subquery of its update), so under SQL Server without RCSI a take holding partition rows waits behind a heartbeat whose read waits on those rows; and the take's read runs at repeatable read, so two mutual set takes cycle on the node records | K1b (prototype engines), K4 |
-| NL-10 | **A late heartbeat, and a wedged Worker.** P's heartbeat is delayed past its lease while P holds work. A second run: P's Worker stops completing passes (a turn loops) while its host keeps running | First run: P's guard expires and P starts no new turn or job body; P stands every partition down; its next heartbeat and takes start again at new epochs. Second run: P's host stops renewing within one lease of the last completed pass; Q takes P's partitions after the lease and counts a death for P's trial messages. Mutation: the host renews regardless of the Worker's passes, and P keeps its partitions while wedged. Replaces the `--lease-check` witnesses whose renewal was a commit | K1b |
+| NL-10 | **A late heartbeat, and a wedged Worker.** P's heartbeat is delayed past its lease while P holds work. A second run: P's commit hangs (a store call that never answers) while its host keeps running and a third node R dies | First run: P's guard expires and P starts no new turn or job body; P stands every partition down; its next heartbeat and takes start again at new epochs. Second run: P's host stops renewing within one lease of the last completed pass and takes none of R's partitions; Q takes P's and R's partitions after the leases and counts a death for P's trial messages. Mutations: the host renews regardless of the Worker's passes, and P keeps its partitions while wedged; and a take renews a wedged host's lease, so P keeps them through its gains. Replaces the `--lease-check` witnesses whose renewal was a commit | K1b |
 | NL-11 | **An Orleans silo.** A silo with grains for 256 partitions stays idle for ten leases | The silo's heartbeat keeps every partition; no partition is taken and no grain's guard expires | K1b |
 
 ## Contract and evidence
