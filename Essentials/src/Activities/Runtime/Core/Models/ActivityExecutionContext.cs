@@ -101,9 +101,17 @@ public sealed record ActivityExecutionContext
     /// This step's variable session (ADR 0090, spec 1231): reads of committed values and explicit writes committed with
     /// the step. Outside a step body (a background worker, a test that builds the context by hand) every call throws.
     /// </summary>
-    public IStepVariables Variables => _variables;
+    public IStepVariables Variables => _variables ?? throw NoVariableSession();
 
-    private IStepVariables _variables = StepVariables.Unavailable;
+    private IStepVariables? _variables;
+
+    /// <summary>The session as handed to this context, or <c>null</c> when it has none; copied into the start and resume contexts.</summary>
+    internal IStepVariables? VariablesOrNull => _variables;
+
+    /// <summary>What reading <see cref="Variables"/> throws in a context that has no variable session (spec 1231 FR-002).</summary>
+    internal static InvalidOperationException NoVariableSession() => new(
+        "No variable session is available here: only a step body (a leaf activity's execute or resume, run inline) reads and writes " +
+        "workflow variables through context.Variables. Input bindings, structural evaluations and background workers have no session.");
 
     /// <summary>Returns a copy whose <see cref="Variables"/> is <paramref name="variables"/>: the runtime hands a step its session this way.</summary>
     public ActivityExecutionContext WithVariables(IStepVariables variables)
@@ -129,7 +137,7 @@ public sealed record ActivityExecutionContext
             TriggerNodeId,
             operationKey,
             targetOperationKey,
-            logicalInvocationId ?? LogicalInvocationId).WithVariables(Variables);
+            logicalInvocationId ?? LogicalInvocationId) { _variables = _variables };
 }
 
 /// <summary>Author-facing base for a transient activity that returns one atomic typed result.</summary>
