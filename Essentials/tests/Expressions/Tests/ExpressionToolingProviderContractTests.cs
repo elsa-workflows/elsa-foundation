@@ -264,6 +264,36 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.NotNull(diagnostic.Range);
     }
 
+    // Spec 1223 FR-017, FR-018: .NET types and PascalCase invocations are refused under the default JSON-only strategy.
+    [Theory]
+    [InlineData("TimeSpan.FromHours(1)", "TimeSpan.FromHours(1)")]
+    [InlineData("args.items.Where(x => x)", "args.items.Where(x => x)")]
+    public async Task JavaScript_validation_refuses_dotnet_usage(string source, string quoted)
+    {
+        var provider = new JavaScriptExpressionToolingProvider(new JavaScriptDotNetUsageAnalyzer());
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        var diagnostic = Assert.Single(result.Payload!.Diagnostics);
+        Assert.Equal("JavaScript/DotNetMemberUsage", diagnostic.Code);
+        Assert.Equal(ExpressionDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains($"'{quoted}'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.NotNull(diagnostic.Range);
+    }
+
+    [Theory]
+    [InlineData("args.order.OrderId")]
+    [InlineData("new Intl.DateTimeFormat('en-GB').format(new Date())")]
+    [InlineData("newGuid()")]
+    public async Task JavaScript_validation_accepts_json_reads_and_native_calls(string source)
+    {
+        var provider = new JavaScriptExpressionToolingProvider(new JavaScriptDotNetUsageAnalyzer());
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        Assert.Empty(result.Payload!.Diagnostics);
+    }
+
     [Theory]
     [InlineData("({ complete: true })")]
     [InlineData("const { complete: done } = { complete: 1 }; return done;")]

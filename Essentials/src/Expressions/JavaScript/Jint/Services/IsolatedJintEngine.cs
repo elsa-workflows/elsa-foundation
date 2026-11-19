@@ -29,6 +29,8 @@ internal static class IsolatedJintEngine
             TimeZone = TimeZoneInfo.Utc,
             Culture = CultureInfo.InvariantCulture,
         };
+        // Intl and Temporal take their default zone from the Temporal zone provider, not TimeZone: UTC there too.
+        options.Temporal.TimeZoneProvider = UtcDefaultTimeZoneProvider.Instance;
 
         if (configured.ExecutionTimeout is { } timeout && timeout > TimeSpan.Zero)
             options.TimeoutInterval(timeout);
@@ -45,8 +47,28 @@ internal static class IsolatedJintEngine
 
         var engine = new Engine(options);
         JintResultMaterializer.Initialize(engine);
+        DefaultIntlToUtc(engine);
         return engine;
     }
+
+    /// <summary>
+    /// Jint's <c>Intl.DateTimeFormat</c> formats in the host's local zone when no <c>timeZone</c> is given, whatever the
+    /// engine's zone. Every expression evaluates in UTC with no ambient zone (spec 1223 FR-002, FR-023), so the
+    /// constructor defaults <c>timeZone</c> to <c>UTC</c>; an explicit zone is kept. Installed before user code runs.
+    /// </summary>
+    private static void DefaultIntlToUtc(Engine engine) => engine.Execute(
+        "(function () {" +
+        " var Native = Intl.DateTimeFormat;" +
+        " function withUtc(options) {" +
+        "  if (options === undefined) return { timeZone: 'UTC' };" +
+        "  var o = Object(options); return o.timeZone === undefined ? Object.assign({}, o, { timeZone: 'UTC' }) : options;" +
+        " }" +
+        " function DateTimeFormat(locales, options) { return new Native(locales, withUtc(options)); }" +
+        " DateTimeFormat.prototype = Native.prototype;" +
+        " Object.defineProperty(DateTimeFormat, 'supportedLocalesOf', { value: Native.supportedLocalesOf, writable: true, configurable: true });" +
+        " Object.defineProperty(Native.prototype, 'constructor', { value: DateTimeFormat, writable: true, configurable: true });" +
+        " Object.defineProperty(Intl, 'DateTimeFormat', { value: DateTimeFormat, writable: true, configurable: true, enumerable: false });" +
+        "})();");
 
     public static void SetReadOnlyArgs(
         Engine engine,
