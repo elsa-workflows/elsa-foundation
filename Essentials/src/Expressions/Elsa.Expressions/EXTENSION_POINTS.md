@@ -53,6 +53,19 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
   catalog). The JavaScript feature registers `JavaScriptVariableReadAnalyzer`, the Liquid feature
   `LiquidVariableReadAnalyzer`.
 
+### `IExecutionWarningSink` *(Core — `Elsa.Expressions.Core`)*
+
+- **Kind:** a channel, not a replacement: the runtime supplies the sink and records what is reported (spec 1228).
+- **Contract:** `Report(ExecutionWarning)`, where an `ExecutionWarning` has a stable `Code`, a `Message`, a `Severity`
+  (`Warning` or `Information`) and string `Details`. A warning changes and refuses nothing, and it never carries a value
+  (spec 1229 FR-006): it names paths, inputs and variables only.
+- **Where it comes from:** `ExpressionEvaluationRequest.Warnings` for an input expression (kept with the input snapshot,
+  with the input key in `Details["input"]`), `JavaScriptScriptEvaluationRequest.Warnings` and
+  `ActivityExecutionContext.Warnings` for a step (kept on the activity state). The activity execution inspection view
+  lists both in `Warnings`, and Studio's run view shows them.
+- **Users:** `VF-PREC-002` (a lossy number read but not written). Next: S-7's C2 visibility warning and S-4's
+  `VF-READ` warnings.
+
 ## Cross-references
 
 - JavaScript binding boundary: [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md).
