@@ -256,7 +256,6 @@ tenant: a later option, if measurements show the need.
   cheap to add later. Placing a tenant's unkeyed starts on a subset of virtual partitions (shuffle sharding) would
   limit a burst's reach. It conflicts with inline execution, which places a start in a partition the receiving node
   owns, so it stays a later option.
-- **Orleans.** The partition grains run passes; the age hint and the pressure query work the same. Not in release 1.
 
 ## The relation to ETL's credit protocol
 

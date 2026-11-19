@@ -43,7 +43,7 @@ provider and MongoDB possible; the actor model as its own replaceable layer; syn
 
 **Evidence.** A standalone prototype (`prototypes/kernel-model/`, on main since #4250–#4260) carries the design:
 deterministic simulation with mutation checks in CI, store conformance on PostgreSQL, SQL Server, SQLite, MySQL and
-MongoDB, a runtime conformance suite with an Orleans reference adapter, killed-connection stress, and native, Flowchart
+MongoDB, a runtime conformance suite (with an Orleans reference adapter until its retirement on 19 November), killed-connection stress, and native, Flowchart
 (graph engine), StateMachine, BPMN, ETL, agent and values-by-reference spikes. Its [README](../../prototypes/kernel-model/README.md),
 [DESIGN.md](../../prototypes/kernel-model/DESIGN.md) and [FINDINGS.md](../../prototypes/kernel-model/FINDINGS.md) record
 what is built, run and unverified. Prototype checks are design evidence; they qualify no product.
@@ -58,8 +58,11 @@ what is built, run and unverified. Prototype checks are design evidence; they qu
 | 2. Durable actors | The durable inbox, the fenced atomic commit of a turn's state and sends, timers, background jobs, events, poison handling, the journal, over the persistence abstraction |
 | 3. Actor types | What an actor does with its messages. A workflow instance is one actor type that runs an execution model; job and plan actors are others |
 
-Runtimes host partitions only. The built-in runtime ships; Orleans hosts each partition as a grain, in a reference
-adapter kept in tests ([sketch, three layers](../reports/clean-slate-kernel/design-sketch-draft-5.md#three-layers)).
+Runtimes host partitions only, and the built-in runtime ships ([sketch, three layers](../reports/clean-slate-kernel/design-sketch-draft-5.md#three-layers)).
+Layers 1 and 2 together are the kernel's built-in **foundation**: an actor implementation on the database. Layer 3 is
+where Elsa adds its own capabilities, behind a strong contract, and a whole foundation is what can be replaced there
+(owner, 16 and 19 November; Non-goals). The Orleans reference adapter, which hosted each partition as a grain under
+this foundation's layer 2, was retired on 19 November for that reason.
 
 ### 2. The turn contract
 
@@ -103,9 +106,9 @@ stored as a digest, while an operator command's operation id stays its outside i
 ### 4. Deployment profiles
 
 Persistence mode, actor runtime and provider vary independently; a profile is a named preset. **Embedded** (built-in
-runtime, one node) and **Cluster** (built-in runtime, partitions shared over nodes) ship in release 1. **Orleans** waits
-for proven demand, and before it ships a silo-level wake brings an idle silo's set polls to about one a second
-(owner, 19 November; K1 measured 107 to 117 a second per idle silo at 1,024). **Log** (replicated-log groups) is planned and not designed. A workflow behaves the same under every
+runtime, one node) and **Cluster** (built-in runtime, partitions shared over nodes) ship in release 1. The Orleans
+profile is withdrawn with the adapter (owner, 19 November): an Orleans or Proto.Actor deployment would come as a
+foundation adapter behind layer 3's contract. **Log** (replicated-log groups) is planned and not designed. A workflow behaves the same under every
 profile, and no capability flag makes it fail on one. Inline execution is chosen per workflow or route
 ([sketch, profiles](../reports/clean-slate-kernel/design-sketch-draft-5.md#deployment-profiles-not-runtimes)).
 
@@ -183,11 +186,13 @@ The gate 2 review added an eighth page, [tenancy](../architecture/tenancy.md), w
 
 ## Non-goals for release 1
 
-- **Alternative durable hosts and a bring-your-own actor framework.** After release 1, layers 1 and 2 are to become a
-  separable built-in default that users may replace. A replacement host (Orleans grains, Dapr actors, Proto.Actor,
-  Akka.NET) would need activation with single-writer turns, an atomic per-actor outcome write, durable timers delivered
-  as messages, and at-least-once delivery deduplicated by id, with an actor outbox for per-actor guarantees. That is a
-  research priority after release 1; release 1 only protects the boundary (section 8).
+- **Alternative foundations.** Layer 3 is where Elsa adds its capabilities, behind a strong contract; a foundation
+  provides what layers 1 and 2 provide today, and the built-in foundation is the kernel's database-backed actor
+  implementation. After release 1, other foundations (Orleans, Proto.Actor, Dapr actors, Akka.NET) can plug in through
+  foundation adapters. Each would need activation with single-writer turns, an atomic per-actor outcome write, durable
+  timers delivered as messages, and at-least-once delivery deduplicated by id, with an actor outbox for per-actor
+  guarantees. That is a research priority after release 1; release 1 protects the boundary with the contracts package
+  (section 8) (owner, 16 and 19 November).
 - The Log profile.
 - BPMN (its prototype stream is parked until after release 1), ETL and its combiner tree, and a dedicated agent model.
 - MongoDB in production (1.1).
@@ -218,9 +223,9 @@ The gate 2 review added an eighth page, [tenancy](../architecture/tenancy.md), w
 - **Journal-first core (ADR 0098, PR #4176).** A journal per run with a head row as fence, behind the existing ports.
   Four review rounds found blockers that came from keeping the old handlers' reads and writes. Superseded on
   12 November; the PR stays open until the owner sees its closure.
-- **An actor framework as the durable layer** (Orleans, Proto.Actor). Rejected for layer 2: Orleans calls are at most
-  once and state and sends are never one atomic act; Proto.Actor persists by event sourcing per actor. They remain
-  layer 1 options.
+- **An actor framework as the built-in foundation's durable layer** (Orleans, Proto.Actor). Rejected for layer 2:
+  Orleans calls are at most once and state and sends are never one atomic act; Proto.Actor persists by event sourcing
+  per actor. A foundation adapter built on one of them must supply those guarantees itself (Non-goals).
 - **Append-only storage, event sourcing or a log-only store as the default.** Measured write volume does not ask for it
   ([write volume](../architecture/write-volume.md)); a lazy snapshot stays the fallback spike and Log a later profile.
 

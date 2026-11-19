@@ -58,7 +58,7 @@ public sealed record WorkerOptions
 
     /// <summary>
     /// Where a background job's body runs. Null (the default): it starts inline, in the pass that started it, as the
-    /// simulation needs. A host that runs a worker's passes on a scheduler of its own (RuntimeNode, an Orleans grain)
+    /// simulation needs. A host that runs a worker's passes on a scheduler of its own (RuntimeNode)
     /// sets another so that a long or blocking job does not hold up the node's passes. Completed drivers hand their
     /// outcomes back to the owner, which alone publishes them into its inbox.
     /// </summary>
