@@ -201,11 +201,12 @@ public static class Cases
             That(await Task.WhenAny(held, Task.Delay(h.Lease * 3)) == held, "the admitted stale commit never returned");
             if (await held != "refused" || store.HeldRefused != 1)
                 throw new FenceException($"the admitted stale commit was not refused by the store: {await held}");
-            // An owned set: the refusal reset the worker, and it took 1, 2 and 3 back by a guarded retake (at their
-            // epochs, to new ones), not by a release and a fresh take. The thief's 0 was left alone.
+            // An owned set: the refusal reset the worker, and it took every other partition back by a guarded retake (at
+            // their epochs, to new ones), not by a release and a fresh take. The thief's 0 was left alone.
+            var all = Enumerable.Range(0, h.Partitions).ToList();
             if (h.WorkerOf(a.Name) is not null)
-                That(await h.WaitAsync(() => new[] { 1, 2, 3 }.All(p => store.Retaken(p) is not null), Slack) && store.Retaken(0) is null && Enumerable.Range(0, 4).All(p => store.ReleaseBegan(p) is null),
-                    $"after the refusal: retaken [{string.Join(", ", Enumerable.Range(0, 4).Select(p => $"{p}: {store.Retaken(p)}"))}], released [{string.Join(" ", Enumerable.Range(0, 4).Where(p => store.ReleaseBegan(p) is not null))}]");
+                That(await h.WaitAsync(() => all.Skip(1).All(p => store.Retaken(p) is not null), Slack) && store.Retaken(0) is null && all.All(p => store.ReleaseBegan(p) is null),
+                    $"after the refusal: retaken [{string.Join(", ", all.Select(p => $"{p}: {store.Retaken(p)}"))}], released [{string.Join(" ", all.Where(p => store.ReleaseBegan(p) is not null))}]");
             await Settle(h, "partition 0 activated again");
             foreach (var token in tokens.Skip(1)) await h.AddAsync(Token(0, "c", token));
             await Applied(h, 0, "c", tokens, h.Lease * 3 + Slack);
@@ -289,13 +290,14 @@ public static class Cases
             store.StallNextCommit(h.Lease / 4, partition: 0);
             foreach (var p in new[] { 0, 2 }) await h.AddAsync(Token(p, "c", "f" + p));
             That(await h.WaitAsync(() => store.Stalls > 1, Slack), "no commit with a turn in 0 entered the hold");
-            var landedAt = store.Held.ContinueWith(_ => Environment.TickCount64, TaskContinuationOptions.ExecuteSynchronously);
             var askedAt = Environment.TickCount64;
             await a.MoveAsync(2, b);
             That(await h.WaitAsync(() => h.Watcher.Holders(h.Partitions)[2].SequenceEqual([b.Name]), Slack), $"partition 2 did not move: {Holders(h)}");
-            That(await store.Held == "landed" && store.HeldPartitions.SequenceEqual([0, 2]) && askedAt < await landedAt && store.ReleaseBegan(2) >= await landedAt,
-                $"the held commit over [{string.Join(" ", store.HeldPartitions)}] {await store.Held}; the move was asked {await landedAt - askedAt} ms before it returned, " +
-                $"and 2 was given up {store.ReleaseBegan(2) - await landedAt} ms after");
+            var held = await store.Held;
+            var landedAt = store.HeldAt;      // recorded by the store before Held completed
+            That(held == "landed" && store.HeldPartitions.SequenceEqual([0, 2]) && askedAt < landedAt && store.ReleaseBegan(2) >= landedAt,
+                $"the held commit over [{string.Join(" ", store.HeldPartitions)}] {held}; the move was asked {landedAt - askedAt} ms before it returned, " +
+                $"and 2 was given up {store.ReleaseBegan(2) - landedAt} ms after");
             // A quiet loss: the partitions kept keep their epochs, so nothing was reset.
             That(Set(worker) == "0 1 3" && new[] { 0, 1, 3 }.Select(worker.EpochOf).SequenceEqual(kept), $"the first node now holds [{string.Join(", ", worker.Fences)}], before {string.Join(" ", kept)}");
             foreach (var p in new[] { 0, 2 }) await h.AddAsync(Token(p, "c", "g" + p));
