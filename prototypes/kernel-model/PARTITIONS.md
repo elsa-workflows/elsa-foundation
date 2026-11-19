@@ -394,6 +394,58 @@ The follow-ups that slice 2a recorded for this slice:
   and a per-scope host (a store without owned sets) still needs that. So the change needs the seam to say that one wake
   covers a node's set, which is a seam decision to take before anyone builds it.
 
+### K1 slice 7: the flip to 1,024, and the simulation's set worlds
+
+- **The flip.** `VirtualPartitions.Provisional` is `Small`, 1,024. `Defaults.ServerPartitions` and
+  `Defaults.SqlitePartitions` are that count (they were 64 and 1), so `EfStore.CreateAsync`, `MongoStore.CreateAsync` and
+  the Orleans adapter create and place 1,024 virtual partitions by default, each with its fence row and journal. On
+  SQLite one node owns them all as one set. Nothing is rehashed: an address embeds its virtual partition, and the count
+  is fixed when the database is created. A deployment on `commit=ef`, which has no owned sets, gets a worker per
+  partition, so it passes a smaller count.
+- **Set worlds.** `sim --count 1024|4096` (1,024 by default) gives the world's store a fence row and a journal for each
+  of the count's virtual partitions. The world places four of them on its two or three nodes. Each node runs one worker
+  for its owned set, through `DurableHost.ForNode`, as the built-in runtime does. Its takes and give-ups name a partition
+  and go through the node's `PartitionRuntime`, its flushes span the partitions they touch under the k-row fence, and a
+  trial group may span the set. Every seventh seed runs a worker per partition, as on a store without owned sets, so
+  both host shapes stay under the mutations. Two pieces of the world are the simulation's only:
+  - `SerialHost` queues the host's activations, passes and give-ups in the order layer 1 asks. The host runs them one
+    at a time under a lock, and a contended `SemaphoreSlim` resumes its waiter on the thread pool. The simulation is one
+    thread, so the queue keeps every continuation on it.
+  - `Placed` cuts the heartbeat's free partitions to the four the world places, so the fair share is of those. The
+    other partitions stay free, and nothing asks for them.
+- **What the count changes in the simulation: nothing but the rows.** Spread placement (children, event starts,
+  correlation instances) hashes over the four placed partitions, and nothing in the kernel reads the count except the
+  store's rows and the heartbeat's free list. At 4,096 every seed therefore runs exactly as at 1,024. The two
+  `--coverage` runs of 10,000 seeds agree to the unit, and so do the native runs. The CI runs both counts, which pins
+  that. What the count does change is measured in rows per take and per beat (slice 8).
+- **Multi-partition flushes.** In 10,000 seeds of 300 actions, at either count: 289,891 commits over several partitions
+  landed fenced; 242 had part of their fences stale and 38 all of them, and each was refused whole.
+- **Checks moved to per-partition epochs** (#4813's list):
+  - I16 reads the epoch of the instance's own partition.
+  - I14's "alone" half gathers the trial rows of every partition the process holds at its current epoch. The first
+    set worlds failed it falsely: a trial group of a set may span two partitions, and the check looked for the instance
+    among the trial rows of each partition alone.
+  - I9 and I3 (`Memory`) check what a worker holds of each partition it holds at its current epoch, and skip the rest.
+  - The fair-share check reads `Holds(p)` and `EpochOf(p)`.
+  - The wire sends a set poll as one call (it went through the interface's default, one call per partition), and
+    counts takes per partition for the outbound sendings it gives back after a failed commit.
+- **Mutations.** Every one of the 43 keeps its verdict at `--seeds 20000`. `TrialPerPartition` (a worker's own gate) is
+  caught at seed 7, a seed with a worker per partition: under one worker per node it changes nothing, because the gate
+  is already the node's. `NoWriteFirst` is caught at seed 3208, earlier than 6946.
+- **Runtime conformance at 1,024.** `semantic --partitions 1024` runs the cases written for the default count of 4 at
+  1,024. The owned-set cases name the partitions of their count and keep it. The built-in runtime passes 16 of 16 in
+  about 41 s, and the Orleans adapter 14 required cases in about 40 s, with the reference case "join" differing as it
+  does at 4: Orleans' placement does not move grains to a node that joins.
+- **Recorded for slice 8:**
+  - `RuntimeNode` reads every scope's due time each round: 1,024 cheap reads per round. It runs one worker pass per
+    round (slice 5a's one-pass rule).
+  - The Orleans keeper calls every grain every `KeepEvery`: 1,024 grain calls per silo per round, with no store call.
+  - A node that starts with 1,024 free partitions takes them one at a time (slice 5a).
+- **Settled: Mongo's millisecond tie** (#4815, review A's Nit 4). Mongo's sequence comes from each partition's clock,
+  so a set poll orders rows of two partitions added in one millisecond either way. The contract orders across
+  partitions only to the store's tick, and the scattered-take case now adds its rows a few milliseconds apart. Nothing
+  in the Worker or the simulation's checks depends on the order across partitions: an instance lives in one partition.
+
 ## Placement and rebalance (`sim --placement-check`)
 
 - `VirtualPartitions.Of(name, count)` is the hash of today, so an address embeds its virtual partition as it embeds
@@ -493,8 +545,8 @@ The decisions that were the owner's, with what the numbers said:
 
 - **Fence granularity: (i), one fence row per virtual partition,** conditional on round 5 B sending the checked fence
   as one multi-row statement. **That multi-row checked fence is now in B's scope.**
-- **Count: 1,024 virtual partitions.** The code keeps `VirtualPartitions.Provisional = 4096` as written on 15 November
-  (no code changed in this round's documentation fix); the Worker refactor to range ownership will use 1,024.
+- **Count: 1,024 virtual partitions.** The code kept `VirtualPartitions.Provisional = 4096` as written on 15 November
+  (no code changed in this round's documentation fix); K1 slice 7 set it to 1,024.
 - Decisions 4 and 5 above (rebalance strategy; when the Worker refactor happens) stayed open on 16 November. The owner
   answered them on 17 November:
   - **Rebalance strategy: fewest moves.** A node's partitions may be scattered, which costs nothing with a fence per
