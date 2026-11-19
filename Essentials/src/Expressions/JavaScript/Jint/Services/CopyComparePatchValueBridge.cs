@@ -172,6 +172,14 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         private (JsonElement Root, Dictionary<string, JsonElement> Markers) Mark(JsValue value)
         {
             var markers = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            // A value with no object in it (a number, a string) cannot hold an entered value: no replacer is needed.
+            if (value is not ObjectInstance || _origins.Count == 0)
+            {
+                var plain = JintResultMaterializer.Stringify(_engine, value)
+                    ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
+                return (JintResultMaterializer.ParseResult(plain, _options), markers);
+            }
+
             _replacer ??= NewReplacer();
             _currentMarkers = markers;
             try
