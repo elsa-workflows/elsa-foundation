@@ -46,6 +46,8 @@ static class EngineRun
             "deadlock" => await Deadlock(target),
             "fence" => await Fence(target),
             "lockorder" => await LockOrder(target),
+            "setcost" => await SetCost.RunAsync(target),
+            "setidle" => await SetCost.IdleAsync(target),
             _ => 2,
         };
     }
