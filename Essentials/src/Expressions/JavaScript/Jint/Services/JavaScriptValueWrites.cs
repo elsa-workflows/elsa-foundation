@@ -55,7 +55,7 @@ internal static class JavaScriptValueWrites
             _ => $"integers beyond {RefusingPrecisionPolicy.MaxSafeInteger} or decimals with more digits than a JavaScript number holds"
         };
         var message =
-            $"The script read numbers a JavaScript number cannot hold exactly ({why}) and computed with the nearest value it holds: {paths}. " +
+            $"JavaScript read numbers it cannot hold exactly ({why}) and computed with the nearest value it holds: {paths}. " +
             "Nothing was written from them. Hold such numbers as strings to keep every digit.";
         sink?.Report(new ExecutionWarning(
             JavaScriptValueDiagnostics.PrecisionLossRead,
