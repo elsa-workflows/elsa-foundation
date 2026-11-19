@@ -1,0 +1,4 @@
+.browser-form-designer { min-height: 100vh; padding: var(--studio-space-6, 2rem); background: var(--studio-app-bg); color: var(--studio-text); }
+.browser-form-designer > h1 { margin: 0 0 var(--studio-space-4); font-size: var(--studio-page-title-size); }
+.browser-form-designer .user-task-designer { width: 100%; max-width: 90rem; margin-inline: auto; }
+@media (width <= 700px) { .browser-form-designer { padding: var(--studio-space-3); } }
