@@ -110,6 +110,27 @@ test("narrow keyboard users preserve workflow browse context through global sear
   await expect(page.getByRole("button", { name: "Folders", exact: true })).toBeVisible();
 });
 
+test("Deleted workflow state preserves the selected browse scope", async ({ page }) => {
+  await page.goto(browseUrl);
+  await expect(page.getByText("First page renewal", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Deleted", exact: true }).click();
+  await expect(page.getByText("Deleted workflow", { exact: true })).toBeVisible();
+  const deletedUrl = new URL(page.url());
+  expect(deletedUrl.searchParams.get("state")).toBe("deleted");
+  expect(deletedUrl.searchParams.get("folderId")).toBe("folder-operations");
+  expect(deletedUrl.searchParams.get("search")).toBe("renewal");
+  const deletedRequest = (await recordedPageRequests(page)).at(-1);
+  expect(deletedRequest).toMatchObject({ state: "deleted", folderId: "folder-operations", searchTerm: "renewal" });
+
+  await page.getByRole("button", { name: "All states", exact: true }).click();
+  await expect(page.getByText("First page renewal", { exact: true })).toBeVisible();
+  const allStatesUrl = new URL(page.url());
+  expect(allStatesUrl.searchParams.get("state")).toBe("all");
+  expect(allStatesUrl.searchParams.get("folderId")).toBe("folder-operations");
+  expect(allStatesUrl.searchParams.get("search")).toBe("renewal");
+});
+
 test("editor Back restores the later workflow page with its observed opaque cursor", async ({ page }) => {
   await openSecondPage(page);
   const requestCountBeforeOpen = (await recordedPageRequests(page)).length;
@@ -218,7 +239,7 @@ test("Workflow Definitions groups its create and refresh actions above the colle
   const actions = header.getByRole("group", { name: "Workflow definition page actions" });
   await expect(header.getByText("Create and organize workflow definitions")).toBeVisible();
   await expect(actions.getByRole("button", { name: "Create workflow" })).toBeVisible();
-  await expect(actions.getByRole("button", { name: "Refresh workflow definitions" })).toBeVisible();
+  await expect(actions.getByRole("button", { name: "Refresh workflow definitions", exact: true })).toBeVisible();
   const search = page.getByRole("searchbox", { name: "Search selected folder" });
   await expect(page.getByRole("group", { name: "Definition state" })).toBeVisible();
   const headingBounds = await heading.boundingBox();
@@ -315,7 +336,7 @@ test("definition header actions use the shared button recipe in the custom mater
   await expect(workflowCreateDialog).toBeVisible();
   await workflowCreateDialog.getByRole("button", { name: "Cancel" }).click();
   const requestsBeforeRefresh = (await recordedPageRequests(page)).length;
-  await page.getByRole("button", { name: "Refresh workflow definitions" }).click();
+  await page.getByRole("button", { name: "Refresh workflow definitions", exact: true }).click();
   await expect.poll(async () => (await recordedPageRequests(page)).length).toBeGreaterThan(requestsBeforeRefresh);
 });
 
@@ -400,7 +421,7 @@ for (const variant of searchStatusVariants) {
     await expectPriorPageIsDisplayOnly(page);
     await page.screenshot({ path: testInfo.outputPath(`${variant.name.replaceAll(" ", "-")}-deferred.png`), fullPage: true });
 
-    await page.getByRole("button", { name: "Refresh workflow definitions" }).focus();
+    await page.getByRole("button", { name: "Refresh workflow definitions", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect.poll(async () => (await recordedSearchRequests(page, "latest")).length)
       .toBe(1);
