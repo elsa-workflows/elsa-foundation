@@ -105,7 +105,8 @@ public sealed class ExpressionDefinitionContractTests
         Assert.False(request.Capabilities.AllowsAmbientWorkflowState);
         Assert.False(request.Capabilities.AllowsMutation);
         Assert.False(request.Capabilities.AllowsServiceLocation);
-        Assert.False(request.Capabilities.AllowsNondeterminism);
+        // Spec 1223 FR-001: binding-readonly-v1 admits the clock, randomness and GUIDs.
+        Assert.True(request.Capabilities.AllowsNondeterminism);
     }
 
     [Fact]
