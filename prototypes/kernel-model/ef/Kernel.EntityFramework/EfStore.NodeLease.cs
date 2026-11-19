@@ -124,7 +124,21 @@ public sealed partial class EfStore
     /// refused; with <paramref name="countDeaths"/> (#4837, a pending partition) a successful retake adds one attempt to
     /// every unfinished message on trial at the previous epoch, as a take from an expired owner does.
     /// </summary>
+    /// <summary>
+    /// Under the node lease, a take that is a deadlock victim or timed out on a lock (SQL Server 1205 and 1222, MySQL 1213
+    /// and 1205, PostgreSQL 40P01 and 55P03) failed as a transient error, as on the commit path: its transaction rolled
+    /// back, and it is taken again at the next round. Null for anything else, which propagates as it is.
+    /// </summary>
+    private StoreException? TransientTake(Exception e) =>
+        NodeLease && e is not StoreException && Classify(e) is { Failure: Failure.Transient } transient ? transient : null;
+
     private async ValueTask<Lease?> RetakeInTransactionAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken)
+    {
+        try { return await RetakeInOneTransactionAsync(partition, node, epoch, lease, countDeaths, cancellationToken); }
+        catch (Exception e) when (TransientTake(e) is { } transient) { throw transient; }
+    }
+
+    private async ValueTask<Lease?> RetakeInOneTransactionAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken)
     {
         await using var db = create();
         await using var transaction = await (NodeLease ? BeginNodeTakeAsync(db, lease, cancellationToken) : Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
