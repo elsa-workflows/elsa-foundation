@@ -38,6 +38,13 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
 | `experiments/VirtualPartitions` | Round 5 A: the two fence granularities of virtual partitions (per virtual partition, per owned range) as EF stores, the measurement harness and the ownership simulation; results in [PARTITIONS.md](PARTITIONS.md) |
+| `experiments/K1.LockOrder` | K1 slice 3: two overlapping range commits on PostgreSQL, SQL Server and MySQL, with the k fence rows locked in ascending partition id and, as the negative, in batch order; [its README](experiments/K1.LockOrder/README.md) |
+| `experiments/Astra4.Sizes` | The fourth gate 2 review's size and identity probe: the real event-match encoding, placement hash and Native background arm, measured beside the proposed compact forms; see its [README](experiments/Astra4.Sizes/README.md) |
+| `experiments/Review4.Blockers` | Gate 2, fourth review: FR-1 (R4-B1, release cohort precedence) and RT-1 (R4-B2, the retirement obligation) on the real Native model and creation protocol, each under the reviewed, repaired and negative rules; [its README](experiments/Review4.Blockers/README.md) |
+| `experiments/Review5.Delivery` | Gate 2, fifth review: EV-1 (R5-M2, event eligibility by the match step, the entitlement point and the sweep's coverage), FR-2 (R5-M3, the drain's handoff credit), JR-1 (R5-M4, a fenced job result across Park) and PO-1 (R5-M6, precedence in the poison comparison) on the real in-memory store and Native model, each under the reviewed, repaired and negative rules; [its README](experiments/Review5.Delivery/README.md) |
+| `experiments/Review5.Termination` | Gate 2, fifth review: RT-2 (R5-B1, idempotent cancellation of a job ticket; R5-m3, generation-carrying jobs), RT-3 (R5-B2, the paged, durable cascade, ThenDelete and key reuse while Discharging) and RT-4 (R5-M5, the parent binding of kernel-marked terminates at running and ended recipients, with the open-drain and marker paths), every turn's commit through the real `InMemoryStore.CommitAsync`, each under the reviewed, repaired and negative rules; [its README](experiments/Review5.Termination/README.md) |
+| `experiments/Review6.Blockers` | Gate 2, sixth review: NT-1 (R6-B1, the model's terminal growth reserved in the envelope check, on the real Native `TerminateMetadata` and `WorkflowInstance` terminate, with the measured 7 bytes per open invocation inbox) and PI-1 (R6-B2, deliveries bound to a publication incarnation, on the real in-memory publish, match, catch-up and sweep paths; event-first's split sweeps are harness batches that remove rows directly, so the built `SweepAsync` is no evidence for that interleaving), each under the reviewed, repaired and negative rules; [its README](experiments/Review6.Blockers/README.md) |
+| `experiments/Review7.Blockers` | Gate 2, seventh review: NT-2 (R7-B1, the terminal projection counts the retained `CustomHandles`, `Model` and `Definition` at their encoded size, on real detached starts through `Turn.Start` and `DurableTurn.StartChild`, the real `WorkflowInstance` terminate and the in-memory commit, whose `Refuses` hook holds the row cap measured as the JSON UTF-8 size of the row's fields) and MX-1 (R7-M1, workflow-issued event ids carry a reserved `~` and the outside publish refuses it, on the real `DurableTurn.Publish` and the in-memory publish, match and delivery paths), each under the reviewed, repaired and negative rules; [its README](experiments/Review7.Blockers/README.md) |
 
 ## Build
 
@@ -54,6 +61,7 @@ dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 SIM="dotnet sim/bin/Release/net10.0/Kernel.Sim.dll"
 $SIM --seeds 200000                                  # 200,000 seeds of 300 actions each
 $SIM --seeds 20000 --actions 1000                    # 20,000 seeds of 1,000 actions
+$SIM --seeds 200000 --count 4096                     # K1: the store's virtual partitions, 1,024 (the default) or 4,096
 $SIM --native --seeds 200000                         # the same with native instances in the mix (40 % of outside actions)
 $SIM --native --seeds 20000 --actions 1000
 $SIM --seed 22 --flaw TrialPerPartition              # replay one seed; prints a shrunk trace when it fails
@@ -142,6 +150,8 @@ $EFR x stress <engine> "<same>" [commit=ef|owned]                               
 $EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch] [commit=ef|owned]   # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
 $EFR x fence <engine> "<connection;Database=kernel_fence>"                            # the k-row fence over eight partitions, one stale: COMMIT-SQL.md
+$EFR x setcost <engine> "<connection;Database=kernel_setcost>" proxy=1 [writes=1] [runs=5] [shape=both|scattered|contiguous] [count=4096]   # K1: ownership of a set in the integrated Worker, PARTITIONS.md "K1 costs"
+$EFR x setidle postgres "<connection;Database=kernel_idle>" seconds=120 writes=1      # K1, D3: four RuntimeNodes idle, the beat's WAL
 $EFR x stress|cost postgres "<connection>" writes=1 [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]   # WRITES.md; the container needs -c wal_keep_size=4GB
 ```
 
@@ -190,10 +200,14 @@ counted and sent round trips do not.
 
 ## How the simulation works
 
-- Several nodes run against one in-memory store. Each `(node, partition)` pair is an *actor* with its own worker. The
-  simulation is the actor runtime (layer 1): each process has a `PartitionRuntime` over a `DurableHost`, and takes,
-  releases and balancing go through them; the pieces of a pass (poll, load, turn, flush, meet) are separate actions, so
-  that one seed keeps its schedule. Once faults stop, the settling loop runs whole passes (`PassAsync`).
+- Several nodes run against one in-memory store, which has a fence row and a journal for each of `--count` virtual
+  partitions (1,024 by default, or 4,096). A world places four of them on its two or three nodes (K1 slice 7). Each
+  node's process is an *actor* with one worker that owns a set of those partitions, through `DurableHost.ForNode`, so a
+  flush spans the partitions it touches under the k-row fence. Every seventh seed runs a worker per partition instead,
+  as on a store without owned sets. The simulation is the actor runtime (layer 1): each process has a
+  `PartitionRuntime` over the node's host, and takes, give-ups and balancing go through them, one at a time; the
+  pieces of a pass (poll, load, turn, flush, meet) are separate actions, so that one seed keeps its schedule. Once
+  faults stop, the settling loop runs whole passes (`PassAsync`).
 - One action happens at a time, chosen from the seed: a runtime activates a partition (a take) or gives it up; a
   worker polls, loads, runs one turn, flushes, beats or reads events; a node balances; a store call executes; its
   answer arrives, arrives as "connection lost" although it executed, or the call never executes; an outsider adds a

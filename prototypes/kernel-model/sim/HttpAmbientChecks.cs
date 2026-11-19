@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 
 namespace Kernel.Sim;
 
-// A reference to the actual posted creator and its process epoch, separate from its reusable wire identity.
+// A reference to the actual posted creator and the epoch of its partition, separate from its reusable wire identity.
 internal sealed record HttpStarter(string Ambient, int Actor, long Epoch);
 internal sealed record HttpAmbientTrace(HttpStarter? Starter, int Observations);
 
@@ -36,7 +36,7 @@ public sealed partial class World
             prior.Generation == turn.Instance.Creation && !prior.Deleted.IsCompleted)
             trace = prior.Trace;    // earlier landed observations survive eviction and owner loss
         if (trace is null) return;
-        if (trace.Starter is { } local && local.Actor == actor.Id && local.Epoch == actor.Worker.Epoch &&
+        if (trace.Starter is { } local && local.Actor == actor.Id && local.Epoch == actor.Worker.EpochOf(turn.Instance.Ref.Partition) &&
             ReferenceEquals(turn.Ambient, local.Ambient))
             trace = trace with { Observations = trace.Observations + 1 };
         (_stateAmbients ??= new()).AddOrUpdate(state, trace);

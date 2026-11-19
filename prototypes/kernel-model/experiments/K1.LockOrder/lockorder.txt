@@ -1,0 +1,72 @@
+$ x lockorder postgres <conn> fence=batch unordered=0
+postgres: isolation read committed; fence in the batch; fence rows locked in ascending partition id
+both waiting before the release: yes; X (1, 2, 3): landed; Y (3, 2, 1): not landed; 123 ms
+engine deadlocks counted: 0; deadlock or key errors answered as a stale fence (E1): 0; positions of 1 2 3: 1 1 1; rows: 1/x 2/x 3/x
+lockorder: both completed, one landed, no deadlock
+exit 0
+$ x lockorder postgres <conn> fence=batch unordered=1
+postgres: isolation read committed; fence in the batch; fence rows locked IN BATCH ORDER (the negative)
+both waiting before the release: yes; X (1, 2, 3): not landed; Y (3, 2, 1): landed; 1140 ms
+engine deadlocks counted: 1; deadlock or key errors answered as a stale fence (E1): 1; positions of 1 2 3: 1 1 1; rows: 1/y 2/y 3/y
+lockorder negative: DEADLOCKED, broken by the engine
+exit 0
+$ x lockorder postgres <conn> fence=checked unordered=0
+postgres: isolation read committed; fence checked; fence rows locked in ascending partition id
+both waiting before the release: yes; X (1, 2, 3): landed; Y (3, 2, 1): not landed; 128 ms
+engine deadlocks counted: 0; deadlock or key errors answered as a stale fence (E1): 0; positions of 1 2 3: 1 1 1; rows: 1/x 2/x 3/x
+lockorder: both completed, one landed, no deadlock
+exit 0
+$ x lockorder postgres <conn> fence=checked unordered=1
+postgres: isolation read committed; fence checked; fence rows locked IN BATCH ORDER (the negative)
+both waiting before the release: yes; X (1, 2, 3): failed: Transient pg 40P01; Y (3, 2, 1): landed; 1173 ms
+engine deadlocks counted: 1; deadlock or key errors answered as a stale fence (E1): 0; positions of 1 2 3: 1 1 1; rows: 1/y 2/y 3/y
+lockorder negative: DEADLOCKED, broken by the engine
+exit 0
+$ x lockorder sqlserver <conn> fence=batch unordered=0
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; fence in the batch; fence rows locked in ascending partition id
+both waiting before the release: yes; X (1, 2, 3): landed; Y (3, 2, 1): not landed; 179 ms
+engine deadlocks counted: 0; deadlock or key errors answered as a stale fence (E1): 0; positions of 1 2 3: 1 1 1; rows: 1/x 2/x 3/x
+lockorder: both completed, one landed, no deadlock
+exit 0
+$ x lockorder sqlserver <conn> fence=batch unordered=1
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; fence in the batch; fence rows locked IN BATCH ORDER (the negative)
+both waiting before the release: yes; X (1, 2, 3): failed: Transient mssql 1205; Y (3, 2, 1): landed; 3298 ms
+engine deadlocks counted: 1; deadlock or key errors answered as a stale fence (E1): 0; positions of 1 2 3: 1 1 1; rows: 1/y 2/y 3/y
+lockorder negative: DEADLOCKED, broken by the engine
+exit 0
+$ x lockorder sqlserver <conn> fence=checked unordered=0
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; fence checked; fence rows locked in ascending partition id
+both waiting before the release: yes; X (1, 2, 3): landed; Y (3, 2, 1): not landed; 154 ms
+engine deadlocks counted: 0; deadlock or key errors answered as a stale fence (E1): 0; positions of 1 2 3: 1 1 1; rows: 1/x 2/x 3/x
+lockorder: both completed, one landed, no deadlock
+exit 0
+$ x lockorder sqlserver <conn> fence=checked unordered=1
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; fence checked; fence rows locked IN BATCH ORDER (the negative)
+both waiting before the release: yes; X (1, 2, 3): failed: Transient mssql 1205; Y (3, 2, 1): landed; 2406 ms
+engine deadlocks counted: 1; deadlock or key errors answered as a stale fence (E1): 0; positions of 1 2 3: 1 1 1; rows: 1/y 2/y 3/y
+lockorder negative: DEADLOCKED, broken by the engine
+exit 0
+$ x lockorder mysql <conn> fence=batch unordered=0
+mysql: REPEATABLE READ (server default REPEATABLE-READ); fence in the batch; fence rows locked in ascending partition id
+both waiting before the release: yes; X (1, 2, 3): landed; Y (3, 2, 1): not landed; 121 ms
+engine deadlocks counted: 0; deadlock or key errors answered as a stale fence (E1): 0; positions of 1 2 3: 1 1 1; rows: 1/x 2/x 3/x
+lockorder: both completed, one landed, no deadlock
+exit 0
+$ x lockorder mysql <conn> fence=batch unordered=1
+mysql: REPEATABLE READ (server default REPEATABLE-READ); fence in the batch; fence rows locked IN BATCH ORDER (the negative)
+both waiting before the release: yes; X (1, 2, 3): landed; Y (3, 2, 1): not landed; 150 ms
+engine deadlocks counted: 1; deadlock or key errors answered as a stale fence (E1): 1; positions of 1 2 3: 1 1 1; rows: 1/x 2/x 3/x
+lockorder negative: DEADLOCKED, broken by the engine
+exit 0
+$ x lockorder mysql <conn> fence=checked unordered=0
+mysql: REPEATABLE READ (server default REPEATABLE-READ); fence checked; fence rows locked in ascending partition id
+both waiting before the release: yes; X (1, 2, 3): landed; Y (3, 2, 1): not landed; 102 ms
+engine deadlocks counted: 0; deadlock or key errors answered as a stale fence (E1): 0; positions of 1 2 3: 1 1 1; rows: 1/x 2/x 3/x
+lockorder: both completed, one landed, no deadlock
+exit 0
+$ x lockorder mysql <conn> fence=checked unordered=1
+mysql: REPEATABLE READ (server default REPEATABLE-READ); fence checked; fence rows locked IN BATCH ORDER (the negative)
+both waiting before the release: yes; X (1, 2, 3): landed; Y (3, 2, 1): failed: Transient mysql 1213; 106 ms
+engine deadlocks counted: 1; deadlock or key errors answered as a stale fence (E1): 0; positions of 1 2 3: 1 1 1; rows: 1/x 2/x 3/x
+lockorder negative: DEADLOCKED, broken by the engine
+exit 0

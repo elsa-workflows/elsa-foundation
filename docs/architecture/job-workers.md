@@ -1,7 +1,9 @@
 # Job workers outside the process
 
-> **Proposed.** The kernel design awaits owner approval; this page answers design-now question 5 and does not
-> authorize product implementation. The worker protocol ships in 1.x. Its contract is designed now so that release 1's
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+> This page answers design-now question 5. The worker protocol ships in 1.x. Its contract is designed now so that release 1's
 > jobs are built to it.
 
 [Design-now question 5](../reports/clean-slate-kernel/design-sketch-draft-5.md#to-answer-in-the-design-proposal-before-the-fable-review-owner-decision-12-november)
@@ -278,6 +280,13 @@ this contract:
   - **the attempt number**, which in process is one plus the ticket's recorded attempts (owners lost while it was on
     trial). It is a lower bound on executions, since an owner lost outside a trial counts nothing;
   - **the deadline and the cancellation token.**
+- **A restart after a Park runs the same invocation (proposed, fourth review R4-M3).** Today the ticket is the only
+  durable home of a job's arguments: the model passes them to `StartJob` and keeps only the job key. Release 1's model
+  also records an immutable `JobSpec` at arm (the key, the arguments and the effect key), and a recover's restart
+  writes the new ticket from that spec under the next ticket generation, so it keeps the invocation's effect key and
+  never reads the old ticket, which a page may have cleared to a payload-free marker or the sweep removed. A kept
+  ticket of an obsolete generation is cleared and never restored, since physical entry checks no generation
+  ([observability](observability.md#recover)).
 - `StartJob` accepts an optional timeout. The kernel writes a timer message to the instance in the same commit and
   recalls it when the result arrives; on expiry it cancels the job and gives the model a timeout result. That costs one
   timer row per job that asks for a timeout.

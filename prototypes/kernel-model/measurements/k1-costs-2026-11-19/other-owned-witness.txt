@@ -1,0 +1,20 @@
+== sqlserver --fence-in-batch
+pass  owned sets: one stale fence rolls the whole flush back; the kept partitions have no hole and no stranded mark  (1074 ms)
+pass  owned sets, the K1 witness: b of {a, b, c} moves by lease expiry while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on  (1075 ms)
+pass  owned sets, the K1 witness: b of {a, b, c} moves by a release while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on  (283 ms)
+entity framework, sqlserver, fence in batch, owned SQL, RCSI: 9 passed, 0 required failed, 0 reference differ, 2 skipped
+== sqlserver --checked-fence
+pass  owned sets: one stale fence rolls the whole flush back; the kept partitions have no hole and no stranded mark  (991 ms)
+pass  owned sets, the K1 witness: b of {a, b, c} moves by lease expiry while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on  (1113 ms)
+pass  owned sets, the K1 witness: b of {a, b, c} moves by a release while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on  (271 ms)
+entity framework, sqlserver, checked fence, owned SQL, RCSI: 9 passed, 0 required failed, 0 reference differ, 2 skipped
+== mysql --fence-in-batch
+pass  owned sets: one stale fence rolls the whole flush back; the kept partitions have no hole and no stranded mark  (897 ms)
+pass  owned sets, the K1 witness: b of {a, b, c} moves by lease expiry while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on  (904 ms)
+pass  owned sets, the K1 witness: b of {a, b, c} moves by a release while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on  (190 ms)
+entity framework, mysql, fence in batch, owned SQL, REPEATABLE READ: 9 passed, 0 required failed, 0 reference differ, 2 skipped
+== mysql --checked-fence
+pass  owned sets: one stale fence rolls the whole flush back; the kept partitions have no hole and no stranded mark  (892 ms)
+pass  owned sets, the K1 witness: b of {a, b, c} moves by lease expiry while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on  (915 ms)
+pass  owned sets, the K1 witness: b of {a, b, c} moves by a release while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on  (212 ms)
+entity framework, mysql, checked fence, owned SQL, REPEATABLE READ: 9 passed, 0 required failed, 0 reference differ, 2 skipped

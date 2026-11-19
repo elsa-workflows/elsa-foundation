@@ -1,0 +1,126 @@
+ 4:43  up 16 days, 14:43, 1 user, load averages: 4.80 7.23 11.88
+528eabf7ee8778e9b3bbc9c61c22cba48d0b03d9
+
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; fence in the batch; commit owned SQL; 1024 virtual partitions, 4 nodes
+shape scattered: the four sets are 256 in 1 ranges, 256 in 1 ranges, 256 in 2 ranges, 256 in 3 ranges; node A holds 256 in 3 ranges (256-341, 768-853, 940-1023)
+run                                                                                          commands begin commit counted   tcp  exec  rows        ms
+take: the per-node host gains A's 256, one activation each (start-up)                             256   256    256     768   768         256     403.8
+    the runs' counts differ (commands begin commit tcp exec rows): 256 256 256 772  256 | 256 256 256 768  256 | 256 256 256 768  256 | 256 256 256 768  256 | 256 256 256 768  256
+    statements by kind: take 256; ms per run: 503.1 438.5 403.8 381.5 393.3
+take: one set take of A's 256 (a worker of the set, fixed host)                                     1     1      1       3     3         256      19.6
+    statements by kind: take 1; ms per run: 30.5 19.6 18.4 18.2 23.2
+take: one set take of A's 256 while a live node holds the upper 128 (fixed host)                    1     1      1       3     3         128      20.5
+    statements by kind: take 1; ms per run: 23.3 20.5 20.1 22.2 19.8
+beat: the node's worker renews its 256 (an empty fenced commit)                                     1     1      1       3     3         256       3.8
+    statements by kind: partitions (other) 1; ms per run: 55.9 3.8 3.2 19.2 3.3
+heartbeat: the membership's node row, live count and free list                                      3     0      0       3     3           0       2.6
+    statements by kind: other 2, heartbeat 1; ms per run: 39.5 3.9 2.5 2.6 2.4
+poll: the set poll over 256, nothing to read                                                        1     0      0       1     1           0       0.8
+    statements by kind: poll 1; ms per run: 1.1 0.8 0.7 0.8 0.8
+sql server: 20 rounds of a give-up, a take and a set poll over 256: cached ad hoc plans of the set poll 1 before, 21 after (33.9 ms a round)
+flush, 100 new instances over k of A: the set poll that reads them                                  1     0      0       1     1           0       2.8
+    statements by kind: poll 1; ms per run: 70.8 2.8 2.6 36.4 2.6
+flush, 100 new instances over k of A: the load                                                      1     0      0       1     1           0       2.5
+    statements by kind: other 1; ms per run: 40.9 5.5 2.2 2.0 2.5
+flush, 100 new instances over k of A: flush 1                                                       1     1      1       3     3          91      46.5
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 3  86 | 1 1 1 3  91 | 1 1 1 3  91 | 1 1 1 3  74 | 1 1 1 3  87
+    statements by kind: partitions (other) 1; ms per run: 102.3 48.7 45.5 46.5 45.3
+flush, 100 new instances over k of A: flush 2                                                       1     1      1       3     3          91      76.5
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 3  86 | 1 1 1 3  91 | 1 1 1 3  91 | 1 1 1 3  74 | 1 1 1 3  87
+    statements by kind: partitions (other) 1; ms per run: 208.5 199.7 75.1 68.7 76.5
+flush, the same 100 again: the set poll that reads them                                             1     0      0       1     1           0       3.0
+    statements by kind: poll 1; ms per run: 3.0 35.5 2.5 2.4 36.9
+flush, the same 100 again: the load                                                                 0     0      0       0     0           0       0.0
+    statements by kind: none; ms per run: 0.0 0.0 0.0 0.0 0.0
+flush, the same 100 again: flush 1                                                                  1     1      1       3     3          91      45.9
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 3  86 | 1 1 1 3  91 | 1 1 1 3  91 | 1 1 1 3  74 | 1 1 1 3  87
+    statements by kind: partitions (other) 1; ms per run: 45.9 52.0 45.3 42.1 50.7
+flush, the same 100 again: flush 2                                                                  1     1      1       3     3          91     236.4
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 3  86 | 1 1 1 3  91 | 1 1 1 3  91 | 1 1 1 3  74 | 1 1 1 3  87
+    statements by kind: partitions (other) 1; ms per run: 262.0 236.4 237.2 220.9 222.1
+    k, the distinct partitions of each run's 100 instances: 86 91 91 74 87
+takeover: one set take of a dead node's 256 (fixed host)                                            2     1      1       4     4         256      39.1
+    statements by kind: take 1, death count 1; ms per run: 42.1 37.7 37.0 39.1 39.5
+takeover: the per-node host gains a dead node's 256, one activation each                          512   256    256    1024  1024         256     430.2
+    statements by kind: take 256, death count 256; ms per run: 443.6 430.2 424.4 435.8 419.5
+release: the per-node host gives up 128 of 256, one scope each                                    128     0      0     128   128         128      68.5
+    statements by kind: release 128; ms per run: 78.0 71.9 67.9 68.5 65.7
+release: one set release of 128 (the store's, as a stand-down sends it)                             1     0      0       1     1         128      10.6
+    statements by kind: release 1; ms per run: 13.6 10.4 10.6 11.9 10.4
+reset: a beat refused on 1 of 256, then the retake of the rest, one each                          257     1      0     258   258         255     177.7
+    statements by kind: retake 256, partitions (other) 1; ms per run: 200.6 169.4 177.0 187.4 177.7
+rebalance: a fourth node joins, the four run rounds until none changes                            540   256    256    1052  1052         256     479.9
+    statements by kind: take 256, release 256, other 19, heartbeat 9; ms per run: 482.1 479.9 476.3 519.9 478.3
+    2 rounds (the last changes nothing), 256 partitions moved, held [256 256 256 256]
+rebalance: a node leaves gracefully, its stop (one scope at a time)                               256     0      0     256   256         256     145.0
+    statements by kind: release 256; ms per run: 136.5 141.9 152.3 145.0 157.2
+rebalance: then the other three run rounds until none changes                                     274   256    256     786   786         256     343.5
+    statements by kind: take 256, other 12, heartbeat 6; ms per run: 343.5 364.9 347.5 324.6 336.0
+    2 rounds (the last changes nothing), 256 partitions moved, held [342 342 340]
+takeover through the runtime: a node dies, the other three run rounds                             530   256    256    1042  1042         256     487.8
+    statements by kind: take 256, death count 256, other 12, heartbeat 6; ms per run: 487.8 519.3 459.2 452.9 502.8
+    2 rounds (the last changes nothing), 256 partitions moved, held [342 342 340]
+
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; fence in the batch; commit owned SQL; 1024 virtual partitions, 4 nodes
+shape contiguous: the four sets are 256 in 1 ranges, 256 in 1 ranges, 256 in 1 ranges, 256 in 1 ranges; node A holds 256 in 1 ranges (0-255)
+run                                                                                          commands begin commit counted   tcp  exec  rows        ms
+take: the per-node host gains A's 256, one activation each (start-up)                             256   256    256     768   768         256     359.6
+    the runs' counts differ (commands begin commit tcp exec rows): 256 256 256 772  256 | 256 256 256 768  256 | 256 256 256 768  256 | 256 256 256 768  256 | 256 256 256 768  256
+    statements by kind: take 256; ms per run: 468.0 382.0 359.6 353.7 354.9
+take: one set take of A's 256 (a worker of the set, fixed host)                                     1     1      1       3     3         256      18.1
+    statements by kind: take 1; ms per run: 20.8 17.6 17.9 18.1 20.4
+take: one set take of A's 256 while a live node holds the upper 128 (fixed host)                    1     1      1       3     3         128      17.4
+    statements by kind: take 1; ms per run: 18.0 16.7 17.4 17.4 17.3
+beat: the node's worker renews its 256 (an empty fenced commit)                                     1     1      1       3     3         256       3.4
+    statements by kind: partitions (other) 1; ms per run: 26.9 3.4 3.1 18.6 2.9
+heartbeat: the membership's node row, live count and free list                                      3     0      0       3     3           0       2.3
+    statements by kind: other 2, heartbeat 1; ms per run: 13.9 2.6 2.3 2.2 2.2
+poll: the set poll over 256, nothing to read                                                        1     0      0       1     1           0       0.8
+    statements by kind: poll 1; ms per run: 0.8 1.0 0.8 0.8 0.7
+sql server: 20 rounds of a give-up, a take and a set poll over 256: cached ad hoc plans of the set poll 1 before, 21 after (34.9 ms a round)
+flush, 100 new instances over k of A: the set poll that reads them                                  1     0      0       1     1           0       2.2
+    statements by kind: poll 1; ms per run: 36.6 2.2 2.2 35.8 2.2
+flush, 100 new instances over k of A: the load                                                      1     0      0       1     1           0       2.1
+    statements by kind: other 1; ms per run: 4.2 5.0 1.9 1.9 2.1
+flush, 100 new instances over k of A: flush 1                                                       1     1      1       3     3          90      47.9
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 3  90 | 1 1 1 3  86 | 1 1 1 3  89 | 1 1 1 3  84 | 1 1 1 3  91
+    statements by kind: partitions (other) 1; ms per run: 61.4 41.8 47.9 47.9 45.2
+flush, 100 new instances over k of A: flush 2                                                       1     1      1       3     3          90      68.7
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 3  90 | 1 1 1 3  86 | 1 1 1 3  89 | 1 1 1 3  84 | 1 1 1 3  91
+    statements by kind: partitions (other) 1; ms per run: 73.1 67.0 74.2 67.6 68.7
+flush, the same 100 again: the set poll that reads them                                             1     0      0       1     1           0       2.8
+    statements by kind: poll 1; ms per run: 2.8 35.6 2.2 2.3 37.5
+flush, the same 100 again: the load                                                                 0     0      0       0     0           0       0.0
+    statements by kind: none; ms per run: 0.0 0.0 0.0 0.0 0.0
+flush, the same 100 again: flush 1                                                                  1     1      1       3     3          90      46.9
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 3  90 | 1 1 1 3  86 | 1 1 1 3  89 | 1 1 1 3  84 | 1 1 1 3  91
+    statements by kind: partitions (other) 1; ms per run: 55.8 46.9 42.7 41.6 56.4
+flush, the same 100 again: flush 2                                                                  1     1      1       3     3          90     249.6
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 3  90 | 1 1 1 3  86 | 1 1 1 3  89 | 1 1 1 3  84 | 1 1 1 3  91
+    statements by kind: partitions (other) 1; ms per run: 249.6 356.1 222.9 232.2 346.1
+    k, the distinct partitions of each run's 100 instances: 90 86 89 84 91
+takeover: one set take of a dead node's 256 (fixed host)                                            2     1      1       4     4         256      37.8
+    statements by kind: take 1, death count 1; ms per run: 41.9 37.8 36.4 36.2 39.4
+takeover: the per-node host gains a dead node's 256, one activation each                          512   256    256    1024  1024         256     448.2
+    statements by kind: take 256, death count 256; ms per run: 448.2 441.6 458.7 443.7 457.9
+release: the per-node host gives up 128 of 256, one scope each                                    128     0      0     128   128         128      68.9
+    statements by kind: release 128; ms per run: 68.9 88.0 66.0 68.2 70.5
+release: one set release of 128 (the store's, as a stand-down sends it)                             1     0      0       1     1         128      10.6
+    statements by kind: release 1; ms per run: 12.2 10.1 10.6 11.7 10.2
+reset: a beat refused on 1 of 256, then the retake of the rest, one each                          257     1      0     258   258         255     194.0
+    statements by kind: retake 256, partitions (other) 1; ms per run: 187.7 194.0 200.5 200.8 178.6
+rebalance: a fourth node joins, the four run rounds until none changes                           1054   513    513    2080  2080         513     909.7
+    statements by kind: take 513, release 513, other 19, heartbeat 9; ms per run: 898.2 892.1 924.7 973.6 909.7
+    2 rounds (the last changes nothing), 513 partitions moved, held [256 256 256 256]
+rebalance: a node leaves gracefully, its stop (one scope at a time)                               256     0      0     256   256         256     148.8
+    statements by kind: release 256; ms per run: 129.5 155.4 135.1 157.1 148.8
+rebalance: then the other three run rounds until none changes                                     444   341    341    1126  1126         341     514.1
+    statements by kind: take 341, release 85, other 12, heartbeat 6; ms per run: 526.5 501.9 514.1 501.0 536.1
+    2 rounds (the last changes nothing), 341 partitions moved, held [342 341 341]
+takeover through the runtime: a node dies, the other three run rounds                             700   341    341    1382  1382         341     696.0
+    statements by kind: take 341, death count 256, release 85, other 12, heartbeat 6; ms per run: 696.0 745.3 672.9 647.7 706.5
+    2 rounds (the last changes nothing), 341 partitions moved, held [342 341 341]
+
+every check passed
+exit 0
+ 4:45  up 16 days, 14:45, 1 user, load averages: 6.57 6.94 11.21

@@ -3,23 +3,21 @@ using System.Collections.Immutable;
 namespace Kernel.Runtime;
 
 /// <summary>
-/// Round 5 A (owner, 15 November): virtual partitions. The database has a fixed number of them, 1,024 or 4,096 (4,096
-/// provisionally), and an actor's address embeds its virtual partition exactly as it embeds a partition today
-/// ("3071/order-17"): the same <see cref="InstanceRef.Spread"/>, so placement is stable, and the count is fixed when
-/// the database is created, so nothing is ever rehashed. Nodes own contiguous <em>ranges</em> of virtual partitions
-/// (<see cref="VpRange"/>, <see cref="RangeMap"/>): a range moves between nodes as a whole or is split; a virtual
-/// partition never changes its number, so its journal keeps its identity across every move. Which row carries the
-/// fence, one per virtual partition or one per owned range, is the experiment of round 5 A
-/// (<c>experiments/VirtualPartitions</c>); this file is only addressing and placement, and nothing in the kernel uses
-/// it yet: the built-in runtime still hosts <see cref="Defaults.ServerPartitions"/> partitions.
+/// Round 5 A (owner, 15 November): virtual partitions. The database has a fixed number of them, and an actor's address
+/// embeds its virtual partition ("1007/order-17"): the same <see cref="InstanceRef.Spread"/>, so placement is stable, and
+/// the count is fixed when the database is created, so nothing is ever rehashed. Each virtual partition has its own fence
+/// row, epoch, position and journal (the owner's decision of 16 November), and a node owns a set of them, which may be
+/// scattered (17 November: fewest moves). The owner chose 1,024 on 16 November; K1 slice 7 made it the count the
+/// runtime's defaults and every store use (<see cref="Defaults.ServerPartitions"/>). <see cref="VpRange"/> and
+/// <see cref="RangeMap"/> are the placement table of the experiment of round 5 A (<c>experiments/VirtualPartitions</c>).
 /// </summary>
 public static class VirtualPartitions
 {
-    /// <summary>The two counts under comparison.</summary>
+    /// <summary>The two counts the simulation runs at.</summary>
     public const int Small = 1024, Large = 4096;
 
-    /// <summary>The owner's provisional choice (15 November), pending the measurements.</summary>
-    public const int Provisional = Large;
+    /// <summary>The owner's choice (16 November): 1,024 virtual partitions.</summary>
+    public const int Provisional = Small;
 
     /// <summary>The virtual partition of a name: a pure function of the name and the count, never of the nodes.</summary>
     public static int Of(string name, int count) => InstanceRef.Spread(name, count);

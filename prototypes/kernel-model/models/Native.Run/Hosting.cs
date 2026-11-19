@@ -101,6 +101,8 @@ public sealed class Sizing(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
     public int Commits, Rows;
     public long StateBytes, MaxStateBytes;
 

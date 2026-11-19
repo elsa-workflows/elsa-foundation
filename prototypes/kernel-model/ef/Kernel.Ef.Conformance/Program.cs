@@ -125,6 +125,7 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         public override string MissingConsumeOutcome => "not landed";
         public override IKernelStore NewClient() => outside;
         public override ICostCounter? Counter => counter;
+        public override Func<int, Task>? Reopen => partitions => outside.CreateAsync(partitions);
 
         // PostgreSQL refuses a NUL in text (22021), every time. SQLite, SQL Server and MySQL store any string the
         // instance row can hold: no refused row (the case is skipped).

@@ -66,13 +66,30 @@ test("classic layout keeps the docked designer", async ({ page }) => {
 
 test("classic layout hides the minimap while a one-step graph fits the canvas", async ({ page }) => {
   await openFlowchartWithOneStep(page, "classic");
-  await expect(page.locator(".react-flow")).toBeVisible();
-  await expect.poll(async () => page.locator(".react-flow").evaluate(element => {
-    const box = (element as HTMLElement).getBoundingClientRect();
-    return box.width > 100 && box.height > 100;
-  })).toBe(true);
-  await expect(page.locator(".react-flow__node")).toHaveCount(1);
-  await expect(page.locator(".react-flow__minimap")).toHaveCount(0);
+  const canvas = page.locator(".react-flow");
+  await expect(canvas).toBeVisible();
+  await expect(canvas.locator(".react-flow__node")).toHaveCount(1);
+  await expect.poll(() => canvas.evaluate(element => {
+    const node = element.querySelector<HTMLElement>(".react-flow__node");
+    return !!node && node.offsetWidth > 0 && node.offsetHeight > 0
+      && node.offsetWidth < element.clientWidth && node.offsetHeight < element.clientHeight;
+  }), { message: "the node fits in the canvas at its natural size" }).toBe(true);
+  await expect(canvas.locator(".react-flow__minimap")).toHaveCount(0);
+});
+
+test("classic layout keeps the block toolbar on one row until a block is selected", async ({ page }) => {
+  await openFlowchartWithOneStep(page, "classic");
+  // Clear the selection that placing the step made: the guard is about the toolbar with nothing selected.
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  const toolbar = page.getByRole("group", { name: "Named block commands", exact: true });
+  await expect(toolbar).toBeVisible();
+  // Promote acts on one named block, so it only joins the toolbar then (#4712).
+  await expect(toolbar.getByRole("button", { name: "Promote to reusable activity…", exact: true })).toHaveCount(0);
+  // A command that wraps the toolbar onto a second row takes that row from the docked canvas.
+  const rows = await toolbar.evaluate(element =>
+    new Set([...element.querySelectorAll<HTMLElement>(":scope > button")].filter(button => button.offsetWidth > 0)
+      .map(button => Math.round(button.getBoundingClientRect().top))).size);
+  expect(rows, "the block toolbar fits on one row").toBe(1);
 });
 
 test("classic layout shows the minimap once the graph outgrows the canvas", async ({ page }) => {

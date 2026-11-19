@@ -1,0 +1,19 @@
+    0 Error(s)
+== 1024
+ 4:22  up 16 days, 14:22, 1 user, load averages: 10.32 26.03 29.56
+PHASE settled 93 ms
+PHASE steady 6044 ms
+PHASE handled 3 6092 ms
+PHASE killed and probed 8706 ms
+PHASE taken over 14761 ms
+PHASE applied 14762 ms
+built-in on in-memory: 1 passed, 0 required failed, 0 reference differ
+== 4096
+ 4:23  up 16 days, 14:22, 1 user, load averages: 8.18 24.79 29.05
+PHASE settled 1174 ms
+PHASE steady 6378 ms
+PHASE handled 3 6496 ms
+FAIL   crash: a crashed node's scopes are taken over, and their messages handled once  (167162 ms)
+built-in on in-memory: 0 passed, 1 required failed, 0 reference differ
+
+[exited with code 0]

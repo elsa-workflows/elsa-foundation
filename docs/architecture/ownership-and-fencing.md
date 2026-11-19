@@ -1,6 +1,8 @@
 # Ownership and fencing
 
-> Proposed clean-slate kernel architecture. The design awaits owner approval; prototype evidence does not authorize product implementation.
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
 
 A runtime places each partition on a node. A lease helps it decide who should work there. The database fence decides whose changes can become durable. One partition holds many instances, so one fence can protect a batch of their turns.
 
