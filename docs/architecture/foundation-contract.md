@@ -223,9 +223,9 @@ reaches the foundation only through `IActorTurn`.
 
 Each case is checkable on the contract alone and runs first on the built-in foundation at K2 (in-memory store and the
 simulation, each with a mutation that fails without it), then on every provider at K4. A future adapter passes the
-same suite, plus a contract-level run of the simulation's workloads against it with every mutation the contract can
+same suite, plus a contract-level run of the simulation's workloads against it with the mutations that the contract can
 express (owner decision 5); the built-in foundation's own run of those workloads through the contract at K2 is the
-reference.
+reference (a coordinator design choice under that decision).
 
 | Case | Guarantee |
 |---|---|
@@ -239,7 +239,7 @@ reference.
 | FC-8 | Children: `Start` yields an exact ref before the commit; the child's first turn runs only after the parent's commit lands; a child's Park sends its parent one notice with `Final` false, and the parent receives one final notice per child, as the resolution decides (discard and expiry `Faulted`; terminate `Cancelled`; delete `Faulted`, `Cancelled` when it takes over a terminate, none after a recover's end; recover none, then the ordinary notice at the child's end); a terminate of the parent reaches every child not yet ended, across a parent that ended first and across any owner change; a detached child receives none of this |
 | FC-9 | Commands: a command is delivered alone, passes `Withholds`, reaches an ended actor, is never discarded as poison, and every other kind is withheld while `Withholds` is true. Who executes: `Suspend`, `Resume`, `Migrate` and `Terminate` the actor type in its turn; `Terminate` of a parked actor, `Recover`, `Discard` and `Delete` the foundation as drains. Authority: `ThenDelete` is accepted on an operator's terminate only, a turn's `Send` of one is refused, and the foundation deletes in the commit of the turn that ends the actor unless `ProtectsDeletion` holds; a cascade's terminate is accepted only from the child's recorded parent; an `OperatorCommand` whose `Selection` no longer matches the actor's life, Park or end mark is refused with no change |
 | FC-10 | Park and recover: a throwing turn leaves the actor `Faulted` with its state and journal intact, its inputs consumed and kept, its waits removed and its parent told; a message or job counts toward the poison threshold only when its owner died while trying it, and past the threshold the actor parks; a recover re-arms exactly the `RestorePlan`, each timer at its recorded due, each job afresh so that an earlier run's result never applies, each subscription with its keep flag, and no wait outside the plan |
-| FC-11 | Journal and reads: every `Record` entry appears once in the actor's history in commit order, at `Full`; at `State` a commit leaves only that the state changed and at `Minimal` nothing, except the foundation's lifecycle entries (start, end, Park and its resolutions, delete), which every history level writes (data lifecycle decision 1), so a Park is visible to the read models at `Minimal`; a read model shows no uncommitted entry and every page says in `AsOf` the foundation clock's reading it is current to; a tail read after a token returns only later entries; `ListAsync` filters by every `ActorQuery` field, with `Labels` eventually consistent with the commit that set them |
+| FC-11 | Journal and reads: every `Record` entry appears once in the actor's history in commit order, at `Full`; at `State` a commit leaves only that the state changed and at `Minimal` nothing, except the foundation's lifecycle entries (start, end, migrate, Park and its resolutions, delete), which every history level writes (data lifecycle decision 1), so a Park is visible to the read models at `Minimal`; a read model shows no uncommitted entry and every page says in `AsOf` the foundation clock's reading it is current to; a tail read after a token returns only later entries; `ListAsync` filters by every `ActorQuery` field, with `Labels` eventually consistent with the commit that set them |
 | FC-12 | Tenancy: an ingress call without a `BoundScope` is refused; a turn's sends, starts, publishes, subscriptions, jobs and entries carry the actor's tenant; names chosen by callers never collide across tenants; an exact ref, caller key or selection of another tenant answers not found, in ingress and in every read model alike, and never names the other tenant ([tenancy](tenancy.md#every-operation)) |
 | FC-13 | Opaque identity: an actor type, a model and the operator API compile against the contracts package alone and run on refs, handles, selections and page tokens that carry no parseable structure |
 | FC-14 | Live output: `Emit` and `Reply` reach the open requests whose message the actor consumed, first response wins, only after the commit lands, or at once when the turn has nothing to write, unless the request opted out with `ReleaseBeforeCommit`; a turn whose commit is refused emits and replies nothing unless the request opted out |
@@ -296,8 +296,8 @@ name or type names a partition, virtual partition, epoch, fence, lease, position
 representative activities, the native model, a second model and the runtime API compiled against the package alone
 and run on refs, handles, selections and page tokens with no parseable structure (FC-13); FC-1 to FC-18 as executable
 cases on the built-in foundation with the in-memory store and the simulation, each with a mutation that fails without
-it; the simulation's workloads run through the contract against the built-in foundation, with every mutation the
-contract can express, as the reference run a future adapter repeats (owner decision 5); and `IKernelStore` kept as
+it; the simulation's workloads run through the contract against the built-in foundation, with the mutations that the
+contract can express, as the reference run a future adapter repeats (a coordinator design choice under owner decision 5); and `IKernelStore` kept as
 the built-in foundation's internal storage contract, with the store conformance suite passing on the in-memory store.
 Tenancy's T1 stays at K2. The projected `Labels` columns are a K3 store change.
 
@@ -313,8 +313,7 @@ The five questions this page asked were decided by the owner on 19 November, eac
    and the terminate cascade belong to the foundation. An actor type builds its read models from bounded labels plus
    the per-actor tail, with no tenant feed.
 3. **Cut both** the identity-only ended row and the commit-time facts.
-4. **Two packages**, one that a foundation adapter builds against and one that an execution model builds against; the
-   recommended single package with two namespaces was declined. Provisional names: the foundation contract and the
+4. **Two packages**, one that a foundation adapter builds against and one that an execution model builds against (option b; the page had recommended option a, one package with two namespaces). Provisional names: the foundation contract and the
    model contract.
 5. **Adapter acceptance.** FC-1 to FC-18, plus a contract-level run of the simulation's workloads against the adapter
-   with every mutation the contract can express.
+   with the mutations that the contract can express.
