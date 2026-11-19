@@ -83,14 +83,23 @@ arguments captured at arm, effect key) and each subscription counts toward the p
 coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fourth-review-round-18-november))
 ([observability](../architecture/observability.md#recover)). Termination is bounded kernel work (fifth review, a coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fifth-review-round-18-november)): a terminate's cascade is a durable obligation that layer 2 discharges in pages of at most `P_cascade` entries, with an idempotent job cancel, and every terminate of that cascade carries a kernel-only cascade origin mark that each recipient checks against its recorded parent in every state, while a model's own `kernel.terminate` keeps its existing authorization ([observability](../architecture/observability.md#every-park-operation-names-its-park)). Events reach waits without a clock: every publish, a turn's or an outside one, is a publish ticket whose match step reads the committed subscriptions, so a wait that did not ask for kept events receives every event accepted after it committed and an earlier one only while that step is outstanding, with no clock bound, and a wait that keeps events is entitled from max(its registration, the tenant's sweep horizon plus 1 ms) to every event whose window was open, which the sweep keeps while the wait's catch-up on that key is outstanding (fifth review, a coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fifth-review-round-18-november); the non-keeping wait's window is an owner decision of 18 November, [register](../architecture/decisions.md#the-gate-2-sixth-review-round-18-november)). The sixth review's repairs are coordinator design choices too ([register](../architecture/decisions.md#the-gate-2-sixth-review-round-18-november)). A live row's envelope check reserves its model's terminal growth, reported by the layer 3 hook `TerminalGrowth(state)` (Native: 7 bytes per open invocation inbox and 23 per non-final receipt, measured; 0 for a model with no terminal growth), beside its registries at the marker's sizes, so a terminate's ending commit always fits; a terminate drain withholds physical job entry, and a model's own job cancel is the cascade's idempotent cancel. Event deliveries are bound to a publication: an event row's 16-byte `Incarnation`, a random value the kernel generates, enters the match digest, the delivery id and the outside publish ticket's id (version 2 of the canonical encoding), so a later publication of the same key and event id never collides with an earlier one's delivery or receipt. A keeping wait's catch-up is one chain with a stable `CatchUpId`, and its coverage is keyed by the subscription incarnation and that id. Match steps page subscriptions and meet steps page matches, each within a byte allowance. The seventh review's answers ([register](../architecture/decisions.md#the-gate-2-seventh-review-round-18-november)): a live row's envelope check counts the projected terminal row, so `CustomHandles` and every other variable-length field are counted at their encoded size beside the state, its terminal growth and the registries, and a fixed reserve covers only the bounded fields (a coordinator design choice); and a turn's event id carries the reserved first code unit `~`, while the outside publish refuses `InvalidEventId` any caller event id provider-equal to one starting with `~`, so workflow-issued and caller-issued event ids never share an event row (an owner decision of 18 November).
 
-### 3. Four logical seams
+### 3. The foundation contract
 
-Layer 2 offers four logical seams: **commit** (append a fenced batch), **ownership** (take, renew, lose authority),
-**delivery** (route a message identity, deduplicate, keep one sender's order) and **read models** (every non-owner
-query). A storage provider implements all four as one unit. A send is recorded atomically with its sender's state and
-may be delivered later. The prototype's `IKernelStore` and `IActorRuntime` still combine them; the split is part of
-the first product slice's design
-([round 5 H paper](../reports/clean-slate-kernel/log-profile-contract-sketch.md)).
+*Proposed on 19 November 2026 under the owner's cards of that day; the approved wording of 18 November (four logical
+seams: commit, ownership, delivery, read models, at `addffea7c`) stands until the owner approves
+[the foundation contract](../architecture/foundation-contract.md).*
+
+Layer 3 sees a foundation through one contract in plain domain words: the **actor turn** (what an actor type receives
+and returns: its inbox, state, sends, timers, jobs, events, subscriptions, children, journal entries, live output and
+commit-time facts, all landing in one atomic outcome), **ingress** (an outside add, start, request, publish or start
+subscription under a bound scope) and **read models** (every non-owner query, with opaque handles and page tokens).
+A foundation implements all of it as one unit and supplies the guarantees itself: single-writer turns, the atomic
+outcome, at-least-once delivery deduplicated by id in one sender's order, durable timers as messages, jobs that run at
+least once with a result applied once, events matched to committed subscriptions, children with a notice and a
+terminate cascade, commands delivered alone, Park and recovery from the actor type's restore plan, tenancy and the
+effect key (cases FC-1 to FC-20). A send is recorded atomically with its sender's state and may be delivered later.
+Commit, ownership, fences, epochs, positions, leases and `IKernelStore` are the built-in foundation's own and never
+cross the contract; `IKernelStore` stays its way to swap EF Core, MongoDB and in-memory storage.
 
 **Tenant identity** (the owner's tenancy decisions of 17 November; [tenancy](../architecture/tenancy.md)). Every ingress takes the tenant only
 from a `BoundScope`, the bound persistence scope of ADR 0097's binder, and refuses a request without one. Every name a
@@ -146,9 +155,14 @@ once; deduplication is the receiver's
 
 ### 8. Layer 3 is host-neutral
 
-Execution models, activities, Studio and the operator APIs depend only on the turn contract, the four seams and read
-models. They never see partitions, positions, epochs or SQL. Release 1 ships a contracts package that layer 3 builds
-against, and layers 1 and 2 as their own packages behind it.
+*Proposed wording of 19 November; the approved wording of 18 November ("the turn contract, the four seams and read
+models") stands until the owner approves it (owner question 1 of the contract page).*
+
+Actor types, execution models, activities, Studio and the operator APIs depend only on the foundation contract of
+section 3 and on the model contract layer 3 builds on its actor turn. They never see partitions, positions, epochs,
+fences, leases or SQL, and they store refs, handles and page tokens as opaque strings. Release 1 ships the contracts
+package that layer 3 builds against, with an architecture guard, and layers 1 and 2 as the built-in foundation's own
+packages behind it; a future foundation adapter supplies the same contract and passes the same conformance cases.
 
 ### 9. Replace whole layers and edges, never pieces of the commit
 
