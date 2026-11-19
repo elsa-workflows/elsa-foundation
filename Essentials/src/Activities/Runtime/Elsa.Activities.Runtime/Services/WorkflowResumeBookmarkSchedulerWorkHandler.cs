@@ -415,7 +415,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 resumeAttempt,
                 triggerDelivery,
                 cancellationToken,
-                (IStepVariables?)stepSession ?? Elsa.Activities.Runtime.Core.Models.StepVariables.Unavailable,
+                (IStepVariables?)stepSession ?? UnavailableStepVariables.Instance,
                 stepWarnings));
             // A fault the session raised faults the step even when the body caught it (spec 1231 FR-006b, FR-014).
             if (stepSession?.PendingFault is { } sessionFault)
