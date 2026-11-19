@@ -1,3 +1,4 @@
+using Elsa.Expressions.JavaScript.Core.Exceptions;
 using System.Text.Json;
 using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
@@ -76,14 +77,30 @@ public sealed class VariablesRootEvaluationTests
         Assert.Equal(35, result.GetInt32());
     }
 
+    [Theory]
+    [InlineData("(() => { variables.count = 99; return 1; })()", "variables.count")]
+    [InlineData("(() => { variables.injected = 1; return 1; })()", "variables.injected")]
+    [InlineData("(() => { const name = 'count'; variables[name] = 1; return 1; })()", "variables.count")]
+    public async Task An_input_expression_that_assigns_a_variable_fails_and_names_it(string source, string path)
+    {
+        // Spec 1228 FR-006a: the values are changeable (FR-001), so the bridge sees the change and the evaluation fails
+        // with Elsa's diagnostic, never a bare TypeError and never a silent drop.
+        var exception = await Assert.ThrowsAsync<JavaScriptInputExpressionWriteException>(() => EvaluateAsync(
+            source,
+            pinned: new() { ["count"] = Json(5) }));
+
+        Assert.Equal(JavaScriptValueDiagnostics.InputExpressionWrite, exception.Code);
+        Assert.Equal(path, exception.Path);
+    }
+
     [Fact]
-    public async Task The_variables_root_is_frozen()
+    public async Task The_variables_and_args_globals_cannot_be_replaced()
     {
         var result = await EvaluateAsync(
-            "(() => { try { variables.count = 99; } catch { } try { variables.injected = 1; } catch { } return variables.count + ':' + typeof variables.injected; })()",
+            "(() => { const before = variables; try { variables = {}; } catch { } try { args = {}; } catch { } return (variables === before) + ':' + variables.count; })()",
             pinned: new() { ["count"] = Json(5) });
 
-        Assert.Equal("5:undefined", result.GetString());
+        Assert.Equal("true:5", result.GetString());
     }
 
     [Theory]

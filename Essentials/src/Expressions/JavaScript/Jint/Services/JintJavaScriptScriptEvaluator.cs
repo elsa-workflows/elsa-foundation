@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Jint.Native;
@@ -7,12 +9,17 @@ using Jint.Native.Object;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime.Interop;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services;
 
 /// <summary>Executes transient script-activity programs in the same closed value world as pure bindings.</summary>
-internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> featureOptions) : IJavaScriptScriptEvaluator
+internal sealed class JintJavaScriptScriptEvaluator(
+    IOptions<FeatureOptions> featureOptions,
+    IScriptValueBridge valueBridge,
+    IJavaScriptPrecisionPolicy precisionPolicy,
+    ILogger<JintJavaScriptScriptEvaluator>? logger = null) : IJavaScriptScriptEvaluator
 {
     public ValueTask<JavaScriptScriptEvaluationResult> EvaluateAsync(JavaScriptScriptEvaluationRequest request)
     {
@@ -21,20 +28,33 @@ internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> fea
 
         var options = featureOptions.Value;
         var engine = IsolatedJintEngine.Create(options, request.CancellationToken);
-        IsolatedJintEngine.SetReadOnlyArgs(engine, request.Arguments, options);
+        using var values = valueBridge.Begin(engine);
+        IsolatedJintEngine.SetArgs(engine, values, request.Arguments, options);
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
 
         var returned = engine.Evaluate(PreparedJavaScript.Script(request.Source));
 
         // Only the script's own top-level returned value selects, wherever it was created (a `return f()` counts).
+        JavaScriptScriptEvaluationResult result;
+        IReadOnlyList<JavaScriptPrecisionLoss> losses;
         if (completions.TryGet(returned, out var completion))
         {
             var (state, names) = completion.ResolveSelection();
-            return ValueTask.FromResult(new JavaScriptScriptEvaluationResult(
-                completions.Materialize(engine, completion.Result, options), state, names));
+            result = new JavaScriptScriptEvaluationResult(Write(completions, values, completion.Result, out losses), state, names);
         }
+        else
+            result = new JavaScriptScriptEvaluationResult(Write(completions, values, returned, out losses));
 
-        return ValueTask.FromResult(new JavaScriptScriptEvaluationResult(completions.Materialize(engine, returned, options)));
+        JavaScriptValueWrites.WarnLossyReads(values, losses, logger);
+        return ValueTask.FromResult(result);
+    }
+
+    /// <summary>The result leaves through the value bridge, and a lossy one meets the precision policy (spec 1228 FR-013).</summary>
+    private JsonElement? Write(ScriptCompletions completions, IScriptValueEvaluation values, JsValue value, out IReadOnlyList<JavaScriptPrecisionLoss> losses)
+    {
+        var written = JavaScriptValueWrites.Apply(completions.Materialize(values, value), "result", precisionPolicy);
+        losses = written.Losses;
+        return written.Value;
     }
 
     /// <summary>
@@ -74,15 +94,15 @@ internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> fea
         /// Materializes a result the way any returned value is (ADR 0046). A completion value reached inside it, nested
         /// in returned data or stored as a result, faults: it can select only as the top-level returned value.
         /// </summary>
-        public JsonElement? Materialize(Engine engine, JsValue value, FeatureOptions options)
+        public ScriptValueWrite Materialize(IScriptValueEvaluation values, JsValue value)
         {
             if (value.IsUndefined())
-                return null;
+                return new ScriptValueWrite(null, []);
 
             _materializing = true;
             try
             {
-                return JintResultMaterializer.Materialize(engine, value, options);
+                return values.Write(value, "result");
             }
             finally
             {

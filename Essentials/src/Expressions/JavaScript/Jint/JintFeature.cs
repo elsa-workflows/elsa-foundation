@@ -1,9 +1,12 @@
 ﻿using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Services;
+using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Elsa.Expressions.JavaScript.Jint.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Expressions.JavaScript.Jint;
 
@@ -79,5 +82,10 @@ public class JintFeature : IShellFeature
         services
             .AddScoped<IPortableJavaScriptEvaluator, JintPortableJavaScriptEvaluator>()
             .AddScoped<IJavaScriptScriptEvaluator, JintJavaScriptScriptEvaluator>();
+
+        // Replacement contracts (spec 1228 FR-009, FR-012): one of each is active per host. A host feature replaces the
+        // default with services.Replace(...); there is no per-workflow or per-node override.
+        services.TryAddSingleton<IScriptValueBridge, CopyComparePatchValueBridge>();
+        services.TryAddSingleton<IJavaScriptPrecisionPolicy, RefusingPrecisionPolicy>();
     }
 }

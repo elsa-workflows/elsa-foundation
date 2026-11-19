@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Exceptions;
 
 namespace Elsa.Activities.Scripting.Activities;
 
@@ -10,7 +11,8 @@ namespace Elsa.Activities.Scripting.Activities;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The script receives only <c>args</c>, a frozen JSON object. It cannot read or write workflow variables,
+/// The script receives only <c>args</c>, plain JavaScript values built from JSON; changing them is local to the run
+/// (spec 1228). It cannot read or write workflow variables,
 /// inputs, outputs, services, configuration, or the ambient activity context. A workflow assignment is a
 /// separate graph-visible <c>Set</c> intrinsic that consumes this activity's result.
 /// </para>
@@ -79,6 +81,11 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         }
         catch (JavaScriptCompletionException exception)
         {
+            return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code, exception.Message));
+        }
+        catch (JavaScriptPrecisionException exception)
+        {
+            // Spec 1228 FR-013: the precision policy refused the result; the step faults and nothing of it is written.
             return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code, exception.Message));
         }
 
