@@ -66,6 +66,11 @@ this foundation's layer 2, was retired on 19 November for that reason.
 
 ### 2. The turn contract
 
+*Proposed on 19 November (owner question 1 of [the foundation contract](../architecture/foundation-contract.md)):
+the paragraph below is the approved text; under the proposed contract `SendOptions.DueAt` becomes the `dueAt`
+argument of `Send`, `JobSpec` is `(Key, Arguments)` with the effect key inside the arguments, `TurnAsync(ITurn)` and
+`ExecuteJobAsync(IJob)` stay, and `RestoreWaits` returns `TimerSpec`, `JobSpec` and `SubscriptionSpec`.*
+
 An execution model implements `TurnAsync(ITurn)` and `ExecuteJobAsync(IJob)` over opaque state. A turn reads its
 inbox and state in memory and produces new state, sends, timers, subscriptions, jobs and journal entries; the kernel
 commits them atomically at the turn's end and only there. Everything that crosses an instance boundary is a message; no
