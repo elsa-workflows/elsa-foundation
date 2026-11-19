@@ -354,7 +354,7 @@ describe("workflow adapter", () => {
             collectionProperty: "cases",
             childProperty: "activity",
             labelProperty: "name",
-            slotNameTemplate: "Case {label}"
+            slotNameTemplate: "Case {name}"
           }],
           initialPayload: { cases: [] }
         }
