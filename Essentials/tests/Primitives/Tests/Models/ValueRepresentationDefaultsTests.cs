@@ -13,7 +13,6 @@ public class ValueRepresentationDefaultsTests
     [InlineData("JsonNode")]
     [InlineData("System.Text.Json.Nodes.JsonNode")]
     [InlineData("JsonObject")]
-    [InlineData("System.Text.Json.Nodes.JsonObject")]
     [InlineData("Any")]
     [InlineData("Elsa.Any")]
     public void Json_and_any_aliases_infer_a_structured_value(string alias) =>

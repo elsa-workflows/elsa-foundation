@@ -1153,7 +1153,8 @@ public sealed class ResponseReplaySafetyProcessTests
     /// Reviewed allowance for spec 256 (#3050): the frozen baseline predates WriteHttpResponse.Body becoming a JSON value.
     /// Its <c>String</c> Body type is upgraded to the current contract. Spec 1169 (#3477) also corrects
     /// the documented optional Body result projection. Issue #3476 corrects the optional ContentType result projection.
-    /// Issue #3167 infers the JSON Body projection as <c>StructuredValue</c>. Historical closure bytes remain unchanged; every other difference still fails.
+    /// Issue #3167 infers the JSON Body projection as <c>StructuredValue</c>. The allowances never rewrite closure bytes;
+    /// until the first stable release a closure is only regenerated in place when publish output changes. Every other difference still fails.
     /// </summary>
     private static void ApplyStructuredBodyContractChange(JsonObject artifact)
     {

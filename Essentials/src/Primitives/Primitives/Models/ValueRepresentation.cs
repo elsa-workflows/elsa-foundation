@@ -41,6 +41,8 @@ public static class ValueRepresentationDefaults
 
     // Compared after the leading "System." is stripped, so "System.Text.Json.JsonElement?" matches
     // "Text.Json.JsonElement?". JsonElement is a struct, so its nullable aliases carry a trailing "?".
+    // The namespaced JsonObject, JsonArray and JsonValue are left out on purpose: their JSON kind is known at publish,
+    // so they may only infer StructuredValue once publish refuses a kind that can never fit the target (#4844).
     private static readonly HashSet<string> StructuredAliases = new(StringComparer.OrdinalIgnoreCase)
     {
         "Any",
@@ -51,7 +53,6 @@ public static class ValueRepresentationDefaults
         "JsonElement?",
         "Text.Json.JsonElement",
         "Text.Json.JsonElement?",
-        "Text.Json.Nodes.JsonNode",
-        "Text.Json.Nodes.JsonObject"
+        "Text.Json.Nodes.JsonNode"
     };
 }
