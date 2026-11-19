@@ -241,6 +241,23 @@ Taken on the three cost findings K1 measured ([K1 acceptance](https://github.com
 | 19 Nov | The per-partition lease renewal (D3: an idle four-node PostgreSQL cluster at 1,024 writes 161 MB of WAL an hour) is replaced by a node-level heartbeat: one row per node carries the lease, and fences stay per-partition epochs. A design amendment to this register and ADR 0099 comes first, with a narrow independent architecture review, and the prototype then builds it with simulation checks and mutations, two reviews, before K3 (milestone K1b). K2 may run alongside. | Owner card; [program plan](../program-goals/clean-slate-kernel.md#milestones) K1b |
 | 19 Nov | The Orleans profile does not ship until a silo-level wake brings an idle silo's set polls to about one a second; K1 measured 107 to 117 a second per idle silo at 1,024, against 1 for the built-in runtime. Nothing is built for it now: Orleans stays a reference adapter kept in tests. | Owner card; [ADR 0099](../adr/0099-clean-slate-execution-kernel.md), section 4 |
 
+## The node lease amendment (19 November, proposed)
+
+The owner's card of 19 November replaced the per-partition lease renewal with a node-level heartbeat (above). The rules
+below carry it out; each is a coordinator design choice under that card, proposed until a narrow independent
+architecture review approves it. [Ownership and fencing](ownership-and-fencing.md) and the
+[storage model](storage-model.md) state them in place, and K1b builds them.
+
+| Date | Rule | Source |
+|---|---|---|
+| 19 Nov | The lease moves to one node record per process, `Nodes (Id, SeenAt, LeaseUntil)` in database time. A partition row keeps `Owner`, `Epoch`, `Position` and `Died`, and no lease. `Owner` and `Nodes.Id` are the process name, unique per process start (finding F9), so a restarted process is a new owner and its predecessor's partitions expire with the predecessor's node record. | Coordinator design choice under the owner card; [ownership and fencing](ownership-and-fencing.md#the-partition-record) |
+| 19 Nov | A take accepts a free partition, a partition whose owner's node record is missing or has `LeaseUntil` before database time, or a retake by the recorded owner. It reads the owners' node records in its transaction without locking them, increments each taken row's epoch, and renews the taker's own node record in the same transaction. Safety rests on the epoch, as before; a renewal that commits after the take's read keeps only the partitions the take left alone. | Coordinator design choice; [ownership and fencing](ownership-and-fencing.md#the-partition-record) |
+| 19 Nov | Deaths count as before: only a take from another process whose node lease has expired, or whose node record is missing, increments `Attempts` on the previous epoch's unfinished trial messages. | Coordinator design choice; [storage model](storage-model.md#message-transition-details) |
+| 19 Nov | The heartbeat is one transaction, about three per lease, busy or idle: it sets `SeenAt` and `LeaseUntil` and reads the partitions this process owns with their epochs. The Worker stands down every held partition missing from that answer or at another epoch, as after a refused fence. The heartbeat locks only its own node record. | Coordinator design choice; [ownership and fencing](ownership-and-fencing.md#the-nodes-heartbeat) |
+| 19 Nov | The commit fence is unchanged except that it renews no lease. A batch with no journal rows still checks and locks every touched row at its epoch and position. On MongoDB the fence writes each touched partition document (it increments `fenced`), so a concurrent take conflicts with the commit. | Coordinator design choice; [ownership and fencing](ownership-and-fencing.md#the-commit-fence) |
+| 19 Nov | The local lease guard keeps its rules with one deadline per process: the monotonic time just before a successful heartbeat or take was sent, plus the lease. An expired process stands down every partition it holds ([LEASE.md](../../prototypes/kernel-model/LEASE.md)). | Coordinator design choice |
+| 19 Nov | Release and the operator's forced take keep their rules. Liveness is per process: a process that still renews keeps every partition it owns, and a forced take moves one whose work is stuck. | Coordinator design choice; [observability](observability.md) |
+
 ## Process
 
 | Date | Rule | Source |

@@ -117,7 +117,10 @@ row and a journal per virtual partition, and a commit over several of them fence
 ascending id. Rebalance moves the fewest partitions, so a node's partitions may be scattered (owner, 17 November:
 PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit lands only while the
 row still has the owner's epoch and expected position, checked in the same transaction, so a stale owner never lands a
-commit. Leases decide who should write; the fence decides who can. The kernel writes its own commit SQL on PostgreSQL,
+commit. Leases decide who should write; the fence decides who can. A lease is held by the process, in one node record
+its heartbeat renews, and covers every partition it owns; a partition row carries none (owner, 19 November; the
+[node lease amendment](../architecture/decisions.md#the-node-lease-amendment-19-november-proposed), proposed until its
+narrow independent review). The kernel writes its own commit SQL on PostgreSQL,
 SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the schema, migrations and cold paths
 ([ownership and fencing](../architecture/ownership-and-fencing.md),
 [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md), [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).

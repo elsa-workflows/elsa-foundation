@@ -24,7 +24,7 @@ the release placement of standalone Jobs.
 | Job actor | Proposed layer 3 actor type, one per invocation that remote workers may run. It holds the invocation, its attempts and its result. A standalone job (Elsa.Jobs rebuilt on the kernel) is one. |
 | Queue actor | Proposed layer 3 actor type that matches waiting workers with ready jobs and counts capacity permits. |
 | Worker gateway | Proposed edge adapter that serves the HTTP and gRPC protocol and turns each request into a message. |
-| Attempt lease | How long an attempt stays its worker's without a heartbeat. The partition lease of [ownership and fencing](ownership-and-fencing.md) is a different lease. |
+| Attempt lease | How long an attempt stays its worker's without a heartbeat. The node lease of [ownership and fencing](ownership-and-fencing.md), which covers a process's partitions, is a different lease. |
 
 ## What is built
 

@@ -171,8 +171,10 @@ delete writes no index entry and leaves dead tuples for vacuum. All of this is u
 measure the query plan and the scan cost under update and delete churn, with WRITES.md's method.
 
 **The pressure list (decision 2).** The owner writes its estimate into a new `backlog` column of the virtual partition's
-fence row, with its next commit or beat. Both already update that row, so this adds bytes and no round trip; it adds one
-assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).
+fence row, with its next commit, which already updates that row, so this adds bytes and no round trip; it adds one
+assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)). Under the node lease amendment (proposed, 19 November) the
+heartbeat no longer writes partition rows, so only commits write the estimate: an owner with work commits at least its
+seen marks while messages arrive, and its last commit before the partition falls idle writes the estimate it leaves.
 Ingress nodes keep a list of the virtual partitions above the low-water mark. Under the built-in runtime, the heartbeat
 already queries the partition rows for free ones (`EfStore.HeartbeatAsync`), and that query can return the list as
 well. Another runtime refreshes it with one query per node per interval:
