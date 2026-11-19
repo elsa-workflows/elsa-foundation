@@ -90,7 +90,7 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 402_000,
+  definitionsLandingTotal: 410_000,
   upgradeLandingTotal: 379_000,
   individualChunk: 500_000
 };

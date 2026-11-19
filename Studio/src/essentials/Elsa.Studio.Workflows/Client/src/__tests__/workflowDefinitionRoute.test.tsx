@@ -298,7 +298,7 @@ describe("workflow definition route browse session", () => {
     await waitForText(container, "active page two");
     expect(new URL(pageRequests.at(-1)!).searchParams.get("continuationToken")).toBe("opaque-page-two");
 
-    await click(button(container, "Deleted"));
+    await click(button(container, "Recycle bin"));
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("state")).toBe("deleted"));
     expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(false);
     await waitForText(container, "deleted page one");
