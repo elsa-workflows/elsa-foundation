@@ -51,11 +51,11 @@ gate 5.
 | K7 | **Graph engine and Flowchart; StateMachine** | The Flowchart conformance corpus and invariants G1–G5; StateMachine invariants S1–S4; both in Embedded and Cluster |
 | K8 | **Synchronous HTTP** | Every case of the sketch's [synchronous HTTP](../reports/clean-slate-kernel/design-sketch-draft-5.md#synchronous-http-requests) section, including a resume owned by another node and an owner lost while a request waits, under the HTTP error and timeout contract below. Its tests are separate from the durable send obligations, because an HTTP response is never recorded |
 | K9 | **Projector, read models and the API read path** | The instance list, parked-work and plan-outcome read models; the viewer's tail read and catch-up; the runtime API on read models only |
-| K10 | **Studio on the projector** | Run views on the projections, the tail read, catch-up on request and the live stream of committed entries; composed Studio journeys pass on both profiles |
+| K10 | **Studio on the projector** | Run views on the projections, the tail read, catch-up on request and the live stream of committed entries; composed Studio journeys pass on both profiles. The remainder of #4126 (the BPMN timeout end-event label) is parked until after release 1 |
 | K11 | **Operations** | Trace context and metrics as the observability page lists, including the `elsa.kernel.drain.held` gauge that case M3-13 reads; admission and the ingress threshold; retention and delete; simple migration with plans, dispatched by creation wherever creation headers exist, with id-only fallback outcomes marked in the plan-outcomes read model and shown to the operator; parked-work inspect, retry and discard; values by reference |
 | K12 | **Qualification** | See "Release 1 qualification" below |
 | K13 | **Default switch** (gate 4) | **Release acceptance:** K1 to K12 accepted on main, each gate 3 row below with its evidence posted on #4229, and no open review finding at Minor or above on a merged release 1 PR. Then the switch PR makes the kernel the default (see "The switch"), the docs at the switch land, and the owner gives the go |
-| K14 | **Old-core removal** (gate 5) | The retirement inventory below, taken on the removal PR's base, shown to the owner and approved |
+| K14 | **Old-core removal** (gate 5) | The retirement inventory below, taken on the removal PR's base, shown to the owner and approved. The removal PR reports before-and-after cleanliness figures: the storage contract's size, capability flags, tables, lines per mechanism and migration lines (carried from #4175, owner, 19 November) |
 
 ### Gate 2 conditions
 
@@ -205,11 +205,21 @@ the table adds no obligation beyond issue [#4859](https://github.com/elsa-workfl
 | The Studio half of SC-005 | K10 |
 | G-d: SQLite transactions unmeasured | The K4 round-trip budgets, and K12 item 2 |
 | Native FR-015, the admission-off twin | K11's admission, and the two-tenant stress test with admission on and off before release |
-| Cancel-admission equivalence (unknown on the old core) | FC-9 (commands, for every actor type) and FC-16 (the exemption of the load-shedding commands from `InboxFull`), applied to the native and StateMachine actor types at K6 and K7 |
+| Cancel-admission equivalence (unknown on the old core) | FC-9 (commands, for every actor type) and FC-16 (the exemption of the load-shedding commands from `InboxFull`), applied to the native model and StateMachine at K6 and K7 |
 
 Accepted as recorded, with no further work: B3, L-Gb1 and L-Gb2 (BPMN, after release 1); D3 (release 1's only
-alteration is migration); #4126 (parked until after release 1, with a K10 note); #4094 (publication rules kept);
+alteration is migration); #4126 (parked until after release 1, noted in the K10 row); #4094 (publication rules kept);
 and the cleanup pass (K14's retirement inventory covers it).
+
+The four programs that #4229 superseded (#4175, #3815, #3583, #3586) closed on 19 November. The owner decided where
+the requirements the plan did not yet hold go:
+
+| Program | Decision |
+|---|---|
+| #3586, the durable background job runner | 1.x, per the 17 November decision (standalone Elsa.Jobs as a job actor type): [#4863](https://github.com/elsa-workflows/elsa-foundation/issues/4863) |
+| #3583, the durable message inbox | 1.x, in layer 3, over events and keyed starts, with no foundation-contract change: [#4864](https://github.com/elsa-workflows/elsa-foundation/issues/4864) |
+| #3815, StateMachine | K7: the StateMachine owner decisions OD1 to OD22 are reviewed against the kernel with the owner before they define K7's invariants S1 to S4 and the Studio designer's place |
+| #4175, the journal-first core | The conformance suite spanning both cores is dropped (the switch is a clean replacement); the cleanliness figures go to K14 |
 
 ## The HTTP error and timeout contract (K8, proposed)
 
