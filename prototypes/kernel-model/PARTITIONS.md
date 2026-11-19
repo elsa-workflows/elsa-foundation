@@ -311,10 +311,12 @@ The follow-ups that slice 2a recorded for this slice:
   `--mutations` list (the pins stay 43 and 15). `Cluster.Rank` (the node's place in name order, from the in-memory
   membership) exists only for that mutation.
 - **The projector per virtual partition** (`NodeProjection`). A landed commit nudges the partitions whose position it
-  moved, and a take or a gain the partition it took (its journal may not be projected yet). One drain at a time runs a
-  round for each nudged partition, and again while a round moves on and leaves more. Nothing sweeps every partition on a
-  timer. The runtime conformance case writes in two of four partitions: the other two get one round each, from their
-  take, and the two written get theirs until the projection reaches the journal.
+  moved, a commit whose outcome is unknown the ones it may have moved, and a take or a gain the partition it took (its
+  journal may not be projected yet). One drain at a time runs a round for each nudged partition, again at once while a
+  round moves on and leaves more, and again after a delay that doubles up to a second while a round throws or loses its
+  conditional write. Nothing sweeps every partition on a timer. The runtime conformance case writes in two of four
+  partitions: the other two get exactly one round each, from their take, and the two written are projected to their
+  journal. `--lease-check` has a round that throws once: it is tried again, and the tail is projected in pages of two.
 - **Fairness under one worker per node** (the plan's D1 risk). The set's poll is first in, first out across the set: one
   query, in seq order, at most `PollLimit` rows. A message in a quiet partition therefore waits behind the rows of every
   partition of the node that arrived before it, and behind none that arrived after it. A full poll that read something
@@ -327,8 +329,9 @@ The follow-ups that slice 2a recorded for this slice:
   instance takes more than two turns between its read and its turn. **The trial pause:** the trial gate is the node's, so
   a trial in any partition of the set holds back the turns of all of them until the trial's commit (FINDINGS F11: a
   death kills every partition the process holds). Under a worker per partition the runtime suite gave each worker its
-  own gate; under the per-node set the pause is structural. Trials happen only for suspects, so the pause is rare, and
-  it lasts one commit of the instance on trial.
+  own gate; under the per-node set the pause is structural, and it applies to the whole node. Trials happen only for
+  suspects, so the pause is rare. It lasts two commits (the trial mark, which starts only when nothing else is in
+  flight, and the turn on trial), or, for a job on trial, the run of that job (`Worker.StartJob`, FINDINGS F11).
 
 ## Placement and rebalance (`sim --placement-check`)
 

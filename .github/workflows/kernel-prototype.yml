@@ -91,7 +91,9 @@ jobs:
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
           $SIM --placement-check
-          if $SIM --placement-check --flaw ContiguousOnlyBalancer > /dev/null; then echo "--placement-check did not catch ContiguousOnlyBalancer"; exit 1; fi
+          # It must fail on its checks (exit 1 with "placement: N check(s) FAILED"), not crash or reject the flaw name.
+          code=0; out=$($SIM --placement-check --flaw ContiguousOnlyBalancer) || code=$?
+          if [ "$code" -ne 1 ] || ! grep -Eq '^placement: [0-9]+ check\(s\) FAILED$' <<<"$out"; then echo "--placement-check did not catch ContiguousOnlyBalancer (exit $code)"; exit 1; fi
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
           dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
           dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
@@ -161,7 +163,9 @@ jobs:
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
           $SIM --placement-check
-          if $SIM --placement-check --flaw ContiguousOnlyBalancer > /dev/null; then echo "--placement-check did not catch ContiguousOnlyBalancer"; exit 1; fi
+          # It must fail on its checks (exit 1 with "placement: N check(s) FAILED"), not crash or reject the flaw name.
+          code=0; out=$($SIM --placement-check --flaw ContiguousOnlyBalancer) || code=$?
+          if [ "$code" -ne 1 ] || ! grep -Eq '^placement: [0-9]+ check\(s\) FAILED$' <<<"$out"; then echo "--placement-check did not catch ContiguousOnlyBalancer (exit $code)"; exit 1; fi
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
           dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
           dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys

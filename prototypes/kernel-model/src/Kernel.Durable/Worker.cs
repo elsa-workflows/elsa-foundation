@@ -1855,6 +1855,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             catch (Exception)
             {
+                // Unknown outcome: the commit may have landed, so its journal may have moved. A spurious round costs two reads.
+                if (batch.Fenced.Where(f => batch.PositionsIn(f.Partition) > 0).Select(f => f.Partition).ToList() is { Count: > 0 } doubt) _options.OnJournal?.Invoke(doubt);
                 await FailAsync(units, generation, cancellationToken);     // unknown outcome
                 return Outcome.Lost;
             }

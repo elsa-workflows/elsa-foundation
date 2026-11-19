@@ -105,7 +105,7 @@ public sealed class Harness : IAsyncDisposable
         // One worker per node: its trial gate is the node's. A worker per scope gets no shared gate: a runtime may run the
         // passes of a node's scopes at the same time, and the gate is not safe for that (FINDINGS, "The runtime
         // conformance suite and the Orleans adapter", R6).
-        var host = _oneWorkerPerNode ? DurableHost.ForNode(name, store, new WorkflowInstance(Stress.Models()), options, _projections[name] = new NodeProjection(store))
+        var host = _oneWorkerPerNode ? DurableHost.ForNode(name, store, new WorkflowInstance(Stress.Models()), options, _projections[name] = new NodeProjection(store, take: 2))
             : new DurableHost(Enumerable.Range(0, Partitions).Select(p => new Worker(name, p, store, new WorkflowInstance(Stress.Models()), options)));
         _hosts[name] = host;
         return new NodeServices(Watcher.Wrap(name, host), store);

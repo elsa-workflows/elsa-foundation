@@ -87,7 +87,8 @@ public static class PlacementChecks
 
     /// <summary>
     /// K1 slice 5: the runtime's balancer (<see cref="Balancer.Plan"/>) moves the fewest partitions. Four nodes join one at
-    /// a time, one leaves, and one joins again; in every round each node plans on the same picture of the store. A join
+    /// a time, one leaves, and one joins again. In every round the nodes plan one after another, each on the store as the
+    /// earlier ones left it (their releases free, their takes held), as rounds that do not overlap would see it. A join
     /// moves only the surplus above the new share and a leave only the leaver's partitions, and the sets end scattered.
     /// Under <see cref="Flaw.ContiguousOnlyBalancer"/> or <see cref="Flaw.GreedyBalancer"/> these checks fail.
     /// </summary>

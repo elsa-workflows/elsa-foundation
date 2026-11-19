@@ -302,7 +302,7 @@ public static class Cases
 
         new("balance: a join and a leave move the fewest partitions", Level.Required, async h =>
         {
-            var a = await h.StartAsync();
+            await h.StartAsync();
             await Steady(h);
             async Task<int> Moved(Func<Task> change)
             {
@@ -332,8 +332,9 @@ public static class Cases
                 && (await h.Outside.ProjectedAsync(3)) is { Written: > 0 } three && three.Position == three.Written;
             That(await Harness.WaitAsync(CaughtUp, Slack), "the journals of 1 and 3 were not projected in time");
             await projection.Idle;
-            // A take nudges once; after that only the partitions whose journal moved have rounds. No timer sweeps 0 and 2.
-            That(projection.RoundsOf(0) <= 1 && projection.RoundsOf(2) <= 1 && projection.RoundsOf(1) > 1 && projection.RoundsOf(3) > 1,
+            // A take nudges once, and finds nothing; after that only the partitions whose journal moved have rounds (pages
+            // of two, so a written partition also gets continuation rounds). No timer sweeps 0 and 2.
+            That(projection.RoundsOf(0) == 1 && projection.RoundsOf(2) == 1 && projection.RoundsOf(1) > 1 && projection.RoundsOf(3) > 1,
                 $"rounds per partition: {string.Join(", ", Enumerable.Range(0, 4).Select(p => $"{p}: {projection.RoundsOf(p)}"))}");
         }, OwnedSet: true),
 
