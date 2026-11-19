@@ -141,13 +141,15 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     public async ValueTask<bool> HeartbeatAsync(CancellationToken cancellationToken = default)
     {
         if (_host is not INodeLeaseHost { NodeLease: not null } host || await host.HeartbeatAsync(window, cancellationToken) is not { } cluster) return false;
-        Volatile.Write(ref _cluster, cluster);
+        // The free list is the store's; this runtime places its own scopes only (a world that places part of the store's).
+        Volatile.Write(ref _cluster, cluster.Free.All(p => p < partitions) ? cluster : cluster with { Free = [.. cluster.Free.Where(p => p < partitions)] });
         return true;
     }
 
     /// <summary>
-    /// K1b: the passes no active scope gives (<see cref="INodeLeaseHost.PassAsync"/>), then the scopes the host holds that
-    /// this runtime does not know are activated, as a scope already held. Its host calls it with the scopes' passes.
+    /// K1b: the passes no active scope gives (<see cref="INodeLeaseHost.PassAsync"/>), then the scopes the host's Workers
+    /// brought back by themselves that this runtime does not know are activated, as a scope already held. Its host calls it
+    /// with the scopes' passes.
     /// </summary>
     public async Task NodePassAsync(CancellationToken cancellationToken = default)
     {

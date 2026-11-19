@@ -144,14 +144,15 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
     /// <summary>
     /// The passes no active scope gives: of each Worker that holds nothing while a partition is pending or a heartbeat answer
     /// waits for it. The node's Worker passes under the turn; a fixed host's Workers have no turn, and the runtime's loop
-    /// that calls this calls their scopes' passes too, one after another. Returns the scopes the host holds afterwards.
+    /// that calls this calls their scopes' passes too, one after another. Returns the partitions the Workers brought back
+    /// by themselves since the last call (an answer's pending retake), in this pass or in a scope's.
     /// </summary>
     public async ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default)
     {
         foreach (var worker in Workers)
             if (!worker.Owns && (worker.Pending.Count > 0 || worker.AnswerWaiting))
                 await (worker == _node ? RunNodeAsync(cancellationToken) : worker.RunAsync(cancellationToken));
-        return [.. Workers.SelectMany(w => w.Fences.Select(f => f.Partition)).Distinct()];
+        return [.. Workers.SelectMany(w => w.TakeBroughtBack()).Distinct()];
     }
 
     /// <summary>

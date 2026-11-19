@@ -547,9 +547,9 @@ public sealed partial class World
             Time += Config.NodeLease ? 1_000 : round == 0 || missing ? 11_000 : 1_000;
             var beaten = new HashSet<Actor>();
             if (Config.NodeLease)       // K1b: each node's heartbeat, which its pass gate may withhold
-                for (var n = 0; n < Config.Nodes; n++)
+                foreach (var runtime in LiveRuntimes.ToList())
                 {
-                    Watch(Runtimes[n].HeartbeatAsync().AsTask());
+                    Watch(runtime.HeartbeatAsync().AsTask());
                     if (_dying.Count != 0) FinishDeaths();
                 }
             else for (var p = 0; p < Config.Partitions; p++)
@@ -587,7 +587,8 @@ public sealed partial class World
                         }
                     }
                     if (!worker.Holds(partition)) continue;
-                    if (!actor.Runtime.Owns(partition)) Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it");
+                    if (!actor.Runtime.Owns(partition))
+                        Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it{(actor.GiveUps.GivenUp.Contains(partition) ? ": the runtime gave it up" : "")}");
                     // An eager host: every pass reads the inbox, and runs whatever is ready before it flushes. A process that
                     // dies (now, or before the pass) cancels it: no turn after that, and no flush.
                     using (_pass = new CancellationTokenSource())

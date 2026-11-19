@@ -27,6 +27,80 @@ internal static class NodeLeaseChecks
         await WedgedWorker(check);
         await RenewsDuringARetake(check);
         await AnswerDuringAPass(check);
+        await SiblingTakeInFlight(check);
+        await HungReleaseDrain(check);
+        await GivenUpDuringItsRetake(check);
+    }
+
+    // Review A of #4870, item 2: a fixed host's w1 has taken 1 in the store and not yet installed it when w0 judges an answer
+    // that lists 1. w1 claims 1 until its install, so w0 does not release it, and w1 then holds 1 with the row its own.
+    private static async Task SiblingTakeInFlight(Action<bool, string> check)
+    {
+        var (store, clock, _) = World(2, out _);
+        var wire = new DelayedCommit(store);
+        var (w0, w1) = (Owner(store, [0], clock), new Worker("p", 1, wire, new WorkflowInstance([new Counter()]), new WorkerOptions { Monotonic = clock, Partitions = 1 }));
+        var host = new DurableHost([w0, w1]);
+        await host.ActivateAsync(0);
+        var beat = new NodeHeartbeat("p", store, [w0, w1], Lease, Window);
+        wire.DelayTake = true;
+        var gain = host.ActivateAsync(1).AsTask();
+        await wire.Taken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var listed = await beat.BeatAsync() is { } answer && answer.Owned.Any(o => o.Partition == 1);
+        await w0.RunAsync();        // w0 judges the answer while w1's take is in flight
+        var kept = store.Partitions[1].Owner == "p";
+        wire.TakeReply.SetResult();
+        await gain;
+        check(listed && kept && w1.Holds(1) && store.Partitions[1].Owner == "p" && store.Partitions[1].Epoch == w1.EpochOf(1),
+            $"NL-8: a sibling's take in flight keeps its partition from the other Worker's release side: listed {listed}, kept {kept}, w1 holds 1 {w1.Holds(1)}");
+    }
+
+    // Review A of #4870, item 3: a fixed host's Worker whose release drain hangs on its commit runs no pass, and none counts:
+    // a lease later its host withholds the heartbeat.
+    private static async Task HungReleaseDrain(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(1, out _);
+        var wire = new DelayedCommit(store);
+        var worker = Owner(wire, [0], clock);
+        await new DurableHost([worker]).ActivateAsync(0);
+        var beat = new NodeHeartbeat("p", wire, [worker], Lease, Window);
+        await store.AddAsync(new Message("m", InstanceRef.In(0, "x"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
+        await worker.PollAsync();
+        await worker.LoadAsync();
+        for (var i = 0; i < 5 && !worker.Ready.Any(); i++) await worker.FlushAsync();     // the seen mark first
+        foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);       // its outcome waits in memory for a flush
+        wire.DelayNext = true;          // the drain's commit lands and its answer waits
+        var release = worker.DisposeAsync().AsTask();
+        await wire.Landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        advance(4_000);
+        var during = await worker.RunAsync();       // blocked by the release in flight: no pass ran
+        advance(7_000);                 // 11 s: a lease since the last completed pass (the take's)
+        var withheld = await beat.BeatAsync() is null && beat.Withheld == 1;
+        wire.Reply.SetResult();
+        await release.WaitAsync(TimeSpan.FromSeconds(5));
+        check(during is null && withheld, $"a pass blocked by a release in flight does not count: the host withholds the heartbeat a lease later: withheld {withheld}");
+    }
+
+    // Review B of #4870, CR-5: a fixed Worker's pending partition is given up (its release) while its counting retake is in
+    // flight. The reply is released at the epoch it returns, not installed, and nothing stays pending.
+    private static async Task GivenUpDuringItsRetake(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(1, out _);
+        var wire = new DelayedCommit(store);
+        var worker = Owner(wire, [0], clock);
+        await new DurableHost([worker]).ActivateAsync(0);
+        var beat = new NodeHeartbeat("p", wire, [worker], Lease, Window);
+        advance(11_000);
+        await worker.RunAsync();        // the guard has expired: 0 is pending
+        var pending = worker.Pending.ContainsKey(0);
+        await beat.BeatAsync();
+        wire.DelayRetake = true;
+        var pass = worker.RunAsync().AsTask();      // the answer's retake of 0, counting the death
+        await wire.Retaken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await worker.DisposeAsync();    // the host gives 0 up meanwhile
+        wire.RetakeReply.SetResult();
+        await pass.WaitAsync(TimeSpan.FromSeconds(5));
+        check(pending && !worker.Holds(0) && worker.Pending.Count == 0 && store.Partitions[0].Owner is null,
+            $"CR-5: a pending partition given up during its counting retake is released, not installed: holds {worker.Holds(0)}, pending {worker.Pending.Count}, owner {store.Partitions[0].Owner ?? "none"}");
     }
 
     // Review of 4b: an answer that arrives during a long pass renews the guard at once, and its stand-down side waits for the

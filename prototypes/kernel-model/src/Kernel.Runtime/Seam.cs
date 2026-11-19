@@ -83,8 +83,9 @@ public interface INodeLeaseHost
 
     /// <summary>
     /// The passes no active scope gives: of a Worker whose only partitions are pending, or that holds none while a
-    /// heartbeat answer waits for it. Returns the scopes the host holds afterwards; the runtime activates the ones it does
-    /// not know, as a scope already held (a pending retake brings a partition back by itself).
+    /// heartbeat answer waits for it. Returns the scopes the host's Workers brought back by themselves since the last call
+    /// (a pending retake); the runtime activates the ones it does not know, as a scope already held. A scope the runtime
+    /// gave up is never among them: a give-up ends its pending entry, and a retake in flight then releases.
     /// </summary>
     ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default);
 }

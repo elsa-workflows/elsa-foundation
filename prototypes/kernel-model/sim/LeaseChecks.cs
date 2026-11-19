@@ -779,8 +779,13 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
         if (DelayRetake) { DelayRetake = false; Retaken.TrySetResult(); await RetakeReply.Task; }
         return result;
     }
-    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken ct = default) =>
-        countDeaths ? inner.RetakeAsync(partition, node, epoch, lease, countDeaths, ct) : RetakeAsync(partition, node, epoch, lease, ct);
+    public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken ct = default)
+    {
+        if (!countDeaths) return await RetakeAsync(partition, node, epoch, lease, ct);
+        var result = await inner.RetakeAsync(partition, node, epoch, lease, countDeaths, ct);
+        if (DelayRetake) { DelayRetake = false; Retaken.TrySetResult(); await RetakeReply.Task; }      // K1b: a counting retake's reply waits too
+        return result;
+    }
     public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
     public Func<NodeBeat, Task<NodeBeat>>? HeartbeatReply;      // K1b: the answer as the wire delivers it (delayed or altered)
     public async ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken ct = default)
