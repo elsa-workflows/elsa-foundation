@@ -8,7 +8,8 @@ public sealed record HarnessSetup(int Partitions, RuntimeTiming Timing, double F
 
 /// <summary>
 /// One cluster of one runtime over one fresh store, with layer 2 built by the suite: every node gets one worker for its
-/// owned set (or a worker for every partition, <see cref="IRuntimeProvider.OneWorkerPerNode"/>), on its own <see cref="NodeStore"/> over a store that records every commit that landed, behind a
+/// owned set when the runtime sets <see cref="IRuntimeProvider.OneWorkerPerNode"/>, and a worker for every partition
+/// otherwise. Each node works on its own <see cref="NodeStore"/> over a store that records every commit that landed, behind a
 /// <see cref="Watcher"/>. The suite reads the end state through the store, as the store suite does.
 /// </summary>
 public sealed class Harness : IAsyncDisposable
@@ -104,7 +105,7 @@ public sealed class Harness : IAsyncDisposable
         // One worker per node: its trial gate is the node's. A worker per scope gets no shared gate: a runtime may run the
         // passes of a node's scopes at the same time, and the gate is not safe for that (FINDINGS, "The runtime
         // conformance suite and the Orleans adapter", R6).
-        var host = _oneWorkerPerNode ? DurableHost.ForNode(name, store, new WorkflowInstance(Stress.Models()), options, _projections[name] = new NodeProjection(store))
+        var host = _oneWorkerPerNode ? DurableHost.ForNode(name, store, new WorkflowInstance(Stress.Models()), options, _projections[name] = new NodeProjection(store, take: 2))
             : new DurableHost(Enumerable.Range(0, Partitions).Select(p => new Worker(name, p, store, new WorkflowInstance(Stress.Models()), options)));
         _hosts[name] = host;
         return new NodeServices(Watcher.Wrap(name, host), store);

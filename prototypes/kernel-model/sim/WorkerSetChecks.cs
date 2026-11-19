@@ -74,6 +74,172 @@ internal static class WorkerSetChecks
         await StandDownDuringRetake(check);
         await StandDownMeetsRefusedFlush(check);
         await NodeSet(check);
+        await SharedPassDeadline(check);
+        await LossLeavesNothingBehind(check);
+        await LossNotQuiet(check);
+        await NodeWithoutOwnedSets(check);
+        await ProjectorRetry(check);
+    }
+
+    // Review of #4817 (reviewer A): a projector round that throws is tried again, and the tail is projected. Five journal
+    // rows in partition 0, pages of two, and the first read of the journal throws: one failed round, then three.
+    private static async Task ProjectorRetry(Action<bool, string> check)
+    {
+        const long time = 100;
+        var store = new InMemoryStore(1, () => time);
+        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 1 });
+        var scope = (await host.ActivateAsync(0))!;
+        for (var i = 0; i < 5; i++) await store.AddAsync(Add(InstanceRef.In(0, "c" + i), "t" + i));
+        await scope.WokenAsync(null);
+        for (var i = 0; i < 5; i++) await scope.RunAsync();
+        var flaky = new DelayedCommit(store) { FailJournalReads = 1 };
+        var projection = new NodeProjection(flaky, take: 2);
+        projection.Nudge([0]);
+        var caughtUp = false;
+        for (var i = 0; i < 250 && !caughtUp; i++)
+        {
+            await Task.Delay(20);
+            caughtUp = (await store.ProjectedAsync(0)) is { Written: 5 } p && p.Position == 5;
+        }
+        await projection.Idle;
+        check(caughtUp && flaky.JournalReadsFailed == 1 && projection.RoundsOf(0) == 4,
+            $"a projector round that throws is tried again and the tail is projected: caught up {caughtUp}, failed reads {flaky.JournalReadsFailed}, rounds {projection.RoundsOf(0)}");
+    }
+
+    // Review of #4816 (reviewer B): on a store without owned sets (commit=ef) the node's host gives each scope its own
+    // worker. Activate, give up and activate again all work, and only positional one-partition batches are sent.
+    private static async Task NodeWithoutOwnedSets(Action<bool, string> check)
+    {
+        const long time = 100;
+        var store = new InMemoryStore(2, () => time);
+        var wire = new DelayedCommit(store) { WithoutOwnedSets = true };
+        var host = DurableHost.ForNode("e", wire, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 2 });
+        var (zero, one) = ((await host.ActivateAsync(0))!, (await host.ActivateAsync(1))!);
+        var epoch = store.Partitions[1].Epoch;
+        await one.DisposeAsync();
+        var given = store.Partitions[1].Owner;
+        var again = await host.ActivateAsync(1);
+        foreach (var p in new[] { 0, 1 }) await store.AddAsync(Add(InstanceRef.In(p, "x"), "x" + p));
+        foreach (var scope in new[] { zero, again! })
+        {
+            await scope.WokenAsync(null);
+            for (var i = 0; i < 5; i++) await scope.RunAsync();
+        }
+        check(host.NodeWorker is null && zero is Worker { Partition: 0 } && again is Worker { Partition: 1, Active: true } && ReferenceEquals(again, one)
+              && given is null && store.Partitions[1].Epoch == epoch + 1 && store.Instances.ContainsKey("0/x") && store.Instances.ContainsKey("1/x")
+              && wire.Batches.Count > 0 && wire.Batches.All(b => b.Fences is null),
+            $"a node on a store without owned sets runs a worker per scope: given up to {given ?? "nobody"}, epoch {epoch} then {store.Partitions[1].Epoch}, {wire.Batches.Count} batches, owned {wire.Batches.Count(b => b.Fences is not null)}");
+    }
+
+    // Review of #4816 (reviewer A): a row sent to a partition that is then handed over is never read back, so it must not
+    // keep the worker behind (F1). With PollLimit 1, x in 0 forwards to 2/z while the worker is behind, then 2 is handed
+    // over; a later forward to 3/w is handed over in memory again, its row seen at 3's epoch.
+    private static async Task LossLeavesNothingBehind(Action<bool, string> check)
+    {
+        const long time = 100;
+        var store = new InMemoryStore(4, () => time);
+        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 4, PollLimit = 1 });
+        var worker = host.NodeWorker!;
+        var scopes = new IScopeActivation?[4];
+        foreach (var p in new[] { 0, 2, 3 }) scopes[p] = await host.ActivateAsync(p);
+        var x = InstanceRef.In(0, "x");
+        async Task Pass() { await scopes[0]!.WokenAsync(null); await scopes[0]!.RunAsync(); }
+        await store.AddAsync(new("one", x, "add", Json.Write(new Add("one", ForwardTo: "2/z")), Start: Counter.Spec));
+        await store.AddAsync(new("two", x, "add", Json.Write(new Add("two")), Start: Counter.Spec));
+        for (var i = 0; i < 10 && !store.Messages.Values.Any(m => m.Message.Target.Id == "2/z"); i++) await Pass();
+        await scopes[2]!.DisposeAsync();
+        for (var i = 0; i < 4; i++) await Pass();
+        await store.AddAsync(new("three", x, "add", Json.Write(new Add("three", ForwardTo: "3/w")), Start: Counter.Spec));
+        long? seen = null;
+        for (var i = 0; i < 10 && seen is null; i++)
+        {
+            await Pass();
+            seen = store.Messages.Values.FirstOrDefault(m => m.Message.Target.Id == "3/w")?.Seen;
+        }
+        check(store.Partitions[2].Owner is null && seen == worker.EpochOf(3),
+            $"a hand-over leaves nothing behind: the forward to 3/w was written seen at {seen?.ToString() ?? "never"}, partition 3's epoch is {worker.EpochOf(3)}");
+    }
+
+    // Review of #4816 (reviewer A): a loss whose partition has a turn in flight, or a trial, is not quiet. The worker
+    // writes what every partition holds in memory only, resets, releases it and retakes the rest at new epochs.
+    private static async Task LossNotQuiet(Action<bool, string> check)
+    {
+        const long time = 100;
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task<(InMemoryStore, DurableHost, IScopeActivation[])> Node(Action<InMemoryStore>? before = null)
+        {
+            var store = new InMemoryStore(3, () => time);
+            before?.Invoke(store);
+            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter(), new Ticker(TimeSpan.FromSeconds(1)), new Suspending(gate.Task)]), new() { Monotonic = () => time, Partitions = 3 });
+            return (store, host, [(await host.ActivateAsync(0))!, (await host.ActivateAsync(1))!, (await host.ActivateAsync(2))!]);
+        }
+        void Fallback(string what, InMemoryStore store, Worker worker, IReadOnlyList<PartitionFence> held, string detail) =>
+            check(store.Partitions[1].Owner is null && worker.Fences.Select(f => (f.Partition, f.Epoch)).SequenceEqual(held.Where(f => f.Partition != 1).Select(f => (f.Partition, f.Epoch + 1)))
+                  && Unserved(store, worker, time) == "", $"{what}: held [{string.Join(", ", held)}], now [{string.Join(", ", worker.Fences)}]{Unserved(store, worker, time)}{detail}");
+
+        // A turn suspended in 1, and an instance held in memory only in kept 0: it is written before the reset.
+        var (store, host, scopes) = await Node();
+        var worker = host.NodeWorker!;
+        worker.Post(new("arm-0", InstanceRef.In(0, "t"), "arm", Start: Ticker.Spec with { Ephemeral = true }), fresh: true);
+        await store.AddAsync(new("s", InstanceRef.In(1, "s"), "go", Start: Suspending.Spec));
+        await scopes[0].WokenAsync(null);
+        for (var i = 0; i < 10 && !worker.Instances.Any(s => s.Id == "1/s" && s.Busy); i++) await scopes[0].RunAsync();
+        var unwritten = worker.Unwritten.ToList();
+        var held = worker.Fences;
+        await scopes[1].DisposeAsync();
+        Fallback("a loss with a turn in flight in its partition resets and retakes the rest", store, worker, held,
+            $"; held in memory only before [{string.Join(" ", unwritten)}], 0/t written {store.Instances.ContainsKey("0/t")}");
+        check(unwritten.SequenceEqual(["0/t"]) && store.Instances.ContainsKey("0/t"), "the fallback writes the kept partitions' instances held in memory only before it resets");
+        gate.SetResult();
+
+        // A trial in 1: what "b" marked there at epoch 2 before it was lost.
+        (store, host, scopes) = await Node(s => (s.Partitions[1].Owner, s.Partitions[1].Epoch, s.Partitions[1].LeaseUntil) = ("b", 2, 0));
+        worker = host.NodeWorker!;
+        await store.AddAsync(new("m", InstanceRef.In(1, "z"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
+        store.Messages["m"].Seen = 2;
+        await worker.PollAsync(); await worker.LoadAsync(); await worker.FlushAsync();
+        var trial = worker.Trial.ToList();
+        held = worker.Fences;
+        await scopes[1].DisposeAsync();
+        Fallback("a loss with a trial in its partition resets and retakes the rest", store, worker, held, $"; on trial [{string.Join(" ", trial)}]");
+    }
+
+    /// <summary>A turn that waits for a gate: an async turn in flight.</summary>
+    private sealed class Suspending(Task gate) : IExecutionModel
+    {
+        public static readonly StartSpec Spec = new("suspending", "s");
+        public string Key => "suspending";
+        public Type StateType => typeof(CounterState);
+        public int StateVersion => 1;
+        public object CreateState(StartSpec start) => new CounterState();
+        public object UpgradeState(string state, int fromVersion) => Json.Read<CounterState>(state);
+        public async ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken) => await gate;
+        public ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken) => new((object?)null);
+    }
+
+    // The node's one pass serves every scope, and a scope that reuses its answer gets what is left of it. Review schedule
+    // (CodeRabbit, #4816): B reads its 30 s timer; A runs a pass that answers 30 s; A is given up at t = 1 s; B calls at
+    // t = 30 s, not having seen A's pass. The timer must run then, not 30 s later.
+    private static async Task SharedPassDeadline(Action<bool, string> check)
+    {
+        long time = 0;
+        var store = new InMemoryStore(2, () => time);
+        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]),
+            new() { Monotonic = () => time, Partitions = 2, Lease = TimeSpan.FromSeconds(120), Horizon = TimeSpan.FromSeconds(60) });
+        var (a, b) = ((await host.ActivateAsync(0))!, (await host.ActivateAsync(1))!);
+        var timer = InstanceRef.In(1, "t");
+        await store.AddAsync(Add(timer, "due", due: 30_000));
+        await b.WokenAsync(null);
+        var first = await b.RunAsync();          // B's pass reads the timer
+        await a.WokenAsync(null);
+        var shared = await a.RunAsync();         // A's pass, which B has not seen: 30 s to the timer
+        time = 1_000;
+        await a.DisposeAsync();
+        time = 30_000;
+        var next = await b.RunAsync();
+        for (var i = 0; i < 5 && next == TimeSpan.Zero; i++) next = await b.RunAsync();
+        check(shared == TimeSpan.FromSeconds(30) && !a.Active && store.Instances.TryGetValue(timer.Id, out var row) && row.Revision == 1,
+            $"a scope that reuses a shared pass answer gets what is left of it: B's first answer {first}, A's {shared}, the timer's row {(store.Instances.TryGetValue(timer.Id, out var r) ? r.Revision : 0)} at 30 s");
     }
 
     // Slice 5 (D1): the node's one worker gains and loses partitions while it runs, through its host. A gain takes that

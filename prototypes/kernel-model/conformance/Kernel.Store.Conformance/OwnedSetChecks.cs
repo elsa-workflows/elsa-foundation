@@ -19,6 +19,7 @@ internal static class OwnedSetChecks
         new("owned sets: a take of a scattered set, and one poll over it", Level.Required, ScatteredTake, Partitions),
         new("owned sets: the k-row fence locks in ascending partition id", Level.Required, LockOrder, Partitions),
         new("owned sets: a retake at the held epoch bumps it and keeps the position; a released, moved or other node's row is refused and unchanged", Level.Required, Retake, Partitions),
+        new("owned sets: a set take from a dead owner counts one attempt per trial row at each partition's last epoch, and nothing else", Level.Required, SetTakeDeath, Partitions),
     ];
 
     private static void Require(Context c)
@@ -227,6 +228,39 @@ internal static class OwnedSetChecks
         await c.Lands(() => c.Commit(b, 3, [Make.New("3/i")]), "b's commit in 3 after a's refused retake");
         Context.That(await c.S.RetakeAsync(4, "b", at[4].Epoch, Context.Long) is null, "b's retake of a's partition 4 was granted");
         await c.Lands(() => c.S.CommitAsync(Flush([at[4]], [Make.New("4/i")])).AsTask(), "a's flush in 4 after b's refused retake");
+    }
+
+    private static async Task SetTakeDeath(Context c)
+    {
+        Require(c);
+        // Partition 1 is taken once before, so that a holds 1 and 2 at different epochs; old1 is on trial at 1's first epoch.
+        foreach (var (id, p) in new[] { ("old1", 1), ("t1", 1), ("t2", 2), ("s2", 2), ("o3", 3), ("d4", 4) }) await c.S.AddAsync(Make.M(id, p));
+        var first = await c.Take(1, "a");
+        await c.Lands(() => c.Commit(first, 1, [], trial: ["old1"]), "a commit in 1 putting old1 on trial at 1's first epoch");
+        var a = await c.S.TakeAsync([1, 2, 3], "a", Short);
+        var at = a.Taken.ToDictionary(f => f.Partition);
+        Context.That(at[1].Epoch != at[2].Epoch, "this case needs partition 1's epoch to differ from partition 2's");
+        await c.Lands(() => c.S.CommitAsync(CommitBatch.Owned([at[1], at[2], at[3]], Short, false, [Make.New("1/x")], ["s2"], ["t1", "t2", "o3"])).AsTask(), "a's flush putting t1, t2 and o3 on trial");
+
+        // A done outside the fenced set is refused as definite, and the message stays.
+        IReadOnlyList<PartitionFence> held = [at[1] with { Position = 1 }, at[2]];
+        Context.Equal("definite", await c.Refused(() => c.S.CommitAsync(CommitBatch.Owned(held, Short, false, [Make.Turn("1/x", Make.Row("1/x", 2), expected: 1, done: ["d4"])], [], [])).AsTask(), "a turn in 1 marking a message of 4 done"),
+            "outcome of a flush marking done a message outside its fenced set");
+        Context.That(await c.Row(4, "d4") is not null, "d4 is gone or done after the refused done");
+        Context.Equal(1L, (await c.S.LoadAsync(["1/x"])).Single().Revision, "revision of 1/x after the refused done");
+
+        // a's lease runs out; b takes 1 and 2 only. Each trial row at its partition's last epoch gets one more attempt.
+        await Task.Delay(PastShort);
+        var b = await c.S.TakeAsync([1, 2], "b", Context.Long);
+        Context.Equal("1 2", string.Join(" ", Ids(b)), "partitions b took from the dead a");
+        async Task Attempts(string when)
+        {
+            foreach (var (id, p, expected) in new[] { ("t1", 1, 1), ("t2", 2, 1), ("s2", 2, 0), ("old1", 1, 0), ("o3", 3, 0) })
+                Context.Equal(expected, (await c.Row(p, id))!.Attempts, $"attempts of {id} {when}");
+        }
+        await Attempts("after b's take from the dead a");
+        Context.Equal(2, (await c.S.TakeAsync([1, 2], "b", Context.Long)).Taken.Count, "partitions b took again");
+        await Attempts("after b took again");
     }
 
     private static async Task LockOrder(Context c)

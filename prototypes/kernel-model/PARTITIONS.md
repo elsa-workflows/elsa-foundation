@@ -269,14 +269,20 @@ Layer 1 still activates one scope per virtual partition.
   over in memory until a short poll has read its inbox (F1). The set may be scattered.
 - **Giving a scope up** removes the partition (`Worker.LoseAsync`). What it holds in memory only is written first, as at
   a stand-down (decision 4). If nothing of the partition is in flight (no read, commit or turn, running job or trial),
-  its memory goes and its fence row is released at its epoch, and nothing else changes. Otherwise the worker resets,
-  releases it and takes the rest back at new epochs, as after a refused fence: safe, at the cost of the rest's memory.
-  Giving up the last partition is a stand-down.
+  its memory goes and its fence row is released at its epoch, and nothing else changes; rows sent to it that the poll
+  would have read back no longer keep the worker behind (F1). Otherwise the worker writes what every partition holds
+  in memory only, as a stand-down does, then resets, releases it and takes the rest back at new epochs, as after a
+  refused fence. That is safe; its cost is the rest's memory, and the reset tells the callers it held "lost", as every
+  reset does. Giving up the last partition is a stand-down.
 - **One at a time.** The node's passes, activations and give-ups run one at a time, so the set changes only between
   passes, and so between flushes. One pass serves every scope: a scope that another scope's pass served since its own
-  last call, with no wake or job result since, gets that pass's answer, so the node runs one pass per round however many
-  scopes it holds.
+  last call, with no wake or job result since, gets what is left of that pass's answer, so the node runs one pass per
+  round however many scopes it holds. Once that answer's time has run out, the call runs the pass itself, so a timer is
+  never postponed after the scope that ran the last pass is given up.
 - **A store without owned sets** (`commit=ef`) gets a worker per scope from the same host, as before.
+- **Start-up cost, for slice 8.** Gains are one-row takes, one at a time under the host's lock, so a node that starts
+  with 1,024 free partitions makes up to 1,024 sequential take round trips. A batched take of the activations a round
+  asks for together would be one; slice 8 measures it before anything changes.
 
 The fixed host (a worker per scope, given up front) stays for the models and the simulation, whose worlds are slice 7's.
 The built-in runtime's conformance suite runs on the per-node host; the Orleans adapter keeps a worker per scope until
@@ -305,10 +311,12 @@ The follow-ups that slice 2a recorded for this slice:
   `--mutations` list (the pins stay 43 and 15). `Cluster.Rank` (the node's place in name order, from the in-memory
   membership) exists only for that mutation.
 - **The projector per virtual partition** (`NodeProjection`). A landed commit nudges the partitions whose position it
-  moved, and a take or a gain the partition it took (its journal may not be projected yet). One drain at a time runs a
-  round for each nudged partition, and again while a round moves on and leaves more. Nothing sweeps every partition on a
-  timer. The runtime conformance case writes in two of four partitions: the other two get one round each, from their
-  take, and the two written get theirs until the projection reaches the journal.
+  moved, a commit whose outcome is unknown the ones it may have moved, and a take or a gain the partition it took (its
+  journal may not be projected yet). One drain at a time runs a round for each nudged partition, again at once while a
+  round moves on and leaves more, and again after a delay that doubles up to a second while a round throws or loses its
+  conditional write. Nothing sweeps every partition on a timer. The runtime conformance case writes in two of four
+  partitions: the other two get exactly one round each, from their take, and the two written are projected to their
+  journal. `--lease-check` has a round that throws once: it is tried again, and the tail is projected in pages of two.
 - **Fairness under one worker per node** (the plan's D1 risk). The set's poll is first in, first out across the set: one
   query, in seq order, at most `PollLimit` rows. A message in a quiet partition therefore waits behind the rows of every
   partition of the node that arrived before it, and behind none that arrived after it. A full poll that read something
@@ -321,8 +329,9 @@ The follow-ups that slice 2a recorded for this slice:
   instance takes more than two turns between its read and its turn. **The trial pause:** the trial gate is the node's, so
   a trial in any partition of the set holds back the turns of all of them until the trial's commit (FINDINGS F11: a
   death kills every partition the process holds). Under a worker per partition the runtime suite gave each worker its
-  own gate; under the per-node set the pause is structural. Trials happen only for suspects, so the pause is rare, and
-  it lasts one commit of the instance on trial.
+  own gate; under the per-node set the pause is structural, and it applies to the whole node. Trials happen only for
+  suspects, so the pause is rare. It lasts two commits (the trial mark, which starts only when nothing else is in
+  flight, and the turn on trial), or, for a job on trial, the run of that job (`Worker.StartJob`, FINDINGS F11).
 
 ### K1 slice 6: Orleans grains join the silo's owned set (D2)
 
