@@ -18,6 +18,7 @@ import { formatCaptureMode, formatSnapshotPayload, runtimeValueContextId, Runtim
 import "./activityInspection.css";
 import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
 import { InputRefreshHistory, LostUpdateBadge, VariableWriteDiagnosticsSection } from "./VariableLifecycleEvidence";
+import { ExecutionWarningBadge, ExecutionWarningsSection } from "./ExecutionWarnings";
 import { countLostUpdates, lostUpdateBadgeLabel } from "../variableLifecycle";
 
 const ReusableBoundaryInspector = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).ReusableBoundaryInspector }));
@@ -223,6 +224,7 @@ export function WorkflowActivityExecutionDetails({
             <div className="wf-activity-copy-line">
               <h4>{activityLabel}</h4>
               {currentInspectionState.status === "ready" ? <LostUpdateBadge count={countLostUpdates(currentInspectionState.inspection?.variableWrites)} label={lostUpdateBadgeLabel(currentInspectionState.inspection?.variableWrites)} /> : null}
+              {currentInspectionState.status === "ready" ? <ExecutionWarningBadge warnings={currentInspectionState.inspection?.warnings} /> : null}
               <CopyValueButton
                 value={activityLabel}
                 ariaLabel="Copy activity name"
@@ -281,6 +283,7 @@ export function WorkflowActivityExecutionDetails({
         {currentInspectionState.status === "ready" && currentInspectionState.inspection ? (
           <VariableWriteDiagnosticsSection inspection={currentInspectionState.inspection} labelOf={nodeLabelOf} />
         ) : null}
+        {currentInspectionState.status === "ready" ? <ExecutionWarningsSection warnings={currentInspectionState.inspection?.warnings} /> : null}
         <WorkflowActivityInputEvidence
           state={currentInspectionState}
           declarations={declaredInputs}
