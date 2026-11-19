@@ -182,6 +182,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-tags-list", path: "/workflows/tags" }),
       expect.objectContaining({ id: "workflows-tags-create", path: "/workflows/tags/new" }),
       expect.objectContaining({ id: "workflows-tags-edit", path: "/workflows/tags/:tagId" }),
+      expect.objectContaining({ id: "workflows-views", label: "Saved views", path: "/workflows/views", requiresBackend: [{ id: "elsa.api.workflow-design", contractVersion: "1", relations: ["workflow-views", "workflow-view"] }] }),
       expect.objectContaining({ id: "workflows-templates", path: "/workflows/templates" }),
       expect.objectContaining({ id: "workflows-elsa3-import", path: "/workflows/activity-definitions/import-elsa3" }),
       expect.objectContaining({ id: "workflows-activity-upgrades", path: "/workflows/activity-definitions/upgrades" }),
