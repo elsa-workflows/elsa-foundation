@@ -19,6 +19,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     private long _until;                    // when the stall ends, on Environment.TickCount64
     private TimeSpan _nextCommit;
     private int _commitPartition, _inFlight, _refused, _commits, _heldRefused;
+    private long _heldAt;
     private readonly TaskCompletionSource<string> _held = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public int Stalls { get; private set; }
@@ -42,6 +43,15 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
 
     /// <summary>What the commit held by <see cref="StallNextCommit"/> got back once it executed: "refused", "landed", or what it threw.</summary>
     public Task<string> Held => _held.Task;
+
+    /// <summary>When the held commit's store call returned (Environment.TickCount64), recorded before <see cref="Held"/> completes.</summary>
+    public long HeldAt => Volatile.Read(ref _heldAt);
+
+    private void Hold(string outcome)
+    {
+        Volatile.Write(ref _heldAt, Environment.TickCount64);
+        _held.TrySetResult(outcome);
+    }
 
     /// <summary>Every call from now on waits until <paramref name="duration"/> from now (or until <see cref="Resume"/>), or longer if a stall under way lasts longer.</summary>
     public void Stall(TimeSpan duration)
@@ -99,7 +109,8 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
         var held = false;
         lock (_lock)
         {
-            if (commit is { Turns.Count: > 0 } && commit.Partition == _commitPartition && _nextCommit != TimeSpan.Zero)
+            // A batch with a turn in the partition: under an owned set (K1 D1) one batch spans the node's partitions.
+            if (commit is { Turns.Count: > 0 } && commit.Turns.Any(t => commit.PartitionOf(t) == _commitPartition) && _nextCommit != TimeSpan.Zero)
             {
                 Begin(_nextCommit);
                 _nextCommit = TimeSpan.Zero;
@@ -135,12 +146,12 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
             try { result = await inner.CommitAsync(batch, cancellationToken); }
             catch (Exception e)
             {
-                if (held) _held.TrySetResult($"threw {e.GetType().Name}: {e.Message}");
+                if (held) Hold($"threw {e.GetType().Name}: {e.Message}");
                 throw;
             }
             if (!result.Landed) Interlocked.Increment(ref _refused);
             if (held && !result.Landed) Interlocked.Increment(ref _heldRefused);
-            if (held) _held.TrySetResult(result.Landed ? "landed" : "refused");
+            if (held) Hold(result.Landed ? "landed" : "refused");
             return result;
         }
         finally { Interlocked.Decrement(ref _inFlight); }

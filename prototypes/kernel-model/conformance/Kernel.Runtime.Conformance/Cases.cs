@@ -4,7 +4,8 @@ using Kernel.Sim;
 namespace Kernel.Runtime.Conformance;
 
 /// <param name="Setup">The case's own timing or partitions; the suite's default otherwise.</param>
-public sealed record RuntimeCase(string Name, Level Level, Func<Harness, Task> Body, HarnessSetup? Setup = null, bool Fence = false);
+/// <param name="OwnedSet">The case reads the node's one worker (K1 D1): it runs only for a runtime with <see cref="IRuntimeProvider.OneWorkerPerNode"/>.</param>
+public sealed record RuntimeCase(string Name, Level Level, Func<Harness, Task> Body, HarnessSetup? Setup = null, bool Fence = false, bool OwnedSet = false);
 
 /// <param name="Caught">The case failed on what the fence guards (a check that throws <see cref="FenceException"/>, or a violation of invariant 1 or of the store's ghosts), not on a precondition or a timeout.</param>
 public sealed record RuntimeOutcome(RuntimeCase Case, bool Passed, string Detail, TimeSpan Took, bool Caught = false);
@@ -30,6 +31,8 @@ public static class Cases
     {
         if (!condition) throw new ConformanceException(message);
     }
+
+    private static string Set(Worker worker) => string.Join(" ", worker.Fences.Select(f => f.Partition));
 
     private static string Holders(Harness h) => string.Join(", ", h.Watcher.Holders(h.Partitions).Select((n, p) => $"{p}: [{string.Join(" ", n)}]"));
 
@@ -222,6 +225,81 @@ public static class Cases
             await Applied(h, 0, "c", tokens, TimeSpan.Zero);
         }, Fence: true),
 
+        new("owned set: one worker serves a scattered set, and gains partitions while it runs", Level.Required, async h =>
+        {
+            // A probe holds 1 and 3, so the node's set is {0, 2}.
+            var probe = new Dictionary<int, long>();
+            foreach (var p in new[] { 1, 3 }) probe[p] = (await h.Outside.TakeAsync(p, "probe", TimeSpan.FromHours(1)))!.Epoch;
+            var a = await h.StartAsync();
+            var worker = h.WorkerOf(a.Name)!;
+            That(await h.WaitAsync(() => Set(worker) == "0 2", h.Lease * 4 + Slack), $"the node does not hold {{0, 2}}: [{Set(worker)}]");
+            var kept = (worker.EpochOf(0), worker.EpochOf(2));
+            foreach (var p in new[] { 0, 2 }) await h.AddAsync(Token(p, "c", "s" + p));
+            foreach (var p in new[] { 0, 2 }) await Applied(h, p, "c", ["s" + p], Slack);
+            foreach (var (p, epoch) in probe) await h.Outside.ReleaseAsync(p, epoch);
+            await Settle(h, "the probe's partitions taken by the node");
+            That(Set(worker) == "0 1 2 3" && (worker.EpochOf(0), worker.EpochOf(2)) == kept,
+                $"gaining 1 and 3 changed the epochs of 0 and 2 (before {kept}): [{string.Join(", ", worker.Fences)}]");
+            foreach (var p in Enumerable.Range(0, 4)) await h.AddAsync(Token(p, "c", "t" + p));
+            foreach (var p in Enumerable.Range(0, 4)) await Applied(h, p, "c", p % 2 == 0 ? ["s" + p, "t" + p] : ["t" + p], Slack);
+        }, OwnedSet: true),
+
+        new("owned set: a node hands part of its set over, and keeps the rest as it was", Level.Required, async h =>
+        {
+            var a = await h.StartAsync();
+            await Settle(h);
+            foreach (var p in Enumerable.Range(0, 4)) await h.AddAsync(Token(p, "c", "k" + p));
+            foreach (var p in Enumerable.Range(0, 4)) await Applied(h, p, "c", ["k" + p], Slack);
+            var worker = h.WorkerOf(a.Name)!;
+            var before = worker.Fences;
+            var b = await h.StartAsync();
+            await Steady(h);
+            var holders = h.Watcher.Holders(h.Partitions);
+            var kept = before.Where(f => holders[f.Partition].Contains(a.Name)).ToList();
+            var moved = before.Where(f => holders[f.Partition].Contains(b.Name)).Select(f => f.Partition).ToList();
+            That(kept.Count == 2 && moved.Count == 2, $"the join did not split the set two and two: {Holders(h)}");
+            // A release of the moved fences only: the kept ones keep their epochs and positions, and their memory.
+            var store = h.StoreOf(a.Name);
+            That(worker.Fences.SequenceEqual(kept) && moved.All(p => store.ReleaseBegan(p) is not null) && kept.All(f => store.ReleaseBegan(f.Partition) is null),
+                $"the hand-over touched more than the moved partitions {string.Join(" ", moved)}: before [{string.Join(", ", before)}], now [{string.Join(", ", worker.Fences)}]");
+            var memory = worker.Instances.Select(i => i.Id).ToHashSet();
+            That(kept.All(f => memory.Contains(InstanceRef.In(f.Partition, "c").Id)) && moved.All(p => !memory.Contains(InstanceRef.In(p, "c").Id)),
+                $"memory after the hand-over of {string.Join(" ", moved)}: [{string.Join(" ", memory)}]");
+            foreach (var p in Enumerable.Range(0, 4)) await h.AddAsync(Token(p, "c", "m" + p));
+            foreach (var p in Enumerable.Range(0, 4)) await Applied(h, p, "c", ["k" + p, "m" + p], Slack);
+        }, OwnedSet: true),
+
+        new("owned set: partitions join and leave the set between flushes, never during one", Level.Required, async h =>
+        {
+            var probe = (await h.Outside.TakeAsync(3, "probe", TimeSpan.FromHours(1)))!.Epoch;
+            var a = await h.StartAsync();
+            var (host, store, worker) = (h.HostOf(a.Name), h.StoreOf(a.Name), h.WorkerOf(a.Name)!);
+            That(await h.WaitAsync(() => Set(worker) == "0 1 2", h.Lease * 4 + Slack), $"the node does not hold {{0, 1, 2}}: [{Set(worker)}]");
+            var kept = (worker.EpochOf(0), worker.EpochOf(1));
+            // A commit with a turn in 0 is held on its way to the store; meanwhile 3 is added and 2 removed, as a runtime
+            // would, straight through the node's host.
+            store.StallNextCommit(h.Lease / 4, partition: 0);
+            await h.AddAsync(Token(0, "c", "f0"));
+            That(await h.WaitAsync(() => store.Stalls > 0, Slack), "no commit with a turn in 0 entered the hold");
+            await h.Outside.ReleaseAsync(3, probe);
+            var gaining = Task.Run(async () => (await host.ActivateAsync(3), Environment.TickCount64));
+            var losing = Task.Run(async () =>
+            {
+                await (await host.ActivateAsync(2))!.DisposeAsync();
+                return Environment.TickCount64;
+            });
+            var (gained, gainedAt) = await gaining;
+            var lostAt = await losing;
+            var held = await store.Held;
+            var landedAt = store.HeldAt;      // recorded by the store before Held completed
+            That(held == "landed" && gained is not null && gainedAt >= landedAt && lostAt >= landedAt && store.ReleaseBegan(2) >= landedAt,
+                $"the held commit {held}; the gain of 3 ({gained is not null}) and the loss of 2 ended {gainedAt - landedAt} and {lostAt - landedAt} ms after it returned");
+            That((worker.EpochOf(0), worker.EpochOf(1)) == kept, $"the change of the set changed the epochs of 0 and 1 (before {kept}): [{string.Join(", ", worker.Fences)}]");
+            await h.AddAsync(Token(3, "c", "g3"));
+            await Applied(h, 0, "c", ["f0"], Slack);
+            await Applied(h, 3, "c", ["g3"], Slack);
+        }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(4) } }, OwnedSet: true),
+
         new("join: a node that joins gets a share of the scopes", Level.Reference, async h =>
         {
             await h.StartAsync();
@@ -235,7 +313,7 @@ public static class Cases
     {
         output ??= Console.Out;
         var outcomes = new List<RuntimeOutcome>();
-        foreach (var @case in All.Where(c => filter?.Invoke(c) ?? true))
+        foreach (var @case in All.Where(c => (!c.OwnedSet || runtime.OneWorkerPerNode) && (filter?.Invoke(c) ?? true)))
         {
             var watch = Stopwatch.StartNew();
             string? failure = null;

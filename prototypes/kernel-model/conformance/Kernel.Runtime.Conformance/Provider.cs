@@ -13,6 +13,12 @@ public interface IRuntimeProvider
 
     /// <summary>A cluster with no nodes yet, over <paramref name="environment"/>. Disposing it stops every node.</summary>
     Task<IRuntimeCluster> CreateAsync(RuntimeEnvironment environment);
+
+    /// <summary>
+    /// Layer 2 serves each node's scopes with one worker, as one owned set (K1 D1), and the owned-set cases run. A runtime
+    /// that runs the passes of a node's scopes at once gets a worker per scope until its adapter joins (K1 slice 6).
+    /// </summary>
+    bool OneWorkerPerNode => false;
 }
 
 /// <summary>What a node gets from layer 2: the host it activates scopes through, and the membership that the built-in runtime counts nodes with. A runtime with a membership of its own ignores the second.</summary>
@@ -56,6 +62,7 @@ public interface IRuntimeNode
 public sealed class BuiltInProvider : IRuntimeProvider
 {
     public string Name => "built-in";
+    public bool OneWorkerPerNode => true;
 
     public Task<IRuntimeCluster> CreateAsync(RuntimeEnvironment environment) => Task.FromResult<IRuntimeCluster>(new Cluster(environment));
 
