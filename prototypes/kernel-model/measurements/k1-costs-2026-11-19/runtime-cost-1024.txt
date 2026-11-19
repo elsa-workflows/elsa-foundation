@@ -1,0 +1,42 @@
+=== run 1: dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll cost 1024 10 1024
+load before:  4:35  up 16 days, 14:34, 1 user, load averages: 2.81 6.99 15.49
+| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+| orleans | 1024 | idle, a second | 1536 | 58.3 | 57.8 | 0 | - | 59187.7 |
+| orleans | 1024 | 1024 tokens | 118 | 30 | 29 | 27 | 37.9 | 32823 |
+orleans: the burst applied in 1331 ms
+load after:  4:35  up 16 days, 14:35, 1 user, load averages: 2.55 6.73 15.24
+=== run 1: dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll cost 1024 10 1024
+load before:  4:35  up 16 days, 14:35, 1 user, load averages: 2.55 6.73 15.24
+| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+| built-in | 1024 | idle, a second | 1332.4 | 1.4 | 1 | 0 | - | 1025.2 |
+| built-in | 1024 | 1024 tokens | 1217 | 28 | 28 | 27 | 37.9 | 31799 |
+built-in: the burst applied in 1378 ms
+load after:  4:35  up 16 days, 14:35, 1 user, load averages: 2.59 6.53 15.02
+=== run 2: dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll cost 1024 10 1024
+load before:  4:35  up 16 days, 14:35, 1 user, load averages: 2.59 6.53 15.02
+| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+| orleans | 1024 | idle, a second | 1535.9 | 55.3 | 54.9 | 0 | - | 56218.1 |
+| orleans | 1024 | 1024 tokens | 289 | 30 | 30 | 27 | 37.9 | 33847 |
+orleans: the burst applied in 1185 ms
+load after:  4:36  up 16 days, 14:35, 1 user, load averages: 2.70 6.36 14.81
+=== run 2: dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll cost 1024 10 1024
+load before:  4:36  up 16 days, 14:35, 1 user, load averages: 2.70 6.36 14.81
+| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+| built-in | 1024 | idle, a second | 1420.4 | 1.4 | 1 | 0 | - | 1025.2 |
+| built-in | 1024 | 1024 tokens | 1330 | 28 | 28 | 27 | 37.9 | 31800 |
+built-in: the burst applied in 1541 ms
+load after:  4:36  up 16 days, 14:35, 1 user, load averages: 2.72 6.24 14.67
+=== run 3: dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll cost 1024 10 1024
+load before:  4:36  up 16 days, 14:35, 1 user, load averages: 2.72 6.24 14.67
+| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+| orleans | 1024 | idle, a second | 1534.3 | 73.2 | 72.6 | 0 | - | 74380.8 |
+| orleans | 1024 | 1024 tokens | 44 | 38 | 39 | 27 | 37.9 | 43063 |
+orleans: the burst applied in 1268 ms
+load after:  4:36  up 16 days, 14:36, 1 user, load averages: 2.69 6.07 14.46
+=== run 3: dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll cost 1024 10 1024
+load before:  4:36  up 16 days, 14:36, 1 user, load averages: 2.69 6.07 14.46
+| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+| built-in | 1024 | idle, a second | 1406.9 | 1.4 | 1 | 0 | - | 1025.2 |
+| built-in | 1024 | 1024 tokens | 3072 | 29 | 28 | 27 | 37.9 | 31800 |
+built-in: the burst applied in 1707 ms
+load after:  4:36  up 16 days, 14:36, 1 user, load averages: 2.84 5.93 14.27

@@ -88,10 +88,12 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
     (scope.owner.structure?.kind === sequenceStructureKind || scope.owner.structure?.kind === flowchartStructureKind || bpmnScope);
   const unavailable = !props.context.canEdit ? "Block editing is unavailable in this view. Open an editable draft."
     : !supported ? "Open a Sequence, Flowchart or BPMN body to create or extract native blocks." : undefined;
-  const promotionUnavailable = !props.promotion ? undefined : !props.context.canEdit ? "Open an editable draft to promote a block."
-    : !isBlock || !selected ? "Select one named block to promote it to a reusable activity."
-    : props.promotion.capabilitiesState === "loading" ? "Loading reusable activity authoring…"
-    : props.promotion.capabilitiesState === "failed" ? "Reusable activity authoring is unavailable on this server." : undefined;
+  // Promotion acts on one named block, so its command appears beside "Open block" only then; an always-present
+  // command wraps the toolbar and takes a row from the canvas.
+  const promotion = isBlock && selected ? props.promotion : undefined;
+  const promotionUnavailable = !promotion ? undefined : !props.context.canEdit ? "Open an editable draft to promote a block."
+    : promotion.capabilitiesState === "loading" ? "Loading reusable activity authoring…"
+    : promotion.capabilitiesState === "failed" ? "Reusable activity authoring is unavailable on this server." : undefined;
   const kind: NativeBlockKind | "bpmn" = bpmnScope ? "bpmn" : action === "flowchart" ? "flowchart" : action === "extract" && scope?.owner.structure?.kind === flowchartStructureKind ? "flowchart" : "sequence";
   const kindLabel = kind === "bpmn" ? "BPMN subprocess" : kind === "sequence" ? "Sequence" : "Flowchart";
   const typeKey = kind === "bpmn" ? "Elsa.Activities.Bpmn.Activities.BpmnProcess" : `Elsa.Activities.${kindLabel}.Activities.${kindLabel}`;
@@ -164,13 +166,13 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
       <button type="button" disabled={!props.context.canEdit || !supported || !props.selectedNodeIds.length} onClick={() => begin("extract")}>Extract block…</button>
       <button type="button" disabled={!props.context.canEdit || !supported || !isBlock} onClick={() => begin("ungroup")}>Ungroup…</button>
       {isBlock && selected ? <button type="button" onClick={() => props.open(selected.nodeId)}>Open {label || "block"} ({childCount} steps)</button> : null}
-      {props.promotion ? <button type="button" disabled={!props.context.canEdit || !isBlock || !selected || props.promotion.capabilitiesState !== "ready"}
-        title={promotionUnavailable} aria-describedby={promotionUnavailable && isBlock && props.context.canEdit ? promotionReasonId : undefined}
+      {promotion ? <button type="button" disabled={!props.context.canEdit || promotion.capabilitiesState !== "ready"}
+        title={promotionUnavailable} aria-describedby={promotionUnavailable && props.context.canEdit ? promotionReasonId : undefined}
         onClick={() => { if (selected) { setPromotionStatus(null); setPromoting(selected.nodeId); } }}>Promote to reusable activity…</button> : null}
       {bpmnScope && props.endpoint ? <Suspense fallback={<span role="status">Loading BPMN interchange…</span>}><BpmnInterchangeCommands {...props} endpoint={props.endpoint} /></Suspense> : null}
     </div>
     {unavailable ? <p className="wf-muted wf-block-command-notice">{unavailable}</p> : null}
-    {promotionUnavailable && isBlock && props.context.canEdit ? <p id={promotionReasonId} className="wf-muted wf-block-command-notice">{promotionUnavailable}</p> : null}
+    {promotionUnavailable && props.context.canEdit ? <p id={promotionReasonId} className="wf-muted wf-block-command-notice">{promotionUnavailable}</p> : null}
     {promotionStatus ? <p className="wf-block-command-notice" role="status">{promotionStatus.message}</p> : null}
     {promoting && props.promotion && props.endpoint ? <Suspense fallback={<span role="status">Loading reusable activity promotion…</span>}>
       <BlockPromotionDialog endpoint={props.endpoint} context={props.context} createPosition={props.createPosition} host={props.promotion} blockNodeId={promoting}

@@ -19,7 +19,8 @@ public interface IStoreProvider
 
 /// <param name="BrokenFence">MUTATION: the commit ignores epoch and position. The stress test must fail with it.</param>
 /// <param name="Counting">The provider should count what goes on the wire, for <see cref="ProvidedStore.Counter"/>.</param>
-public sealed record StoreSetup(bool BrokenFence = false, bool Counting = false);
+/// <param name="Flaws">A defect switched on in a store that has it, for a mutation's witness (the in-memory store's; others ignore it).</param>
+public sealed record StoreSetup(bool BrokenFence = false, bool Counting = false, Flaw Flaws = Flaw.None);
 
 public abstract class ProvidedStore : IAsyncDisposable
 {
@@ -51,6 +52,18 @@ public abstract class ProvidedStore : IAsyncDisposable
     /// null if the provider cannot do that.
     /// </summary>
     public virtual Task<IAsyncDisposable?> HoldPartitionAsync(int partition) => Task.FromResult<IAsyncDisposable?>(null);
+
+    /// <summary>
+    /// Open the same database again, as a node that starts does, with <c>partitions</c> partitions (the store's create),
+    /// or null when the store has no database to reopen (the in-memory store is made with its count).
+    /// </summary>
+    public virtual Func<int, Task>? Reopen => null;
+
+    /// <summary>
+    /// Remove the partition rows from this id on, as a first open cut short after writing the ones before would leave
+    /// them; null when the store writes its partition rows in one transaction, so that cannot happen.
+    /// </summary>
+    public virtual Func<int, Task>? CutPartitionRows => null;
 
     /// <summary>Things the store itself saw go wrong (the in-memory store's ghost list), checked after a stress run.</summary>
     public virtual IReadOnlyList<string> Ghosts => [];
@@ -88,7 +101,7 @@ public sealed class InMemoryProvider : IStoreProvider
     public string Name => "in-memory";
 
     public Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup) =>
-        Task.FromResult<ProvidedStore>(new Provided(new InMemoryStore(partitions, Clock, setup.BrokenFence ? Flaw.FenceWithoutEpoch | Flaw.FenceWithoutPosition : Flaw.None)));
+        Task.FromResult<ProvidedStore>(new Provided(new InMemoryStore(partitions, Clock, (setup.BrokenFence ? Flaw.FenceWithoutEpoch | Flaw.FenceWithoutPosition : Flaw.None) | setup.Flaws)));
 
     private sealed class Provided(InMemoryStore store) : ProvidedStore
     {

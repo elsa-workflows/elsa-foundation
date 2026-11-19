@@ -22,3 +22,60 @@ it("keeps cross-interpolation delimiters untouched and accepts ordinary incomple
   expect(render("`text ${value}`", 9, 14).supported).toBe(false);
   expect(render("call(", 5).supported).toBe(true);
 });
+
+it("repairs direct argument reads inside template interpolations and skips lookalike text", () => {
+  const source = '`args.Variable1: ${args.Variable1}` + "args.Variable1" /* args.Variable1 */';
+  const fixes = adapter.findArgumentFixes!(source, name => name === "Variable1" ? { namespace: "variables", name } : undefined);
+  expect(fixes).toEqual([{
+    from: source.indexOf("${") + 2,
+    to: source.indexOf("}"),
+    current: "args.Variable1",
+    replacement: "variables.Variable1"
+  }]);
+});
+
+it("leaves shadowed arguments alone and escapes unusual public input names", () => {
+  const resolve = () => ({ namespace: "args" as const, name: "Input numbers" });
+  expect(adapter.findArgumentFixes!("(args) => args.numbers", resolve)).toEqual([]);
+  expect(adapter.findArgumentFixes!("({ args }) => args.numbers", resolve)).toEqual([]);
+  expect(adapter.findArgumentFixes!("args.numbers.reduce(sum, 0)", resolve)).toEqual([
+    { from: 0, to: 12, current: "args.numbers", replacement: 'args["Input numbers"]' }
+  ]);
+  expect(adapter.render({ namespace: "variables", alias: "Input numbers", memberPath: [], source: "", selection: { anchor: 0, head: 0 } }))
+    .toMatchObject({ supported: true, insert: 'variables["Input numbers"]' });
+});
+
+it.each([
+  String.raw`((\u0061rgs) => args.Count)({Count: 7})`,
+  "args.Count = 5",
+  "args.Count.member = 5",
+  "args.Count++",
+  "delete args.Count",
+  "++args.Count",
+  "for (args.Count of list) {}",
+  "for (args.Count in list) {}"
+])("does not offer a read repair for %s", source => {
+  expect(adapter.findArgumentFixes!(source, () => ({ namespace: "args", name: "count" }))).toEqual([]);
+});
+
+it("blocks insertion when a plain or escaped local binding can shadow the namespace", () => {
+  for (const source of ["(args) => x", String.raw`(\u0061rgs) => x`])
+    expect(render(source, source.length).supported).toBe(false);
+});
+
+it.each([
+  ['args["Count"]', "args.count"],
+  ["args['Count']", "args.count"],
+  ["args?.Count", "args?.count"],
+  ['args?.["Count"]', "args?.count"]
+])("preserves read semantics and optional chaining for %s", (source, replacement) => {
+  expect(adapter.findArgumentFixes!(source, () => ({ namespace: "args", name: "count" })))
+    .toEqual([{ from: 0, to: source.length, current: source, replacement }]);
+});
+
+it.each(["+args.Count", "-args.Count", "for (value of args.Count) {}", "const {args: other} = record; args.Count"])(
+  "offers a repair for a read in %s", source => {
+    expect(adapter.findArgumentFixes!(source, () => ({ namespace: "args", name: "count" })))
+      .toMatchObject([{ current: "args.Count", replacement: "args.count" }]);
+  }
+);

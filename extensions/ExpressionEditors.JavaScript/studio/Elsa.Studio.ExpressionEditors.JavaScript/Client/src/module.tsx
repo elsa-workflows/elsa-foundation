@@ -1,4 +1,5 @@
 import { javaScriptSourceInsertion } from "./sourceInsertion";
+import { javaScriptResultCheck } from "./resultCheck";
 import React, { memo } from "react";
 import {
   createStudioCodeToolingProjection,
@@ -18,6 +19,7 @@ export function register(api: ElsaStudioModuleApi) {
   api.expressionEditors.add({
     id: "elsa.javascript-expression-editor",
     sourceInsertion: javaScriptSourceInsertion,
+    resultCheck: javaScriptResultCheck,
     order: 100,
     variableAdditionPreservation: {
       language: javaScriptSyntax,

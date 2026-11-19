@@ -97,7 +97,7 @@ test("edits a reusable activity interface without losing unapplied defaults or s
   await page.goto("/?mode=activity-authoring&theme=dark");
   await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await expect(page.getByText("Advanced interface details", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Stable reference key" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Stable reference key" })).toHaveValue("subtotal");
   await page.getByRole("button", { name: "Add input", exact: true }).click();
   await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Discount");
   await page.getByRole("textbox", { name: "Input name", exact: true }).press("Enter");

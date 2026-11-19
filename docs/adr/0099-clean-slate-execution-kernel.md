@@ -1,14 +1,20 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-17
 ---
 
 # Clean-slate execution kernel: actor runtime, durable actors, execution models
 
-Status: proposed (17 November 2026). Program [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229),
-gate 2. The decisions below are the owner's, listed with dates and sources in the
-[kernel decision register](../architecture/decisions.md). Design approval follows the independent architecture review;
-until then this ADR authorizes no product code. Detail lives in the [architecture references](../architecture/README.md)
+Status: accepted with conditions (18 November 2026); proposed on 17 November 2026. Program
+[#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229), gate 2. Gate 2 granted design approval at the
+reviewed revision `addffea7c850063d1ebe710b07866ff1640a93cb`, on the eighth independent architecture review's verdict,
+APPROVE WITH CONDITIONS, with 0 Blockers, 0 Majors and 3 Minors
+([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The approval covers
+the design. Implementation starts at K1, the prototype Worker refactor, before product wiring. Product slices follow from K2, behind a host switch, with the old core the default until gate 4. The work lands milestone by milestone under the
+[program plan](../program-goals/clean-slate-kernel.md#milestones); the implementation evidence is owed at K1 to K12,
+and the review's conditions stay open in the plan's [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions)
+until their evidence lands. The decisions below are the owner's, listed with dates and sources in the
+[kernel decision register](../architecture/decisions.md). Detail lives in the [architecture references](../architecture/README.md)
 and the [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md); this record does not repeat it.
 
 ## Context
@@ -69,8 +75,10 @@ Recovery in place adds three proposed obligations to the contract, a coordinator
 round, not an owner decision ([register](../architecture/decisions.md#the-gate-2-fix-round-17-november)): each model
 implements `RestoreWaits`, which returns the waits its committed state holds, each timer as a `TimerSpec` (the id
 `Send` returned, its kind, payload and absolute due), and arms a timer it may restore with `SendOptions.DueAt`, an
-absolute time on `ITurn.Now`'s clock that the kernel writes unchanged
-([observability](../architecture/observability.md#recover)).
+absolute time on `ITurn.Now`'s clock that the kernel writes unchanged; each job comes back as a `JobSpec` (job key,
+arguments captured at arm, effect key) and each subscription counts toward the plan's bounds (fourth review, also a
+coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fourth-review-round-18-november))
+([observability](../architecture/observability.md#recover)). Termination is bounded kernel work (fifth review, a coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fifth-review-round-18-november)): a terminate's cascade is a durable obligation that layer 2 discharges in pages of at most `P_cascade` entries, with an idempotent job cancel, and every terminate of that cascade carries a kernel-only cascade origin mark that each recipient checks against its recorded parent in every state, while a model's own `kernel.terminate` keeps its existing authorization ([observability](../architecture/observability.md#every-park-operation-names-its-park)). Events reach waits without a clock: every publish, a turn's or an outside one, is a publish ticket whose match step reads the committed subscriptions, so a wait that did not ask for kept events receives every event accepted after it committed and an earlier one only while that step is outstanding, with no clock bound, and a wait that keeps events is entitled from max(its registration, the tenant's sweep horizon plus 1 ms) to every event whose window was open, which the sweep keeps while the wait's catch-up on that key is outstanding (fifth review, a coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fifth-review-round-18-november); the non-keeping wait's window is an owner decision of 18 November, [register](../architecture/decisions.md#the-gate-2-sixth-review-round-18-november)). The sixth review's repairs are coordinator design choices too ([register](../architecture/decisions.md#the-gate-2-sixth-review-round-18-november)). A live row's envelope check reserves its model's terminal growth, reported by the layer 3 hook `TerminalGrowth(state)` (Native: 7 bytes per open invocation inbox and 23 per non-final receipt, measured; 0 for a model with no terminal growth), beside its registries at the marker's sizes, so a terminate's ending commit always fits; a terminate drain withholds physical job entry, and a model's own job cancel is the cascade's idempotent cancel. Event deliveries are bound to a publication: an event row's 16-byte `Incarnation`, a random value the kernel generates, enters the match digest, the delivery id and the outside publish ticket's id (version 2 of the canonical encoding), so a later publication of the same key and event id never collides with an earlier one's delivery or receipt. A keeping wait's catch-up is one chain with a stable `CatchUpId`, and its coverage is keyed by the subscription incarnation and that id. Match steps page subscriptions and meet steps page matches, each within a byte allowance. The seventh review's answers ([register](../architecture/decisions.md#the-gate-2-seventh-review-round-18-november)): a live row's envelope check counts the projected terminal row, so `CustomHandles` and every other variable-length field are counted at their encoded size beside the state, its terminal growth and the registries, and a fixed reserve covers only the bounded fields (a coordinator design choice); and a turn's event id carries the reserved first code unit `~`, while the outside publish refuses `InvalidEventId` any caller event id provider-equal to one starting with `~`, so workflow-issued and caller-issued event ids never share an event row (an owner decision of 18 November).
 
 ### 3. Four logical seams
 
@@ -88,23 +96,26 @@ event matching and the effect key never cross tenants; every tenant-keyed record
 the owner checks on load and consumption. Release 1 runs only the shared store: tenants share one database and its
 1,024 virtual partitions. On SQL Server and MySQL every column holding a tenant id, an actor id or a tenant-qualified
 name has one pinned, non-locale collation, used in every expression over it, so `Q` stays injective whatever the
-database's default collation is.
+database's default collation is. A caller key resolves its actor id through a binding row unique under that collation, written by
+insert-or-read before routing, so equivalent spellings reach one actor; a keyed request's operation id is compared exactly and
+stored as a digest, while an operator command's operation id stays its outside id `Q(t, operation)` (fourth review R4-M6, a coordinator design choice).
 
 ### 4. Deployment profiles
 
 Persistence mode, actor runtime and provider vary independently; a profile is a named preset. **Embedded** (built-in
 runtime, one node) and **Cluster** (built-in runtime, partitions shared over nodes) ship in release 1. **Orleans** waits
-for proven demand. **Log** (replicated-log groups) is planned and not designed. A workflow behaves the same under every
+for proven demand, and before it ships a silo-level wake brings an idle silo's set polls to about one a second
+(owner, 19 November; K1 measured 107 to 117 a second per idle silo at 1,024). **Log** (replicated-log groups) is planned and not designed. A workflow behaves the same under every
 profile, and no capability flag makes it fail on one. Inline execution is chosen per workflow or route
 ([sketch, profiles](../reports/clean-slate-kernel/design-sketch-draft-5.md#deployment-profiles-not-runtimes)).
 
 ### 5. Virtual partitions and the fence
 
-1,024 fixed virtual partitions, one fence row each: decided on 16 November and not built. The prototype still has
-`VirtualPartitions.Provisional = 4096` and fences one row per commit until the Worker refactor to range ownership
-of the 1,024 virtual partitions, with a journal per virtual partition. That refactor is release 1's first milestone,
-right after design approval and before product wiring, and rebalance moves the fewest partitions, so a node's
-partitions may be scattered (owner, 17 November: PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit lands only while the
+1,024 fixed virtual partitions, one fence row each: decided on 16 November and built by K1, the Worker refactor to
+range ownership, accepted on main on 19 November at `0352a8cde`. A node's Worker owns a set of the 1,024, with a fence
+row and a journal per virtual partition, and a commit over several of them fences each of their rows, locked in
+ascending id. Rebalance moves the fewest partitions, so a node's partitions may be scattered (owner, 17 November:
+PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit lands only while the
 row still has the owner's epoch and expected position, checked in the same transaction, so a stale owner never lands a
 commit. Leases decide who should write; the fence decides who can. The kernel writes its own commit SQL on PostgreSQL,
 SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the schema, migrations and cold paths
@@ -152,16 +163,16 @@ inspect, retry and discard; values by reference
 
 ### 11. The seven design-now answers
 
-Each answer is a Proposed page with the owner's decisions of 17 November at its end:
+Each answer is an Approved design page with the owner's decisions of 17 November at its end:
 
 | Question | Page | Decisions in short |
 |---|---|---|
 | 1. Migrating running instances | [migrating-running-instances](../architecture/migrating-running-instances.md) | State versions per model and activity; release 1 migrates running and suspended instances at a turn boundary for the simple cases; a refused instance stays running |
-| 2. Data lifecycle | [data-lifecycle](../architecture/data-lifecycle.md) | Retention worker over the instance-list read model; guarded shortened policy; delete plus values by reference now, per-instance keys in 1.x; clear journal envelope; every delete names tenant, creation and terminal mark and is checked at the owner, with no force path |
+| 2. Data lifecycle | [data-lifecycle](../architecture/data-lifecycle.md) | Retention worker over the instance-list read model; guarded shortened policy; delete plus values by reference now, per-instance keys in 1.x; clear journal envelope; every delete names tenant, instance, creation and terminal mark and is checked at the owner, with no force path; a deleted child's retirement marker keeps a bounded cancellation obligation, so its parent's later terminate still reaches its descendants (coordinator design choices of the fourth review round) |
 | 3. Fairness and backpressure | [fairness-and-backpressure](../architecture/fairness-and-backpressure.md) | Admission at the edge; no running-instance quotas; backlog on the fence row; only load-shedding commands bypass `InboxFull` |
 | 4. Large fan-out | [large-fan-out](../architecture/large-fan-out.md) | Release 1 caps a parallel ForEach at 1,000 items, degree 16 by default and 64 at most; a combiner tree after release 1; a parked child keeps its parent waiting |
 | 5. Job workers | [job-workers](../architecture/job-workers.md) | One job contract; standalone Elsa.Jobs and the remote worker protocol in 1.x |
-| 6. Observability | [observability](../architecture/observability.md) | W3C trace context on every message; stable metric names; recovery in place plus intervention; Park keeps each row by kept reason and full delivery handle; every resolution (recover, discard, terminate, delete, and a finite `Parked` window's expiry as an automatic discard, a coordinator design choice of the gate 2 fix round) is a bounded drain; every resolution except recover sends a waiting parent the one final notice its drain owed, and a recover sends none, so the child's later end sends the ordinary notice |
+| 6. Observability | [observability](../architecture/observability.md) | W3C trace context on every message; stable metric names; recovery in place plus intervention; Park keeps each row by kept reason and full delivery handle; every resolution (recover, discard, terminate, delete, and a finite `Parked` window's expiry as an automatic discard, a coordinator design choice of the gate 2 fix round) is a bounded drain; every resolution except recover sends a waiting parent the one final notice its drain owed, and a recover sends none, so the child's later end sends the ordinary notice; the rows a recover released keep delivery precedence until consumed, and every Park selection names its instance (coordinator design choices of the fourth review round) |
 | 7. Write volume | [write-volume](../architecture/write-volume.md) | Snapshot plus journal stays; values by reference in the same database, accepted by a PostgreSQL run |
 
 The gate 2 review added an eighth page, [tenancy](../architecture/tenancy.md), with the owner's six decisions of

@@ -7,10 +7,11 @@ namespace Kernel.Sim;
 /// </summary>
 public static class PlacementChecks
 {
-    public static int Run()
+    public static int Run(Flaw flaws = Flaw.None)
     {
         var failures = 0;
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
+        foreach (var count in new[] { VirtualPartitions.Small, VirtualPartitions.Large }) Balancing(count, flaws, Check);
 
         foreach (var count in new[] { VirtualPartitions.Small, VirtualPartitions.Large })
         {
@@ -82,5 +83,47 @@ public static class PlacementChecks
         }
         Console.WriteLine(failures == 0 ? "placement: every check passed" : $"placement: {failures} check(s) FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// K1 slice 5: the runtime's balancer (<see cref="Balancer.Plan"/>) moves the fewest partitions. Four nodes join one at
+    /// a time, one leaves, and one joins again. In every round the nodes plan one after another, each on the store as the
+    /// earlier ones left it (their releases free, their takes held), as rounds that do not overlap would see it. A join
+    /// moves only the surplus above the new share and a leave only the leaver's partitions, and the sets end scattered.
+    /// Under <see cref="Flaw.ContiguousOnlyBalancer"/> or <see cref="Flaw.GreedyBalancer"/> these checks fail.
+    /// </summary>
+    private static void Balancing(int count, Flaw flaws, Action<bool, string> check)
+    {
+        var owner = new string?[count];
+        var nodes = new List<string>();
+        int Held(string node) => owner.Count(o => o == node);
+        void Event(string what, Action change, int fewest)
+        {
+            var before = (string?[])owner.Clone();
+            change();
+            for (var round = 0; round < 16; round++)
+                for (var rank = 0; rank < nodes.Count; rank++)
+                {
+                    var node = nodes[rank];
+                    var free = Enumerable.Range(0, count).Where(p => owner[p] is null).ToList();
+                    var (release, take) = Balancer.Plan(count, new Cluster(nodes.Count, free, 0, rank), Enumerable.Range(0, count).Where(p => owner[p] == node).ToList(), [], flaws);
+                    foreach (var p in release) owner[p] = null;
+                    foreach (var p in take) owner[p] ??= node;      // a row another node took this round refuses the take
+                }
+            var moved = Enumerable.Range(0, count).Count(p => before[p] is not null && owner[p] != before[p]);
+            var share = (count + nodes.Count - 1) / nodes.Count;
+            check(moved == fewest && owner.All(o => o is not null) && nodes.All(n => Held(n) <= share),
+                $"{count}: {what}: {moved} partitions moved, the fewest is {fewest}; held [{string.Join(" ", nodes.Select(Held))}], share {share}");
+        }
+        int Surplus(int nodesAfter) => nodes.Sum(n => Math.Max(0, Held(n) - (count + nodesAfter - 1) / nodesAfter));
+        for (var i = 0; i < 4; i++)
+        {
+            var name = "n" + i;
+            Event($"{name} joins", () => nodes.Add(name), nodes.Count == 0 ? 0 : Surplus(nodes.Count + 1));
+        }
+        Event("n1 leaves", () => { for (var p = 0; p < count; p++) if (owner[p] == "n1") owner[p] = null; nodes.Remove("n1"); }, Held("n1"));
+        Event("n4 joins", () => nodes.Add("n4"), Surplus(nodes.Count + 1));
+        var ranges = nodes.Sum(n => Enumerable.Range(0, count).Count(p => owner[p] == n && (p == 0 || owner[p - 1] != n)));
+        check(ranges > nodes.Count, $"{count}: the sets end scattered: {ranges} ranges for {nodes.Count} nodes");
     }
 }

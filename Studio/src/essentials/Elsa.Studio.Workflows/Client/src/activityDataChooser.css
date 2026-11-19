@@ -358,3 +358,12 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+.wf-expression-reference-fix {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
