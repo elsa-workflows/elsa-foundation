@@ -390,7 +390,7 @@ The follow-ups that slice 2a recorded for this slice:
   - **Under load.** The two runtimes are close. One commit spans many partitions on both (the harness caps a batch at
     40 turns). Orleans makes fewer pass calls, because a hint reaches only its own grain.
   - **For slice 8.** It measures the Orleans set polls per poll interval on a quiet machine at 1,024 partitions.
-    Measured in "K1 costs" below: 55 to 73 a second, against 1.0 for the built-in loop.
+    Measured in "K1 costs" below: 107 to 117 a second, against 1.0 for the built-in loop.
 - **Open seam question, for slice 8.** A silo-level poll would bring Orleans to one set poll per interval: the silo
   wakes its owned set once, as the built-in loop does. The seam today promises a wake per held scope (`RuntimeTiming.PollInterval`),
   and a per-scope host (a store without owned sets) still needs that. So the change needs the seam to say that one wake
@@ -534,8 +534,8 @@ position. The rest is dropped, nothing else is taken, and the poll at the new ep
 
 The take, beat, takeover, release, rebalance and flush, measured on real stores in the integrated Worker and runtime,
 for scattered and for contiguous sets, and compared with the experiment's tables above ("Flush cost" and "Take, beat,
-takeover and rebalance"). Measurement only: no kernel behaviour changed (the one code fix is in the runtime suite's
-own bookkeeping, below). The raw outputs are in
+takeover and rebalance"). Measurement only: no kernel behaviour changed (the two code fixes are in the suites' own
+bookkeeping, below). The raw outputs are in
 [measurements/k1-costs-2026-11-19](measurements/k1-costs-2026-11-19).
 
 **The workload.** `EngineRun` `x setcost` (`ef/Kernel.Ef.Run/SetCost.cs`) drives the kernel's own types:
@@ -565,14 +565,14 @@ own bookkeeping, below). The raw outputs are in
 | Beat of 256 | 1 tcp, 1 stmt, 256 rows | 2 / 2 / 256 / 3.6 | 2 / 2 / 256 / 1.4 | +1 tcp, +1 stmt: the beat is an empty fenced commit, a lock statement in ascending id (slice 3) and the UPDATE in one transaction, then the COMMIT |
 | Heartbeat (node row, live count, free list) | (not run) | 3 / 3 / 0 / 2.7 | 3 / 3 / 0 / 2.6 | once per balancing round |
 | Set poll over 256, nothing to read | (not run) | 1 / 1 / 0 / 1.4 | 1 / 1 / 0 / 1.6 | one query per pass |
-| Takeover of a dead node's 256, one set take (fixed host) | 2 tcp, 1 stmt, 256 rows; 3.8 ms | 3 / 2 / 256 / 2.6 | 3 / 2 / 256 / 1.8 | +1 tcp, +1 stmt: the death count (one attempt for what was on trial at each partition's old epoch), in the take's transaction; the experiment's take counted none |
+| Takeover of a dead node's 256, one set take (fixed host) | 2 tcp, 1 stmt, 256 rows; 3.8 ms (median of 5 takes of 128 rows) | 3 / 2 / 256 / 2.6 | 3 / 2 / 256 / 1.8 | +1 tcp, +1 stmt: the death count (one attempt for what was on trial at each partition's old epoch), in the take's transaction; the experiment's take counted none |
 | Takeover through the per-node host: 256 activations | (not run) | 768 / 512 / 256 / 161 | 768 / 512 / 256 / 131 | one take and one death count per partition: 3 tcp each |
-| Takeover through the runtime: a node dies, the other three run rounds | (not run) | 786 / 530 / 256 / 138 | 1,041 / 700 / 341 / 212 | the survivors take the dead node's partitions one at a time (as the line above), plus 6 heartbeats; contiguous moves 341 |
+| Takeover through the runtime: a node dies, the other three run rounds | (not run) | 786 / 530 / 256 / 138 | 1,041 / 700 / 341 / 212 | the survivors take the dead node's partitions one at a time (as the line above), plus 6 heartbeats; contiguous moves 341, with 85 one-row releases from `ContiguousOnlyBalancer` |
 | Release of 128, one set release (the store's; a stand-down sends it) | 2 tcp, 1 stmt | 1 / 1 / 128 / 0.9 | 1 / 1 / 128 / 0.8 | one round trip fewer (no transaction) |
 | Release of 128 through the per-node host, one scope each | (not run) | 128 / 128 / 128 / 34 | 128 / 128 / 128 / 27 | the runtime gives scopes up one at a time |
-| Rebalance: a fourth node joins, rounds until none changes | the other node takes the freed half: 2 tcp, 1 stmt | 796 / 540 / 256 moved / 160 | 1,567 / 1,054 / 513 moved / 328 | each move is a one-row release and a one-row take; contiguous moves twice as many (513 against 256, as the placement witness says) |
+| Rebalance: a fourth node joins, rounds until none changes | a different workload: one move of half a range (128 of 256) between two nodes, a set release (2 tcp, 1 stmt) and a set take (2 tcp, 1 stmt), so 4 tcp and 2 stmt | 796 / 540 / 256 moved / 160 | 1,567 / 1,054 / 513 moved / 328 | K1's workload is three nodes holding all 1,024 and a fourth joining, with 4 balancing rounds' heartbeats. Each move is a one-row release and a one-row take; contiguous moves twice as many (513 against 256, as the placement witness says) |
 | Rebalance: a node leaves gracefully, its stop | (not run) | 256 / 256 / 256 / 52 | 256 / 256 / 256 / 55 | one release per scope |
-| Then the other three run rounds | (not run) | 530 / 274 / 256 moved / 99 | 785 / 444 / 341 moved / 150 | one-row takes |
+| Then the other three run rounds | (not run) | 530 / 274 / 256 moved / 99 | 785 / 444 / 341 moved / 150 | one-row takes; contiguous also has 85 one-row releases, because `ContiguousOnlyBalancer` shifts a survivor's range: 341 moved, 256 of them the leaver's |
 | Reset after a refused beat: retake the other 255 | (not modelled) | 258 / 258 / 255 / 62 | 258 / 258 / 255 / 58 | slice 2a's retake, one partition at a time |
 
 **One 100-instance flush, PostgreSQL** (the same run): 100 instances spread over A by the placement hash, each with
@@ -608,7 +608,10 @@ F-B6: the PostgreSQL stream varies by a read).
 | The mark and the turns of a 100-instance flush | 3 and 3 | 3 and 3 | 6 and 6 |
 
 SqlClient sends BEGIN alone, and Connector/NET adds a Ping and an Init DB per pooled connection and two trips for a
-BEGIN (ENGINES.md). Hence SQL Server's and MySQL's extra trips; their statements match PostgreSQL's.
+BEGIN (ENGINES.md). Hence SQL Server's and MySQL's extra trips. SQL Server's commands match PostgreSQL's statements. MySQL's
+set operations match too, but its one-row take and retake read the row back (no RETURNING), so its one-row paths send
+more commands: start-up 512 against PostgreSQL's 256 statements, the takeover through the host 768 against 512, the
+reset 512 against 258, and the join 796 against 540 (scattered) and 1,567 against 1,054 (contiguous).
 
 **4,096, R = 1,024, PostgreSQL scattered** (`... count=4096 shape=scattered runs=3`; one set take of 1,024 rows):
 
@@ -643,15 +646,32 @@ as there, and the one-row operations scale with the partitions moved.
 None of these is a correctness defect. Each is the kernel's design at K1: the first is a kernel rule, the second and
 third are the serial path that slices 2a and 5a recorded for this slice, and the fourth is the trial protocol.
 
-**The crash case at 4,096 (raised in the 7a review).** The built-in runtime suite's case "crash: a crashed node's
-scopes are taken over" took 17 s at 1,024 and over 120 s at 4,096 in that review, and 15 s at 1,024 here. The time went before the kill: the case built the
-holder list of every partition once per partition, and the list read every watched activation once per scope, so cubic
-in the count (about 190 s at 4,096). The suite now reads its holders in one pass (`Watcher.Holders`), and the case
-reads them once. The case now takes 13.8 s at 1,024, 14.0 s at 2,048 and 14.3 s at 4,096. The takeover itself, from
-the kill until every scope is held again, takes 7.4 s at each count: the 6 s lease runs out and a balancing round takes
-the partitions. That phase is the same at 1,024 and at 4,096, so the serial gains (512 against 2,048 one-row takes on
-the in-memory store) add no measurable time. The suite passes at its default count,
-at 1,024 and (that case) at 4,096 on both runtimes.
+**The crash case at 4,096 (raised in the 7a review; built-in runtime only).** The built-in runtime suite's case
+"crash: a crashed node's scopes are taken over" took 17 s at 1,024 and over 120 s at 4,096 in that review, and 15 s at
+1,024 here. A later re-check at 4,096 took 413 s, with the takeover settled 6.3 s after the kill.
+- **Where the time went: before the kill.** The case built the holder list of every partition once per partition, and
+  the list read every watched activation once per scope, so cubic in the count. Timed by phase at 4,096 before the fix
+  ([crash-case-phases-before.txt](measurements/k1-costs-2026-11-19/crash-case-phases-before.txt); `crash-case-phases.txt`
+  has the runs at 1,024, 2,048 and 4,096 after it): the case reached the steady state at 6.3 s and the kill at 198 s. The case's takeover line measures from the kill, so it
+  showed 6 to 7 s while the case ran minutes; applying the case's 30 tokens after the takeover took about 1 ms.
+- **The fix** (`528eabf7e`, the suite only): `Watcher.Holders` reads the live activations in one pass, and the case
+  reads the list once. The case now takes 13.8 s at 1,024, 14.0 s at 2,048 and 14.3 s at 4,096, on the built-in
+  runtime (the Orleans adapter was run at its default count and at 1,024). The takeover itself, from the kill until
+  every scope is held again, takes 6.2 to 7.5 s at each count: the 6 s lease runs out and a balancing round takes the
+  partitions. That phase does not grow from 1,024 to 4,096, so the serial gains (512 against 2,048 one-row takes on the
+  in-memory store) add no measurable time.
+- **Turn throughput across a large set** (asked after the re-check). The runtime `cost` burst of k tokens over k
+  partitions took 1.3 s at 1,024 and 21.4 s at 4,096: growing with k squared. The suites' store wrappers (`FaultyStore`,
+  `RecordingStore`, the runtime suite's `NodeStore`) did not forward the set poll, so it went through the interface's
+  default, one poll per partition, and the in-memory store reads every message for each. A pass over k partitions was
+  k scans of the inbox. With the set poll as one call (`961b599ea`, the suites only) the burst takes 0.13 to 0.17 s at
+  1,024 and 0.9 to 1.1 s at 4,096 ([runtime-burst-after-setpoll.txt](measurements/k1-costs-2026-11-19/runtime-burst-after-setpoll.txt)).
+  The other candidates are small: `RuntimeNode` makes 4,258 to 4,479 pass calls a second at 4,096 with 1.4 worker
+  passes, the one-pass rule answers the rest with no store call, and on PostgreSQL the set poll over 1,024 is one
+  query of 1.6 ms. Since that fix the cost run's "Store calls" column counts a set poll once; "Set polls" is unchanged.
+- After both fixes the built-in suite at 4,096 passes 17 of 17 in 46 s (215 s at `bc8021514`), and every suite run at
+  the default count and at 1,024 passes on both runtimes, with the stresses
+  ([conformance-after-setpoll.txt](measurements/k1-costs-2026-11-19/conformance-after-setpoll.txt)).
 
 **PostgreSQL: what the set statements lock** (`writes=1`, pg_walinspect, record counts on `Partitions`):
 - The set take of 256 while a live node holds 128 of them writes 256 lock records and 128 updates. The locking read
@@ -673,12 +693,12 @@ another and settled at 256 each, then 120 s with nothing to do:
 |---|---|
 | Statements a second | 17.0: heartbeats 8.0 (2 statements each, a node a second), free lists 4.0, set polls 4.0 (one per node a second), beats 1.2 |
 | Partitions rows updated | 36,864, so 307 a second (1,024 rows every 3.3 s); 95 % HOT |
-| WAL | 5.36 MB, 44.7 kB a second, 154 MB an hour |
-| Of which `Partitions` | 42.9 kB a second (96 %): updates 2.53 MB, lock records 2.09 MB, index 0.12 MB, pruning 0.2 MB |
+| WAL | 5.36 MB, 44.7 kB a second, 161 MB an hour |
+| Of which `Partitions` | 42.9 kB a second (96 %): updates 2.73 MB (HOT and non-HOT), lock records 2.09 MB, index 0.12 MB, pruning 0.2 MB |
 | Of which `Nodes` (the four node rows, a heartbeat a second each) | 582 B a second |
 | Dead tuples in `Partitions` | 2,584 before, 1,486 after; 2 autovacuums in the window |
 
-- So the per-partition beat costs about 154 MB of WAL an hour on an idle four-node cluster at 1,024, and autovacuum
+- So the per-partition beat costs about 161 MB of WAL an hour on an idle four-node cluster at 1,024, and autovacuum
   keeps the 1,024-row table small (385 kB of heap).
 - The cost grows with the partitions, which is the whole count however many nodes hold them. It does not grow with
   the nodes.
@@ -689,20 +709,23 @@ another and settled at 256 each, then 120 s with nothing to do:
   against overlapping commits is a commit-SQL question for K4.
 
 **Orleans idle polls at 1,024, on a quiet machine** (runtime `cost`, in-memory store, one silo or node holding every
-partition, 10 idle seconds; three runs each, interleaved; load average 2.6 to 2.8 on 15 cores):
+partition, 10 idle seconds). After the set-poll fix above, two runs at load average 3.1 to 3.5 on 15 cores; before it,
+three interleaved runs at load 2.6 to 2.8:
 
 | Runtime | Pass calls a second | Worker passes a second | Set polls a second |
 |---|---|---|---|
-| Orleans | 1,536, 1,536, 1,534 | 58.3, 55.3, 73.2 | 57.8, 54.9, 72.6 |
-| built-in | 1,332, 1,420, 1,407 | 1.4, 1.4, 1.4 | 1.0, 1.0, 1.0 |
+| Orleans, after the fix | 1,536, 1,536 | 107.6, 117.5 | 107.1, 117.0 |
+| Orleans, before the fix (each set poll 1,024 scans) | 1,536, 1,536, 1,534 | 58.3, 55.3, 73.2 | 57.8, 54.9, 72.6 |
+| built-in, before the fix (after it: 1,434 pass calls, 1.4 passes, 1.0 set polls) | 1,332, 1,420, 1,407 | 1.4, 1.4, 1.4 | 1.0, 1.0, 1.0 |
 
-- **The spread** is 55 to 73 set polls a second for Orleans against 1.0 for the built-in loop. Slice 6 measured 2.0 at
-  16 partitions, 2.9 at 64 and 5.8 at 256 on a quiet machine, so it grows faster than linearly with the grains.
+- **The spread** is 107 to 117 set polls a second for Orleans against 1.0 for the built-in loop. Slice 6 measured 2.0
+  at 16 partitions, 2.9 at 64 and 5.8 at 256 on a quiet machine, so it grows faster than linearly with the grains.
 - **Why.** Each grain's 1 s tick wakes the silo's worker, and a wake that comes after a pass began costs another poll
-  of the whole set. With 1,024 ticks a second spread over the second, most of them land after the last pass.
-- **On a SQL store** that is 55 to 73 queries a second per idle silo, each over 1,024 partitions, against one.
-- **The bursts were close:** 1,024 tokens took 1.2 to 1.3 s on Orleans and 1.4 to 1.7 s on the built-in runtime, with
-  27 commits of 37.9 partitions each on both.
+  of the whole set. With 1,024 ticks a second spread over the second, most of them land after the last pass. A slower
+  pass gathers more ticks into one, which is why the old per-partition poll of the suite's wrappers showed about half.
+- **On a SQL store** that is about 110 queries a second per idle silo, each over 1,024 partitions, against one.
+- **The bursts were close:** after the fix, 1,024 tokens took 0.10 to 0.12 s on Orleans and 0.13 to 0.17 s on the
+  built-in runtime, with 27 commits of 37.9 partitions each on both.
 
 **The seam question for the silo-level poll.** A silo-level poll would bring Orleans to one set poll per interval. The
 seam promises a wake per held scope (`RuntimeTiming.PollInterval`), so it needs the seam to say that one wake covers a
@@ -723,8 +746,8 @@ take and beat statements do not depend on the fence mode.
 1. **Batched gain and give-up** (cost, built-in runtime): one set take and one set release per balancing round, in
    `DurableHost` and `PartitionRuntime`. It would cut a join at 1,024 from 796 round trips to a few. Recommended for K4
    or a K1 follow-up, measured against this table.
-2. **The beat's WAL (D3):** 154 MB an hour idle at 1,024 on PostgreSQL. A node-level beat or a cheaper beat statement.
-3. **The silo-level poll (Orleans):** 55 to 73 set polls a second per idle silo at 1,024. A seam decision.
+2. **The beat's WAL (D3):** 161 MB an hour idle at 1,024 on PostgreSQL. A node-level beat or a cheaper beat statement.
+3. **The silo-level poll (Orleans):** 107 to 117 set polls a second per idle silo at 1,024. A seam decision.
 
 ## Placement and rebalance (`sim --placement-check`)
 
@@ -775,7 +798,7 @@ Updated at K1 slice 8. What the round 5 A list said and K1 has since done is sta
   batch order they deadlock ([experiments/K1.LockOrder](experiments/K1.LockOrder/README.md)). Slice 8 ran the owned-set
   cases with the K1 witness on all three in both modes (9 passed each) and the set costs on both. Provider
   qualification, the deadlock surface under load included, is K4.
-- **Measured in K1: the beat's WAL on PostgreSQL** (raised in review): 154 MB an hour on an idle four-node cluster at
+- **Measured in K1: the beat's WAL on PostgreSQL** (raised in review): 161 MB an hour on an idle four-node cluster at
   1,024, 96 % of it the `Partitions` rows, 41 % of that lock records; autovacuum keeps up. A node-level beat (D3) is not
   built; it is a decision with that measurement attached.
 - **Measured in K1: the batch size on SQL Server and MySQL** (raised in review). The owned commit sends its own commands,
@@ -784,7 +807,7 @@ Updated at K1 slice 8. What the round 5 A list said and K1 has since done is sta
 - **Not done: batched gains and give-ups.** The runtime moves partitions one row at a time (start-up, the balancer's
   moves, a takeover through the runtime, a stand-down through layer 1): about 800 round trips for a join at 1,024 and
   3,100 at 4,096 on PostgreSQL, where the store's set take and set release are 2 and 1.
-- **Not done: the silo-level poll** for Orleans (55 to 73 set polls a second per idle silo at 1,024). A seam decision.
+- **Not done: the silo-level poll** for Orleans (107 to 117 set polls a second per idle silo at 1,024). A seam decision.
 - **Not done, K4:** the set poll's epochs as parameters (SQL Server caches an ad hoc plan per take); the PostgreSQL set
   take's lock on rows it does not change; whether the beat can drop its locking read; MongoDB's set poll at 1,024
   (`SORT_MERGE` over k index scans, not measured).

@@ -515,7 +515,7 @@ marked.
 |---|---|---|---|
 | 1 | No reads while a workflow runs | Memory per active instance; the whole state rewritten per commit | Bound on instances held; values by reference |
 | 2 | One writer per partition: no locks, many instances per commit | Failover takes about one lease; a hot partition has one writer; the partition count is fixed at creation | Partitions (1,024 virtual partitions: decided 16 November); lease (10 s: decided) |
-| 3 | An idle owner needs little traffic | A beat renews every owned partition's row about three times per lease, in one statement per node, plus one node beat; on PostgreSQL that is about 154 MB of WAL an hour on an idle four-node cluster at 1,024 (PARTITIONS.md, "K1 costs") | Lease; a node-level beat (D3, not built) |
+| 3 | An idle owner needs little traffic | A beat renews every owned partition's row about three times per lease, in one fenced commit per node (2 statements on PostgreSQL: the locking read and the update), plus one node beat; on PostgreSQL that is about 161 MB of WAL an hour on an idle four-node cluster at 1,024 (PARTITIONS.md, "K1 costs") | Lease; a node-level beat (D3, not built) |
 | 4 | Batching under load | A commit waits for the one before it | Rows per flush |
 | 5 | Balanced mode: one commit per wait | Activities since the last commit run again after a crash; `Redelivered` reports observed delivery history, not every possible rerun | Persistence mode per workflow |
 | 6 | A background job does not block the instance | It can execute more than once | None: inherent |

@@ -1924,7 +1924,7 @@ Not done, unverified: COMMIT-SQL.md's last section.
 
 ## 30. K1: range ownership in the integrated Worker. Run
 
-The Worker refactor of PARTITIONS.md's owner decisions, in slices 0 to 8 (#4810 to #4820 and slice 8's PR): a node's
+The Worker refactor of PARTITIONS.md's owner decisions, in slices 0 to 8 (#4809 to #4820 and #4821): a node's
 one worker owns a set of the 1,024 virtual partitions, each with its own fence row, epoch, position and journal; a
 flush lands whole or not at all under a k-row fence locked in ascending id; the balancer moves the fewest partitions,
 so sets may be scattered; Seen and Trial marks, suspects and child ids are per partition epoch. The record of each
@@ -1935,10 +1935,13 @@ are in [PARTITIONS.md](PARTITIONS.md) ("K1 slice 0" to "K1 costs").
   per-node host turns a join, a takeover through the runtime and a start-up into one-row takes and give-ups: about 800
   round trips for a join at 1,024 on PostgreSQL, where the store's set take is 2. Correct, and under a second locally
   at 4,096; a batched gain is the recorded option.
-- **F-K2. The idle beat is WAL.** 154 MB an hour on an idle four-node PostgreSQL cluster at 1,024, nearly all of it the
+- **F-K2. The idle beat is WAL.** 161 MB an hour on an idle four-node PostgreSQL cluster at 1,024, nearly all of it the
   partition rows, 41 % of that lock records. Measured for D3; a node-level beat is not built.
-- **F-K3. Each Orleans grain's tick can cost a set poll.** 55 to 73 set polls a second per idle silo at 1,024, against one for
+- **F-K3. Each Orleans grain's tick can cost a set poll.** 107 to 117 set polls a second per idle silo at 1,024, against one for
   the built-in loop, on a quiet machine. The silo-level poll needs a seam decision.
 - **F-K4. A test's own bookkeeping can be the slow part.** The runtime suite's crash case took minutes at 4,096: it read
   its holders in time cubic in the count, before the kill. Read once, in one pass, the case takes 14 s at every count
-  and its takeover 7.4 s, the lease.
+  and its takeover 6.2 to 7.5 s, the lease (built-in runtime).
+- **F-K5. A wrapper that leaves a set operation to the interface's default changes its cost.** The suites' store
+  wrappers sent a set poll as one poll per partition, each a scan of the in-memory inbox, so a burst over 4,096
+  partitions took 21.4 s. Forwarded as one call, it takes about 1 s.

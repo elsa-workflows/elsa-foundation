@@ -15,7 +15,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 ///   x setidle postgres "connection" [seconds=120] [count=1024] [writes=1]     four RuntimeNodes on the default lease, idle: the beat's WAL (D3)
 /// Scattered sets are those of the fewest-moves balancer after four joins (<see cref="Balancer.Plan"/>, as
 /// <c>sim --placement-check</c> runs it); contiguous sets are the fair ranges. Each row runs <c>runs</c> times from its own
-/// setup, which is not counted; the counts are the first run's (a run whose counts differ says so) and the time is the
+/// setup, which is not counted; the counts are the most common run's (the runs whose counts differ are listed) and the time is the
 /// median. Counted as the cost runs count: commands, BEGINs, COMMITs, the TCP round trips through the proxy and, on
 /// PostgreSQL, the Execute frames (one per statement). "Rows" are the fence rows the operation wrote, read back from
 /// the Partitions table before and after (owner, epoch, lease or position changed).

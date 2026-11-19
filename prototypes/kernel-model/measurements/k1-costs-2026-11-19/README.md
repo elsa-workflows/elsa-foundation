@@ -17,3 +17,7 @@ as committed after it, before its `count=` option, which changes nothing at 1,02
 | `pg-owned-witness.txt`, `other-owned-witness.txt` | `Kernel.Ef.Conformance.dll postgres|sqlserver|mysql "<connection>" --fence-in-batch|--checked-fence semantic "owned set"` |
 | `conformance-after-fix.txt`, `conformance-after-merge.txt` | the runtime suites after the holder-read fix, before and after merging 7b's `8e0cbb7e1` |
 | `rtc-4096.txt` | `Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096` after the merge, with the crash case's takeover line |
+| `crash-case-phases-before.txt` | the crash case at 4,096 at `9a4f915eb`, timed by phase with temporary markers (not committed), before the holder-read fix: the case's time is before the kill |
+| `crash-case-phases.txt` | the same case at 1,024, 2,048 and 4,096 after the fix (`528eabf7e` with the markers) |
+| `conformance-after-setpoll.txt` | after the wrappers' set-poll fix (`961b599ea`): Orleans `cost 1024` twice, both runtime suites at the default count, 1,024 (and built-in 4,096), both runtime stresses, the in-memory store suite and its stress, EF SQLite |
+| `runtime-burst-after-setpoll.txt` | the built-in `cost 1024 10 1024` and `cost 4096 10 4096` after that fix |
