@@ -1,13 +1,16 @@
 using System.Globalization;
 using System.Numerics;
+using Jint.Runtime;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services;
 
 /// <summary>
-/// Whether a JavaScript number holds a JSON number exactly (ADR 0046 V9, spec 1228 FR-011, research R-2). The JSON text
-/// is read exactly as a big-integer mantissa and a base-10 exponent and compared, as an exact value, with the double the
-/// engine holds. <c>10.50</c> and <c>2.0</c> are exact; <c>9007199254740993</c> is not; a number that becomes
-/// <c>Infinity</c>, or a non-zero number that becomes zero, is lossy.
+/// Whether a JavaScript number holds a JSON number exactly (ADR 0046 V9, spec 1228 FR-011, research R-2): a number has
+/// lost precision when the JavaScript number, written as JSON, differs in value from the stored one. Both texts are read
+/// exactly, as a big-integer mantissa and a base-10 exponent, so the comparison holds for any length and any exponent.
+/// <c>10.50</c> → <c>10.5</c>, <c>2.0</c> → <c>2</c>, <c>0.1</c> → <c>0.1</c> and <c>1e30</c> → <c>1e+30</c> keep their
+/// value; <c>9007199254740993</c> → <c>9007199254740992</c> does not, and a number that becomes <c>Infinity</c> or a
+/// non-zero number that becomes <c>0</c> is lossy.
 /// </summary>
 internal static class JavaScriptNumberPrecision
 {
@@ -16,6 +19,9 @@ internal static class JavaScriptNumberPrecision
 
     public static double Parse(string text) => double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
 
+    /// <summary>The JSON text JavaScript writes for a number (<c>Number.prototype.toString</c>).</summary>
+    public static string JavaScriptText(double value) => TypeConverter.ToString(value);
+
     /// <summary>Checks one JSON number text. <paramref name="held"/> is the double a script holds.</summary>
     public static bool IsExact(string text, out double held, out bool isInteger)
     {
@@ -23,67 +29,33 @@ internal static class JavaScriptNumberPrecision
         held = Parse(text);
 
         // The common case: a plain integer within ±(2^53 − 1).
-        if (long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var integer))
+        if (long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var integer) &&
+            integer is >= -MaxSafeInteger and <= MaxSafeInteger)
         {
             isInteger = true;
-            return integer is >= -MaxSafeInteger and <= MaxSafeInteger || new BigInteger(held) == integer;
+            return true;
         }
 
-        var (mantissa, exponent) = ReadExact(text);
-        isInteger = IsInteger(mantissa, exponent);
-        if (double.IsInfinity(held))
+        var stored = Read(text);
+        isInteger = stored.IsInteger;
+        if (double.IsInfinity(held) || double.IsNaN(held))
             return false;
-        if (held == 0)
-            return mantissa.IsZero;
-        if (mantissa.IsZero)
-            return false;
-
-        // The exact value of the double: m × 2^e with an integer m.
-        var bits = BitConverter.DoubleToInt64Bits(held);
-        var negative = bits < 0;
-        var biased = (int)((bits >> 52) & 0x7FF);
-        var fraction = bits & 0xFFFFFFFFFFFFFL;
-        long binaryMantissa;
-        int binaryExponent;
-        if (biased == 0)
-        {
-            binaryMantissa = fraction;
-            binaryExponent = -1074;
-        }
-        else
-        {
-            binaryMantissa = fraction | (1L << 52);
-            binaryExponent = biased - 1075;
-        }
-
-        if (negative)
-            binaryMantissa = -binaryMantissa;
-
-        // mantissa × 10^exponent == binaryMantissa × 2^binaryExponent, cross-multiplied to integers.
-        var left = mantissa * (exponent > 0 ? BigInteger.Pow(10, exponent) : BigInteger.One);
-        var leftDenominator = exponent < 0 ? BigInteger.Pow(10, -exponent) : BigInteger.One;
-        var right = new BigInteger(binaryMantissa) * (binaryExponent > 0 ? BigInteger.Pow(2, binaryExponent) : BigInteger.One);
-        var rightDenominator = binaryExponent < 0 ? BigInteger.Pow(2, -binaryExponent) : BigInteger.One;
-        return left * rightDenominator == right * leftDenominator;
+        return stored.Equals(Read(JavaScriptText(held)));
     }
 
-    /// <summary>Reads JSON number text as an exact signed mantissa and base-10 exponent.</summary>
-    private static (BigInteger Mantissa, int Exponent) ReadExact(string text)
+    /// <summary>Reads JSON number text as an exact decimal: a signed mantissa with no trailing zeros, and an exponent.</summary>
+    private static ExactDecimal Read(string text)
     {
         var span = text.AsSpan();
         var negative = span[0] == '-';
-        if (negative)
+        if (negative || span[0] == '+')
             span = span[1..];
 
         var exponentAt = span.IndexOfAny('e', 'E');
-        var exponent = 0;
+        BigInteger exponent = BigInteger.Zero;
         if (exponentAt >= 0)
         {
-            // A JSON exponent too large for an int already made the double infinite or zero, which decides it above;
-            // clamping keeps the arithmetic finite for the mantissa's sign and integer test.
-            exponent = int.TryParse(span[(exponentAt + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
-                ? parsed
-                : span[exponentAt + 1] == '-' ? -100_000 : 100_000;
+            exponent = BigInteger.Parse(span[(exponentAt + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
             span = span[..exponentAt];
         }
 
@@ -97,16 +69,20 @@ internal static class JavaScriptNumberPrecision
         else
             digits = span.ToString();
 
+        digits = digits.TrimStart('0');
+        if (digits.Length == 0)
+            return new ExactDecimal(BigInteger.Zero, BigInteger.Zero);
+
+        var trailing = digits.Length - digits.TrimEnd('0').Length;
+        digits = digits[..^trailing];
+        exponent += trailing;
         var mantissa = BigInteger.Parse(digits, NumberStyles.None, CultureInfo.InvariantCulture);
-        return (negative ? -mantissa : mantissa, exponent);
+        return new ExactDecimal(negative ? -mantissa : mantissa, exponent);
     }
 
-    private static bool IsInteger(BigInteger mantissa, int exponent)
+    /// <summary>A normalized exact decimal: equal values have equal fields (zero has exponent zero).</summary>
+    private readonly record struct ExactDecimal(BigInteger Mantissa, BigInteger Exponent)
     {
-        if (exponent >= 0 || mantissa.IsZero)
-            return true;
-        if (exponent < -10_000)
-            return false;
-        return BigInteger.Remainder(mantissa, BigInteger.Pow(10, -exponent)).IsZero;
+        public bool IsInteger => Mantissa.IsZero || Exponent >= 0;
     }
 }

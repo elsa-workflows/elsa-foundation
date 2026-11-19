@@ -273,7 +273,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         {
             if (!JavaScriptNumberPrecision.IsExact(text, out var held, out var isInteger))
             {
-                var lossy = new JavaScriptLossyNumber(path, text, JavaScriptText(held), held, isInteger);
+                var lossy = new JavaScriptLossyNumber(path, text, JavaScriptNumberPrecision.JavaScriptText(held), held, isInteger);
                 _lossy.Add(lossy);
                 _lossyByValue.TryAdd(held, lossy);
             }
@@ -439,7 +439,6 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         private static Utf8JsonWriter NewWriter(IBufferWriter<byte> buffer) =>
             new(buffer, new JsonWriterOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping, SkipValidation = true });
 
-        private static string JavaScriptText(double value) => TypeConverter.ToString(value);
 
         private sealed record Entry(JsonElement Element, JsValue Value);
     }
