@@ -789,7 +789,13 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
         return HeartbeatReply is { } reply ? await reply(answer) : answer;
     }
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken ct = default) => inner.HeartbeatAsync(node, window, ct);
-    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken ct = default) => inner.ReleaseAsync(partition, epoch, ct);
+    public bool FailRelease;      // K1b: the next release fails before it reaches the store
+    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken ct = default)
+    {
+        if (!FailRelease) return inner.ReleaseAsync(partition, epoch, ct);
+        FailRelease = false;
+        throw new IOException("the release never reached the store");
+    }
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken ct = default)
     {
         PollCalls++;

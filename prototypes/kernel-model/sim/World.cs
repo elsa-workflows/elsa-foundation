@@ -6,7 +6,7 @@ namespace Kernel.Sim;
 // K1 slice 7: Count is the store's virtual partitions, a fence row and a journal each (0: Partitions); the world places
 // and addresses the first Partitions of them. Set: each node runs one worker for its owned set (DurableHost.ForNode);
 // otherwise a worker per partition, as on a store without owned sets.
-public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None, AdmissionFlaw AdmissionFlaws = AdmissionFlaw.None, int Count = 0, bool Set = false)
+public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None, AdmissionFlaw AdmissionFlaws = AdmissionFlaw.None, int Count = 0, bool Set = false, bool NodeLease = false)
 {
     public int Rows => Count > 0 ? Count : Partitions;
 }
@@ -31,6 +31,8 @@ public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Messa
         "release" when S != "" => $"actor {A} gives {S} up",
         "release" => $"actor {A} releases its partition",
         "balance" => $"node {A} balances: heartbeat, release the surplus, take up to its share",
+        "heartbeat" => $"node {A} sends its node heartbeat, if its Workers' passes allow",
+        "pass" => $"actor {A} runs a pass",
         "pause" => $"node {A} pauses",
         "resume" => $"node {A} resumes",
         "project" when S != "" => $"the projector of {S} on actor {A} runs a round",
@@ -87,6 +89,9 @@ public sealed class Actor(int id, int node, int partition)
     public int Partition => partition;
     public bool Set => partition < 0;
     public Worker Worker = null!;
+    public IKernelStore Wire = null!;      // the worker's store: the shared store behind this actor's wire
+    public bool Passing;                    // K1b: a whole pass is in flight
+    public CancellationTokenSource? PassCancel;     // cancelled when the process dies: no turn after that, and no flush
     public DurableHost? Host;           // a set world's node host (ForNode), whose worker this is
     public Projector Projector = null!;
     public Projector[] Projectors = [];     // a set world: a projector per partition of the world, on every node
@@ -156,11 +161,12 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         if (!countDeaths) return RetakeAsync(partition, node, epoch, lease, cancellationToken);
         actor.PendingSendings.RemoveAll(s => new InstanceRef(s.Instance).Partition == partition);
         actor.Took(partition);
-        return Send("take", $"retake p{partition} e{epoch}, counting deaths", () => world.Store.RetakeAsync(partition, node, epoch, lease, countDeaths: true));
+        return Send("take", $"retake p{partition} e{epoch}, counting deaths", () => world.RetakeCounting(partition, node, epoch, lease));
     }
 
     public bool NodeLeaseAvailable => world.Store.NodeLeaseAvailable;
-    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.NodeHeartbeatAsync(node, lease, window);
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) =>
+        Send("beat", $"heartbeat of {node}", () => world.Store.NodeHeartbeatAsync(node, lease, window));
 
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(partition, epoch);
     public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(owned);
@@ -370,6 +376,7 @@ public sealed partial class World
         if (actor.Dead || _dying.Exists(prior => prior.Runtime == actor.Runtime)) return;
         _dying.Add(actor);
         _pass?.Cancel();
+        foreach (var sibling in Actors.Where(a => a.Runtime == actor.Runtime)) sibling.PassCancel?.Cancel();     // a whole pass of the process stops too
     }
 
     private void FinishDeaths()
@@ -391,7 +398,8 @@ public sealed partial class World
         Config = config;
         if (config.Partitions > config.Rows) throw new ArgumentOutOfRangeException(nameof(config), "A world places at most the store's partitions.");
         Native = new NativeOracle(config.Partitions);
-        Store = new InMemoryStore(config.Rows, () => Time, config.Flaws) { ObserveLifecycles = true, Refuses = row => row.State.Contains(Fragile.Sour) };
+        Store = new InMemoryStore(config.Rows, () => Time, config.Flaws) { ObserveLifecycles = true, Refuses = row => row.State.Contains(Fragile.Sour), NodeLeaseAvailable = config.NodeLease };
+        Beats = new NodeHeartbeat?[config.Nodes];
         Store.Lifecycle!.AppliedCancellation = (state, consumed) => state is HttpState { AppliedCancellations: { } applied }
             ? applied.Find(cancel => _httpCancelInputs?.TryGetValue(cancel, out _) == true && consumed.Any(d => ReferenceEquals(d.Message, cancel))) : null;
         Current = new int[config.Nodes, config.Partitions];
@@ -421,7 +429,13 @@ public sealed partial class World
         IScopeHost host = first.Set ? new SerialHost(first.Host!) : new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker));
         runtime.StartAsync(host).AsTask().Wait();
         for (var partition = 0; partition < Config.Partitions; partition++) Of(node, partition).Runtime = runtime;
+        // K1b: the node's heartbeat and pass gate, over the Workers of this incarnation, on its first actor's wire.
+        if (Config.NodeLease)
+            Beats[node] = new NodeHeartbeat(first.Worker.Node, first.Wire, [.. (first.Set ? [first] : Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p))).Select(a => a.Worker)],
+                TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(25));
     }
+
+    public readonly NodeHeartbeat?[] Beats;
 
     /// <summary>A process is alive while any of its workers is.</summary>
     public bool Running(string process) => Actors.Exists(a => !a.Dead && a.Worker.Node == process);
@@ -454,6 +468,7 @@ public sealed partial class World
     {
         var actor = new Actor(Actors.Count, node, partition);
         var wire = new Wire(this, actor);
+        actor.Wire = wire;
         actor.Version = Versions[node];
         // A projector runs on every node, whoever owns the partition.
         if (actor.Set) actor.Projectors = [.. Enumerable.Range(0, Config.Partitions).Select(p => new Projector(wire, p, take: 5, Config.Flaws))];
@@ -522,6 +537,44 @@ public sealed partial class World
                 if (issued.Length != 3 || issued[0] != partition.ToString(System.Globalization.CultureInfo.InvariantCulture) || issued[1] != epoch.ToString(System.Globalization.CultureInfo.InvariantCulture))
                     Faults.Add($"C2 {turn.Instance} started child {sent.Target}, and its commit is fenced at partition {partition}, epoch {epoch}");
             }
+    }
+
+    /// <summary>
+    /// K1b: the node's heartbeat. The node is its Workers' host, so a pending partition the answer had its Worker retake
+    /// joins the runtime's activations, as an activation of a partition the Worker already holds.
+    /// </summary>
+    public async Task Heartbeat(int node, NodeHeartbeat beat)
+    {
+        await beat.BeatAsync();
+        foreach (var actor in Actors.Where(a => !a.Dead && a.Node == node && Beats[node] == beat).ToList())
+            foreach (var fence in actor.Worker.Fences)
+                if (!actor.Runtime.Owns(fence.Partition) && !actor.Runtime.Activating(fence.Partition)) await actor.Runtime.ActivateAsync(fence.Partition);
+    }
+
+    private static async Task Pass(Actor actor)
+    {
+        using var cancel = actor.PassCancel = new CancellationTokenSource();
+        try { await actor.Worker.RunAsync(cancel.Token); }
+        finally { (actor.Passing, actor.PassCancel) = (false, null); }
+    }
+
+    /// <summary>
+    /// K1b: the retake of a partition the guard stood down (pending), watched as a take is: it counts a death for the rows on
+    /// trial at the epoch it was held, as a take from an expired owner does.
+    /// </summary>
+    public ValueTask<Lease?> RetakeCounting(int partition, string node, long epoch, TimeSpan lease)
+    {
+        var taken = Store.RetakeAsync(partition, node, epoch, lease, countDeaths: true);
+        if (taken.Result is not null) Count("pending retaken");
+        foreach (var row in Store.Messages.Values)
+        {
+            var onTrial = taken.Result is not null && !row.Done && row.Trial == epoch && row.Message.Target.Partition == partition;
+            if (onTrial) Count("attempts charged");
+            var expected = _attempts.GetValueOrDefault(row.Message.Id) + (onTrial ? 1 : 0);
+            if (row.Attempts != expected) Faults.Add($"I14 the counting retake of partition {partition} by {node} left {row.Message.Id} at {row.Attempts} attempts; it should be {expected}");
+            _attempts[row.Message.Id] = row.Attempts;
+        }
+        return taken;
     }
 
     /// <summary>The take, watched: taking from another owner means that owner was lost, the only thing that may raise attempts.</summary>
@@ -623,6 +676,21 @@ public sealed partial class World
                     default: return null;
                 }
                 return actor.Calls.Count > calls ? $"call {actor.Calls.Count - 1}: {actor.Calls[^1].Text}" : "nothing to send";
+            }
+            case "heartbeat":
+            {
+                if (Paused[act.A] || Beats[act.A] is not { } beat) return null;
+                var calls = Actors.Sum(a => a.Calls.Count);
+                var withheld = beat.Withheld;
+                Watch(Heartbeat(act.A, beat));
+                return beat.Withheld > withheld ? "withheld: a Worker that holds partitions has completed no pass within the lease" : $"{Actors.Sum(a => a.Calls.Count) - calls} call sent";
+            }
+            case "pass":
+            {
+                if (Live(act.A) is not { Passing: false } actor) return null;
+                actor.Passing = true;
+                Watch(Pass(actor));
+                return "";
             }
             case "balance":
             {
@@ -809,8 +877,13 @@ public sealed class Generator(int seed, World world)
                 var pick = ready[r.Next(ready.Count)];
                 return new Act("turn", pick.Id, S: pick.id);
             }
+            // K1b: under the node lease the beat is the node's heartbeat, and whole passes feed its pass gate.
+            case < 40 when world.Config.NodeLease: return new Act("flush", actor.Id);
+            case < 44 when world.Config.NodeLease: return new Act("pass", actor.Id);
+            case < 46 when world.Config.NodeLease: return new Act("heartbeat", actor.Node);
             case < 46: return new Act("flush", actor.Id);
             case < 47: return actor.Set ? OnPartition("release", actor, world.Place(actor, r)) : new Act("release", actor.Id);
+            case < 48 when world.Config.NodeLease: return new Act("heartbeat", actor.Node);
             case < 48: return new Act("beat", actor.Id);
             case < 52: return new Act("meet", actor.Id);
             case < 82:
