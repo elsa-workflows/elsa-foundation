@@ -140,23 +140,10 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
                 [
                     new("getVariable(name)", ["name"], new("Any"))
                 ]));
-            projected.AddRange(variables
-                .Where(symbol => IsIdentifier(symbol.Name))
-                .Select(symbol => new ExpressionSymbol(
-                    $"javascript:getter:{symbol.SymbolId}",
-                    $"get{char.ToUpperInvariant(symbol.Name[0])}{symbol.Name[1..]}",
-                    ExpressionSymbolKind.Function,
-                    symbol.ValueShape,
-                    $"Reads the '{symbol.Name}' workflow variable.",
-                    [new($"get{char.ToUpperInvariant(symbol.Name[0])}{symbol.Name[1..]}()", ReturnShape: symbol.ValueShape)])));
+            // No generated get<Name>() accessors: the runtime does not provide them (spec 1222 FR-036, ADR 0089 decision 6).
         }
         return context with { RootSymbols = projected };
     }
-
-    private static bool IsIdentifier(string value) =>
-        value.Length > 0 &&
-        (char.IsLetter(value[0]) || value[0] is '_' or '$') &&
-        value.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '_' or '$');
 
     private static (string Source, ExpressionToolingPosition Position) NormalizeEmptyAccessorCalls(
         string source,

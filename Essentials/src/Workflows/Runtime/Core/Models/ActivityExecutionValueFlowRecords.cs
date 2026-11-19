@@ -92,6 +92,14 @@ public sealed record ActivityInputSnapshot
     public VariableInputReadSet? InputReadSet { get; init; }
 
     /// <summary>
+    /// The variable reads this materialization's input expressions made by a computed or opaque name (spec 1222 FR-010,
+    /// FR-011), present or absent, in first-read order. The present ones are also in <see cref="InputReadSet"/>. Null
+    /// when no input expression read a variable that way.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<VariableComputedRead>? ComputedVariableReads { get; init; }
+
+    /// <summary>
     /// Which evaluation of the invocation's inputs this is (spec 1221 FR-018): 1 for the snapshot Start materialized, one
     /// more for each background admission refresh. Omitted while 1.
     /// </summary>

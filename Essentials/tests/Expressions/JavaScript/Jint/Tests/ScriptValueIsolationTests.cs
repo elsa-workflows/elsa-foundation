@@ -11,7 +11,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 /// <summary>
 /// No CLR object reaches a script, through the evaluator the public expression features compose. A value handed to
-/// Jint, whether a declared parameter or an ambient variable, is a frozen plain JavaScript object built from its JSON:
+/// Jint, whether a declared parameter or a pinned variable read, is a frozen plain JavaScript object built from its JSON:
 /// a write to it is refused and changes nothing, and no .NET member or CLR namespace is reachable from it. Liquid
 /// renders a member that only the .NET object carrying the value would have as empty. This is what makes the types
 /// behind these features safe to keep internal: a script never sees one.
@@ -65,7 +65,7 @@ public sealed class ScriptValueIsolationTests
     private static async Task<JsonElement> EvaluateAsync(
         string language,
         string source,
-        IReadOnlyDictionary<string, JsonElement>? ambientVariables = null)
+        IReadOnlyDictionary<string, JsonElement>? pinnedVariables = null)
     {
         var services = new ServiceCollection();
         new ExpressionsFeature().ConfigureServices(services);
@@ -75,16 +75,24 @@ public sealed class ScriptValueIsolationTests
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
 
+        // A variable reaches a script as a pinned variables-surface parameter (spec 1222).
+        var parameters = new Dictionary<string, ExpressionParameterBinding> { ["order"] = new WorkflowRequestExpressionParameterBinding("order") };
+        var values = new Dictionary<string, JsonElement> { ["order"] = Order };
+        foreach (var (name, value) in pinnedVariables ?? new Dictionary<string, JsonElement>())
+        {
+            parameters[ExpressionParameterSurfaces.VariablesKey(name)] = new VariableExpressionParameterBinding("workflow", name, ExpressionParameterSurfaces.Variables);
+            values[ExpressionParameterSurfaces.VariablesKey(name)] = value;
+        }
+
         var definition = new ExpressionDefinition(
             language,
             source,
             new TypeReference("String"),
-            new Dictionary<string, ExpressionParameterBinding> { ["order"] = new WorkflowRequestExpressionParameterBinding("order") },
+            parameters,
             JsonSerializer.SerializeToElement(new { }),
             ExpressionCapabilityProfiles.BindingPureV1);
-        var values = new Dictionary<string, JsonElement> { ["order"] = Order };
 
         return await scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>()
-            .EvaluateAsync(new ExpressionEvaluationRequest(definition, values, ambientVariables, CancellationToken.None));
+            .EvaluateAsync(new ExpressionEvaluationRequest(definition, values, CancellationToken.None));
     }
 }

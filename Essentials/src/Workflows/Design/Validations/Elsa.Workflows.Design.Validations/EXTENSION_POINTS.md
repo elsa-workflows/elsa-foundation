@@ -41,6 +41,17 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 
 ---
 
+### `IScriptVariableRenamePlanner` *(Core — `Elsa.Workflows.Design.Core`)*
+
+- **Kind:** replacement contract, exactly one per host. `ScriptVariableRenamePlanner` is the default, registered with
+  `TryAddScoped` by this feature, so a host's own scoped registration made earlier replaces it; a second registration
+  fails the shell at start (`DataSelectionAnalyzerCompositionCheck`), so none wins silently.
+- **Contract:** `PlanAsync(state, scopeId, referenceKey, newName, scriptInputKeyOf)` returns the script edits that keep
+  each resolvable literal read on a renamed variable and the references it cannot safely update (spec 1222 FR-021,
+  FR-022). It never changes the draft or a published version.
+- **Consumer:** the Design API endpoint `POST design/workflows/scoped-variables/rename-plan`.
+
+
 ## Implementable contributor interfaces
 
 ### `IActivityDataSelectionDocumentProjector` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
@@ -73,6 +84,7 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 - `Elsa.Workflows.Design.Validations` — `VariableExpressionResolverValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations`: `CredentialLiteralValidator` *(intra-domain default; reports the credential-literal findings on the validation panel; the rule is enforced through `ICredentialLiteralValidator` by the writers listed under that contract, not by this registration)*
 - `Elsa.Workflows.Design.Validations`: `ScriptOutcomeValidator` *(intra-domain default; spec 1208 script outcome checks `Scripts/UnknownOutcome` (VF-AUTH-010), `Scripts/ReturnedOutcomeName` (VF-AUTH-012, warning) and `Scripts/ReservedName`; consumes the optional `IJavaScriptScriptOutcomeAnalyzer` from `Elsa.Expressions.JavaScript.Core`, and checks nothing without it)*
+- `Elsa.Workflows.Design.Validations`: `ScriptVariableReadValidator` *(intra-domain default; spec 1222 script variable reads: `Scripts/UnresolvedVariableRead` (VF-READ-002), `Scripts/ComputedVariableRead` (VF-READ-004, warning) and `Scripts/BodyVariableRead` (VF-READ-006, warning); consumes `ScriptVariableReadResolver`, which reads the registered `IScriptVariableReadAnalyzer`s, and checks nothing without one)*
 - Activity feature validators *(cross-domain — each activity feature ships its own `IDraftValidator` per FR-034)*
 - Graph-specific validators such as orphan checks belong to the activity feature that owns graph semantics, such as a future Flowchart module.
 

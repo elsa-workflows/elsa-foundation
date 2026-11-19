@@ -139,6 +139,26 @@ public sealed class DomainApiCapabilityRegistrationTests
     }
 
     [Fact]
+    public async Task Workflow_design_operational_source_advertises_the_rename_plan_only_when_a_planner_is_composed()
+    {
+        var planner = new StubRenamePlanner();
+
+        var declaration = Assert.Single(await new WorkflowDesignOperationalCapabilitySource(renamePlanner: planner).GetCapabilitiesAsync());
+
+        var link = Assert.Single(declaration.Links);
+        Assert.Equal("scoped-variable-rename-plan", link.Rel);
+        Assert.Equal("design/workflows/scoped-variables/rename-plan", link.Href);
+    }
+
+    private sealed class StubRenamePlanner : Elsa.Workflows.Design.Core.Contracts.IScriptVariableRenamePlanner
+    {
+        public ValueTask<Elsa.Workflows.Design.Core.Models.ScriptVariableRenamePlan> PlanAsync(
+            Elsa.Workflows.Design.Core.Models.WorkflowDefinitionState state, string scopeId, string referenceKey, string newName,
+            Func<Elsa.Workflows.Design.Core.Models.ActivityNode, CancellationToken, ValueTask<string?>>? scriptInputKeyOf = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    [Fact]
     public async Task Workflow_design_operational_source_advertises_expression_tooling_only_when_context_and_provider_are_composed()
     {
         var context = (IExpressionAuthoringContextService)RuntimeHelpers.GetUninitializedObject(typeof(ExpressionAuthoringContextService));

@@ -19,7 +19,12 @@ public sealed class ScopedVariableResolver(IActivityStructureService structureSe
     /// <param name="workflowVariables">Workflow-scoped variable declarations (always visible).</param>
     /// <param name="root">The workflow root activity node.</param>
     /// <param name="maxDepth">Maximum tree depth to traverse (safety net against malformed data).</param>
-    public ScopedVariableVisibility Resolve(IEnumerable<VariableDefinition> workflowVariables, ActivityNode? root, int maxDepth)
+    /// <param name="includeIterationScopes">
+    /// Also adds each loop's iteration values (ForEach's <c>currentItem</c> and <c>currentIndex</c>, For's <c>index</c>)
+    /// as the innermost scope of every node in its body, declared by the loop node (spec 1222 FR-004a). Script read
+    /// resolution asks for them; pickers and reference validators, which work with container variables, do not.
+    /// </param>
+    public ScopedVariableVisibility Resolve(IEnumerable<VariableDefinition> workflowVariables, ActivityNode? root, int maxDepth, bool includeIterationScopes = false)
     {
         var workflowScope = new VisibleVariableScope(VariableReference.WorkflowScopeId, [.. workflowVariables]);
         var visibleScopesByNode = new Dictionary<string, IReadOnlyList<VisibleVariableScope>>(StringComparer.Ordinal);
@@ -48,6 +53,8 @@ public sealed class ScopedVariableResolver(IActivityStructureService structureSe
             var childScopes = declared.Count > 0
                 ? new List<VisibleVariableScope> { new(node.NodeId, [.. declared]) }.Concat(visibleScopes).ToArray()
                 : visibleScopes;
+            if (includeIterationScopes && structureService.ProjectIterationVariables(node) is { Count: > 0 } iteration)
+                childScopes = new List<VisibleVariableScope> { new(node.NodeId, [.. iteration]) { IsIterationScope = true } }.Concat(childScopes).ToArray();
 
             foreach (var child in structureService.ProjectChildren(node).SelectMany(slot => slot.Activities))
                 stack.Push((child, depth + 1, childScopes));
@@ -61,7 +68,11 @@ public sealed class ScopedVariableResolver(IActivityStructureService structureSe
 /// A single variable scope visible from a node: the declaring scope identity (a container node id,
 /// or the workflow-scope sentinel) and the variables it declares.
 /// </summary>
-public sealed record VisibleVariableScope(string ScopeId, IReadOnlyList<VariableDefinition> Variables);
+public sealed record VisibleVariableScope(string ScopeId, IReadOnlyList<VariableDefinition> Variables)
+{
+    /// <summary>Whether this scope holds a loop's iteration values rather than container variables (spec 1222 FR-004a).</summary>
+    public bool IsIterationScope { get; init; }
+}
 
 /// <summary>
 /// A variable visible from a node, with its declaring scope, for authoring pickers.

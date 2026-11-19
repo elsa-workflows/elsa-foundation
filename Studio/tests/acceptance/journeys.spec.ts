@@ -8,6 +8,7 @@ import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
+import { variableRenameJourney } from "./variableRenameJourney";
 import { variableLifecycleJourney } from "./variableLifecycleJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
@@ -536,6 +537,10 @@ test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
 
 test("compact runtime Inputs retain exact captured values and accessible technical details", async ({ page }, info) => {
   await compactInputsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("variable rename updates script reads and lists the rest", async ({ page }, info) => {
+  await variableRenameJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
 test("variable lifecycle warnings and refusals", async ({ page }, info) => {

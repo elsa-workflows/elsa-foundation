@@ -13,11 +13,13 @@ public sealed record ExpressionDefinition(
     TypeReference ResultType,
     IReadOnlyDictionary<string, ExpressionParameterBinding> Parameters,
     JsonElement Options,
-    string CapabilityProfile);
+    string CapabilityProfile,
+    VariableReadFallback? VariableReadFallback = null);   // spec 1222
 
 public sealed record ExpressionEvaluationRequest(
     ExpressionDefinition Definition,
     IReadOnlyDictionary<string, object?> ParameterValues,
+    IExpressionVariableReader? VariableReader,             // spec 1222: computed and opaque reads
     CancellationToken CancellationToken);
 
 public interface IExpressionEvaluator
@@ -35,10 +37,30 @@ Each parameter binding is exactly one of:
 ```text
 Literal(value)
 WorkflowRequest(memberKey)
-Variable(declaringScopeNodeId, variableKey)
+Variable(declaringScopeNodeId, variableKey, surface?)   // surface: args (default) | variables
 ActivityResult(producerNodeId, projectionKey)
 WorkflowInstance(member)        // member: correlationId | instanceId
 ```
+
+**Variable reads by name (spec 1222, ADR 0089, decision D-7).** A `Variable` parameter carries a `surface`
+flag: `args` (the default, omitted) or `variables`. Publish parses each script and pins every variable it names
+literally (`variables.X`, `variables['X']`, `getVariable('X')`) as a `Variable` parameter with `surface =
+variables`, keyed `variables.<name>` in the parameter map, recording the nearest declaring scope (a loop's
+iteration values innermost, then containers, then the workflow). A dotted key is never a JavaScript identifier,
+so it cannot collide with an explicit `args` parameter of the same name. The authored source is not rewritten.
+
+A script that reads variables it does not name literally (`variables[expr]`, `getVariable(expr)`, `variables`
+or `getVariable` used as a value, or a host function registered as reading variables) gets the **fallback
+marker** `VariableReadFallback(candidates)`: the conservative read report, every variable visible at that point,
+nearest scope first, each name once. The runtime then makes the candidates readable before evaluation and passes
+an `IExpressionVariableReader` with the request. Each read it serves is resolved nearest scope first, checked for
+protection, and recorded on the host side: a present read joins the step's input read set and input snapshot
+(`ComputedVariableReads`), a name that matches nothing reads `undefined` (nil in Liquid) and is recorded absent
+with warning `VF-READ-001`, and a withheld or transient match faults the step even if the script catches the
+error. An expression without the marker gets no reader and loads only the variables it names. A marker with an empty
+candidate list means publish could not resolve the expression's scopes (an occurrence input inside a reusable
+activity's body, compiled at placement): every read it makes, literal or computed, then goes through the recorded
+run-time lookup.
 
 `WorkflowInstance` was added by the ADR 0045 amendment for issue #2717 (spec 247). It reads the running
 instance's correlation ID or instance ID from committed runtime state as a declared parameter, so it satisfies
@@ -77,6 +99,30 @@ pinned as part of the consumer invocation's complete input snapshot.
 }
 ```
 
+A pinned variable read and the fallback marker serialize as:
+
+```json
+{
+  "parameters": {
+    "variables.order": {
+      "kind": "Variable",
+      "declaringScopeNodeId": "container-1",
+      "variableKey": "order",
+      "surface": "variables"
+    }
+  },
+  "variableReadFallback": {
+    "candidates": [
+      { "name": "order", "declaringScopeNodeId": "container-1", "variableKey": "order" },
+      { "name": "customer", "declaringScopeNodeId": "workflow", "variableKey": "customer" }
+    ]
+  }
+}
+```
+
+`surface` is omitted for `args`, and `variableReadFallback` is omitted for a literal-only expression, so existing
+definitions keep their shape and hash.
+
 Serialization invariants:
 
 - parameter names are unique using ordinal comparison and are rendered in ordinal order for hashing;
@@ -90,17 +136,21 @@ Serialization invariants:
 
 ## 3. Language surfaces
 
-JavaScript receives a read-only `args` object:
+JavaScript receives a read-only `args` object, and, when the script reads variables, a separate read-only
+`variables` object and a `getVariable(name)` function (spec 1222):
 
 ```javascript
-args.customer.id + ":" + args.orderNumber
+args.customer.id + ":" + args.orderNumber + ":" + variables.order.total
 ```
 
-Liquid receives only declared parameter roots:
+Liquid receives the declared `args` parameters as roots, and the same `variables` root:
 
 ```liquid
-{{ customer.id }}:{{ orderNumber }}
+{{ customer.id }}:{{ orderNumber }}:{{ variables.order.total }}
 ```
+
+Every read path to one variable returns the same frozen value within one evaluation. No generated
+`get<Name>()` accessor exists; it survives only as an Elsa 3 import form.
 
 Both engines MUST materialize dynamic `Any` parameters consistently from fresh `JsonNode` and durable
 `JsonElement` forms. Mutation of the engine-local object MUST NOT write workflow state and SHOULD be
@@ -126,9 +176,10 @@ It permits:
 
 It forbids:
 
-- ambient `variables`, `input`, `output`, or `ExpressionExecutionContext` objects;
-- `getVariable`, `setVariable`, named variable getters/setters, `getInput`, `getOutput`, and
-  `getOutputFrom` host functions;
+- ambient `input`, `output`, or `ExpressionExecutionContext` objects (the `variables` root reads only what
+  publish pinned or the recorded fallback serves, spec 1222);
+- `setVariable`, named variable getters/setters, `getInput`, `getOutput`, and `getOutputFrom` host
+  functions (`getVariable` reads like `variables`);
 - workflow/activity/instance identity not declared as a parameter;
 - live .NET objects crossing into the expression while .NET interop is off, which is the default. A host
   may enable .NET interop for JavaScript through one replaceable engine strategy, provided by a feature
@@ -146,9 +197,8 @@ It forbids:
   preprocessors, or postprocessors; and
 - nonpersistable results in durable execution.
 
-The first two forbidden items stay until
 [ADR 0089](../../../docs/adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md)
-(proposed, decision D-7) is accepted. It lets `variables.X`, `variables['X']` and `getVariable('X')`
+(decision D-7, accepted; implemented by spec 1222) lets `variables.X`, `variables['X']` and `getVariable('X')`
 read through publish-resolved declarations, pinned at publish. A computed name (`variables[x]`,
 `getVariable(expr)`) or a read inside an opaque host function falls back to a run-time lookup: it is
 reported conservatively at publish, and its actual reads are recorded, protection-checked and part of
@@ -238,17 +288,26 @@ Examples:
 
 | Elsa 3 source | Canonical source | Added parameter |
 | --- | --- | --- |
-| `variables.total * 1.2` | `args.total * 1.2` | `total -> Variable(scope,key)` |
-| `getVariable("total")` | `args.total` | `total -> Variable(scope,key)` |
+| `variables.total * 1.2` | `variables.total * 1.2` | `variables.total -> Variable(scope,key,variables)` |
+| `getVariable("total")` | `variables.total` | `variables.total -> Variable(scope,key,variables)` |
+| `getTotal()` (generated accessor) | `variables.total` (spelled as declared) | `variables.total -> Variable(scope,key,variables)` |
+| `getVariable(name)` (computed) | `getVariable(name)` | none; publish sets the fallback marker |
 | `input.customerId` | `args.customerId` | `customerId -> WorkflowRequest(customer-id)` |
 | `getOutput("receiptId")` | `args.receiptId` | `receiptId -> ActivityResult(node,receipt-id)` |
-| `{{ Variables.customer.name }}` | `{{ customer.name }}` | `customer -> Variable(scope,key)` |
+| `{{ Variables.customer.name }}` | `{{ variables.customer.name }}` | `variables.customer -> Variable(scope,key,variables)` |
+
+Variable reads keep a `variables` root (spec 1222 FR-026); publish pins them again to the nearest declaring scope.
+A computed variable read is converted faithfully and served by the run-time fallback (FR-027). Until the
+`RunJavaScript` body has its own `variables` root (spec 1222 T047), a converted body keeps lowering variable reads
+to `args` and still refuses computed ones (FR-026a). A script whose own `args` or `variables` would capture a
+converted read is refused (#3296, FR-028); so is a literal read that Elsa 4's nearest-scope resolution would point at
+another declaration than the converter's (`VF-IMP-010`, FR-031).
 
 Rewriting MUST use a JavaScript parser or Liquid syntax tree appropriate to the registered language;
 regex-only semantic rewriting is forbidden. Property names, string literals, comments, and escaping
 must remain correct.
 
-The importer MUST fail rather than guess when source uses computed variable/output names, dynamic
+The importer MUST fail rather than guess when source uses computed output or input names, dynamic
 property discovery, variable assignment, setter host calls, ambient configuration/time/randomness,
 unknown host functions, multiple possible producers, or a producer outside the visible structural
 frame. A custom expression language requires an explicit importer lowering provider or fails as

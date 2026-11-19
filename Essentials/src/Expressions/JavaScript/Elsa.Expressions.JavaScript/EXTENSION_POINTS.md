@@ -55,6 +55,30 @@ with portable expression evaluation.
 - **Override when:** a host uses another JavaScript parser or dialect for script activities. Register one analyzer; a
   later registration replaces the default, as for `IJavaScriptScriptEvaluator`.
 
+### IScriptVariableReadAnalyzer *(Core — Elsa.Expressions.Core)*
+
+- **Kind:** replacement contract per language: exactly one analyzer per language, any lifetime (JavaScript registers
+  a singleton, Liquid a scoped one, since it holds the scoped `FluidParser`). Two of different types for one language
+  fail the shell at start through `DataSelectionAnalyzerCompositionCheck` (Design.Validations, which Publishing and the
+  Design API depend on).
+- **Contract:** `Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer` (spec 1222 FR-014) —
+  `Analyze(source, scriptBody)` parses a script (never evaluates it) and returns a `ScriptVariableReadAnalysis`, or
+  `null` when it does not parse: `LiteralNames` read as `variables.X`, `variables['X']` or `getVariable('X')`, and
+  `HasComputedRead` when it also reads variables it does not name (`variables[expr]`, `getVariable(expr)`, `variables`
+  or `getVariable` used as a value or declared by the script).
+- **Implementation:** `JavaScriptVariableReadAnalyzer` (internal, Acornima), registered as a singleton by
+  `JavaScriptFeature`. One analyzer per language; the Liquid feature registers its own.
+- **Consumer:** `ScriptVariableReadResolver` in `Elsa.Workflows.Design.Validations`, used by the publish compiler to
+  pin literal reads and set the fallback marker, by `ScriptVariableReadValidator` for the draft diagnostics and by the
+  rename planner.
+- **Override when:** a host uses another JavaScript parser or dialect. Replace the default registration (remove it and
+  register its own): two analyzers of different types for one language fail the shell at start, so none wins silently.
+- **Host functions:** a host function that reads workflow variables is declared with
+  `JavaScriptHostFunctionDeclaration(name, ReadsVariables: true)` (`Elsa.Expressions.JavaScript.Core`), registered in the
+  service collection as a singleton; the analyzer then treats a call to it as an opaque read, so publish sets the
+  fallback marker. The isolated engine has no way to install host functions yet, so a declaration only affects publish
+  until one exists; such a function would read through the request's `IExpressionVariableReader`.
+
 ## Cross-references
 
 - JS type declarations for the design surface: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md).

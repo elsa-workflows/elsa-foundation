@@ -56,7 +56,7 @@ Inside a body, the `workflow` scope means the activity, because the body is auth
 the activity. When a workflow that uses the activity is published, placement rewrites these template-local references
 to the placed activity, so two uses of one activity never share values, and each run of the activity reads its own
 inputs and variables. JavaScript in a body
-sees the activity's variables by name (`variables.x`, `getVariable('x')`, `get<X>()`); it reads inputs through
+sees the activity's variables by name (`variables.x`, `getVariable('x')`); it reads inputs through
 request parameters, as in a workflow. A graph published before graph compiler `3.0.0` and used inside a newer one
 reads the newer graph as its caller.
 

@@ -62,7 +62,7 @@ using WorkflowExecutableHasher = Elsa.Workflows.Publishing.Services.WorkflowExec
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-public sealed class WorkflowExecutableCompilerTests
+public sealed partial class WorkflowExecutableCompilerTests
 {
     [Fact]
     public async Task Source_authority_revision_changes_with_the_actual_transient_candidate_under_the_same_source_ids()
@@ -1050,6 +1050,7 @@ public sealed class WorkflowExecutableCompilerTests
         ActivityExecutionPlacement executionPlacement = ActivityExecutionPlacement.Inline,
         bool primaryInputIsRequired = true,
         bool primaryInputIsNullable = false,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null,
         params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
     {
         var primaryInputKey = authoredInput?.ReferenceKey ?? "value";
@@ -1136,7 +1137,8 @@ public sealed class WorkflowExecutableCompilerTests
             new SinglePublicationStore(publication),
             new ReusableTemplateReader(template),
             new ReusableSourceReader(sourceReference),
-            new WorkflowExecutablePlacementSidecarContext());
+            new WorkflowExecutablePlacementSidecarContext(),
+            scriptVariableReadResolver: readResolver);
     }
 
     [Fact]

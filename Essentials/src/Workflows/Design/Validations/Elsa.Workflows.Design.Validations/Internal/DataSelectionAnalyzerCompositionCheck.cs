@@ -1,3 +1,4 @@
+using Elsa.Workflows.Design.Core.Contracts;
 using CShells.Lifecycle;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,10 +8,11 @@ namespace Elsa.Workflows.Design.Validations.Internal;
 internal sealed record DataSelectionComposition(IServiceCollection Services);
 
 /// <summary>
-/// Rejects a missing, duplicate or non-scoped data selection authority, and a missing, duplicate or non-singleton
-/// write-order analyzer, after every feature has registered.
+/// Rejects a missing, duplicate or non-scoped data selection authority, a missing, duplicate or non-singleton
+/// write-order analyzer, a missing, duplicate or non-scoped script variable rename planner, and two script variable read
+/// analyzers for one language (spec 1222), after every feature has registered.
 /// </summary>
-internal sealed class DataSelectionAnalyzerCompositionCheck(DataSelectionComposition composition) : IShellInitializer
+internal sealed class DataSelectionAnalyzerCompositionCheck(DataSelectionComposition composition, IServiceProvider services) : IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -24,6 +26,15 @@ internal sealed class DataSelectionAnalyzerCompositionCheck(DataSelectionComposi
             descriptor.ServiceType == typeof(IUnorderedVariableWriteAnalyzer) && !descriptor.IsKeyedService).ToArray();
         if (writeOrder.Length != 1 || writeOrder[0].Lifetime != ServiceLifetime.Singleton)
             throw new InvalidOperationException("Exactly one singleton IUnorderedVariableWriteAnalyzer must be composed.");
+        // The rename planner (spec 1222) is a replacement contract consumed by the Design API: exactly one scoped.
+        var renamePlanners = composition.Services.Where(descriptor =>
+            descriptor.ServiceType == typeof(IScriptVariableRenamePlanner) && !descriptor.IsKeyedService).ToArray();
+        if (renamePlanners.Length != 1 || renamePlanners[0].Lifetime != ServiceLifetime.Scoped)
+            throw new InvalidOperationException("Exactly one scoped IScriptVariableRenamePlanner must be composed.");
+        // The read resolver refuses two analyzers of different types for one language; resolving it here makes that a
+        // start-up failure rather than a failure of the first publish.
+        using (var scope = services.CreateScope())
+            _ = scope.ServiceProvider.GetService<Services.ScriptVariableReadResolver>();
         return Task.CompletedTask;
     }
 

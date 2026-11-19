@@ -69,12 +69,12 @@ internal static class ReferenceWorkflows
         var setReferenceText = SetVariable(
             "set-reference-text",
             "referenceText",
-            JavaScript(WorkflowIntrinsicInputKeys.Value, "String", "getVariable('content').firstName + ' ' + getVariable('content').lastName"));
+            JavaScript(WorkflowIntrinsicInputKeys.Value, "String", "getVariable('content').firstName + ' ' + getVariable('content').lastName", "content"));
         var response = Clr(
             "write-response",
             typeof(WriteHttpResponse),
             [(nameof(WriteHttpResponse.StatusCode), 200), (nameof(WriteHttpResponse.ContentType), "text/plain")],
-            [JavaScript(nameof(WriteHttpResponse.Body), "System.Text.Json.JsonElement?", "getVariable('referenceText')")]);
+            [JavaScript(nameof(WriteHttpResponse.Body), "System.Text.Json.JsonElement?", "getVariable('referenceText')", "referenceText")]);
 
         return Executable(
             "http-reference",
@@ -248,9 +248,21 @@ internal static class ReferenceWorkflows
         new(input.Key, input.Type, Inline, RuntimeInputBindingSource.Literal,
             literal: ValueEnvelope.Inline(input.Type, JsonSerializer.SerializeToElement(value), Inline));
 
-    private static RuntimeInputBinding JavaScript(string inputKey, string alias, string script) =>
+    /// <summary>
+    /// A JavaScript input as publish compiles it: each workflow variable the script names literally is pinned as a
+    /// <c>variables.&lt;name&gt;</c> parameter (spec 1222), which is how the script reads it at run time.
+    /// </summary>
+    private static RuntimeInputBinding JavaScript(string inputKey, string alias, string script, params string[] reads) =>
         new(inputKey, new ValueTypeDescriptor(alias), Inline, RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding("JavaScript", script, new RuntimeValueTypeDescriptor("alias", alias, null)));
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                script,
+                new RuntimeValueTypeDescriptor("alias", alias, null),
+                parameters: reads.ToDictionary(
+                    ExpressionParameterSurfaces.VariablesKey,
+                    variable => (ExpressionParameterBinding)new VariableExpressionParameterBinding(
+                        VariableReference.WorkflowScopeId, variable, ExpressionParameterSurfaces.Variables),
+                    StringComparer.Ordinal)));
 
     /// <summary>A workflow variable with the empty-string default the authored reference workflow declares.</summary>
     private static RuntimeVariableDeclaration Variable(string key, string alias)
