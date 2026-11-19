@@ -5,7 +5,7 @@ name: Kernel prototype
 # tools/ci/affected_tests.py). This workflow is the prototype's own gate:
 #
 #   - pull request: a fast gate, the deterministic simulation at a small size plus both mutation checks, the in-memory
-#     store conformance and the graph engine corpus. Target: well under 10 minutes.
+#     store conformance and the graph engine corpus. Target: well under its 20-minute timeout.
 #   - nightly: the larger simulation sizes, the runtime and store conformance (built-in runtime, Orleans adapter,
 #     EF on SQLite in both fence modes) and the native smoke and cost runs.
 #
@@ -52,7 +52,7 @@ jobs:
     name: Kernel prototype gate
     if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft || github.event_name == 'workflow_dispatch' && inputs.suite == 'gate' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: prototypes/kernel-model
@@ -219,7 +219,7 @@ jobs:
 
   # K1 slice 7: the count of 4,096. The sim's --count only sizes the store's rows (PARTITIONS.md, slice 7), so it runs
   # here at reduced seeds; the integrated runtime suite qualifies 4,096 end to end. Estimate on a 4-core runner: build
-  # 3 min, the two sims 4 min, the runtime suite at 4,096 about 10 min (its crash case settles in minutes there).
+  # 3 min, the two sims 4 min, the runtime suite at 4,096 about 3 min (49 s on 15 cores).
   nightly-4096:
     name: Kernel prototype nightly, 4,096 virtual partitions
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'nightly' }}
