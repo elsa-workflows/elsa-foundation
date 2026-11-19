@@ -263,7 +263,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // What is in memory, for tests of invariant 9.
     public IEnumerable<(string Id, InstanceRow? Row, string? State, bool Busy)> Instances =>
         _slots.Where(s => Loaded(s.Value)).Select(s => (s.Key, s.Value.Row, s.Value.State is null ? null : Json.Write(s.Value.State), s.Value.Busy));
-    public IEnumerable<(InboxKey Id, bool Durable, bool Taken)> Messages => _items.Values.Select(i => (i.Message.InboxKey, i.Durable, i.Taken));
+    public IEnumerable<(InboxKey Id, bool Durable, bool Taken, InstanceRef Target)> Messages => _items.Values.Select(i => (i.Message.InboxKey, i.Durable, i.Taken, i.Message.Target));
 
     /// <summary>Test observation of a completed job result, after it has been placed in the instance inbox.</summary>
     public bool JobResultReady(string instance, string key, long creation = 0)

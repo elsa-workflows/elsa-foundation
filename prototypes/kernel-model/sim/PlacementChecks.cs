@@ -11,7 +11,7 @@ public static class PlacementChecks
     {
         var failures = 0;
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
-        foreach (var count in new[] { Defaults.ServerPartitions, VirtualPartitions.Small }) Balancing(count, flaws, Check);
+        foreach (var count in new[] { VirtualPartitions.Small, VirtualPartitions.Large }) Balancing(count, flaws, Check);
 
         foreach (var count in new[] { VirtualPartitions.Small, VirtualPartitions.Large })
         {

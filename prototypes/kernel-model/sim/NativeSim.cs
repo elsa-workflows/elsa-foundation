@@ -75,7 +75,7 @@ public sealed partial class World
             if (r.Next(4) == 0)
             {
                 var owner = alive[r.Next(alive.Count)];
-                var posted = InstanceRef.In(owner.Partition, key);
+                var posted = InstanceRef.In(Place(owner, r), key);
                 Native.Started[posted.Id] = (workflow, mode, true);
                 if (events > 0) Native.Waiting.Add((posted.Id, [.. Enumerable.Range(1, events).Select(i => $"event:{key}-{i}")]));
                 return new Act("post", owner.Id, M: new Message($"x{n}", posted, Kinds.Start, Start: spec));

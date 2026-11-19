@@ -6,11 +6,18 @@ public static class Defaults
     /// <summary>A partition's lease.</summary>
     public static readonly TimeSpan Lease = TimeSpan.FromSeconds(10);
 
-    /// <summary>Partitions of a database that serves several nodes: PostgreSQL, SQL Server, MySQL, MongoDB.</summary>
-    public const int ServerPartitions = 64;
+    /// <summary>
+    /// Virtual partitions of a database that serves several nodes: PostgreSQL, SQL Server, MySQL, MongoDB. K1 slice 7:
+    /// the owner's 1,024, each with its own fence row and journal (it was 64 physical partitions before K1).
+    /// </summary>
+    public const int ServerPartitions = VirtualPartitions.Provisional;
 
-    /// <summary>Partitions of SQLite, which has one writer: more would only add polls and fences.</summary>
-    public const int SqlitePartitions = 1;
+    /// <summary>
+    /// Virtual partitions of SQLite: the same 1,024. It has one writer, so one node owns them all, as one set with one
+    /// poll per pass and a flush that fences the partitions it touches. A store without owned sets (<c>commit=ef</c>)
+    /// gets a worker per partition, so a deployment that chooses it passes a smaller count. Before K1 it was 1.
+    /// </summary>
+    public const int SqlitePartitions = VirtualPartitions.Provisional;
 }
 
 /// <summary>

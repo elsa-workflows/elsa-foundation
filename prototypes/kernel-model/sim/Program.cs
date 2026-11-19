@@ -3,7 +3,7 @@ using System.Diagnostics;
 using Kernel.Sim;
 
 // Usage:
-//   dotnet run -c Release --project sim -- --seeds 10000 [--from 1] [--actions 300] [--flaw Name[,Name]]
+//   dotnet run -c Release --project sim -- --seeds 10000 [--from 1] [--actions 300] [--flaw Name[,Name]] [--count 1024|4096]
 //   dotnet run -c Release --project sim -- --seed 42 [--actions 300] [--flaw Name]      replay one seed; prints a shrunk trace if it fails
 //   dotnet run -c Release --project sim -- --mutations [--seeds 2000]                   break the kernel on purpose and see who notices
 
@@ -25,6 +25,8 @@ if (args.Contains("--check-flaws"))
 
 string? Arg(string name) => Array.IndexOf(args, name) is >= 0 and var i && i + 1 < args.Length ? args[i + 1] : null;
 var actions = int.Parse(Arg("--actions") ?? "300");
+// K1 slice 7: the store's virtual partitions, a fence row and a journal each. A world places the first few of them.
+var count = int.Parse(Arg("--count") ?? VirtualPartitions.Provisional.ToString(System.Globalization.CultureInfo.InvariantCulture));
 Generator.Faults = double.Parse(Arg("--faults") ?? "1", System.Globalization.CultureInfo.InvariantCulture);
 var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Flaw.None, (all, name) => all | Enum.Parse<Flaw>(name, true));
 
@@ -41,8 +43,11 @@ return Sweep(int.Parse(Arg("--from") ?? "1"), int.Parse(Arg("--seeds") ?? "10000
 
 // Every fifth seed tries suspects in groups of four that halve, with a threshold to match; the others one at a time.
 // Every third seed is a rolling upgrade: counters start at state version 1 and each node moves to 2 when it restarts.
-static Config ConfigOf(int seed, Flaw flaws) => (flaws.HasFlag(Flaw.StableNodeName) ? new(1, 2, flaws) : seed % 5 == 0 ? new(2 + seed % 2, 2, flaws, Attempts: 5, Group: 4) : new Config(2 + seed % 2, 2, flaws))
-    with { Upgrade = seed % 3 == 0, Native = NativeSwitch.On, NativeFlaws = NativeSwitch.Flaws };
+// K1 slice 7: the store has `count` virtual partitions, and the world places four of them on its two or three nodes. Each
+// node runs one worker for its owned set, through DurableHost.ForNode; every seventh seed runs a worker per partition
+// instead, the host of a store without owned sets (commit=ef), so both shapes stay under the mutations.
+Config ConfigOf(int seed, Flaw flaws) => (flaws.HasFlag(Flaw.StableNodeName) ? new(1, Placed, flaws) : seed % 5 == 0 ? new(2 + seed % 2, Placed, flaws, Attempts: 5, Group: 4) : new Config(2 + seed % 2, Placed, flaws))
+    with { Upgrade = seed % 3 == 0, Native = NativeSwitch.On, NativeFlaws = NativeSwitch.Flaws, Count = count, Set = seed % 7 != 0 };
 
 (string? Violation, List<Act> Acts) Run(int seed, Flaw flaws, int? length = null)
 {
@@ -105,7 +110,9 @@ bool Replay(int seed, Flaw flaws)
     Console.WriteLine($"seed {seed} (flaws: {flaws}) fails after {acts.Count} actions:\n  {violation}\n");
     var config = ConfigOf(seed, flaws);
     var small = Shrink(config, acts, violation.Split(' ')[0]);
-    Console.WriteLine($"shrunk to {small.Count} acts ({config.Nodes} nodes, {config.Partitions} partitions; actor = node * {config.Partitions} + partition until a restart adds one):");
+    Console.WriteLine(config.Set
+        ? $"shrunk to {small.Count} acts ({config.Nodes} nodes, {config.Partitions} of {config.Rows} virtual partitions; actor = node, one worker for its set, until a restart adds one):"
+        : $"shrunk to {small.Count} acts ({config.Nodes} nodes, {config.Partitions} of {config.Rows} virtual partitions; actor = node * {config.Partitions} + partition until a restart adds one):");
     var again = Again(config, small, Console.WriteLine);
     Console.WriteLine($"\n  {again}");
     return false;
@@ -122,7 +129,7 @@ bool Sweep(int from, int seeds, Flaw flaws)
         Interlocked.Add(ref acts, done.Count);
         if (violation is not null) failures.Add((seed, violation));
     });
-    Console.WriteLine($"{seeds} seeds from {from}, {acts} actions, {clock.Elapsed.TotalSeconds:F1} s, flaws: {flaws}: {failures.Count} failed; {World.Bystanders} innocent instances parked at the threshold"
+    Console.WriteLine($"{seeds} seeds from {from} at {count} virtual partitions, {acts} actions, {clock.Elapsed.TotalSeconds:F1} s, flaws: {flaws}: {failures.Count} failed; {World.Bystanders} innocent instances parked at the threshold"
         + (NativeSwitch.On ? $"; native: {World.NativeInstances} finished instances matched a run without faults, {World.NativeReruns} External effects ran again under the same committed attempt ({World.NativeRerunsFlagged} of them told that their turn may have run before), {World.NativeSameKeyReruns} outbound effects were sent again with the key of their first sending, {World.NativeReusedFrames} under a frame number another activation had sent under, {World.NativeRevisits} from a node that had sent before under another iteration path" : ""));
     if (args.Contains("--coverage")) Console.WriteLine("  coverage (seeds that reached the end): " + string.Join("; ", World.Seen.OrderBy(s => s.Key).Select(s => $"{s.Key}: {s.Value}")));
     foreach (var group in failures.GroupBy(f => f.Violation.Split(' ')[0]).OrderByDescending(g => g.Count()))
@@ -238,3 +245,6 @@ int Mutations(int seeds)
     }
     return missed;
 }
+
+// The virtual partitions a world places: four, so a node of two or three holds several in its set.
+partial class Program { const int Placed = 4; }

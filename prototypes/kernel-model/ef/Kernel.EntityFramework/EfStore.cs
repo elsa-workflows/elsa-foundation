@@ -280,8 +280,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string Q(string sql) => Engine?.Sql(sql) ?? sql;
 
     /// <summary>
-    /// Creates the tables and the partition rows. The number of partitions is fixed here; by default (the owner's of 12
-    /// November) 64 on a server database and 1 on SQLite.
+    /// Creates the tables and the partition rows. The number of partitions is fixed here; by default the 1,024 virtual
+    /// partitions (K1 slice 7), each with its own fence row, on a server database and on SQLite.
     /// </summary>
     public async Task CreateAsync(int? partitions = null)
     {
