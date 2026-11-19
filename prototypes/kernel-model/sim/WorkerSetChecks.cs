@@ -88,7 +88,7 @@ internal static class WorkerSetChecks
     {
         const long time = 100;
         var store = new InMemoryStore(1, () => time);
-        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 1 });
+        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), 1, new() { Monotonic = () => time, Partitions = 1 });
         var scope = (await host.ActivateAsync(0))!;
         for (var i = 0; i < 5; i++) await store.AddAsync(Add(InstanceRef.In(0, "c" + i), "t" + i));
         await scope.WokenAsync(null);
@@ -114,7 +114,7 @@ internal static class WorkerSetChecks
         const long time = 100;
         var store = new InMemoryStore(2, () => time);
         var wire = new DelayedCommit(store) { WithoutOwnedSets = true };
-        var host = DurableHost.ForNode("e", wire, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 2 });
+        var host = DurableHost.ForNode("e", wire, new WorkflowInstance([new Counter()]), 2, new() { Monotonic = () => time, Partitions = 2 });
         var (zero, one) = ((await host.ActivateAsync(0))!, (await host.ActivateAsync(1))!);
         var epoch = store.Partitions[1].Epoch;
         await one.DisposeAsync();
@@ -139,7 +139,7 @@ internal static class WorkerSetChecks
     {
         const long time = 100;
         var store = new InMemoryStore(4, () => time);
-        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 4, PollLimit = 1 });
+        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), 4, new() { Monotonic = () => time, Partitions = 4, PollLimit = 1 });
         var worker = host.NodeWorker!;
         var scopes = new IScopeActivation?[4];
         foreach (var p in new[] { 0, 2, 3 }) scopes[p] = await host.ActivateAsync(p);
@@ -171,7 +171,7 @@ internal static class WorkerSetChecks
         {
             var store = new InMemoryStore(3, () => time);
             before?.Invoke(store);
-            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter(), new Ticker(TimeSpan.FromSeconds(1)), new Suspending(gate.Task)]), new() { Monotonic = () => time, Partitions = 3 });
+            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter(), new Ticker(TimeSpan.FromSeconds(1)), new Suspending(gate.Task)]), 3, new() { Monotonic = () => time, Partitions = 3 });
             return (store, host, [(await host.ActivateAsync(0))!, (await host.ActivateAsync(1))!, (await host.ActivateAsync(2))!]);
         }
         void Fallback(string what, InMemoryStore store, Worker worker, IReadOnlyList<PartitionFence> held, string detail) =>
@@ -226,7 +226,7 @@ internal static class WorkerSetChecks
         long time = 0;
         var store = new InMemoryStore(2, () => time);
         var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]),
-            new() { Monotonic = () => time, Partitions = 2, Lease = TimeSpan.FromSeconds(120), Horizon = TimeSpan.FromSeconds(60) });
+            2, new() { Monotonic = () => time, Partitions = 2, Lease = TimeSpan.FromSeconds(120), Horizon = TimeSpan.FromSeconds(60) });
         var (a, b) = ((await host.ActivateAsync(0))!, (await host.ActivateAsync(1))!);
         var timer = InstanceRef.In(1, "t");
         await store.AddAsync(Add(timer, "due", due: 30_000));
@@ -252,7 +252,7 @@ internal static class WorkerSetChecks
         var store = new InMemoryStore(4, () => time);
         var job = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter(), new Runner((_, _) => new ValueTask<object?>(job.Task))]),
-            new() { Monotonic = () => time, Partitions = 4 });
+            4, new() { Monotonic = () => time, Partitions = 4 });
         var worker = host.NodeWorker!;
         var scopes = new IScopeActivation?[4];
         foreach (var p in new[] { 0, 2, 3 }) scopes[p] = await host.ActivateAsync(p);
@@ -602,7 +602,7 @@ internal static class WorkerSetChecks
         {
             var store = new InMemoryStore(stored, () => 100);
             if (waiting is { } p) await store.AddAsync(Add(InstanceRef.In(p, "late"), "t"));
-            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => 100, Partitions = placed }, placesPart: part);
+            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), placed, new() { Monotonic = () => 100, Partitions = placed }, placesPart: part);
             try { await new PartitionRuntime("a", store, scopes, TimeSpan.FromSeconds(3)).StartAsync(host); return null; }
             catch (InvalidOperationException e) { return e.Message; }
         }

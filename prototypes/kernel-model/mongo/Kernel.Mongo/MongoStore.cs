@@ -61,10 +61,19 @@ public sealed class MongoStore : IKernelStore
     public IMongoDatabase Database { get; }
 
     /// <summary>Collections, indexes and the partition documents. Collections are created here, not inside a transaction.</summary>
-    /// <summary>The count the first open recorded, or the partition documents of a database from before the record.</summary>
-    public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) =>
-        await Database.GetCollection<BsonDocument>("meta").Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync(cancellationToken) is { } meta
-            ? meta["count"].ToInt32() : (int)await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+    /// <summary>
+    /// The count the first open recorded, once every partition document of it exists; an open cut short between the record
+    /// and the last document refuses (definite) until <see cref="CreateAsync"/> runs again at that count. A database from
+    /// before the record gives its partition documents.
+    /// </summary>
+    public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
+    {
+        var rows = (int)await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+        if (await Database.GetCollection<BsonDocument>("meta").Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync(cancellationToken) is not { } meta) return rows;
+        var count = meta["count"].ToInt32();
+        return rows == count ? count
+            : throw new StoreException(Failure.Definite, $"Initialization incomplete: {rows} of {count} partition documents exist. Re-run CreateAsync at the same count.");
+    }
 
     public async Task CreateAsync(int partitions = Defaults.ServerPartitions)
     {

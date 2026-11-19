@@ -45,14 +45,20 @@ public sealed class DurableHost : IScopeHost, IScopeCount
     /// created when the scope is first activated. With a <paramref name="projection"/>, the node's commits and takes nudge
     /// its rounds, per virtual partition.
     /// </summary>
+    /// <param name="partitions">The count the node places, explicit: the runtime's scopes, the store's partitions and
+    /// <see cref="WorkerOptions.Partitions"/>, which spread placement hashes over. Options that say another count are refused.</param>
     /// <param name="placesPart">The simulation's worlds only: the node places the first of the store's partitions, fewer
     /// than it has, and the rest are left unserved on purpose. A database-backed node places every one.</param>
-    public static DurableHost ForNode(string node, IKernelStore store, IActorType type, WorkerOptions? options = null, NodeProjection? projection = null, bool placesPart = false)
+    public static DurableHost ForNode(string node, IKernelStore store, IActorType type, int partitions, WorkerOptions? options = null, NodeProjection? projection = null, bool placesPart = false)
     {
+        if (partitions <= 0) throw new ArgumentException("A node's host needs the partition count it places.", nameof(partitions));
+        if (options is not null && options.Partitions != partitions)
+            throw new ArgumentException($"WorkerOptions.Partitions is {options.Partitions} and the node places {partitions}: spread placement must hash over the node's count.", nameof(options));
+        options = (options ?? new()) with { Partitions = partitions };
         if (projection is not null)
-            options = (options ?? new()) with { OnJournal = options?.OnJournal is { } earlier ? moved => { earlier(moved); projection.Nudge(moved); } : projection.Nudge };
+            options = options with { OnJournal = options.OnJournal is { } earlier ? moved => { earlier(moved); projection.Nudge(moved); } : projection.Nudge };
         var host = store.OwnedSetsAvailable ? new DurableHost(Worker.ForNode(node, store, type, options)) : new DurableHost(scope => new Worker(node, scope, store, type, options));
-        host._counted = (store, (options ?? new()).Partitions, placesPart);
+        host._counted = (store, partitions, placesPart);
         return host;
     }
 
