@@ -402,6 +402,16 @@ The follow-ups that slice 2a recorded for this slice:
   SQLite one node owns them all as one set. Nothing is rehashed: an address embeds its virtual partition, and the count
   is fixed when the database is created. A deployment on `commit=ef`, which has no owned sets, gets a worker per
   partition, so it passes a smaller count.
+- **The count is checked, never migrated** (CodeRabbit on #4819; no data exists before release, so a database is
+  recreated):
+  - `EfStore.CreateAsync` and `MongoStore.CreateAsync` refuse, definitely, to open a database at a count other than
+    the one it was created with, naming both. Mongo writes its partition documents one at a time, so its first open
+    records the count first, and an open cut short is finished by the next open at the same count. EF writes its rows
+    in one transaction.
+  - `IKernelStore.PartitionCountAsync` gives that count. When the built-in runtime or the Orleans adapter starts a
+    node's host (`DurableHost.ForNode`, `IScopeCount`), the runtime's scopes must equal `WorkerOptions.Partitions`,
+    which spread placement hashes over, and the store must have a row for each. A mismatch refuses the start, naming
+    the three counts. A node may place fewer than the store has, as the simulation's worlds do.
 - **Set worlds.** `sim --count 1024|4096` (1,024 by default) gives the world's store a fence row and a journal for each
   of the count's virtual partitions. The world places four of them on its two or three nodes. Each node runs one worker
   for its owned set, through `DurableHost.ForNode`, as the built-in runtime does. Its takes and give-ups name a partition
