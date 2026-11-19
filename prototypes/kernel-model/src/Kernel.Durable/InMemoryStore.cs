@@ -341,13 +341,20 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     }
 
     /// <summary>The retake after a reset: only a row this node still holds at that epoch; one more epoch, no death.</summary>
-    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default)
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) =>
+        RetakeAsync(partition, node, epoch, lease, countDeaths: false, cancellationToken);
+
+    /// <summary>The retake, counting a death on the previous epoch's unfinished trial messages when asked (a pending partition).</summary>
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
             var (row, now) = (Partitions[partition], clock());
             if (NodeLeaseAvailable) Renew(node, lease, now);    // a retake is a take: it writes the taker's node record first
             if (row.Owner != node || row.Epoch != epoch) return new((Lease?)null);
+            if (countDeaths)
+                foreach (var message in Messages.Values)
+                    if (message.Trial == row.Epoch && !message.Done && message.Message.Target.Partition == partition) message.Attempts++;
             row.Epoch++;
             if (!NodeLeaseAvailable) row.LeaseUntil = now + (long)lease.TotalMilliseconds;
             return new(new Lease(row.Epoch, row.Position, now));

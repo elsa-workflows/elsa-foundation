@@ -16,6 +16,7 @@ internal static class NodeLeaseChecks
     [
         new("node lease: the heartbeat renews the node record and lists its partitions with their epochs; membership frees an expired owner's partitions; the fence renews no lease", Level.Required, Heartbeat, 4, NodeLease: true),
         new("node lease: a partition whose owner has no node record is taken, and the take counts one death", Level.Required, MissingRecord, 3, NodeLease: true),
+        new("node lease: a pending partition's retake counts one death per trial message of the previous epoch; a plain retake counts none", Level.Required, PendingRetake, 4, NodeLease: true),
         new("node lease NL-2: a paused owner's flush is refused whole, its heartbeat lists none of its partitions, one death per trial message; no take from a live process", Level.Required, PausedOwner, 4, NodeLease: true),
         new("node lease NL-4: a renewal racing a take keeps only the partitions the take left alone", Level.Required, RenewalRacingTake, 4, NodeLease: true),
         new("node lease NL-5: a flush of seen marks only is refused whole when a take lands while it is on the wire", Level.Required, MarksOnly, 5, NodeLease: true),
@@ -75,6 +76,29 @@ internal static class NodeLeaseChecks
         Context.That((await Beat(c, "q")).Cluster.Free.Contains(1), "partition 1 is not free once its owner has no node record");
         Context.Equal(At(p.Taken[0] with { Epoch = p.Taken[0].Epoch + 1 }), At([.. (await c.S.TakeAsync([1], "q", Context.Long)).Taken]), "q's take of 1, whose owner has no node record");
         await Attempts(c, "after q's take", ("t1", 1, 1));
+    }
+
+    /// <summary>
+    /// A Worker whose guard expired keeps the partitions it stood down pending and retakes them counting deaths. The
+    /// negative control: a plain retake counts none. A counting retake that is refused counts none either.
+    /// </summary>
+    private static async Task PendingRetake(Context c)
+    {
+        Require(c);
+        foreach (var n in new[] { 1, 2 })
+        {
+            await c.S.AddAsync(Make.M($"t{n}", n));
+            await c.S.AddAsync(Make.M($"m{n}", n));
+        }
+        var at = (await c.S.TakeAsync([1, 2], "p", Context.Long)).Taken.ToDictionary(f => f.Partition);
+        await c.Lands(() => c.S.CommitAsync(CommitBatch.Owned([at[1], at[2]], Context.Long, false, [], ["m1", "m2"], ["t1", "t2"])).AsTask(), "p's flush putting t1 and t2 on trial");
+        var plain = await c.S.RetakeAsync(1, "p", at[1].Epoch, Context.Long);
+        Context.Equal(new PartitionFence(1, at[1].Epoch + 1, 0), plain?.For(1), "p's plain retake of 1");
+        Context.That(await c.S.RetakeAsync(2, "p", at[2].Epoch - 1, Context.Long, countDeaths: true) is null, "p's counting retake of 2 at a stale epoch was granted");
+        var pending = await c.S.RetakeAsync(2, "p", at[2].Epoch, Context.Long, countDeaths: true);
+        Context.Equal(new PartitionFence(2, at[2].Epoch + 1, 0), pending?.For(2), "p's counting retake of 2");
+        await Attempts(c, "after p's retakes", ("t1", 1, 0), ("t2", 2, 1), ("m1", 1, 0), ("m2", 2, 0));
+        Context.Equal(At(plain!.For(1), pending!.For(2)), Listed(await Beat(c, "p")), "p's heartbeat answer after its retakes");
     }
 
     private static async Task PausedOwner(Context c)

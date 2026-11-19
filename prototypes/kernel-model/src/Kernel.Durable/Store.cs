@@ -230,9 +230,9 @@ public interface IKernelStore : IMembership
     /// that holds nothing, then writes the taker's own record (<c>SeenAt</c> and <c>LeaseUntil</c>, whatever it takes),
     /// then locks the partition rows in ascending id, each decided by that read; deaths count as before, a missing record
     /// as expired. A retake writes the taker's record the same way, also when it is refused. A caller does not bound its
-    /// node lease by a take's or retake's database time (an empty take returns none): the host bounds it on its own
-    /// monotonic clock, as surely expired once one lease, plus that call's timeout, has passed since the last renewing
-    /// call it sent, a heartbeat or a take (K1b slice 4). The fence renews no lease: <see cref="CommitBatch.Lease"/>
+    /// node lease by a take's or retake's database time (an empty take returns none). A Worker whose guard expired keeps
+    /// the partitions it stood down pending and retakes them counting deaths (#4837; the counting retake below). The
+    /// fence renews no lease: <see cref="CommitBatch.Lease"/>
     /// renews nothing (slice 4 makes it the commit-step deadline), and the fence still checks and locks every fenced
     /// row, a batch with no journal rows included. Membership's free partitions are those unowned or whose owner's node
     /// lease has expired. Under the node lease the host's membership call is <see cref="NodeHeartbeatAsync"/>;
@@ -289,6 +289,17 @@ public interface IKernelStore : IMembership
     /// </summary>
     ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This store does not retake a partition at an epoch.");
+
+    /// <summary>
+    /// The retake, deciding as the one above. With <paramref name="countDeaths"/> (K1b, #4837: a pending partition retaken
+    /// after the guard expired) a successful retake is a death: in the same transaction every message on trial at the
+    /// previous epoch and not done gets one more attempt, as a take from an expired owner counts it. Without it, it is the
+    /// retake above. There is no set form: a pending row is still this node's at the epoch it held, so a set take would
+    /// read it as a retake by the recorded owner and count nothing; the Worker retakes pending rows one at a time with
+    /// this call, as it retakes after a reset. The default refuses a counting retake.
+    /// </summary>
+    ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) =>
+        countDeaths ? throw new NotSupportedException("This store does not count deaths at a retake.") : RetakeAsync(partition, node, epoch, lease, cancellationToken);
 
     /// <summary>
     /// One poll of an owned set: each partition's rows not yet seen at that partition's epoch, merged in seq order, at most
