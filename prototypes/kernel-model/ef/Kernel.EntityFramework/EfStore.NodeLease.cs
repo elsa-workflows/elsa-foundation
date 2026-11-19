@@ -11,6 +11,18 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     /// <summary>
+    /// MUTATION, for NL-9: the take reads the owners' node records as a subquery of its update, after it has locked
+    /// partition rows; under SQL Server's locking READ COMMITTED, and on MySQL, whose subquery in an update is a locking read.
+    /// </summary>
+    public bool NodeReadInUpdate { get; init; }
+
+    /// <summary>MUTATION, for NL-9: the take's transaction runs at REPEATABLE READ, so its read of a node record holds until it ends.</summary>
+    public bool RepeatableReadTake { get; init; }
+
+    /// <summary>MUTATION, for NL-9: the heartbeat reads membership (the node count and the free list) inside its transaction, while it holds its own record.</summary>
+    public bool MembershipInHeartbeat { get; init; }
+
+    /// <summary>
     /// The take's transaction. NL-C1: READ COMMITTED on every engine, whatever the store's configured isolation; SQLite
     /// has one writer, so its take cannot hold a read lock while it waits. Its lock waits are bounded by the lease: the
     /// engine's lock timeout (whole milliseconds; MySQL's in whole seconds, at least one) and the command timeout (whole
@@ -21,7 +33,7 @@ public sealed partial class EfStore
     private async Task<IDbContextTransaction> BeginNodeTakeAsync(KernelDb db, TimeSpan lease, CancellationToken cancellationToken)
     {
         db.Database.SetCommandTimeout(Math.Max(1, (int)lease.TotalSeconds));
-        var transaction = await BeginReadCommittedAsync(db, cancellationToken);
+        var transaction = await (RepeatableReadTake && (Engine is not null || postgres) ? db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken) : BeginReadCommittedAsync(db, cancellationToken));
         var ms = Math.Max(1, (long)lease.TotalMilliseconds);
         var bound = Engine switch
         {
@@ -88,6 +100,7 @@ public sealed partial class EfStore
         if (!NodeLease) throw new NotSupportedException("The node lease is off in this store.");
         long now;
         List<OwnedEpoch> owned;
+        Cluster? inside = null;
         using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
         {
             deadline.CancelAfter(lease / 3);
@@ -99,6 +112,7 @@ public sealed partial class EfStore
                 if (Engine is null && postgres) await db.Database.ExecuteSqlRawAsync(FormattableString.Invariant($"SET LOCAL statement_timeout = {Math.Max(1, (long)(lease / 3).TotalMilliseconds)}"), deadline.Token);
                 now = await RenewAsync(db, node, lease, deadline.Token);
                 owned = await db.Partitions.AsNoTracking().Where(p => p.Owner == node).OrderBy(p => p.Id).Select(p => new OwnedEpoch(p.Id, p.Epoch)).ToListAsync(deadline.Token);
+                if (MembershipInHeartbeat) inside = await MembershipAsync(db, now, window, deadline.Token);     // MUTATION
                 await transaction.CommitAsync(deadline.Token);
             }
             catch (Exception e) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -106,9 +120,19 @@ public sealed partial class EfStore
                 throw new StoreException(Failure.Unknown, "The heartbeat outlasted a third of the lease.", e);
             }
         }
+        if (inside is not null) return new NodeBeat(owned, now, inside);
         await using var read = create();
         return new NodeBeat(owned, now, await MembershipAsync(read, now, window, cancellationToken));
     }
+
+    /// <summary>
+    /// Under the node lease, a take that is a deadlock victim, a serialization failure, timed out on a lock or met a busy
+    /// database (SQL Server 1205 and 1222, MySQL 1213 and 1205, PostgreSQL 40P01, 40001 and 55P03, SQLite 5 and 6) failed
+    /// as a transient error, as on the commit path: its transaction rolled back, and it is taken again at the next round.
+    /// Null for anything else, which propagates as it is.
+    /// </summary>
+    private StoreException? TransientTake(Exception e) =>
+        NodeLease && e is not StoreException && Classify(e) is { Failure: Failure.Transient } transient ? transient : null;
 
     /// <summary>
     /// The retake in one transaction: under the node lease the taker's record is written first, also when the retake is
@@ -116,6 +140,12 @@ public sealed partial class EfStore
     /// every unfinished message on trial at the previous epoch, as a take from an expired owner does.
     /// </summary>
     private async ValueTask<Lease?> RetakeInTransactionAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken)
+    {
+        try { return await RetakeInOneTransactionAsync(partition, node, epoch, lease, countDeaths, cancellationToken); }
+        catch (Exception e) when (TransientTake(e) is { } transient) { throw transient; }
+    }
+
+    private async ValueTask<Lease?> RetakeInOneTransactionAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken)
     {
         await using var db = create();
         await using var transaction = await (NodeLease ? BeginNodeTakeAsync(db, lease, cancellationToken) : Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));

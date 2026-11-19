@@ -136,7 +136,7 @@ reset are never released or stood down by an answer from before them. When the W
 again at a new epoch.
 
 **Lock order.** A take first reads the node records of the owners it may take from, with a plain read that holds
-nothing afterwards (never a locking read or a subquery inside the update, which MySQL makes locking); then it writes
+nothing afterwards (never a locking read or a subquery inside the update, which MySQL makes locking at REPEATABLE READ); then it writes
 its own node record; then it locks the partition rows in ascending id. A heartbeat writes its own node record, then
 reads partition rows. A commit locks only partition rows, in ascending id. The take's transaction runs at read committed on every engine, whatever
 the store's configured isolation, so the read's shared locks, where the engine takes them, end with the statement (MySQL
