@@ -23,7 +23,7 @@ public sealed class DurableHost : IScopeHost
     private readonly Worker? _node;
     private readonly Dictionary<int, NodeScope> _scopes = [];
     private readonly SemaphoreSlim _turn = new(1, 1);     // a pass, a gain and a loss of the node's worker never overlap
-    private long _passes;
+    private long _passes, _lastAt;
     private TimeSpan? _last;
 
     public DurableHost(IEnumerable<Worker> workers)
@@ -80,14 +80,20 @@ public sealed class DurableHost : IScopeHost
         {
             if (!node.Holds(scope.Scope)) return null;
             // Another scope's pass ran since this scope's last call, and no wake or job result came since: that pass
-            // served this scope too, and its answer stands. The scope whose call ran it keeps the true due time.
+            // served this scope too. Its answer stands, less the time gone since; once that has run out (a timer is due,
+            // or a beat), this call runs the pass, whichever scope ran the last one and whether it is still held.
             if (scope.Seen < _passes && !node.PassWanted && _last is { } last)
             {
-                scope.Seen = _passes;
-                return last;
+                var left = last - TimeSpan.FromMilliseconds(node.Monotonic - _lastAt);
+                if (last == TimeSpan.Zero || left > TimeSpan.Zero)
+                {
+                    scope.Seen = _passes;
+                    return last == TimeSpan.Zero ? last : left;
+                }
             }
             scope.Seen = ++_passes;
             _last = await node.RunAsync(cancellationToken);
+            _lastAt = node.Monotonic;
             return node.Holds(scope.Scope) ? _last : null;
         }
         finally { _turn.Release(); }
