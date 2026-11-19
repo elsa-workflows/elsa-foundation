@@ -923,6 +923,8 @@ export interface WorkflowInstanceDetails {
   persistenceMode?: PersistenceMode | null;
   /** `activity-level` when Durable, otherwise `boundary-level`; absent on older Runtime hosts. */
   inspectionGranularity?: InspectionGranularity | null;
+  /** Spec 1229 FR-009: the run's lost-update warnings, summed over its activity executions; absent on older hosts. */
+  lostUpdateWarningCount?: number | null;
 }
 
 /** A display hint: the endpoints still enforce every permission. */

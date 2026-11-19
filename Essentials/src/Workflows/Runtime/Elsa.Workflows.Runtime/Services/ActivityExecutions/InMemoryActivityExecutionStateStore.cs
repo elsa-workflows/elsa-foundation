@@ -92,6 +92,46 @@ public sealed class InMemoryActivityExecutionStateStore : InMemoryKeyedStateStor
                 StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, query.ParentActivityExecutionId))));
     }
 
+    // Spec 1229 FR-016: the same contract as the interface defaults, answered from one snapshot of the instance's rows.
+    public ValueTask<IReadOnlyList<ActivityExecutionState>> ListByCommitSequenceAsync(
+        ActivityExecutionStateCommitSequenceQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+        IReadOnlyList<ActivityExecutionState> rows = SnapshotValues(state =>
+                StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, query.WorkflowExecutionId) &&
+                state.FirstCommitSequence is not null && state.LastCommitSequence >= query.FromCommitSequence &&
+                (query.After is not { } after ||
+                 state.FirstCommitSequence > after.FirstCommitSequence ||
+                 state.FirstCommitSequence == after.FirstCommitSequence &&
+                 StringComparer.Ordinal.Compare(state.Execution.ActivityExecutionId, after.ActivityExecutionId) > 0))
+            .OrderBy(state => state.FirstCommitSequence)
+            .ThenBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
+            .Take(query.Limit)
+            .ToArray();
+        return new(rows);
+    }
+
+    public ValueTask<IReadOnlyList<ActivityExecutionState>> ListWithoutCommitSequenceAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        IReadOnlyList<ActivityExecutionState> rows = SnapshotValues(state =>
+                StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId) && state.FirstCommitSequence is null)
+            .OrderBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
+            .ToArray();
+        return new(rows);
+    }
+
+    public ValueTask<long> SumLostUpdateWarningCountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        return new(SnapshotValues(state => StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId))
+            .Sum(state => (long)(state.LostUpdateWarningCount ?? ActivityExecutionState.CountLostUpdateWarnings(state.VariableWrites) ?? 0)));
+    }
+
     public readonly record struct ActivityExecutionStateKey(string WorkflowExecutionId, string ActivityExecutionId);
 
     private static RuntimeStorePage<ActivityExecutionState> Page(

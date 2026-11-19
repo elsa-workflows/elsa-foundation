@@ -102,7 +102,9 @@ public sealed record WorkflowInstanceDetailsView(
     string PersistenceMode,
     string InspectionGranularity,
     string? ActivityNextContinuationToken = null,
-    WorkflowInstancePermissionsView? Permissions = null);
+    WorkflowInstancePermissionsView? Permissions = null,
+    // Spec 1229 FR-009: omitted while 0, so a run without lost updates reads as before; clients read a missing count as 0.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long LostUpdateWarningCount = 0);
 
 /// <summary>
 /// A named workflow output on the instance details view (#254 Seam R1): the durably captured value a

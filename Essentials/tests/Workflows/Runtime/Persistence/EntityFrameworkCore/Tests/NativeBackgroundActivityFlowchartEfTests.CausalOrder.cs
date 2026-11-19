@@ -153,7 +153,11 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests
         Assert.False(captured is { ValueKind: JsonValueKind.String } && captured.Value.GetString() == "left-result");
         Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(harness, executionId, LeftNodeId));
         Assert.Equal(0, finalCounter.Count);
-        Assert.Empty((await ActivityStatesAsync(harness, executionId)).SelectMany(state => state.VariableWrites ?? []));
+        var afterFault = await ActivityStatesAsync(harness, executionId);
+        Assert.Empty(afterFault.SelectMany(state => state.VariableWrites ?? []));
+        // Spec 1229: the inspection journal reads stamps and records, so nothing of the refused commit may be stamped.
+        Assert.DoesNotContain(afterFault.Single(state => state.Execution.ExecutableNodeId == LeftNodeId).Transitions ?? [],
+            stamp => stamp.Kind is ActivityLifecycleTransitionKind.Completed or ActivityLifecycleTransitionKind.Faulted);
 
         await using (var scope = await CreatePartitionScopeAsync(harness))
         {
