@@ -140,12 +140,18 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     navigations.push({ definitionId: created.definition.id, role, stage, consumerId, producerId, selectedNodeId: await selected.getAttribute("data-id") });
   }
 
-  /** Selects one Sequence step on the canvas (inspector folded away on narrow screens) and scrolls it into view. */
+  /** Selects one Sequence step on the canvas (inspector folded away on narrow screens) and centres it in view. */
   async function showSequence(nodeId: string) {
     await s.canvas(); await node(nodeId).press("Enter");
     await expect(page.locator('.wf-sequence-step[aria-pressed="true"]')).toHaveCount(1);
     await expect(node(nodeId)).toHaveAttribute("aria-pressed", "true");
-    await node(nodeId).scrollIntoViewIfNeeded(); await expect(node(nodeId)).toBeInViewport();
+    // Centre it so paste and redo frame alike, and nothing overlaid (such as the validation footer) covers it.
+    await node(nodeId).evaluate(step => step.scrollIntoView({ block: "center" }));
+    await expect(node(nodeId)).toBeInViewport();
+    await expect.poll(() => node(nodeId).evaluate(step => {
+      const box = step.getBoundingClientRect();
+      return step.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+    }), { message: "Selected Sequence is uncovered" }).toBe(true);
   }
 
   if (mode === "pairs" || sequencePairs) {
@@ -315,6 +321,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     await s.select(copiedSwitch.nodeId); await sections.getByRole("tab", { name: "Slots", exact: true }).click();
     const condition = page.locator(".wf-slot-list .wf-data-reference-source");
     await expect(condition).toContainText("Payload"); await expect(condition).toContainText("enabled");
+    // Today this editor names the scope by its raw id (#4827); update this pin when it shows the scope's label.
     await expect(condition).toContainText(copiedGroup.nodeId);
     await condition.scrollIntoViewIfNeeded(); await capture(page, info, "switch-copied-condition");
     await sections.getByRole("tab", { name: "Inputs", exact: true }).click();
