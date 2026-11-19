@@ -307,9 +307,10 @@ public sealed partial class EfStore
         await using var db = create();
         await using var transaction = await (NodeLease ? BeginNodeTakeAsync(db, lease, cancellationToken) : Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         // The node lease (K1b): the owners' node records read first, then this node's own written, then the rows below.
-        var expired = NodeLease ? await ReadAndRenewAsync(db, ids, node, lease, cancellationToken) : null;
+        var expired = NodeLease ? await ReadAndRenewAsync(db, NodeReadInUpdate ? null : ids, node, lease, cancellationToken) : null;
         var take = NodeLease ? """ "Owner" = {0}, "Epoch" = "Epoch" + 1""" : $""" "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"}""";
         var free = expired is null ? $"""("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"})"""
+            : NodeReadInUpdate ? $"""("Owner" IS NULL OR "Owner" = {"{0}"} OR NOT EXISTS (SELECT 1 FROM "Nodes" n WHERE n."Id" = "Partitions"."Owner" AND n."LeaseUntil" >= {Now}))"""     // MUTATION
             : $"""("Owner" IS NULL OR "Owner" = {"{0}"}{(expired.Count == 0 ? "" : $" OR \"Owner\" IN ({string.Join(", ", expired.Select((_, i) => $"{{{i + 1}}}"))})")})""";
         object[] parameters = expired is null ? [node, (long)lease.TotalMilliseconds] : [node, .. expired];
         var died = """("Owner" IS NOT NULL AND "Owner" <> {0})""";

@@ -11,6 +11,15 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     /// <summary>
+    /// MUTATION, for NL-9: the take reads the owners' node records as a subquery of its update, after it has locked
+    /// partition rows; under SQL Server's locking READ COMMITTED, and on MySQL, whose subquery in an update is a locking read.
+    /// </summary>
+    public bool NodeReadInUpdate { get; init; }
+
+    /// <summary>MUTATION, for NL-9: the take's transaction runs at REPEATABLE READ, so its read of a node record holds until it ends.</summary>
+    public bool RepeatableReadTake { get; init; }
+
+    /// <summary>
     /// The take's transaction. NL-C1: READ COMMITTED on every engine, whatever the store's configured isolation; SQLite
     /// has one writer, so its take cannot hold a read lock while it waits. Its lock waits are bounded by the lease: the
     /// engine's lock timeout (whole milliseconds; MySQL's in whole seconds, at least one) and the command timeout (whole
@@ -20,7 +29,7 @@ public sealed partial class EfStore
     private async Task<IDbContextTransaction> BeginNodeTakeAsync(KernelDb db, TimeSpan lease, CancellationToken cancellationToken)
     {
         db.Database.SetCommandTimeout(Math.Max(1, (int)lease.TotalSeconds));
-        var transaction = await BeginReadCommittedAsync(db, cancellationToken);
+        var transaction = await (RepeatableReadTake && (Engine is not null || postgres) ? db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken) : BeginReadCommittedAsync(db, cancellationToken));
         var ms = Math.Max(1, (long)lease.TotalMilliseconds);
         var bound = Engine switch
         {
