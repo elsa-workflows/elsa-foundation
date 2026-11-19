@@ -219,7 +219,7 @@ mutations, at 300 seeds of 300 actions and both counts, are each caught:
 |---|---|---|
 | `FenceSubset`: the k-row fence covers only the rows still held, and the batch lands those | seed 1 at both counts | W1 |
 | `SeenAtNodeEpoch`: a mark records the picture's highest epoch | seed 5 at both counts | S1; with S1 off, S2 at seed 34 |
-| `ResetAll`: a refused flush resets by a take | seed 1 at both counts | W4, as a cost. It is safe and keeps service. It bumps the kept partitions' epochs and re-polls them. Slice 7 changed its meaning (below). |
+| `ResetAll`: a refused flush resets by a take (slice 7: drops the whole picture) | seed 1 at both counts | W3 since slice 7 (below). At slice 0 it meant a reset by a take, which W4 caught as a cost; that reset is now the Worker's. |
 | `ResetPollsSeenBelow`: the poll after a keeping reset reads `Seen < epoch` | seed 2 at both counts | S1 (stranded). Slice 7 changed its meaning (below). |
 | `ProjectorBlindWrite`: the cursor write is not conditional | seed 1 at both counts | P1 |
 | `ProjectorJumps`: the cursor write jumps to the partition's position | seed 1 at both counts | P3 |
@@ -464,20 +464,20 @@ The follow-ups that slice 2a recorded for this slice:
 ### K1 slice 7b: the decisive witness, the set mutations, and the model's reset
 
 **The decisive witness** (the plan's K1 row) runs in three places.
-- **In the simulation, as an invariant.** W1 (`World.cs`, the wire's commit): a flush lands whole or not at all. When
-  one fence of its set is stale, nothing of it is written in any partition: no row, journal row or mark, and no position
-  moves. The set worlds reach it on their own: 242 flushes of 10,000 seeds had part of their fences stale. The checks
-  that follow every action cover the rest of the witness. I6 finds a journal hole in any partition. S1 (new) finds a
-  Seen or Trial mark above its partition's epoch. I3 finds a mark stranded at the epoch a worker holds, on a message it
+- **In the simulation, as an invariant.** W1 (`World.cs`, the wire's commit): a flush with one stale fence of its set
+  does not land. It checks the landed flag and the fenced partitions' positions. The set worlds reach it on their own:
+  242 flushes of 10,000 seeds had part of their fences stale. The checks that follow every action see more of it. I6
+  finds a journal hole in any partition. M1 (new; the model's S1 without its stranded half) finds a Seen or Trial mark
+  above its partition's epoch. I3 finds a mark stranded at the epoch a worker holds, on a message it
   does not hold in memory. The settle phase requires every placed partition to be served again.
-- **As a deterministic store conformance case,** in two variants: b of {a, b, c} moves by lease expiry, or by a
+- **As a deterministic store conformance case, the full witness,** in two variants: b of {a, b, c} moves by lease expiry, or by a
   cooperative release, while a flush with a turn, a Seen and a Trial mark in each of the three is held. The flush is
   refused whole, with no row, journal row, position or mark written. a then retakes a and c at new epochs, as the
   Worker resets, and b's retake by a is refused. The poll at the new epochs reads back everything a had marked there,
   and nothing is marked at a new epoch. a goes on with a and c, b with its own, and every journal starts at 1. It
   passes on the in-memory store, EF on SQLite in both fence modes, and MongoDB (single-node replica set, data on tmpfs)
-  in both modes. `semantic-flaw FenceSubset` runs the in-memory store with that mutation, and both variants fail
-  ("the held flush landed"); CI requires that.
+  in both modes. `semantic-flaw FenceSubset "the K1 witness" "the held flush landed"` runs the in-memory store with
+  that mutation and requires every matching case to fail with that text; both variants do, and CI requires it.
 - **The ownership model** keeps its W1, W3 and W4 checks, with W4 aligned (below).
 
 **The new kernel mutations** (`Flaw` bits 50 to 54), at 20,000 seeds; the pin moves from 43 to 48:
@@ -485,7 +485,7 @@ The follow-ups that slice 2a recorded for this slice:
 | Mutation | What it breaks | Caught by |
 |---|---|---|
 | `FenceSubset` | the k-row fence lands the part of a flush whose fences still match (`InMemoryStore`) | W1 |
-| `SeenAtNodeEpoch` | a mark records the batch's highest epoch, not its partition's (`InMemoryStore.MarkEpoch`) | S1 |
+| `SeenAtNodeEpoch` | a mark records the batch's highest epoch, not its partition's (`InMemoryStore.MarkEpoch`) | M1 |
 | `SuspectAcrossPartitions` | the suspect test asks for the mark's epoch in any partition (`Worker.Mine`) | IDLE: a row an earlier owner marked is not tried, and the instances behind it never finish |
 | `ChildIssuerPerWorker` | one child id issuer, at the worker's lowest partition (`Worker.ChildIdsFor`) | C2 (new): a child's address names the (partition, epoch) its parent's commit is fenced at |
 | `TrialSparesOtherPartitions` | a trial holds back only its own partition of the set (`ReadyForTurns`, `RunTurn`) | I14 ("alone") |
@@ -496,6 +496,10 @@ The follow-ups that slice 2a recorded for this slice:
   store commits under one lock, so nothing can deadlock there. Its witnesses stay the lock-order probe on PostgreSQL,
   SQL Server and MySQL (slice 3, [experiments/K1.LockOrder](experiments/K1.LockOrder/README.md)) and the in-memory
   store's lock-order case. Mongo has no form of it either (slice 4: a second writer fails at once).
+- **`ResetAll` has no kernel sim form.** A worker that drops the partitions it keeps after a refused fence, instead of
+  retaking them, stays safe: the balancer takes them again, so the random sim's checks, which judge safety and service
+  once faults stop, cannot tell. It costs availability only. Slice 2a's `--lease-check` cases pin the retake directly
+  (each kept partition retaken once, at a new epoch), and the model's W3 catches the drop.
 
 **The model's reset, aligned with the Worker** (`experiments/VirtualPartitions`). A refused flush now resets as the
 Worker does: each partition still the owner's at the epoch it holds is retaken, at a new epoch and the store's

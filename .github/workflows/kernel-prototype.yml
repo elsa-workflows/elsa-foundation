@@ -113,12 +113,13 @@ jobs:
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 10000
 
-      # K1 slice 7: the witness case must fail with the k-row fence broken to land the part of a flush still fenced.
+      # K1 slice 7: both witness cases must fail, each on the landed flush, with the k-row fence broken to land the part
+      # of a flush still fenced.
       - name: Store conformance, in memory
         run: |
           STC="dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll"
           $STC semantic
-          $STC semantic-flaw FenceSubset "the K1 witness"
+          $STC semantic-flaw FenceSubset "the K1 witness" "the held flush landed"
 
       - name: Graph engine corpus
         run: dotnet test models/Graph.Tests -c Release --no-build
