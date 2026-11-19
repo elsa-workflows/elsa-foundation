@@ -58,6 +58,12 @@ public abstract class ProvidedStore : IAsyncDisposable
     /// </summary>
     public virtual Func<int, Task>? Reopen => null;
 
+    /// <summary>
+    /// Remove the partition rows from this id on, as a first open cut short after writing the ones before would leave
+    /// them; null when the store writes its partition rows in one transaction, so that cannot happen.
+    /// </summary>
+    public virtual Func<int, Task>? CutPartitionRows => null;
+
     /// <summary>Things the store itself saw go wrong (the in-memory store's ghost list), checked after a stress run.</summary>
     public virtual IReadOnlyList<string> Ghosts => [];
 

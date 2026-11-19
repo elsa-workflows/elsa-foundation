@@ -319,7 +319,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
         if (Engine is not null) await Engine.CreatedAsync(db, default);
         // The count is fixed when the database is created: one opened at another count would address partitions with no
-        // row, or leave some unserved. Nothing is migrated (K1 slice 7; no data exists before release): recreate it.
+        // row, or leave some unserved. Nothing is migrated (K1 slice 7; no data exists before release): recreate it. The
+        // rows are written in one SaveChanges, one transaction, so an open cut short leaves all of them or none.
         if (await db.Partitions.CountAsync() is var rows and > 0)
         {
             if (rows != count) throw new StoreException(Failure.Definite, $"The database has {rows} partitions and was opened with {count}. The count is fixed at creation: recreate the database.");
