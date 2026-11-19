@@ -795,34 +795,6 @@ Elsa.Expressions.Core.Contracts.ScriptVariableWrite.Path.init -> void
 Elsa.Expressions.Core.Contracts.ScriptVariableWrite.ScriptVariableWrite(string! Name, string! Path) -> void
 Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.Writes.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Contracts.ScriptVariableWrite!>!
 Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.Writes.init -> void
-Elsa.Expressions.Core.Models.ExpressionValueAdapter.Version.get -> string!
-Elsa.Expressions.Core.Models.ExpressionValueAdapter.Language.get -> string!
-Elsa.Expressions.Core.Models.ExpressionValueAdapter.Version.init -> void
-Elsa.Expressions.Core.Models.ExpressionValueAdapter.Language.init -> void
-Elsa.Expressions.Core.Models.ScriptActivityLanguage.Language.get -> string!
-Elsa.Expressions.Core.Models.ScriptActivityLanguage.ActivityType.get -> string!
-Elsa.Expressions.Core.Models.ScriptActivityLanguage.Language.init -> void
-Elsa.Expressions.Core.Models.ScriptActivityLanguage.ActivityType.init -> void
-Elsa.Expressions.Core.Models.ExpressionValueAdapter
-override Elsa.Expressions.Core.Models.ExpressionValueAdapter.ToString() -> string!
-static Elsa.Expressions.Core.Models.ExpressionValueAdapter.operator !=(Elsa.Expressions.Core.Models.ExpressionValueAdapter? left, Elsa.Expressions.Core.Models.ExpressionValueAdapter? right) -> bool
-static Elsa.Expressions.Core.Models.ExpressionValueAdapter.operator ==(Elsa.Expressions.Core.Models.ExpressionValueAdapter? left, Elsa.Expressions.Core.Models.ExpressionValueAdapter? right) -> bool
-override Elsa.Expressions.Core.Models.ExpressionValueAdapter.GetHashCode() -> int
-Elsa.Expressions.Core.Models.ScriptActivityLanguage
-override Elsa.Expressions.Core.Models.ExpressionValueAdapter.Equals(object? obj) -> bool
-override Elsa.Expressions.Core.Models.ScriptActivityLanguage.ToString() -> string!
-Elsa.Expressions.Core.Models.ExpressionValueAdapter.Equals(Elsa.Expressions.Core.Models.ExpressionValueAdapter? other) -> bool
-static Elsa.Expressions.Core.Models.ScriptActivityLanguage.operator !=(Elsa.Expressions.Core.Models.ScriptActivityLanguage? left, Elsa.Expressions.Core.Models.ScriptActivityLanguage? right) -> bool
-Elsa.Expressions.Core.Models.ExpressionValueAdapter.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionValueAdapter!
-static Elsa.Expressions.Core.Models.ScriptActivityLanguage.operator ==(Elsa.Expressions.Core.Models.ScriptActivityLanguage? left, Elsa.Expressions.Core.Models.ScriptActivityLanguage? right) -> bool
-Elsa.Expressions.Core.Models.ExpressionValueAdapter.Deconstruct(out string! Language, out string! Version) -> void
-override Elsa.Expressions.Core.Models.ScriptActivityLanguage.GetHashCode() -> int
-override Elsa.Expressions.Core.Models.ScriptActivityLanguage.Equals(object? obj) -> bool
-Elsa.Expressions.Core.Models.ScriptActivityLanguage.Equals(Elsa.Expressions.Core.Models.ScriptActivityLanguage? other) -> bool
-Elsa.Expressions.Core.Models.ScriptActivityLanguage.<Clone>$() -> Elsa.Expressions.Core.Models.ScriptActivityLanguage!
-Elsa.Expressions.Core.Models.ScriptActivityLanguage.Deconstruct(out string! ActivityType, out string! Language) -> void
-Elsa.Expressions.Core.Models.ExpressionValueAdapter.ExpressionValueAdapter(string! Language, string! Version) -> void
-Elsa.Expressions.Core.Models.ScriptActivityLanguage.ScriptActivityLanguage(string! ActivityType, string! Language) -> void
 Elsa.Expressions.Core.Models.ExecutionWarningSeverity.Information = 0 -> Elsa.Expressions.Core.Models.ExecutionWarningSeverity
 Elsa.Expressions.Core.Models.ExecutionWarningSeverity.Warning = 1 -> Elsa.Expressions.Core.Models.ExecutionWarningSeverity
 Elsa.Expressions.Core.Contracts.IExecutionWarningSink

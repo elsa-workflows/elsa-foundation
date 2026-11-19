@@ -72,7 +72,6 @@ internal static class StructuralParentEvaluationSupport
             // Re-materialization reads the node's inputs again, member reads (#4078) included, so it is guarded as
             // activity start and bookmark resume are: a runtime that cannot select members refuses here.
             SchedulerWorkHandlerHelpers.EnsureMemberSelectionSupported(executable, serviceProvider);
-            SchedulerWorkHandlerHelpers.EnsureValueAdaptersPinned(executable, serviceProvider);
             freshSnapshot = await inputRematerializer.MaterializeAsync(
                 executable,
                 executableNode,

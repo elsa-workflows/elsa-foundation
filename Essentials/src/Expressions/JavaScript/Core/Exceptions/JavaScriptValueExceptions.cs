@@ -16,16 +16,6 @@ public static class JavaScriptValueDiagnostics
     public const string InputExpressionWrite = "VF-BIND-001";
 }
 
-/// <summary>
-/// The JavaScript value adapter (ADR 0046 V12, spec 1228 FR-027, FR-028): its rules, written in
-/// <c>docs/reference/value-adapters.md</c>, are a version. A change to a rule is a new version, never an edit of this one.
-/// </summary>
-public static class JavaScriptValueAdapter
-{
-    /// <summary>The JSON profile, first version: plain changeable values in, changes out, lossy numbers refused at a write.</summary>
-    public const string Version = "json-1";
-}
-
 /// <summary>The precision policy refused a write (FR-013). Nothing of the step is written.</summary>
 public sealed class JavaScriptPrecisionException : InvalidOperationException
 {

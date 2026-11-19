@@ -283,9 +283,7 @@ public sealed class ActivityDraftTestRunService(
                 cancellationToken);
         }
 
-        // Spec 1228 FR-028: the wrapper carries the value adapter pins publication would add, in its hash too.
-        var valueAdapterPins = placer.ValueAdapterPins(placement.Root);
-        var artifactHash = hasher.ComputeHash(placement.Root, valueAdapterPins);
+        var artifactHash = hasher.ComputeHash(placement.Root);
         var artifactId = hasher.CreateArtifactId("artifact-", artifactHash);
         var wrapperDefinitionId = $"activity-test-wrapper:{definition.Id}";
         var wrapperVersionId = $"activity-test-wrapper:{draft.Id}:{draft.Revision}";
@@ -294,11 +292,11 @@ public sealed class ActivityDraftTestRunService(
             placement.Root,
             placement.ResumeTargets,
             now,
-            ExecutableValueAdapters.Stamp(new Dictionary<string, string>(StringComparer.Ordinal)
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["runtime.scope"] = "activity-draft-test-run",
                 ["activity.templateHash"] = compilation.Template.TemplateHash
-            }, valueAdapterPins),
+            },
             IncidentStrategyBuiltIns.FaultReference);
         var wrapperReference = new WorkflowExecutableSourceReference(
             $"activity-test-source-ref-{StableHash(testRunId)}",

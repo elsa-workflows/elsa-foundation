@@ -4,18 +4,14 @@ A value crosses a boundary only through an adapter with a written contract ([ADR
 amended by [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)). This page is that contract for
 JavaScript, activity inputs and outputs, and Liquid ([spec 1228](../../specs/1228-value-model-conversion/spec.md)
 FR-027). The core value is valid JSON with a type and a presence (V1). An adapter rule never changes in place: a
-change ships as a new version, and a published executable keeps the version it was published with (FR-028).
+change after 4.0 comes with its own plan for executables already published (FR-028). Today there is one version of each
+adapter; nothing is stamped into an executable or checked at run time.
 
 ## JavaScript — JSON profile, version `json-1`
 
 Script activities (Run JavaScript) and JavaScript input expressions use the same adapter (D-15), through the
 replaceable script value bridge (`IScriptValueBridge`; default: copy, compare, patch). No .NET object, type or member
 is reachable from either (D-16).
-
-An executable that uses JavaScript (an input expression, a variable's initial binding or a script activity) carries one
-pin, `javascript.valueAdapter = json-1`, in its compatibility metadata, and its behavioral hash covers the pin. An
-executable that uses no JavaScript carries none and keeps its hash. When the runtime admits a loaded executable, it
-refuses one with no pin or another version with `VF-ADPT-001`, and asks to republish the workflow.
 
 ### Into JavaScript
 
@@ -61,7 +57,6 @@ A script activity's changes go to the step write path of ADR 0090 (spec 1231). A
 | A lossy number passed to a host function | Logged warning, call not refused | `VF-PREC-002` | Function and argument path (the host function argument conversion is S-1's) |
 | An input expression assigns a variable or a member of one, visibly in its source | Refused at publish | `VF-BIND-001` | Node, input, variable, path; "input expressions only read"; use a script activity |
 | An input expression changes a read value in a way publication cannot see | Evaluation fails, nothing written | `VF-BIND-001` | Same |
-| An executable published with no adapter version, or another one | Refused at run time | `VF-ADPT-001` | Executable, pinned and running version; republish |
 
 The precision policy is one replaceable host-wide component (`IJavaScriptPrecisionPolicy`, D-17). Elsa ships only
 `RefusingPrecisionPolicy`, with no options and no per-workflow or per-node override. A host that wants other handling

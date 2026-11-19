@@ -18,9 +18,7 @@ discarding executable source also releases its preparation. No engine or evaluat
 
 Values enter scripts and bindings alike as plain, changeable JavaScript values through `IScriptValueBridge` (spec 1228);
 a JavaScript input expression only reads, so any change the bridge reports fails its evaluation with `VF-BIND-001`, and
-one the source shows is refused at publish. An executable that uses JavaScript is pinned to `JavaScriptValueAdapter.Version`
-(`javascript.valueAdapter` in its hashed content; `ExpressionValueAdapter`, registered by `JavaScriptFeature` and
-`JintFeature`); the runtime refuses, once per loaded executable, one with no pin or another version (`VF-ADPT-001`).
+one the source shows is refused at publish.
 
 `IJavaScriptScriptEvaluator` is a separate typed activity-script contract used by `RunJavaScript`.
 It accepts one explicit JSON argument document and returns a `JavaScriptScriptEvaluationResult`: the
@@ -100,7 +98,7 @@ with portable expression evaluation.
   `Elsa.Expressions.JavaScript` meter (`elsa.javascript.value_bridge.enter.duration`, `…collect.duration`, `…bytes`).
 - **Override when:** a faster bridge (for example one built on proxies) behaves identically; replace the registration
   from a host feature (`services.Replace(...)`). One that behaves differently is a new JSON profile, so a new adapter
-  version (`JavaScriptValueAdapter.Version`).
+  version of the contract in `docs/reference/value-adapters.md` (FR-028).
 - **Contract text:** [`docs/reference/value-adapters.md`](../../../../../docs/reference/value-adapters.md).
 
 ### IJavaScriptPrecisionPolicy *(Core — Elsa.Expressions.JavaScript.Core)*

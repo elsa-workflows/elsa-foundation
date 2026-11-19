@@ -403,10 +403,12 @@ sensitive and redacted where the variable is.
 
 - **FR-027**: The adapter contracts for JavaScript, activity inputs and outputs, and Liquid MUST be written down: what
   each accepts, what it produces, what is lossless, lossy or refused, and the diagnostic for each refusal.
-- **FR-028**: A change to an adapter rule MUST ship as a new pinned version, never as an edit of an existing one. A
-  published executable keeps the version it was published with. An executable published before this spec (no
-  JavaScript adapter version) MUST be refused at run time with a diagnostic that asks to republish it. Before 4.0,
-  reset and republish is enough (ADR 0046 V3); Elsa does not keep the old frozen adapter.
+- **FR-028**: An adapter rule MUST never change in place (ADR 0046 V3). Today there is one version of each adapter;
+  nothing is stamped into an executable or checked at run time. A future rule change after 4.0 comes with its own plan
+  for executables already published. Before 4.0, reset and republish is enough; Elsa does not keep the old frozen
+  adapter. *(Amended 2026-11-19 by the coordinator: the run-time refusal and the per-executable version stamp are
+  removed, because refusing an unstamped executable would break workflows on every adapter change, and ADR 0046 V3
+  asks only that a rule never change in place.)*
 
 ### Key Entities
 

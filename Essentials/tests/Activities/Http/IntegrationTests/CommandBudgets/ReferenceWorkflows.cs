@@ -1,4 +1,3 @@
-using Elsa.Expressions.JavaScript.Core.Exceptions;
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
@@ -138,10 +137,7 @@ internal static class ReferenceWorkflows
             root,
             resumeTargets.ToDictionary(target => target.Id, target => target.Target, StringComparer.Ordinal),
             DateTimeOffset.UtcNow,
-            // Spec 1228 FR-028: these stand for published executables, so one that uses JavaScript carries the pin.
-            ExecutableValueAdapters.Stamp(
-                new Dictionary<string, string>(),
-                ExecutableValueAdapters.Required(root.DescendantsAndSelf(), variables, [new("JavaScript", JavaScriptValueAdapter.Version)], [])),
+            new Dictionary<string, string>(),
             inputContract: null,
             dependencies: null,
             runtimeRequirements: null,

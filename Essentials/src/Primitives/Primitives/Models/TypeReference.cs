@@ -22,19 +22,6 @@ public sealed record TypeReference(
 {
     private readonly string _alias = TypeAliasConvention.ReadAlias(Alias);
 
-    /// <summary>Keeps the constructor from before <see cref="Element"/> existed (review checklist §E5).</summary>
-    public TypeReference(string Alias, CollectionKind CollectionKind)
-        : this(Alias, CollectionKind, null)
-    {
-    }
-
-    /// <summary>Keeps the deconstruction from before <see cref="Element"/> existed (review checklist §E5).</summary>
-    public void Deconstruct(out string Alias, out CollectionKind CollectionKind)
-    {
-        Alias = this.Alias;
-        CollectionKind = this.CollectionKind;
-    }
-
     /// <summary>
     /// The element type's alias. <c>Object</c>, <c>System.Object</c> and <c>Elsa.Any</c> read as <c>Any</c>, the
     /// dynamic kind, so a definition naming them loads as <c>Any</c> (spec 1228 FR-018).

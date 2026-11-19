@@ -43,26 +43,6 @@ public static class SchedulerWorkHandlerHelpers
             $"({(checker is null ? "no runtime requirement checker is composed" : status?.ToString() ?? "unchecked")}); none of it runs here.");
     }
 
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<WorkflowExecutable, object> ValueAdaptersChecked = new();
-
-    /// <summary>
-    /// Refuses, before anything of it runs, an executable published with no value adapter version, or another one, for an
-    /// expression language this host runs (spec 1228 FR-028, <see cref="ExecutableValueAdapters"/>). Checked once per
-    /// loaded executable; an executable that uses no such language is never affected.
-    /// </summary>
-    public static void EnsureValueAdaptersPinned(WorkflowExecutable executable, IServiceProvider services)
-    {
-        ArgumentNullException.ThrowIfNull(executable);
-        ArgumentNullException.ThrowIfNull(services);
-        if (ValueAdaptersChecked.TryGetValue(executable, out _))
-            return;
-        ExecutableValueAdapters.Ensure(
-            executable,
-            (IEnumerable<Elsa.Expressions.Core.Models.ExpressionValueAdapter>?)services.GetService(typeof(IEnumerable<Elsa.Expressions.Core.Models.ExpressionValueAdapter>)) ?? [],
-            (IEnumerable<Elsa.Expressions.Core.Models.ScriptActivityLanguage>?)services.GetService(typeof(IEnumerable<Elsa.Expressions.Core.Models.ScriptActivityLanguage>)) ?? []);
-        ValueAdaptersChecked.AddOrUpdate(executable, true);
-    }
-
     /// <summary>
     /// Guards that the loaded executable artifact matches the pinned snapshot the work item was
     /// scheduled against. The exception message is keyed on <see cref="RuntimeSchedulerWorkItem.CommandKind"/>,

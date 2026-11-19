@@ -301,22 +301,17 @@ public sealed class WorkflowExecutableCompiler(
             var persistenceMode = CompilePersistenceMode(state.StrategyOptions);
             var workflowVariables = executableNodeCompiler.CompileWorkflowVariables(state.Variables);
             var incidentStrategy = ResolveIncidentStrategy(state.StrategyOptions, incidentStrategyCatalog);
-            // Spec 1228 FR-028: one pin per expression language the executable uses, in its hashed content.
-            var valueAdapterPins = executableNodeCompiler.ValueAdapterPins(compiledRoot, workflowVariables);
             var artifactHash = hasher.ComputeHash(
                 compiledRoot,
                 inputContract,
                 dependencies,
                 persistenceMode,
                 workflowVariables,
-                incidentStrategy,
-                valueAdapterPins);
+                incidentStrategy);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             await ValidateDependencyGraphAsync(artifactId, artifactHash, dependencies, cancellationToken);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
                 .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-            foreach (var (key, version) in valueAdapterPins)
-                metadata[key] = version;
 
             var resumeTargets = executableNodeCompiler.BuildResumeTargets(compiledRoot, placedNodeIds).ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
             foreach (var target in placedResumeTargets)

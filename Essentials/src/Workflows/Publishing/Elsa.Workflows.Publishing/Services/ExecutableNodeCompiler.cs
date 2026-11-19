@@ -35,19 +35,8 @@ public sealed class ExecutableNodeCompiler(
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
     IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null,
     ValueConversionPlanResolver? conversionPlanResolver = null,
-    ScriptVariableReadResolver? scriptVariableReadResolver = null,
-    IEnumerable<ExpressionValueAdapter>? valueAdapters = null,
-    IEnumerable<ScriptActivityLanguage>? scriptActivities = null)
+    ScriptVariableReadResolver? scriptVariableReadResolver = null)
 {
-    private readonly IReadOnlyCollection<ExpressionValueAdapter> _valueAdapters = (valueAdapters ?? []).ToArray();
-    private readonly IReadOnlyCollection<ScriptActivityLanguage> _scriptActivities = (scriptActivities ?? []).ToArray();
-
-    /// <summary>
-    /// The value adapter pins of an executable (spec 1228 FR-028): one per registered expression language its complete
-    /// tree, placed reusable activities included, or its variables use. They go into the hash and the compatibility metadata.
-    /// </summary>
-    public IReadOnlyDictionary<string, string> ValueAdapterPins(ExecutableNode root, IEnumerable<RuntimeVariableDeclaration>? workflowVariables) =>
-        ExecutableValueAdapters.Required(root.DescendantsAndSelf(), workflowVariables, _valueAdapters, _scriptActivities);
 
     /// <summary>
     /// The scoped-variable visibility of one compilation, iteration scopes included, kept per tree projection so the

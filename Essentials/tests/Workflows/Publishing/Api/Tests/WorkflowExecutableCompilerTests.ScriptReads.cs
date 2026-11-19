@@ -174,31 +174,15 @@ public sealed partial class WorkflowExecutableCompilerTests
         Assert.Contains("Input expressions only read", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task An_executable_that_uses_javascript_is_pinned_to_the_value_adapter_and_the_pin_changes_the_hash()
-    {
-        // Spec 1228 FR-028: one pin per executable, in its hashed content.
-        var node = Node("consumer", JavaScriptText("variables.greeting + '!'"));
-        var unpinned = await CompileReadsAsync(node, [Greeting]);
-        var pinned = await CompileReadsAsync(node, [Greeting], [new ExpressionValueAdapter("JavaScript", "json-1")]);
-
-        Assert.Equal("json-1", pinned.CompatibilityMetadata["javascript.valueAdapter"]);
-        Assert.False(unpinned.CompatibilityMetadata.ContainsKey("javascript.valueAdapter"));
-        Assert.DoesNotContain(pinned.Nodes, node => node.Metadata.Keys.Any(key => key.Contains("valueAdapter", StringComparison.Ordinal)));
-        Assert.NotEqual(unpinned.Identity.ArtifactHash, pinned.Identity.ArtifactHash);
-    }
-
     private ValueTask<WorkflowExecutable> CompileReadsAsync(
         Elsa.Workflows.Design.Core.Models.ActivityNode root,
-        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> variables,
-        IEnumerable<ExpressionValueAdapter>? valueAdapters = null) =>
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> variables) =>
         TestCompiler.Create(
                 new FakeVersionStore(WorkflowVersion(root, variables: variables)),
                 new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
                 _activityStructureService,
                 TestWellKnownTypeRegistry.Create(),
-                scriptVariableReadResolver: ReadResolver,
-                valueAdapters: valueAdapters)
+                scriptVariableReadResolver: ReadResolver)
             .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
 
     /// <summary>

@@ -49,7 +49,6 @@ Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics
 const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.PrecisionLossRefused = "VF-PREC-001" -> string!
 const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.InputExpressionWrite = "VF-BIND-001" -> string!
 Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptPrecisionPolicy
-Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueAdapter
 Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Path.get -> string!
 const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.PrecisionLossRead = "VF-PREC-002" -> string!
 Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Path.init -> void
@@ -70,7 +69,6 @@ static Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.operator 
 Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Entered.init -> void
 static Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.operator ==(Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss? left, Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss? right) -> bool
 Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber
-const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueAdapter.Version = "json-1" -> string!
 override Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.GetHashCode() -> int
 override Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.ToString() -> string!
 override Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Equals(object? obj) -> bool

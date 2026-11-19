@@ -1,8 +1,6 @@
 ﻿using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
-using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
-using Elsa.Expressions.JavaScript.Core.Exceptions;
 using Elsa.Expressions.JavaScript.Core.Services;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
@@ -92,8 +90,5 @@ public class JintFeature : IShellFeature
         services.TryAddSingleton<IScriptValueBridge, CopyComparePatchValueBridge>();
         services.TryAddSingleton<IJavaScriptPrecisionPolicy, RefusingPrecisionPolicy>();
         JavaScriptValueCompositionValidator.Register(services);
-        // Spec 1228 FR-028: publication pins this version into each executable that uses JavaScript.
-        if (!services.Any(descriptor => descriptor.ImplementationInstance is ExpressionValueAdapter { Language: "JavaScript" }))
-            services.AddSingleton(new ExpressionValueAdapter("JavaScript", JavaScriptValueAdapter.Version));
     }
 }

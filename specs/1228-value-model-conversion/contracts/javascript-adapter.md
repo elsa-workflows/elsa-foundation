@@ -1,6 +1,7 @@
 # Contract: JavaScript adapter (JSON profile)
 
-Version: the first pinned version of the JSON profile (ADR 0046 V12). Any change ships as a new version.
+Version: the first version of the JSON profile, `json-1` (ADR 0046 V12). A rule never changes in place; a change after
+4.0 comes with its own plan for executables already published (FR-028). Nothing is stamped into an executable.
 
 ## Into JavaScript
 

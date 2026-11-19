@@ -161,8 +161,6 @@ public sealed class ScriptValueAdapterTests
 
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IJavaScriptPrecisionPolicy));
-        var adapter = Assert.Single(services, descriptor => descriptor.ImplementationInstance is ExpressionValueAdapter).ImplementationInstance;
-        Assert.Equal(new ExpressionValueAdapter("JavaScript", JavaScriptValueAdapter.Version), adapter);
 
         var policy = new AllowingPolicy();
         var replaced = new ServiceCollection();
