@@ -3,6 +3,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Until Elsa 4's first release, RS0016/RS0017 stay warnings and must not fail the build.
+         Re-enable them (drop WarningsNotAsErrors) with a fresh PublicAPI.Shipped.txt baseline at that
+         release. Studio does not import the root Directory.Build.props, so this is set here too. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);RS0016;RS0017</WarningsNotAsErrors>
     <PackageIcon>icon.png</PackageIcon>
     <!-- Shared NuGet package metadata for the publishable Elsa.Studio.* module libraries.
          No Version here — CI injects /p:Version. -->
