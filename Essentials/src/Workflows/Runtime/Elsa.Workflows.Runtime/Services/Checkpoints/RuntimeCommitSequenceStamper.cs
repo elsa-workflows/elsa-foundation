@@ -41,6 +41,17 @@ internal static class RuntimeCommitSequenceStamper
         var job = commit.StateChanges.AlterationJobTerminalChange;
         if (activities.Count == 0 && job?.Outcomes.All(outcome => outcome.VariableWrites is null) != false)
             return commit;
+        // Spec 1229 FR-009: every committed row carries the count of its lost-update warnings, with or without a lease.
+        if (activities.Any(change => change.State is { } state && !ReferenceEquals(state.WithLostUpdateWarningCount(), state)))
+        {
+            commit = commit with
+            {
+                StateChanges = commit.StateChanges.WithActivityExecutions(activities
+                    .Select(change => change.State is null ? change : change with { State = change.State.WithLostUpdateWarningCount() })
+                    .ToArray())
+            };
+            activities = commit.StateChanges.ActivityExecutions;
+        }
         if (lease is null || !StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, commit.WorkflowExecutionId))
             return WithoutPendingNumbers(commit, activities, job);
 

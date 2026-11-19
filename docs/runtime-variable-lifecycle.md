@@ -203,20 +203,75 @@ run inline. Input bindings, structural evaluations and background workers have n
   of every visible variable, and a step write that overlaps the node's own capture is warned about
   (`ValueFlow/StepWriteOverlapsCapture`).
 
+## Inspecting the lifecycle
+
+Spec 1229 (S-6) reads the write history back. No projection or history table is added: the read model is derived
+when read from the write records, the lifecycle stamps and the alteration records above, plus two things this spec
+stores: the scheduling causes on provenance (`CausedBy`) and, per activity row, its lost-update count and
+commit-sequence range as store columns. Every route uses the existing permission for
+activity-execution inspection; values follow the sensitive-value rules.
+
+| Route under `runtime/workflows/instances/{id}` | Returns |
+|---|---|
+| `GET …/variables` | each variable instance (frame and key): scope, frame kind, current version, last writer, last commit sequence, value state |
+| `GET …/variable-writes?frameId&scopeId&variableKey&source&outcome&overwrites&cursor&take` | the write history in commit order, paged |
+| `GET …/journal?cursor&take` | the commit-ordered journal: per commit, the activity transitions (with their run-time path), input refreshes and applied writes |
+| `GET …/compare/{otherId}` | two instances of one executable version compared by run-time path and digest; any other pair is `409` with `differentExecutable` |
+| `GET …/variable-writes/{entryId}/payload?value=written\|overwritten\|refused` | one value, under the payload permission, audited like the value-evidence payload read |
+| `GET …` (instance details) | `lostUpdateWarningCount`: the instance's lost-update warnings, summed from a store column |
+
+- **Order.** Entries are ordered by commit sequence, then by position in the commit (frame revision, time). Records
+  without a commit sequence (older records, commits made outside an execution lease) come first, ordered by frame
+  revision and time, and are marked `orderApproximate`. A page cursor is a commit sequence and a position within the
+  commit, so a page that ends inside a commit continues exactly there.
+- **Applied and current value.** A write is applied when it changed the version; a refused `Fault` write is listed but
+  not applied, and so is a stale-base write of the value already there (it still counts as a lost update). The applied
+  entry whose new version is the variable instance's current version is marked `isCurrentValue`. An accepted override
+  links to the refused write it resolves (`resolvesEntryId`); both stay in the history. `ModifyVariable` changes are
+  listed with source `alteration` in their commit position.
+- **Concurrent overwrites.** An applied write that replaced the previous applied write of the same variable instance is
+  a concurrent overwrite when that write does not happen before the overwriting invocation. *Happens before* is read
+  from scheduling provenance: walking back from the invocation's scheduling over the activity that scheduled it and the
+  *scheduling causes* (`ActivitySchedulingProvenance.CausedBy`: the completed child of a parent callback or a loop's
+  next iteration, the arrivals that satisfied a Flowchart join), and from a completed container to the children that
+  completed before it, a commit of the earlier writer at or after its write must be reached. So sequences, loops,
+  joins and a `Parallel` that completed order their writes; parallel branches and a child a container scheduled before
+  writing do not. Writes of one logical invocation (its retries) never overwrite each other; an alteration write is
+  never marked as an overwrite, and a later write that was not scheduled after it is. An applied lost update is one
+  kind of concurrent overwrite (`isLostUpdate`). The rule covers scripts, C# writes and run-time Flowchart paths alike,
+  because it reads provenance, not structure. Code: `VariableLifecycleInspection`.
+- **Value states.** A value is `captured`, `omitted` (not captured), `redacted` (captured, the caller may not see it) or
+  `expired` (removed after capture); none of them is `null`, and a captured `null` is a value read through the payload
+  route. The written value is the writer's `VariableWrite` value evidence; the overwritten and refused values are
+  operational data on the record (`isOperational`). A written value's digest is shown with its state (none for a hidden
+  value); the comparison shows digests only.
+- **Lost-update count.** Each activity row keeps the number of its lost-update warnings (`LostUpdateWarningCount`),
+  set when the row is committed; the store keeps it and the row's commit-sequence range as columns (the range indexed
+  with the instance), so the instance details sum it without reading row documents. No incident is raised: an incident ends a coalescing session.
+- **Run-time path.** An activity execution is matched across instances by the executable node ids from the root down,
+  each with its occurrence under its parent (in order of scheduling), never by row ids.
+- **Cost.** The run time pays only for the scheduling causes and the per-row count. Each read loads the instance's rows
+  once; spec 1229's measurement (T022) is in its tasks and on its PR.
+
+Studio shows these reads on the run view's Variables tab (write history with its filters, journal, comparison), on hosts
+that advertise the routes. The run's lost-update count shows on its Timeline tab and opens the write history filtered to
+lost updates. Values appear only through their states and the payload read.
+
 ## What is not covered yet
 
-- Read sets cover Elsa's instrumented read paths: variable-read bindings, declared expression parameters and the
-  ambient variables an expression references. An expression with computed access (`variables[x]`, `getVariable(x)`)
-  is handed every visible variable, so all of them enter its read set: the conservative direction, which can raise a
-  warning (or, under `Fault`, a fault) for a variable it did not use. Arbitrary host access is not tracked.
+- Read sets cover Elsa's instrumented read paths: variable-read bindings, declared expression parameters, script reads
+  by a literal name (pinned at publish as parameters) and computed reads (`variables[x]`, `getVariable(x)`), which go
+  through a recorded lookup so only the variables actually read enter the read set
+  ([spec 1222](../specs/1222-scripts-read-by-name/spec.md)). The inspector does not list an invocation's
+  computed reads separately yet. Arbitrary host access is not tracked.
 - An intrinsic cannot write a closed scope's variables yet; only captures write rows. A step session cannot either: a
   session write to a reusable activity's body variable faults the step.
 - A step session cannot read or write a variable that requires encryption or is stored externally yet; it faults the
   step and names the variable.
 - `RunJavaScript` script writes (`variables.x = v`, `setVariable`) and the Elsa 3 converter's rewrite of `setVariable`
   and generated setters are not built yet (spec 1231 Phases 5 and 8).
-- A value snapshot is kept for captures of a leaf (on completion and on resume, including background results) and
-  for intrinsic writes to the root and container frames. Captures into closed-scope rows, captures made while a
+- A value snapshot is kept for captures of a leaf (on completion and on resume, including background results), for
+  step-session writes (on completion and on suspension) and for intrinsic writes to the root and container frames. Captures into closed-scope rows, captures made while a
   composite completes and accepted overrides have their write record, but no value snapshot yet. (Loop iteration
   frames are read-only to intrinsics.)
 - Two captures of one completion into the same closed-scope variable are both judged against the stored row; the
@@ -233,5 +288,13 @@ run inline. Input bindings, structural evaluations and background workers have n
   Rebuilt commits already differ by their timestamps.
 - A `Fault` refusal on resume or on a composite's completion records only the refused write, not a completion to
   accept.
-- The write history is data; the read API that presents it is spec S-6, and the Studio screens are follow-up work in
-  this repository's `Studio/` (#4734, #4735).
+- A BPMN joining gateway records no scheduling causes yet (Flowchart joins do), so a write after it can be marked as a
+  concurrent overwrite of a branch that arrived at the gateway before it.
+- A commit made outside an execution lease is not numbered, so what it records reads as order unknown.
+- The concurrent-overwrite walk labels an edge with the commit that created the scheduled row, which comes after the
+  scheduler's decision. A scheduler that writes a variable between scheduling a child and that child's row being
+  created is read as ordered before the child, so the child's later overwrite of that write is not marked.
+- An operator's `ModifyVariable` value is not on its write record (only in the protected alteration request), so the
+  history shows it as not captured.
+- Rows committed before the inspection columns existed count no lost updates in the instance details; their records
+  are still read.

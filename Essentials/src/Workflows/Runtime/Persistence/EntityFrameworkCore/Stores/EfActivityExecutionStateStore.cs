@@ -172,6 +172,67 @@ public sealed class EfActivityExecutionStateStore(
         return new RuntimeStorePage<ActivityExecutionState>(query, items, next);
     }
 
+    public async ValueTask<IReadOnlyList<ActivityExecutionState>> ListByCommitSequenceAsync(
+        ActivityExecutionStateCommitSequenceQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ValidateWorkflow(query.WorkflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var scopeHash = ActivityExecutionEfSupport.Hash(scope);
+        var workflowHash = ActivityExecutionEfSupport.Hash(query.WorkflowExecutionId);
+        var from = query.FromCommitSequence;
+        var source = context.ActivityExecutionStates.AsNoTracking()
+            .Where(row => row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash &&
+                          row.FirstCommitSequence != null && row.LastCommitSequence >= from);
+        if (query.After is { } after)
+        {
+            ValidateIdentity(query.WorkflowExecutionId, after.ActivityExecutionId);
+            var afterFirst = after.FirstCommitSequence;
+            var afterKey = ActivityExecutionEfSupport.OrderKey(after.ActivityExecutionId);
+            source = source.Where(row => row.FirstCommitSequence > afterFirst ||
+                                         row.FirstCommitSequence == afterFirst && row.ActivityExecutionIdOrderKey.CompareTo(afterKey) > 0);
+        }
+
+        var rows = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "listing by commit sequence", query.WorkflowExecutionId,
+            () => source
+                .OrderBy(row => row.FirstCommitSequence)
+                .ThenBy(row => row.ActivityExecutionIdOrderKey)
+                .Take(query.Limit)
+                .ToArrayAsync(cancellationToken));
+        return rows.Select(row => ReadChecked(row, scope, query.WorkflowExecutionId)).ToArray();
+    }
+
+    public async ValueTask<IReadOnlyList<ActivityExecutionState>> ListWithoutCommitSequenceAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ValidateWorkflow(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var scopeHash = ActivityExecutionEfSupport.Hash(scope);
+        var workflowHash = ActivityExecutionEfSupport.Hash(workflowExecutionId);
+        var rows = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "listing without commit sequence", workflowExecutionId,
+            () => context.ActivityExecutionStates.AsNoTracking()
+                .Where(row => row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash && row.FirstCommitSequence == null)
+                .OrderBy(row => row.ActivityExecutionIdOrderKey)
+                .ToArrayAsync(cancellationToken));
+        return rows.Select(row => ReadChecked(row, scope, workflowExecutionId)).ToArray();
+    }
+
+    public async ValueTask<long> SumLostUpdateWarningCountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ValidateWorkflow(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var scopeHash = ActivityExecutionEfSupport.Hash(scope);
+        var workflowHash = ActivityExecutionEfSupport.Hash(workflowExecutionId);
+        var sum = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "summing lost updates", workflowExecutionId,
+            () => context.ActivityExecutionStates.AsNoTracking()
+                .Where(row => row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash && row.LostUpdateWarningCount != null)
+                .SumAsync(row => (long?)row.LostUpdateWarningCount, cancellationToken));
+        return sum ?? 0;
+    }
+
     internal static ActivityExecutionStateEntity ToEntity(ActivityExecutionState state, string scope, string id, long revision)
     {
         var row = new ActivityExecutionStateEntity();
@@ -203,6 +264,9 @@ public sealed class EfActivityExecutionStateStore(
         row.ExecutionSequence = state.ExecutionSequence;
         row.ScheduledAtUtcTicks = state.ScheduledAt.UtcTicks;
         row.ScheduledAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(state.ScheduledAt);
+        row.FirstCommitSequence = state.FirstCommitSequence;
+        row.LastCommitSequence = state.LastCommitSequence;
+        row.LostUpdateWarningCount = state.LostUpdateWarningCount ?? ActivityExecutionState.CountLostUpdateWarnings(state.VariableWrites);
         row.ContentJson = RuntimeArtifactJson.Serialize(state);
         row.SchemaVersion = RuntimeActivityExecutionEfModule.SchemaVersion;
         row.Revision = revision;

@@ -147,6 +147,50 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
   await expect(section).not.toContainText("Recorded completion kept");
   await capture(page, info, "fault-refusal");
 
+  // Spec 1229: the run's lost-update count opens the instance's write history, filtered to lost updates.
+  await openActivity(warning.runId, warning.step);
+  const timeline = inspector().getByRole("tab", { name: "Timeline", exact: true });
+  await timeline.click();
+  const badge = inspector().getByRole("button", { name: "1 lost update in this run" });
+  await expect(badge).toBeVisible({ timeout: 30_000 });
+  await capture(page, info, "run-lost-update-badge");
+  await badge.click();
+  await expect(inspector().getByRole("tab", { name: "Variables", exact: true })).toHaveAttribute("aria-selected", "true");
+  const history = inspector().getByRole("table", { name: "Variable write history" });
+  await expect(history).toContainText("Lost update", { timeout: 30_000 });
+  // The Set step on the other branch was not ordered before the resumed step: a concurrent overwrite, naming it.
+  await expect(history).toContainText("Lost update over");
+  await expect(history).toContainText("Current value");
+  // Filtered to lost updates: the Set step's applied write is not listed.
+  await expect(inspector().getByRole("region", { name: "Variable lifecycle", exact: true }).getByLabel("Outcome")).toHaveValue("lostUpdateWarning");
+  await expect(history.getByRole("row")).toHaveCount(2);
+  await expect(history).not.toContainText("Applied");
+  await capture(page, info, "write-history-lost-updates");
+
+  // The journal lists the run's commits in order, with the writes and transitions of each commit.
+  const lifecycle = inspector().getByRole("region", { name: "Variable lifecycle", exact: true });
+  await lifecycle.getByRole("tab", { name: "Journal", exact: true }).click();
+  const journal = lifecycle.getByRole("list", { name: "Commit journal" });
+  await expect(journal).toContainText("write", { timeout: 30_000 });
+  const commits = journal.locator(":scope > li");
+  // Writes are listed with transitions in their commits (a commit holds a write and a completion).
+  await expect(commits.filter({ hasText: "write" }).filter({ hasText: "completed" }).first()).toBeVisible();
+  // Commit numbers ("Commit token.ordinal") grow down the list.
+  const numbers = (await commits.locator("header strong").allTextContents())
+    .map(text => /Commit (\d+)(?:\.(\d+))?/.exec(text))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map(match => match[2] === undefined ? [0, Number(match[1])] : [Number(match[1]), Number(match[2])]);
+  expect(numbers.length).toBeGreaterThan(1);
+  expect(numbers.every((current, index) => index === 0 || current[0] > numbers[index - 1][0] || current[0] === numbers[index - 1][0] && current[1] > numbers[index - 1][1])).toBe(true);
+  await capture(page, info, "commit-journal");
+
+  // Runs of a different workflow (or version) are not compared.
+  await lifecycle.getByRole("tab", { name: "Compare", exact: true }).click();
+  await lifecycle.getByLabel("Other instance").fill(refusal.runId);
+  await lifecycle.getByRole("button", { name: "Compare", exact: true }).click();
+  await expect(lifecycle.getByRole("status")).toContainText("they do not run the same workflow version", { timeout: 30_000 });
+  await capture(page, info, "compare-refused");
+
   // The write history's values are opt-in.
   await page.goto("/workflows/runtime-diagnostics");
   const row = page.locator(".runtime-diagnostics-subject").filter({ hasText: "Variable writes" });
