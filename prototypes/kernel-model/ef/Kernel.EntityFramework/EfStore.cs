@@ -279,11 +279,6 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string False => postgres && Engine is null ? "false" : "0";
     private string Q(string sql) => Engine?.Sql(sql) ?? sql;
 
-    /// <summary>
-    /// Creates the tables and the partition rows. The number of partitions is fixed here; by default the 1,024 virtual
-    /// partitions (K1 slice 7), each with its own fence row, on a server database and on SQLite. Opening a database that
-    /// has its rows already checks the count, and refuses another (definite).
-    /// </summary>
     /// <summary>The partition rows, written in one transaction when the database was created.</summary>
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
@@ -291,6 +286,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         return await db.Partitions.CountAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Creates the tables and the partition rows. The number of partitions is fixed here; by default the 1,024 virtual
+    /// partitions (K1 slice 7), each with its own fence row, on a server database and on SQLite. Opening a database that
+    /// has its rows already checks the count, and refuses another (definite).
+    /// </summary>
     public async Task CreateAsync(int? partitions = null)
     {
         var count = partitions ?? (postgres ? Defaults.ServerPartitions : Defaults.SqlitePartitions);

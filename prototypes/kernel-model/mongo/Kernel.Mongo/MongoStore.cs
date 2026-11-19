@@ -60,7 +60,6 @@ public sealed class MongoStore : IKernelStore
     public bool PhysicalRetirementAvailable => true;
     public IMongoDatabase Database { get; }
 
-    /// <summary>Collections, indexes and the partition documents. Collections are created here, not inside a transaction.</summary>
     /// <summary>
     /// The count the first open recorded, once every partition document of it exists; an open cut short between the record
     /// and the last document refuses (definite) until <see cref="CreateAsync"/> runs again at that count. A database from
@@ -75,6 +74,7 @@ public sealed class MongoStore : IKernelStore
             : throw new StoreException(Failure.Definite, $"Initialization incomplete: {rows} of {count} partition documents exist. Re-run CreateAsync at the same count.");
     }
 
+    /// <summary>Collections, indexes and the partition documents. Collections are created here, not inside a transaction.</summary>
     public async Task CreateAsync(int partitions = Defaults.ServerPartitions)
     {
         var existing = await (await Database.ListCollectionNamesAsync()).ToListAsync();

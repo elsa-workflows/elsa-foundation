@@ -194,8 +194,9 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
             World.Count(fenced ? "commit over several partitions, fenced" : current > 0 ? "commit over several partitions, part of its fences stale" : "commit over several partitions, every fence stale");
         var before = batch.Fenced.Select(f => world.Store.Partitions[f.Partition].Position).ToList();
         var landed = world.Store.CommitAsync(batch);
-        // W1 (K1, the decisive witness): a flush lands whole or not at all. One stale fence of its set, and nothing of it
-        // is written in any partition: no row, no journal row, no mark, no position moved.
+        // W1 (K1, the decisive witness in the random sim): a flush with one stale fence of its set does not land. This
+        // checks the landed flag and the fenced partitions' positions only. The store conformance case "the K1 witness" is
+        // the full witness: rows, journal rows, positions, marks, the retake, the read-back and the continuation.
         if (!fenced && current > 0 && (landed.Result.Landed || batch.Fenced.Where((f, i) => world.Store.Partitions[f.Partition].Position != before[i]).Any()))
             world.Faults.Add($"W1 a flush over {string.Join(", ", batch.Fenced.Select(f => $"p{f.Partition} e{f.Epoch}"))} landed in part, with {batch.Fenced.Count - current} of its fences stale");
         if (landed.Result.Landed && fenced) world.ChildIssued(batch);
