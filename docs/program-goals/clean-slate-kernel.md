@@ -188,6 +188,29 @@ stress test with admission on and off; an ownership-traffic run (takes, beats, t
 and a retention and recovery load run. No capacity conclusion is drawn before these runs. No Azure or multi-machine
 spend without the owner's approval.
 
+## Carried from #2892
+
+The execution-core milestone of #2892 closed as superseded by this program, with recorded limitations
+([closing statement](../reports/exec-core-closing-statement.md)). The owner confirmed on 19 November the disposition of
+its open items ([review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7012983197)).
+Nothing further is proved on the old core, which K14 removes. Each item below lives on in an existing milestone or case;
+the table adds no obligation beyond issue [#4859](https://github.com/elsa-workflows/elsa-foundation/issues/4859).
+
+| #2892 item | Lives on in |
+|---|---|
+| B2: a native child's business error across `DispatchWorkflow` | [#4859](https://github.com/elsa-workflows/elsa-foundation/issues/4859), K6: the business outcome in the model's `Output` on a `Finished` notice, distinct from `Faulted` ([FC-8](../architecture/foundation-contract.md#what-a-foundation-adapter-must-supply)) |
+| G2.1: a crash after the result, before the parent consumes it | K6's two job races (a `StartJob` timeout against completion; Park then recover against a late result), FC-5, and K12 item 1. The BPMN half comes after release 1 |
+| D2: the tenant half (#4107) | The tenancy cases T2 to T17, and FC-12 |
+| Other providers and multiple hosts | K4, K5, and K12 items 1 and 9 |
+| The Studio half of SC-005 | K10 |
+| G-d: SQLite transactions unmeasured | The K4 round-trip budgets, and K12 item 2 |
+| Native FR-015, the admission-off twin | K11's admission, and the two-tenant stress test with admission on and off before release |
+| Cancel-admission equivalence (unknown on the old core) | FC-9 (commands, for every actor type) and FC-16 (the exemption of the load-shedding commands from `InboxFull`), applied to the native and StateMachine actor types at K6 and K7 |
+
+Accepted as recorded, with no further work: B3, L-Gb1 and L-Gb2 (BPMN, after release 1); D3 (release 1's only
+alteration is migration); #4126 (parked until after release 1, with a K10 note); #4094 (publication rules kept);
+and the cleanup pass (K14's retirement inventory covers it).
+
 ## The HTTP error and timeout contract (K8, proposed)
 
 A response is live output on the `Emit` channel. It is held in memory until the commit of the turn that wrote it
