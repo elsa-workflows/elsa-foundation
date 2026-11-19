@@ -2353,6 +2353,10 @@ its principal, reason and outcome.
 Studio and the operator API depend on the turn contract, the four seams and read models only. They name an instance by
 its `InstanceRef` and never see a partition, a position, an epoch, an order key or SQL:
 
+*Proposed, 19 November:* [the foundation contract](foundation-contract.md#read-models-iactorreads-and-iinboxinspection)
+restates these read models in contract words (`ActorRef`, `Selection`, `Page`, opaque handles, no creation, Park
+revision or trial state). The records below are the approved sketch and are reworded when that page is approved.
+
 ```csharp
 interface IParkedWork      // read model, written by the projector from Park, recover and discard journal rows
 {

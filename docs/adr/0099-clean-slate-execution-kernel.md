@@ -85,32 +85,31 @@ coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fo
 
 ### 3. The foundation contract
 
-*Proposed on 19 November 2026 under the owner's cards of that day; the approved wording of 18 November (four logical
-seams: commit, ownership, delivery, read models, at `addffea7c`) stands until the owner approves
-[the foundation contract](../architecture/foundation-contract.md).*
+*Proposed on 19 November 2026 under the owner's cards of that day (owner question 1 of
+[the foundation contract](../architecture/foundation-contract.md)). The approved wording of 18 November, at `addffea7c`,
+stands until the owner approves it:*
+
+> **Four logical seams.** Layer 2 offers four logical seams: **commit** (append a fenced batch), **ownership** (take,
+> renew, lose authority), **delivery** (route a message identity, deduplicate, keep one sender's order) and **read
+> models** (every non-owner query). A storage provider implements all four as one unit. A send is recorded atomically
+> with its sender's state and may be delivered later. The prototype's `IKernelStore` and `IActorRuntime` still combine
+> them; the split is part of the first product slice's design
+> ([round 5 H paper](../reports/clean-slate-kernel/log-profile-contract-sketch.md)).
 
 Layer 3 sees a foundation through one contract in plain domain words: the **actor turn** (what an actor type receives
-and returns: its inbox, state, sends, timers, jobs, events, subscriptions, children, journal entries, live output and
-commit-time facts, all landing in one atomic outcome), **ingress** (an outside add, start, request, publish or start
-subscription under a bound scope) and **read models** (every non-owner query, with opaque handles and page tokens).
-A foundation implements all of it as one unit and supplies the guarantees itself: single-writer turns, the atomic
-outcome, at-least-once delivery deduplicated by id in one sender's order, durable timers as messages, jobs that run at
-least once with a result applied once, events matched to committed subscriptions, children with a notice and a
-terminate cascade, commands delivered alone, Park and recovery from the actor type's restore plan, tenancy and the
-effect key (cases FC-1 to FC-20). A send is recorded atomically with its sender's state and may be delivered later.
-Commit, ownership, fences, epochs, positions, leases and `IKernelStore` are the built-in foundation's own and never
-cross the contract; `IKernelStore` stays its way to swap EF Core, MongoDB and in-memory storage.
-
-**Tenant identity** (the owner's tenancy decisions of 17 November; [tenancy](../architecture/tenancy.md)). Every ingress takes the tenant only
-from a `BoundScope`, the bound persistence scope of ADR 0097's binder, and refuses a request without one. Every name a
-caller chooses is stored tenant-qualified, `Q(t, n)`, under a canonical tenant-id grammar, so store-wide deduplication,
-event matching and the effect key never cross tenants; every tenant-keyed record also carries a `tenant` column that
-the owner checks on load and consumption. Release 1 runs only the shared store: tenants share one database and its
-1,024 virtual partitions. On SQL Server and MySQL every column holding a tenant id, an actor id or a tenant-qualified
-name has one pinned, non-locale collation, used in every expression over it, so `Q` stays injective whatever the
-database's default collation is. A caller key resolves its actor id through a binding row unique under that collation, written by
-insert-or-read before routing, so equivalent spellings reach one actor; a keyed request's operation id is compared exactly and
-stored as a digest, while an operator command's operation id stays its outside id `Q(t, operation)` (fourth review R4-M6, a coordinator design choice).
+and returns: its inbox, state, sends, timers, jobs, events, subscriptions, children, journal entries and live output,
+all landing in one atomic outcome), **ingress** (an outside add, request, publish or start subscription under a bound
+scope, addressed to a ref, a caller key, an event key or a start spec) and **read models** (every non-owner query, with
+opaque handles, selections and page tokens). A foundation implements all of it as one unit and supplies the guarantees
+itself: single-writer turns, the atomic outcome, at-least-once delivery deduplicated per sender, target and id in one
+sender's order, durable timers as messages, jobs that run at least once with a result applied once, events matched to
+committed subscriptions, children with their notices and a terminate cascade, commands delivered alone, Park and
+recovery from the actor type's restore plan, tenancy and exact refs (cases FC-1 to FC-18). A send is recorded
+atomically with its sender's state and may be delivered later. Commit, ownership, fences, epochs, positions, leases,
+node records and `IKernelStore` are the built-in foundation's own and never cross the contract; `IKernelStore` stays
+its way to swap EF Core, MongoDB and in-memory storage. Every ingress takes the tenant only from a `BoundScope` (the
+owner's tenancy decisions of 17 November, [tenancy](../architecture/tenancy.md)); how the built-in foundation keeps
+tenants apart is stated under section 5.
 
 ### 4. Deployment profiles
 
@@ -137,6 +136,17 @@ SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the sch
 ([ownership and fencing](../architecture/ownership-and-fencing.md),
 [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md), [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).
 
+**Tenant identity in the built-in foundation** (the owner's tenancy decisions of 17 November, moved here from section 3 on 19 November, wording unchanged; [tenancy](../architecture/tenancy.md)). Every ingress takes the tenant only
+from a `BoundScope`, the bound persistence scope of ADR 0097's binder, and refuses a request without one. Every name a
+caller chooses is stored tenant-qualified, `Q(t, n)`, under a canonical tenant-id grammar, so store-wide deduplication,
+event matching and the effect key never cross tenants; every tenant-keyed record also carries a `tenant` column that
+the owner checks on load and consumption. Release 1 runs only the shared store: tenants share one database and its
+1,024 virtual partitions. On SQL Server and MySQL every column holding a tenant id, an actor id or a tenant-qualified
+name has one pinned, non-locale collation, used in every expression over it, so `Q` stays injective whatever the
+database's default collation is. A caller key resolves its actor id through a binding row unique under that collation, written by
+insert-or-read before routing, so equivalent spellings reach one actor; a keyed request's operation id is compared exactly and
+stored as a digest, while an operator command's operation id stays its outside id `Q(t, operation)` (fourth review R4-M6, a coordinator design choice).
+
 ### 6. Persistence modes
 
 The author chooses per workflow. **Ephemeral:** an instance that ends in its first turn without sending writes nothing,
@@ -155,14 +165,19 @@ once; deduplication is the receiver's
 
 ### 8. Layer 3 is host-neutral
 
-*Proposed wording of 19 November; the approved wording of 18 November ("the turn contract, the four seams and read
-models") stands until the owner approves it (owner question 1 of the contract page).*
+*Proposed wording of 19 November (owner question 1 of the contract page). The approved wording of 18 November stands
+until the owner approves it:*
+
+> Execution models, activities, Studio and the operator APIs depend only on the turn contract, the four seams and read
+> models. They never see partitions, positions, epochs or SQL. Release 1 ships a contracts package that layer 3 builds
+> against, and layers 1 and 2 as their own packages behind it.
 
 Actor types, execution models, activities, Studio and the operator APIs depend only on the foundation contract of
 section 3 and on the model contract layer 3 builds on its actor turn. They never see partitions, positions, epochs,
-fences, leases or SQL, and they store refs, handles and page tokens as opaque strings. Release 1 ships the contracts
-package that layer 3 builds against, with an architecture guard, and layers 1 and 2 as the built-in foundation's own
-packages behind it; a future foundation adapter supplies the same contract and passes the same conformance cases.
+fences, leases, node records or SQL, and they store refs, handles, selections and page tokens as opaque strings.
+Release 1 ships the contracts package that layer 3 builds against, with an architecture guard, and layers 1 and 2 as
+the built-in foundation's own packages behind it; a future foundation adapter supplies the same contract and passes
+the same conformance cases.
 
 ### 9. Replace whole layers and edges, never pieces of the commit
 
@@ -171,6 +186,14 @@ actor runtime, execution models and actor types, ingress adapters (brokers, webh
 inserts), egress through jobs or an outbox with the effect key, the wake notifier and a test clock. No external broker
 is the inbox and no scheduler library is the timer engine
 ([sketch, extensibility boundary](../reports/clean-slate-kernel/design-sketch-draft-5.md#extensibility-boundary-owner-principle-15-november)).
+
+*Proposed reading of 19 November under the card that retired the Orleans adapter (owner question 1 of the contract
+page); the paragraph above is the approved text.* Timers, messages, events and subscriptions stay inside the
+foundation's atomic commit, which in the built-in foundation is the fenced commit. Replaceable behind the contract: a
+foundation as a whole, execution models and actor types, ingress adapters on the contract's ingress, and egress
+through jobs or an outbox with the effect key. Storage as a whole unit, the actor runtime, the wake notifier and a test
+clock stay the built-in foundation's own swap points and are never offered through the contract. No external broker is
+the inbox and no scheduler library is the timer engine.
 
 ### 10. Release 1 scope
 
