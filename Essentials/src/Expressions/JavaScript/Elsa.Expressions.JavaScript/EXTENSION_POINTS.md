@@ -18,9 +18,9 @@ discarding executable source also releases its preparation. No engine or evaluat
 
 Values enter scripts and bindings alike as plain, changeable JavaScript values through `IScriptValueBridge` (spec 1228);
 a JavaScript input expression only reads, so any change the bridge reports fails its evaluation with `VF-BIND-001`, and
-one the source shows is refused at publish. Each node that uses JavaScript is pinned to `JavaScriptValueAdapter.Version`
-(`ExpressionValueAdapter`, registered by `JavaScriptFeature` and `JintFeature`); the runtime refuses a node with no pin
-or another version (`VF-ADPT-001`).
+one the source shows is refused at publish. An executable that uses JavaScript is pinned to `JavaScriptValueAdapter.Version`
+(`javascript.valueAdapter` in its hashed content; `ExpressionValueAdapter`, registered by `JavaScriptFeature` and
+`JintFeature`); the runtime refuses, once per loaded executable, one with no pin or another version (`VF-ADPT-001`).
 
 `IJavaScriptScriptEvaluator` is a separate typed activity-script contract used by `RunJavaScript`.
 It accepts one explicit JSON argument document and returns a `JavaScriptScriptEvaluationResult`: the

@@ -12,9 +12,10 @@ Script activities (Run JavaScript) and JavaScript input expressions use the same
 replaceable script value bridge (`IScriptValueBridge`; default: copy, compare, patch). No .NET object, type or member
 is reachable from either (D-16).
 
-Each executable node that uses JavaScript carries `runtime.valueAdapter.JavaScript = json-1` in its metadata, which is
-part of the executable's hashed content. The runtime refuses a node with no pin or another version, with
-`VF-ADPT-001`, and asks to republish the workflow.
+An executable that uses JavaScript (an input expression, a variable's initial binding or a script activity) carries one
+pin, `javascript.valueAdapter = json-1`, in its compatibility metadata, and its behavioral hash covers the pin. An
+executable that uses no JavaScript carries none and keeps its hash. When the runtime admits a loaded executable, it
+refuses one with no pin or another version with `VF-ADPT-001`, and asks to republish the workflow.
 
 ### Into JavaScript
 
