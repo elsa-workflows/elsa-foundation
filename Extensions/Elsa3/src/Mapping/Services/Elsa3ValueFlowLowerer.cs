@@ -320,6 +320,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             property.Value,
             rewrite.Definition!.Language,
             JsonSerializer.SerializeToElement(rewrite.Definition));
+        AddConversionNotes(input, property, rewrite, diagnostics);
 
         // Spec 1222 FR-031: a computed read is served by the Elsa 4 run-time lookup, nearest scope first. Where a name
         // is declared both on the workflow and by an enclosing container, that lookup reads the container's.
@@ -465,6 +466,35 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             property.MemoryReferenceId));
     }
 
+    /// <summary>
+    /// A converted expression's behaviour warnings (spec 1223 FR-009, FR-022), and, once per workflow, the date
+    /// interpretation that decided how its scripts converted (FR-034).
+    /// </summary>
+    private void AddConversionNotes(
+        DiagnosticScope input,
+        ActivityProperty property,
+        Elsa3ExpressionRewriteResult rewrite,
+        List<Elsa3MigrationDiagnostic> diagnostics)
+    {
+        foreach (var warning in rewrite.Warnings)
+        {
+            diagnostics.Add(CreateDiagnostic(input, property, warning.Code, warning.Message, warning.Guidance,
+                $"{property.JsonPath}.expression.value", null, Elsa3MigrationDiagnosticSeverity.Warning));
+        }
+
+        if (!rewrite.AppliedDateInterpretation ||
+            diagnostics.Any(diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
+            return;
+
+        var interpretation = expressionRewriter.DateInterpretation;
+        diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
+            interpretation == Elsa3DateInterpretation.SourceTimeZone
+                ? $"The workflow's scripts were converted with the date interpretation SourceTimeZone '{expressionRewriter.SourceTimeZone}': each use of Elsa 3 local time names that zone in the converted code."
+                : $"The workflow's scripts were converted with the date interpretation {interpretation}.",
+            "Keep the same date interpretation when this workflow is converted again.",
+            $"{property.JsonPath}.expression.value", null, Elsa3MigrationDiagnosticSeverity.Info));
+    }
+
     private static bool IsLoopVariable(Elsa3MemoryOccurrence occurrence) =>
         occurrence.Direction == Elsa3PropertyDirection.Output &&
         Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(occurrence.StablePropertyKey);
@@ -528,6 +558,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var definitionResult = rewrite.Definition!;
         property.Activity.AdditionalProperties[property.PropertyName] = StripMemoryReference(
             Elsa3Literal(property.Value, definitionResult.Source));
+        AddConversionNotes(input, property, rewrite, diagnostics);
         if (rewrite.ScriptOutcomes is { } scriptOutcomes)
             DeclareScriptOutcomes(input, property, possibleOutcomes, scriptOutcomes, diagnostics);
         if (definitionResult.Parameters.Count == 0)
@@ -672,7 +703,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 return matches.Length switch
                 {
                     1 => Elsa3ExpressionParameterResolution.Success(
-                        new WorkflowRequestExpressionParameterBinding(matches[0].Name)),
+                        new WorkflowRequestExpressionParameterBinding(matches[0].Name),
+                        Elsa3ScriptValueKinds.Classify(matches[0].Type)),
                     0 => MissingAmbient(ambient),
                     _ => AmbiguousAmbient(ambient),
                 };
@@ -726,7 +758,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 return matches.Length switch
                 {
                     1 => Elsa3ExpressionParameterResolution.SuccessVariable(
-                        new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, matches[0].Id), matches[0].Name),
+                        new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, matches[0].Id), matches[0].Name,
+                        Elsa3ScriptValueKinds.Classify(matches[0].TypeName, matches[0].IsArray)),
                     0 => MissingAmbient(ambient),
                     _ => AmbiguousAmbient(ambient),
                 };

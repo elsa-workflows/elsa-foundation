@@ -10,8 +10,23 @@ using System.Text.RegularExpressions;
 namespace Elsa.Expressions.JavaScript.Services;
 
 /// <summary>Metadata-only JavaScript authoring assistance; it parses source but never loads Jint or evaluates it.</summary>
-internal sealed partial class JavaScriptExpressionToolingProvider(IJavaScriptDotNetUsageAnalyzer? dotNetUsage = null) : IExpressionToolingProvider
+internal sealed partial class JavaScriptExpressionToolingProvider(
+    IJavaScriptDotNetUsageAnalyzer? dotNetUsage = null,
+    IEnumerable<JavaScriptHostFunctionDeclaration>? hostFunctions = null) : IExpressionToolingProvider
 {
+    /// <summary>What each built-in takes and returns, for completions and hover (spec 1223 FR-006, FR-007, FR-026).</summary>
+    private static readonly (string Name, string[] Parameters, string Documentation)[] BuiltInSignatures =
+    [
+        (JavaScriptBuiltInFunctions.NewGuid, [], "A new GUID, as its 36-character text."),
+        (JavaScriptBuiltInFunctions.NewGuidString, [], "A new GUID, as its 36-character text."),
+        (JavaScriptBuiltInFunctions.GetGuidString, [], "A new GUID, as its 36-character text."),
+        (JavaScriptBuiltInFunctions.NewShortGuid, [], "A new GUID in Elsa 3's short form: Base64 of its bytes without '/', '+' and '=' (at most 22 characters)."),
+        (JavaScriptBuiltInFunctions.GetShortGuid, [], "A new GUID in Elsa 3's short form: Base64 of its bytes without '/', '+' and '=' (at most 22 characters)."),
+        (JavaScriptBuiltInFunctions.ParseGuid, ["text"], "The 36-character text of the GUID that text denotes, in any form .NET's Guid.Parse accepts; other text fails."),
+        (JavaScriptBuiltInFunctions.StringToBase64, ["text"], "The standard Base64 of the text's UTF-8 bytes."),
+        (JavaScriptBuiltInFunctions.StringFromBase64, ["base64"], "The UTF-8 text of standard Base64; invalid Base64 fails."),
+    ];
+
     public ExpressionToolingCapabilities DeclaredCapabilities { get; } = new(
         SupportsCompletions: true,
         SupportsHover: true,
@@ -93,7 +108,7 @@ internal sealed partial class JavaScriptExpressionToolingProvider(IJavaScriptDot
         !string.IsNullOrWhiteSpace(context.ExpectedResultType) &&
         string.Equals(symbol.Detail, context.ExpectedResultType, StringComparison.Ordinal);
 
-    private static ExpressionAuthoringContext ProjectContext(ExpressionAuthoringContext context)
+    private ExpressionAuthoringContext ProjectContext(ExpressionAuthoringContext context)
     {
         var values = context.RootSymbols
             .Where(symbol => symbol.Kind is ExpressionSymbolKind.WorkflowInput or ExpressionSymbolKind.ActivityResult)
@@ -142,6 +157,34 @@ internal sealed partial class JavaScriptExpressionToolingProvider(IJavaScriptDot
                 ]));
             // No generated get<Name>() accessors: the runtime does not provide them (spec 1222 FR-036, ADR 0089 decision 6).
         }
+
+        // The built-in functions and the registered function namespaces, on every JavaScript surface (spec 1223 FR-003).
+        foreach (var (name, parameters, documentation) in BuiltInSignatures)
+        {
+            projected.Add(new(
+                $"javascript:{name}",
+                name,
+                ExpressionSymbolKind.Function,
+                Documentation: documentation,
+                Signatures: [new($"{name}({string.Join(", ", parameters)})", parameters, new("String"))]));
+        }
+
+        foreach (var space in (hostFunctions ?? [])
+                     .Select(function => function.Name)
+                     .Where(name => name.Contains('.', StringComparison.Ordinal))
+                     .GroupBy(name => name[..name.IndexOf('.', StringComparison.Ordinal)], StringComparer.Ordinal)
+                     .OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            projected.Add(new(
+                $"javascript:{space.Key}",
+                space.Key,
+                ExpressionSymbolKind.Namespace,
+                new("Functions", ExpressionValueKind.Object, false, Members: space
+                    .Select(name => new ExpressionValueMember(name[(space.Key.Length + 1)..], new(), $"Host function {name}."))
+                    .ToArray()),
+                $"Functions the host registered under '{space.Key}'."));
+        }
+
         return context with { RootSymbols = projected };
     }
 

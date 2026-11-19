@@ -13,7 +13,7 @@ namespace Elsa3.Mapping.Tests.Support;
 /// </summary>
 internal static class ConversionServices
 {
-    public static ServiceProvider Create(IActivityDefinitionLookup catalog)
+    public static ServiceProvider Create(IActivityDefinitionLookup catalog, Elsa3MappingFeature? feature = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(catalog);
@@ -21,7 +21,9 @@ internal static class ConversionServices
             services.AddSingleton(store);
         services.AddSingleton(TypeRegistry());
         services.AddSingleton(SerializationServices.ObjectConverter());
-        new Elsa3MappingFeature().ConfigureServices(services);
+        // The converter checks converted scripts with the JavaScript strategy (the feature depends on JavaScriptExpressions).
+        services.AddSingleton<Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptDotNetUsageAnalyzer>(new Elsa.Expressions.JavaScript.Services.JavaScriptDotNetUsageAnalyzer());
+        (feature ?? new Elsa3MappingFeature()).ConfigureServices(services);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
@@ -29,9 +31,10 @@ internal static class ConversionServices
     public static async Task<Elsa3MigrationResult<Elsa3ConvertedDefinition>> ConvertAsync(
         IActivityDefinitionLookup catalog,
         Elsa3WorkflowDefinition definition,
-        bool isReusable = false)
+        bool isReusable = false,
+        Elsa3MappingFeature? feature = null)
     {
-        await using var provider = Create(catalog);
+        await using var provider = Create(catalog, feature);
         await using var scope = provider.CreateAsyncScope();
         var converter = scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>();
         return await converter.ConvertAsync(new Elsa3ConversionRequest(definition, isReusable));

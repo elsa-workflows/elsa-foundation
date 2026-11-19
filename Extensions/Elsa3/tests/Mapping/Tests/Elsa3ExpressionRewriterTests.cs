@@ -7,7 +7,7 @@ namespace Elsa3.Mapping.Tests;
 
 public sealed class Elsa3ExpressionRewriterTests
 {
-    private readonly Elsa3ExpressionRewriter _sut = new();
+    private readonly Elsa3ExpressionRewriter _sut = new(new Elsa.Expressions.JavaScript.Services.JavaScriptDotNetUsageAnalyzer());
 
     [Fact]
     public void JavaScript_rewrites_only_parser_proven_reads_and_preserves_literals_comments_and_property_names()
@@ -40,8 +40,7 @@ public sealed class Elsa3ExpressionRewriterTests
     [Theory]
     [InlineData("setVariable(\"total\", 42)")]
     [InlineData("variables.total = 42")]
-    [InlineData("Math.random()")]
-    public void JavaScript_rejects_mutation_and_nondeterminism(string source)
+    public void JavaScript_rejects_mutation(string source)
     {
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("String"), Resolve);
 

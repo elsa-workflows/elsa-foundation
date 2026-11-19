@@ -4,7 +4,9 @@ using System.Text.Json;
 using Acornima;
 using Acornima.Ast;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Primitives.Models;
+using Elsa3.Mapping.Conversion;
 using Elsa3.Mapping.Internal;
 using Fluid;
 
@@ -14,9 +16,24 @@ namespace Elsa3.Mapping.Services;
 /// Rewrites the narrowly supported Elsa 3 ambient expression surface into a portable expression.
 /// All semantic decisions are made from a language syntax tree. Source edits use parser-provided
 /// JavaScript ranges or a Liquid-aware token scanner, never regular expressions.
+/// <para>
+/// A converted JavaScript source is checked last by the shared .NET-usage analysis (spec 1223 FR-016, FR-017), with
+/// the values the conversion knows were live .NET objects in Elsa 3; a refusal is <c>VF-IMP-012</c>. Local date and time
+/// follows the converter's date interpretation (FR-021 to FR-024, FR-034).
+/// </para>
 /// </summary>
-public sealed class Elsa3ExpressionRewriter
+/// <param name="dotNetUsage">The default JavaScript strategy's .NET-usage analysis.</param>
+/// <param name="options">The converter's settings; the default refuses zone-dependent date usage.</param>
+public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNetUsage, Elsa3ConversionOptions? options = null)
 {
+    private readonly Elsa3ConversionOptions _options = options ?? new();
+
+    /// <summary>How Elsa 3 local date and time is read (spec 1223 FR-034).</summary>
+    public Elsa3DateInterpretation DateInterpretation => _options.DateInterpretation;
+
+    /// <summary>The Elsa 3 server's IANA zone under <see cref="Elsa3DateInterpretation.SourceTimeZone"/>.</summary>
+    public string? SourceTimeZone => _options.SourceTimeZone;
+
     /// <summary>
     /// What to change in the Elsa 3 workflow when an expression assigns a value: Elsa 4 expressions are pure. In Elsa 3
     /// terms, because the engineer edits the Elsa 3 workflow; the reusable caveat is spec 246 D-7.
@@ -58,7 +75,7 @@ public sealed class Elsa3ExpressionRewriter
         return language switch
         {
             var value when value.Equals("JavaScript", StringComparison.OrdinalIgnoreCase) =>
-                CheckStrictMode(RewriteJavaScript(source, resultType, resolve, mode, scriptOutcomes), mode),
+                RewriteCheckedJavaScript(source, resultType, resolve, mode, scriptOutcomes),
             var value when value.Equals("Liquid", StringComparison.OrdinalIgnoreCase) =>
                 RewriteLiquid(source, resultType, resolve),
             _ => Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
@@ -68,13 +85,42 @@ public sealed class Elsa3ExpressionRewriter
         };
     }
 
-    private static Elsa3ExpressionRewriteResult RewriteJavaScript(
+    private Elsa3ExpressionRewriteResult RewriteCheckedJavaScript(
         string source,
         TypeReference resultType,
         Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve,
         Elsa3JavaScriptMode mode,
         Elsa3ScriptOutcomeContext? scriptOutcomes)
     {
+        var result = CheckStrictMode(RewriteJavaScript(source, resultType, resolve, mode, scriptOutcomes, out var analyzer), mode);
+        if (!result.Succeeded || analyzer is null)
+            return result;
+
+        // Spec 1223 FR-016 to FR-018: the converted source, with the values that were live .NET objects in Elsa 3.
+        var usages = dotNetUsage.Analyze(
+            result.Definition!.Source,
+            scriptBody: mode == Elsa3JavaScriptMode.Script,
+            new JavaScriptDotNetUsageContext(analyzer.KnownDotNetValues));
+        if (usages is { Count: > 0 })
+        {
+            return Elsa3ExpressionRewriteResult.Failure(usages.Select(usage => new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.DotNetMemberUsage,
+                usage.Message,
+                "Rewrite the expression in the Elsa 3 workflow with JavaScript or an Elsa 4 built-in function, before import.")));
+        }
+
+        return result.WithConversionNotes(analyzer.Warnings, analyzer.AppliedDateInterpretation);
+    }
+
+    private Elsa3ExpressionRewriteResult RewriteJavaScript(
+        string source,
+        TypeReference resultType,
+        Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve,
+        Elsa3JavaScriptMode mode,
+        Elsa3ScriptOutcomeContext? scriptOutcomes,
+        out JavaScriptAnalyzer? analyzerUsed)
+    {
+        analyzerUsed = null;
         Script script;
         try
         {
@@ -92,8 +138,12 @@ public sealed class Elsa3ExpressionRewriter
         var analyzer = new JavaScriptAnalyzer(resolve)
         {
             AllowsOutcomeSetters = mode == Elsa3JavaScriptMode.Script && scriptOutcomes is not null,
-            Mode = mode
+            Mode = mode,
+            Source = source,
+            DateInterpretation = _options.DateInterpretation,
+            SourceTimeZone = _options.SourceTimeZone,
         };
+        analyzerUsed = analyzer;
         analyzer.Visit(script);
         if (analyzer.Issues.Count > 0)
             return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
@@ -604,6 +654,35 @@ public sealed class Elsa3ExpressionRewriter
 
         private bool ReadsVariablesRoot => Mode == Elsa3JavaScriptMode.Expression;
 
+        /// <summary>The source being converted, for quoting the offending expression in a diagnostic.</summary>
+        public string Source { get; init; } = string.Empty;
+
+        /// <summary>How Elsa 3 local date and time is read (spec 1223 FR-034).</summary>
+        public Elsa3DateInterpretation DateInterpretation { get; init; }
+
+        /// <summary>The Elsa 3 server's IANA zone under <see cref="Elsa3DateInterpretation.SourceTimeZone"/>.</summary>
+        public string? SourceTimeZone { get; init; }
+
+        /// <summary>Behaviour warnings of a successful conversion: a rewritten <c>toJson</c>, a date assumed UTC.</summary>
+        public List<Elsa3ExpressionRewriteIssue> Warnings { get; } = [];
+
+        /// <summary>Whether the date interpretation decided how an expression converted.</summary>
+        public bool AppliedDateInterpretation { get; private set; }
+
+        /// <summary>
+        /// The Elsa 4 read paths (<c>variables.x</c>, <c>args.x</c>) of values that were live .NET objects in Elsa 3, for
+        /// the .NET-usage analysis (FR-016).
+        /// </summary>
+        public Dictionary<string, JavaScriptDotNetValueKind> KnownDotNetValues { get; } = new(StringComparer.Ordinal);
+
+        private bool _usesZonedHelper;
+
+        /// <summary>Reads rewritten from a date-typed Elsa 3 value to a <c>Date</c> (FR-032): known dates.</summary>
+        private readonly HashSet<Node> _dateReads = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary><c>const</c>/<c>let</c> names holding a known date.</summary>
+        private readonly HashSet<string> _dateAliases = new(StringComparer.Ordinal);
+
         /// <summary>Whether the converted source reads variables by a computed name, which publish serves by the run-time fallback.</summary>
         public bool HasComputedVariableRead { get; private set; }
 
@@ -652,7 +731,9 @@ public sealed class Elsa3ExpressionRewriter
         private readonly SortedSet<string> _helpers = new(StringComparer.Ordinal);
 
         /// <summary>The local functions the rewritten source calls, one per line, or empty.</summary>
-        public string Prelude => string.Concat(_helpers.Select(helper => InlineHelpers[helper].Declaration + "\n"));
+        public string Prelude =>
+            string.Concat(_helpers.Select(helper => InlineHelpers[helper].Declaration + "\n")) +
+            (_usesZonedHelper ? Elsa3ZonedDateHelper.Declaration(SourceTimeZone!) + "\n" : string.Empty);
 
         /// <summary>Elsa 3 built-ins that read instance metadata, and the parameter each one becomes.</summary>
         private static readonly Dictionary<string, (string Member, string Parameter)> InstanceMembers = new(StringComparer.Ordinal)
@@ -667,12 +748,13 @@ public sealed class Elsa3ExpressionRewriter
         };
 
         /// <summary>
-        /// Globals Elsa 3 put into the engine that Elsa 4 does not have (or removes): CLR types, <c>Date</c> and the
-        /// optional lodash and moment libraries. Reading or constructing them would fail at run time (plan D-14).
+        /// Globals Elsa 3 put into the engine that Elsa 4 does not have: CLR types and the optional lodash and moment
+        /// libraries. Reading or constructing them would fail at run time (plan D-14). <c>Date</c> is native JavaScript
+        /// and converts (spec 1223 FR-014).
         /// </summary>
         private static readonly HashSet<string> ElsaThreeGlobals = new(StringComparer.Ordinal)
         {
-            "Date", "DateTime", "DateTimeOffset", "TimeSpan", "Guid", "Random", "_", "moment",
+            "DateTime", "DateTimeOffset", "TimeSpan", "Guid", "Random", "_", "moment",
         };
 
         private static Elsa3ExpressionRewriteIssue UnavailableGlobal(string name) => new(
@@ -680,19 +762,19 @@ public sealed class Elsa3ExpressionRewriter
             $"JavaScript uses '{name}', which the Elsa 4 JavaScript engine does not provide.",
             name switch
             {
-                "Date" or "DateTime" or "DateTimeOffset" => TimeGuidance,
+                "DateTime" or "DateTimeOffset" => TimeGuidance,
                 "Guid" or "Random" => UniqueValueGuidance,
                 _ => "Supply the value as a pinned input or compute it in an activity before import.",
             });
 
         private const string TimeGuidance =
-            "Elsa 4 expressions have no clock. In the Elsa 3 workflow, replace a wait loop with a Delay activity, and pass the current time or date values in as workflow inputs, before import.";
+            "Elsa 4 expression values are JSON and expressions have no .NET types. Use JavaScript's Date or Temporal (for example Date.now() or new Date().toISOString()) in the Elsa 3 workflow before import.";
 
         private const string UniqueValueGuidance =
-            "Elsa 4 expressions have no random or unique values. In the Elsa 3 workflow, use getWorkflowInstanceId() when one unique value per run is enough, or pass the value in as a workflow input, before import.";
+            "Elsa 4 expressions have no .NET types. Use newGuid() for a GUID, or Math.random() for a random number, in the Elsa 3 workflow before import.";
 
         private const string DataGuidance =
-            "Elsa 4 values are JSON and expressions have no byte, stream or Base64 helpers. Move the conversion into an activity before import.";
+            "Elsa 4 values are JSON and expressions have no byte or stream helpers. Move the conversion into an activity before import.";
 
         private const string InstanceGuidance =
             "Elsa 4 expressions can read only the correlation ID and the instance ID of a workflow instance. Pass the value in as a workflow input, or move the operation into an activity, before import.";
@@ -704,29 +786,20 @@ public sealed class Elsa3ExpressionRewriter
 
         /// <summary>
         /// Elsa 3 host functions Elsa 4 cannot run the same, each with what to change in the Elsa 3 workflow
-        /// (spec 247 contracts/javascript-conversion.md, "Refused"). The code stays VF-IMP-005.
+        /// (spec 247 contracts/javascript-conversion.md, "Refused"). The code stays VF-IMP-005. The GUID family,
+        /// <c>parseGuid</c> and the Base64 pair are Elsa 4 built-ins and convert as written; <c>toJson</c> becomes
+        /// <c>JSON.stringify</c> with a warning (spec 1223 FR-009, FR-014; supersedes spec 247 R-6 for them).
         /// </summary>
         private static readonly Dictionary<string, (string Message, string Guidance)> RefusedHostFunctions = new(StringComparer.Ordinal)
         {
             ["setOutcome"] = ("JavaScript calls 'setOutcome', which sets an Elsa 3 script outcome.", OutcomeGuidance),
             ["setOutcomes"] = ("JavaScript calls 'setOutcomes', which sets Elsa 3 script outcomes.", OutcomeGuidance),
-            ["newGuid"] = ("JavaScript calls 'newGuid', which generates a random value.", UniqueValueGuidance),
-            ["newGuidString"] = ("JavaScript calls 'newGuidString', which generates a random value.", UniqueValueGuidance),
-            ["newShortGuid"] = ("JavaScript calls 'newShortGuid', which generates a random value.", UniqueValueGuidance),
-            ["getGuidString"] = ("JavaScript calls 'getGuidString', which generates a random value.", UniqueValueGuidance),
-            ["getShortGuid"] = ("JavaScript calls 'getShortGuid', which generates a random value.", UniqueValueGuidance),
-            ["toJson"] = ("JavaScript calls 'toJson'. Elsa 3 serialized with .NET, which escapes HTML characters and keeps .NET property casing, so no Elsa 4 form returns the same text.",
-                "Use JSON.stringify(value) in the Elsa 3 workflow, or JSON.parse(JSON.stringify(value)) to copy a value, before import."),
-            ["parseGuid"] = ("JavaScript calls 'parseGuid', which returns a .NET Guid that Elsa 4 values cannot carry.",
-                "Keep the GUID as a string in the Elsa 3 workflow, and check its format in the script if needed, before import."),
             ["bytesToString"] = ("JavaScript calls 'bytesToString'.", DataGuidance),
             ["bytesFromString"] = ("JavaScript calls 'bytesFromString'.", DataGuidance),
             ["bytesToBase64"] = ("JavaScript calls 'bytesToBase64'.", DataGuidance),
             ["bytesFromBase64"] = ("JavaScript calls 'bytesFromBase64'.", DataGuidance),
             ["streamToBytes"] = ("JavaScript calls 'streamToBytes'.", DataGuidance),
             ["streamToBase64"] = ("JavaScript calls 'streamToBase64'.", DataGuidance),
-            ["stringToBase64"] = ("JavaScript calls 'stringToBase64'.", DataGuidance),
-            ["stringFromBase64"] = ("JavaScript calls 'stringFromBase64'.", DataGuidance),
             ["getConfig"] = ("JavaScript calls 'getConfig', which reads host configuration.",
                 "Pass the setting in as a workflow input before import."),
             ["getWorkflowDefinitionId"] = ("JavaScript calls 'getWorkflowDefinitionId'.", InstanceGuidance),
@@ -1144,6 +1217,40 @@ public sealed class Elsa3ExpressionRewriter
                     return;
                 }
 
+                if (callee.Name == "toJson")
+                {
+                    ConvertToJson(call, callee);
+                    return;
+                }
+
+                // Elsa 3's GUID and Base64 functions are Elsa 4 built-ins that return the same text (FR-006, FR-007, FR-026).
+                if (JavaScriptBuiltInFunctions.Names.Contains(callee.Name))
+                {
+                    // Elsa 3 registered built-ins and generated accessors in an order its source does not fix (R-3).
+                    if (callee.Name.StartsWith("get", StringComparison.Ordinal) &&
+                        resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, callee.Name["get".Length..])).Succeeded)
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                            $"JavaScript calls '{callee.Name}', which is both an Elsa 3 built-in and the generated accessor of a variable or input.",
+                            $"Rename the variable or input so that '{callee.Name}' only means the built-in, before import."));
+                        return;
+                    }
+
+                    foreach (var argument in call.Arguments)
+                        Visit(argument);
+                    return;
+                }
+
+                // Date(...) without new returns the current time as local text (FR-022).
+                if (callee.Name == "Date")
+                {
+                    foreach (var argument in call.Arguments)
+                        Visit(argument);
+                    ZoneDependent(call, DateUse.LocalFormat, null);
+                    return;
+                }
+
                 if (RefusedHostFunctions.TryGetValue(callee.Name, out var refused))
                 {
                     Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, refused.Guidance));
@@ -1158,6 +1265,43 @@ public sealed class Elsa3ExpressionRewriter
                         "Replace the call with deterministic language syntax or move it into a graph-visible activity."));
                     return;
                 }
+            }
+
+            if (node is NewExpression { Callee: Identifier { Name: "Date" } } construction && !IsDeclared("Date"))
+            {
+                VisitDateConstruction(construction);
+                return;
+            }
+
+            if (node is NewExpression { Callee: MemberExpression { Computed: false, Object: Identifier { Name: "Intl" }, Property: Identifier intlConstructor } } intlConstruction &&
+                !IsDeclared("Intl") && IntlConstructors.Contains(intlConstructor.Name))
+            {
+                foreach (var argument in intlConstruction.Arguments)
+                    Visit(argument);
+                CheckIntlLocale(intlConstruction, intlConstructor.Name, intlConstruction.Arguments);
+                return;
+            }
+
+            if (node is CallExpression { Callee: MemberExpression dateOrLocaleCallee } dateOrLocaleCall &&
+                VisitDateOrLocaleCall(dateOrLocaleCall, dateOrLocaleCallee))
+                return;
+
+            if (node is VariableDeclaration declaration)
+            {
+                foreach (var declarator in declaration.Declarations)
+                {
+                    Visit(declarator);
+                    // A const/let alias of a known date is a known date (FR-022).
+                    if (declaration.Kind is VariableDeclarationKind.Const or VariableDeclarationKind.Let && declarator.Id is Identifier alias)
+                    {
+                        if (declarator.Init is { } init && IsKnownDate(init))
+                            _dateAliases.Add(alias.Name);
+                        else
+                            _dateAliases.Remove(alias.Name);
+                    }
+                }
+
+                return;
             }
 
             if (node is NewExpression { Callee: Identifier constructed } && IsUnavailableGlobal(constructed.Name))
@@ -1210,8 +1354,8 @@ public sealed class Elsa3ExpressionRewriter
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                    $"JavaScript calls '{helperRoot.Name}.{helper.Name}', a nondeterministic time or random helper.",
-                    helperRoot.Name == "Date" ? TimeGuidance : UniqueValueGuidance));
+                    $"JavaScript calls '{helperRoot.Name}.{helper.Name}', which Elsa 3 did not provide.",
+                    UniqueValueGuidance));
                 return;
             }
 
@@ -1325,7 +1469,7 @@ public sealed class Elsa3ExpressionRewriter
                     return;
                 }
 
-                Edits.Add(new SourceEdit(node.Start, node.End, FormatVariableAccess(variableName)));
+                Edits.Add(new SourceEdit(node.Start, node.End, ScriptValue(node, resolution.ScriptValueKind, "variables", variableName, FormatVariableAccess(variableName))));
                 return;
             }
 
@@ -1340,7 +1484,33 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
-            Edits.Add(new SourceEdit(node.Start, node.End, FormatArgumentAccess(name)));
+            Edits.Add(new SourceEdit(node.Start, node.End, ScriptValue(node, resolution.ScriptValueKind, "args", name, FormatArgumentAccess(name))));
+        }
+
+        /// <summary>
+        /// A converted read of a typed Elsa 3 value. A date-typed value, which Elsa 3 handed scripts as a <c>Date</c>,
+        /// becomes a <c>Date</c> of the same instant, null kept (FR-032); a value that was a live .NET object is recorded
+        /// for the .NET-usage analysis (FR-016).
+        /// </summary>
+        private string ScriptValue(Node node, Elsa3ScriptValueKind kind, string root, string name, string access)
+        {
+            switch (kind)
+            {
+                case Elsa3ScriptValueKind.Date:
+                    _dateReads.Add(node);
+                    return $"({access} == null ? {access} : new Date({access}))";
+                case Elsa3ScriptValueKind.Guid:
+                    KnownDotNetValues[$"{root}.{name}"] = JavaScriptDotNetValueKind.Guid;
+                    break;
+                case Elsa3ScriptValueKind.Object:
+                    KnownDotNetValues[$"{root}.{name}"] = JavaScriptDotNetValueKind.Object;
+                    break;
+                case Elsa3ScriptValueKind.Collection:
+                    KnownDotNetValues[$"{root}.{name}"] = JavaScriptDotNetValueKind.Collection;
+                    break;
+            }
+
+            return access;
         }
 
         /// <summary>
@@ -1414,12 +1584,316 @@ public sealed class Elsa3ExpressionRewriter
                    !Elsa3JavaScriptNames.BuiltIns.Contains(name);
         }
 
+        /// <summary>
+        /// Elsa 3's <c>toJson(x)</c> becomes <c>JSON.stringify(x)</c>, with a behaviour warning naming the text
+        /// differences (spec 1223 FR-009). Elsa 4 has no <c>toJson</c>.
+        /// </summary>
+        private void ConvertToJson(CallExpression call, Identifier callee)
+        {
+            if (call.Arguments.Count != 1 || call.Arguments[0] is SpreadElement)
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                    $"JavaScript calls 'toJson' with other than one argument in '{Quote(call)}'.",
+                    "Call it with exactly one argument before import."));
+                return;
+            }
+
+            if (IsDeclared("JSON"))
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    "JavaScript declares its own 'JSON', and the converter turns Elsa 3's 'toJson' into 'JSON.stringify'.",
+                    "Rename the script's 'JSON' in the Elsa 3 workflow before import."));
+                return;
+            }
+
+            Visit(call.Arguments[0]);
+            Edits.Add(new SourceEdit(callee.Start, callee.End, "JSON.stringify"));
+            Warnings.Add(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.ToJsonRewritten,
+                $"JavaScript calls 'toJson' in '{Quote(call)}', converted to JSON.stringify. The text can differ from Elsa 3's: Elsa 3 wrote the HTML-sensitive characters <, >, &, ', + and ` and characters outside the Basic Multilingual Plane as \\uXXXX escapes, wrote a Date with trimmed fractional seconds, wrote undefined as null and failed on NaN; JSON.stringify omits an undefined property and writes NaN as null. The parsed value is the same apart from the undefined and NaN cases.",
+                "Check that nothing depends on the exact text, before import."));
+        }
+
+        private enum DateUse
+        {
+            /// <summary>A local getter or setter (<c>getHours()</c>, <c>setDate()</c>).</summary>
+            LocalField,
+
+            /// <summary>The local multi-argument constructor (<c>new Date(2026, 9, 28)</c>).</summary>
+            LocalConstructor,
+
+            /// <summary>A parse of text without an offset, or of a value that is not a literal.</summary>
+            Parse,
+
+            /// <summary>Local text: <c>toString()</c>, <c>toDateString()</c>, <c>toTimeString()</c>, <c>Date()</c>.</summary>
+            LocalFormat,
+
+            /// <summary>Locale text formatted in the server's zone: a locale but no <c>timeZone</c>.</summary>
+            ZoneFormat,
+        }
+
+        /// <summary>Methods that exist only on <c>Date</c> and read or write local time (FR-022), recognised by name.</summary>
+        private static readonly HashSet<string> LocalDateMethods = new(StringComparer.Ordinal)
+        {
+            "getDate", "getDay", "getFullYear", "getHours", "getMilliseconds", "getMinutes", "getMonth", "getSeconds",
+            "getTimezoneOffset", "getYear", "setDate", "setFullYear", "setHours", "setMilliseconds", "setMinutes",
+            "setMonth", "setSeconds", "setYear", "toDateString", "toTimeString",
+        };
+
+        private static readonly HashSet<string> LocaleMethods = new(StringComparer.Ordinal)
+        {
+            "toLocaleString", "toLocaleDateString", "toLocaleTimeString",
+        };
+
+        private static readonly HashSet<string> IntlConstructors = new(StringComparer.Ordinal)
+        {
+            "DateTimeFormat", "NumberFormat", "Collator", "PluralRules", "RelativeTimeFormat", "ListFormat", "DisplayNames",
+            "Segmenter",
+        };
+
+        /// <summary>
+        /// Date statics, local date methods and locale-dependent calls (FR-021 to FR-024, FR-033). Returns false for any
+        /// other member call, which the caller visits as usual.
+        /// </summary>
+        private bool VisitDateOrLocaleCall(CallExpression call, MemberExpression callee)
+        {
+            if (callee.Computed || callee.Property is not Identifier property)
+                return false;
+            var name = property.Name;
+            var receiver = callee.Object;
+
+            if (receiver is Identifier { Name: "Date" } && !IsDeclared("Date"))
+            {
+                if (name != "parse")
+                    return false;
+                foreach (var argument in call.Arguments)
+                    Visit(argument);
+                if (call.Arguments.Count > 0 && !IsZoneIndependentText(call.Arguments[0]))
+                    ZoneDependent(call, DateUse.Parse, () => Edits.Add(new SourceEdit(callee.Start, callee.End, $"{Elsa3ZonedDateHelper.Name}.parse")));
+                return true;
+            }
+
+            if (receiver is Identifier { Name: "Intl" } && !IsDeclared("Intl") && IntlConstructors.Contains(name))
+            {
+                foreach (var argument in call.Arguments)
+                    Visit(argument);
+                CheckIntlLocale(call, name, call.Arguments);
+                return true;
+            }
+
+            if (LocaleMethods.Contains(name))
+            {
+                Visit(receiver);
+                foreach (var argument in call.Arguments)
+                    Visit(argument);
+                if (call.Arguments.Count == 0 || IsUndefined(call.Arguments[0]))
+                    Issues.Add(LocaleRefusal(call, name));
+                else if (IsKnownDate(receiver) && !HasTimeZoneOption(call.Arguments, 1))
+                    ZoneDependent(call, DateUse.ZoneFormat, null);
+                return true;
+            }
+
+            if (name == "localeCompare")
+            {
+                Visit(receiver);
+                foreach (var argument in call.Arguments)
+                    Visit(argument);
+                if (call.Arguments.Count < 2 || IsUndefined(call.Arguments[1]))
+                    Issues.Add(LocaleRefusal(call, name));
+                return true;
+            }
+
+            if (LocalDateMethods.Contains(name))
+            {
+                Visit(receiver);
+                foreach (var argument in call.Arguments)
+                    Visit(argument);
+                var use = name is "toDateString" or "toTimeString" ? DateUse.LocalFormat : DateUse.LocalField;
+                ZoneDependent(call, use, () => WrapLocalCall(call, callee, name));
+                return true;
+            }
+
+            if (name == "toString" && call.Arguments.Count == 0)
+            {
+                // The receiver is visited first: a converted date-typed read is known as a date once it is rewritten.
+                Visit(receiver);
+                if (IsKnownDate(receiver))
+                    ZoneDependent(call, DateUse.LocalFormat, null);
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary><c>new Date(...)</c>: no argument, a number, a date or text with an offset is an instant (FR-021).</summary>
+        private void VisitDateConstruction(NewExpression construction)
+        {
+            foreach (var argument in construction.Arguments)
+                Visit(argument);
+
+            var arguments = construction.Arguments;
+            if (arguments.Count == 0)
+                return;
+            if (arguments.Count == 1 && arguments[0] is not SpreadElement)
+            {
+                var argument = arguments[0];
+                if (IsZoneIndependentDateArgument(argument))
+                    return;
+                ZoneDependent(construction, DateUse.Parse, () =>
+                {
+                    Edits.Add(new SourceEdit(argument.Start, argument.Start, $"{Elsa3ZonedDateHelper.Name}.from("));
+                    Edits.Add(new SourceEdit(argument.End, argument.End, ")"));
+                });
+                return;
+            }
+
+            ZoneDependent(construction, DateUse.LocalConstructor, () =>
+            {
+                Edits.Add(new SourceEdit(arguments[0].Start, arguments[0].Start, $"{Elsa3ZonedDateHelper.Name}.local("));
+                Edits.Add(new SourceEdit(arguments[^1].End, arguments[^1].End, ")"));
+            });
+        }
+
+        /// <summary>FR-033: an <c>Intl</c> constructor needs an explicit locale; a date format without a zone is zone-dependent.</summary>
+        private void CheckIntlLocale(Node node, string constructor, IReadOnlyList<Node> arguments)
+        {
+            if (arguments.Count == 0 || IsUndefined(arguments[0]))
+                Issues.Add(LocaleRefusal(node, $"Intl.{constructor}"));
+            else if (constructor == "DateTimeFormat" && !HasTimeZoneOption(arguments, 1))
+                ZoneDependent(node, DateUse.ZoneFormat, null);
+        }
+
+        /// <summary>
+        /// Applies the date interpretation to zone-dependent usage (FR-022 to FR-024): refused under <c>Refuse</c>;
+        /// converted with a warning under <c>AssumeUtc</c>; under <c>SourceTimeZone</c> rewritten with the zone in the
+        /// code, except local text, which depends on the Elsa 3 server's operating system and is refused.
+        /// <paramref name="rewrite"/> adds its edits after the node's children were visited, so it wraps theirs.
+        /// </summary>
+        private void ZoneDependent(Node node, DateUse use, Action? rewrite)
+        {
+            var quote = Quote(node);
+            var what = use switch
+            {
+                DateUse.Parse => $"parses a date from text in '{quote}': text without an offset is a local time, and text that is not a literal may have none",
+                DateUse.LocalFormat => $"formats a date as local text in '{quote}'",
+                DateUse.ZoneFormat => $"formats a date with a locale but no timeZone in '{quote}', which uses the local time zone",
+                DateUse.LocalConstructor => $"builds a date from local date and time fields in '{quote}'",
+                _ => $"reads or changes local date and time in '{quote}'",
+            };
+            var isText = use is DateUse.LocalFormat or DateUse.ZoneFormat;
+
+            switch (DateInterpretation)
+            {
+                case Elsa3DateInterpretation.AssumeUtc:
+                    AppliedDateInterpretation = true;
+                    Warnings.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.DateAssumedUtc,
+                        $"JavaScript {what}. It is converted as if the Elsa 3 server ran on UTC (date interpretation AssumeUtc); the result differs from Elsa 3 if that server was not on UTC.",
+                        "If the Elsa 3 server was not on UTC, set the date interpretation to SourceTimeZone with its IANA time zone and convert again."));
+                    return;
+                case Elsa3DateInterpretation.SourceTimeZone when !isText && rewrite is not null:
+                    AppliedDateInterpretation = true;
+                    _usesZonedHelper = true;
+                    if (IsDeclared(Elsa3ZonedDateHelper.Name))
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                            $"JavaScript declares '{Elsa3ZonedDateHelper.Name}', the name the converter gives its time zone helper.",
+                            "Rename the declaration before import."));
+                        return;
+                    }
+
+                    rewrite();
+                    return;
+                case Elsa3DateInterpretation.SourceTimeZone:
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                        $"JavaScript {what}. Elsa 3's text depended on the server's time zone and operating system (for example 'GMT+0100 (Central European Standard Time)'), which Elsa 4 cannot reproduce.",
+                        $"Use toISOString(), or Intl.DateTimeFormat or toLocaleString with an explicit locale and timeZone (for example {{ timeZone: '{SourceTimeZone}' }}), in the Elsa 3 workflow before import."));
+                    return;
+                default:
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                        $"JavaScript {what}. Elsa 3 evaluated it in its server's time zone; Elsa 4 evaluates every expression in UTC, and the converter's date interpretation is Refuse.",
+                        isText
+                            ? "Set the Elsa 3 converter's date interpretation to AssumeUtc to accept UTC, or rewrite it in the Elsa 3 workflow with toISOString() or with an explicit locale and timeZone, before import."
+                            : "Set the Elsa 3 converter's date interpretation to SourceTimeZone with the Elsa 3 server's IANA time zone (for example 'Europe/Amsterdam'), or to AssumeUtc to accept UTC; or rewrite it in the Elsa 3 workflow with UTC methods (getUTCHours) or an explicit offset, before import."));
+                    return;
+            }
+        }
+
+        /// <summary><c>R.name(args)</c> becomes <c>__elsa3Tz.call(R, "name", [args])</c> (FR-023).</summary>
+        private void WrapLocalCall(CallExpression call, MemberExpression callee, string name)
+        {
+            var open = Source.IndexOf('(', callee.End);
+            Edits.Add(new SourceEdit(call.Start, call.Start, $"{Elsa3ZonedDateHelper.Name}.call("));
+            Edits.Add(new SourceEdit(callee.Object.End, open + 1, $", {JsonSerializer.Serialize(name)}, ["));
+            Edits.Add(new SourceEdit(call.End - 1, call.End, "])"));
+        }
+
+        /// <summary>Whether <paramref name="node"/> is known to be a <c>Date</c>: a construction, a rewritten date value or an alias.</summary>
+        private bool IsKnownDate(Node node) => node switch
+        {
+            NewExpression { Callee: Identifier { Name: "Date" } } => !IsDeclared("Date"),
+            Identifier alias => _dateAliases.Contains(alias.Name),
+            _ => _dateReads.Contains(node),
+        };
+
+        /// <summary>A one-argument construction that is an instant whatever the zone: a number, a date or offset text.</summary>
+        private bool IsZoneIndependentDateArgument(Node argument) => argument switch
+        {
+            Literal { Value: string } => IsZoneIndependentText(argument),
+            Literal => true,
+            UnaryExpression { Operator: Operator.UnaryNegation or Operator.UnaryPlus } => true,
+            BinaryExpression { Operator: Operator.Subtraction or Operator.Multiplication or Operator.Division or Operator.Remainder } => true,
+            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" or "valueOf" or "now" or "UTC" or "parse" } } } => true,
+            _ => IsKnownDate(argument),
+        };
+
+        /// <summary>A literal date text that carries <c>Z</c> or an offset, or is date-only, which ECMAScript reads as UTC.</summary>
+        private static bool IsZoneIndependentText(Node argument)
+        {
+            var text = argument switch
+            {
+                Literal { Value: string literal } => literal,
+                TemplateLiteral { Expressions.Count: 0 } template => template.Quasis[0].Value.Cooked,
+                _ => null,
+            };
+            return text is not null && (DateOnlyText.IsMatch(text) || OffsetText.IsMatch(text));
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex DateOnlyText = new(@"^\s*[+-]?\d{4,6}(?:-\d{2}(?:-\d{2})?)?\s*$");
+
+        private static readonly System.Text.RegularExpressions.Regex OffsetText =
+            new(@"(?:[zZ]|[+-]\d{2}(?::?\d{2})?|\b(?:UTC|GMT|UT)\b[^()]*)\s*(?:\([^)]*\))?\s*$");
+
+        private static bool IsUndefined(Node node) => node is Identifier { Name: "undefined" };
+
+        private static bool HasTimeZoneOption(IReadOnlyList<Node> arguments, int index) =>
+            arguments.Count > index && arguments[index] is ObjectExpression options &&
+            options.Properties.OfType<Property>().Any(property => property.Key is Identifier { Name: "timeZone" } or Literal { Value: "timeZone" });
+
+        private Elsa3ExpressionRewriteIssue LocaleRefusal(Node node, string name) => new(
+            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+            $"JavaScript calls '{name}' without an explicit locale in '{Quote(node)}'. Elsa 3 used the server's culture; Elsa 4 uses the invariant culture.",
+            "Pass an explicit locale (for example 'nl-NL') in the Elsa 3 workflow before import.");
+
+        private string Quote(Node node)
+        {
+            var text = Source[node.Start..node.End].ReplaceLineEndings(" ");
+            return text.Length <= 160 ? text : text[..157] + "...";
+        }
+
+        /// <summary>
+        /// <c>crypto.randomUUID</c>, which Elsa 3 did not provide. The clock and <c>Math.random</c> convert (spec 1223
+        /// FR-001, FR-014).
+        /// </summary>
         private bool IsNondeterministicCall(MemberExpression member) =>
             member.Object is Identifier root && !IsDeclared(root.Name) &&
             member.Property is Identifier property &&
-            ((root.Name.Equals("Math", StringComparison.Ordinal) && property.Name.Equals("random", StringComparison.Ordinal)) ||
-             (root.Name.Equals("Date", StringComparison.Ordinal) && property.Name.Equals("now", StringComparison.Ordinal)) ||
-             (root.Name.Equals("crypto", StringComparison.Ordinal) && property.Name.Equals("randomUUID", StringComparison.Ordinal)));
+            root.Name.Equals("crypto", StringComparison.Ordinal) && property.Name.Equals("randomUUID", StringComparison.Ordinal);
     }
 
     private static class LiquidTokenScanner
@@ -1602,13 +2076,25 @@ public sealed class Elsa3ExpressionParameterResolution
     /// </summary>
     public string? VariableName { get; }
 
-    public static Elsa3ExpressionParameterResolution Success(ExpressionParameterBinding binding) => new(binding, null);
+    /// <summary>
+    /// What the value was in an Elsa 3 script, from its Elsa 3 type (spec 1223 FR-016, FR-032): a date is rewritten to a
+    /// <c>Date</c>; a live .NET object is checked by the .NET-usage analysis.
+    /// </summary>
+    public Elsa3ScriptValueKind ScriptValueKind { get; private init; }
+
+    public static Elsa3ExpressionParameterResolution Success(
+        ExpressionParameterBinding binding,
+        Elsa3ScriptValueKind scriptValueKind = Elsa3ScriptValueKind.Json) =>
+        new(binding, null) { ScriptValueKind = scriptValueKind };
 
     /// <summary>A resolved variable read, which an Elsa 4 script reads as <c>variables.&lt;variableName&gt;</c>.</summary>
-    public static Elsa3ExpressionParameterResolution SuccessVariable(VariableExpressionParameterBinding binding, string variableName)
+    public static Elsa3ExpressionParameterResolution SuccessVariable(
+        VariableExpressionParameterBinding binding,
+        string variableName,
+        Elsa3ScriptValueKind scriptValueKind = Elsa3ScriptValueKind.Json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(variableName);
-        return new(binding, null, variableName);
+        return new(binding, null, variableName) { ScriptValueKind = scriptValueKind };
     }
     public static Elsa3ExpressionParameterResolution Failure(Elsa3ExpressionRewriteIssue issue) => new(null, issue);
 }
@@ -1638,6 +2124,22 @@ public sealed class Elsa3ExpressionRewriteResult
 
     /// <summary>Whether the converted source reads variables by a computed name (spec 1222 FR-027), served by the run-time lookup.</summary>
     public bool HasComputedVariableRead { get; private init; }
+
+    /// <summary>Behaviour warnings of a successful conversion (spec 1223 FR-009, FR-022): it converts, but differs.</summary>
+    public IReadOnlyList<Elsa3ExpressionRewriteIssue> Warnings { get; private init; } = [];
+
+    /// <summary>Whether the converter's date interpretation decided how the expression converted (spec 1223 FR-034).</summary>
+    public bool AppliedDateInterpretation { get; private init; }
+
+    internal Elsa3ExpressionRewriteResult WithConversionNotes(IReadOnlyList<Elsa3ExpressionRewriteIssue> warnings, bool appliedDateInterpretation) =>
+        new(Definition, Issues)
+        {
+            CompletionValueLost = CompletionValueLost,
+            ScriptOutcomes = ScriptOutcomes,
+            HasComputedVariableRead = HasComputedVariableRead,
+            Warnings = warnings.ToArray(),
+            AppliedDateInterpretation = appliedDateInterpretation,
+        };
 
     public static Elsa3ExpressionRewriteResult SuccessReading(
         bool computedVariableRead,
@@ -1688,6 +2190,21 @@ public static class Elsa3ImportDiagnosticCodes
 
     /// <summary>Warning: a computed variable read could reach a name declared in more than one visible scope (spec 1222 FR-031).</summary>
     public const string ShadowedCandidate = "VF-IMP-011";
+
+    /// <summary>
+    /// A script uses a member of a value that was a live .NET object in Elsa 3, a .NET type, or a .NET-style member
+    /// (spec 1223 FR-016 to FR-018): refused, because Elsa 4 values are JSON.
+    /// </summary>
+    public const string DotNetMemberUsage = "VF-IMP-012";
+
+    /// <summary>Warning: Elsa 3's <c>toJson</c> was converted to <c>JSON.stringify</c>, whose text can differ (spec 1223 FR-009).</summary>
+    public const string ToJsonRewritten = "ELS3-BEHAVIOUR-TOJSON-STRINGIFY";
+
+    /// <summary>Warning: local date and time converted as UTC under the date interpretation AssumeUtc (spec 1223 FR-022).</summary>
+    public const string DateAssumedUtc = "ELS3-BEHAVIOUR-DATE-ASSUMED-UTC";
+
+    /// <summary>Info: the date interpretation the converter applied to a workflow's scripts (spec 1223 FR-034).</summary>
+    public const string DateInterpretationApplied = "ELS3-DATE-INTERPRETATION";
 
     /// <summary>Info: a converted script selects a converter-declared catch-all for computed names outside its known set (spec 1208).</summary>
     public const string ScriptOutcomeCatchAll = "ELS3-SCRIPT-OUTCOME-CATCHALL";

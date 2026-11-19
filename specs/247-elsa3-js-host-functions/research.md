@@ -158,6 +158,8 @@ this is recorded in the ADR 0045 amendment rather than mitigated.
 
 ## R-6 Helpers
 
+> **Superseded in part by spec 1223** (S-1): the rows below for the GUID functions, `parseGuid`, `toJson`, `stringToBase64` and `stringFromBase64` no longer refuse. The GUID functions, `parseGuid` and the Base64 pair are Elsa 4 built-ins that return Elsa 3's text (spec 1223 FR-006, FR-007, FR-026); `toJson` is rewritten to `JSON.stringify` with a behaviour warning (FR-009). The byte and stream helpers and `getConfig` stay refused (FR-013).
+
 | Helper | Elsa 3 (`Handlers/ConfigureEngineWithCommonFunctions.cs`) | Decision |
 |---|---|---|
 | `isNullOrEmpty(string)` | `string.IsNullOrEmpty` (L50) | Inline: `v == null \|\| v === ""` |
