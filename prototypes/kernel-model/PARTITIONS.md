@@ -428,11 +428,13 @@ The follow-ups that slice 2a recorded for this slice:
     thread, so the queue keeps every continuation on it.
   - `Placed` cuts the heartbeat's free partitions to the four the world places, so the fair share is of those. The
     other partitions stay free, and nothing asks for them.
-- **What the count changes in the simulation: nothing but the rows.** Spread placement (children, event starts,
-  correlation instances) hashes over the four placed partitions, and nothing in the kernel reads the count except the
-  store's rows and the heartbeat's free list. At 4,096 every seed therefore runs exactly as at 1,024. The two
-  `--coverage` runs of 10,000 seeds agree to the unit, and so do the native runs. The CI runs both counts, which pins
-  that. What the count does change is measured in rows per take and per beat (slice 8).
+- **The sim's `--count` only sizes the store's rows.** Every world places partitions 0 to 3. Spread placement
+  (children, event starts, correlation instances) hashes over those four, and nothing in the kernel reads the count
+  except the store's rows and the heartbeat's free list. So at 4,096 every seed runs exactly as at 1,024: the two
+  `--coverage` runs of 10,000 seeds agree to the unit, and so do the native runs. Scattered ids would need new
+  mechanism in spread placement and in the count guard, and K1 does not need them. **4,096 is qualified end to end by
+  the integrated runtime suite** (`semantic --partitions 4096`, built-in runtime, below). The PR gate runs the sim at
+  1,024 only; the nightly runs it at 4,096 too, at reduced seeds, in a job of its own with the runtime suite.
 - **Multi-partition flushes.** In 10,000 seeds of 300 actions, at either count: 289,891 commits over several partitions
   landed fenced; 242 had part of their fences stale and 38 all of them, and each was refused whole.
 - **Checks moved to per-partition epochs** (#4813's list):
@@ -447,10 +449,24 @@ The follow-ups that slice 2a recorded for this slice:
 - **Mutations.** Every one of the 43 keeps its verdict at `--seeds 20000`. `TrialPerPartition` (a worker's own gate) is
   caught at seed 7, a seed with a worker per partition: under one worker per node it changes nothing, because the gate
   is already the node's. `NoWriteFirst` is caught at seed 3208, earlier than 6946.
+- **The sim's counters against main.** The set worlds change every seed's schedule, so the sweep's counters differ
+  from main's (for example "owners lost", the native "finished instances matched"). They are not comparable seed for
+  seed: a node is one actor now, four partitions spread the traffic thinner, and one worker serves a node's set. In the
+  native mutations `FreshTurnSwapsLoopKeys` is first caught at seed 3589, against 269 on main, for the same reason
+  (NATIVE.md); the PR gate runs the native mutations at 12,000 seeds to keep three times that.
 - **Runtime conformance at 1,024.** `semantic --partitions 1024` runs the cases written for the default count of 4 at
   1,024. The owned-set cases name the partitions of their count and keep it. The built-in runtime passes 16 of 16 in
   about 41 s, and the Orleans adapter 14 required cases in about 40 s, with the reference case "join" differing as it
   does at 4: Orleans' placement does not move grains to a node that joins.
+- **Runtime conformance at 4,096** (built-in runtime). The case "crash: a crashed node's scopes are taken over" did not
+  end within 120 s in review (it takes 17 s at 1,024 and 33 s at 2,048). Above 1,024 a case's settling bounds and its
+  time now grow with the count, so it records the takeover instead of failing, and the crash case logs how long the
+  takeover took. Run here: 17 of 17 passed in 215 s. The crash case took 175 s, while its takeover (2,048 of 4,096
+  scopes) settled 6.6 s after the kill, so most of the case's time lies before the kill (two nodes taking 4,096
+  partitions one at a time) and after it. Slice 8 measures and fixes that cost.
+- **A runtime-suite case for the count check** ("count: a node whose workers place another count than its store and
+  runtime is refused at its start") runs on the built-in runtime and the Orleans adapter. The runtime suite's watcher
+  passes the check through to layer 2's host, and a store that does not say its count is refused too.
 - **Recorded for slice 8:**
   - `RuntimeNode` reads every scope's due time each round: 1,024 cheap reads per round. It runs one worker pass per
     round (slice 5a's one-pass rule).
