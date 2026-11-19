@@ -175,15 +175,16 @@ public sealed partial class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task A_node_that_uses_javascript_is_pinned_to_the_value_adapter_and_the_pin_changes_the_hash()
+    public async Task An_executable_that_uses_javascript_is_pinned_to_the_value_adapter_and_the_pin_changes_the_hash()
     {
-        // Spec 1228 FR-028: the pin is node content, so the executable's hash covers it.
+        // Spec 1228 FR-028: one pin per executable, in its hashed content.
         var node = Node("consumer", JavaScriptText("variables.greeting + '!'"));
         var unpinned = await CompileReadsAsync(node, [Greeting]);
         var pinned = await CompileReadsAsync(node, [Greeting], [new ExpressionValueAdapter("JavaScript", "json-1")]);
 
-        Assert.Equal("json-1", pinned.RootActivity.Metadata[ExecutableNodeValueAdapters.Key("JavaScript")]);
-        Assert.False(unpinned.RootActivity.Metadata.ContainsKey(ExecutableNodeValueAdapters.Key("JavaScript")));
+        Assert.Equal("json-1", pinned.CompatibilityMetadata["javascript.valueAdapter"]);
+        Assert.False(unpinned.CompatibilityMetadata.ContainsKey("javascript.valueAdapter"));
+        Assert.DoesNotContain(pinned.Nodes, node => node.Metadata.Keys.Any(key => key.Contains("valueAdapter", StringComparison.Ordinal)));
         Assert.NotEqual(unpinned.Identity.ArtifactHash, pinned.Identity.ArtifactHash);
     }
 

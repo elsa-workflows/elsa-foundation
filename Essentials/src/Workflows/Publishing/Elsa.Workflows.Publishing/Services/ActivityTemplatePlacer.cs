@@ -63,8 +63,20 @@ public sealed class ActivityTemplatePlacer(
     RuntimeInputBindingCompiler inputBindingCompiler,
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
     IWellKnownTypeRegistry? typeRegistry = null,
-    Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null)
+    Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null,
+    IEnumerable<Elsa.Expressions.Core.Models.ExpressionValueAdapter>? valueAdapters = null,
+    IEnumerable<Elsa.Expressions.Core.Models.ScriptActivityLanguage>? scriptActivities = null)
 {
+    private readonly Elsa.Expressions.Core.Models.ExpressionValueAdapter[] _valueAdapters = (valueAdapters ?? []).ToArray();
+    private readonly Elsa.Expressions.Core.Models.ScriptActivityLanguage[] _scriptActivities = (scriptActivities ?? []).ToArray();
+
+    /// <summary>
+    /// The value adapter pins of an executable built from a placed tree outside the workflow compiler, such as an
+    /// activity draft's Test Run wrapper (spec 1228 FR-028).
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ValueAdapterPins(ExecutableNode root) =>
+        ExecutableValueAdapters.Required(root.DescendantsAndSelf(), null, _valueAdapters, _scriptActivities);
+
     private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }

@@ -43,10 +43,11 @@ public sealed class ExecutableNodeCompiler(
     private readonly IReadOnlyCollection<ScriptActivityLanguage> _scriptActivities = (scriptActivities ?? []).ToArray();
 
     /// <summary>
-    /// Pins the value adapter version of each expression language a node uses into its metadata (spec 1228 FR-028). Run
-    /// on the complete tree, before the executable is hashed.
+    /// The value adapter pins of an executable (spec 1228 FR-028): one per registered expression language its complete
+    /// tree, placed reusable activities included, or its variables use. They go into the hash and the compatibility metadata.
     /// </summary>
-    public ExecutableNode PinValueAdapters(ExecutableNode root) => ExecutableNodeValueAdapters.PinTree(root, _valueAdapters, _scriptActivities);
+    public IReadOnlyDictionary<string, string> ValueAdapterPins(ExecutableNode root, IEnumerable<RuntimeVariableDeclaration>? workflowVariables) =>
+        ExecutableValueAdapters.Required(root.DescendantsAndSelf(), workflowVariables, _valueAdapters, _scriptActivities);
 
     /// <summary>
     /// The scoped-variable visibility of one compilation, iteration scopes included, kept per tree projection so the

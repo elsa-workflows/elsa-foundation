@@ -30,15 +30,29 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         return Hash(NodePayload(rootActivity));
     }
 
+    /// <summary>
+    /// Hashes the node tree and the value adapter pins (spec 1228 FR-028). With no pin it is <see cref="ComputeHash(ExecutableNode)"/>.
+    /// </summary>
+    public string ComputeHash(ExecutableNode rootActivity, IReadOnlyDictionary<string, string> valueAdapters)
+    {
+        ArgumentNullException.ThrowIfNull(valueAdapters);
+        return valueAdapters.Count == 0
+            ? ComputeHash(rootActivity)
+            : Hash(NodePayload(rootActivity) + "\nvalueAdapters:" + string.Join(',', valueAdapters
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .Select(item => $"{item.Key}={item.Value}")));
+    }
+
     public string ComputeHash(
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
         PersistenceMode? persistenceMode = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
-        IncidentStrategyReference? incidentStrategy = null) =>
+        IncidentStrategyReference? incidentStrategy = null,
+        IReadOnlyDictionary<string, string>? valueAdapters = null) =>
         ComputeBehavioralHash(rootActivity, inputContract, dependencies, persistenceMode, workflowVariables,
-            incidentStrategy, includeInputContracts: true);
+            incidentStrategy, includeInputContracts: true, valueAdapters);
 
     public bool MatchesHash(WorkflowExecutable executable)
     {
@@ -50,9 +64,10 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         // rendering; every new publication uses V2 so it cannot deduplicate onto a stale V1 body.
         // Check V1 first so its verification does not depend on serializing fields it never covered.
         // No V1 artifact can hold a member read, and V1 never rendered a selection, so one is never matched as V1.
+        var valueAdapters = ValueAdapterPins(executable);
         if (ReadsAnyMember(executable))
             return StringComparer.Ordinal.Equals(ComputeHash(executable.RootActivity, contract, executable.Dependencies,
-                executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy), executable.Identity.ArtifactHash);
+                executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy, valueAdapters), executable.Identity.ArtifactHash);
 
         var historical = ComputeBehavioralHash(executable.RootActivity, contract, executable.Dependencies,
             executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy,
@@ -61,9 +76,12 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             return true;
 
         var current = ComputeHash(executable.RootActivity, contract, executable.Dependencies,
-            executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy);
+            executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy, valueAdapters);
         return StringComparer.Ordinal.Equals(current, executable.Identity.ArtifactHash);
     }
+
+    private static IReadOnlyDictionary<string, string> ValueAdapterPins(WorkflowExecutable executable) =>
+        ExecutableValueAdapters.Pins(executable.CompatibilityMetadata).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 
     private static bool ReadsAnyMember(WorkflowExecutable executable) =>
         executable.Nodes.SelectMany(node => node.InputBindings.Values).Any(binding => binding.Selection is not null) ||
@@ -76,7 +94,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         PersistenceMode? persistenceMode,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
         IncidentStrategyReference? incidentStrategy,
-        bool includeInputContracts)
+        bool includeInputContracts,
+        IReadOnlyDictionary<string, string>? valueAdapters = null)
     {
         ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(inputContract);
@@ -92,7 +111,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
                 persistenceMode,
                 workflowVariables,
                 incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference,
-                includeInputContracts);
+                includeInputContracts,
+                valueAdapters);
 
         return Hash(stream.ToArray());
     }
@@ -284,11 +304,23 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         PersistenceMode? persistenceMode,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
         IncidentStrategyReference incidentStrategy,
-        bool includeInputContracts)
+        bool includeInputContracts,
+        IReadOnlyDictionary<string, string>? valueAdapters)
     {
         writer.WriteStartObject();
         writer.WriteNumber("schemaVersion", includeInputContracts ? 2 : 1);
         writer.WriteString("rootNodeId", rootActivity.ExecutableNodeId);
+
+        // Spec 1228 FR-028: the value adapter versions an executable runs with are behavior, so equal hash implies equal
+        // versions and a republish under another version is another artifact. Written only when pinned, so an
+        // executable that uses no adapter hashes byte-identically to before the field existed.
+        if (valueAdapters is { Count: > 0 })
+        {
+            writer.WriteStartObject("valueAdapters");
+            foreach (var (key, version) in valueAdapters.OrderBy(item => item.Key, StringComparer.Ordinal))
+                writer.WriteString(key, version);
+            writer.WriteEndObject();
+        }
 
         writer.WriteStartObject("incidentStrategy");
         writer.WriteString("alias", incidentStrategy.Alias);
@@ -377,19 +409,6 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             writer.WriteString("executionPlacement", node.ExecutionPlacement.ToString());
         if (node.ActivityContract is { } activityContract)
             writer.WriteString("sideEffectProfile", activityContract.SideEffectProfile.ToString());
-        // Spec 1228 FR-028: the value adapter versions a node runs with are behavior, so they are part of its identity.
-        // Written only when pinned, so a node that uses no adapter keeps its hash.
-        var valueAdapters = node.Metadata
-            .Where(item => item.Key.StartsWith(ExecutableNodeValueAdapters.KeyPrefix, StringComparison.Ordinal))
-            .OrderBy(item => item.Key, StringComparer.Ordinal)
-            .ToArray();
-        if (valueAdapters.Length > 0)
-        {
-            writer.WriteStartObject("valueAdapters");
-            foreach (var (key, version) in valueAdapters)
-                writer.WriteString(key[ExecutableNodeValueAdapters.KeyPrefix.Length..], version);
-            writer.WriteEndObject();
-        }
         writer.WriteStartObject("descriptor");
         writer.WriteString("consumerKey", node.Descriptor.ConsumerKey);
         writer.WriteString("schemaVersion", node.Descriptor.SchemaVersion);

@@ -573,15 +573,18 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     private WorkflowExecutable PinClrActivityContracts(WorkflowExecutable executable) =>
         new(
             executable.Identity,
-            // A hand-built executable stands for a published one, so it gets the value adapter pins publication adds
-            // (spec 1228 FR-028).
-            ExecutableNodeValueAdapters.PinTree(
-                PinClrActivityContract(executable.RootActivity),
-                _provider.GetServices<Elsa.Expressions.Core.Models.ExpressionValueAdapter>().ToArray(),
-                _provider.GetServices<Elsa.Expressions.Core.Models.ScriptActivityLanguage>().ToArray()),
+            PinClrActivityContract(executable.RootActivity),
             executable.ResumeTargets,
             executable.CreatedAt,
-            executable.CompatibilityMetadata,
+            // A hand-built executable stands for a published one, so it gets the value adapter pins publication adds
+            // (spec 1228 FR-028).
+            ExecutableValueAdapters.Stamp(
+                executable.CompatibilityMetadata,
+                ExecutableValueAdapters.Required(
+                    executable.Nodes,
+                    executable.WorkflowVariables,
+                    _provider.GetServices<Elsa.Expressions.Core.Models.ExpressionValueAdapter>(),
+                    _provider.GetServices<Elsa.Expressions.Core.Models.ScriptActivityLanguage>())),
             inputContract: executable.InputContract,
             dependencies: executable.Dependencies,
             runtimeRequirements: null,

@@ -18,20 +18,26 @@ public sealed class WorkflowExecutableHasher
 
     public string ComputeHash(ExecutableNode rootActivity) => _inner.ComputeHash(rootActivity);
 
+    /// <summary>Hashes the node tree and the value adapter pins (spec 1228 FR-028).</summary>
+    public string ComputeHash(ExecutableNode rootActivity, IReadOnlyDictionary<string, string> valueAdapters) =>
+        ((Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher)_inner).ComputeHash(rootActivity, valueAdapters);
+
     public string ComputeHash(
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
         PersistenceMode? persistenceMode = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
-        IncidentStrategyReference? incidentStrategy = null) =>
+        IncidentStrategyReference? incidentStrategy = null,
+        IReadOnlyDictionary<string, string>? valueAdapters = null) =>
         _inner.ComputeHash(
             rootActivity,
             inputContract,
             dependencies,
             persistenceMode,
             workflowVariables,
-            incidentStrategy);
+            incidentStrategy,
+            valueAdapters);
 
     public string CreateArtifactId(string artifactIdPrefix, string artifactHash) =>
         _inner.CreateArtifactId(artifactIdPrefix, artifactHash);

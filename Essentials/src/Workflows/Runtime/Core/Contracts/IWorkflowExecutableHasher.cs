@@ -37,14 +37,18 @@ public interface IWorkflowExecutableHasher
     /// <summary>Hashes the node tree alone.</summary>
     string ComputeHash(ExecutableNode rootActivity);
 
-    /// <summary>Hashes the full behavioural payload — node tree, input contract, dependencies, persistence mode, variables and incident strategy.</summary>
+    /// <summary>
+    /// Hashes the full behavioural payload — node tree, input contract, dependencies, persistence mode, variables,
+    /// incident strategy and the value adapter pins (spec 1228 FR-028, see <see cref="ExecutableValueAdapters"/>).
+    /// </summary>
     string ComputeHash(
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
         PersistenceMode? persistenceMode = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
-        IncidentStrategyReference? incidentStrategy = null);
+        IncidentStrategyReference? incidentStrategy = null,
+        IReadOnlyDictionary<string, string>? valueAdapters = null);
 
     /// <summary>
     /// Verifies the declared hash using a canonical schema this implementation supports. The default
@@ -56,7 +60,9 @@ public interface IWorkflowExecutableHasher
         ArgumentNullException.ThrowIfNull(executable);
         return executable.InputContract is { } contract && StringComparer.Ordinal.Equals(
             ComputeHash(executable.RootActivity, contract, executable.Dependencies, executable.PersistenceMode,
-                executable.WorkflowVariables, executable.IncidentStrategy), executable.Identity.ArtifactHash);
+                executable.WorkflowVariables, executable.IncidentStrategy,
+                ExecutableValueAdapters.Pins(executable.CompatibilityMetadata).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal)),
+            executable.Identity.ArtifactHash);
     }
 
     /// <summary>Derives the content-addressed artifact id from a computed hash.</summary>
