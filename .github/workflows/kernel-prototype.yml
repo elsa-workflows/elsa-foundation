@@ -120,6 +120,10 @@ jobs:
           STC="dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll"
           $STC semantic
           $STC semantic-flaw FenceSubset "the K1 witness" "the held flush landed"
+          # K1b slice 1: the node lease's store cases, each failing on its own check under its mutation.
+          $STC semantic-flaw TakeIgnoresNodeLease "NL-2" "from the live p"
+          $STC semantic-flaw PlainReadEmptyFence "NL-5" "taken on the wire landed"
+          $STC semantic-flaw StableNodeName "NL-6" "while its predecessor's node lease was live"
 
       - name: Graph engine corpus
         run: dotnet test models/Graph.Tests -c Release --no-build

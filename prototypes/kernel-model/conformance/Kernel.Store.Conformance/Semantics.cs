@@ -9,7 +9,8 @@ namespace Kernel.Store.Conformance;
 public enum Level { Required, Reference }
 
 /// <param name="Partitions">How many partitions the case's fresh store has.</param>
-public sealed record Case(string Name, Level Level, Func<Context, Task> Body, int Partitions = 2);
+/// <param name="NodeLease">The case asks for its store with the node lease on (K1b); a store without it skips the case.</param>
+public sealed record Case(string Name, Level Level, Func<Context, Task> Body, int Partitions = 2, bool NodeLease = false);
 
 public sealed record Outcome(Case Case, bool Passed, bool Skipped, string Detail, TimeSpan Took);
 
@@ -23,6 +24,9 @@ public sealed class Context(ProvidedStore provided)
     public ProvidedStore Provided => provided;
     public IKernelStore S => provided.Store;
     public List<string> Notes { get; } = [];
+
+    /// <summary>The defects the run switched on, for a case whose mutation lives in the case's own steps (<see cref="Flaw.StableNodeName"/>).</summary>
+    public Flaw Flaws { get; init; }
 
     public static readonly TimeSpan Long = TimeSpan.FromSeconds(30);
 
@@ -156,6 +160,7 @@ public static class Semantics
         IdentityTerminalJobsChecks.Case,
         StoredStateChecks.Case,
         .. OwnedSetChecks.Cases,
+        .. NodeLeaseChecks.Cases,
         new("actor addressing: an unwritten workflow retains its identity, state and owed job on alias delivery", Level.Required, VirtualActorAliases.Run),
         new("actor addressing: requested spellings resolve under the provider actor collation in one snapshot", Level.Required, async c =>
         {
@@ -1248,9 +1253,9 @@ public static class Semantics
         {
             var watch = Stopwatch.StartNew();
             Outcome outcome;
-            await using (var provided = await provider.CreateAsync(@case.Partitions, setup ?? new StoreSetup()))
+            await using (var provided = await provider.CreateAsync(@case.Partitions, (setup ?? new StoreSetup()) with { NodeLease = @case.NodeLease }))
             {
-                var context = new Context(provided);
+                var context = new Context(provided) { Flaws = setup?.Flaws ?? Flaw.None };
                 try
                 {
                     await @case.Body(context).WaitAsync(TimeSpan.FromSeconds(60));

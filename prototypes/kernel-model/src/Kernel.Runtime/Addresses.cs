@@ -100,4 +100,8 @@ public enum Flaw : long
     SuspectAcrossPartitions = 1L << 52, // the suspect test asks whether this process held the mark's epoch in any partition
     ChildIssuerPerWorker = 1L << 53, // one child id issuer, at the worker's lowest partition, for the parents of every partition
     TrialSparesOtherPartitions = 1L << 54, // a trial holds back only its own partition of the worker's set
+
+    // K1b slice 1: the node lease's store rules, each caught by its store conformance case (NL-2, NL-5).
+    TakeIgnoresNodeLease = 1L << 55, // a node-lease take treats every owner's node record as expired, so it takes from a live process
+    PlainReadEmptyFence = 1L << 56,  // the fence of a batch with no journal rows is a plain read that holds no row, so a take lands after it
 }

@@ -85,6 +85,15 @@ public sealed record OwnedLease(IReadOnlyList<PartitionFence> Taken, long Now);
 
 public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 
+/// <summary>A partition the node heartbeat found owned by its node, at the epoch the store has for it.</summary>
+public sealed record OwnedEpoch(int Partition, long Epoch);
+
+/// <summary>
+/// The node heartbeat's answer (K1b): the partitions this node owns, in ascending id; the database time of the renewal,
+/// so the node lease runs until <c>Now</c> plus the lease; and the membership the same transaction saw.
+/// </summary>
+public sealed record NodeBeat(IReadOnlyList<OwnedEpoch> Owned, long Now, Cluster Cluster);
+
 /// <summary>
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
@@ -211,6 +220,30 @@ public interface IKernelStore : IMembership
 
     /// <summary>The store commits a batch over several virtual partitions all or nothing under their k fence rows. Default unavailable.</summary>
     bool OwnedSetsAvailable => false;
+
+    /// <summary>
+    /// K1b, the node lease ("The partition record" and "The node's heartbeat" in ownership-and-fencing.md). The lease is
+    /// the node record, <c>Nodes (Id, SeenAt, LeaseUntil)</c> in database time, and covers every partition its process
+    /// owns. A take accepts a free partition, one whose owner's node record is missing or has <c>LeaseUntil</c> before
+    /// database time, or a retake by the recorded owner. Its transaction reads the owners' node records with a plain read
+    /// that holds nothing, then writes the taker's own record (<c>SeenAt</c> and <c>LeaseUntil</c>, whatever it takes),
+    /// then locks the partition rows in ascending id, each decided by that read; deaths count as before, a missing record
+    /// as expired. A retake writes the taker's record the same way. The fence renews no lease (<see cref="CommitBatch.Lease"/>
+    /// is not read) and still checks and locks every fenced row, a batch with no journal rows included. Membership's free
+    /// partitions are those unowned or whose owner's node lease has expired. Off by default: until the Worker switches
+    /// (K1b slice 4), the per-partition lease stands.
+    /// </summary>
+    bool NodeLeaseAvailable => false;
+
+    /// <summary>
+    /// The node's heartbeat under <see cref="NodeLeaseAvailable"/>, one transaction: write this node's record, <c>SeenAt</c>
+    /// at database time and <c>LeaseUntil</c> at database time plus <paramref name="lease"/>, then read the partitions
+    /// whose owner is <paramref name="node"/> with their epochs (a read that writes nothing), and the membership
+    /// <see cref="IMembership.HeartbeatAsync"/> returns for <paramref name="window"/>. The caller takes its monotonic
+    /// time just before sending it.
+    /// </summary>
+    ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This store keeps no node lease.");
 
     /// <summary>The partitions the database was created with (K1 slice 7), or null when the store does not say.</summary>
     ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult<int?>(null);
