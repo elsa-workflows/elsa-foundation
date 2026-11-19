@@ -122,7 +122,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly List<TurnOutcome> _queue = [];
     private long _generation, _anchor = long.MinValue, _local, _observed;
     private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
-    private long _safeUntil;    // local monotonic deadline, measured from the start of a successful take or commit
+    private long _safeUntil = long.MinValue;    // local monotonic deadline, measured from the start of a successful take or commit; none before the first
     private long _expiredGeneration = -1; // monotonically latched by an off-turn callback; only the owner resets state
     private bool _aliasesChangedDuringLoad, _retryAliases;
     private long _aliasRead, _aliasBirths = 1, _birthComparison, _previousBirths;
@@ -494,32 +494,26 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// The heartbeat's answer, as the host hands it over (ownership-and-fencing, "The node's heartbeat"). Judged only
     /// within the generation it was sent in: a Worker that reset meanwhile discards it. Otherwise it renews the guard, if
     /// the reply came within its send time plus the lease, and stands down every partition held at the send that the
-    /// answer omits or lists at another epoch, as a refused fence makes it stand down: when nothing of those partitions is
-    /// in flight their memory goes and the rest keep their epochs, otherwise the Worker resets and takes the rest back.
+    /// answer omits or lists at another epoch, through <see cref="LoseAsync"/>: when nothing of those partitions is in
+    /// flight their memory goes and the rest keep their epochs, otherwise the Worker resets and takes the rest back. While a
+    /// release or retake is in flight the answer still renews the guard, and only the stand-down side waits.
     /// </summary>
     public async Task HeartbeatAnsweredAsync(HeartbeatSent sent, NodeBeat answer, CancellationToken cancellationToken = default)
     {
-        List<PartitionFence> kept = [];
+        HashSet<int> lost;
         lock (_turnSync)
         {
-            if (sent.Generation != _generation || _releasing || _retaking) return;
+            if (sent.Generation != _generation) return;
             RenewGuard(sent.At);
             Observe(answer.Now);
+            if (_releasing || _retaking) return;    // the stand-down side waits: the release or retake in flight covers these rows
             var listed = answer.Owned.ToDictionary(o => o.Partition, o => o.Epoch);
-            var lost = sent.Held.Where(f => (!listed.TryGetValue(f.Partition, out var epoch) || epoch != f.Epoch)
+            lost = sent.Held.Where(f => (!listed.TryGetValue(f.Partition, out var epoch) || epoch != f.Epoch)
                 && _held.TryGetValue(f.Partition, out var held) && held.Epoch == f.Epoch).Select(f => f.Partition).ToHashSet();
-            if (lost.Count == 0) return;
-            bool Lost(string id) => StoreBatchRules.AddressPartition(id) is { } p && lost.Contains(p);
-            var leaving = Fences.Where(f => lost.Contains(f.Partition)).ToList();
-            if (leaving.Count < _held.Count && Quiet(Lost)) Drop(Lost, leaving);
-            else
-            {
-                kept = [.. Fences.Where(f => !lost.Contains(f.Partition))];
-                Reset();
-                if (kept.Count > 0) (_retaking, _retakeStoodDown) = (true, false);
-            }
         }
-        if (kept.Count > 0) await RetakeAsync(kept, cancellationToken);
+        // As a cooperative hand-over goes: drain, then drop when quiet, or reset and take the rest back. Its release of the
+        // lost rows at their old epochs is a no-op, by the store's epoch guard: they moved to another epoch.
+        if (lost.Count > 0) await LoseAsync(lost, cancellationToken);
     }
 
     private bool LeaseUsable()

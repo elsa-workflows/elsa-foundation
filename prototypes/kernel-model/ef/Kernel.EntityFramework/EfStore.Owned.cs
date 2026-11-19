@@ -36,9 +36,8 @@ public sealed partial class EfStore
 
     private CommitDialect RequireDialect() => Dialect ?? throw new NotSupportedException("This engine has no owned commit dialect yet; use CommitSql.EntityFramework.");
 
-    private async Task<Committed> CommitOwnedAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, CancellationToken cancellationToken)
+    private async Task<Committed> CommitOwnedAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, long sentAt, CancellationToken cancellationToken)
     {
-        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         var dialect = RequireDialect();
         await using var db = create();
         db.Database.AutoSavepointsEnabled = false;

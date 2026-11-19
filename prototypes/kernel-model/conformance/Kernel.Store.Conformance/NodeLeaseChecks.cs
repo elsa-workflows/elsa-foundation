@@ -11,6 +11,7 @@ internal static class NodeLeaseChecks
     private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(300);
     private static readonly TimeSpan PastShort = TimeSpan.FromMilliseconds(700);
     private static readonly TimeSpan Window = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan Brief = TimeSpan.FromMilliseconds(1500);       // NL-7: a lease near expiry, with 1.2 s of margin for the renewing takes
 
     internal static IReadOnlyList<Case> Cases { get; } =
     [
@@ -280,10 +281,10 @@ internal static class NodeLeaseChecks
     private static async Task TakeRenews(Context c)
     {
         Require(c);
-        var q = await c.S.TakeAsync([1], "q", Short);
-        await c.S.TakeAsync([3], "p", Short);
-        await c.S.TakeAsync([4], "z", Short);
-        await Task.Delay(Short / 3);
+        var q = await c.S.TakeAsync([1], "q", Brief);
+        await c.S.TakeAsync([3], "p", Brief);
+        await c.S.TakeAsync([4], "z", Brief);
+        await Task.Delay(Brief / 5);       // well inside the brief lease, on a loaded runner too
         var renewing = await c.S.TakeAsync([2], "q", Context.Long);
         Context.Equal("2", Ids(renewing), "q's take of 2");
         var empty = await c.S.TakeAsync([3], "z", Context.Long);
@@ -291,7 +292,7 @@ internal static class NodeLeaseChecks
         Context.Equal(0L, empty.Now, "the time of z's empty take, which a caller must not read");
         if (c.S is InMemoryStore store)
             Context.Equal(renewing.Now + (long)Context.Long.TotalMilliseconds, store.Nodes["q"].LeaseUntil, "q's node lease after its take of 2");
-        await Task.Delay(PastShort);
+        await Task.Delay(Brief + TimeSpan.FromMilliseconds(500));
         Context.Equal("3", Ids(await c.S.TakeAsync([1, 2, 3, 4], "r", Context.Long)), "partitions r took: p's only");
         Context.Equal($"1@{q.Taken[0].Epoch} {At(renewing.Taken[0])}", Listed(await Beat(c, "q")), "q's heartbeat answer");
     }

@@ -20,6 +20,32 @@ internal static class NodeLeaseChecks
         await DiscardsAnAnswerFromBeforeAReset(check);
         await LateTakeReply(check, heartbeat: true);
         await LateTakeReply(check, heartbeat: false);
+        await RenewsDuringARetake(check);
+    }
+
+    // Review of #4868: a heartbeat answered while a retake is in flight renews the guard; only its stand-down side waits.
+    // The retake sent at 0 lands at 9 s, so its own renewal ends at 10 s; the heartbeat sent at 8 s carries the guard to 18 s.
+    private static async Task RenewsDuringARetake(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(2, out _);
+        var wire = new DelayedCommit(store);
+        var worker = Owner(wire, [0, 1], clock);
+        await new DurableHost([worker]).ActivateAsync(0);
+        store.Partitions[0].Position++;     // the next flush is refused: a reset, then the retakes
+        await store.AddAsync(new Message("m", InstanceRef.In(0, "x"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
+        await worker.PollAsync();
+        wire.DelayRetake = true;
+        var flush = worker.FlushAsync();
+        await wire.Retaken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        advance(8_000);
+        await Beat(store, worker);
+        advance(1_000);
+        wire.RetakeReply.SetResult();
+        await flush;
+        advance(3_000);         // 12 s: past the retake's own renewal, within the heartbeat's
+        var pass = await worker.RunAsync();
+        check(pass is not null && worker.Owns && worker.Fences.Count == 2,
+            $"a heartbeat answered during a retake renews the guard: owns at 12 s {worker.Owns}, held [{string.Join(", ", worker.Fences)}]");
     }
 
     private static (InMemoryStore Store, Func<long> Clock, Action<long> Advance) World(int partitions, out long start)
