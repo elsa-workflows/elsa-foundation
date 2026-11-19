@@ -41,7 +41,7 @@ internal static class ConversionServices
     {
         var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
-        registry.RegisterType(typeof(object), "Object");
+        registry.RegisterType(typeof(System.Text.Json.JsonElement), "Any");
         // The primitives a host seeds from its type descriptors; a variable's starting value converts only to a known type.
         registry.RegisterType(typeof(int), "Int32");
         registry.RegisterType(typeof(long), "Int64");
