@@ -176,7 +176,7 @@ export const setVariableActivity: ActivityCatalogItem = {
   executionType: "Action",
   inputs: [
     { referenceKey: "variable", name: "Variable", type: "String", typeName: "String", displayName: "Variable", order: 0, isBrowsable: true, isRequired: true, isNullable: false, uiHint: "variable-picker" },
-    { referenceKey: "value", name: "Value", type: "Elsa.Any", typeName: "Elsa.Any", displayName: "Value", order: 1, isBrowsable: true, isRequired: true, isNullable: true, uiHint: "single-line" }
+    { referenceKey: "value", name: "Value", type: "Any", typeName: "Any", displayName: "Value", order: 1, isBrowsable: true, isRequired: true, isNullable: true, uiHint: "single-line" }
   ],
   outputs: [],
   ports: [{ name: "Done", displayName: "Done", isBrowsable: true }],
@@ -196,7 +196,7 @@ export const setOutputActivity: ActivityCatalogItem = {
   executionType: "Action",
   inputs: [
     { referenceKey: "name", name: "Output Name", type: "String", typeName: "String", displayName: "Output Name", order: 0, isBrowsable: true, isRequired: true, isNullable: false, uiHint: "single-line" },
-    { referenceKey: "value", name: "Value", type: "Elsa.Any", typeName: "Elsa.Any", displayName: "Value", order: 1, isBrowsable: true, isRequired: true, isNullable: true, uiHint: "single-line" }
+    { referenceKey: "value", name: "Value", type: "Any", typeName: "Any", displayName: "Value", order: 1, isBrowsable: true, isRequired: true, isNullable: true, uiHint: "single-line" }
   ],
   outputs: [],
   ports: [{ name: "Done", displayName: "Done", isBrowsable: true }],
