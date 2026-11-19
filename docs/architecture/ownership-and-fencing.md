@@ -1,8 +1,15 @@
 # Ownership and fencing
 
-> Proposed clean-slate kernel architecture. The design awaits owner approval; prototype evidence does not authorize product implementation.
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+>
+> **Proposed amendment, 19 November 2026: the node lease.** The owner replaced the per-partition lease renewal with
+> a node-level heartbeat ([register](decisions.md#the-node-lease-amendment-19-november-proposed)). This page states
+> the amended design. It is proposed until a narrow independent architecture review approves it, and milestone K1b
+> builds it. Fences stay per partition: what moves to the node is the lease, which only decides who may take.
 
-A runtime places each partition on a node. A lease helps it decide who should work there. The database fence decides whose changes can become durable. One partition holds many instances, so one fence can protect a batch of their turns.
+A runtime places each partition on a node. A lease, held by the node, helps it decide who should work there. The database fence decides whose changes can become durable. One partition holds many instances, so one fence can protect a batch of their turns.
 
 The runtime may briefly activate the same partition twice. Correctness must survive that overlap, including an old owner that resumes after its replacement has started.
 
@@ -19,12 +26,30 @@ Lease expiry makes a partition eligible for a take. It does not by itself make a
 | Field | Purpose |
 |---|---|
 | `id` | The ownership scope: one partition. |
-| `owner` | The node that took it; used for placement, release and recovery. |
-| `epoch` | A generation incremented by every successful take, including a retake by the same node. |
-| `lease_until` | The deadline used to decide whether another node may take the partition. |
+| `owner` | The process that took it, named uniquely per process start, so a restarted process is a new owner (finding F9); used for placement, release and recovery. |
+| `epoch` | A generation incremented by every successful take, including a retake by the same process. |
 | `position` | The last allocated journal position in this partition. |
 
-A take conditionally updates this row. It accepts an unowned partition, an expired lease according to database time, or a retake by the recorded owner. It increments the epoch and returns the resulting lease and position. The successful update and the reading of that position must be one atomic operation or transaction.
+The partition record carries no lease. Each process has one node record, and its lease covers every partition the
+process owns:
+
+| Field | Purpose |
+|---|---|
+| `id` | The process name, the value partitions store as `owner`. |
+| `seen_at` | Database time of the last renewal; membership counts the nodes renewed inside its window. |
+| `lease_until` | Database time until which no other process may take this process's partitions. |
+
+A take conditionally updates the partition row. It accepts an unowned partition, a partition whose owner's node record
+is missing or has `lease_until` before database time, read in the take's transaction, or a retake by the recorded
+owner. It increments the epoch and returns the resulting position. The successful update and the reading of that
+position must be one atomic operation or transaction. The same transaction renews the taker's own node record, so a
+process never holds a partition it took under an expired lease of its own.
+
+The take reads the owners' node records without locking them. A renewal that commits after the take read an expired
+lease is too late for the partitions that take changed, and it keeps every partition the take left alone. Such a take
+also counts a death on the partitions it moved, by its read; a race between a renewal and a take can therefore cost
+one death count, and the fence, not the count, protects correctness. Safety does
+not rest on that read: the epoch the take increments fences the previous owner out, as before.
 
 **A take that changes zero rows returns nothing.** It has acquired no authority and must not return a separately read position as though it had succeeded. A take that succeeds learns the true position, including any commit that finished before it.
 
@@ -34,7 +59,7 @@ An owner preparing a batch remembers epoch `e` and position `n`. If the batch wr
 
 ```sql
 UPDATE partition
-SET position = n + k, lease_until = renewed_deadline
+SET position = n + k
 WHERE id = p AND epoch = e AND position = n;
 ```
 
@@ -42,7 +67,7 @@ Exactly one row must match. The same transaction writes the instance snapshots, 
 
 This is a compare-and-swap on the partition record. The instance revision guards and consumed-row counts remain part of the contract; a partition fence does not replace them. See the [storage model](storage-model.md) for the row invariants and query paths.
 
-A batch that writes no journal rows has `k = 0`. This includes an empty heartbeat and can include turns at Minimal history. Its fence still checks the epoch and expected position, but does not advance the journal.
+A batch that writes no journal rows has `k = 0`. This includes a batch of seen marks only and can include turns at Minimal history. Its fence still checks and locks every touched row at the epoch and expected position, but does not advance the journal: the owned SQL sends the unchanged update, which matches one row on every engine, and the EF reference path marks `Position` modified even when it is unchanged, so the fence is always sent. The fence renews no lease: the node's heartbeat does. On MongoDB, where a transaction that only reads a document does not conflict with a later write to it, the fence still writes each touched partition document (it increments a fence count), so a concurrent take conflicts with it.
 
 ## Why epoch and position
 
@@ -65,7 +90,7 @@ The partition record orders the two transactions. On relational engines, a succe
 
 | Order at the partition row | Result |
 |---|---|
-| The old commit obtains the row first. | Its writes either commit together or roll back. A take waits. If it subsequently succeeds, it receives the position left by that transaction and increments the epoch. A renewed, still-valid lease can instead make that take decline. |
+| The old commit obtains the row first. | Its writes either commit together or roll back. A take waits. If it subsequently succeeds, it receives the position left by that transaction and increments the epoch. A still-valid lease of the owner's node record can instead make that take decline. |
 | The take obtains the row first. | It increments the epoch and commits. The old commit waits, then finds its expected epoch no longer matches. Its entire transaction rolls back. |
 
 MongoDB can instead reject a competing transaction immediately with a transient write conflict. Its caller retries; a successful take still changes the epoch before a stale commit can land. It need not wait for the winner as a relational lock contender does.
@@ -83,11 +108,44 @@ Two commit paths exist, and SQL Server's default differs between them ([COMMIT-S
 
 E9 is the evidence for the distinction. A take locks the partition row, then message rows; EF's in-batch commit locked message rows, then the partition row, so the two could wait for each other. In the same 40-second SQL Server stress, EF with the fence in the batch had 74 deadlocks, every victim a take; the owned commit with the fence in the batch had none, and so did the checked fence ([COMMIT-SQL.md, E9](../../prototypes/kernel-model/COMMIT-SQL.md#e9-on-sql-server-the-owned-in-batch-fence)). Measured, on one machine. For the k-row fence of the Worker refactor, ascending lock order is enforced today on PostgreSQL only, whose statement locks the rows with `ORDER BY "Id" FOR UPDATE`. SQL Server's statement (`WITH (UPDLOCK, ROWLOCK)`) and MySQL's (`FOR UPDATE`) carry no ordering clause, so their lock order is left to the query plan and is unenforced; SQLite has one writer. The kernel fences one row today, so no run covers this. K1 and K4 must enforce ascending order on every engine and show two overlapping range commits completing with no deadlock.
 
+## The node's heartbeat
+
+A process renews its lease with one heartbeat, at least three times per lease, whether its partitions are busy or
+idle. Every host of a Worker owns its node's heartbeat: the built-in runtime's node loop, the Orleans adapter's silo
+service, the fixed host and the simulation's node. It runs on its own cadence, never behind a balancing round's moves,
+and hands the Worker its answer with the monotonic time just before it was sent. The heartbeat is one statement or
+transaction: it sets its node record's `seen_at` to database time and `lease_until` to database
+time plus the lease, and reads back the partitions whose `owner` is this process, with their epochs. That read writes
+nothing. The Worker stands down every partition it held at the epoch it held when it sent the heartbeat that is
+missing from the answer or at another epoch, as a refused fence makes it stand down; a partition it took after sending
+that heartbeat is judged by the next one. The answer is also reconciled the other way: a partition it lists as this
+process's, at an epoch the Worker does not hold, is released at that epoch (or taken back) before the next heartbeat,
+so a release or retake whose answer was lost cannot leave a row owned by a live process that does not work it; a
+release that fails is retried at the next heartbeat. When the Worker stands a partition down, it drops that partition's memory and work, and a later take may claim it
+again at a new epoch.
+
+**Lock order.** A take first reads the node records of the owners it may take from, with a plain read that holds
+nothing afterwards (never a locking read or a subquery inside the update, which MySQL makes locking); then it writes
+its own node record; then it locks the partition rows in ascending id. A heartbeat writes its own node record, then
+reads partition rows. A commit locks only partition rows, in ascending id. With this order no cycle forms, including
+under SQL Server without RCSI, where a plain read takes shared locks: a take reads while it holds no lock; a take or
+heartbeat that holds its own node record then waits only for partition rows, and whoever holds those never waits for
+another process's node record.
+
+The heartbeat takes over both jobs of the former per-partition renewal, an empty fenced commit per idle partition: it
+renews the lease, now once for the whole set, and it tells the owner that a partition was taken from it. A commit no
+longer renews anything. An idle owner learns of a lost partition at its next heartbeat; a busy one also learns at its
+next refused commit. A heartbeat late by more than the lease leaves the process past its local guard: it stands every
+partition down, and its next successful heartbeat and takes start again. On MongoDB a single-document heartbeat needs
+no transaction; a take's write to the taker's node document can conflict with that process's concurrent heartbeat,
+and the transient conflict is retried.
+
+Liveness is per process. A process that still renews its node record keeps all its partitions, even one whose work is
+stuck; an operator's forced take moves such a partition ([observability](observability.md)).
+
 ## What the fence transaction also does
 
-A busy partition renews its lease through its commits. It does not need an additional heartbeat for the same purpose. An idle partition sends an empty fenced commit to renew the lease and discover if its epoch has been replaced.
-
-The transaction also marks newly polled messages `seen` at the current epoch before they are delivered. Polling itself is a read. A poll result is not evidence that the owner still owns the partition, and reading a message does not authorize its execution. The fenced mark establishes that this generation saw it; trial markers then identify the work whose repeated owner losses count toward poison handling.
+The fence transaction also marks newly polled messages `seen` at the current epoch before they are delivered. Polling itself is a read. A poll result is not evidence that the owner still owns the partition, and reading a message does not authorize its execution. The fenced mark establishes that this generation saw it; trial markers then identify the work whose repeated owner losses count toward poison handling.
 
 The message marks are writes protected by the fence, rather than fields in the partition row. After a takeover, the higher epoch lets the new owner discover messages seen by its predecessor.
 
@@ -161,10 +219,32 @@ committed state over a shorter and a longer inbox and asserts the same; six muta
 
 The partition row serializes commits within its partition. Batching amortizes that cost across instances; additional partitions provide parallel ownership scopes. A hot partition still has one writer, and long transactions or large flushes increase contention and takeover delay.
 
-The checked fence costs an extra command/round trip compared with the batch form. Idle ownership costs renewal traffic. A reset throws away caches and uncommitted work and requires recovery reads. Conservative leases and clocks can cost availability; a slow or failed owner can leave work waiting until another take succeeds.
+The checked fence costs an extra command/round trip compared with the batch form. Idle ownership costs one node-record update per heartbeat per process, whatever its number of partitions. A reset throws away caches and uncommitted work and requires recovery reads. Conservative leases and clocks can cost availability; a slow or failed owner can leave work waiting until another take succeeds.
 
 The protocol depends on atomic rollback, reliable affected-row checks and read isolation supplied by each provider. The fence protects durable changes in that store. It does not cancel packets already sent to another system, make external effects exactly once, or establish ordering across different partitions.
 
+## Acceptance cases (node lease)
+
+Each runs first in the prototype, on the in-memory store and the simulation, then on the prototype's EF stores and
+MongoDB (K1b), and on the providers (K4). Process P owns partitions {a, b, c}; Q is another process.
+
+| Case | Scenario | Pass when | Milestone |
+|---|---|---|---|
+| NL-1 | **Idle cost.** Four idle processes at 1,024 partitions on PostgreSQL for 120 seconds, as K1's `x setidle` | One node-record update per heartbeat per process, and the WAL an hour reported against K1's 161 MB with the workload and units stated | K1b |
+| NL-2 | **A paused owner.** P pauses past its lease; Q takes a, b and c; P resumes with a flush of a turn and seen marks over all three, then sends its heartbeat | The flush is refused whole; P's heartbeat answer lists none of the three, and P stands all three down; Q's journals have no hole and no stranded seen or trial mark; one death is counted per trial message of P's epoch. Mutation: the take ignores the owner's node lease and takes from a live process, so a live owner's partitions move (an invariant: no take from a live process except a release or a forced take) | K1b, K4 |
+| NL-3 | **One partition moved from a live owner.** A test seam performs an operator's forced take of b to Q while P renews | P's next heartbeat answer omits b; P stands b down within one heartbeat and keeps a and c at their epochs. Mutation: the heartbeat ignores its ownership answer, so P keeps polling and executing b until a commit is refused (an invariant: a process stands down a partition taken from it within one heartbeat) | K1b, K4 |
+| NL-4 | **A renewal racing a take.** P's lease expires; Q's set take reads P's node record as expired and is held before its commit while P's heartbeat commits; then Q's take commits, taking a and b and leaving c | a and b are Q's at new epochs and P stands them down; c stays P's at its epoch, and P's commits to c land | K1b, K4 |
+| NL-5 | **A flush of seen marks only.** P's batch with no journal rows over a and b is on the wire when Q's take of b lands (after P's lease expired, or by a forced take); the batch then tries to land, on every store and on the owned and EF paths, MongoDB included | Refused whole; no seen or trial mark of P's epoch is written in a or b. Mutation: the fence of a batch with no journal rows is a plain read (on MongoDB, the partition document is not written), so P's stale marks land in b (M1) | K1b, K4 |
+| NL-6 | **A restart under the same host.** P's process restarts as P′ (a new process name) while P's node lease is still live; P′ tries to take a | P′'s take of a is refused until P's node lease expires; then a, b and c move at new epochs, each counting a death for P's trial messages. Mutation: `StableNodeName` (a restarted process keeps its predecessor's name), so P′ retakes a at once as the recorded owner with no death and inherits b and c | K1b |
+| NL-7 | **A take renews its taker.** Q, with a lease near expiry, takes a | Q's node record is renewed in the take's transaction. If the take's reply arrives before its own send time plus the lease, Q's guard deadline becomes the later of its current deadline and that send time plus the lease; it never moves earlier. A reply after its send time plus the lease restarts nothing: a newer heartbeat's later deadline stands, and with no live deadline Q stays latched expired and stands down as [LEASE.md](../../prototypes/kernel-model/LEASE.md) requires. Schedules: a take sent at 0 with its reply at 11 while a heartbeat set the deadline to 15 leaves 15; the same reply with no newer heartbeat leaves Q expired. A heartbeat answer read before the take does not stand a down | K1b, K4 |
+| NL-8 | **A lost release or retake.** P releases b and the release's answer is lost (the store call fails after or before it lands), or P's retake of b after a reset fails; P stays live | Within one heartbeat b is free, or held and worked by P at its epoch; no row stays P's while P does not work it. Mutation `KeepUnheldRows`: the heartbeat answer is reconciled one way only, and b stays P's while P lives | K1b, K4 |
+| NL-9 | **Take, heartbeat and commit together.** One process's gain take, its heartbeat and its commit overlap with another process's take of overlapping partitions, on SQL Server with RCSI off and with RCSI, MySQL and PostgreSQL | No deadlock; every outcome is a landed or refused statement. A second run has two processes, both past their leases, whose set takes cover each other's partitions. Mutation: the take reads the owners' node records after it has locked partition rows (or as a subquery of its update), so under SQL Server without RCSI a take holding partition rows waits behind a heartbeat whose read waits on those rows | K1b (prototype engines), K4 |
+| NL-10 | **A late heartbeat.** P's heartbeat is delayed past its lease while P holds work | P's guard expires and P starts no new turn or job body; P stands every partition down; its next heartbeat and takes start again at new epochs. Replaces the `--lease-check` witnesses whose renewal was a commit | K1b |
+| NL-11 | **An Orleans silo.** A silo with grains for 256 partitions stays idle for ten leases | The silo's heartbeat keeps every partition; no partition is taken and no grain's guard expires | K1b |
+
 ## Contract and evidence
 
-The [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#the-commit) defines the commit and ownership protocol. The prototype's [DESIGN.md](../../prototypes/kernel-model/DESIGN.md), [lost-answer analysis](../../prototypes/kernel-model/FINDINGS.md#3-mutation-check), [engine notes](../../prototypes/kernel-model/ENGINES.md#e9-sql-server-fence-in-the-batch-merged-kernel-the-take-deadlocks-with-a-stale-commit-run-fixed-in-round-4-the-checked-fence-closed-by-round-5-b-the-owned-in-batch-fence-is-the-default-again) and [local lease guard](../../prototypes/kernel-model/LEASE.md) separate implementation evidence from this proposed architecture.
+The [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#the-commit) defines the commit and ownership protocol. The prototype's [DESIGN.md](../../prototypes/kernel-model/DESIGN.md), [lost-answer analysis](../../prototypes/kernel-model/FINDINGS.md#3-mutation-check), [engine notes](../../prototypes/kernel-model/ENGINES.md#e9-sql-server-fence-in-the-batch-merged-kernel-the-take-deadlocks-with-a-stale-commit-run-fixed-in-round-4-the-checked-fence-closed-by-round-5-b-the-owned-in-batch-fence-is-the-default-again) and [local lease guard](../../prototypes/kernel-model/LEASE.md) separate implementation evidence from this proposed architecture. Until K1b builds the node lease, LEASE.md and
+DESIGN.md describe the per-partition lease as built: the guard renews on a take or a landed commit, and the runtime's
+renewal contract (`Seam.cs`, R1: a runtime that calls again when asked keeps an idle scope's lease) holds. K1b moves
+the guard to the heartbeat and rewrites R1 for the node lease.

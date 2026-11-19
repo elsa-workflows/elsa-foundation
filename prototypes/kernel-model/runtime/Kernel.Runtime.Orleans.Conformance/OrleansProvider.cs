@@ -1,7 +1,11 @@
 using Kernel.Runtime.Conformance;
 using Microsoft.Extensions.DependencyInjection;
+using Orleans;
 using Orleans.Configuration;
+using Orleans.Core.Internal;
 using Orleans.Hosting;
+using Orleans.Runtime;
+using Orleans.Runtime.Placement;
 using Orleans.TestingHost;
 
 namespace Kernel.Runtime.Orleans.Conformance;
@@ -15,6 +19,7 @@ namespace Kernel.Runtime.Orleans.Conformance;
 public sealed class OrleansProvider : IRuntimeProvider
 {
     public string Name => "orleans";
+    public bool OneWorkerPerNode => true;
 
     public Task<IRuntimeCluster> CreateAsync(RuntimeEnvironment environment) => Task.FromResult<IRuntimeCluster>(new Cluster(environment));
 
@@ -88,6 +93,7 @@ public sealed class OrleansProvider : IRuntimeProvider
     {
         public string Name => name;
         public int Side => side;
+        public SiloAddress Silo => silo.SiloAddress;
         public ValueTask WakeAsync(InstanceRef actor) => runtime.WakeAsync(actor);
 
         public async Task StopAsync()
@@ -100,6 +106,15 @@ public sealed class OrleansProvider : IRuntimeProvider
         {
             runtime.Crash();
             await cluster.KillSiloAsync(silo);
+        }
+
+        /// <summary>Orleans' own move: the grain migrates to the other silo, deactivating here (it gives its scope up) and activating there.</summary>
+        public async Task MoveAsync(int scope, IRuntimeNode to)
+        {
+            var grain = silo.ServiceProvider.GetRequiredService<IGrainFactory>().GetGrain<IPartitionGrain>(scope);
+            RequestContext.Set(IPlacementDirector.PlacementHintKey, ((Node)to).Silo);
+            try { await grain.AsReference<IGrainManagementExtension>().MigrateOnIdle(); }
+            finally { RequestContext.Remove(IPlacementDirector.PlacementHintKey); }
         }
     }
 }

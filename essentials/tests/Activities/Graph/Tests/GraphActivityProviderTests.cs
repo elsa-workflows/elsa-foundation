@@ -14,6 +14,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -26,6 +27,46 @@ public sealed partial class GraphActivityProviderTests
     private readonly GraphActivityProvider _provider = new(
         new TestActivityStructureService(),
         new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
+
+    [Theory]
+    [InlineData("TestExpression", "{\"source\":\"\",\"inputBinding\":\"referenceKey\"}", "Source must be supplied.")]
+    [InlineData("TestExpression", "{\"source\":1}", "Enter source text")]
+    [InlineData("AnotherExpression", "{\"source\":\"\",\"inputBinding\":\"referenceKey\"}", null)]
+    [InlineData("TestExpression", "\"source\"", null)]
+    public async Task Validation_routes_portable_output_findings_by_language(string syntax, string value, string? message)
+    {
+        var provider = new GraphActivityProvider(new TestActivityStructureService(),
+            new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()),
+            expressionValidators: [new TestSourceValidator()]);
+        var manifest = CreateManifest($$$"""
+            {
+              "rootActivity": {"nodeId":"graph-root","activityVersionId":"activity-ver-root","inputs":[],"outputs":[]},
+              "variables":[],
+              "outputMappings":[{"outputReferenceKey":"total","source":{"syntax":"{{{syntax}}}","value":{{{value}}}}}]
+            }
+            """);
+
+        var findings = (await provider.ValidateAsync(manifest, CreateContract()))
+            .Where(diagnostic => diagnostic.Code == "activity.graph.output.source-invalid");
+        if (message is null)
+        {
+            Assert.Empty(findings);
+            return;
+        }
+
+        var finding = Assert.Single(findings);
+        Assert.Contains(message, finding.Message, StringComparison.Ordinal);
+        Assert.Equal("/outputMappings/0/source", finding.Location?.JsonPointer);
+        Assert.Equal("total", finding.Location?.ReferenceKey);
+    }
+
+    private sealed class TestSourceValidator : IPortableExpressionSourceValidator
+    {
+        public string Language => "TestExpression";
+
+        public IEnumerable<string> Validate(PortableExpressionSource source) =>
+            source.UsesReferenceKeys && source.Text.Length == 0 ? ["Source must be supplied."] : [];
+    }
 
     [Theory]
     [InlineData(false)]
@@ -77,7 +118,7 @@ public sealed partial class GraphActivityProviderTests
                 "activityVersionId": "activity-ver-sequence-1"
               },
               "outputMappings": [{
-                "source": { "value": "getVariable('RunningTotal')", "syntax": "JavaScript" },
+                "source": { "value": "getVariable('RunningTotal')", "syntax": "TestExpression" },
                 "outputReferenceKey": "total"
               }]
             }
@@ -86,7 +127,7 @@ public sealed partial class GraphActivityProviderTests
             {
               "outputMappings": [{
                 "outputReferenceKey": "total",
-                "source": { "syntax": "JavaScript", "value": "getVariable('RunningTotal')" }
+                "source": { "syntax": "TestExpression", "value": "getVariable('RunningTotal')" }
               }],
               "rootActivity": {
                 "activityVersionId": "activity-ver-sequence-1",
@@ -326,7 +367,7 @@ public sealed partial class GraphActivityProviderTests
               }],
               "outputMappings": [{
                 "outputReferenceKey": "total",
-                "source": { "syntax": "JavaScript", "value": "getVariable('Counter')" }
+                "source": { "syntax": "TestExpression", "value": "getVariable('Counter')" }
               }],
               "rootActivity": {
                 "structure": {
@@ -583,7 +624,7 @@ public sealed partial class GraphActivityProviderTests
 
     [Theory]
     [InlineData("missing", "Literal", "activity.graph.complete.outcome-unknown")]
-    [InlineData("fail", "JavaScript", "activity.graph.complete.outcome-literal-required")]
+    [InlineData("fail", "TestExpression", "activity.graph.complete.outcome-literal-required")]
     [InlineData("", "Literal", "activity.graph.complete.outcome-literal-required")]
     public async Task Complete_compilation_rejects_an_invalid_outcome(string outcome, string expressionType, string expectedCode)
     {

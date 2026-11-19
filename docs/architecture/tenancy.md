@@ -1,8 +1,10 @@
 # Tenancy in the kernel
 
-> **Proposed.** The kernel design awaits owner approval. This page answers finding M2 of the gate 2 architecture
-> review ([review comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)); it
-> does not authorize product implementation.
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+> This page answers finding M2 of the gate 2 architecture
+> review ([review comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)).
 
 Several tenants share one Cluster database, its 1,024 virtual partitions and its owners. This page defines how the
 kernel learns a tenant, how every name a caller can choose is kept apart per tenant, and what each ingress, match, read
@@ -177,23 +179,87 @@ tenants opaque ids, which the grammar allows.
 
 | Provider | Limit | Left for the caller's name |
 |---|---|---|
-| SQL Server | `Messages.Id` `nvarchar(450)` (`EfStore.cs`); clustered composite keys of `Subscriptions (Key, Instance, Wait)` and `Events (Key, Id)` within 900 bytes, 450 UTF-16 units in all | 385 for a message id; 380 for an actor id `{vp}/Q`; `Subscriptions` 385 for raw key, instance id and wait together, 315 when the instance has a caller key; `Events` 385 for raw key and event id together |
-| MySQL | `Messages.Id` 255 characters (`EfStore.cs`) | 190 for a message id; 185 for an actor id. The composite keys use the provider's default key width, recorded at K4 |
+| SQL Server | `Messages.Id` `nvarchar(450)` (`EfStore.cs`); clustered composite keys of `Subscriptions (Key, Instance, Wait)` and `Events (Key, Id)` within 900 bytes, 450 UTF-16 units in all | 385 for a message id; 380 for an actor id `{vp}/Q`, and 322 for a caller key, since every id the instance issues is its caller key plus 128 characters (`Q` and `{vp}/`, 70, and the issued id's prefix and suffix, 58: `c`, a 3-digit unit count, since ids here stay under 1,000 units, four separators, a 20-digit creation and revision and a 10-digit ordinal; observability's `N` + 129 counts a 4-digit unit count at the admission limit for an issued message id, and a turn's event id, with its reserved `~`, is `N` + 130 there (seventh review R7-M1)), so caller-key admission applies that bound (derived, unmeasured, K4); `Subscriptions` 385 for raw key, instance id and wait together, 315 when the instance has a caller key; `Events` 385 for raw key and event id together; a turn's generated event id is its actor id plus at most 59 units of prefix and suffix, the reserved `~` included (seventh review R7-M1), so a turn's `Publish` leaves 256 for raw key and caller key together (derived, unmeasured, measured at K4; fifth review R5-M1, [observability](observability.md#resolving-a-park-a-bounded-drain)) |
+| MySQL | `Messages.Id` 255 characters (`EfStore.cs`) | 190 for a message id; 185 for an actor id, and 127 for a caller key, by the same issued-id bound (a 3-digit unit count) (derived, unmeasured, K4). The composite keys use the provider's default key width, recorded at K4 |
 | PostgreSQL | No column limit; a B-tree index entry is at most about 2,704 bytes | Composite keys stay within that, 65 bytes less for each qualified column |
 | SQLite, MongoDB | None that `Q` reaches | Not limited by `Q` |
 
 | Name | Chosen by | Stored as | Unique within |
 |---|---|---|---|
-| Caller-key actor id | Caller | `{vp}/Q(t, key)`, with `vp` the hash of `Q(t, key)` over 1,024 | The store, so the tenant |
+| Caller-key actor id | Caller | `{vp}/Q(t, key)` of the first spelling to commit the key's binding row, with `vp` the hash of that `Q(t, key)` over 1,024; every equivalent spelling reads the binding ("Caller keys resolve through a binding row", below) | The store, so the tenant |
+| Caller-key binding (proposed) | Kernel, at the key's first use | A row `(tenant, Q(t, key))` holding the actor id and the reuse window, the key in a pinned column; never deleted | The tenant, under the pinned collation |
 | Generated actor id (child, event start, job and plan actors) | Kernel | As today (issuer partition, epoch and ordinal; event sequence) | The store, by construction |
 | Job queue actor id | Kernel, from caller names | `queue/Q(t, name)/{shard}` (job workers' `queue/{tenant}/{name}/{shard}`, made injective) | The store |
 | Outside message id, operator operation id | Caller | `Q(t, id)` in ordinary scope zero | The store, so the tenant |
-| Keyed request wire id | Caller | `key/` + SHA-256 over `t`, key and operation | The store |
+| Keyed request wire id | Caller | `key/` + SHA-256 over the binding's actor id and the operation's exact code units (below) | The store |
 | Message id a turn sends | Kernel | Derived from sender id and revision, as today | The store, since sender ids are |
 | Correlation key (subscription and event) | Caller or model | `Q(t, key)`; a sensitive key is `Q(t, "h:" + HMAC)` with the per-tenant key (data lifecycle) | The store |
-| Outside event id | Caller | `(Q(t, key), id)` | The qualified key |
+| Outside event id | Caller | `(Q(t, key), id)`; an id provider-equal, under the pinned equality of `Events.Id`, to one starting with `~` is refused `InvalidEventId` with nothing written (owner decision, 18 November (seventh review), R7-M1) | The qualified key |
+| Turn event id (proposed) | Kernel | `(Q(t, key), ~{origin}#{revision}.{ordinal})`, the reserved `~` ahead of the publish ticket's issued id ([observability](observability.md#recover), "Turn and caller event ids are disjoint") | The qualified key, and disjoint from every outside event id |
 | Value row | Kernel | `(instance, digest)`; the digest is keyed per tenant where erasure needs it | The instance |
 | Effect key | Kernel | `{instance origin}/{node}/{iteration path}/{attempt}`, as decided | The store, since the origin is the store-unique id with its creation |
+
+**Caller keys resolve through a binding row (proposed, fourth review R4-M6).** The actor id of a caller key carries
+a placement prefix computed outside the database, and the placement hash runs over the spelling's UTF-16 code units
+(`InstanceRef.Spread`, `Addresses.cs` 22–27), while the pinned collation on SQL Server and MySQL folds case, and on
+MySQL accents too. Executed in this repair, the size probe ran the real hash
+([experiments/Astra4.Sizes](../../prototypes/kernel-model/experiments/Astra4.Sizes/README.md)): `Spread("a_Invoice", 1024)` is 460 and
+`Spread("a_invoice", 1024)` is 300, and `a_café` and `a_cafe` give 1000 and 796. Two first uses of one key under two
+spellings would get two actor ids with different prefixes, reach two partitions and two owners, and no comparison
+under the pin could merge them. So a keyed request resolves its actor id before it is routed:
+
+- **The binding row.** Each caller key has one binding row `(tenant, Q(t, key))`, holding its actor id and its reuse
+  window, with the key in a pinned column that is unique under the pinned collation. Key admission writes it by a
+  store-side insert-or-read: in one transaction it inserts the row, with the actor id `{vp}/Q(t, key)` computed from
+  the request's own spelling, unless an equivalent row exists, and then reads the row. The first spelling to commit
+  wins. Every equivalent spelling reads the same row, so it routes to the same actor id, the same virtual partition
+  (from the id's own `{vp}`) and the same owner, and concurrent first uses on two nodes converge on one actor and one
+  creation, since the unique key serializes their inserts.
+- **Never deleted.** The binding row is kept like the creation high-water mark at the retirement marker ([data
+  lifecycle](data-lifecycle.md#proposed-the-qualified-delete)), which same-id addressing already needs: a key reused
+  after its instance is deleted reads its binding and starts the same actor id under a higher creation, whichever
+  equivalent spelling the new start uses.
+- **The key is a name; the operation is a token.** This covers a keyed request's operation id. An operator command's
+  operation id is its outside message id, `Q(t, operation)` in ordinary scope zero (the table above), an ordinary `Id`
+  compared under the pinned collation, in which admission refuses an unpaired unit ("Where names enter" in
+  [observability](observability.md#resolving-a-park-a-bounded-drain)). The caller key is compared under the pinned collation, through
+  the binding row. A keyed request's operation id is an opaque token, compared exactly, by its UTF-16 code units, and stored only as
+  its digest, as today's wire id already holds it only hashed and the receipt only base64-encoded (`KeyAdmission.cs`
+  14–17). Admission accepts a NUL or an unpaired unit in an operation id ("Where names enter" in
+  [observability](observability.md#resolving-a-park-a-bounded-drain), and S-6), which a `utf8mb4` column cannot store
+  and PostgreSQL text refuses, so no column holds the operation's spelling. A receipt is keyed by the binding's actor
+  id and the SHA-256 of the operation's code units, and written by the same insert-or-read in the admission's
+  transaction. An equivalent key with the same operation finds that receipt and is a duplicate: the earlier answer
+  when the rest of the request is equal, and `conflict` when it differs, as the prototype's receipt rule answers today
+  (`KeyAdmission.cs` 54–56). Two operation ids that differ in case, or in any unit, are two operations, and the
+  existing rules apply to the second: a second start on a live binding answers `in-use` (`KeyAdmission.cs` 62), and
+  a command is accepted as a new request. The wire id is `key/` and the SHA-256 over the canonical encoding of the
+  binding's actor id and the operation's code units, so every equivalent spelling of the key, with the same
+  operation, produces one message id.
+- **A start while the predecessor's cascade still pages** (proposed, fifth review R5-B2). A keyed root deleted while
+  its own terminate's cascade is `Discharging` keeps that obligation on its retirement marker until the last page
+  ([observability](observability.md#every-park-operation-names-its-park), "A termination cascade is paged and
+  idempotent"). Admission decides a start against it, in the admission transaction: after reading the binding it
+  reads the marker of the binding's actor id, and while the marker's cascade is `Discharging` it answers
+  `in-progress` with reason `ObligationOutstanding`, a retryable refusal (HTTP 503 with `Retry-After` at the API),
+  and writes no receipt and no message. A retry with the same operation finds no receipt and is decided again, as a
+  retry with a new operation is; both are refused while the cascade pages and admitted after its last page, at
+  most ⌈n / `P_cascade`⌉ page turns after the delete. Deciding it here keeps an acknowledged start from being lost:
+  admission otherwise answers `accepted` and writes its receipt before the start is routed (`KeyAdmission.cs`
+  76–81), the start it writes carries no reply address (71–72), so a refusal at the worker would reach nobody, and a
+  same-operation retry would get the stored `accepted` receipt (54–56). The read is the same kind of check
+  admission already makes when it tests whether the bound instance is retired (`KeyAdmission.cs` 57–58 and 62). The
+  worker's `ObligationOutstanding` refusal of a successor creation stays as a defence in depth below ingress. Cost:
+  one more point read, only on a start whose binding exists, measured at K4.
+- **Case-sensitive providers.** PostgreSQL, SQLite and MongoDB compare these columns in binary, so two spellings are two
+  keys with two bindings, as their own equality says.
+- **Cost.** One store read per keyed request, and an insert on its first use: a coordinator design choice, measured at
+  K4. It keeps the owner's case-insensitive pin (decision 6), so it needs no owner decision.
+- **What is built.** The prototype's key admission is memory-only: it keeps a binding per key under one lock with
+  ordinal comparison, replaces the binding's run id on reuse and hashes the raw key for placement
+  (`KeyAdmission.cs` 42–83, existing prototype behaviour). The actor-alias lookup resolves spellings of an id that is
+  already stored ([storage model](storage-model.md#inbox-identity-and-public-names)); it cannot serialize two first
+  uses. Cases KB-1 to KB-3.
 
 **The kernel's amendment to ADR 0097 (a) (decided, 17 November).** 0097 (a) puts the bound scope in every
 tenant-keyed key. For the kernel: names a caller chooses are tenant-qualified, so the scope is in their keys; ids the
@@ -207,8 +273,8 @@ Two consequences need no further rule:
 - **Placement.** The hash runs over the qualified name, so a tenant's caller keys spread over the virtual partitions
   independently of another tenant's.
 
-Host-wide records carry no tenant (ADR 0097 (e): cluster membership is host-wide): `partition` rows (fence, lease,
-position, backlog), `node` rows and the projector's `projection` cursor. A virtual partition's journal holds rows of
+Host-wide records carry no tenant (ADR 0097 (e): cluster membership is host-wide): `partition` rows (fence,
+position, backlog), `node` rows (membership and, under the node lease amendment, the lease) and the projector's `projection` cursor. A virtual partition's journal holds rows of
 many tenants; each journal row carries its instance's tenant.
 
 **Layer 3 stays host-neutral.** Ids stay opaque strings to layer 3; only layer 2 forms and parses `Q` and `{vp}/`.
@@ -236,12 +302,12 @@ feature.
 | Operation | Tenant from | Uniqueness | Authorization | Refusal, and what it reveals |
 |---|---|---|---|---|
 | Start without a caller key | Bound scope | Generated id | Start permission; the definition is looked up in the tenant's publications | Unknown definition: 404, as for a definition that does not exist |
-| Keyed start or command | Bound scope | `{vp}/Q(t, key)`; outside id `Q(t, id)` | The command's permission in the tenant | Duplicate: the tenant's own earlier answer. Another tenant's equal key is a different name and never answers |
+| Keyed start or command | Bound scope | `{vp}/Q(t, key)`, read from the key's binding row before routing, so every spelling equal under the pinned collation reaches one actor; outside id `Q(t, id)` | The command's permission in the tenant | Duplicate: the tenant's own earlier answer, for a key equivalent under the pinned collation and the exact same operation id. Another tenant's equal key is a different name and never answers |
 | HTTP trigger | Host or route (ADR 0097 (c)) | The route table is per tenant | The route's own rule | No route for this tenant: 404 |
 | Ingress adapter (broker, webhook, schedule) | The adapter's binding, one scope per configured source, or a trusted header verified against the adapter's authenticated identity | `Q(t, source event id)` | The adapter's grant for that tenant | Unbound or mismatched: refused and logged host-side, not inserted |
-| Outside publish | Bound scope | Event `(Q(t, key), id)` | Publish permission | Matches only `Q(t, key)` waits and the tenant's own event-start subscriptions |
+| Outside publish | Bound scope | Event `(Q(t, key), id)`; proposed (fifth review R5-M2): a kernel-issued publish ticket `pub:` + SHA-256 of `(Q(t, key), id, incarnation)`, 68 ASCII bytes, in the virtual partition its digest places, the incarnation being the event row's (sixth review R6-B2, [observability](observability.md#recover)) | Publish permission, and the ticket's partition high-water rule; a caller event id provider-equal to one starting with the reserved `~` is refused `InvalidEventId`, nothing written (owner decision, 18 November (seventh review), R7-M1) | Matches only `Q(t, key)` waits and the tenant's own event-start subscriptions |
 | A turn's send, start, publish, subscribe, job, timer | The instance's row | Derived ids; qualified names for caller-chosen keys | Kernel-internal | A target under another tenant is a missing target (above) |
-| Event match | The event's qualified key | The match tuple, whose key names the tenant | Kernel-internal | None: other tenants' waits are never candidates |
+| Event match | The event's qualified key | The match digest over the stored qualified key, event id and publication incarnation ([observability](observability.md#resolving-a-park-a-bounded-drain)), so two tenants' matches never share a digest | Kernel-internal | None: other tenants' waits are never candidates |
 | Reply to a synchronous request | The request's bound scope, recorded in the reply address | One reply address per request | The owner sends output only to reply addresses on messages in its instance's inbox; the receiving node checks the reply's tenant against the waiting request's | A mismatch is dropped and counted, never written to a response |
 | Instance list, get, viewer (rows and journal tail), parked work, plan outcomes, inbox inspection | Bound scope | Read-model rows keyed by tenant | Read permissions; payloads need their own (observability) | Another tenant's id: 404, the same status and body as a missing id |
 | Recover, retry, discard, suspend, resume, terminate, delete, migrate, plans | Bound scope | Operation id `Q(t, op)` | Separate operator permissions per tenant, audited (observability) | Another tenant's instance: not found, as above |
@@ -264,7 +330,8 @@ the support context once it exists.
   partitions, the tenant in every tenant-keyed name and as a column. Database per tenant (ADR 0097's opt-in hybrid,
   its Phase 5) maps to one kernel per tenant store, each with its own partitions and ownership; see "Decisions".
 - **Changes for K3:** the tenant column on every tenant-keyed record, `Q` at every ingress and in the keyed-request
-  hash, qualified correlation keys, the tenant check on load and consumption, read-model indexes led by tenant, and
+  hash, the caller-key binding row with its insert-or-read before routing and its receipts under the pinned
+  collation (fourth review R4-M6), qualified correlation keys, the tenant check on load and consumption, read-model indexes led by tenant, and
   the conformance cases below. Fairness's tenant column on the instance row is part of this.
 - **Kernel-behaviour store change for K3 (two reviews):** the collation pin (decision 6) on every pinned column, created
   by the schema and the migrations of every relational provider, and the pinned collation in every expression that
@@ -272,6 +339,30 @@ the support context once it exists.
   and variables, with T16 and T17. The three known prototype sites are not carried over: the actor-alias lookup in
   `EfStore.LoadActorsAsync` and the SQL Server stripe in `EventInsert`, both `DATABASE_DEFAULT`, and the MySQL
   procedure `kernel_insert_event`, whose `wire` parameter has no `COLLATE`.
+
+## Fourth review: counterexamples and answers
+
+**R4-M6: equivalent caller keys could route to different owners**
+([fourth gate 2 review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6967291576)).
+
+1. Trace: on SQL Server and MySQL the pinned collation makes tenant a's `Invoice` and `invoice` one name. The
+   caller-key actor id `{vp}/Q(t, key)` takes its prefix from a hash of the spelling's code units, measured in the
+   size probe at 460 and 300, so two first uses under the two spellings get two complete actor ids, reach two
+   partitions and can reach two owners. A spelling taken from an already stored actor id, or the first spelling in
+   one batch, cannot serialize two requests that arrive on different nodes, and a wire id hashed over the raw key
+   and operation does not say which spellings are one receipt.
+2. Revised: a keyed request reads its actor id from the key's binding row before routing, and the row is written by
+   a store-side insert-or-read, unique under the pinned collation ("Caller keys resolve through a binding row"
+   above). The first spelling to commit wins; the second request's insert finds the equivalent row and reads it, so
+   both route to the winner's actor id and partition, and the instance gets one creation.
+3. The receipt is keyed by the binding's actor id and the digest of the operation's exact code units: the key is a
+   name compared under the pin, and the operation an opaque token compared exactly, since admission lets it hold
+   units no pinned column can store. A retry under an equivalent spelling of the key with the same operation is a
+   duplicate, a different payload under them is a `conflict`, and an operation that differs only in case is another
+   operation (a second start answers `in-use`). The wire id hashes the actor id and the operation's units, so the
+   message row is one. The binding is never deleted, so a reuse after a delete gets the same actor id under a higher
+   creation. A case-sensitive provider keeps two bindings, by its own equality. Cases KB-1 to KB-3; the size probe
+   measured the placement hash only, and no concurrent first use has been run.
 
 ## Acceptance cases
 
@@ -298,6 +389,9 @@ MySQL and MongoDB (K4), unless the milestone says otherwise. "A" and "B" are two
 | T15 | The binder is given `Acme`, `acmé`, `acme_x` and a 65-character id. Then T2 and T3 run against the pinned schema on SQL Server 2022 in databases whose default collation is `SQL_Latin1_General_CP1_CI_AS` (SQL Server's default, accent-sensitive) and `Hungarian_100_CI_AS`, and on MySQL 8.4 with database defaults `utf8mb4_0900_ai_ci` and `utf8mb4_hu_0900_ai_ci`. Tenant pairs: `ab`/`a-b`, `a`/`a-b` (`a_b_x` against `a-b_x`), `ccs`/`cscs` and `ssz`/`szsz` | The four ids are refused at the binder; every pair stays two rows, two matches and two answers, including `ccs_x` and `cscs_x` in the Hungarian-default databases | K4 |
 | T16 | Inspect the schema the K3 store change and the K4 migrations create, on SQL Server and MySQL, in a database with a locale default collation | Every pinned column has the pinned collation; a column created without it fails the check | K3, K4 |
 | T17 | In a Hungarian-default database on SQL Server and MySQL, run T2 and T3 through the actor-alias lookup (keyed commands to `ccs_x` and `cscs_x`, each with its own row) and through event-start insertion; on SQL Server, also in a case-sensitive-default database, insert one event match concurrently under two spellings equal under the pin. A guard over the owned and EF SQL flags `COLLATE DATABASE_DEFAULT` applied to a pinned value, and any string parameter or local variable of a kernel routine declared without the pinned `COLLATE` | Each lookup resolves to its own tenant's row; MySQL event-start insertion succeeds, and its stripe is the hash of the value under the pinned collation; the two concurrent inserts are serialized and land one match; the guard flags nothing | K3, K4 |
+| KB-1 | **Concurrent first uses under equivalent spellings** (the fourth review's R4-M6). On SQL Server and MySQL under the pinned collation, two nodes accept a keyed start for tenant A at the same time, one under `Invoice` and one under `invoice`, with the fixture holding both past routing until both have read the binding; on MySQL also `café` and `cafe`; on PostgreSQL, SQLite and MongoDB the same pairs as the case-sensitive control; at K3 the in-memory store with an equality hook that folds case, and once with ordinal equality | Where the pin folds the pair: exactly one binding row, one actor id (the winner's spelling and its `{vp}`), one instance at creation 1; the other start answers `in-use`, or, with the same operation id, the winner's answer when the two requests are equal and `conflict` when they differ. On the control providers and under ordinal equality: two bindings and two instances. Mutation: route by the request's own spelling (today's `Spread` over its code units, 460 and 300 as measured); two actor ids and two instances exist for one key | K3, K4 |
+| KB-2 | **Retry, deletion and reuse; the operation as a token** (R4-M6). Tenant A starts `Invoice` with operation `op-1`. Then: a retry as `INVOICE` with `op-1` and the same request; the same with another payload; a start as `invoice` with `OP-1`; a start as `invoice` with `op-2` while the instance lives; a keyed command as `invoice` with `op-9`, its retry as `INVOICE` with `op-9`, and a command as `invoice` with `OP-9`; a command whose operation holds an unpaired unit, and one whose operation holds a NUL, on every provider; the instance is deleted, and a start as `iNvOiCe` with `op-3` after its reuse window; a sweep, a retention run and the delete itself between the steps | The start's retry is a duplicate with the original answer and adds no message; the other payload answers `conflict`; `OP-1` is another operation and answers `in-use`, as does `op-2`; the `op-9` command is applied once and its retry is a duplicate, while `OP-9` is a second command, accepted and applied; the operations holding an unpaired unit or a NUL are admitted and deduplicated by their digest on every provider, MySQL included, with no column holding their spelling; the reuse gets the binding's actor id, unchanged, under creation 2; the binding row survives every sweep, retention run and delete. Mutation: delete the binding with the instance; the reuse computes its id from its own spelling, a different `{vp}`, and gets creation 1 again under a new id. Mutation: key the receipt by the request's key spelling in place of the binding; the `INVOICE` retry of `op-9` misses the receipt and the command is applied twice. Mutation: store the operation in a pinned column and compare it there; `OP-9` is taken as a duplicate of `op-9`, and on MySQL the operation with an unpaired unit cannot be stored, so an admitted request fails at the store | K3, K4 |
+| KB-3 | **A Park addressed through an equivalent spelling** (R4-M6). On SQL Server and MySQL, A is parked under key `Invoice`; an operator's discard addressed by key `INVOICE`, carrying A's `ParkSelection`, whose `Instance` is the binding's actor id, is added and delivered; on PostgreSQL the same as a control | The key resolves through the binding to A's actor id, which equals the selection's `Instance`, so the target check passes; the store pins `TargetCreation` to A's creation; A is discarded once, with its parent's one Faulted notice; the parked-work read model lists A under its stored key spelling. On PostgreSQL `INVOICE` is another key and the command answers not found. Mutation: resolve the key by the request's spelling; on SQL Server the command reaches no instance and answers not found, and A stays parked | K9, K11 |
 
 The two-tenant fairness run of K12 measures latency and refusals; it does not replace these cases.
 

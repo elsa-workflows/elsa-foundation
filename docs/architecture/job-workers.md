@@ -1,7 +1,9 @@
 # Job workers outside the process
 
-> **Proposed.** The kernel design awaits owner approval; this page answers design-now question 5 and does not
-> authorize product implementation. The worker protocol ships in 1.x. Its contract is designed now so that release 1's
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+> This page answers design-now question 5. The worker protocol ships in 1.x. Its contract is designed now so that release 1's
 > jobs are built to it.
 
 [Design-now question 5](../reports/clean-slate-kernel/design-sketch-draft-5.md#to-answer-in-the-design-proposal-before-the-fable-review-owner-decision-12-november)
@@ -22,7 +24,7 @@ the release placement of standalone Jobs.
 | Job actor | Proposed layer 3 actor type, one per invocation that remote workers may run. It holds the invocation, its attempts and its result. A standalone job (Elsa.Jobs rebuilt on the kernel) is one. |
 | Queue actor | Proposed layer 3 actor type that matches waiting workers with ready jobs and counts capacity permits. |
 | Worker gateway | Proposed edge adapter that serves the HTTP and gRPC protocol and turns each request into a message. |
-| Attempt lease | How long an attempt stays its worker's without a heartbeat. The partition lease of [ownership and fencing](ownership-and-fencing.md) is a different lease. |
+| Attempt lease | How long an attempt stays its worker's without a heartbeat. The node lease of [ownership and fencing](ownership-and-fencing.md), which covers a process's partitions, is a different lease. |
 
 ## What is built
 
@@ -113,7 +115,7 @@ written it does not, and this page claims no bound for it:
 
 | Aspect | Today (in process, built) | Proposed (in process and remote) |
 |---|---|---|
-| Who owns an attempt | The partition owner, under its partition lease | In process: unchanged. Remote: the job actor grants an attempt with its own lease and a grant token. |
+| Who owns an attempt | The partition owner, under its node lease (proposed, 19 November; formerly the partition lease) | In process: unchanged. Remote: the job actor grants an attempt with its own lease and a grant token. |
 | Timeouts | None in the kernel; the model decides | An attempt deadline (hard), an attempt lease (renewed by heartbeat) and an optional invocation deadline. Each is a timer message in the job actor's commit, recalled when the attempt ends. In process, the deadline cancels the job's token. |
 | Retries | The model receives `job-finished` with an error and decides | The worker classifies a failure: retryable with an optional backoff, or terminal (Zeebe's fail-job command). The job actor keeps the count, enforces the attempt limit and applies the backoff as a due time. An expired lease or a passed deadline is a failed attempt that the job actor records itself. |
 | What the code receives | Key, arguments, creation (`JobContext`) | Also the effect key, the attempt number, the attempt id, the deadline and a cancellation signal. |
@@ -228,7 +230,7 @@ keeps it in memory. The rules that keep it inside the commit contract:
   commit per lease period per attempt) and expires nothing.
 - **A renewal is answered only by an owner within its local lease guard.** An owner past its guard starts no new work
   and answers no renewal ([LEASE.md](../../prototypes/kernel-model/LEASE.md)). An extension it gave therefore ends no
-  later than its partition lease plus one attempt lease.
+  later than its node lease plus one attempt lease.
 - **A takeover grants a grace.** A new owner cannot know the renewals its predecessor received, so it extends every
   attempt in flight to one attempt lease past its take. That covers every extension the predecessor could have given.
 - **A lost renewal shortens a lease.** The worker learns it from its next renewal (`Stale`) and stops; another attempt
@@ -278,6 +280,13 @@ this contract:
   - **the attempt number**, which in process is one plus the ticket's recorded attempts (owners lost while it was on
     trial). It is a lower bound on executions, since an owner lost outside a trial counts nothing;
   - **the deadline and the cancellation token.**
+- **A restart after a Park runs the same invocation (proposed, fourth review R4-M3).** Today the ticket is the only
+  durable home of a job's arguments: the model passes them to `StartJob` and keeps only the job key. Release 1's model
+  also records an immutable `JobSpec` at arm (the key, the arguments and the effect key), and a recover's restart
+  writes the new ticket from that spec under the next ticket generation, so it keeps the invocation's effect key and
+  never reads the old ticket, which a page may have cleared to a payload-free marker or the sweep removed. A kept
+  ticket of an obsolete generation is cleared and never restored, since physical entry checks no generation
+  ([observability](observability.md#recover)).
 - `StartJob` accepts an optional timeout. The kernel writes a timer message to the instance in the same commit and
   recalls it when the result arrives; on expiry it cancels the job and gives the model a timeout result. That costs one
   timer row per job that asks for a timeout.

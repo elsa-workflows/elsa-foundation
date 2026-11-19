@@ -1,6 +1,8 @@
 # Migrating running instances
 
-> **Proposed.** The kernel design awaits owner approval. This page answers design-now question 1 of the [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#to-answer-in-the-design-proposal-before-the-fable-review-owner-decision-12-november); it does not authorize product implementation.
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands. This page answers design-now question 1 of the [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#to-answer-in-the-design-proposal-before-the-fable-review-owner-decision-12-november).
 
 A running instance keeps its state across two kinds of change:
 
@@ -238,6 +240,10 @@ the rest of the kernel's. Rejected options are kept for the record.
    supersedes. Rejected: (A) suspended instances only.
 5. **A source definition version is kept while any running or suspended instance, job ticket or retained history refers to it
    (A).** Rejected: (B) running instances and tickets only, with a "definition removed" fallback for older history.
+   Applied to the proposed `JobSpec` (observability, fourth review R4-M3; proposed, not an owner decision): a job spec
+   in an instance's state names its definition and node (Native's `BackgroundArgs`, `NativeModel.cs` 54), so it is a
+   reference that keeps its source version while it is in the state, as a ticket does, a parked instance's included,
+   whose retained history keeps the same version too.
 
 **Accepted with the recommendations:** until creation headers are persisted, a plan addresses instances by id only,
 and release 1 documents the reused-caller-key risk ("The id-only fallback" above). Dispatch is creation-qualified wherever the provider and row allow it, and fallback outcomes are shown to the operator (added for the Astra High gate 2 review).

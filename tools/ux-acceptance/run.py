@@ -59,6 +59,7 @@ CAPTURES = {
     'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320', 'capability-control', 'capability-reference'],
     'choose nested activity data': ['reference', 'customer-sources', 'customer-members', 'customer-reference', 'customer-code-reopened', 'customer-flowchart', 'customer-held', 'customer-loading', 'customer-retry', 'customer-320'],
     'choose declared and scoped activity data': ['reference', 'source-groups', 'variable-literal', 'variable-empty', 'variable-reference', 'outer-variable-reference', 'declared-reference', 'unsupported-request', 'request-repaired', 'no-request-proposal', 'source-320'],
+    'repair scoped JavaScript references': ['reference', 'sum-binding-mode', 'sum-fix', 'sum-picker', 'write-line-fix', 'calculator-direct-repair', 'write-line-picker', 'write-line-result-warning', 'write-line-result-fixed', 'calculator-completed'],
     'insert JavaScript activity data': ['reference', 'expression-sources', 'expression-cancelled', 'expression-history', 'expression-expanded', 'expression-escaped-member', 'expression-transformed', 'expression-reopened', 'expression-completed', 'expression-320'],
     'insert Liquid activity data': ['reference', 'expression-sources', 'expression-cancelled', 'expression-history', 'expression-expanded', 'expression-escaped-member', 'expression-transformed', 'expression-reopened', 'expression-completed', 'expression-320'],
     'preserve expression data without optional modules': ['reference', 'missing-javascript', 'missing-javascript-reopened', 'missing-liquid', 'missing-liquid-reopened', 'missing-native-control', 'missing-320'],
@@ -980,6 +981,9 @@ def run(output, journey=None, studio_root=None, composition='normal'):
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)
             report['ownedRoot'] = str(data)
+            asset_manifest = data / 'workflow-assets.json'
+            asset_manifest.write_text(json.dumps({'workflowSourceAssets': workflow_assets,
+                                                  'copyImplementationAssets': copy_assets}), encoding='utf-8')
             env = dict(clean_environment(), DOTNET_PROCESSOR_COUNT='2', HOME=str(data / "home"), DOTNET_CLI_HOME=str(data / "home"),
                        **{"Logging__LogLevel__Microsoft.Hosting.Lifetime": "Information"})
             (data / "home").mkdir()
@@ -1016,7 +1020,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                                ELSA_WORKBENCH_URL=combined['backendUrl'], UX_BACKEND_URL=combined['backendUrl'],
                                UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha,
                                UX_ACTIVITY_DATA_COMPOSITION=composition, UX_ACCEPTANCE_OWNED_ROOT=str(data),
-                               UX_WORKFLOW_ASSET_SHA256S=json.dumps(workflow_assets), UX_COPY_IMPLEMENTATION_ASSETS=json.dumps(copy_assets))
+                               UX_WORKFLOW_ASSET_MANIFEST=str(asset_manifest))
             for item in hosts[1:]:
                 variable = item['name'].split('-')[0].upper()
                 browser_env.update({f'UX_{variable}_STUDIO_URL': item['studioUrl'], f'UX_{variable}_BACKEND_URL': item['backendUrl']})
