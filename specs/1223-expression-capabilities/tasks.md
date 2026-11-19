@@ -10,12 +10,12 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Add Elsa 3 parity fixtures under the Elsa3 mapping test project: for fixed inputs, the exact Elsa.JavaScript 3.5.3 output of the short-GUID algorithm, `Guid.Parse(...).ToString()` for each accepted form, and `stringToBase64`. Used by T009, T011 and T019.
+- [x] T001 [P] Add Elsa 3 parity fixtures under the Elsa3 mapping test project: for fixed inputs, the exact Elsa.JavaScript 3.5.3 output of the short-GUID algorithm, `Guid.Parse(...).ToString()` for each accepted form, and `stringToBase64`. Used by T009, T011 and T019.
 
 ## Phase 2: Foundational (blocking prerequisites)
 
 - [x] T002 Rename `ExpressionCapabilityProfiles.BindingPureV1` to `BindingReadonlyV1` (value `binding-readonly-v1`) in `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs` and update `ExpressionEvaluationCapabilities` so the profile allows time and randomness; update every user (portable, Jint, Liquid and runtime evaluators; `Elsa3ExpressionRewriter`; `Elsa3ValueFlowLowerer`; `BindingPureArgsDeclarationContributor`). No alias or reader for the old value (FR-031).
-- [ ] T003 Regenerate stored fixtures and golden executable hashes that carry `capabilityProfile` in place; verify with the affected test projects (FR-031).
+- [x] T003 Regenerate stored fixtures and golden executable hashes that carry `capabilityProfile` in place; verify with the affected test projects (FR-031).
 - [x] T004 Remove the `Inline` comment that grounds replay safety in `binding-pure-v1` (`Essentials/src/Activities/Primitives/Activities/Inline.cs`); reference the D-2 contract instead (FR-031).
 - [x] T005 Extend `JavaScriptHostFunctionDeclaration` with an implementation delegate (no effect metadata, FR-012) taking and returning JSON values; keep `ReadsVariables` (FR-012, FR-029).
 
@@ -28,9 +28,9 @@
 - [x] T007 [US1] Implement a Jint `ITimeSystem` over the host `System.TimeProvider`; set `Options.TimeSystem`, `Options.TimeZone = UTC`, `Options.Culture = Invariant` on engine construction (FR-002).
 - [x] T008 [US1] Install every registered `JavaScriptHostFunctionDeclaration` in `IsolatedJintEngine` as a non-writable global, as `SetReadOnlyVariables` installs `getVariable`; marshal arguments and results as JSON values (FR-011, FR-029).
 - [x] T009 [P] [US1] Register the GUID built-ins `newGuid`, `newGuidString`, `getGuidString`, `newShortGuid`, `getShortGuid` and `parseGuid` with `ReadsVariables = false` (FR-006, FR-026; T001 fixtures).
-- [ ] T010 [P] [US1] xUnit: intrinsics restored; clock reads a controlled `TimeProvider` (`Date`, `Temporal.Now`); UTC and invariant formatting; `Math.random` permitted to differ — quickstart A1–A4, SC-003.
-- [ ] T011 [P] [US1] xUnit: GUID built-ins return strings in Elsa 3's forms; `parseGuid` accepted forms and invalid text — quickstart B6, B7.
-- [ ] T012 [P] [US1] xUnit: `Temporal` and `Intl.DateTimeFormat` convert between UTC and `Europe/Amsterdam` in winter and summer; record the result on the host OS used by CI (FR-025) — quickstart A5a.
+- [x] T010 [P] [US1] xUnit: intrinsics restored; clock reads a controlled `TimeProvider` (`Date`, `Temporal.Now`); UTC and invariant formatting; `Math.random` permitted to differ — quickstart A1–A4, SC-003.
+- [x] T011 [P] [US1] xUnit: GUID built-ins return strings in Elsa 3's forms; `parseGuid` accepted forms and invalid text — quickstart B6, B7.
+- [x] T012 [P] [US1] xUnit: `Temporal` and `Intl.DateTimeFormat` convert between UTC and `Europe/Amsterdam` in winter and summer; record the result on the host OS used by CI (FR-025) — quickstart A5a.
 
 ## Phase 4: User Story 4 — Built-in helpers & .NET functions, consistent across surfaces (P2)
 
@@ -41,9 +41,9 @@
 - [x] T014 [US4] Enforce the naming rule at startup: reserved names (`variables`, `input`, `activities`, `workflow`, `args`, the built-ins, namespace roots), namespace prefix for host functions, duplicate detection; failure names the function. Install a namespace as a read-only global object holding its functions (FR-027).
 - [x] T015 [US4] Extend the publish check (`JavaScriptReservedNames`): declaring `variables` → the existing error `Scripts/ReservedName`; `args` unchanged (spec 1222); `complete` unchanged (spec 1208); declaring `input`, `activities`, `workflow`, a built-in name or a namespace root → the new warning `Scripts/ShadowedFunction` (FR-027).
 - [ ] T016 [US4] Warn on a number argument that carries spec 1228's loss information, naming the function and the argument path; never refuse, never stringify (FR-028).
-- [ ] T017 [P] [US4] xUnit: Base64 round trip and Elsa 3 parity; no `toJson` global; no live .NET object in or out — quickstart B8–B10, SC-005, SC-008.
-- [ ] T018 [P] [US4] xUnit: naming failures, reserved-name warning, no fallback read marker for built-ins, no effectful option on the registration, V9 warning — quickstart B11–B11b.
-- [ ] T019 [P] [US4] xUnit: surface parity — each intrinsic and built-in identical in an input binding and a `RunJavaScript` script (FR-003) — quickstart A5, SC-004.
+- [x] T017 [P] [US4] xUnit: Base64 round trip and Elsa 3 parity; no `toJson` global; no live .NET object in or out — quickstart B8–B10, SC-005, SC-008.
+- [x] T018 [P] [US4] xUnit: naming failures, reserved-name warning, no fallback read marker for built-ins, no effectful option on the registration, V9 warning — quickstart B11–B11b.
+- [x] T019 [P] [US4] xUnit: surface parity — each intrinsic and built-in identical in an input binding and a `RunJavaScript` script (FR-003) — quickstart A5, SC-004.
 
 ## Phase 5: User Story 2 — Elsa 3 time / GUID / string functions convert faithfully (P1)
 
@@ -73,9 +73,9 @@
 - [x] T031 [US3] In the converter, call the analyzer with the known .NET-object sources (`newGuid()`/`parseGuid()` results; variables, inputs and outputs whose Elsa 3 type is in the wrapped catalog) and their `const`/`let` aliases; emit `VF-IMP-012` (new constant in `Elsa3ImportDiagnosticCodes`); leave `ElsaThreeGlobals` on `VF-IMP-005` (FR-016, FR-017).
 - [x] T032 [US3] Call the analyzer from publish validation and emit `Scripts/DotNetMemberUsage` (FR-017, FR-018).
 - [x] T033 [US3] Register the analyzer as part of the default JavaScript strategy in the existing feature; no setting (FR-030).
-- [ ] T034 [P] [US3] Feature-registration test (§2.23.1): the analyzer and the built-ins resolve in the default composition.
-- [ ] T035 [P] [US3] Analyzer tests (refuse): GUID member calls, `toByteArray()` through an alias, a `FormFile` variable's members, `toJson` of a non-GUID .NET value, .NET type references, PascalCase invocations; each message quotes the offending expression (SC-006) — quickstart E18–E20.
-- [ ] T036 [P] [US3] Analyzer tests (allow): PascalCase property reads incl. `variables.Order.Status`, native calls incl. `Intl.DateTimeFormat('en-GB')`, computed dispatch, same-script members, GUIDs as text — quickstart E21–E22a.
+- [x] T034 [P] [US3] Feature-registration test (§2.23.1): the analyzer and the built-ins resolve in the default composition.
+- [x] T035 [P] [US3] Analyzer tests (refuse): GUID member calls, `toByteArray()` through an alias, a `FormFile` variable's members, `toJson` of a non-GUID .NET value, .NET type references, PascalCase invocations; each message quotes the offending expression (SC-006) — quickstart E18–E20.
+- [x] T036 [P] [US3] Analyzer tests (allow): PascalCase property reads incl. `variables.Order.Status`, native calls incl. `Intl.DateTimeFormat('en-GB')`, computed dispatch, same-script members, GUIDs as text — quickstart E21–E22a.
 - [x] T037 [P] [US3] SC-002 check over the corpus and representative cases; one analyzer used at conversion and publish — quickstart E23, E24.
 
 ## Phase 7: Polish & cross-cutting
