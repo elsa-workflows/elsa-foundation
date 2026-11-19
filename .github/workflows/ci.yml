@@ -53,7 +53,8 @@ permissions:
 
 # PR updates cancel the superseded head. Main finishes its active run and keeps only the
 # newest pending push in the same group, so a stream of merges cannot restart validation
-# indefinitely. Intermediate pending pushes are replaced by the latest one. Manual,
+# indefinitely. Intermediate pending pushes are replaced by the latest one; plan-scope then diffs the latest push from
+# the last push run that ran, so the replaced pushes' changes still select their focused proofs (#4713). Manual,
 # scheduled and merge-queue runs retain their own groups. A cancelled run is not a failure,
 # and the aggregate jobs use !cancelled() so cancellation does not file a red-main issue.
 concurrency:
@@ -69,6 +70,12 @@ jobs:
     name: Select focused validation
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # A push to main diffs from the head of the last push run whose focused proofs ran, not from the event's `before`:
+    # a pending run replaced by a newer push, or a [skip ci] head, validates nothing, and its change would otherwise
+    # never reach a path filter (#4713). Reading the earlier runs needs actions: read.
+    permissions:
+      contents: read
+      actions: read
     outputs:
       weaver: ${{ steps.scope.outputs.weaver }}
       studio: ${{ steps.scope.outputs.studio }}
@@ -87,6 +94,8 @@ jobs:
         id: scope
         env:
           CI_FULL_TIER_EVERY_PUSH: ${{ vars.CI_FULL_TIER_EVERY_PUSH }}
+          # Only a push reads the earlier runs; pull request code gets no token here.
+          GH_TOKEN: ${{ github.event_name == 'push' && github.token || '' }}
         run: python3 tools/ci/workflow_scope.py
 
   # Python only, so the shards start within a minute: the change scope, the cheap guards, and the shard matrix.
