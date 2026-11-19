@@ -82,6 +82,9 @@ internal static class ActivitySuccessorStaging
             Status = ActivityExecutionStatus.Scheduled,
             StartedAt = null,
             InputSnapshot = null,
+            // A re-execution is a new logical invocation with a new read set (ADR 0092 decision 8): the bases the source's
+            // own writes advanced are not its own, so it starts with none (spec 1231 FR-010).
+            OwnVariableBases = null,
             VariableFrame = null,
             IterationVariableFrame = null,
             IterationFrameRequest = iterationRequest,
@@ -129,6 +132,9 @@ internal static class ActivitySuccessorStaging
             // Per-invocation history belongs to the source row: the successor starts its own lifecycle and history, and
             // a refused completion stays with the row that refused it.
             RecordedCompletion = null,
+            // Session reads belong to their own attempt and row (spec 1231 FR-007); a retry or acceptance keeps the
+            // invocation's own advanced bases (it is the same logical invocation), never its reads.
+            SessionReads = null,
             Transitions = null,
             InputRefreshes = null,
             FirstCommitSequence = null,

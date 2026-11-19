@@ -43,6 +43,29 @@ public sealed class BackgroundEligibilityPublicationTests
         Assert.Equal(ActivityExecutionPlacement.Inline, inline.RootActivity.ExecutionPlacement);
     }
 
+    // Spec 1231 T032 (FR-030, SC-005): publication refuses each step-variable signal in the background with VF-BG-001 (C9).
+    [Theory]
+    [InlineData(typeof(BackgroundSafeMarkedActivity), "[AccessesUndeclaredVariables]")]
+    [InlineData(typeof(BackgroundSafeWritableReferenceActivity), "input 'Balance' is a VariableReference")]
+    [InlineData(typeof(BackgroundSafeReadOnlyReferenceActivity), "input 'Balance' is a ReadOnlyVariableReference")]
+    public async Task C9_refuses_a_step_variable_signal_in_the_background(Type activityType, string signal)
+    {
+        var inputs = activityType == typeof(BackgroundSafeMarkedActivity)
+            ? []
+            : new[]
+            {
+                new WorkflowArgumentState("Balance",
+                    new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "balance", declaringScopeId = "workflow" }), "Variable"),
+                    null, null, null, null)
+            };
+
+        var refusal = await SecretBindingCompilerFixture.AssertRefusedAsync(Background(activityType, inputs), [activityType],
+            variables: [new VariableDefinition("balance", "balance", new TypeReference("Decimal"), null, null)]);
+
+        Assert.Contains($"VF-BG-001 (C9): Background execution is not eligible for activity node '{SecretBindingCompilerFixture.NodeId}': ", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(signal, refusal.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task C10_refuses_a_sensitive_input_that_is_not_a_secret_reference()
     {
@@ -110,6 +133,34 @@ public sealed class BackgroundEligibilityPublicationTests
     [BackgroundExecutionSafe]
     public sealed class BackgroundSafeVariableReader : Activity<int>, IRuntimeScopedVariableReader
     {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
+
+    [BackgroundExecutionSafe]
+    [AccessesUndeclaredVariables]
+    public sealed class BackgroundSafeMarkedActivity : Activity<int>
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
+
+    [BackgroundExecutionSafe]
+    public sealed class BackgroundSafeWritableReferenceActivity : Activity<int>
+    {
+        [ActivityInput]
+        public VariableReference<decimal> Balance { get; set; } = default!;
+
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
+
+    [BackgroundExecutionSafe]
+    public sealed class BackgroundSafeReadOnlyReferenceActivity : Activity<int>
+    {
+        [ActivityInput]
+        public ReadOnlyVariableReference<decimal> Balance { get; set; } = default!;
+
         protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(ActivityTransition.Complete(1));
     }

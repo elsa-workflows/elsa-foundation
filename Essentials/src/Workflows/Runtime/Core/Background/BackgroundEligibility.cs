@@ -50,8 +50,9 @@ public sealed record BackgroundEligibilitySubject(string NodeId)
     /// <summary>
     /// The CLR type is not known to this host but is checked again where the node runs. Template placement sets it
     /// when the publishing host does not register a template node's runtime type (a design-only shell): the criteria
-    /// that read the contract and node shape still apply, and the ones that need the CLR type (the interface part of
-    /// C1, C2, C9 and the CLR parts of C3 and C4) are left to admission and the worker, which always re-check them. Only publication honours it:
+    /// that read the contract and node shape still apply (C9's contract-visible signals too, see
+    /// <see cref="TouchesVariables"/>), and the ones that need the CLR type (the interface part of C1, C2, the CLR-only
+    /// part of C9 and the CLR parts of C3 and C4) are left to admission and the worker, which always re-check them. Only publication honours it:
     /// <see cref="BackgroundEligibility.CheckRunTime"/> ignores it, so a run-time subject without a CLR type is refused.
     /// </summary>
     public bool TypeCheckedAtRunTime { get; init; }
@@ -74,6 +75,13 @@ public sealed record BackgroundEligibilitySubject(string NodeId)
     /// <summary>The node's compiled input bindings, read by C10.</summary>
     public IReadOnlyDictionary<string, RuntimeInputBinding> InputBindings { get; init; } =
         new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The pinned contract says the body touches variables through its step session (spec 1231 FR-031): the type is marked
+    /// <c>[AccessesUndeclaredVariables]</c> or is an engine script activity, or an input is a variable reference. C9 reads
+    /// it even when <see cref="TypeCheckedAtRunTime"/> defers the CLR-type checks, since the contract carries it.
+    /// </summary>
+    public bool TouchesVariables => Contract is { } contract && (contract.AccessesUndeclaredVariables || contract.HasVariableReferenceInputs);
 
     /// <summary>Whether the body staged a workflow dispatch or published stimuli. Null before the body ran.</summary>
     public bool? StagedCoordinatorEffects { get; init; }
@@ -170,15 +178,49 @@ public static class BackgroundEligibility
     }
 
     /// <summary>
-    /// C9 as one predicate over the CLR type: the activity reads variables by name. ADR 0090's
-    /// <c>[AccessesUndeclaredVariables]</c> marker and writable <c>VariableReference&lt;T&gt;</c> inputs join it here
-    /// when they exist in code.
+    /// C9 as one predicate over the CLR type (ADR 0093 C9, spec 1231 FR-030): the body reads or writes workflow variables
+    /// itself. That is a structural reader (<c>IRuntimeScopedVariableReader</c>), a type marked
+    /// <c>[AccessesUndeclaredVariables]</c> or an engine script activity (<c>IStepVariableSessionConsumer</c>), or a type
+    /// with a <c>VariableReference&lt;T&gt;</c> or <c>ReadOnlyVariableReference&lt;T&gt;</c> input (Q2: a read-only one too).
     /// </summary>
-    public static bool AccessesVariablesByName(Type activityType)
+    public static bool AccessesVariablesByName(Type activityType) => VariableSignal(activityType) is not null;
+
+    // The C9 signal of a CLR type, named for the refusal, or null.
+    private static string? VariableSignal(Type activityType)
     {
         ArgumentNullException.ThrowIfNull(activityType);
-        return typeof(IRuntimeScopedVariableReader).IsAssignableFrom(activityType);
+        if (typeof(IRuntimeScopedVariableReader).IsAssignableFrom(activityType))
+            return "the activity reads variables by name";
+        if (VariableReferenceTypes.AccessesUndeclaredVariables(activityType))
+            return "the activity type may read and write any visible variable by name ([AccessesUndeclaredVariables], or an engine script activity)";
+        // Only [ActivityInput] properties, as the scanner and the contract count them, named by their contract key.
+        foreach (var property in activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance).OrderBy(property => property.Name, StringComparer.Ordinal))
+        {
+            if (Attribute.GetCustomAttribute(property, typeof(ActivityInputAttribute), inherit: true) is not ActivityInputAttribute input)
+                continue;
+            if (VariableReferenceTypes.TryGet(property.PropertyType, out var access, out _))
+                return ReferenceSignal(input.Key ?? property.Name, access);
+        }
+
+        return null;
     }
+
+    // The C9 signal the pinned contract shows, named for the refusal, or null (spec 1231 FR-031).
+    private static string? ContractVariableSignal(ActivityContract contract)
+    {
+        if (contract.AccessesUndeclaredVariables)
+            return "the activity type may read and write any visible variable by name ([AccessesUndeclaredVariables], or an engine script activity)";
+        var reference = contract.Inputs.Values
+            .Where(input => input.VariableReference is not null)
+            .OrderBy(input => input.Key, StringComparer.Ordinal)
+            .FirstOrDefault();
+        return reference is null ? null : ReferenceSignal(reference.Key, reference.VariableReference!.Access);
+    }
+
+    private static string ReferenceSignal(string input, ActivityVariableAccess access) =>
+        access == ActivityVariableAccess.ReadWrite
+            ? $"input '{input}' is a VariableReference: the activity reads and writes a workflow variable in its step"
+            : $"input '{input}' is a ReadOnlyVariableReference: the activity reads a workflow variable in its step";
 
     private static BackgroundEligibilityRefusal? Check(BackgroundEligibilitySubject subject, bool includeCoordinatorEffects)
     {
@@ -265,10 +307,16 @@ public static class BackgroundEligibility
             ? "sensitive or encryption-required result values are not supported"
             : null;
 
-    private static string? UsesVariablesOnlyThroughInputsAndResults(BackgroundEligibilitySubject subject) =>
-        subject.ActivityType is { } type && AccessesVariablesByName(type)
-            ? "the activity reads variables by name; variables reach a background step only through its inputs and output captures"
-            : null;
+    // C9: a background step has no variable session (ADR 0093 Limits). The contract-visible signals are checked whenever the
+    // contract is there, also at a placement that defers the CLR type; the type-only ones when the type is known.
+    private static string? UsesVariablesOnlyThroughInputsAndResults(BackgroundEligibilitySubject subject)
+    {
+        var signal = (subject.TouchesVariables ? ContractVariableSignal(subject.Contract!) : null)
+                     ?? (subject.ActivityType is { } type ? VariableSignal(type) : null);
+        return signal is null
+            ? null
+            : $"{signal}; variables reach a background step only through its inputs and output captures";
+    }
 
     private static string? HasSupportedWorkerBoundInputs(BackgroundEligibilitySubject subject)
     {

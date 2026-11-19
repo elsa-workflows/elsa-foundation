@@ -8340,7 +8340,6 @@ static Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.F
 static Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.ForInitialTriggerClaim(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! resumeWorkItem, Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload! resumePayload, Elsa.Workflows.Runtime.Core.Models.BookmarkState! selectedBookmark, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState! claimedState, string! attemptId, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.BookmarkState!>? siblingBookmarks = null) -> Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest!
 static Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.ForRedeliveryClaim(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! resumeWorkItem, Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload! resumePayload, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState! claimedState, string! attemptId) -> Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest!
 static Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.ForStaleBookmarkConsumption(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! resumeWorkItem, Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload! resumePayload, Elsa.Workflows.Runtime.Core.Models.BookmarkState! bookmark, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState! completedState, Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! completionWorkItem) -> Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest!
-static Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.ForSuspension(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! resumeWorkItem, Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload! resumePayload, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState! suspendedState, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem!>! bookmarkCreationWorkItems, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionValueSnapshot!>? valueSnapshots = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeStateChange<Elsa.Workflows.Runtime.Core.Models.DurableValueState!>!>? durableValueChanges = null) -> Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest!
 static Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointResult.operator !=(Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointResult? left, Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointResult? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointResult.operator ==(Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointResult? left, Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointResult? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.BookmarkResumeRequest.operator !=(Elsa.Workflows.Runtime.Core.Models.BookmarkResumeRequest? left, Elsa.Workflows.Runtime.Core.Models.BookmarkResumeRequest? right) -> bool
@@ -10721,28 +10720,28 @@ Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot.ComputedVariableReads.g
 Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot.ComputedVariableReads.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeExpressionBinding.RuntimeExpressionBinding(string! language, string! expression, Elsa.Workflows.Runtime.Core.Models.RuntimeValueTypeDescriptor? resultType = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.ExpressionParameterBinding!>? parameters = null, System.Text.Json.JsonElement? options = null, string? capabilityProfile = null, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ValueConversionPlan!>? parameterConversionPlans = null, Elsa.Expressions.Core.Models.VariableReadFallback? variableReadFallback = null) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeExpressionBinding.VariableReadFallback.get -> Elsa.Expressions.Core.Models.VariableReadFallback?
-Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.RuntimeInputBindingResolutionContext(string! workflowExecutionId, string! activityExecutionId, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState? consumerInvocation = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!>? runtimeView = null, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable? executable = null, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!>? workflowInputEnvelopes = null, System.Collections.Generic.IReadOnlyDictionary<Elsa.Workflows.Runtime.Core.Models.RuntimeVariableValueAddress, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!>? variableEnvelopes = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable!>? visibleVariables = null, string? correlationId = null, Elsa.Workflows.Runtime.Core.Models.RuntimeVariableReadRecorder? variableReadRecorder = null) -> void
-Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.VisibleVariables.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.RuntimeInputBindingResolutionContext(string! workflowExecutionId, string! activityExecutionId, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState? consumerInvocation = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!>? runtimeView = null, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable? executable = null, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!>? workflowInputEnvelopes = null, System.Collections.Generic.IReadOnlyDictionary<Elsa.Workflows.Runtime.Core.Models.RuntimeVariableValueAddress, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!>? variableEnvelopes = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable!>? visibleVariables = null, string? correlationId = null, Elsa.Workflows.Runtime.Core.Models.RuntimeVariableReadRecorder? variableReadRecorder = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.VisibleVariables.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable!>!
 Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead
 Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead!
-Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.Deconstruct(out string! Name, out Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable? Variable) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.Deconstruct(out string! Name, out Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable? Variable) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead? other) -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.Name.get -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.Name.init -> void
-Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.RuntimeVariableComputedRead(string! Name, Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable? Variable) -> void
-Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.Variable.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable?
+Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.RuntimeVariableComputedRead(string! Name, Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable? Variable) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.Variable.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable?
 Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.Variable.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeVariableReadRecorder.ComputedReads.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead!>!
 Elsa.Workflows.Runtime.Core.Models.RuntimeVariableReadRecorder.RecordComputed(Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead! read) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeVariableReadRecorder.ToComputedReads(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableFrameState!>! visibleFrames) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableComputedRead!>?
-Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable
-Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable!
-Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.Envelope.get -> Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!
-Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable? other) -> bool
-Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.Name.get -> string!
-Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.RuntimeVisibleVariable(string! name, string! scopeId, string! variableKey, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! envelope) -> void
-Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.ScopeId.get -> string!
-Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.VariableKey.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable!
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.Envelope.get -> Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.Name.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.RuntimeReadableVariable(string! name, string! scopeId, string! variableKey, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! envelope) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.ScopeId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.VariableKey.get -> string!
 Elsa.Workflows.Runtime.Core.Models.VariableComputedRead
 Elsa.Workflows.Runtime.Core.Models.VariableComputedRead.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.VariableComputedRead!
 Elsa.Workflows.Runtime.Core.Models.VariableComputedRead.Equals(Elsa.Workflows.Runtime.Core.Models.VariableComputedRead? other) -> bool
@@ -10757,16 +10756,16 @@ const Elsa.Workflows.Runtime.Core.Models.VariableComputedRead.MissingNameWarning
 override Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.Equals(object? obj) -> bool
 override Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.GetHashCode() -> int
 override Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.ToString() -> string!
-override Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.Equals(object? obj) -> bool
-override Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.GetHashCode() -> int
-override Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.ToString() -> string!
 override Elsa.Workflows.Runtime.Core.Models.VariableComputedRead.Equals(object? obj) -> bool
 override Elsa.Workflows.Runtime.Core.Models.VariableComputedRead.GetHashCode() -> int
 override Elsa.Workflows.Runtime.Core.Models.VariableComputedRead.ToString() -> string!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead? left, Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead? left, Elsa.Workflows.Runtime.Core.Models.RuntimeVariableComputedRead? right) -> bool
-static Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable? left, Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable? right) -> bool
-static Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable? left, Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable? left, Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable? left, Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.VariableComputedRead.Absent(string! name) -> Elsa.Workflows.Runtime.Core.Models.VariableComputedRead!
 static Elsa.Workflows.Runtime.Core.Models.VariableComputedRead.operator !=(Elsa.Workflows.Runtime.Core.Models.VariableComputedRead? left, Elsa.Workflows.Runtime.Core.Models.VariableComputedRead? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.VariableComputedRead.operator ==(Elsa.Workflows.Runtime.Core.Models.VariableComputedRead? left, Elsa.Workflows.Runtime.Core.Models.VariableComputedRead? right) -> bool
@@ -10786,3 +10785,31 @@ static Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.operator !=(Elsa.Wo
 static Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.operator ==(Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan? left, Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan? right) -> bool
 Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.InputKey.get -> string!
 Elsa.Workflows.Runtime.Core.Models.ScriptBodyReadPlan.ScriptBodyReadPlan(string! inputKey, string! language, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.VariableExpressionParameterBinding!>! parameters, Elsa.Expressions.Core.Models.VariableReadFallback? variableReadFallback = null) -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.OwnVariableBases.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry!>?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.OwnVariableBases.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.SessionReads.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableSessionRead!>?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.SessionReads.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.WithSessionReads(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.VariableSessionRead!>! reads) -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!
+Elsa.Workflows.Runtime.Core.Models.InvocationVariableBases
+Elsa.Workflows.Runtime.Core.Models.VariableSessionRead
+Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.VariableSessionRead!
+Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.AttemptId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.Entry.get -> Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry!
+Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.Equals(Elsa.Workflows.Runtime.Core.Models.VariableSessionRead? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.Policy.get -> Elsa.Workflows.Runtime.Core.Models.ValueProtectionPolicy!
+Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.VariableSessionRead(string! attemptId, Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry! entry, Elsa.Workflows.Runtime.Core.Models.ValueProtectionPolicy! policy) -> void
+Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.DroppedMembers.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.DroppedMembers.init -> void
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.MayWriteEveryVisibleVariable = "runtime.mayWriteEveryVisibleVariable" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.MayWriteVariables = "runtime.mayWriteVariables" -> string!
+override Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.InvocationVariableBases.Advance(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState! invocation, System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord!>! ownWrites) -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!
+static Elsa.Workflows.Runtime.Core.Models.InvocationVariableBases.For(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState? invocation, string! scopeId, string! variableKey) -> Elsa.Workflows.Runtime.Core.Models.VariableWriteBase?
+static Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.operator !=(Elsa.Workflows.Runtime.Core.Models.VariableSessionRead? left, Elsa.Workflows.Runtime.Core.Models.VariableSessionRead? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.VariableSessionRead.operator ==(Elsa.Workflows.Runtime.Core.Models.VariableSessionRead? left, Elsa.Workflows.Runtime.Core.Models.VariableSessionRead? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.VariableOwnerChanges.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!>!
+Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.WithVariableOwnerChanges(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!>! owners) -> Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest!
+static Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.ForSuspension(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! resumeWorkItem, Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload! resumePayload, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState! suspendedState, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem!>! bookmarkCreationWorkItems, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionValueSnapshot!>? valueSnapshots = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeStateChange<Elsa.Workflows.Runtime.Core.Models.DurableValueState!>!>? durableValueChanges = null, Elsa.Workflows.Runtime.Core.Models.RuntimeStateChange<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState!>? workflowExecutionChange = null) -> Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest!
+Elsa.Workflows.Runtime.Core.Background.BackgroundEligibilitySubject.TouchesVariables.get -> bool

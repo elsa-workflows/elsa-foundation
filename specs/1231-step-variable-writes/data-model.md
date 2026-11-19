@@ -3,34 +3,47 @@
 Types S-10 (#4316) builds are reused and only referenced here: `VariableReadSetEntry`, `VariableInputReadSet`,
 `VariableWriteBase`, `VariableCommitRule`, `LostUpdateMode`, `VariableWriteRecord` (`Source = SessionChange`).
 
-## StepVariableSession (per step, in memory)
+## StepVariableSession (per attempt, in memory; `Elsa.Activities.Runtime/Services/StepVariables/`)
 
 | Field | Meaning |
 |---|---|
-| `InvocationId`, `AttemptId` | The step it belongs to. Dropped at the step's transition. |
-| `SessionReads` | Ordered `VariableReadSetEntry` list for this attempt (version; digest under `Fault`). Not carried to a new attempt or across a suspension. |
-| `PendingIntents` | One `WriteIntent` per variable, latest wins within the step. |
-| `View` | Read-your-writes: committed value at first read, overlaid with pending intents. |
+| `AttemptId` | The attempt it belongs to; a new attempt and every resume get a fresh session. |
+| `Reads` | Ordered `VariableSessionRead` list for this attempt (below). Not carried to a new attempt or across a suspension. |
+| Pending intents | One `StepVariableWriteIntent` per variable, latest wins within the step. |
+| View | Read-your-writes over the frame chain loaded when the step started (spec 1221 FR-021: nothing else commits to the instance while an inline step runs), overlaid with pending intents. |
+| `PendingFault` | A host-side fault (withheld value, undeclared name, failed type check) raised even when the body catches it. |
 
-## WriteIntent
+## VariableSessionRead (`Elsa.Workflows.Runtime.Core`)
 
 | Field | Meaning |
 |---|---|
-| `Variable` | Scope (frame) and key, resolved at publish (script, bound reference) or at run time (free name). |
-| `Kind` | `WholeAssignment` or `MemberChange` (script only; changed paths from S-8). Decides the no-op equality (C4). |
+| `AttemptId` | The attempt that read. |
+| `Entry` | `VariableReadSetEntry`: scope, key, version read; the digest only under `Fault` (spec 1221 FR-003). |
+| `Policy` | The variable's `ValueProtectionPolicy` (spec 1222 FR-035). |
+
+Saved on the invocation as `ActivityExecutionState.SessionReads`, inspection data only: kept on completion,
+suspension, fault and cancellation, cleared for every successor.
+
+## StepVariableWriteIntent
+
+| Field | Meaning |
+|---|---|
+| Target | Scope (frame), key and `Name`, resolved at publish (bound reference) or at run time (free name). |
+| `Kind` | `WholeAssignment` (C#) or `MemberChange` (script, from Phase 5; changed paths from S-8). Decides the no-op equality (C4). |
 | `Value` | The whole value: base plus changes (C3). |
 | `Base` | `VariableWriteBase?` chosen per research R-3; null = blind. |
-| `Writer` | Node, invocation, attempt. |
-| `DroppedMembers` | C# only: members the read type dropped, for the FR-017 warning. |
+| `OwnerInvocationId` | The activity whose container frame declares the variable (the commit writes that frame); null for a workflow variable. The writing invocation's own-write base advances separately (`InvocationVariableBases.Advance`). |
+| `DroppedMembers` | C# only: members the read type dropped, for the FR-017 warning on the write record. |
 
-Applied in the step's checkpoint commit before captures. Each produces a `VariableWriteRecord` (applied, no-op,
-lost update with warning, or fault).
+The writer (node, invocation, attempt) is set
+at commit (`StepVariableCommit`). Intents apply in the step's checkpoint commit before captures; each produces a
+`VariableWriteRecord` with source `SessionChange` (applied, no-op, lost update with warning, or fault).
 
-## InvocationOwnBases (persisted with the invocation)
+## Own-write bases (persisted with the invocation)
 
 | Field | Meaning |
 |---|---|
-| `Variable` → `VariableWriteBase` | The base an own applied write advanced to (ADR 0092 decision 4). Persisted with the activity execution state; restored on resume. |
+| `ActivityExecutionState.OwnVariableBases` | `VariableReadSetEntry` list: the version an own applied write advanced each variable to (ADR 0092 decision 4). Restored on resume and kept on retry; cleared on re-execution. |
 
 ## Pinned node facts (publish → executable node)
 

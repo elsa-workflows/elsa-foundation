@@ -107,7 +107,7 @@ public sealed class RuntimeVariableReadRecorder
 }
 
 /// <summary>One computed read as the evaluator served it: the name asked for and the visible variable it resolved to, or none.</summary>
-public sealed record RuntimeVariableComputedRead(string Name, RuntimeVisibleVariable? Variable);
+public sealed record RuntimeVariableComputedRead(string Name, RuntimeReadableVariable? Variable);
 
 /// <summary>
 /// One variable read a script made by a computed or opaque name, recorded in the input snapshot (spec 1222 FR-010,

@@ -30,7 +30,7 @@ public sealed class ScriptVariableReadMaterializationTests
     private static readonly ValueEnvelope Scratch = ValueEnvelope.Transient(Any, new object());
 
     // Visible from the consumer, nearest first: the container's order shadows the workflow's.
-    private static readonly IReadOnlyList<RuntimeVisibleVariable> Visible =
+    private static readonly IReadOnlyList<RuntimeReadableVariable> Visible =
     [
         new("order", "container", "inner-order", InnerOrder),
         new("large", "workflow", "large", Large),
@@ -170,7 +170,7 @@ public sealed class ScriptVariableReadMaterializationTests
     {
         // FR-019: a protected value read by a computed name makes the result protected.
         var secret = ValueEnvelope.Inline(Any, JsonSerializer.SerializeToElement("s3cr3t"), new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true));
-        var visible = Visible.Append(new RuntimeVisibleVariable("apiKey", "workflow", "apiKey", secret)).ToArray();
+        var visible = Visible.Append(new RuntimeReadableVariable("apiKey", "workflow", "apiKey", secret)).ToArray();
 
         var snapshot = await MaterializeAsync(new Script(request => request.VariableReader!.Read("apiKey").Value), computed: true, visible: visible);
 
@@ -205,7 +205,7 @@ public sealed class ScriptVariableReadMaterializationTests
         bool computed = false,
         CountingPayloadStore? store = null,
         RuntimeVariableReadRecorder? recorder = null,
-        IReadOnlyList<RuntimeVisibleVariable>? visible = null)
+        IReadOnlyList<RuntimeReadableVariable>? visible = null)
     {
         visible ??= Visible;
         var parameters = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal);

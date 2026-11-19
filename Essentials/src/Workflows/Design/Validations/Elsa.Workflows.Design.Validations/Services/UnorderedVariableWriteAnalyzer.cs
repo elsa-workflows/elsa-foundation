@@ -12,7 +12,10 @@ internal enum VariableWriteKind
     Capture,
     Set,
     Merge,
-    Reduce
+    Reduce,
+
+    /// <summary>A write a step body makes through its variable session (spec 1231): a writable reference or a free name.</summary>
+    StepWrite
 }
 
 /// <summary>
@@ -86,11 +89,33 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(structures);
-        return new Analysis(structures, cancellationToken).Run(root, node => DeclaredWrites(node, includeIntrinsics));
+        return new Analysis(structures, cancellationToken).Run(root, node => DeclaredWrites(node, includeIntrinsics), StepVariableWriteFacts.None);
     }
 
+    public UnorderedVariableWriteAnalysis Analyze(
+        ActivityNode root,
+        IActivityStructureService structures,
+        bool includeIntrinsics,
+        StepVariableWriteFacts stepWrites,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(structures);
+        ArgumentNullException.ThrowIfNull(stepWrites);
+        return new Analysis(structures, cancellationToken).Run(
+            root,
+            node => DeclaredWrites(node, includeIntrinsics).Concat(StepWrites(node, stepWrites)),
+            stepWrites);
+    }
+
+    /// <summary>The explicit step writes of a node: the variables its writable references are bound to (spec 1231 FR-024).</summary>
+    internal static IEnumerable<VariableWrite> StepWrites(ActivityNode node, StepVariableWriteFacts facts) =>
+        !string.IsNullOrWhiteSpace(node.NodeId) && facts.ByNodeId.TryGetValue(node.NodeId, out var writers)
+            ? writers.Targets.Select(target => new VariableWrite(node.NodeId, VariableWriteKind.StepWrite, NormalizeScopeId(target.ScopeId), target.ReferenceKey))
+            : [];
+
     private static string UnorderedMessage(string scopeId, string referenceKey, IReadOnlyList<string> writerNodeIds,
-        IReadOnlyList<string> selfOverlapping, IReadOnlyList<UndeclaredStructure> undeclared)
+        IReadOnlyList<string> selfOverlapping, IReadOnlyList<UndeclaredStructure> undeclared, IReadOnlyCollection<string>? everyVisible = null)
     {
         var writers = string.Join(", ", writerNodeIds.Select(id => $"'{id}'"));
         var text = writerNodeIds.Count == 1
@@ -98,6 +123,8 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
             : $"Variable '{referenceKey}' in scope '{scopeId}' is written by {writerNodeIds.Count} nodes whose order the definition does not fix: {writers}.";
         foreach (var node in selfOverlapping)
             text += $" Node '{node}' can run more than once at the same time.";
+        foreach (var node in writerNodeIds.Where(id => everyVisible?.Contains(id) == true))
+            text += $" Node '{node}' may write any visible variable (its activity type is marked [AccessesUndeclaredVariables], or its script writes by a computed name), so it counts as a writer of this one.";
         foreach (var structure in undeclared)
             text += structure.Fact == UndeclaredStructureFact.Completion
                 ? $" Structure '{structure.Kind}' (node '{structure.NodeId}') does not declare whether it completes only after its children, so its children's writes are treated as unordered with what follows it."
@@ -119,7 +146,7 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
         private readonly Dictionary<(Node Parent, string First, string Second), ActivityChildTimeRelation> _relations = [];
         private readonly Dictionary<Node, bool?> _completes = [];
 
-        public UnorderedVariableWriteAnalysis Run(ActivityNode root, Func<ActivityNode, IEnumerable<VariableWrite>> writesOf)
+        public UnorderedVariableWriteAnalysis Run(ActivityNode root, Func<ActivityNode, IEnumerable<VariableWrite>> writesOf, StepVariableWriteFacts stepWrites)
         {
             Build(root);
             var writes = new List<(Node Node, VariableWrite Write)>();
@@ -140,6 +167,29 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
                     }));
             }
 
+            // Spec 1231 FR-028: a node that may write every visible variable counts as a writer of each variable visible to it:
+            // those the definition writes, the workflow variables, and the variables its enclosing containers declare.
+            var everyVisible = _nodes
+                .Where(node => !string.IsNullOrWhiteSpace(node.Activity.NodeId) &&
+                               stepWrites.ByNodeId.TryGetValue(node.Activity.NodeId, out var writers) && writers.MayWriteEveryVisibleVariable)
+                .ToArray();
+            if (everyVisible.Length > 0)
+            {
+                var variables = writes.Select(item => (item.Write.ScopeId, item.Write.ReferenceKey))
+                    .Concat(stepWrites.WorkflowVariableKeys.Select(key => (ScopeId: VariableReference.WorkflowScopeId, ReferenceKey: key)))
+                    .Distinct()
+                    .ToArray();
+                foreach (var node in everyVisible)
+                foreach (var (scopeId, referenceKey) in variables.Concat(ScopedVariablesAbove(node)).Distinct())
+                {
+                    if (!IsVisibleTo(node, scopeId) ||
+                        writes.Any(item => ReferenceEquals(item.Node, node) && item.Write.ScopeId == scopeId && item.Write.ReferenceKey == referenceKey))
+                        continue;
+                    writes.Add((node, new VariableWrite(node.Activity.NodeId, VariableWriteKind.StepWrite, scopeId, referenceKey)));
+                }
+            }
+
+            var everyVisibleIds = everyVisible.Select(node => node.Activity.NodeId).ToHashSet(StringComparer.Ordinal);
             var findings = new List<UnorderedVariableWriteFinding>();
             foreach (var variable in writes.GroupBy(item => (item.Write.ScopeId, item.Write.ReferenceKey)))
             {
@@ -171,10 +221,33 @@ internal sealed class UnorderedVariableWriteAnalyzer : IUnorderedVariableWriteAn
                 var overlappingIds = selfOverlapping.Select(node => node.Activity.NodeId).ToArray();
                 var undeclaredStructures = undeclared.Distinct().ToArray();
                 findings.Add(new(variable.Key.ScopeId, variable.Key.ReferenceKey, writerIds, overlappingIds, undeclaredStructures,
-                    UnorderedMessage(variable.Key.ScopeId, variable.Key.ReferenceKey, writerIds, overlappingIds, undeclaredStructures)));
+                    UnorderedMessage(variable.Key.ScopeId, variable.Key.ReferenceKey, writerIds, overlappingIds, undeclaredStructures, everyVisibleIds)));
             }
 
             return new(findings, duplicates);
+        }
+
+        // The container variables declared by the node's ancestors: visible to it, written or not.
+        private IEnumerable<(string ScopeId, string ReferenceKey)> ScopedVariablesAbove(Node node)
+        {
+            for (var ancestor = node.Parent; ancestor is not null; ancestor = ancestor.Parent)
+            {
+                if (string.IsNullOrWhiteSpace(ancestor.Activity.NodeId))
+                    continue;
+                foreach (var variable in structures.ProjectScopedVariables(ancestor.Activity))
+                    yield return (ancestor.Activity.NodeId, variable.ReferenceKey);
+            }
+        }
+
+        // A workflow variable is visible everywhere; a container variable only below the container that declares it.
+        private static bool IsVisibleTo(Node node, string scopeId)
+        {
+            if (StringComparer.Ordinal.Equals(scopeId, VariableReference.WorkflowScopeId))
+                return true;
+            for (var ancestor = node.Parent; ancestor is not null; ancestor = ancestor.Parent)
+                if (StringComparer.Ordinal.Equals(ancestor.Activity.NodeId, scopeId))
+                    return true;
+            return false;
         }
 
         private void Build(ActivityNode root)

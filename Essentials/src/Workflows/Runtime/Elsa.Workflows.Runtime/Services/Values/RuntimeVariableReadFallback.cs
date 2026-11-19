@@ -18,13 +18,13 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </summary>
 internal sealed class RuntimeVariableReadFallback : IExpressionVariableReader
 {
-    private readonly IReadOnlyDictionary<string, RuntimeVisibleVariable> _variables;
+    private readonly IReadOnlyDictionary<string, RuntimeReadableVariable> _variables;
     private readonly IReadOnlyDictionary<string, JsonElement> _values;
     private readonly List<RuntimeVariableComputedRead> _reads = [];
     private readonly List<RuntimeVariableReadRefusal> _refusals = [];
 
     private RuntimeVariableReadFallback(
-        IReadOnlyList<RuntimeVisibleVariable> variables,
+        IReadOnlyList<RuntimeReadableVariable> variables,
         IReadOnlyDictionary<string, JsonElement> values)
     {
         _variables = variables.ToDictionary(variable => variable.Name, StringComparer.Ordinal);
@@ -42,7 +42,7 @@ internal sealed class RuntimeVariableReadFallback : IExpressionVariableReader
 
     /// <summary>Loads the readable values of the visible variables: durable, present and not withheld.</summary>
     public static async ValueTask<RuntimeVariableReadFallback> LoadAsync(
-        IReadOnlyList<RuntimeVisibleVariable> visibleVariables,
+        IReadOnlyList<RuntimeReadableVariable> visibleVariables,
         IExternalPayloadStore? externalPayloadStore,
         CancellationToken cancellationToken)
     {
@@ -161,7 +161,7 @@ internal enum RuntimeVariableReadRefusalKind
     Unreadable
 }
 
-internal sealed record RuntimeVariableReadRefusal(RuntimeVisibleVariable Variable, RuntimeVariableReadRefusalKind Kind)
+internal sealed record RuntimeVariableReadRefusal(RuntimeReadableVariable Variable, RuntimeVariableReadRefusalKind Kind)
 {
     public string Describe(string? nodeId, string? inputName)
     {

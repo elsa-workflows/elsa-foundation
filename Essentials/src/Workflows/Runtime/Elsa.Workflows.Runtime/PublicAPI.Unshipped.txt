@@ -1916,4 +1916,21 @@ static Elsa.Workflows.Runtime.Services.Values.ClosedScopeVariableRows.ReadFrame(
 static Elsa.Workflows.Runtime.Services.Values.ClosedScopeVariableRows.WithVersion(Elsa.Workflows.Runtime.Core.Models.DurableValueState! row, Elsa.Workflows.Runtime.Core.Models.VariableVersion! version, bool hidesValue = false) -> Elsa.Workflows.Runtime.Core.Models.DurableValueState!
 Elsa.Workflows.Runtime.Services.Values.RuntimeVariableReadRefusedException
 Elsa.Workflows.Runtime.Services.Values.RuntimeVariableReadRefusedException.RuntimeVariableReadRefusedException(string! message) -> void
-static Elsa.Workflows.Runtime.Services.Values.RuntimeContainerScopeService.ProjectReadableVariables(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! executable, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableFrameState!>! orderedFrames, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? rootVariableNames = null) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeVisibleVariable!>!
+static Elsa.Workflows.Runtime.Services.Values.RuntimeContainerScopeService.ProjectReadableVariables(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! executable, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableFrameState!>! orderedFrames, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? rootVariableNames = null) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeReadableVariable!>!
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.<Clone>$() -> Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable!
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.Deconstruct(out string! Name, out Elsa.Workflows.Runtime.Core.Models.VariableFrameState! Frame, out string! VariableKey) -> void
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.Equals(Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable? other) -> bool
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.Frame.get -> Elsa.Workflows.Runtime.Core.Models.VariableFrameState!
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.Frame.init -> void
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.Name.get -> string!
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.Name.init -> void
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.RuntimeVisibleVariable(string! Name, Elsa.Workflows.Runtime.Core.Models.VariableFrameState! Frame, string! VariableKey) -> void
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.VariableKey.get -> string!
+Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.VariableKey.init -> void
+override Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.ToString() -> string!
+static Elsa.Workflows.Runtime.Services.Values.RuntimeContainerScopeService.ProjectVisibleVariableTargets(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! executable, Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariableFrames! visibleFrames) -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable!>!
+static Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.operator !=(Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable? left, Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable? right) -> bool
+static Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable.operator ==(Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable? left, Elsa.Workflows.Runtime.Services.Values.RuntimeVisibleVariable? right) -> bool

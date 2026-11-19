@@ -82,6 +82,7 @@ public sealed class RuntimeInputBindingCompiler(
             definitionsByKey.TryGetValue(key, out var definition) && definition.IsCredential == true ? definition.Name : null);
         EnsureConnectionBindings(nodeId, states, key =>
             definitionsByKey.TryGetValue(key, out var definition) && IsConnectionInput(definition));
+        EnsureVariableReferenceBindings(nodeId, definitions, states);
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         foreach (var state in states)
         {
@@ -114,6 +115,7 @@ public sealed class RuntimeInputBindingCompiler(
             contractsByKey.TryGetValue(key, out var contract) && contract.IsCredential ? contract.Name : null);
         EnsureConnectionBindings(nodeId, states, key =>
             contractsByKey.TryGetValue(key, out var contract) && IsConnectionInput(contract));
+        EnsureVariableReferenceBindings(nodeId, contracts.Select(ToInputDefinition).ToArray(), states);
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         foreach (var state in states)
         {
@@ -166,6 +168,27 @@ public sealed class RuntimeInputBindingCompiler(
                 $"Activity node '{nodeId}' input '{state.ReferenceKey}' must be a Connection reference (name and type), not a literal credential.");
         }
     }
+
+    /// <summary>
+    /// Spec 1231 FR-024: a variable-reference input (<c>VariableReference&lt;T&gt;</c> or
+    /// <c>ReadOnlyVariableReference&lt;T&gt;</c>) must be bound, and only to a declared variable through the
+    /// <c>Variable</c> expression. An unbound one, or one bound to any other expression, is refused, naming the input.
+    /// </summary>
+    private static void EnsureVariableReferenceBindings(string nodeId, IReadOnlyCollection<InputDefinition> definitions, IReadOnlyCollection<ArgumentState> states)
+    {
+        foreach (var definition in definitions.Where(IsVariableReferenceInput).OrderBy(definition => definition.ReferenceKey, StringComparer.Ordinal))
+        {
+            var state = states.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.ReferenceKey, definition.ReferenceKey));
+            if (state is null || !state.IsBound())
+                throw new ArgumentException(
+                    $"VF-VAR-001: Activity node '{nodeId}' input '{definition.ReferenceKey}' is a variable reference and must be bound to a declared variable.");
+            if (!string.Equals(state.Value!.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException(
+                    $"VF-VAR-001: Activity node '{nodeId}' input '{definition.ReferenceKey}' is a variable reference and must be bound to a declared variable, not to a '{state.Value.ExpressionType}' expression.");
+        }
+    }
+
+    internal static bool IsVariableReferenceInput(InputDefinition definition) => !string.IsNullOrWhiteSpace(definition.VariableAccess);
 
     private static bool IsConnectionInput(InputDefinition definition) =>
         !string.IsNullOrWhiteSpace(definition.ConnectionType) || IsConnectionTyped(definition.Type.Alias);
@@ -368,7 +391,10 @@ public sealed class RuntimeInputBindingCompiler(
         DefaultValue: contract.DefaultValue,
         DefaultSyntax: contract.HasDefault ? LiteralExpressionType : null,
         IsCredential: contract.IsCredential ? true : null,
-        ConnectionType: contract.ConnectionType);
+        ConnectionType: contract.ConnectionType,
+        VariableAccess: contract.VariableReference is { } reference
+            ? reference.Access == Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess.ReadWrite ? InputVariableAccess.ReadWrite : InputVariableAccess.Read
+            : null);
 
     private static InputDefinition ToInputDefinition(ActivityInputContract contract) => new(
         contract.ReferenceKey,
@@ -428,6 +454,9 @@ public sealed class RuntimeInputBindingCompiler(
         ValueProtectionPolicy effectivePolicy,
         AuthoredValueConversionRequest? conversion)
     {
+        if (IsVariableReferenceInput(inputDefinition))
+            return CompileVariableReferenceInput(nodeId, inputDefinition, value);
+
         if (string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileLiteralInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
@@ -629,6 +658,45 @@ public sealed class RuntimeInputBindingCompiler(
                 reference.ReferenceKey,
                 reference.IsWorkflowScope ? VariableReference.WorkflowScopeId : reference.DeclaringScopeId!),
             metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    /// <summary>
+    /// Compiles a variable-reference input (spec 1231 FR-022): the pinned binding is the variable it names, its declaring
+    /// scope and key, as an inline literal of <see cref="Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes.Alias"/>.
+    /// It is never a value: the activity reads and writes the variable through its step's session.
+    /// </summary>
+    private static RuntimeInputBinding CompileVariableReferenceInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        if (!string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException(
+                $"VF-VAR-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' is a variable reference and must be bound to a declared variable, not to a '{value.ExpressionType}' expression.");
+
+        var reference = ParseVariableReference(nodeId, inputDefinition, value.Value);
+        var scopeId = reference.IsWorkflowScope ? VariableReference.WorkflowScopeId : reference.DeclaringScopeId!;
+        var name = ReadVariableName(value.Value) ?? reference.ReferenceKey;
+        var type = new ValueTypeDescriptor(Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes.Alias);
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: type,
+            effectivePolicy: policy,
+            source: RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(new { name, scopeId, variableKey = reference.ReferenceKey }), policy),
+            metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    private static string? ReadVariableName(object? value)
+    {
+        var element = value is JsonElement json ? json : JsonSerializer.SerializeToElement(value);
+        if (element.ValueKind != JsonValueKind.Object)
+            return null;
+        foreach (var member in new[] { "name", "Name" })
+        {
+            if (element.TryGetProperty(member, out var name) && name.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(name.GetString()))
+                return name.GetString();
+        }
+
+        return null;
     }
 
     private static RuntimeInputBinding CompileWorkflowRequestInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, ValueProtectionPolicy effectivePolicy)

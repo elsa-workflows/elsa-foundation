@@ -355,15 +355,16 @@ public sealed class RuntimeContainerScopeService(
     /// Exposed as a static so producers that assemble the visible chain by hand (e.g. the intrinsic executor) reuse one
     /// name resolution.
     /// </summary>
-    public static IReadOnlyList<RuntimeVisibleVariable> ProjectReadableVariables(
+    public static IReadOnlyList<RuntimeReadableVariable> ProjectReadableVariables(
         WorkflowExecutable executable,
         IReadOnlyList<VariableFrameState> orderedFrames,
         IReadOnlyDictionary<string, string>? rootVariableNames = null)
     {
-        var byName = new Dictionary<string, RuntimeVisibleVariable>(StringComparer.Ordinal);
+        var byName = new Dictionary<string, RuntimeReadableVariable>(StringComparer.Ordinal);
         var order = new List<string>();
-        foreach (var variable in EnumerateVisibleVariables(executable, orderedFrames, lenient: true, rootVariableNames))
+        foreach (var entry in EnumerateVisibleVariableEntries(executable, orderedFrames, lenient: true, rootVariableNames))
         {
+            var variable = new RuntimeReadableVariable(entry.Name, entry.Frame.ScopeId, entry.Key, entry.Envelope);
             if (!byName.ContainsKey(variable.Name))
                 order.Add(variable.Name);
             byName[variable.Name] = variable;
@@ -387,7 +388,30 @@ public sealed class RuntimeContainerScopeService(
         return -1;
     }
 
-    private static IEnumerable<RuntimeVisibleVariable> EnumerateVisibleVariables(
+    /// <summary>
+    /// Projects the visible lexical frame chain into the author-facing name → variable view a step's variable session
+    /// resolves free names against (spec 1231 FR-025, FR-020a): the frame that holds the variable and its key, with the
+    /// innermost scope winning for a shadowed name, by the same name mapping as <see cref="ProjectVisibleVariableEnvelopes"/>.
+    /// </summary>
+    public static IReadOnlyDictionary<string, RuntimeVisibleVariable> ProjectVisibleVariableTargets(
+        WorkflowExecutable executable,
+        RuntimeVisibleVariableFrames visibleFrames)
+    {
+        ArgumentNullException.ThrowIfNull(visibleFrames);
+        var result = new Dictionary<string, RuntimeVisibleVariable>(StringComparer.Ordinal);
+        foreach (var (name, _, frame, key) in EnumerateVisibleVariableEntries(executable, visibleFrames.Frames, lenient: true, visibleFrames.RootVariableNames))
+            result[name] = new RuntimeVisibleVariable(name, frame, key);
+        return result;
+    }
+
+    private static IEnumerable<(string Name, ValueEnvelope Envelope)> EnumerateVisibleVariables(
+        WorkflowExecutable executable,
+        IReadOnlyList<VariableFrameState> orderedFrames,
+        bool lenient,
+        IReadOnlyDictionary<string, string>? rootVariableNames) =>
+        EnumerateVisibleVariableEntries(executable, orderedFrames, lenient, rootVariableNames).Select(entry => (entry.Name, entry.Envelope));
+
+    private static IEnumerable<(string Name, ValueEnvelope Envelope, VariableFrameState Frame, string Key)> EnumerateVisibleVariableEntries(
         WorkflowExecutable executable,
         IReadOnlyList<VariableFrameState> orderedFrames,
         bool lenient,
@@ -403,7 +427,7 @@ public sealed class RuntimeContainerScopeService(
             {
                 // Iteration-frame keys are the exposed variable names directly (e.g. loopIndex / the item key).
                 foreach (var (key, value) in frame.Values)
-                    yield return new RuntimeVisibleVariable(key, frame.ScopeId, key, value);
+                    yield return (key, value, frame, key);
                 continue;
             }
 
@@ -411,7 +435,7 @@ public sealed class RuntimeContainerScopeService(
             if (RuntimeClosedScope.IsClosedScopeFrame(frame))
             {
                 foreach (var (key, value) in frame.Values)
-                    yield return new RuntimeVisibleVariable(rootVariableNames?.GetValueOrDefault(key) ?? key, frame.ScopeId, key, value);
+                    yield return (rootVariableNames?.GetValueOrDefault(key) ?? key, value, frame, key);
                 continue;
             }
 
@@ -436,7 +460,7 @@ public sealed class RuntimeContainerScopeService(
                     throw new InvalidOperationException($"Variable frame '{frame.FrameId}' contains undeclared variable key '{key}'.");
                 }
 
-                yield return new RuntimeVisibleVariable(declaration.Name, frame.ScopeId, key, value);
+                yield return (declaration.Name, value, frame, key);
             }
         }
     }
@@ -517,6 +541,9 @@ public sealed class RuntimeContainerScopeService(
         frames.Add(frame);
     }
 }
+
+/// <summary>A visible variable by its author-facing name: the frame that holds it and its key there.</summary>
+public sealed record RuntimeVisibleVariable(string Name, VariableFrameState Frame, string VariableKey);
 
 public sealed class RuntimeVisibleVariableFrames
 {

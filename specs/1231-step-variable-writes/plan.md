@@ -52,7 +52,7 @@ JavaScript expressions/Jint, Scripting activities, Elsa 3 mapping)
 
 | # | Decision | Detail |
 |---|---|---|
-| P-1 | Session behind the activity context | R-2. `IActivityExecutionContext.Variables` (`IStepVariables`); implemented in `Elsa.Workflows.Runtime` over the visible frame chain; created per step by the invoke and resume handlers. |
+| P-1 | Session behind the activity context | R-2. `ActivityExecutionContext.Variables` (`IStepVariables`) on the author-facing context, and on the start and resume contexts; `IActivityExecutionContext` gets none (Q4: structural evaluations have no session). Implemented as `StepVariableSession` in `Elsa.Activities.Runtime/Services/StepVariables/` over the visible frame chain; created per step by the invoke and resume handlers (as built: tasks.md T003, T004). |
 | P-2 | Intents ride the existing checkpoint | Handed to the commit the handler builds for the transition; applied before captures with S-10's `VariableCommitRule`; write records with `SessionChange`. |
 | P-3 | Bases | R-3: session read → input read set → blind; own applied writes advance a persisted per-invocation base, restored on resume. |
 | P-4 | Script writes pinned at publish | R-4: extend S-4's body analyzer with write forms; pin targets, may-write set, body touch set. |
@@ -81,18 +81,18 @@ specs/1231-step-variable-writes/
 
 ```text
 Essentials/src/Activities/Runtime/Core/
-├── Contracts/IActivityExecutionContext.cs          # + Variables
+├── Models/ActivityExecutionContext.cs              # + Variables (author-facing context; also StatefulActivity contexts)
 ├── Contracts/IStepVariables.cs                     # new
 ├── Models/VariableReference.cs                     # new: VariableReference<T>, ReadOnlyVariableReference<T>
 ├── Attributes/AccessesUndeclaredVariablesAttribute.cs  # new
 └── Models/ActivityContract.cs                      # input kind + direction; marker
 Essentials/src/Workflows/Runtime/Core/
 ├── Background/BackgroundEligibility.cs             # C9 extension (S-11's file)
-└── Models/StepVariableSession.cs, WriteIntent.cs   # new
+└── Models/VariableSessionModels.cs, ActivityExecutionState.cs  # session reads, own-write bases
 Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/
-├── Services/ActivityExecutions/SimpleActivityExecutionContext.cs  # session wiring
 └── Services/Values/RuntimeContainerScopeService.cs                # shared read path
 Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/
+├── StepVariables/StepVariableSession.cs, StepVariableCommit.cs, StepVariableSessions.cs  # new: session, intents, commit
 ├── WorkflowInvokeActivitySchedulerWorkHandler.cs   # session per step; intents into the commit
 ├── WorkflowResumeBookmarkSchedulerWorkHandler.cs   # fresh session on resume; own bases restored
 └── RuntimeOutputCaptureProjection.cs               # intents before captures

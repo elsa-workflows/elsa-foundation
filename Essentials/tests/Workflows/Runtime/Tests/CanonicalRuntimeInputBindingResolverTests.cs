@@ -696,7 +696,7 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
     private static readonly ValueEnvelope RegionEnvelope =
         ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement("eu"), ValueProtectionPolicy.InstanceInline);
 
-    private static readonly IReadOnlyList<RuntimeVisibleVariable> WithheldTokenInScope =
+    private static readonly IReadOnlyList<RuntimeReadableVariable> WithheldTokenInScope =
     [
         new("token", "scope:root", "token", WithheldToken),
         new("region", "scope:root", "region", RegionEnvelope)

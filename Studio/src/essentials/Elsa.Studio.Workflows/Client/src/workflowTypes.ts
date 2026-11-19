@@ -228,6 +228,8 @@ export interface ActivityCatalogItem {
   inputs: unknown[];
   outputs: unknown[];
   designFacets?: unknown[];
+  /** The activity type is marked `[AccessesUndeclaredVariables]` (spec 1231 FR-026); absent on older backends. */
+  accessesUndeclaredVariables?: boolean | null;
   paletteHints?: ActivityPaletteHints | null;
   available?: boolean;
   availabilityReason?: string | null;

@@ -87,7 +87,7 @@ persisted.
 | `VariableUniquenessValidator` | Workflow-scope | `$workflow/variables/{Name}` · `Variables/Uniqueness` |
 | `RequiredInputOutputValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `InputOutput/MissingRequired` |
 | `VariableExpressionResolverValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `Expressions/UnresolvedVariable` |
-| `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity; ConcurrentWrite and DuplicateCaptureTarget are warnings, spec 266) |
+| `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity, VariableReference (spec 1231: a variable-reference input not bound to a declared variable); ConcurrentWrite, DuplicateCaptureTarget (spec 266) and StepWriteOverlapsCapture (spec 1231) are warnings). Step-write checks need the activity catalog (`IActivityDefinitionLookup`); without it they are skipped |
 | `CredentialLiteralValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `Inputs/CredentialLiteral` (reporting only here; see below) |
 | `ScriptOutcomeValidator` | Catalog-backed root + nested (recurses); nodes whose `elsa.outcomes` facet names a `scriptInput` with a literal script | `{NodeId}/inputs/{scriptInput}` · `Scripts/UnknownOutcome` (`VF-AUTH-010`, error), `Scripts/ReturnedOutcomeName` (`VF-AUTH-012`, warning), `Scripts/ReservedName` (error) (see below) |
 

@@ -7,8 +7,9 @@ import { WORKFLOW_SCOPE_ID } from "./scopedVariables";
  * selected activity, keyed `scopeId::referenceKey`, with an empty "Select a variable…" option and the
  * loading/error/unavailable/empty status notes. A selected reference that is not in the visible set (or is
  * filtered out by `workflowScopeOnly`) is preserved as a disabled "(not visible from this scope)" option so
- * an authored target is never silently dropped. Used by the Set Variable intrinsic inspector and the
- * activity output-capture editor; the caller supplies its own label markup around the select.
+ * an authored target is never silently dropped. Used by the Set Variable intrinsic inspector, the activity
+ * output-capture editor and variable-reference inputs (spec 1231 FR-036); the caller supplies its own label
+ * markup around the select.
  */
 
 const optionSeparator = "::";
@@ -16,15 +17,20 @@ const optionSeparator = "::";
 export function VariableTargetSelect({
   ariaLabelledBy,
   ariaLabel,
+  ariaDescribedBy,
   visibleVariables,
   status,
   retry,
   selected,
   onSelect,
-  workflowScopeOnly = false
+  workflowScopeOnly = false,
+  disabled = false,
+  unlistedLabel,
+  emptyLabel
 }: {
   ariaLabelledBy?: string;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
   visibleVariables: VisibleVariableView[];
   status: ScopedVariableAnalysisStatus;
   retry?: () => void;
@@ -32,6 +38,11 @@ export function VariableTargetSelect({
   onSelect(selection: { referenceKey: string; scopeId: string } | null): void;
   // v1 output captures only offer workflow-scope targets; the intrinsic picker offers every scope.
   workflowScopeOnly?: boolean;
+  disabled?: boolean;
+  // The text of a selection that is not among the options; defaults to its key, "not visible from this scope".
+  unlistedLabel?: string;
+  // The note when no option is offered; defaults to "no variables are visible here".
+  emptyLabel?: string;
 }) {
   const options = workflowScopeOnly ? visibleVariables.filter(variable => variable.isWorkflowScope) : visibleVariables;
   const optionsUnavailable = status !== "ready";
@@ -42,13 +53,14 @@ export function VariableTargetSelect({
       <select
         aria-labelledby={ariaLabelledBy}
         aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
         value={selected}
-        disabled={optionsUnavailable}
+        disabled={disabled || optionsUnavailable}
         onChange={event => onSelect(parseOptionKey(event.target.value))}
       >
         <option value="">Select a variable…</option>
         {selected !== "" && !selectedIsVisible ? (
-          <option value={selected} disabled>{parseOptionKey(selected)?.referenceKey ?? selected} (not visible from this scope)</option>
+          <option value={selected} disabled>{unlistedLabel ?? `${parseOptionKey(selected)?.referenceKey ?? selected} (not visible from this scope)`}</option>
         ) : null}
         {options.map(variable => (
           <option key={optionKey(variable.referenceKey, variable.scopeId)} value={optionKey(variable.referenceKey, variable.scopeId)}>
@@ -66,7 +78,7 @@ export function VariableTargetSelect({
       ) : status === "unavailable" ? (
         <p className="wf-variable-picker-note">Variable scope information is unavailable. The current target is preserved.</p>
       ) : options.length === 0 ? (
-        <p className="wf-variable-picker-note">No variables are visible here. Declare one on the workflow or a container scope.</p>
+        <p className="wf-variable-picker-note">{emptyLabel ?? "No variables are visible here. Declare one on the workflow or a container scope."}</p>
       ) : null}
     </div>
   );

@@ -25,8 +25,9 @@ public sealed class ActivityContract
         IReadOnlyCollection<string> outcomes,
         ActivityActivationRequirement activation,
         SideEffectProfile sideEffectProfile = SideEffectProfile.External,
-        bool supportsBackgroundExecution = false)
-        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution)
+        bool supportsBackgroundExecution = false,
+        bool accessesUndeclaredVariables = false)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution, accessesUndeclaredVariables)
     {
         if (!StringComparer.Ordinal.Equals(schemaFingerprint, SchemaFingerprint))
             throw new JsonException($"Activity contract fingerprint '{schemaFingerprint}' does not match computed fingerprint '{SchemaFingerprint}'.");
@@ -67,6 +68,22 @@ public sealed class ActivityContract
         ActivityActivationRequirement activation,
         SideEffectProfile sideEffectProfile,
         bool supportsBackgroundExecution)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution, accessesUndeclaredVariables: false)
+    {
+    }
+
+    public ActivityContract(
+        string activityTypeKey,
+        string contractVersion,
+        string descriptorKind,
+        JsonElement descriptorPayload,
+        IEnumerable<ActivityInputContract> inputs,
+        ActivityResultContract result,
+        IEnumerable<string> outcomes,
+        ActivityActivationRequirement activation,
+        SideEffectProfile sideEffectProfile,
+        bool supportsBackgroundExecution,
+        bool accessesUndeclaredVariables)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(contractVersion);
@@ -97,6 +114,7 @@ public sealed class ActivityContract
         Activation = activation;
         SideEffectProfile = sideEffectProfile;
         SupportsBackgroundExecution = supportsBackgroundExecution;
+        AccessesUndeclaredVariables = accessesUndeclaredVariables;
         SchemaFingerprint = ComputeFingerprint();
     }
 
@@ -127,6 +145,19 @@ public sealed class ActivityContract
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool SupportsBackgroundExecution { get; }
+
+    /// <summary>
+    /// Whether the activity type is marked <c>[AccessesUndeclaredVariables]</c> (spec 1231 FR-025, FR-026): it may read
+    /// and write any visible variable by free name. Pinned so publication, inspection, the concurrent-write rule and
+    /// background eligibility (ADR 0093 C9) see it without the CLR type. Omitted from the serialized shape and the
+    /// fingerprint while false, so existing contracts keep their document and fingerprint.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AccessesUndeclaredVariables { get; }
+
+    /// <summary>Whether any input is a variable reference (<see cref="VariableReference{T}"/> or <see cref="ReadOnlyVariableReference{T}"/>).</summary>
+    [JsonIgnore]
+    public bool HasVariableReferenceInputs => Inputs.Values.Any(input => input.VariableReference is not null);
 
 
     private string ComputeFingerprint()
@@ -159,6 +190,9 @@ public sealed class ActivityContract
         if (SupportsBackgroundExecution)
             node[nameof(SupportsBackgroundExecution)] = true;
 
+        if (AccessesUndeclaredVariables)
+            node[nameof(AccessesUndeclaredVariables)] = true;
+
         var canonical = SortNode(node).ToJsonString();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
@@ -187,6 +221,9 @@ public sealed class ActivityContract
 
         if (!string.IsNullOrWhiteSpace(input.ConnectionType))
             projection[nameof(input.ConnectionType)] = input.ConnectionType;
+
+        if (input.VariableReference is { } reference)
+            projection[nameof(input.VariableReference)] = reference;
 
         return projection;
     }
@@ -326,6 +363,15 @@ public sealed class ActivityInputContract
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsStructureInput { get; init; }
+
+    /// <summary>
+    /// For an input of type <see cref="VariableReference{T}"/> or <see cref="ReadOnlyVariableReference{T}"/> (spec 1231
+    /// FR-022): its direction and the value type the activity reads the variable as. The input's <see cref="Type"/> is
+    /// then <see cref="VariableReferenceTypes.Alias"/>: its pinned binding is the variable it names, never a value.
+    /// Omitted from the serialized shape and the fingerprint while null.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ActivityInputVariableReference? VariableReference { get; init; }
 }
 
 public sealed class ActivityResultContract

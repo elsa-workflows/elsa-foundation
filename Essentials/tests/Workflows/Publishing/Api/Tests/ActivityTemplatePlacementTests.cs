@@ -254,6 +254,48 @@ public sealed class ActivityTemplatePlacementTests
         Assert.Equal(ActivityExecutionPlacement.Background, leaf.ExecutionPlacement);
     }
 
+    // Spec 1231 T033 (FR-031, User Story 5 scenario 5): a design-only shell defers the type checks, yet the step-variable
+    // signals the pinned contract carries are refused at placement with VF-BG-001 (C9).
+    [Theory]
+    [InlineData("marker", "[AccessesUndeclaredVariables]")]
+    [InlineData("writable", "input 'balance' is a VariableReference")]
+    [InlineData("read-only", "input 'balance' is a ReadOnlyVariableReference")]
+    public async Task Placement_without_the_runtime_type_refuses_a_contract_visible_step_variable_signal(string signal, string expected)
+    {
+        var unknown = BackgroundLeaf("unknown", "test.not-registered-here");
+        var contract = unknown.ActivityContract!;
+        IReadOnlyList<Elsa.Activities.Runtime.Core.Models.ActivityInputContract> inputs = signal == "marker"
+            ? []
+            :
+            [
+                new Elsa.Activities.Runtime.Core.Models.ActivityInputContract("balance", "Balance", new(VariableReferenceTypes.Alias), true, false, false, null, ActivityValuePolicy.Default)
+                {
+                    VariableReference = new ActivityInputVariableReference(
+                        signal == "writable" ? ActivityVariableAccess.ReadWrite : ActivityVariableAccess.Read, new("Decimal"))
+                }
+            ];
+        var leaf = new ExecutableNode(
+            unknown.ExecutableNodeId, unknown.AuthoredActivityId, unknown.ActivityType, unknown.ActivityTypeVersion, unknown.Descriptor,
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), ActivityExecutionPlacement.Background,
+            activityContract: new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+                contract.ActivityTypeKey, contract.ContractVersion, contract.DescriptorKind, contract.DescriptorPayload,
+                inputs, contract.Result, contract.Outcomes, contract.Activation, contract.SideEffectProfile,
+                supportsBackgroundExecution: true, accessesUndeclaredVariables: signal == "marker"));
+        var template = Template("template-root", "hash-root", Node("root", leaf));
+        var publication = Publication("definition-root", "version-root", "type.root", template);
+        var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
+        var placer = CreatePlacer(new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]),
+            new Sha256ActivityPlacementHasher());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => placer.PlaceAsync(new(
+            publication, template, reference,
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            publication.ActivityTypeKey, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>())).AsTask());
+
+        Assert.StartsWith("VF-BG-001 (C9): Background execution is not eligible for activity node 'node-", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(expected, exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Placement_checks_the_background_node_as_pinned_with_the_occurrence_bindings()
     {

@@ -175,6 +175,13 @@ public sealed record VariableWriteRecord
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? FrameId { get; init; }
 
+    /// <summary>
+    /// A C# session write of a value read as a type that dropped members of the stored value (spec 1231 FR-017, ADR 0046
+    /// V6): the dropped members, by JSON path. The write applies; this is its declared-loss warning.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? DroppedMembers { get; init; }
+
     /// <summary>The digest of the value the variable holds after this write (its resulting version's digest), when known.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Digest { get; init; }

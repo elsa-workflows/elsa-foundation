@@ -12,7 +12,7 @@ public sealed class RuntimeInputBindingResolutionContext
         WorkflowExecutable? executable = null,
         IReadOnlyDictionary<string, ValueEnvelope>? workflowInputEnvelopes = null,
         IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes = null,
-        IReadOnlyList<RuntimeVisibleVariable>? visibleVariables = null,
+        IReadOnlyList<RuntimeReadableVariable>? visibleVariables = null,
         string? correlationId = null,
         RuntimeVariableReadRecorder? variableReadRecorder = null)
     {
@@ -53,7 +53,7 @@ public sealed class RuntimeInputBindingResolutionContext
     /// Distinct from <see cref="VariableEnvelopes"/>, which is keyed by declaring-scope address and drives pinned
     /// <c>Variable</c> parameters. Empty when the producer supplies no projection.
     /// </summary>
-    public IReadOnlyList<RuntimeVisibleVariable> VisibleVariables { get; }
+    public IReadOnlyList<RuntimeReadableVariable> VisibleVariables { get; }
 
     /// <summary>
     /// The instance's correlation ID as committed in its identity durable values, read by a
@@ -73,9 +73,9 @@ public sealed class RuntimeInputBindingResolutionContext
 }
 
 /// <summary>One visible variable a script's computed read can reach: its author-facing name, declaring scope, key and committed envelope.</summary>
-public sealed record RuntimeVisibleVariable
+public sealed record RuntimeReadableVariable
 {
-    public RuntimeVisibleVariable(string name, string scopeId, string variableKey, ValueEnvelope envelope)
+    public RuntimeReadableVariable(string name, string scopeId, string variableKey, ValueEnvelope envelope)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeId);

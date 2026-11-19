@@ -27,4 +27,18 @@ public interface IUnorderedVariableWriteAnalyzer
         IActivityStructureService structures,
         bool includeIntrinsics,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Analyses the tree as <see cref="Analyze(ActivityNode, IActivityStructureService, bool, CancellationToken)"/> does,
+    /// and also counts the step writers in <paramref name="stepWrites"/> (spec 1231 FR-028): each node's writable
+    /// variable references, and a node that may write every visible variable as writing each variable visible to it. A
+    /// replacement that does not know step writers ignores them.
+    /// </summary>
+    UnorderedVariableWriteAnalysis Analyze(
+        ActivityNode root,
+        IActivityStructureService structures,
+        bool includeIntrinsics,
+        StepVariableWriteFacts stepWrites,
+        CancellationToken cancellationToken = default) =>
+        Analyze(root, structures, includeIntrinsics, cancellationToken);
 }
