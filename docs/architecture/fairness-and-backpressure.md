@@ -100,7 +100,7 @@ An inline Ephemeral start that writes no row passes the tenant rate check only.
 |---|---|---|---|
 | Tenant rate: a token bucket per tenant and `AdmissionKind` (rate, burst) | Per node | In memory | Exact per node. Cluster-wide it is the configured rate divided by the node count from membership, so approximate while nodes join or leave, and below the configured rate when ingress traffic is uneven across nodes |
 | Admissions in flight | Per node | In memory | Exact |
-| Due depth of the target's virtual partition | Per virtual partition | The pressure list, below | Approximate by up to one refresh interval of arrivals |
+| Due depth of the target's virtual partition | Per virtual partition | The pressure list, below | Approximate by up to one refresh interval of arrivals (plus one heartbeat interval under the node lease amendment, proposed) |
 
 Background jobs are limited in a different way: the job scheduler gives each tenant a number of slots per node, and a
 job beyond them waits for a slot. That limit refuses nothing.
@@ -171,8 +171,14 @@ delete writes no index entry and leaves dead tuples for vacuum. All of this is u
 measure the query plan and the scan cost under update and delete churn, with WRITES.md's method.
 
 **The pressure list (decision 2).** The owner writes its estimate into a new `backlog` column of the virtual partition's
-fence row, with its next commit or beat. Both already update that row, so this adds bytes and no round trip; it adds one
-assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).
+fence row, with its next commit, which already updates that row, so this adds bytes and no round trip; it adds one
+assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)). Under the node lease amendment (proposed, 19 November) the
+heartbeat no longer writes partition rows, so only commits write the estimate: an owner with work commits at least its
+seen marks while messages arrive, and its last commit before the partition falls idle writes the estimate it leaves.
+When a sampled estimate crosses the low- or high-water mark and the partition has had no commit for one heartbeat
+interval, the owner sends a fenced commit with no journal rows that writes it, so a partition whose commits stall
+still publishes its depth within one heartbeat interval; a partition whose estimate stays on one side of the marks
+writes nothing.
 Ingress nodes keep a list of the virtual partitions above the low-water mark. Under the built-in runtime, the heartbeat
 already queries the partition rows for free ones (`EfStore.HeartbeatAsync`), and that query can return the list as
 well. Another runtime refreshes it with one query per node per interval:
@@ -183,7 +189,7 @@ SELECT id, backlog FROM partition WHERE backlog >= :lowWater;
 
 Admission refuses a start or command whose target virtual partition is above the high-water mark, and admits again
 below the low-water mark. For admitted starts and commands the threshold is soft: they can overshoot it by one refresh
-interval plus one sample interval of ingress. The fan-out of an outside publish and all internal arrivals are not
+interval plus one sample interval of ingress, plus, under the node lease amendment, one heartbeat interval. The fan-out of an outside publish and all internal arrivals are not
 limited by it at all. A provider without a
 relational fence row stores the field beside its fence record; MongoDB stores it in the partition document.
 

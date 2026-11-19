@@ -117,7 +117,10 @@ row and a journal per virtual partition, and a commit over several of them fence
 ascending id. Rebalance moves the fewest partitions, so a node's partitions may be scattered (owner, 17 November:
 PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit lands only while the
 row still has the owner's epoch and expected position, checked in the same transaction, so a stale owner never lands a
-commit. Leases decide who should write; the fence decides who can. The kernel writes its own commit SQL on PostgreSQL,
+commit. Leases decide who should write; the fence decides who can. A lease is held by the process, in one node record
+its heartbeat renews, and covers every partition it owns; a partition row carries none (owner, 19 November; the
+[node lease amendment](../architecture/decisions.md#the-node-lease-amendment-19-november-proposed), proposed until its
+narrow independent review). The kernel writes its own commit SQL on PostgreSQL,
 SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the schema, migrations and cold paths
 ([ownership and fencing](../architecture/ownership-and-fencing.md),
 [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md), [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).
@@ -247,7 +250,7 @@ until then the listed ADRs keep governing the current core.
 | 0063 BPMN library, 0064 Flowchart dead paths, 0086 compensation | Keep | The kernel hosts Bpmn.Semantics; the graph engine keeps dead-path joins; compensation semantics are the models' |
 | 0027, 0028, 0045, 0046, 0048, 0089, 0090 variables and value flow | Keep | Layer 3 native-model semantics; a step's unit of work commits with its turn |
 | 0043 publication slots, 0038–0040 artifacts, 0079 host package sets | Keep | Definition, artifact and hosting rules; the route table is built from publications |
-| [0077](0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) schema upgrade | Keep, applied to the kernel | F14 withholding covers model state versions only. The kernel's own schema and protocol families, with every reader and writer (owned SQL, take and beat, poll, sweeper, projector, viewer), follow 0077's coordination rule: a process refuses before it processes a family version it cannot read. The plan names the families, adds the refusal checks at K4 and a mixed-version rehearsal at K12, and documents the rollback floor ([plan](../program-goals/clean-slate-kernel.md#kernel-schema-and-protocol-compatibility-proposed)) |
+| [0077](0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) schema upgrade | Keep, applied to the kernel | F14 withholding covers model state versions only. The kernel's own schema and protocol families, with every reader and writer (owned SQL, take and heartbeat, poll, sweeper, projector, viewer), follow 0077's coordination rule: a process refuses before it processes a family version it cannot read. The plan names the families, adds the refusal checks at K4 and a mixed-version rehearsal at K12, and documents the rollback floor ([plan](../program-goals/clean-slate-kernel.md#kernel-schema-and-protocol-compatibility-proposed)) |
 | [0075](0075-oracle-is-not-a-supported-ef-core-engine.md) Oracle not supported | Keep | It fixes the four relational engines the owned commit SQL covers |
 | [0076](0076-persistence-tooling-runs-inside-the-host-closure.md) persistence tooling in the host closure | Keep | The kernel's EF schema and migrations use the same tooling; the owned commit SQL needs no tooling of its own |
 | [0035](0035-serialization-unifies-on-the-alias-registry-and-retires-open-object-polymorphism.md) serialization alias registry | Keep | The kernel treats state and payloads as opaque; the native model serializes its state, messages and job arguments under 0035, with state versions added on top |

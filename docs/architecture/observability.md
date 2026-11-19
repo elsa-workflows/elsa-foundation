@@ -130,7 +130,7 @@ answer was lost counts as an unknown outcome.
 | Inspect an inbox | Pending deliveries of one instance, in delivery order: handle, id, kind, sender, due, state (pending, held or on trial), attempts, size; and, for a parked instance, its kept rows with their handle and reason (`KeptAsync`); paged | Metadata only |
 | Suspend, resume, terminate, delete | The built control kinds | Yes |
 | Release a partition, drain a node | Host administration: asks the owner to release, through the runtime | Yes |
-| Force a handover from an unresponsive owner | Host administration: a forced take, a conditional update at the expected owner and epoch that names the new owner and **increments the epoch**, so the old owner's next commit fails the fence. Ending the lease alone would not do: with the fence in the batch, the old owner's next commit at the same epoch would still land and renew its lease | Later |
+| Force a handover from an unresponsive owner | Host administration: a forced take, a conditional update at the expected owner and epoch that names the new owner and **increments the epoch**, so the old owner's next commit fails the fence. Ending the lease alone would not do: with the fence in the batch, the old owner's next commit at the same epoch would still land, and under the node lease (proposed) its next heartbeat renews the lease of every partition it owns | Later |
 
 ### What Park keeps
 
