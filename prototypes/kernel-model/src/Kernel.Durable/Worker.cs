@@ -156,6 +156,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private sealed record Answered(HeartbeatSent Sent, NodeBeat Answer, Func<int, bool>? Sibling);
     private int _gaining = -1;
     private bool _retaking, _retakeStoodDown;      // a stand-down during a retake (RetakeAsync) cancels it
+    private readonly HashSet<int> _retakeLost = [];     // partitions given up during a retake: it does not take them back
 
     public Worker(string node, int partition, IKernelStore store, IActorType type, WorkerOptions? options = null)
         : this(node, [partition], store, type, options) { }
@@ -729,12 +730,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (_taking || TakesClosed)
         {
-            lock (_turnSync) _retaking = false;     // a take in flight replaces the retake; a closed gate takes nothing
+            lock (_turnSync)
+            {
+                _retaking = false;      // a take in flight replaces the retake; a closed gate takes nothing
+                _retakeLost.Clear();
+            }
             return;
         }
         _taking = true;
         Interlocked.Increment(ref _takesStarted);
         var (started, taken, now, reached) = (_options.Monotonic(), new List<PartitionFence>(), long.MaxValue, 0);
+        List<PartitionFence> skipped = [];
         try
         {
             foreach (var fence in held)
@@ -742,6 +748,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 {
                     if (Volatile.Read(ref _retakeStoodDown)) break;
                     reached++;
+                    bool lost;
+                    lock (_turnSync) lost = _retakeLost.Contains(fence.Partition);
+                    if (lost)
+                    {
+                        skipped.Add(fence);     // given up meanwhile: not taken back, and released at the epoch it was held
+                        continue;
+                    }
                     if (await _store.RetakeAsync(fence.Partition, Node, fence.Epoch, _options.Lease, cancellationToken) is not { } one) continue;
                     taken.Add(one.For(fence.Partition));
                     now = Math.Min(now, one.Now);
@@ -750,16 +763,29 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         finally { _taking = false; }
         bool stoodDown;
+        List<PartitionFence> given = skipped;
         // One critical section, for the same stand-down: it sees _retaking, or the installed set, never neither.
         lock (_turnSync)
         {
             (stoodDown, _retaking) = (_retakeStoodDown, false);
+            if (!stoodDown)
+            {
+                given.AddRange(taken.Where(t => _retakeLost.Contains(t.Partition)));      // given up after their retake was sent
+                taken.RemoveAll(t => _retakeLost.Contains(t.Partition));
+            }
+            _retakeLost.Clear();
             if (!stoodDown && taken.Count > 0)
             {
                 Install(new(taken, now), started);
                 _woken = true;      // memory went with the reset: the next pass reads the inbox at the new epochs
             }
         }
+        try
+        {
+            if (given.Count == 1) await _store.ReleaseAsync(given[0].Partition, given[0].Epoch, cancellationToken);
+            else if (given.Count > 1) await _store.ReleaseAsync(given, cancellationToken);
+        }
+        catch (Exception) { /* then the leases run out instead */ }
         if (stoodDown)
         {
             // A stand-down came while the retake was in flight: install nothing, and give up what it took at the new epochs
@@ -923,11 +949,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// rows are released at their epochs and nothing else changes: the partitions kept keep their epochs, positions and
     /// memory. If something of theirs is still in flight (a turn, a running job, a trial), the worker writes what every
     /// partition holds in memory only, resets, releases them, and takes the rest back at new epochs, as after a refused
-    /// fence. Handing over every partition is a stand-down.
+    /// fence. Handing over every partition is a stand-down. During a retake after a reset the Worker holds nothing: the
+    /// retake leaves these partitions out and releases them, at the epoch it held them or the one it got back.
     /// </summary>
     internal async Task LoseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
     {
         bool HandedOver(string id) => StoreBatchRules.AddressPartition(id) is { } p && partitions.Contains(p);
+        lock (_turnSync)
+            if (_retaking && !_releasing)
+            {
+                // A retake after a reset is in flight: the Worker holds nothing to drain, and the retake leaves these
+                // partitions out, or gives them up at the new epoch if it already has them back.
+                _retakeLost.UnionWith(partitions);
+                return;
+            }
         if (_releasing || _retaking || !partitions.Any(Holds)) return;
         if (Fences.All(f => partitions.Contains(f.Partition)))
         {

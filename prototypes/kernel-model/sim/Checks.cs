@@ -582,6 +582,9 @@ public sealed partial class World
                         continue;
                     }
                     if (!worker.Holds(partition)) continue;
+                    // K1b: a node-lease Worker brings partitions back by itself (a pending retake, a retake after a reset
+                    // whose activation the runtime had dropped meanwhile); the node, as their host, adopts them first.
+                    if (Config.NodeLease && !actor.Runtime.Owns(partition) && !actor.Runtime.Activating(partition)) Watch(actor.Runtime.ActivateAsync(partition));
                     if (!actor.Runtime.Owns(partition)) Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it");
                     // An eager host: every pass reads the inbox, and runs whatever is ready before it flushes. A process that
                     // dies (now, or before the pass) cancels it: no turn after that, and no flush.
