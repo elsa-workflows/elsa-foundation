@@ -7,15 +7,20 @@ using Microsoft.EntityFrameworkCore.Storage;
 /// K1b, NL-9 on the prototype engines (ownership-and-fencing.md, the node's heartbeat, "Lock order"): takes, a heartbeat
 /// and a commit overlap, and no cycle may form. An outside transaction holds rows so that each interleaving is forced:
 /// the probe waits until the engine reports the sessions waiting, then releases the hold (its write is rolled back).
-///   x nodelease postgres|sqlserver|mysql "connection" case=heartbeat|mutual [mutation=subquery|rr] [rcsi=0]
+///   x nodelease postgres|sqlserver|mysql "connection" case=heartbeat|mutual|heartbeats [mutation=subquery|rr|membership] [expect=none|deadlock] [rcsi=0]
 /// case=heartbeat: r owns 1, p owns 2 and 3, both past their node leases. The hold is on partition row 0. p's heartbeat
 ///   is sent: it writes p's record, and its read of the partition rows waits at row 0 where reads take locks. Then q's
 ///   take of {1, 2} is sent; on release, p's commit in 3 and p's gain take of 5 are sent too.
 /// case=mutual: a owns {1, 2} and b owns {3, 4}, both past their leases. The hold is on both records. a's take of {3, 4}
 ///   and b's take of {1, 2} are sent, then the hold is released.
+/// case=heartbeats: the hold is on partition row 0; p's and r's heartbeats both write their records and queue at it.
 /// mutation=subquery (EfStore.NodeReadInUpdate) reads the node records inside the take's update, after it locked rows;
-/// mutation=rr (EfStore.RepeatableReadTake) runs the take at REPEATABLE READ. Each is expected to deadlock where its
-/// engine's locks make the cycle (NL-9); the store as built must not deadlock on any engine.
+/// mutation=rr (EfStore.RepeatableReadTake) runs the take at REPEATABLE READ; mutation=membership
+/// (EfStore.MembershipInHeartbeat) reads the node count and the free list inside the heartbeat's transaction.
+/// The exit code is the verdict. expect=deadlock fails unless the run deadlocked; expect=none (the default) fails if it
+/// did, or if any answer failed or hung. A mutual run, and any run where reads take locks (SQL Server without RCSI), fails
+/// too when its sessions were not waiting before the release; the heartbeat cases elsewhere are recorded unforced. On
+/// PostgreSQL the victim's error decides, since its counter lags.
 /// </summary>
 static class NodeLeaseRun
 {
@@ -26,9 +31,9 @@ static class NodeLeaseRun
         await target.ResetAsync(8);
         var (admin, store) = (target.Admins(), target.Store(target.Workers()));
         var (kind, mutation) = (target.Get("case", "heartbeat"), target.Get("mutation", ""));
-        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; case {kind}; take {mutation switch { "subquery" => "READS THE NODE RECORDS IN ITS UPDATE (the negative)", "rr" => "AT REPEATABLE READ (the negative)", _ => "as built" }}");
+        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; case {kind}; take {mutation switch { "subquery" => "READS THE NODE RECORDS IN ITS UPDATE (the negative)", "rr" => "AT REPEATABLE READ (the negative)", "membership" => "with the heartbeat READING MEMBERSHIP IN ITS TRANSACTION (the negative)", _ => "as built" }}; expect {target.Get("expect", "none")}");
         var held = new Dictionary<string, OwnedLease>();
-        foreach (var (node, set) in kind == "mutual" ? new[] { ("a", new[] { 1, 2 }), ("b", [3, 4]) } : [("r", [1]), ("p", [2, 3])])
+        foreach (var (node, set) in kind == "mutual" ? new[] { ("a", new[] { 1, 2 }), ("b", [3, 4]) } : [("r", [1]), ("p", [2, 3])])     // heartbeats: as heartbeat
             if ((held[node] = await store.TakeAsync(set, node, Brief)).Taken.Count != set.Length) { Console.WriteLine($"the probe could not set up {node}"); return 2; }
         await Task.Delay(Brief + TimeSpan.FromMilliseconds(500));     // every node lease above has expired
         var deadlocks = await target.DeadlocksAsync(admin);
@@ -48,6 +53,14 @@ static class NodeLeaseRun
             Send("a's take of {3, 4}", async () => "took " + Ids(await store.TakeAsync([3, 4], "a", Lease)));
             waited = await target.WaitForWaitersAsync(1);
             Send("b's take of {1, 2}", async () => "took " + Ids(await store.TakeAsync([1, 2], "b", Lease)));
+            waited &= await target.WaitForWaitersAsync(2);
+            await hold.DisposeAsync();
+        }
+        else if (kind == "heartbeats")
+        {
+            Send("p's heartbeat", async () => "lists " + string.Join(" ", (await store.NodeHeartbeatAsync("p", Lease, Window)).Owned.Select(o => o.Partition)));
+            waited = await target.WaitForWaitersAsync(1);
+            Send("r's heartbeat", async () => "lists " + string.Join(" ", (await store.NodeHeartbeatAsync("r", Lease, Window)).Owned.Select(o => o.Partition)));
             waited &= await target.WaitForWaitersAsync(2);
             await hold.DisposeAsync();
         }
@@ -71,11 +84,15 @@ static class NodeLeaseRun
         Console.WriteLine($"sessions waiting before the release: {(waited ? "yes" : "NO (the interleaving was not forced)")}; {clock.ElapsedMilliseconds} ms");
         foreach (var (what, answer) in outcomes) Console.WriteLine($"  {what}: {answer}");
         Console.WriteLine($"engine deadlocks counted: {counted}; owners of 1 to 5: {string.Join(" ", owners)}");
-        var clean = done && counted == 0 && outcomes.All(o => !o.Answer.StartsWith("failed", StringComparison.Ordinal) && o.Answer != "HUNG");
-        Console.WriteLine(mutation != ""
-            ? $"nodelease negative: {(counted > 0 ? "DEADLOCKED, broken by the engine" : clean ? "no deadlock" : "other")}"
-            : $"nodelease: {(clean ? "no deadlock; every outcome landed or was refused" : "WRONG")}");
-        return mutation != "" || clean ? 0 : 1;
+        var victim = outcomes.Any(o => o.Answer.Contains(target.DeadlockCode, StringComparison.Ordinal));
+        var deadlocked = target.Engine == "postgres" ? victim : counted > 0 || victim;
+        var clean = done && !deadlocked && outcomes.All(o => !o.Answer.StartsWith("failed", StringComparison.Ordinal) && o.Answer != "HUNG");
+        var (expectDeadlock, lockingReads) = (target.Get("expect", "none") == "deadlock", target.Engine == "sqlserver" && target.Get("rcsi", "1") == "0");
+        var forced = kind == "mutual" || lockingReads;      // where the hold makes the sessions wait
+        var met = done && (waited || !forced) && (expectDeadlock ? deadlocked : clean);
+        Console.WriteLine($"nodelease{(mutation != "" ? " negative" : "")}: {(deadlocked ? "DEADLOCKED, broken by the engine" : clean ? "no deadlock; every outcome landed or was refused" : "other")}; " +
+            $"expected {(expectDeadlock ? "a deadlock" : "none")}{(forced ? ", forced" : "")}: {(met ? "as expected" : "NOT AS EXPECTED")}");
+        return met ? 0 : 1;
     }
 
     private static string Ids(OwnedLease lease) => lease.Taken.Count == 0 ? "nothing" : string.Join(" ", lease.Taken.Select(f => f.Partition));

@@ -1,216 +1,280 @@
-$ x nodelease postgres <conn> case=heartbeat 
-postgres: isolation read committed; case heartbeat; take as built
-sessions waiting before the release: NO (the interleaving was not forced); 20057 ms
+$ x nodelease postgres <conn> case=heartbeat expect=none
+postgres: isolation read committed; case heartbeat; take as built; expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20073 ms
   p's heartbeat: lists 2 3
   q's take of {1, 2}: took 1
   p's commit in 3: landed
   p's gain take of 5: took 5
 engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease: no deadlock; every outcome landed or was refused
-exit 0 (22 s)
-$ x nodelease sqlserver <conn> case=heartbeat 
-sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case heartbeat; take as built
-sessions waiting before the release: NO (the interleaving was not forced); 20124 ms
-  p's heartbeat: lists 2 3
-  q's take of {1, 2}: took 1
-  p's commit in 3: landed
-  p's gain take of 5: took 5
-engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease: no deadlock; every outcome landed or was refused
+nodelease: no deadlock; every outcome landed or was refused; expected none: as expected
 exit 0 (23 s)
-$ x nodelease sqlserver <conn> case=heartbeat rcsi=0 
-sqlserver: READ COMMITTED, locking; case heartbeat; take as built
-sessions waiting before the release: yes; 185 ms
+$ x nodelease sqlserver <conn> case=heartbeat expect=none
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case heartbeat; take as built; expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20108 ms
   p's heartbeat: lists 2 3
   q's take of {1, 2}: took 1
   p's commit in 3: landed
   p's gain take of 5: took 5
 engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease: no deadlock; every outcome landed or was refused
-exit 0 (2 s)
-$ x nodelease mysql <conn> case=heartbeat 
-mysql: REPEATABLE READ (server default REPEATABLE-READ); case heartbeat; take as built
-sessions waiting before the release: NO (the interleaving was not forced); 20061 ms
-  p's heartbeat: lists 2 3
-  q's take of {1, 2}: took 1
-  p's commit in 3: landed
-  p's gain take of 5: took 5
-engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease: no deadlock; every outcome landed or was refused
+nodelease: no deadlock; every outcome landed or was refused; expected none: as expected
 exit 0 (22 s)
-$ x nodelease postgres <conn> case=heartbeat mutation=subquery
-postgres: isolation read committed; case heartbeat; take READS THE NODE RECORDS IN ITS UPDATE (the negative)
-sessions waiting before the release: NO (the interleaving was not forced); 20061 ms
+$ x nodelease sqlserver <conn> case=heartbeat rcsi=0 expect=none
+sqlserver: READ COMMITTED, locking; case heartbeat; take as built; expect none
+sessions waiting before the release: yes; 167 ms
   p's heartbeat: lists 2 3
   q's take of {1, 2}: took 1
   p's commit in 3: landed
   p's gain take of 5: took 5
 engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease negative: no deadlock
+nodelease: no deadlock; every outcome landed or was refused; expected none, forced: as expected
+exit 0 (3 s)
+$ x nodelease mysql <conn> case=heartbeat expect=none
+mysql: REPEATABLE READ (server default REPEATABLE-READ); case heartbeat; take as built; expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20071 ms
+  p's heartbeat: lists 2 3
+  q's take of {1, 2}: took 1
+  p's commit in 3: landed
+  p's gain take of 5: took 5
+engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
+nodelease: no deadlock; every outcome landed or was refused; expected none: as expected
+exit 0 (22 s)
+$ x nodelease postgres <conn> case=heartbeat mutation=subquery expect=none
+postgres: isolation read committed; case heartbeat; take READS THE NODE RECORDS IN ITS UPDATE (the negative); expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20075 ms
+  p's heartbeat: lists 2 3
+  q's take of {1, 2}: took 1
+  p's commit in 3: landed
+  p's gain take of 5: took 5
+engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
+nodelease negative: no deadlock; every outcome landed or was refused; expected none: as expected
+exit 0 (22 s)
+$ x nodelease sqlserver <conn> case=heartbeat mutation=subquery expect=none
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case heartbeat; take READS THE NODE RECORDS IN ITS UPDATE (the negative); expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20109 ms
+  p's heartbeat: lists 2 3
+  q's take of {1, 2}: took 1
+  p's commit in 3: landed
+  p's gain take of 5: took 5
+engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
+nodelease negative: no deadlock; every outcome landed or was refused; expected none: as expected
 exit 0 (23 s)
-$ x nodelease sqlserver <conn> case=heartbeat mutation=subquery
-sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case heartbeat; take READS THE NODE RECORDS IN ITS UPDATE (the negative)
-sessions waiting before the release: NO (the interleaving was not forced); 20128 ms
-  p's heartbeat: lists 2 3
-  q's take of {1, 2}: took 1
-  p's commit in 3: landed
-  p's gain take of 5: took 5
-engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease negative: no deadlock
-exit 0 (22 s)
-$ x nodelease sqlserver <conn> case=heartbeat rcsi=0 mutation=subquery
-sqlserver: READ COMMITTED, locking; case heartbeat; take READS THE NODE RECORDS IN ITS UPDATE (the negative)
-sessions waiting before the release: yes; 2060 ms
+$ x nodelease sqlserver <conn> case=heartbeat rcsi=0 mutation=subquery expect=deadlock
+sqlserver: READ COMMITTED, locking; case heartbeat; take READS THE NODE RECORDS IN ITS UPDATE (the negative); expect deadlock
+sessions waiting before the release: yes; 3635 ms
   p's heartbeat: failed: mssql 1205
   q's take of {1, 2}: took 1 2
   p's commit in 3: landed
   p's gain take of 5: took 5
 engine deadlocks counted: 1; owners of 1 to 5: 1:q@2 2:q@2 3:p@1 4:-@0 5:p@1
-nodelease negative: DEADLOCKED, broken by the engine
-exit 0 (5 s)
-$ x nodelease mysql <conn> case=heartbeat mutation=subquery
-mysql: REPEATABLE READ (server default REPEATABLE-READ); case heartbeat; take READS THE NODE RECORDS IN ITS UPDATE (the negative)
-sessions waiting before the release: NO (the interleaving was not forced); 20078 ms
+nodelease negative: DEADLOCKED, broken by the engine; expected a deadlock, forced: as expected
+exit 0 (6 s)
+$ x nodelease mysql <conn> case=heartbeat mutation=subquery expect=none
+mysql: REPEATABLE READ (server default REPEATABLE-READ); case heartbeat; take READS THE NODE RECORDS IN ITS UPDATE (the negative); expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20080 ms
   p's heartbeat: lists 2 3
   q's take of {1, 2}: took 1
   p's commit in 3: landed
   p's gain take of 5: took 5
 engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease negative: no deadlock
+nodelease negative: no deadlock; every outcome landed or was refused; expected none: as expected
 exit 0 (22 s)
-$ x nodelease postgres <conn> case=heartbeat mutation=rr
-postgres: isolation read committed; case heartbeat; take AT REPEATABLE READ (the negative)
-sessions waiting before the release: NO (the interleaving was not forced); 20074 ms
+$ x nodelease postgres <conn> case=heartbeat mutation=rr expect=none
+postgres: isolation read committed; case heartbeat; take AT REPEATABLE READ (the negative); expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20068 ms
   p's heartbeat: lists 2 3
   q's take of {1, 2}: took 1
   p's commit in 3: landed
   p's gain take of 5: took 5
 engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease negative: no deadlock
-exit 0 (22 s)
-$ x nodelease sqlserver <conn> case=heartbeat mutation=rr
-sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case heartbeat; take AT REPEATABLE READ (the negative)
-sessions waiting before the release: NO (the interleaving was not forced); 20102 ms
-  p's heartbeat: lists 2 3
-  q's take of {1, 2}: took 1
-  p's commit in 3: landed
-  p's gain take of 5: took 5
-engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease negative: no deadlock
+nodelease negative: no deadlock; every outcome landed or was refused; expected none: as expected
 exit 0 (23 s)
-$ x nodelease sqlserver <conn> case=heartbeat rcsi=0 mutation=rr
-sqlserver: READ COMMITTED, locking; case heartbeat; take AT REPEATABLE READ (the negative)
-sessions waiting before the release: yes; 151 ms
+$ x nodelease sqlserver <conn> case=heartbeat mutation=rr expect=none
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case heartbeat; take AT REPEATABLE READ (the negative); expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20087 ms
   p's heartbeat: lists 2 3
   q's take of {1, 2}: took 1
   p's commit in 3: landed
   p's gain take of 5: took 5
 engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease negative: no deadlock
-exit 0 (2 s)
-$ x nodelease mysql <conn> case=heartbeat mutation=rr
-mysql: REPEATABLE READ (server default REPEATABLE-READ); case heartbeat; take AT REPEATABLE READ (the negative)
-sessions waiting before the release: NO (the interleaving was not forced); 20105 ms
-  p's heartbeat: lists 2 3
-  q's take of {1, 2}: took 1
-  p's commit in 3: landed
-  p's gain take of 5: took 5
-engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
-nodelease negative: no deadlock
+nodelease negative: no deadlock; every outcome landed or was refused; expected none: as expected
 exit 0 (22 s)
-$ x nodelease postgres <conn> case=mutual 
-postgres: isolation read committed; case mutual; take as built
-sessions waiting before the release: yes; 85 ms
-  a's take of {3, 4}: took 3 4
-  b's take of {1, 2}: took 1 2
-engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
-nodelease: no deadlock; every outcome landed or was refused
-exit 0 (2 s)
-$ x nodelease sqlserver <conn> case=mutual 
-sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case mutual; take as built
-sessions waiting before the release: yes; 125 ms
-  a's take of {3, 4}: took 3 4
-  b's take of {1, 2}: took 1 2
-engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
-nodelease: no deadlock; every outcome landed or was refused
+$ x nodelease sqlserver <conn> case=heartbeat rcsi=0 mutation=rr expect=none
+sqlserver: READ COMMITTED, locking; case heartbeat; take AT REPEATABLE READ (the negative); expect none
+sessions waiting before the release: yes; 158 ms
+  p's heartbeat: lists 2 3
+  q's take of {1, 2}: took 1
+  p's commit in 3: landed
+  p's gain take of 5: took 5
+engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
+nodelease negative: no deadlock; every outcome landed or was refused; expected none, forced: as expected
 exit 0 (3 s)
-$ x nodelease sqlserver <conn> case=mutual rcsi=0 
-sqlserver: READ COMMITTED, locking; case mutual; take as built
-sessions waiting before the release: yes; 123 ms
-  a's take of {3, 4}: took 3 4
-  b's take of {1, 2}: took 1 2
-engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
-nodelease: no deadlock; every outcome landed or was refused
-exit 0 (2 s)
-$ x nodelease mysql <conn> case=mutual 
-mysql: REPEATABLE READ (server default REPEATABLE-READ); case mutual; take as built
-sessions waiting before the release: yes; 93 ms
-  a's take of {3, 4}: took 3 4
-  b's take of {1, 2}: took 1 2
-engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
-nodelease: no deadlock; every outcome landed or was refused
-exit 0 (3 s)
-$ x nodelease postgres <conn> case=mutual mutation=subquery
-postgres: isolation read committed; case mutual; take READS THE NODE RECORDS IN ITS UPDATE (the negative)
+$ x nodelease mysql <conn> case=heartbeat mutation=rr expect=none
+mysql: REPEATABLE READ (server default REPEATABLE-READ); case heartbeat; take AT REPEATABLE READ (the negative); expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20071 ms
+  p's heartbeat: lists 2 3
+  q's take of {1, 2}: took 1
+  p's commit in 3: landed
+  p's gain take of 5: took 5
+engine deadlocks counted: 0; owners of 1 to 5: 1:q@2 2:p@1 3:p@1 4:-@0 5:p@1
+nodelease negative: no deadlock; every outcome landed or was refused; expected none: as expected
+exit 0 (22 s)
+$ x nodelease postgres <conn> case=mutual expect=none
+postgres: isolation read committed; case mutual; take as built; expect none
 sessions waiting before the release: yes; 78 ms
   a's take of {3, 4}: took 3 4
   b's take of {1, 2}: took 1 2
 engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
-nodelease negative: no deadlock
+nodelease: no deadlock; every outcome landed or was refused; expected none, forced: as expected
 exit 0 (2 s)
-$ x nodelease sqlserver <conn> case=mutual mutation=subquery
-sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case mutual; take READS THE NODE RECORDS IN ITS UPDATE (the negative)
-sessions waiting before the release: yes; 116 ms
+$ x nodelease sqlserver <conn> case=mutual expect=none
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case mutual; take as built; expect none
+sessions waiting before the release: yes; 112 ms
   a's take of {3, 4}: took 3 4
   b's take of {1, 2}: took 1 2
 engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
-nodelease negative: no deadlock
-exit 0 (2 s)
-$ x nodelease sqlserver <conn> case=mutual rcsi=0 mutation=subquery
-sqlserver: READ COMMITTED, locking; case mutual; take READS THE NODE RECORDS IN ITS UPDATE (the negative)
-sessions waiting before the release: yes; 4766 ms
-  a's take of {3, 4}: took 3 4
-  b's take of {1, 2}: failed: Transient mssql 1205
-engine deadlocks counted: 1; owners of 1 to 5: 1:a@1 2:a@1 3:a@2 4:a@2 5:-@0
-nodelease negative: DEADLOCKED, broken by the engine
-exit 0 (7 s)
-$ x nodelease mysql <conn> case=mutual mutation=subquery
-mysql: REPEATABLE READ (server default REPEATABLE-READ); case mutual; take READS THE NODE RECORDS IN ITS UPDATE (the negative)
-sessions waiting before the release: yes; 87 ms
-  a's take of {3, 4}: took 3 4
-  b's take of {1, 2}: took 1 2
-engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
-nodelease negative: no deadlock
-exit 0 (2 s)
-$ x nodelease postgres <conn> case=mutual mutation=rr
-postgres: isolation read committed; case mutual; take AT REPEATABLE READ (the negative)
-sessions waiting before the release: yes; 92 ms
-  a's take of {3, 4}: took 3 4
-  b's take of {1, 2}: took 1 2
-engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
-nodelease negative: no deadlock
+nodelease: no deadlock; every outcome landed or was refused; expected none, forced: as expected
 exit 0 (3 s)
-$ x nodelease sqlserver <conn> case=mutual mutation=rr
-sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case mutual; take AT REPEATABLE READ (the negative)
-sessions waiting before the release: yes; 816 ms
+$ x nodelease sqlserver <conn> case=mutual rcsi=0 expect=none
+sqlserver: READ COMMITTED, locking; case mutual; take as built; expect none
+sessions waiting before the release: yes; 107 ms
   a's take of {3, 4}: took 3 4
-  b's take of {1, 2}: failed: Transient mssql 1205
-engine deadlocks counted: 1; owners of 1 to 5: 1:a@1 2:a@1 3:a@2 4:a@2 5:-@0
-nodelease negative: DEADLOCKED, broken by the engine
+  b's take of {1, 2}: took 1 2
+engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
+nodelease: no deadlock; every outcome landed or was refused; expected none, forced: as expected
 exit 0 (3 s)
-$ x nodelease sqlserver <conn> case=mutual rcsi=0 mutation=rr
-sqlserver: READ COMMITTED, locking; case mutual; take AT REPEATABLE READ (the negative)
-sessions waiting before the release: yes; 2708 ms
+$ x nodelease mysql <conn> case=mutual expect=none
+mysql: REPEATABLE READ (server default REPEATABLE-READ); case mutual; take as built; expect none
+sessions waiting before the release: yes; 74 ms
+  a's take of {3, 4}: took 3 4
+  b's take of {1, 2}: took 1 2
+engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
+nodelease: no deadlock; every outcome landed or was refused; expected none, forced: as expected
+exit 0 (2 s)
+$ x nodelease postgres <conn> case=mutual mutation=subquery expect=none
+postgres: isolation read committed; case mutual; take READS THE NODE RECORDS IN ITS UPDATE (the negative); expect none
+sessions waiting before the release: yes; 73 ms
+  a's take of {3, 4}: took 3 4
+  b's take of {1, 2}: took 1 2
+engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
+nodelease negative: no deadlock; every outcome landed or was refused; expected none, forced: as expected
+exit 0 (2 s)
+$ x nodelease sqlserver <conn> case=mutual mutation=subquery expect=none
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case mutual; take READS THE NODE RECORDS IN ITS UPDATE (the negative); expect none
+sessions waiting before the release: yes; 117 ms
+  a's take of {3, 4}: took 3 4
+  b's take of {1, 2}: took 1 2
+engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
+nodelease negative: no deadlock; every outcome landed or was refused; expected none, forced: as expected
+exit 0 (3 s)
+$ x nodelease sqlserver <conn> case=mutual rcsi=0 mutation=subquery expect=deadlock
+sqlserver: READ COMMITTED, locking; case mutual; take READS THE NODE RECORDS IN ITS UPDATE (the negative); expect deadlock
+sessions waiting before the release: yes; 3546 ms
+  a's take of {3, 4}: failed: Transient mssql 1205
+  b's take of {1, 2}: took 1 2
+engine deadlocks counted: 1; owners of 1 to 5: 1:b@2 2:b@2 3:b@1 4:b@1 5:-@0
+nodelease negative: DEADLOCKED, broken by the engine; expected a deadlock, forced: as expected
+exit 0 (6 s)
+$ x nodelease mysql <conn> case=mutual mutation=subquery expect=none
+mysql: REPEATABLE READ (server default REPEATABLE-READ); case mutual; take READS THE NODE RECORDS IN ITS UPDATE (the negative); expect none
+sessions waiting before the release: yes; 63 ms
+  a's take of {3, 4}: took 3 4
+  b's take of {1, 2}: took 1 2
+engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
+nodelease negative: no deadlock; every outcome landed or was refused; expected none, forced: as expected
+exit 0 (2 s)
+$ x nodelease postgres <conn> case=mutual mutation=rr expect=none
+postgres: isolation read committed; case mutual; take AT REPEATABLE READ (the negative); expect none
+sessions waiting before the release: yes; 78 ms
+  a's take of {3, 4}: took 3 4
+  b's take of {1, 2}: took 1 2
+engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
+nodelease negative: no deadlock; every outcome landed or was refused; expected none, forced: as expected
+exit 0 (2 s)
+$ x nodelease sqlserver <conn> case=mutual mutation=rr expect=deadlock
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case mutual; take AT REPEATABLE READ (the negative); expect deadlock
+sessions waiting before the release: yes; 644 ms
   a's take of {3, 4}: took 3 4
   b's take of {1, 2}: failed: Transient mssql 1205
 engine deadlocks counted: 1; owners of 1 to 5: 1:a@1 2:a@1 3:a@2 4:a@2 5:-@0
-nodelease negative: DEADLOCKED, broken by the engine
+nodelease negative: DEADLOCKED, broken by the engine; expected a deadlock, forced: as expected
+exit 0 (3 s)
+$ x nodelease sqlserver <conn> case=mutual rcsi=0 mutation=rr expect=deadlock
+sqlserver: READ COMMITTED, locking; case mutual; take AT REPEATABLE READ (the negative); expect deadlock
+sessions waiting before the release: yes; 2553 ms
+  a's take of {3, 4}: took 3 4
+  b's take of {1, 2}: failed: Transient mssql 1205
+engine deadlocks counted: 1; owners of 1 to 5: 1:a@1 2:a@1 3:a@2 4:a@2 5:-@0
+nodelease negative: DEADLOCKED, broken by the engine; expected a deadlock, forced: as expected
 exit 0 (5 s)
-$ x nodelease mysql <conn> case=mutual mutation=rr
-mysql: REPEATABLE READ (server default REPEATABLE-READ); case mutual; take AT REPEATABLE READ (the negative)
-sessions waiting before the release: yes; 77 ms
+$ x nodelease mysql <conn> case=mutual mutation=rr expect=none
+mysql: REPEATABLE READ (server default REPEATABLE-READ); case mutual; take AT REPEATABLE READ (the negative); expect none
+sessions waiting before the release: yes; 69 ms
   a's take of {3, 4}: took 3 4
   b's take of {1, 2}: took 1 2
 engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
-nodelease negative: no deadlock
+nodelease negative: no deadlock; every outcome landed or was refused; expected none, forced: as expected
 exit 0 (2 s)
+$ x nodelease postgres <conn> case=heartbeats expect=none
+postgres: isolation read committed; case heartbeats; take as built; expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20049 ms
+  p's heartbeat: lists 2 3
+  r's heartbeat: lists 1
+engine deadlocks counted: 0; owners of 1 to 5: 1:r@1 2:p@1 3:p@1 4:-@0 5:-@0
+nodelease: no deadlock; every outcome landed or was refused; expected none: as expected
+exit 0 (23 s)
+$ x nodelease sqlserver <conn> case=heartbeats expect=none
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case heartbeats; take as built; expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20056 ms
+  p's heartbeat: lists 2 3
+  r's heartbeat: lists 1
+engine deadlocks counted: 0; owners of 1 to 5: 1:r@1 2:p@1 3:p@1 4:-@0 5:-@0
+nodelease: no deadlock; every outcome landed or was refused; expected none: as expected
+exit 0 (22 s)
+$ x nodelease sqlserver <conn> case=heartbeats rcsi=0 expect=none
+sqlserver: READ COMMITTED, locking; case heartbeats; take as built; expect none
+sessions waiting before the release: yes; 129 ms
+  p's heartbeat: lists 2 3
+  r's heartbeat: lists 1
+engine deadlocks counted: 0; owners of 1 to 5: 1:r@1 2:p@1 3:p@1 4:-@0 5:-@0
+nodelease: no deadlock; every outcome landed or was refused; expected none, forced: as expected
+exit 0 (3 s)
+$ x nodelease mysql <conn> case=heartbeats expect=none
+mysql: REPEATABLE READ (server default REPEATABLE-READ); case heartbeats; take as built; expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20036 ms
+  p's heartbeat: lists 2 3
+  r's heartbeat: lists 1
+engine deadlocks counted: 0; owners of 1 to 5: 1:r@1 2:p@1 3:p@1 4:-@0 5:-@0
+nodelease: no deadlock; every outcome landed or was refused; expected none: as expected
+exit 0 (22 s)
+$ x nodelease postgres <conn> case=heartbeats mutation=membership expect=none
+postgres: isolation read committed; case heartbeats; take with the heartbeat READING MEMBERSHIP IN ITS TRANSACTION (the negative); expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20051 ms
+  p's heartbeat: lists 2 3
+  r's heartbeat: lists 1
+engine deadlocks counted: 0; owners of 1 to 5: 1:r@1 2:p@1 3:p@1 4:-@0 5:-@0
+nodelease negative: no deadlock; every outcome landed or was refused; expected none: as expected
+exit 0 (22 s)
+$ x nodelease sqlserver <conn> case=heartbeats mutation=membership expect=none
+sqlserver: READ COMMITTED, READ_COMMITTED_SNAPSHOT ON; case heartbeats; take with the heartbeat READING MEMBERSHIP IN ITS TRANSACTION (the negative); expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20064 ms
+  p's heartbeat: lists 2 3
+  r's heartbeat: lists 1
+engine deadlocks counted: 0; owners of 1 to 5: 1:r@1 2:p@1 3:p@1 4:-@0 5:-@0
+nodelease negative: no deadlock; every outcome landed or was refused; expected none: as expected
+exit 0 (23 s)
+$ x nodelease sqlserver <conn> case=heartbeats rcsi=0 mutation=membership expect=deadlock
+sqlserver: READ COMMITTED, locking; case heartbeats; take with the heartbeat READING MEMBERSHIP IN ITS TRANSACTION (the negative); expect deadlock
+sessions waiting before the release: yes; 2104 ms
+  p's heartbeat: failed: mssql 1205
+  r's heartbeat: lists 1
+engine deadlocks counted: 1; owners of 1 to 5: 1:r@1 2:p@1 3:p@1 4:-@0 5:-@0
+nodelease negative: DEADLOCKED, broken by the engine; expected a deadlock, forced: as expected
+exit 0 (4 s)
+$ x nodelease mysql <conn> case=heartbeats mutation=membership expect=none
+mysql: REPEATABLE READ (server default REPEATABLE-READ); case heartbeats; take with the heartbeat READING MEMBERSHIP IN ITS TRANSACTION (the negative); expect none
+sessions waiting before the release: NO (the interleaving was not forced); 20032 ms
+  p's heartbeat: lists 2 3
+  r's heartbeat: lists 1
+engine deadlocks counted: 0; owners of 1 to 5: 1:r@1 2:p@1 3:p@1 4:-@0 5:-@0
+nodelease negative: no deadlock; every outcome landed or was refused; expected none: as expected
+exit 0 (23 s)

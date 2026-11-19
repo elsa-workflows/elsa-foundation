@@ -19,6 +19,9 @@ public sealed partial class EfStore
     /// <summary>MUTATION, for NL-9: the take's transaction runs at REPEATABLE READ, so its read of a node record holds until it ends.</summary>
     public bool RepeatableReadTake { get; init; }
 
+    /// <summary>MUTATION, for NL-9: the heartbeat reads membership (the node count and the free list) inside its transaction, while it holds its own record.</summary>
+    public bool MembershipInHeartbeat { get; init; }
+
     /// <summary>
     /// The take's transaction. NL-C1: READ COMMITTED on every engine, whatever the store's configured isolation; SQLite
     /// has one writer, so its take cannot hold a read lock while it waits. Its lock waits are bounded by the lease: the
@@ -97,6 +100,7 @@ public sealed partial class EfStore
         if (!NodeLease) throw new NotSupportedException("The node lease is off in this store.");
         long now;
         List<OwnedEpoch> owned;
+        Cluster? inside = null;
         using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
         {
             deadline.CancelAfter(lease / 3);
@@ -108,6 +112,7 @@ public sealed partial class EfStore
                 if (Engine is null && postgres) await db.Database.ExecuteSqlRawAsync(FormattableString.Invariant($"SET LOCAL statement_timeout = {Math.Max(1, (long)(lease / 3).TotalMilliseconds)}"), deadline.Token);
                 now = await RenewAsync(db, node, lease, deadline.Token);
                 owned = await db.Partitions.AsNoTracking().Where(p => p.Owner == node).OrderBy(p => p.Id).Select(p => new OwnedEpoch(p.Id, p.Epoch)).ToListAsync(deadline.Token);
+                if (MembershipInHeartbeat) inside = await MembershipAsync(db, now, window, deadline.Token);     // MUTATION
                 await transaction.CommitAsync(deadline.Token);
             }
             catch (Exception e) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -115,23 +120,25 @@ public sealed partial class EfStore
                 throw new StoreException(Failure.Unknown, "The heartbeat outlasted a third of the lease.", e);
             }
         }
+        if (inside is not null) return new NodeBeat(owned, now, inside);
         await using var read = create();
         return new NodeBeat(owned, now, await MembershipAsync(read, now, window, cancellationToken));
     }
+
+    /// <summary>
+    /// Under the node lease, a take that is a deadlock victim, a serialization failure, timed out on a lock or met a busy
+    /// database (SQL Server 1205 and 1222, MySQL 1213 and 1205, PostgreSQL 40P01, 40001 and 55P03, SQLite 5 and 6) failed
+    /// as a transient error, as on the commit path: its transaction rolled back, and it is taken again at the next round.
+    /// Null for anything else, which propagates as it is.
+    /// </summary>
+    private StoreException? TransientTake(Exception e) =>
+        NodeLease && e is not StoreException && Classify(e) is { Failure: Failure.Transient } transient ? transient : null;
 
     /// <summary>
     /// The retake in one transaction: under the node lease the taker's record is written first, also when the retake is
     /// refused; with <paramref name="countDeaths"/> (#4837, a pending partition) a successful retake adds one attempt to
     /// every unfinished message on trial at the previous epoch, as a take from an expired owner does.
     /// </summary>
-    /// <summary>
-    /// Under the node lease, a take that is a deadlock victim or timed out on a lock (SQL Server 1205 and 1222, MySQL 1213
-    /// and 1205, PostgreSQL 40P01 and 55P03) failed as a transient error, as on the commit path: its transaction rolled
-    /// back, and it is taken again at the next round. Null for anything else, which propagates as it is.
-    /// </summary>
-    private StoreException? TransientTake(Exception e) =>
-        NodeLease && e is not StoreException && Classify(e) is { Failure: Failure.Transient } transient ? transient : null;
-
     private async ValueTask<Lease?> RetakeInTransactionAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken)
     {
         try { return await RetakeInOneTransactionAsync(partition, node, epoch, lease, countDeaths, cancellationToken); }
