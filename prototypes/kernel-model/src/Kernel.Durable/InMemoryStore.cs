@@ -40,7 +40,22 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public Dictionary<(string Key, string Id), EventRow> EventRows { get; } = [];
     public Dictionary<(int Partition, long Position), JournalRow> Journal { get; } = [];
     public List<string> Ghost { get; } = [];
-    public Dictionary<string, long> Nodes { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, NodeRow> Nodes { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>A node record: membership's <c>SeenAt</c> and, under the node lease, <c>LeaseUntil</c>; both database time.</summary>
+    public sealed class NodeRow
+    {
+        public long SeenAt, LeaseUntil;
+    }
+
+    /// <summary>K1b: the node lease is on (<see cref="IKernelStore.NodeLeaseAvailable"/>). Off, the per-partition lease stands.</summary>
+    public bool NodeLeaseAvailable { get; init; }
+
+    /// <summary>
+    /// For tests: called with the taker's name once a node-lease take has made its plain read of the owners' node
+    /// records, before it writes its own record and locks partition rows. A store call made here lands between the two.
+    /// </summary>
+    public Action<string>? TakeRead { get; set; }
     public long[] Projection { get; } = new long[partitions];
     public long[] Deleted { get; } = new long[partitions];     // journal rows removed by deletes, per partition: for the tests
     public Dictionary<string, ViewRow> Views { get; } = new(StringComparer.Ordinal);
@@ -69,7 +84,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
-        lock (_gate) return new(Take(partition, node, lease, clock()));
+        lock (_gate) return new(Take([partition], node, lease, clock()).Select(t => t.Lease).SingleOrDefault());
     }
 
     /// <summary>A take of a set: one transaction, the rows in ascending id, each decided as the one-partition take decides.</summary>
@@ -78,23 +93,50 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         lock (_gate)
         {
             var now = clock();
-            var taken = new List<PartitionFence>();
-            foreach (var partition in partitions.Distinct().Order())
-                if (Take(partition, node, lease, now) is { } one) taken.Add(one.For(partition));
-            return new(new OwnedLease(taken, now));
+            var taken = Take(partitions, node, lease, now);
+            return new(new OwnedLease([.. taken.Select(t => t.Lease.For(t.Partition))], taken.Count > 0 ? now : 0));   // 0 when nothing was taken, as on EF and MongoDB
         }
     }
 
-    private Lease? Take(int partition, string node, TimeSpan lease, long now)
+    // One take's transaction. Under the node lease it reads the owners' node records first, a plain read holding nothing,
+    // then writes the taker's own record, then decides the partition rows in ascending id by that read.
+    private List<(int Partition, Lease Lease)> Take(IEnumerable<int> partitions, string node, TimeSpan lease, long now)
     {
-        var p = Partitions[partition];
-        var died = p.Owner is not null && p.Owner != node;      // taken from another: only possible once its lease has expired
-        if (died && p.LeaseUntil >= now) return null;
-        if (died || (Has(Flaw.EveryTakeCounts) && p.Owner is not null))
-            foreach (var row in Messages.Values)
-                if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition) row.Attempts++;
-        (p.Owner, p.Epoch, p.LeaseUntil) = (node, p.Epoch + 1, now + (long)lease.TotalMilliseconds);
-        return new Lease(p.Epoch, p.Position, now);
+        var ids = partitions.Distinct().Order().ToList();
+        HashSet<string>? expired = null;
+        if (NodeLeaseAvailable)
+        {
+            // MUTATION TakeIgnoresNodeLease: every owner reads as expired.
+            expired = ids.Select(p => Partitions[p].Owner).OfType<string>().Where(o => o != node && (Has(Flaw.TakeIgnoresNodeLease) || NodeExpired(o, now))).ToHashSet(StringComparer.Ordinal);
+            TakeRead?.Invoke(node);
+            Renew(node, lease, now);
+        }
+        var taken = new List<(int, Lease)>();
+        foreach (var partition in ids)
+        {
+            var p = Partitions[partition];
+            var died = p.Owner is not null && p.Owner != node;      // taken from another: only possible once its lease has expired
+            if (died && (expired is null ? p.LeaseUntil >= now : !expired.Contains(p.Owner!))) continue;
+            if (died || (Has(Flaw.EveryTakeCounts) && p.Owner is not null))
+                foreach (var row in Messages.Values)
+                    if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition) row.Attempts++;
+            (p.Owner, p.Epoch) = (node, p.Epoch + 1);
+            if (expired is null) p.LeaseUntil = now + (long)lease.TotalMilliseconds;
+            taken.Add((partition, new Lease(p.Epoch, p.Position, now)));
+        }
+        return taken;
+    }
+
+    // The node lease: the owner's node record is missing, or its lease is before database time.
+    private bool NodeExpired(string owner, long now) => !Nodes.TryGetValue(owner, out var n) || n.LeaseUntil < now;
+
+    private bool Free(PartitionRow p, long now) => p.Owner is null || (NodeLeaseAvailable ? NodeExpired(p.Owner, now) : p.LeaseUntil < now);
+
+    // The node record's write, by a heartbeat and by every take under the node lease.
+    private void Renew(string node, TimeSpan lease, long now)
+    {
+        if (!Nodes.TryGetValue(node, out var row)) Nodes[node] = row = new NodeRow();
+        (row.SeenAt, row.LeaseUntil) = (now, now + (long)lease.TotalMilliseconds);
     }
 
     public bool OwnedSetsAvailable => true;
@@ -127,9 +169,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             // The k-row fence: every fence row the batch touches, locked in ascending partition id, all or nothing.
             var (fences, now) = (batch.Fenced, clock());
             var (epoch, position, fenced, stale) = (true, true, true, new List<string>());
+            // MUTATION PlainReadEmptyFence: a batch with no journal rows reads its fence rows without locking them, so a
+            // take may land on them after the check.
+            var plain = Has(Flaw.PlainReadEmptyFence) && batch.Positions == 0;
             foreach (var fence in fences)
             {
-                Locking?.Invoke(fence.Partition);
+                if (!plain) Locking?.Invoke(fence.Partition);
                 var row = Partitions[fence.Partition];
                 bool e = row.Epoch == fence.Epoch, q = row.Position == fence.Position;
                 (epoch, position) = (epoch && e, position && q);
@@ -137,6 +182,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 if (!e) stale.Add($"I1 a commit prepared under epoch {fence.Epoch} landed in partition {fence.Partition} at epoch {row.Epoch}");
                 else if (!q) stale.Add($"I1 a commit prepared at position {fence.Position} landed in partition {fence.Partition} at position {row.Position}");
             }
+            if (plain) foreach (var fence in fences) Locking?.Invoke(fence.Partition);
             if (!fenced && Has(Flaw.FenceSubset) && batch.Fences is not null && Subset(batch, stale.Count) is { } part)
                 return CommitAsync(part, cancellationToken);    // MUTATION: the part whose fences still match lands
             if (!fenced && !Has(Flaw.CommitDespiteFence)) return new(new Committed(false, now, []));
@@ -180,7 +226,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         throw new StoreException(Failure.WindowExpired, "The database clock left the decision's authority window.");
                 }
                 foreach (var fence in fences)
-                    (Partitions[fence.Partition].Position, Partitions[fence.Partition].LeaseUntil) = (fence.Position + batch.PositionsIn(fence.Partition), now + (long)batch.Lease.TotalMilliseconds);
+                {
+                    Partitions[fence.Partition].Position = fence.Position + batch.PositionsIn(fence.Partition);
+                    if (!NodeLeaseAvailable) Partitions[fence.Partition].LeaseUntil = now + (long)batch.Lease.TotalMilliseconds;   // the node lease: the fence renews nothing
+                }
             }
 
             List<LifecycleObservation.Change>? changes = null;
@@ -253,10 +302,30 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     {
         lock (_gate)
         {
-            var now = Nodes[node] = clock();
-            var free = Enumerable.Range(0, Partitions.Length).Where(p => Partitions[p].Owner is null || Partitions[p].LeaseUntil < now).ToList();
-            var heard = Nodes.Where(n => n.Value >= now - (long)window.TotalMilliseconds).Select(n => n.Key).Order(StringComparer.Ordinal).ToList();
-            return new(new Cluster(heard.Count, free, now, heard.IndexOf(node)));
+            var now = clock();
+            if (!Nodes.TryGetValue(node, out var row)) Nodes[node] = row = new NodeRow();
+            row.SeenAt = now;
+            return new(Membership(node, window, now));
+        }
+    }
+
+    private Cluster Membership(string node, TimeSpan window, long now)
+    {
+        var free = Enumerable.Range(0, Partitions.Length).Where(p => Free(Partitions[p], now)).ToList();
+        var heard = Nodes.Where(n => n.Value.SeenAt >= now - (long)window.TotalMilliseconds).Select(n => n.Key).Order(StringComparer.Ordinal).ToList();
+        return new Cluster(heard.Count, free, now, heard.IndexOf(node));
+    }
+
+    /// <summary>The node heartbeat: the node record's write first, then the read of this node's partitions and membership.</summary>
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default)
+    {
+        if (!NodeLeaseAvailable) throw new NotSupportedException("The node lease is off in this store.");
+        lock (_gate)
+        {
+            var now = clock();
+            Renew(node, lease, now);
+            var owned = Enumerable.Range(0, Partitions.Length).Where(p => Partitions[p].Owner == node).Select(p => new OwnedEpoch(p, Partitions[p].Epoch)).ToList();
+            return new(new NodeBeat(owned, now, Membership(node, window, now)));
         }
     }
 
@@ -272,13 +341,22 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     }
 
     /// <summary>The retake after a reset: only a row this node still holds at that epoch; one more epoch, no death.</summary>
-    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default)
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) =>
+        RetakeAsync(partition, node, epoch, lease, countDeaths: false, cancellationToken);
+
+    /// <summary>The retake, counting a death on the previous epoch's unfinished trial messages when asked (a pending partition).</summary>
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
             var (row, now) = (Partitions[partition], clock());
+            if (NodeLeaseAvailable) Renew(node, lease, now);    // a retake is a take: it writes the taker's node record first
             if (row.Owner != node || row.Epoch != epoch) return new((Lease?)null);
-            (row.Epoch, row.LeaseUntil) = (row.Epoch + 1, now + (long)lease.TotalMilliseconds);
+            if (countDeaths)
+                foreach (var message in Messages.Values)
+                    if (message.Trial == row.Epoch && !message.Done && message.Message.Target.Partition == partition) message.Attempts++;
+            row.Epoch++;
+            if (!NodeLeaseAvailable) row.LeaseUntil = now + (long)lease.TotalMilliseconds;
             return new(new Lease(row.Epoch, row.Position, now));
         }
     }

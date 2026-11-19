@@ -85,6 +85,15 @@ public sealed record OwnedLease(IReadOnlyList<PartitionFence> Taken, long Now);
 
 public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 
+/// <summary>A partition the node heartbeat found owned by its node, at the epoch the store has for it.</summary>
+public sealed record OwnedEpoch(int Partition, long Epoch);
+
+/// <summary>
+/// The node heartbeat's answer (K1b): the partitions this node owns, in ascending id; the database time of the renewal,
+/// so the node lease runs until <c>Now</c> plus the lease; and the membership, read after the renewal outside its transaction.
+/// </summary>
+public sealed record NodeBeat(IReadOnlyList<OwnedEpoch> Owned, long Now, Cluster Cluster);
+
 /// <summary>
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
@@ -190,7 +199,8 @@ public interface IKernelStore : IMembership
     /// Take the partition if it is free, expired or already mine. Every take bumps the epoch. A take from another
     /// owner can only succeed because that owner's lease expired: that is a death, and in the same transaction every
     /// message the dead owner had on trial gets one more attempt. <paramref name="node"/> must be unique per process
-    /// start, or a restarted process would look like its predecessor taking again.
+    /// start, or a restarted process would look like its predecessor taking again. Under the node lease, "expired" is
+    /// the owner's node record, and the take renews its taker (<see cref="NodeLeaseAvailable"/>).
     /// </summary>
     ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default);
 
@@ -212,12 +222,43 @@ public interface IKernelStore : IMembership
     /// <summary>The store commits a batch over several virtual partitions all or nothing under their k fence rows. Default unavailable.</summary>
     bool OwnedSetsAvailable => false;
 
+    /// <summary>
+    /// K1b, the node lease ("The partition record" and "The node's heartbeat" in ownership-and-fencing.md). The lease is
+    /// the node record, <c>Nodes (Id, SeenAt, LeaseUntil)</c> in database time, and covers every partition its process
+    /// owns. A take accepts a free partition, one whose owner's node record is missing or has <c>LeaseUntil</c> before
+    /// database time, or a retake by the recorded owner. Its transaction reads the owners' node records with a plain read
+    /// that holds nothing, then writes the taker's own record (<c>SeenAt</c> and <c>LeaseUntil</c>, whatever it takes),
+    /// then locks the partition rows in ascending id, each decided by that read; deaths count as before, a missing record
+    /// as expired. A retake writes the taker's record the same way, also when it is refused. A caller does not bound its
+    /// node lease by a take's or retake's database time (an empty take returns none). A Worker whose guard expired keeps
+    /// the partitions it stood down pending and retakes them counting deaths (#4837; the counting retake below). The
+    /// fence renews no lease: <see cref="CommitBatch.Lease"/>
+    /// renews nothing (slice 4 makes it the commit-step deadline), and the fence still checks and locks every fenced
+    /// row, a batch with no journal rows included. Membership's free partitions are those unowned or whose owner's node
+    /// lease has expired. Under the node lease the host's membership call is <see cref="NodeHeartbeatAsync"/>;
+    /// <see cref="IMembership.HeartbeatAsync"/> stays for the per-partition lease only, and slice 5 moves the hosts off
+    /// it. Off by default: until the Worker switches (K1b slice 4), the per-partition lease stands.
+    /// </summary>
+    bool NodeLeaseAvailable => false;
+
+    /// <summary>
+    /// The node's heartbeat under <see cref="NodeLeaseAvailable"/>. One statement or transaction writes this node's
+    /// record, <c>SeenAt</c> at database time and <c>LeaseUntil</c> at database time plus <paramref name="lease"/>, then
+    /// reads the partitions whose owner is <paramref name="node"/> with their epochs (a read that writes nothing). The
+    /// membership reads (the live-node count for <paramref name="window"/> and the free list) run after it, outside any
+    /// transaction that holds a node record, as <see cref="IMembership.HeartbeatAsync"/> runs them: a heartbeat never
+    /// reads another node record while holding its own. The caller takes its monotonic time just before sending it.
+    /// </summary>
+    ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This store keeps no node lease.");
+
     /// <summary>The partitions the database was created with (K1 slice 7), or null when the store does not say.</summary>
     ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult<int?>(null);
 
     /// <summary>
     /// Take a set of virtual partitions. Each is taken, or left out, exactly as the one-partition take decides for it,
-    /// with its own epoch and its own death count; the set need not be contiguous. <c>Now</c> is the store's time when a row was taken; when nothing was, a caller must not read it (the default adapter returns 0).
+    /// with its own epoch and its own death count; the set need not be contiguous. <c>Now</c> is the store's time when a row was taken; when nothing was, a caller must not read it (every store returns 0).
+    /// Under the node lease a caller does not bound its node lease by <c>Now</c> either (<see cref="NodeLeaseAvailable"/>).
     /// The default takes one at a time, k round trips: if one of them fails, the partitions before it are taken already,
     /// so a failure is an unknown outcome and the caller treats the whole set as it treats a failed take.
     /// </summary>
@@ -248,6 +289,19 @@ public interface IKernelStore : IMembership
     /// </summary>
     ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This store does not retake a partition at an epoch.");
+
+    /// <summary>
+    /// The retake, deciding as the one above. With <paramref name="countDeaths"/> (K1b, #4837: a pending partition retaken
+    /// after the guard expired) a successful retake is a death: in the same transaction every message on trial at the
+    /// previous epoch and not done gets one more attempt, as a take from an expired owner counts it. Without it, it is the
+    /// retake above. There is no set form: a pending row is still this node's at the epoch it held, so a set take would
+    /// read it as a retake by the recorded owner and count nothing; the Worker retakes pending rows one at a time with
+    /// this call, as it retakes after a reset. "A gain or set take that includes a pending partition is its retake"
+    /// (ownership-and-fencing.md) is the Worker's routing: it splits the pending partitions out of the take and retakes
+    /// each with <paramref name="countDeaths"/> set. The default refuses a counting retake.
+    /// </summary>
+    ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) =>
+        countDeaths ? throw new NotSupportedException("This store does not count deaths at a retake.") : RetakeAsync(partition, node, epoch, lease, cancellationToken);
 
     /// <summary>
     /// One poll of an owned set: each partition's rows not yet seen at that partition's epoch, merged in seq order, at most
