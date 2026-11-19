@@ -636,10 +636,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     // ---- the node's owned set (D1) -------------------------------------------------------------------------------
 
-    /// <summary>A wake, a job result or a deferred job came since the last pass: the next call must run a pass.</summary>
     /// <summary>The worker's monotonic clock (<see cref="WorkerOptions.Monotonic"/>), in milliseconds: the host times a shared pass answer by it.</summary>
     internal long Monotonic => _options.Monotonic();
 
+    /// <summary>A wake, a job result or a deferred job came since the last pass: the next call must run a pass.</summary>
     internal bool PassWanted => _woken || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
 
     /// <summary>
