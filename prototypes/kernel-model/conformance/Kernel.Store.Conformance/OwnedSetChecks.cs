@@ -17,6 +17,7 @@ internal static class OwnedSetChecks
         new("owned sets: one stale fence rolls the whole flush back; the kept partitions have no hole and no stranded mark", Level.Required, PartialStaleness, Partitions),
         new("owned sets, the K1 witness: b of {a, b, c} moves by lease expiry while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on", Level.Required, c => Witness(c, release: false), Partitions),
         new("owned sets, the K1 witness: b of {a, b, c} moves by a release while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on", Level.Required, c => Witness(c, release: true), Partitions),
+        new("owned sets: a database created at 64 partitions refuses to open at 1,024, and opens at 64", Level.Required, ReopenAtAnotherCount, 64),
         new("owned sets: a release of a subset leaves the kept rows untouched", Level.Required, SubsetRelease, Partitions),
         new("owned sets: a take of a scattered set, and one poll over it", Level.Required, ScatteredTake, Partitions),
         new("owned sets: the k-row fence locks in ascending partition id", Level.Required, LockOrder, Partitions),
@@ -178,6 +179,29 @@ internal static class OwnedSetChecks
             var tried = (await c.Row(fence.Partition, $"t{fence.Partition}"))!;
             Context.That(tried.Seen == fence.Epoch && tried.Trial == fence.Epoch, $"trial mark in kept partition {fence.Partition} is not at its new epoch");
         }
+    }
+
+    /// <summary>
+    /// The count is fixed when the database is created (K1 slice 7). A database of 64 partitions opened at the default
+    /// 1,024 would address partitions 64 to 1,023, which have no row, so it is refused, definitely, naming both counts.
+    /// Nothing is migrated: no data exists before release, so a database is recreated.
+    /// </summary>
+    private static async Task ReopenAtAnotherCount(Context c)
+    {
+        if (c.Provided.Reopen is not { } reopen) throw new SkipException("the store has no database to reopen");
+        await c.S.AddAsync(Make.M("kept", 63));
+        try
+        {
+            await reopen(VirtualPartitions.Small);
+            throw new ConformanceException("a database of 64 partitions opened at 1,024");
+        }
+        catch (StoreException e)
+        {
+            Context.Equal(Failure.Definite, e.Failure, "the failure of an open at another count");
+            Context.That(e.Message.Contains("64") && e.Message.Contains("1024"), $"the refusal does not name both counts: {e.Message}");
+        }
+        await reopen(64);
+        Context.Equal("kept", string.Join(" ", (await c.S.PollAsync(63, (await c.Take(63)).Epoch, TimeSpan.Zero, 10)).Messages.Select(m => m.Message.Id)), "partition 63 after the open at 64");
     }
 
     private static async Task SubsetRelease(Context c)

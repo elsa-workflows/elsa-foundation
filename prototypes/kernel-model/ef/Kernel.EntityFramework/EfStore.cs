@@ -281,7 +281,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     /// <summary>
     /// Creates the tables and the partition rows. The number of partitions is fixed here; by default the 1,024 virtual
-    /// partitions (K1 slice 7), each with its own fence row, on a server database and on SQLite.
+    /// partitions (K1 slice 7), each with its own fence row, on a server database and on SQLite. Opening a database that
+    /// has its rows already checks the count, and refuses another (definite).
     /// </summary>
     public async Task CreateAsync(int? partitions = null)
     {
@@ -317,7 +318,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             await db.Database.ExecuteSqlRawAsync(mysql.Sql(EventInsert.InstallMySql.Replace("CREATE PROCEDURE", "CREATE PROCEDURE IF NOT EXISTS")));
         }
         if (Engine is not null) await Engine.CreatedAsync(db, default);
-        if (await db.Partitions.AnyAsync()) return;
+        // The count is fixed when the database is created: one opened at another count would address partitions with no
+        // row, or leave some unserved. Nothing is migrated (K1 slice 7; no data exists before release): recreate it.
+        if (await db.Partitions.CountAsync() is var rows and > 0)
+        {
+            if (rows != count) throw new StoreException(Failure.Definite, $"The database has {rows} partitions and was opened with {count}. The count is fixed at creation: recreate the database.");
+            return;
+        }
         db.Partitions.AddRange(Enumerable.Range(0, count).Select(id => new PartitionEntity { Id = id }));
         db.Projections.AddRange(Enumerable.Range(0, count).Select(id => new ProjectionEntity { Partition = id }));
         await db.SaveChangesAsync();
