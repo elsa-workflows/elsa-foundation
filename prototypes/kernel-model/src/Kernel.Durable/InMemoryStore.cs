@@ -106,6 +106,17 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     public bool SupportsCommitWindow => true;
 
+    // FenceSubset: the batch cut to the partitions whose fence matches, or null when none does or every one does.
+    private CommitBatch? Subset(CommitBatch batch, int stale)
+    {
+        var current = batch.Fenced.Where(f => Partitions[f.Partition].Epoch == f.Epoch && Partitions[f.Partition].Position == f.Position).ToList();
+        if (current.Count == 0 || stale == 0) return null;
+        var kept = current.Select(f => f.Partition).ToHashSet();
+        bool Kept(InboxKey id) => Messages.GetValueOrDefault(id) is { } row && kept.Contains(row.Message.Target.Partition);
+        var turns = batch.Turns.Where(t => batch.PartitionOf(t) is var p && kept.Contains(p)).ToList();
+        return CommitBatch.Owned(current, batch.Lease, batch.HandOver, turns, [.. batch.Seen.Where(Kept)], [.. batch.Trial.Where(Kept)]) with { Window = batch.Window };
+    }
+
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         StoreBatchRules.Validate(batch, ownedSets: true);
@@ -126,10 +137,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 if (!e) stale.Add($"I1 a commit prepared under epoch {fence.Epoch} landed in partition {fence.Partition} at epoch {row.Epoch}");
                 else if (!q) stale.Add($"I1 a commit prepared at position {fence.Position} landed in partition {fence.Partition} at position {row.Position}");
             }
+            if (!fenced && Has(Flaw.FenceSubset) && batch.Fences is not null && Subset(batch, stale.Count) is { } part)
+                return CommitAsync(part, cancellationToken);    // MUTATION: the part whose fences still match lands
             if (!fenced && !Has(Flaw.CommitDespiteFence)) return new(new Committed(false, now, []));
             Ghost.AddRange(stale);
             var epochs = fences.ToDictionary(f => f.Partition, f => f.Epoch);
-            long MarkEpoch(MessageRow row) => epochs.GetValueOrDefault(row.Message.Target.Partition, batch.Epoch);
+            // MUTATION SeenAtNodeEpoch: the set's highest epoch, as one epoch for the whole node would be.
+            long MarkEpoch(MessageRow row) => Has(Flaw.SeenAtNodeEpoch) && fences.Count > 0 ? fences.Max(f => f.Epoch) : epochs.GetValueOrDefault(row.Message.Target.Partition, batch.Epoch);
 
             if (fenced)
             {

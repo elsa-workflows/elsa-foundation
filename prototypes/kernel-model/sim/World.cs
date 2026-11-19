@@ -192,7 +192,14 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         var fenced = current == batch.Fenced.Count;
         if (batch.Fenced.Count > 1)
             World.Count(fenced ? "commit over several partitions, fenced" : current > 0 ? "commit over several partitions, part of its fences stale" : "commit over several partitions, every fence stale");
+        var before = batch.Fenced.Select(f => world.Store.Partitions[f.Partition].Position).ToList();
         var landed = world.Store.CommitAsync(batch);
+        // W1 (K1, the decisive witness in the random sim): a flush with one stale fence of its set does not land. This
+        // checks the landed flag and the fenced partitions' positions only. The store conformance case "the K1 witness" is
+        // the full witness: rows, journal rows, positions, marks, the retake, the read-back and the continuation.
+        if (!fenced && current > 0 && (landed.Result.Landed || batch.Fenced.Where((f, i) => world.Store.Partitions[f.Partition].Position != before[i]).Any()))
+            world.Faults.Add($"W1 a flush over {string.Join(", ", batch.Fenced.Select(f => $"p{f.Partition} e{f.Epoch}"))} landed in part, with {batch.Fenced.Count - current} of its fences stale");
+        if (landed.Result.Landed && fenced) world.ChildIssued(batch);
         if (landed.Result.Landed)
         {
             world.Landed(sendings);     // the store's truth, before the answer can be lost on the wire
@@ -484,6 +491,26 @@ public sealed partial class World
         Actors.Add(actor);
         for (var p = 0; p < Config.Partitions; p++)
             if (actor.Set || p == partition) Current[node, p] = actor.Id;
+    }
+
+    /// <summary>
+    /// C2 (K1 slice 2b's rule): a child's address names the (partition, epoch) its parent's commit is fenced at: the parent's
+    /// own partition, at the epoch the batch fences it. Only that take's issuer ever publishes ids under it, so two owners
+    /// can never mint one id.
+    /// </summary>
+    public void ChildIssued(CommitBatch batch)
+    {
+        var fences = batch.Fenced.ToDictionary(f => f.Partition, f => f.Epoch);
+        foreach (var turn in batch.Turns)
+            foreach (var sent in turn.Sent)
+            {
+                var at = sent.Target.Id.IndexOf("/child/", StringComparison.Ordinal);
+                if (sent.Kind != Kinds.Start || sent.Sender != turn.Instance || !sent.Target.ChildAddress || at < 0) continue;
+                var issued = sent.Target.Id[(at + 7)..].Split('.');
+                var (partition, epoch) = (batch.PartitionOf(turn), fences.GetValueOrDefault(batch.PartitionOf(turn)));
+                if (issued.Length != 3 || issued[0] != partition.ToString(System.Globalization.CultureInfo.InvariantCulture) || issued[1] != epoch.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    Faults.Add($"C2 {turn.Instance} started child {sent.Target}, and its commit is fenced at partition {partition}, epoch {epoch}");
+            }
     }
 
     /// <summary>The take, watched: taking from another owner means that owner was lost, the only thing that may raise attempts.</summary>

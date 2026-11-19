@@ -209,7 +209,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         lock (_turnSync)
         {
-            var partition = StoreBatchRules.AddressPartition(instance) is { } p && _held.ContainsKey(p) ? p : _held.Keys.First();
+            var partition = Has(Flaw.ChildIssuerPerWorker) ? _held.Keys.Min()      // MUTATION: one issuer for the whole set
+                : StoreBatchRules.AddressPartition(instance) is { } p && _held.ContainsKey(p) ? p : _held.Keys.First();
             var epoch = _held[partition].Epoch;
             if (!_issuers.TryGetValue(partition, out var issuer) || issuer.Epoch != epoch) _issuers[partition] = issuer = new(partition, epoch);
             return issuer;
@@ -257,7 +258,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         ReceiveJobPublications(cancellationToken);
         return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && Deliverable(s.Key, s.Value).Count > 0).Select(s => s.Key)
-            .Where(id => !Blocked && (TrialItems.Count == 0 || OnTrial(id)));    // while a trial runs, nothing else in the process does
+            .Where(id => !Blocked && (TrialItems.Count == 0 || OnTrial(id) || Spared(id)));    // while a trial runs, nothing else in the process does
     }
 
     // What is in memory, for tests of invariant 9.
@@ -907,9 +908,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private bool Suspect(Stored row, long now) => row.Message.Kind is not (Kinds.Meet or Kinds.Publish) && !Kinds.IsControl(row.Message.Kind) && row.Attempts < _options.MaxAttempts
         && (row.Trial > 0 || (row.Seen > 0 && !Mine(row.Message.Target.Partition, row.Seen) && (row.Message.Due is not { } due || due <= now)));
 
-    private bool Mine(int partition, long epoch) { lock (_turnSync) return _mine.Contains((partition, epoch)); }
+    private bool Mine(int partition, long epoch)
+    {
+        // MUTATION SuspectAcrossPartitions: epochs count per partition, so a bare epoch names another partition's take too.
+        lock (_turnSync) return Has(Flaw.SuspectAcrossPartitions) ? _mine.Any(m => m.Epoch == epoch) : _mine.Contains((partition, epoch));
+    }
 
     private bool OnTrial(string instance) => TrialItems.Any(t => Canonical(t.Message.Target.Id) == instance);
+
+    // MUTATION TrialSparesOtherPartitions: a trial holds back only its own partition, as if a death killed only that one.
+    private bool Spared(string instance) => Has(Flaw.TrialSparesOtherPartitions) && StoreBatchRules.AddressPartition(instance) is { } p
+        && !TrialItems.Any(t => t.Message.Target.Partition == p);
 
     // A fenced trial that cannot physically enter must not hold the process hostage. Its durable trial
     // and loss accounting stay intact; resuming the job reacquires isolation without another store mark.
@@ -1356,7 +1365,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         ReceiveJobPublications(cancellationToken);
         instance = Canonical(instance);
         if (_releasing || !LeaseUsable() || !_slots.TryGetValue(instance, out var slot) || !Loaded(slot) || slot.Busy) return;
-        if (Blocked || (TrialItems.Count > 0 && !OnTrial(instance))) return;
+        if (Blocked || (TrialItems.Count > 0 && !OnTrial(instance) && !Spared(instance))) return;
         var due = Deliverable(instance, slot);
         if (due.Count == 0) return;
         var supplied = due.FindAll(i => i.DiscardedAt(slot));
@@ -2234,9 +2243,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
 /// <summary>
 /// One per process. At most one of its workers has a trial in flight, and then the others start nothing. A death kills
 /// every partition the process holds, so a trial in one of a worker's partitions holds back its other partitions too.
-/// Within a worker, the trial filters of <c>ReadyForTurns</c> and <c>RunTurn</c> enforce that, and no mutation covers
-/// it yet; <see cref="Flaw.TrialPerPartition"/> gives each worker its own gate, which is per partition only while a
-/// worker owns one. A reset releases the gate, so a trial in a partition the worker dropped gates nothing it took back.
+/// Within a worker, the trial filters of <c>ReadyForTurns</c> and <c>RunTurn</c> enforce that
+/// (<see cref="Flaw.TrialSparesOtherPartitions"/> breaks them); <see cref="Flaw.TrialPerPartition"/> gives each worker its
+/// own gate, which is per partition only while a worker owns one, as on a store without owned sets. A reset releases the
+/// gate, so a trial in a partition the worker dropped gates nothing it took back.
 /// </summary>
 public sealed class TrialGate
 {

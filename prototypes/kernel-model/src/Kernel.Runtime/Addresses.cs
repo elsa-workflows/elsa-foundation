@@ -93,4 +93,11 @@ public enum Flaw : long
 
     // K1 slice 5: a placement cost, witnessed by sim --placement-check, not by the random sim.
     ContiguousOnlyBalancer = 1L << 49, // a node keeps one contiguous range, its fair one by rank: a join or a leave moves more than the fewest
+
+    // K1 slice 7: the rules of a worker that owns a set of virtual partitions, each caught by the random sim's set worlds.
+    FenceSubset = 1L << 50,        // the k-row fence lands the part of a flush whose fences still match, and drops the rest
+    SeenAtNodeEpoch = 1L << 51,    // a Seen or Trial mark records the highest epoch of the batch's set, not its own partition's
+    SuspectAcrossPartitions = 1L << 52, // the suspect test asks whether this process held the mark's epoch in any partition
+    ChildIssuerPerWorker = 1L << 53, // one child id issuer, at the worker's lowest partition, for the parents of every partition
+    TrialSparesOtherPartitions = 1L << 54, // a trial holds back only its own partition of the worker's set
 }
