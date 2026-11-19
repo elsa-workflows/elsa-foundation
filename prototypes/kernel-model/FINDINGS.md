@@ -1732,6 +1732,7 @@ not refused, and the store's count check is what stopped it.
   time; Orleans runs a silo's grains in parallel. The suite gives every worker its own gate under both runtimes, so F11
   does not hold there: a crash during a trial may count against a message in another partition's trial. The stress
   tests set the attempts high enough that nothing is parked. A lock in `TrialGate` is a small layer 2 change (leak L8).
+  Superseded by K1 D1 and D2: the gate is now the node worker's on both runtimes (`Worker.cs` 180), so F11 holds there.
 - **R7. A split costs takes.** Every partition grain on the side that does not hold the fence asks again every
   `RetryEvery`, and each ask is a take: a store round trip on the holder's partition row, declined. In one Orleans
   stress run (four partitions, `RetryEvery` 150 ms, 20 s of load and its settling) 355 activations were asked for

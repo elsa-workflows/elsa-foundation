@@ -333,6 +333,67 @@ The follow-ups that slice 2a recorded for this slice:
   suspects, so the pause is rare. It lasts two commits (the trial mark, which starts only when nothing else is in
   flight, and the turn on trial), or, for a job on trial, the run of that job (`Worker.StartJob`, FINDINGS F11).
 
+### K1 slice 6: Orleans grains join the silo's owned set (D2)
+
+- **One worker per silo.** The Orleans provider now serves a silo's partition grains through `DurableHost.ForNode`
+  (`IRuntimeProvider.OneWorkerPerNode`). A grain's activation gains its partition (`GainAsync`, that one fence row), and
+  its deactivation loses it (`LoseAsync`). Orleans runs a silo's grains in parallel; the host's lock runs their passes,
+  gains and losses one at a time, and the one-pass rule answers a grain whose pass another grain just ran. The seam
+  needed no change for this. The trial gate is the silo's, so F11 now holds under Orleans too (FINDINGS R6 described
+  the worker per scope).
+- **Placement.** Orleans places the grains, and `Balancer.Plan` is not used. A silo that joins gets nothing until a grain
+  moves (FINDINGS R8): the reference case "join" still differs, as it does on main. The two cases that test the
+  balancer (a join hands part of a set over; a join and a leave move the fewest) run only under the kernel's balancer
+  (`Placement.Balancer`). Every other owned-set case now runs on Orleans too.
+- **Batching across a silo's grains, and a move mid-flush** (new case, `Placement.Runtime`). One silo holds all four
+  partitions, and a second silo has joined. Tokens in 0 and 2 reach the store together, so one flush spans both grains'
+  partitions under the k-row fence, and that flush is held on its way to the store. While it is held, Orleans migrates
+  the grain of 2 to the second silo (`MigrateOnIdle` with a placement hint, through `IRuntimeNode.MoveAsync`). The
+  deactivation's loss waits for the flush: the flush lands, 2 is given up only after it returns, and 0, 1 and 3 keep
+  their epochs and their memory (a quiet loss, no reset). The second silo takes 2, and both partitions go on in order. A host lock that
+  admits every caller fails the case (2 is given up before the flush returns), and so does a loss that always resets.
+- **The reset by a guarded retake.** The fence case now checks, on an owned set, that the refused commit reset the
+  worker and that it took 1, 2 and 3 back by `RetakeAsync`, releasing none, while the thief kept 0. It runs on both
+  runtimes. With the retake switched off it fails.
+- **The cost of a pass** (`Kernel.Runtime.Conformance.Run ... cost` and `Kernel.Runtime.Orleans.Conformance ... cost`,
+  in-memory store, load average 2.5 to 3). One node holds every partition, with a 6 s lease and a 1 s poll interval: 10
+  idle seconds, then a burst of tokens over the partitions (400, 1,024 and 4,096), each with a hint. The columns are the
+  tool's. "Set polls" is the node's partition polls over the partitions: the harness's store answers a set poll with
+  one poll per partition, where a SQL store sends one query. "Store calls" counts each partition poll, so it overstates
+  both runtimes' polls against a SQL store.
+
+  | Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+  |---|---|---|---|---|---|---|---|---|
+  | orleans | 16 | idle, a second | 24 | 2.5 | 2.0 | 0 | - | 32.5 |
+  | built-in | 16 | idle, a second | 17.6 | 1.1 | 0.9 | 0 | - | 15.5 |
+  | orleans | 16 | 400 tokens | 33 | 18 | 18 | 11 | 14.8 | 791 |
+  | built-in | 16 | 400 tokens | 74 | 14 | 12 | 11 | 14.8 | 696 |
+  | orleans | 64 | idle, a second | 96 | 3.4 | 2.9 | 0 | - | 186.1 |
+  | built-in | 64 | idle, a second | 96 | 1.5 | 1.0 | 0 | - | 65.2 |
+  | orleans | 64 | 1,024 tokens | 37 | 37 | 37 | 27 | 37.9 | 4,703 |
+  | built-in | 64 | 1,024 tokens | 162 | 36 | 35 | 34 | 30.1 | 5,193 |
+  | orleans | 256 | idle, a second | 384 | 6.3 | 5.8 | 0 | - | 1,485.3 |
+  | built-in | 256 | idle, a second | 383.9 | 1.4 | 1.0 | 0 | - | 257.1 |
+  | orleans | 256 | 4,096 tokens | 416 | 350 | 350 | 343 | 11.9 | 101,876 |
+  | built-in | 256 | 4,096 tokens | 768 | 256 | 255 | 252 | 16.3 | 77,832 |
+
+  - **Pass calls.** Each grain calls its pass about as often as the built-in loop visits a scope, and the one-pass rule
+    answers most of those calls.
+  - **Idle polls.** The poll is the difference. The built-in loop wakes every scope at once and polls the set about once
+    a second. Each Orleans grain wakes the node's worker at its own poll tick, counted from its activation, and a wake
+    that comes after a pass began costs another poll of the whole set. On a quiet machine Orleans polled the set 2.0 to
+    5.8 times a second here, growing with the grains. A review under load (load average 8 to 85) measured 2.1 to 16 a
+    second.
+  - **The poll grid that was dropped.** One version of this slice put the grains' ticks on a shared grid. A first run
+    showed it halving the polls, but the review's interleaved pairs did not reproduce that benefit, so it is not kept.
+  - **Under load.** The two runtimes are close. One commit spans many partitions on both (the harness caps a batch at
+    40 turns). Orleans makes fewer pass calls, because a hint reaches only its own grain.
+  - **For slice 8.** It measures the Orleans set polls per poll interval on a quiet machine at 1,024 partitions.
+- **Open seam question, for slice 8.** A silo-level poll would bring Orleans to one set poll per interval: the silo
+  wakes its owned set once, as the built-in loop does. The seam today promises a wake per held scope (`RuntimeTiming.PollInterval`),
+  and a per-scope host (a store without owned sets) still needs that. So the change needs the seam to say that one wake
+  covers a node's set, which is a seam decision to take before anyone builds it.
+
 ## Placement and rebalance (`sim --placement-check`)
 
 - `VirtualPartitions.Of(name, count)` is the hash of today, so an address embeds its virtual partition as it embeds

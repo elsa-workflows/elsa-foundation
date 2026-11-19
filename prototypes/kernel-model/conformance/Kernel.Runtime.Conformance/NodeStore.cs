@@ -20,6 +20,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     private TimeSpan _nextCommit;
     private int _commitPartition, _inFlight, _refused, _commits, _heldRefused;
     private long _heldAt;
+    private long _calls, _polls, _turnCommits, _turnPartitions;
     private readonly TaskCompletionSource<string> _held = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public int Stalls { get; private set; }
@@ -37,6 +38,13 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
 
     /// <summary>Commits held by <see cref="StallNextCommit"/> that the store then answered "not landed": a stale writer the fence refused.</summary>
     public int HeldRefused => Volatile.Read(ref _heldRefused);
+
+    /// <summary>For the cost run: every call of the node, its partition polls (a set poll is one per partition here), its commits with turns, and the partitions those turns spanned in all.</summary>
+    public (long Calls, long Polls, long TurnCommits, long TurnPartitions) Counts =>
+        (Interlocked.Read(ref _calls), Interlocked.Read(ref _polls), Interlocked.Read(ref _turnCommits), Interlocked.Read(ref _turnPartitions));
+
+    /// <summary>The partitions with a turn in the commit held by <see cref="StallNextCommit"/>.</summary>
+    public IReadOnlyList<int> HeldPartitions { get; private set; } = [];
 
     /// <summary>No call of the node is under way, stalled or not.</summary>
     public bool Idle => Volatile.Read(ref _inFlight) == 0;
@@ -115,6 +123,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
                 Begin(_nextCommit);
                 _nextCommit = TimeSpan.Zero;
                 held = true;
+                HeldPartitions = [.. commit.Turns.Select(commit.PartitionOf).Distinct().Order()];
             }
             wait = _stall?.Task;
         }
@@ -125,6 +134,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     private async ValueTask<T> Call<T>(Func<ValueTask<T>> call)
     {
         Interlocked.Increment(ref _inFlight);
+        Interlocked.Increment(ref _calls);
         try
         {
             await Gate();
@@ -138,6 +148,12 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _inFlight);
+        Interlocked.Increment(ref _calls);
+        if (batch.Turns.Count > 0)
+        {
+            Interlocked.Increment(ref _turnCommits);
+            Interlocked.Add(ref _turnPartitions, batch.Turns.Select(batch.PartitionOf).Distinct().Count());
+        }
         try
         {
             var held = await Gate(batch);
@@ -158,13 +174,27 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     }
 
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) => Call(() => inner.TakeAsync(partition, node, lease, cancellationToken));
-    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => Call(() => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken));
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => Call(async () =>
+    {
+        var taken = await inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
+        if (taken is not null) _retaken[partition] = taken.Epoch;
+        return taken;
+    });
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, long> _retaken = new();
+
+    /// <summary>The epoch at which the node last took the partition back by a guarded retake (after a reset), if it ever did.</summary>
+    public long? Retaken(int partition) => _retaken.TryGetValue(partition, out var epoch) ? epoch : null;
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
     {
         _releases[partition] = Environment.TickCount64;
         return Call(() => inner.ReleaseAsync(partition, epoch, cancellationToken));
     }
-    public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => Call(() => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken));
+    public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _polls);
+        return Call(() => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken));
+    }
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => Call(() => inner.AddAsync(message, cancellationToken));
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => Call(() => inner.AddEventAsync(delivery, cancellationToken));
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => Call(() => inner.LoadAsync(ids, cancellationToken));
