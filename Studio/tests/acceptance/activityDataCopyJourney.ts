@@ -140,6 +140,20 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     navigations.push({ definitionId: created.definition.id, role, stage, consumerId, producerId, selectedNodeId: await selected.getAttribute("data-id") });
   }
 
+  /** Selects one Sequence step on the canvas (inspector folded away on narrow screens) and centres it in view. */
+  async function showSequence(nodeId: string) {
+    await s.canvas(); await node(nodeId).press("Enter");
+    await expect(page.locator('.wf-sequence-step[aria-pressed="true"]')).toHaveCount(1);
+    await expect(node(nodeId)).toHaveAttribute("aria-pressed", "true");
+    // Centre it so paste and redo frame alike, and nothing overlaid (such as the validation footer) covers it.
+    await node(nodeId).evaluate(step => step.scrollIntoView({ block: "center" }));
+    await expect(node(nodeId)).toBeInViewport();
+    await expect.poll(() => node(nodeId).evaluate(step => {
+      const box = step.getBoundingClientRect();
+      return step.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+    }), { message: "Selected Sequence is uncovered" }).toBe(true);
+  }
+
   if (mode === "pairs" || sequencePairs) {
     for (const role of ["whole", "member"] as const) {
       const producer: Node = role === "whole" ? echo() : { nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] };
@@ -281,11 +295,15 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     await waitCount(created, 19);
     const pastedState = (await s.saved(created)).state;
     const copiedGroup = pastedState.rootActivity.structure!.payload.activities[2];
-    await capture(page, info, "scope-pasted");
+    await showSequence(copiedGroup.nodeId); await capture(page, info, "scope-pasted");
     await page.getByRole("button", { name: "Undo", exact: true }).click(); await waitCount(created, 13);
-    expect((await s.saved(created)).state).toEqual(duplicatedState); await capture(page, info, "scope-paste-undo");
+    expect((await s.saved(created)).state).toEqual(duplicatedState);
+    // The paste is gone: the last remaining Sequence is the duplicate, with nothing after it.
+    await expect(node(copiedGroup.nodeId)).toHaveCount(0); await showSequence(duplicatedGroup.nodeId);
+    await capture(page, info, "scope-paste-undo");
     await page.getByRole("button", { name: "Redo", exact: true }).click(); await waitCount(created, 19);
-    expect((await s.saved(created)).state).toEqual(pastedState); await capture(page, info, "scope-paste-redo");
+    expect((await s.saved(created)).state).toEqual(pastedState); await showSequence(copiedGroup.nodeId);
+    await capture(page, info, "scope-paste-redo");
     const [copiedProducer, copiedConsumer, copiedPortable, copiedSwitch] = copiedGroup.structure!.payload.activities;
     const copiedCase = (copiedSwitch.structure!.payload.cases as { activity: Node; condition: { value: Binding } }[])[0];
     expect(copiedCase.activity.nodeId).not.toBe("case-consumer");
@@ -298,8 +316,26 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     await s.canvas(); await node(copiedGroup.nodeId).locator("..").getByRole("button", { name: /^Open Activities/ }).click();
     await s.select(copiedConsumer.nodeId); await expect(s.reference()).toContainText('"a.b"'); await expect(s.reference()).toContainText('""');
     await capture(page, info, "scope-copied-reference");
-    await s.select(copiedSwitch.nodeId); await capture(page, info, "switch-copied-condition");
-    await s.select(copiedPortable.nodeId); await capture(page, info, "portable-copied-preserved");
+    // The case condition lives in the Slots tab; the Inputs tab only points there.
+    const sections = page.getByLabel("Activity inspector sections", { exact: true });
+    await s.select(copiedSwitch.nodeId); await sections.getByRole("tab", { name: "Slots", exact: true }).click();
+    const condition = page.locator(".wf-slot-list .wf-data-reference-source");
+    await expect(condition).toContainText("Payload"); await expect(condition).toContainText("enabled");
+    // Today this editor names the scope by its raw id (#4827); update this pin when it shows the scope's label.
+    await expect(condition).toContainText(copiedGroup.nodeId);
+    await condition.scrollIntoViewIfNeeded(); await capture(page, info, "switch-copied-condition");
+    await sections.getByRole("tab", { name: "Inputs", exact: true }).click();
+    // The preserved body reads args.customer. Beside a canvas, keep its remapped producer, the copied Get Customer,
+    // in view; narrow layouts cannot show the canvas beside the inspector, so give the inspector the full width.
+    await s.select(copiedPortable.nodeId);
+    const source = page.locator(".wf-inspector-content .studio-code-editor-preview code");
+    await expect(source).toHaveText("args.customer.customerId");
+    const narrow = page.viewportSize()!.width <= 600;
+    if (narrow) await page.getByRole("button", { name: "Maximize inspector panel", exact: true }).click();
+    else { await node(copiedProducer.nodeId).scrollIntoViewIfNeeded(); await expect(node(copiedProducer.nodeId)).toBeInViewport(); }
+    await expect.poll(() => source.evaluate(code => code.scrollWidth <= code.clientWidth), { message: "Portable source is not truncated" }).toBe(true);
+    await capture(page, info, "portable-copied-preserved");
+    if (narrow) await page.getByRole("button", { name: "Restore inspector panel", exact: true }).click();
     const minimal = process.env.UX_ACTIVITY_DATA_COMPOSITION === "minimal";
     if (minimal) {
       const descriptors = await s.api<{ items: { type: string }[] }>("/expressions/descriptors");
