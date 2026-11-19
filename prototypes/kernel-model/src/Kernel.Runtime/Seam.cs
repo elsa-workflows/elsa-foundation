@@ -26,6 +26,16 @@ public interface IScopeHost
 }
 
 /// <summary>
+/// K1 slice 7: a host that checks, when the runtime starts it, that the runtime's scopes, its workers' placement count
+/// and its store's partitions agree. The count is fixed when the database is created; a runtime or a worker at another
+/// count would place work on partitions with no row, or leave some unserved. A mismatch refuses the start.
+/// </summary>
+public interface IScopeCount
+{
+    ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// One scope while layer 2 holds its fence. The runtime calls <see cref="RunAsync"/> one pass at a time and never on two
 /// nodes at once as far as it knows; disposing gives the scope up.
 /// </summary>

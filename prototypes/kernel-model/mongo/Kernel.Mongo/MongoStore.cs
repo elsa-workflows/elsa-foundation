@@ -61,6 +61,11 @@ public sealed class MongoStore : IKernelStore
     public IMongoDatabase Database { get; }
 
     /// <summary>Collections, indexes and the partition documents. Collections are created here, not inside a transaction.</summary>
+    /// <summary>The count the first open recorded, or the partition documents of a database from before the record.</summary>
+    public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) =>
+        await Database.GetCollection<BsonDocument>("meta").Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync(cancellationToken) is { } meta
+            ? meta["count"].ToInt32() : (int)await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+
     public async Task CreateAsync(int partitions = Defaults.ServerPartitions)
     {
         var existing = await (await Database.ListCollectionNamesAsync()).ToListAsync();

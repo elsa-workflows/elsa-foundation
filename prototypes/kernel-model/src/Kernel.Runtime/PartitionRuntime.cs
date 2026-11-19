@@ -40,11 +40,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     public int ScopeOf(InstanceRef actor) => actor.Partition;
 
-    public ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
+    public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
+        if (host is IScopeCount counted) await counted.CheckScopesAsync(partitions, cancellationToken);     // refuses a mismatch
         _host = host;
         Wake.Listen(actor => _ = Woken(actor));
-        return ValueTask.CompletedTask;
     }
 
     private async Task Woken(InstanceRef actor)

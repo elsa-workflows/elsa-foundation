@@ -79,6 +79,7 @@ internal static class WorkerSetChecks
         await LossNotQuiet(check);
         await NodeWithoutOwnedSets(check);
         await ProjectorRetry(check);
+        await CountsAgree(check);
     }
 
     // Review of #4817 (reviewer A): a projector round that throws is tried again, and the tail is projected. Five journal
@@ -592,6 +593,24 @@ internal static class WorkerSetChecks
         check(retaken == e0 + 1 && again == retaken + 1 && held && children.Distinct().Count() == children.Count
               && children.SequenceEqual([$"g0/child/0.{e0}.1", $"g1/child/1.{e1}.1", $"g0/child/0.{e0}.2", $"g0/child/0.{retaken}.1", $"g0/child/0.{again}.1"]),
             $"child ids stay unique across a lost-answer retake and a refused-fence reset: [{string.Join(", ", children)}]");
+    }
+    // K1 slice 7: the runtime's scopes, the workers' placement count and the store's partitions are checked together when
+    // the runtime starts a node's host; a store created at 64 with a runtime and workers at 1,024 is refused.
+    private static async Task CountsAgree(Action<bool, string> check)
+    {
+        async Task<string?> Start(int stored, int placed, int scopes)
+        {
+            var store = new InMemoryStore(stored, () => 100);
+            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => 100, Partitions = placed });
+            try { await new PartitionRuntime("a", store, scopes, TimeSpan.FromSeconds(3)).StartAsync(host); return null; }
+            catch (InvalidOperationException e) { return e.Message; }
+        }
+        var refused = await Start(64, 1024, 1024);
+        check(refused is not null && refused.Contains("1024 scopes") && refused.Contains("over 1024 partitions") && refused.Contains("has 64 partitions"),
+            $"a store at 64 with the runtime and workers at 1,024 is refused, naming the three counts ({refused ?? "started"})");
+        check(await Start(1024, 64, 1024) is not null, "workers at 64 under a runtime of 1,024 are refused");
+        check(await Start(1024, 1024, 1024) is null, "the runtime, the workers and the store at 1,024 start");
+        check(await Start(1024, 4, 4) is null, "a runtime and workers that place 4 of a store's 1,024 start (the simulation's worlds)");
     }
 }
 

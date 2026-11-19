@@ -7,8 +7,10 @@ namespace Kernel.Sim;
 /// answers them. The queue keeps every continuation on that thread and in order: an operation starts when the one before
 /// it has ended, inline. Nothing else changes: the host and its worker are the runtime's.
 /// </summary>
-public sealed class SerialHost(DurableHost host) : IScopeHost
+public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount
 {
+    public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) => host.CheckScopesAsync(scopes, cancellationToken);
+
     private Task _tail = Task.CompletedTask;
     private readonly Dictionary<int, SerialScope> _scopes = [];
 

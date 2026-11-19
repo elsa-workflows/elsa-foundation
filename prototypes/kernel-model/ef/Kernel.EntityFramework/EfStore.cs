@@ -284,6 +284,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     /// partitions (K1 slice 7), each with its own fence row, on a server database and on SQLite. Opening a database that
     /// has its rows already checks the count, and refuses another (definite).
     /// </summary>
+    /// <summary>The partition rows, written in one transaction when the database was created.</summary>
+    public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = create();
+        return await db.Partitions.CountAsync(cancellationToken);
+    }
+
     public async Task CreateAsync(int? partitions = null)
     {
         var count = partitions ?? (postgres ? Defaults.ServerPartitions : Defaults.SqlitePartitions);

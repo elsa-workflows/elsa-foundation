@@ -212,6 +212,9 @@ public interface IKernelStore : IMembership
     /// <summary>The store commits a batch over several virtual partitions all or nothing under their k fence rows. Default unavailable.</summary>
     bool OwnedSetsAvailable => false;
 
+    /// <summary>The partitions the database was created with (K1 slice 7), or null when the store does not say.</summary>
+    ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult<int?>(null);
+
     /// <summary>
     /// Take a set of virtual partitions. Each is taken, or left out, exactly as the one-partition take decides for it,
     /// with its own epoch and its own death count; the set need not be contiguous. <c>Now</c> is the store's time when a row was taken; when nothing was, a caller must not read it (the default adapter returns 0).
