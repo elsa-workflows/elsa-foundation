@@ -15,6 +15,8 @@ internal static class OwnedSetChecks
     [
         new("owned sets: a one-element set is today's one-partition take, poll, commit and release", Level.Required, OneElement),
         new("owned sets: one stale fence rolls the whole flush back; the kept partitions have no hole and no stranded mark", Level.Required, PartialStaleness, Partitions),
+        new("owned sets: a database created at 64 partitions refuses to open at 1,024, and opens at 64", Level.Required, ReopenAtAnotherCount, 64),
+        new("owned sets: a first open cut short after 40 of 64 partition rows is finished by an open at 64, and refused at 1,024", Level.Required, ReopenAfterCut, 64),
         new("owned sets: a release of a subset leaves the kept rows untouched", Level.Required, SubsetRelease, Partitions),
         new("owned sets: a take of a scattered set, and one poll over it", Level.Required, ScatteredTake, Partitions),
         new("owned sets: the k-row fence locks in ascending partition id", Level.Required, LockOrder, Partitions),
@@ -109,6 +111,55 @@ internal static class OwnedSetChecks
         Context.Equal(b!.Epoch, (await c.Row(3, "s3"))!.Seen, "seen mark in partition 3 at b's epoch");
     }
 
+    /// <summary>
+    /// The count is fixed when the database is created (K1 slice 7). A database of 64 partitions opened at the default
+    /// 1,024 would address partitions 64 to 1,023, which have no row, so it is refused, definitely, naming both counts.
+    /// Nothing is migrated: no data exists before release, so a database is recreated.
+    /// </summary>
+    private static async Task ReopenAtAnotherCount(Context c)
+    {
+        if (c.Provided.Reopen is not { } reopen) throw new SkipException("the store has no database to reopen");
+        await c.S.AddAsync(Make.M("kept", 63));
+        try
+        {
+            await reopen(VirtualPartitions.Small);
+            throw new ConformanceException("a database of 64 partitions opened at 1,024");
+        }
+        catch (StoreException e)
+        {
+            Context.Equal(Failure.Definite, e.Failure, "the failure of an open at another count");
+            Context.That(e.Message.Contains("64") && e.Message.Contains("1024"), $"the refusal does not name both counts: {e.Message}");
+        }
+        await reopen(64);
+        Context.Equal("kept", string.Join(" ", (await c.S.PollAsync(63, (await c.Take(63)).Epoch, TimeSpan.Zero, 10)).Messages.Select(m => m.Message.Id)), "partition 63 after the open at 64");
+    }
+
+    /// <summary>
+    /// A store that writes its partition rows one at a time (Mongo) records the count first, so an open cut short after
+    /// some rows is finished by the next open at the same count, and refused at another. EF writes them in one
+    /// transaction, so the case does not apply there.
+    /// </summary>
+    private static async Task ReopenAfterCut(Context c)
+    {
+        if (c.Provided.Reopen is not { } reopen || c.Provided.CutPartitionRows is not { } cut) throw new SkipException("the store writes its partition rows in one transaction");
+        await cut(40);
+        try
+        {
+            await reopen(VirtualPartitions.Small);
+            throw new ConformanceException("a database created for 64 partitions, with 40 written, opened at 1,024");
+        }
+        catch (StoreException e) { Context.Equal(Failure.Definite, e.Failure, "the failure of an open at another count after a cut"); }
+        // The count a node's start reads counts as configured only once every partition row exists.
+        var incomplete = "";
+        try { incomplete = $"gave {await c.S.PartitionCountAsync()}"; }
+        catch (StoreException e) { incomplete = e.Failure == Failure.Definite && e.Message.Contains("Initialization incomplete", StringComparison.Ordinal) ? "" : e.Message; }
+        Context.Equal("", incomplete, "the partition count of a database whose first open was cut short");
+        await reopen(64);
+        Context.Equal((int?)64, await c.S.PartitionCountAsync(), "the partition count after the open at 64 finished the rows");
+        await c.S.AddAsync(Make.M("late", 63));
+        Context.Equal("late", string.Join(" ", (await c.S.PollAsync(63, (await c.Take(63)).Epoch, TimeSpan.Zero, 10)).Messages.Select(m => m.Message.Id)), "partition 63 after the open at 64 finished the rows");
+    }
+
     private static async Task SubsetRelease(Context c)
     {
         Require(c);
@@ -157,7 +208,14 @@ internal static class OwnedSetChecks
         var b = await c.S.TakeAsync([0, 1, 2, 4, 7], "b", Context.Long);
         Context.Equal("0 2 7", string.Join(" ", Ids(b)), "b's take leaves out a's partitions");
 
-        foreach (var (id, p) in new[] { ("m6", 6), ("m2", 2), ("m1", 1), ("m4", 4), ("n1", 1) }) await c.S.AddAsync(Make.M(id, p));
+        // A set poll merges its partitions in the store's sequence. Mongo's comes from each partition's clock in
+        // milliseconds (MONGO.md), so two adds to two partitions in one millisecond tie and may come in either order; the
+        // contract orders across partitions only to the store's tick, so these adds are a few milliseconds apart.
+        foreach (var (id, p) in new[] { ("m6", 6), ("m2", 2), ("m1", 1), ("m4", 4), ("n1", 1) })
+        {
+            await c.S.AddAsync(Make.M(id, p));
+            await Task.Delay(3);
+        }
         var polled = await c.S.PollAsync(a.Taken, TimeSpan.Zero, 100);
         // Each row is compared with its own partition's epoch: p1, seen at 1's earlier epoch, is due again.
         Context.Equal("p1 m6 m1 m4 n1", string.Join(" ", polled.Messages.Select(m => m.Message.Id)), "one poll over a's set, in seq order");

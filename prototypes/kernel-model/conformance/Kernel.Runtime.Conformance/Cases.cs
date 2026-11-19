@@ -6,7 +6,8 @@ namespace Kernel.Runtime.Conformance;
 /// <param name="Setup">The case's own timing or partitions; the suite's default otherwise.</param>
 /// <param name="OwnedSet">The case reads the node's one worker (K1 D1): it runs only for a runtime with <see cref="IRuntimeProvider.OneWorkerPerNode"/>.</param>
 /// <param name="Placement">The case tests this placement: it runs only for a runtime that places scopes so (<see cref="IRuntimeProvider.Placement"/>).</param>
-public sealed record RuntimeCase(string Name, Level Level, Func<Harness, Task> Body, HarnessSetup? Setup = null, bool Fence = false, bool OwnedSet = false, Placement? Placement = null);
+/// <param name="AnyCount">The case holds at any partition count (semantic <c>--partitions</c>); false for one that names the partitions of its count.</param>
+public sealed record RuntimeCase(string Name, Level Level, Func<Harness, Task> Body, HarnessSetup? Setup = null, bool Fence = false, bool OwnedSet = false, Placement? Placement = null, bool AnyCount = true);
 
 /// <param name="Caught">The case failed on what the fence guards (a check that throws <see cref="FenceException"/>, or a violation of invariant 1 or of the store's ghosts), not on a precondition or a timeout.</param>
 public sealed record RuntimeOutcome(RuntimeCase Case, bool Passed, string Detail, TimeSpan Took, bool Caught = false);
@@ -25,6 +26,10 @@ public static class Cases
     public static readonly HarnessSetup Default = new(4, new RuntimeTiming(TimeSpan.FromMilliseconds(800), TimeSpan.FromMilliseconds(400)));
 
     private static readonly TimeSpan Slack = TimeSpan.FromSeconds(3);
+
+    // K1 slice 7: a takeover above 1,024 partitions takes longer than the bounds were set for (a crash at 4,096 settles in
+    // minutes, slice 8 measures why), so the settling bounds and a case's time grow with the count above 1,024.
+    private static TimeSpan Scaled(int partitions, TimeSpan bound) => partitions > 1024 ? bound * (partitions / 1024.0) : bound;
 
     private static HarnessSetup WithPoll(TimeSpan poll) => Default with { Timing = Default.Timing with { PollInterval = poll } };
 
@@ -54,12 +59,12 @@ public static class Cases
             var now = Holders(h);
             if (now != seen) (seen, since) = (now, Stopwatch.StartNew());
             return h.Settled() && since.Elapsed >= h.Lease / 2;
-        }, h.Lease * 4 + Slack), $"the holders did not stay put for two balancing rounds: {Holders(h)}");
+        }, Scaled(h.Partitions, h.Lease * 4 + Slack)), $"the holders did not stay put for two balancing rounds: {Holders(h)}");
     }
 
     private static async Task Settle(Harness h, string what = "every scope held by exactly one node")
     {
-        That(await h.WaitAsync(h.Settled, h.Lease * 4 + Slack), $"not {what} in time: {Holders(h)}");
+        That(await h.WaitAsync(h.Settled, Scaled(h.Partitions, h.Lease * 4 + Slack)), $"not {what} in time: {Holders(h)}");
     }
 
     private static async Task<bool> Finished(Harness h, string id, TimeSpan within) =>
@@ -149,7 +154,8 @@ public static class Cases
             });
             That(await Harness.WaitAsync(async () => (await h.RowAsync(id)) is { } row && Json.Read<CounterState>(row.State).Tokens.Count >= 3, Slack),
                 $"{a.Name} handled none of partition 0's messages before the crash");
-            var held = Enumerable.Range(0, h.Partitions).Where(p => h.Watcher.Holders(h.Partitions)[p].Contains(a.Name)).ToList();
+            var holders = h.Watcher.Holders(h.Partitions);       // once: it reads every watched activation
+            var held = Enumerable.Range(0, h.Partitions).Where(p => holders[p].Contains(a.Name)).ToList();
             var killing = Stopwatch.StartNew();
             var killedAt = Environment.TickCount64;
             await h.KillAsync(a);
@@ -165,8 +171,18 @@ public static class Cases
                     That(h.StoreOf(a.Name).ReleaseBegan(p) is { } began && began < killedAt, $"the killed node gave partition {p} up: a crash gives nothing up");
             await adding;
             await Settle(h, "every scope taken over");
-            await Applied(h, 0, "c", tokens, h.Lease * 3 + Slack);
+            Console.WriteLine($"         takeover: {held.Count} of {h.Partitions} scopes held by the crashed node, settled {Environment.TickCount64 - killedAt} ms after the kill");
+            await Applied(h, 0, "c", tokens, Scaled(h.Partitions, h.Lease * 3 + Slack));
         }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(6) } }),
+
+        new("count: a node whose workers place another count than its store and runtime is refused at its start", Level.Required, async h =>
+        {
+            string? refused = null;
+            try { await h.StartAsync(); }
+            catch (Exception e) { refused = e.ToString(); }
+            That(refused?.Contains("The partition counts disagree", StringComparison.Ordinal) == true, $"the node started, or failed otherwise: {refused ?? "started"}");
+            That(h.Watcher.Holders(h.Partitions).All(n => n.Count == 0), $"a scope was activated: {Holders(h)}");
+        }, Default with { WorkerPartitions = 8 }, OwnedSet: true, AnyCount: false),
 
         new("stop: a stopped node's scopes are taken over before its lease would have run out", Level.Reference, async h =>
         {
@@ -249,7 +265,7 @@ public static class Cases
                 $"gaining 1 and 3 changed the epochs of 0 and 2 (before {kept}): [{string.Join(", ", worker.Fences)}]");
             foreach (var p in Enumerable.Range(0, 4)) await h.AddAsync(Token(p, "c", "t" + p));
             foreach (var p in Enumerable.Range(0, 4)) await Applied(h, p, "c", p % 2 == 0 ? ["s" + p, "t" + p] : ["t" + p], Slack);
-        }, OwnedSet: true),
+        }, OwnedSet: true, AnyCount: false),
 
         new("owned set: a node hands part of its set over, and keeps the rest as it was", Level.Required, async h =>
         {
@@ -274,7 +290,7 @@ public static class Cases
                 $"memory after the hand-over of {string.Join(" ", moved)}: [{string.Join(" ", memory)}]");
             foreach (var p in Enumerable.Range(0, 4)) await h.AddAsync(Token(p, "c", "m" + p));
             foreach (var p in Enumerable.Range(0, 4)) await Applied(h, p, "c", ["k" + p, "m" + p], Slack);
-        }, OwnedSet: true, Placement: Placement.Balancer),
+        }, OwnedSet: true, AnyCount: false, Placement: Placement.Balancer),
 
         new("owned set: the runtime moves one of a node's scopes while a flush over several is in flight", Level.Required, async h =>
         {
@@ -307,7 +323,7 @@ public static class Cases
                 $"memory after the move of 2: [{string.Join(" ", memory)}]");
             foreach (var p in Enumerable.Range(0, 4)) await h.AddAsync(Token(p, "c", "g" + p));
             foreach (var p in Enumerable.Range(0, 4)) await Applied(h, p, "c", p % 2 == 0 ? ["f" + p, "g" + p] : ["k" + p, "g" + p], Slack);
-        }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(4) } }, OwnedSet: true, Placement: Placement.Runtime),
+        }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(4) } }, OwnedSet: true, AnyCount: false, Placement: Placement.Runtime),
 
         new("owned set: partitions join and leave the set between flushes, never during one", Level.Required, async h =>
         {
@@ -338,7 +354,7 @@ public static class Cases
             await h.AddAsync(Token(3, "c", "g3"));
             await Applied(h, 0, "c", ["f0"], Slack);
             await Applied(h, 3, "c", ["g3"], Slack);
-        }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(4) } }, OwnedSet: true),
+        }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(4) } }, OwnedSet: true, AnyCount: false),
 
         new("balance: a join and a leave move the fewest partitions", Level.Required, async h =>
         {
@@ -414,7 +430,7 @@ public static class Cases
         }),
     ];
 
-    public static async Task<List<RuntimeOutcome>> RunAsync(IRuntimeProvider runtime, IStoreProvider store, bool brokenFence = false, Func<RuntimeCase, bool>? filter = null, TextWriter? output = null)
+    public static async Task<List<RuntimeOutcome>> RunAsync(IRuntimeProvider runtime, IStoreProvider store, bool brokenFence = false, Func<RuntimeCase, bool>? filter = null, TextWriter? output = null, int? partitions = null)
     {
         output ??= Console.Out;
         var outcomes = new List<RuntimeOutcome>();
@@ -425,19 +441,22 @@ public static class Cases
             var caught = false;
             try
             {
-                await using var harness = await Harness.CreateAsync(runtime, store, (@case.Setup ?? Default) with { BrokenFence = brokenFence });
+                var setup = @case.Setup ?? Default;
+                if (partitions is { } count && @case.AnyCount && setup.Partitions == Default.Partitions) setup = setup with { Partitions = count };     // a case that chose its own count keeps it
+                var timeout = Scaled(setup.Partitions, Timeout);
+                await using var harness = await Harness.CreateAsync(runtime, store, setup with { BrokenFence = brokenFence });
                 try
                 {
-                    await @case.Body(harness).WaitAsync(Timeout);
+                    await @case.Body(harness).WaitAsync(timeout);
                     if (@case.Level == Level.Required) await EndAsync(harness);
                 }
                 catch (FenceException e) { (failure, caught) = (e.Message, true); }
                 catch (ConformanceException e) { failure = e.Message; }
-                catch (TimeoutException) { failure = $"the case did not end within {Timeout.TotalSeconds} s"; }
+                catch (TimeoutException) { failure = $"the case did not end within {timeout.TotalSeconds} s"; }
                 catch (Exception e) { failure = $"threw {e.GetType().Name}: {e.Message}"; }      // the teardown and the checks below still run
                 // What the nodes do on their way out is checked too. A stop that hangs fails the case, not the suite.
-                try { await harness.StopAllAsync().WaitAsync(Timeout); }
-                catch (TimeoutException) { failure ??= $"stopping the nodes did not end within {Timeout.TotalSeconds} s"; }
+                try { await harness.StopAllAsync().WaitAsync(timeout); }
+                catch (TimeoutException) { failure ??= $"stopping the nodes did not end within {timeout.TotalSeconds} s"; }
                 var wrong = harness.Violations();
                 if (failure is null && wrong.Count > 0) failure = string.Join("; ", wrong.Take(5));
                 caught |= wrong.Any(w => w.StartsWith("I1 ", StringComparison.Ordinal) || w.StartsWith("GHOST ", StringComparison.Ordinal));

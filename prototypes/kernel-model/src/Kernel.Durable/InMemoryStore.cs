@@ -99,6 +99,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     public bool OwnedSetsAvailable => true;
 
+    public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => new(Partitions.Length);
+
     /// <summary>For tests: called with each fence row's partition as a commit locks it, in the order it locks them.</summary>
     public Action<int>? Locking { get; set; }
 

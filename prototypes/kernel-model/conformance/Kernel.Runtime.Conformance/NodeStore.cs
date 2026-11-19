@@ -13,7 +13,8 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
-    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set take and release go through this wrapper's own calls; the set poll is one call
+    public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => inner.PartitionCountAsync(cancellationToken);
     private readonly object _lock = new();
     private TaskCompletionSource? _stall;
     private long _until;                    // when the stall ends, on Environment.TickCount64
@@ -194,6 +195,12 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     {
         Interlocked.Increment(ref _polls);
         return Call(() => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken));
+    }
+    /// <summary>A set poll is one call, as on a SQL store; it still counts one poll per partition, for the cost run's column.</summary>
+    public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Add(ref _polls, owned.Count);
+        return Call(() => inner.PollAsync(owned, horizon, limit, cancellationToken));
     }
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => Call(() => inner.AddAsync(message, cancellationToken));
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => Call(() => inner.AddEventAsync(delivery, cancellationToken));

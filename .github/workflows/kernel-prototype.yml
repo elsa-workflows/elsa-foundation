@@ -5,7 +5,7 @@ name: Kernel prototype
 # tools/ci/affected_tests.py). This workflow is the prototype's own gate:
 #
 #   - pull request: a fast gate, the deterministic simulation at a small size plus both mutation checks, the in-memory
-#     store conformance and the graph engine corpus. Target: well under 10 minutes.
+#     store conformance and the graph engine corpus. Target: well under its 20-minute timeout.
 #   - nightly: the larger simulation sizes, the runtime and store conformance (built-in runtime, Orleans adapter,
 #     EF on SQLite in both fence modes) and the native smoke and cost runs.
 #
@@ -52,7 +52,7 @@ jobs:
     name: Kernel prototype gate
     if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft || github.event_name == 'workflow_dispatch' && inputs.suite == 'gate' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: prototypes/kernel-model
@@ -82,6 +82,8 @@ jobs:
             dotnet build "$p" -c Release --no-restore
           done
 
+      # K1 slice 7: the sim's --count only sizes the store's rows, so the gate runs the default, 1,024. The nightly's
+      # count-4096 job runs the integrated runtime suite at 4,096.
       - name: Simulation, kernel and native, plus the lease witness
         run: |
           SIM="dotnet sim/$BIN/Kernel.Sim.dll"
@@ -99,15 +101,16 @@ jobs:
           dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
 
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
-      # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 6946, a seed that has drifted before, so a smaller
-      # size would sit too close to it. Every kernel mutation is caught except the two FINDINGS documents as caught only
+      # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 3208 (6946 before K1 slice 7's set worlds), a seed
+      # that has drifted before, so a smaller size would sit too close to it. The native check runs 12,000 seeds:
+      # FreshTurnSwapsLoopKeys is first caught at seed 3589 since slice 7 (NATIVE.md), and the gate keeps three times that. Every kernel mutation is caught except the two FINDINGS documents as caught only
       # with the rule that covers them. --expect-total pins the number of mutations, the two flag combinations included, so one dropped or added fails.
       - name: Mutation checks
         run: |
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 43 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
-            dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 10000
+            dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 12000
 
       - name: Store conformance, in memory
         run: dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll semantic
@@ -189,8 +192,10 @@ jobs:
           RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
           ORC="dotnet runtime/Kernel.Runtime.Orleans.Conformance/$BIN/Kernel.Runtime.Orleans.Conformance.dll"
           $RTC semantic
+          $RTC semantic --partitions 1024
           $RTC stress 20 2000
           $ORC semantic
+          $ORC semantic --partitions 1024
           $ORC stress 20 2000
 
       # The -broken forms break the store's fence on purpose; the runner decides whether the runtime failed as it must.
@@ -211,3 +216,47 @@ jobs:
 
       - name: Graph engine corpus
         run: dotnet test models/Graph.Tests -c Release --no-build
+
+  # K1 slice 7: the count of 4,096. The sim's --count only sizes the store's rows (PARTITIONS.md, slice 7), so it runs
+  # here at reduced seeds; the integrated runtime suite qualifies 4,096 end to end. Estimate on a 4-core runner: build
+  # 3 min, the two sims 4 min, the runtime suite at 4,096 about 3 min (49 s on 15 cores).
+  nightly-4096:
+    name: Kernel prototype nightly, 4,096 virtual partitions
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'nightly' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      - name: Build
+        run: |
+          for p in sim conformance/Kernel.Runtime.Conformance.Run; do
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
+          done
+
+      - name: Simulation at 4,096, kernel and native
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --seeds 20000 --count 4096
+          $SIM --native --seeds 20000 --count 4096
+
+      - name: Runtime conformance at 4,096, built-in runtime
+        run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096

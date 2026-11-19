@@ -4,7 +4,7 @@ namespace Kernel.Runtime.Conformance;
 
 /// <summary>
 /// The suite's command line, for a runtime's own runner:
-/// <c>semantic [filter]</c>, <c>semantic-broken [filter]</c>, <c>stress [seconds] [messages]</c>, <c>stress-broken [seconds] [messages]</c>,
+/// <c>semantic [filter] [--partitions N]</c>, <c>semantic-broken [filter]</c>, <c>stress [seconds] [messages]</c>, <c>stress-broken [seconds] [messages]</c>,
 /// <c>cost [partitions] [seconds] [tokens]</c> (<see cref="RuntimeCost"/>).
 /// The <c>-broken</c> forms break the store's fence on purpose: the fence's cases and the stress test must then fail,
 /// which shows that the runtime really did activate a scope twice at once.
@@ -16,7 +16,20 @@ public static class Cli
         switch (args)
         {
             case ["semantic", .. var rest]:
-                var outcomes = await Cases.RunAsync(runtime, store, filter: Filter(rest));
+                // K1 slice 7: --partitions runs the cases written for the default count at another, such as the 1,024.
+                // The flag and its operand are one option; a missing or non-integer operand is a usage error.
+                int? partitions = null;
+                if (Array.IndexOf(rest, "--partitions") is >= 0 and var at)
+                {
+                    if (at + 1 >= rest.Length || !int.TryParse(rest[at + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var count))
+                    {
+                        Console.Error.WriteLine(Usage);
+                        return 2;
+                    }
+                    partitions = count;
+                    rest = [.. rest.Where((_, i) => i != at && i != at + 1)];
+                }
+                var outcomes = await Cases.RunAsync(runtime, store, filter: Filter(rest), partitions: partitions);
                 if (outcomes.Count == 0) Console.Error.WriteLine("no case matches the filter");
                 return outcomes.Count == 0 || outcomes.Any(o => !o.Passed && o.Case.Level == Level.Required) ? 1 : 0;
             case ["semantic-broken", .. var rest]:
@@ -39,10 +52,12 @@ public static class Cli
                 int Arg(int i, int otherwise) => rest.Length > i ? int.Parse(rest[i], CultureInfo.InvariantCulture) : otherwise;
                 return await RuntimeCost.RunAsync(runtime, store, partitions: Arg(0, 16), seconds: Arg(1, 10), tokens: Arg(2, 400));
             default:
-                Console.Error.WriteLine("semantic [filter] | semantic-broken [filter] | stress [seconds] [messages] | stress-broken [seconds] [messages] | cost [partitions] [seconds] [tokens]");
+                Console.Error.WriteLine(Usage);
                 return 2;
         }
     }
+
+    private const string Usage = "semantic [filter] [--partitions N] | semantic-broken [filter] | stress [seconds] [messages] | stress-broken [seconds] [messages] | cost [partitions] [seconds] [tokens]";
 
     private static Func<RuntimeCase, bool>? Filter(string[] rest) => rest.Length == 0 ? null : c => c.Name.Contains(rest[0], StringComparison.OrdinalIgnoreCase);
 }

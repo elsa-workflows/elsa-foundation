@@ -394,6 +394,92 @@ The follow-ups that slice 2a recorded for this slice:
   and a per-scope host (a store without owned sets) still needs that. So the change needs the seam to say that one wake
   covers a node's set, which is a seam decision to take before anyone builds it.
 
+### K1 slice 7: the flip to 1,024, and the simulation's set worlds
+
+- **The flip.** `VirtualPartitions.Provisional` is `Small`, 1,024. `Defaults.ServerPartitions` and
+  `Defaults.SqlitePartitions` are that count (they were 64 and 1), so `EfStore.CreateAsync`, `MongoStore.CreateAsync` and
+  the Orleans adapter create and place 1,024 virtual partitions by default, each with its fence row and journal. On
+  SQLite one node owns them all as one set. Nothing is rehashed: an address embeds its virtual partition, and the count
+  is fixed when the database is created. A deployment on `commit=ef`, which has no owned sets, gets a worker per
+  partition, so it passes a smaller count.
+- **The count is checked, never migrated** (CodeRabbit on #4819; no data exists before release, so a database is
+  recreated):
+  - `EfStore.CreateAsync` and `MongoStore.CreateAsync` refuse, definitely, to open a database at a count other than
+    the one it was created with, naming both. Mongo writes its partition documents one at a time, so its first open
+    records the count first, and an open cut short is finished by the next open at the same count. Until every
+    partition document exists, the count a node's start reads refuses ("initialization incomplete"). EF writes its rows
+    in one transaction.
+  - `IKernelStore.PartitionCountAsync` gives that count. When the built-in runtime or the Orleans adapter starts a
+    node's host (`DurableHost.ForNode`, `IScopeCount`), the runtime's scopes must equal `WorkerOptions.Partitions`,
+    which spread placement hashes over, and both must equal the store's count: fewer would leave partitions, and
+    perhaps their work, unserved. A mismatch refuses the start, naming the three counts. `ForNode` takes the count as
+    an explicit argument, and refuses options that say another. Only the simulation's worlds place fewer than the
+    store has, behind `ForNode`'s explicit `placesPart`.
+  - The guard protects developer-local prototype databases, which are regenerated; anything further on it is K4's
+    provider schema work.
+- **Set worlds.** `sim --count 1024|4096` (1,024 by default) gives the world's store a fence row and a journal for each
+  of the count's virtual partitions. The world places four of them on its two or three nodes. Each node runs one worker
+  for its owned set, through `DurableHost.ForNode`, as the built-in runtime does. Its takes and give-ups name a partition
+  and go through the node's `PartitionRuntime`, its flushes span the partitions they touch under the k-row fence, and a
+  trial group may span the set. Every seventh seed runs a worker per partition, as on a store without owned sets, so
+  both host shapes stay under the mutations. Two pieces of the world are the simulation's only:
+  - `SerialHost` queues the host's activations, passes and give-ups in the order layer 1 asks. The host runs them one
+    at a time under a lock, and a contended `SemaphoreSlim` resumes its waiter on the thread pool. The simulation is one
+    thread, so the queue keeps every continuation on it.
+  - `Placed` cuts the heartbeat's free partitions to the four the world places, so the fair share is of those. The
+    other partitions stay free, and nothing asks for them.
+- **The sim's `--count` only sizes the store's rows.** Every world places partitions 0 to 3. Spread placement
+  (children, event starts, correlation instances) hashes over those four, and nothing in the kernel reads the count
+  except the store's rows and the heartbeat's free list. So at 4,096 every seed runs exactly as at 1,024: the two
+  `--coverage` runs of 10,000 seeds agree to the unit, and so do the native runs. Scattered ids would need new
+  mechanism in spread placement and in the count guard, and K1 does not need them. **4,096 is qualified end to end by
+  the integrated runtime suite** (`semantic --partitions 4096`, built-in runtime, below). The PR gate runs the sim at
+  1,024 only; the nightly runs it at 4,096 too, at reduced seeds, in a job of its own with the runtime suite.
+- **Multi-partition flushes.** In 10,000 seeds of 300 actions, at either count: 289,891 commits over several partitions
+  landed fenced; 242 had part of their fences stale and 38 all of them, and each was refused whole.
+- **Checks moved to per-partition epochs** (#4813's list):
+  - I16 reads the epoch of the instance's own partition.
+  - I14's "alone" half gathers the trial rows of every partition the process holds at its current epoch. The first
+    set worlds failed it falsely: a trial group of a set may span two partitions, and the check looked for the instance
+    among the trial rows of each partition alone.
+  - I9 and I3 (`Memory`) check what a worker holds of each partition it holds at its current epoch, and skip the rest.
+  - The fair-share check reads `Holds(p)` and `EpochOf(p)`.
+  - The wire sends a set poll as one call (it went through the interface's default, one call per partition), and
+    counts takes per partition for the outbound sendings it gives back after a failed commit.
+- **Mutations.** Every one of the 43 keeps its verdict at `--seeds 20000`. `TrialPerPartition` (a worker's own gate) is
+  caught at seed 7, a seed with a worker per partition: under one worker per node it changes nothing, because the gate
+  is already the node's. `NoWriteFirst` is caught at seed 3208, earlier than 6946.
+- **The sim's counters against main.** The set worlds change every seed's schedule, so the sweep's counters differ
+  from main's (for example "owners lost", the native "finished instances matched"). They are not comparable seed for
+  seed: a node is one actor now, four partitions spread the traffic thinner, and one worker serves a node's set. In the
+  native mutations `FreshTurnSwapsLoopKeys` is first caught at seed 3589, against 269 on main, for the same reason
+  (NATIVE.md); the PR gate runs the native mutations at 12,000 seeds to keep three times that.
+- **Runtime conformance at 1,024.** `semantic --partitions 1024` runs the cases written for the default count of 4 at
+  1,024. The owned-set cases name the partitions of their count and keep it. The built-in runtime passes 16 of 16 in
+  about 41 s, and the Orleans adapter 14 required cases in about 40 s, with the reference case "join" differing as it
+  does at 4: Orleans' placement does not move grains to a node that joins.
+- **Runtime conformance at 4,096** (built-in runtime). The case "crash: a crashed node's scopes are taken over" did not
+  end within 120 s in review (it takes 17 s at 1,024 and 33 s at 2,048). Above 1,024 a case's settling bounds and its
+  time now grow with the count, so it records the takeover instead of failing, and the crash case logs how long the
+  takeover took. That time was the harness's: the case read its holder list once per partition, and each read scanned
+  every activation per scope, cubic in the count, slow enough that a live node's lease lapsed ("the killed node gave
+  partition 0 up"). The watcher now groups the activations by scope in one pass, and the case reads the list once
+  (slice 8's fix, cherry-picked). Run here three times: 17 of 17 passed in 48 to 49 s, and the crash case alone three
+  more times in 14 s; its takeover (2,048 of 4,096 scopes) settles 7.4 to 7.6 s after the kill, the 6 s lease running
+  out and a balancing round.
+- **A runtime-suite case for the count check** ("count: a node whose workers place another count than its store and
+  runtime is refused at its start") runs on the built-in runtime and the Orleans adapter. The runtime suite's watcher
+  passes the check through to layer 2's host, and a store that does not say its count is refused too.
+- **Recorded for slice 8:**
+  - `RuntimeNode` reads every scope's due time each round: 1,024 cheap reads per round. It runs one worker pass per
+    round (slice 5a's one-pass rule).
+  - The Orleans keeper calls every grain every `KeepEvery`: 1,024 grain calls per silo per round, with no store call.
+  - A node that starts with 1,024 free partitions takes them one at a time (slice 5a).
+- **Settled: Mongo's millisecond tie** (#4815, review A's Nit 4). Mongo's sequence comes from each partition's clock,
+  so a set poll orders rows of two partitions added in one millisecond either way. The contract orders across
+  partitions only to the store's tick, and the scattered-take case now adds its rows a few milliseconds apart. Nothing
+  in the Worker or the simulation's checks depends on the order across partitions: an instance lives in one partition.
+
 ## Placement and rebalance (`sim --placement-check`)
 
 - `VirtualPartitions.Of(name, count)` is the hash of today, so an address embeds its virtual partition as it embeds
@@ -493,8 +579,8 @@ The decisions that were the owner's, with what the numbers said:
 
 - **Fence granularity: (i), one fence row per virtual partition,** conditional on round 5 B sending the checked fence
   as one multi-row statement. **That multi-row checked fence is now in B's scope.**
-- **Count: 1,024 virtual partitions.** The code keeps `VirtualPartitions.Provisional = 4096` as written on 15 November
-  (no code changed in this round's documentation fix); the Worker refactor to range ownership will use 1,024.
+- **Count: 1,024 virtual partitions.** The code kept `VirtualPartitions.Provisional = 4096` as written on 15 November
+  (no code changed in this round's documentation fix); K1 slice 7 set it to 1,024.
 - Decisions 4 and 5 above (rebalance strategy; when the Worker refactor happens) stayed open on 16 November. The owner
   answered them on 17 November:
   - **Rebalance strategy: fewest moves.** A node's partitions may be scattered, which costs nothing with a fence per

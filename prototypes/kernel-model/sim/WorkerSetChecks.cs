@@ -79,6 +79,7 @@ internal static class WorkerSetChecks
         await LossNotQuiet(check);
         await NodeWithoutOwnedSets(check);
         await ProjectorRetry(check);
+        await CountsAgree(check);
     }
 
     // Review of #4817 (reviewer A): a projector round that throws is tried again, and the tail is projected. Five journal
@@ -87,7 +88,7 @@ internal static class WorkerSetChecks
     {
         const long time = 100;
         var store = new InMemoryStore(1, () => time);
-        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 1 });
+        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), 1, new() { Monotonic = () => time, Partitions = 1 });
         var scope = (await host.ActivateAsync(0))!;
         for (var i = 0; i < 5; i++) await store.AddAsync(Add(InstanceRef.In(0, "c" + i), "t" + i));
         await scope.WokenAsync(null);
@@ -113,7 +114,7 @@ internal static class WorkerSetChecks
         const long time = 100;
         var store = new InMemoryStore(2, () => time);
         var wire = new DelayedCommit(store) { WithoutOwnedSets = true };
-        var host = DurableHost.ForNode("e", wire, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 2 });
+        var host = DurableHost.ForNode("e", wire, new WorkflowInstance([new Counter()]), 2, new() { Monotonic = () => time, Partitions = 2 });
         var (zero, one) = ((await host.ActivateAsync(0))!, (await host.ActivateAsync(1))!);
         var epoch = store.Partitions[1].Epoch;
         await one.DisposeAsync();
@@ -138,7 +139,7 @@ internal static class WorkerSetChecks
     {
         const long time = 100;
         var store = new InMemoryStore(4, () => time);
-        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 4, PollLimit = 1 });
+        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), 4, new() { Monotonic = () => time, Partitions = 4, PollLimit = 1 });
         var worker = host.NodeWorker!;
         var scopes = new IScopeActivation?[4];
         foreach (var p in new[] { 0, 2, 3 }) scopes[p] = await host.ActivateAsync(p);
@@ -170,7 +171,7 @@ internal static class WorkerSetChecks
         {
             var store = new InMemoryStore(3, () => time);
             before?.Invoke(store);
-            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter(), new Ticker(TimeSpan.FromSeconds(1)), new Suspending(gate.Task)]), new() { Monotonic = () => time, Partitions = 3 });
+            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter(), new Ticker(TimeSpan.FromSeconds(1)), new Suspending(gate.Task)]), 3, new() { Monotonic = () => time, Partitions = 3 });
             return (store, host, [(await host.ActivateAsync(0))!, (await host.ActivateAsync(1))!, (await host.ActivateAsync(2))!]);
         }
         void Fallback(string what, InMemoryStore store, Worker worker, IReadOnlyList<PartitionFence> held, string detail) =>
@@ -225,7 +226,7 @@ internal static class WorkerSetChecks
         long time = 0;
         var store = new InMemoryStore(2, () => time);
         var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]),
-            new() { Monotonic = () => time, Partitions = 2, Lease = TimeSpan.FromSeconds(120), Horizon = TimeSpan.FromSeconds(60) });
+            2, new() { Monotonic = () => time, Partitions = 2, Lease = TimeSpan.FromSeconds(120), Horizon = TimeSpan.FromSeconds(60) });
         var (a, b) = ((await host.ActivateAsync(0))!, (await host.ActivateAsync(1))!);
         var timer = InstanceRef.In(1, "t");
         await store.AddAsync(Add(timer, "due", due: 30_000));
@@ -251,7 +252,7 @@ internal static class WorkerSetChecks
         var store = new InMemoryStore(4, () => time);
         var job = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter(), new Runner((_, _) => new ValueTask<object?>(job.Task))]),
-            new() { Monotonic = () => time, Partitions = 4 });
+            4, new() { Monotonic = () => time, Partitions = 4 });
         var worker = host.NodeWorker!;
         var scopes = new IScopeActivation?[4];
         foreach (var p in new[] { 0, 2, 3 }) scopes[p] = await host.ActivateAsync(p);
@@ -592,6 +593,29 @@ internal static class WorkerSetChecks
         check(retaken == e0 + 1 && again == retaken + 1 && held && children.Distinct().Count() == children.Count
               && children.SequenceEqual([$"g0/child/0.{e0}.1", $"g1/child/1.{e1}.1", $"g0/child/0.{e0}.2", $"g0/child/0.{retaken}.1", $"g0/child/0.{again}.1"]),
             $"child ids stay unique across a lost-answer retake and a refused-fence reset: [{string.Join(", ", children)}]");
+    }
+    // K1 slice 7: the runtime's scopes, the workers' placement count and the store's partitions are checked together when
+    // the runtime starts a node's host; a store created at 64 with a runtime and workers at 1,024 is refused.
+    private static async Task CountsAgree(Action<bool, string> check)
+    {
+        async Task<string?> Start(int stored, int placed, int scopes, bool part = false, int? waiting = null)
+        {
+            var store = new InMemoryStore(stored, () => 100);
+            if (waiting is { } p) await store.AddAsync(Add(InstanceRef.In(p, "late"), "t"));
+            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), placed, new() { Monotonic = () => 100, Partitions = placed }, placesPart: part);
+            try { await new PartitionRuntime("a", store, scopes, TimeSpan.FromSeconds(3)).StartAsync(host); return null; }
+            catch (InvalidOperationException e) { return e.Message; }
+        }
+        var refused = await Start(64, 1024, 1024);
+        check(refused is not null && refused.Contains("1024 scopes") && refused.Contains("over 1024 partitions") && refused.Contains("has 64 partitions"),
+            $"a store at 64 with the runtime and workers at 1,024 is refused, naming the three counts ({refused ?? "started"})");
+        check(await Start(1024, 64, 1024) is not null, "workers at 64 under a runtime of 1,024 are refused");
+        check(await Start(1024, 1024, 1024) is null, "the runtime, the workers and the store at 1,024 start");
+        var unserved = await Start(1024, 64, 64, waiting: 900);
+        check(unserved is not null && unserved.Contains("64 scopes") && unserved.Contains("has 1024 partitions"),
+            $"a store at 1,024 with a message in partition 900, and the runtime and workers at 64, is refused ({unserved ?? "started"})");
+        check(await Start(1024, 4, 4) is not null, "a runtime and workers that place 4 of a store's 1,024 are refused");
+        check(await Start(1024, 4, 4, part: true) is null, "with placesPart, the simulation's only, 4 of a store's 1,024 start");
     }
 }
 

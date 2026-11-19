@@ -61,6 +61,7 @@ dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 SIM="dotnet sim/bin/Release/net10.0/Kernel.Sim.dll"
 $SIM --seeds 200000                                  # 200,000 seeds of 300 actions each
 $SIM --seeds 20000 --actions 1000                    # 20,000 seeds of 1,000 actions
+$SIM --seeds 200000 --count 4096                     # K1: the store's virtual partitions, 1,024 (the default) or 4,096
 $SIM --native --seeds 200000                         # the same with native instances in the mix (40 % of outside actions)
 $SIM --native --seeds 20000 --actions 1000
 $SIM --seed 22 --flaw TrialPerPartition              # replay one seed; prints a shrunk trace when it fails
@@ -197,10 +198,14 @@ counted and sent round trips do not.
 
 ## How the simulation works
 
-- Several nodes run against one in-memory store. Each `(node, partition)` pair is an *actor* with its own worker. The
-  simulation is the actor runtime (layer 1): each process has a `PartitionRuntime` over a `DurableHost`, and takes,
-  releases and balancing go through them; the pieces of a pass (poll, load, turn, flush, meet) are separate actions, so
-  that one seed keeps its schedule. Once faults stop, the settling loop runs whole passes (`PassAsync`).
+- Several nodes run against one in-memory store, which has a fence row and a journal for each of `--count` virtual
+  partitions (1,024 by default, or 4,096). A world places four of them on its two or three nodes (K1 slice 7). Each
+  node's process is an *actor* with one worker that owns a set of those partitions, through `DurableHost.ForNode`, so a
+  flush spans the partitions it touches under the k-row fence. Every seventh seed runs a worker per partition instead,
+  as on a store without owned sets. The simulation is the actor runtime (layer 1): each process has a
+  `PartitionRuntime` over the node's host, and takes, give-ups and balancing go through them, one at a time; the
+  pieces of a pass (poll, load, turn, flush, meet) are separate actions, so that one seed keeps its schedule. Once
+  faults stop, the settling loop runs whole passes (`PassAsync`).
 - One action happens at a time, chosen from the seed: a runtime activates a partition (a take) or gives it up; a
   worker polls, loads, runs one turn, flushes, beats or reads events; a node balances; a store call executes; its
   answer arrives, arrives as "connection lost" although it executed, or the call never executes; an outsider adds a

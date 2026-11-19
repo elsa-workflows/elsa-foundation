@@ -52,6 +52,18 @@ public abstract class ProvidedStore : IAsyncDisposable
     /// </summary>
     public virtual Task<IAsyncDisposable?> HoldPartitionAsync(int partition) => Task.FromResult<IAsyncDisposable?>(null);
 
+    /// <summary>
+    /// Open the same database again, as a node that starts does, with <c>partitions</c> partitions (the store's create),
+    /// or null when the store has no database to reopen (the in-memory store is made with its count).
+    /// </summary>
+    public virtual Func<int, Task>? Reopen => null;
+
+    /// <summary>
+    /// Remove the partition rows from this id on, as a first open cut short after writing the ones before would leave
+    /// them; null when the store writes its partition rows in one transaction, so that cannot happen.
+    /// </summary>
+    public virtual Func<int, Task>? CutPartitionRows => null;
+
     /// <summary>Things the store itself saw go wrong (the in-memory store's ghost list), checked after a stress run.</summary>
     public virtual IReadOnlyList<string> Ghosts => [];
 
