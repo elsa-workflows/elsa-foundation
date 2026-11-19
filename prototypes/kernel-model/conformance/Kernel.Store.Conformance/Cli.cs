@@ -2,7 +2,7 @@ namespace Kernel.Store.Conformance;
 
 /// <summary>
 /// The suite's command line, for a provider's own runner:
-/// <c>semantic [name filter]</c>, <c>stress [seconds] [messages]</c>, <c>stress-broken [seconds] [messages]</c>, <c>cost</c>.
+/// <c>semantic [name filter]</c>, <c>semantic-flaw Flaw [name filter]</c>, <c>stress [seconds] [messages]</c>, <c>stress-broken [seconds] [messages]</c>, <c>cost</c>.
 /// </summary>
 public static class Cli
 {
@@ -17,6 +17,10 @@ public static class Cli
                 // The semantic tests with the fence broken on purpose: the fence's cases must fail.
                 var broken = await Semantics.RunAsync(provider, new StoreSetup(BrokenFence: true), rest.Length == 0 ? null : c => c.Name.Contains(rest[0], StringComparison.OrdinalIgnoreCase));
                 return broken.Any(o => !o.Passed && !o.Skipped && o.Case.Level == Level.Required) ? 0 : 1;
+            case ["semantic-flaw", var name, .. var rest]:
+                // K1 slice 7: a store defect switched on (the in-memory store's); the cases that guard it must fail.
+                var flawed = await Semantics.RunAsync(provider, new StoreSetup(Flaws: Enum.Parse<Flaw>(name)), rest.Length == 0 ? null : c => c.Name.Contains(rest[0], StringComparison.OrdinalIgnoreCase));
+                return flawed.Any(o => !o.Passed && !o.Skipped && o.Case.Level == Level.Required) ? 0 : 1;
             case ["stress" or "stress-broken", .. var rest]:
                 var options = new StressOptions { BrokenFence = args[0] == "stress-broken" };
                 if (rest.Length > 0) options = options with { Seconds = int.Parse(rest[0]) };

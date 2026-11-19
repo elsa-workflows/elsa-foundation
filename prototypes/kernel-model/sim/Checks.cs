@@ -115,6 +115,10 @@ public sealed partial class World
         // I14, the counting half: attempts change only in a take (see World.Take).
         foreach (var row in Store.Messages.Values)
             if (row.Attempts != _attempts.GetValueOrDefault(row.Message.Id)) return $"I14 the attempts of {row.Message.Id} changed to {row.Attempts} outside a take";
+        // S1 (K1 D4): a Seen or Trial mark records its own partition's epoch at the take, so none is above it.
+        foreach (var row in Store.Messages.Values)
+            if (!row.Done && Store.Partitions[row.Message.Target.Partition].Epoch is var epoch && (row.Seen > epoch || row.Trial > epoch))
+                return $"S1 {row.Message.Id} is marked at seen {row.Seen}, trial {row.Trial}, above partition {row.Message.Target.Partition}'s epoch {epoch}";
         return Journal() ?? Memory() ?? Counters(waiting) ?? Trees(waiting) ?? Waits() ?? Sequences(waiting) ?? Jobs() ?? Correlated() ?? Answers();
     }
 

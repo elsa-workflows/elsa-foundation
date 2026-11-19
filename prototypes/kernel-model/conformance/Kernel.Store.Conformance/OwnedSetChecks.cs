@@ -15,6 +15,8 @@ internal static class OwnedSetChecks
     [
         new("owned sets: a one-element set is today's one-partition take, poll, commit and release", Level.Required, OneElement),
         new("owned sets: one stale fence rolls the whole flush back; the kept partitions have no hole and no stranded mark", Level.Required, PartialStaleness, Partitions),
+        new("owned sets, the K1 witness: b of {a, b, c} moves by lease expiry while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on", Level.Required, c => Witness(c, release: false), Partitions),
+        new("owned sets, the K1 witness: b of {a, b, c} moves by a release while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on", Level.Required, c => Witness(c, release: true), Partitions),
         new("owned sets: a release of a subset leaves the kept rows untouched", Level.Required, SubsetRelease, Partitions),
         new("owned sets: a take of a scattered set, and one poll over it", Level.Required, ScatteredTake, Partitions),
         new("owned sets: the k-row fence locks in ascending partition id", Level.Required, LockOrder, Partitions),
@@ -107,6 +109,75 @@ internal static class OwnedSetChecks
         }
         Context.Equal(1L, (await c.S.ProjectedAsync(3)).Written, "position of partition 3 after b's commit");
         Context.Equal(b!.Epoch, (await c.Row(3, "s3"))!.Seen, "seen mark in partition 3 at b's epoch");
+    }
+
+    /// <summary>
+    /// K1's decisive witness, as the Worker meets it. Owner a holds {a, b, c} and has marked a message in each. A flush with
+    /// a turn, a Seen and a Trial mark in each of the three is held outstanding while b moves to another owner, by lease
+    /// expiry or by a cooperative release. The old flush then lands, and is refused whole. Then the old owner resets as the
+    /// Worker does: it retakes the partitions it keeps at new epochs, and polls them. No journal hole in any of the three,
+    /// and no stranded mark in the kept ones: none at an epoch whose owner does not hold the message in memory, so the poll
+    /// at the new epochs reads back everything a had marked there. Then a goes on with a and c, and the new owner with b.
+    /// </summary>
+    private static async Task Witness(Context c, bool release)
+    {
+        Require(c);
+        var (pa, pb, pc) = release ? (2, 5, 7) : (1, 4, 6);
+        int[] set = [pa, pb, pc];
+        foreach (var p in set)
+            foreach (var id in new[] { "m", "s", "t" }) await c.S.AddAsync(Make.M($"{id}{p}", p));
+        var a = await c.S.TakeAsync(set, "a", release ? Context.Long : Short);
+        Context.Equal(string.Join(" ", set), string.Join(" ", Ids(a)), "partitions a took");
+        // The first flush renews the leases it fences, so in the expiry variant it renews them as briefly as the take.
+        var first = CommitBatch.Owned([.. a.Taken], release ? Context.Long : Short, false, [], [.. set.Select(p => (InboxKey)$"m{p}")], []);
+        await c.Lands(() => c.S.CommitAsync(first).AsTask(), "a's first flush, marking a message in each partition");
+
+        // Held outstanding: a turn, a Seen and a Trial mark in each of the three.
+        var flush = Flush(a.Taken, [Make.New($"{pa}/x"), Make.New($"{pb}/y"), Make.New($"{pc}/z")], seen: [.. set.Select(p => (InboxKey)$"s{p}")], trial: [.. set.Select(p => (InboxKey)$"t{p}")]);
+        if (release) await c.S.ReleaseAsync([a.Taken.Single(f => f.Partition == pb)]);
+        else await Task.Delay(PastShort);
+        var b = await c.S.TakeAsync(pb, "b", Context.Long);
+        Context.That(b is not null, $"b could not take partition {pb} after it {(release ? "was released" : "ran out")}");
+        Context.Equal("not landed", await c.Refused(() => c.S.CommitAsync(flush).AsTask(), "the held flush"), "outcome of the held flush");
+
+        // Refused whole: nothing of it in any partition.
+        Context.Equal(0, (await c.S.LoadAsync([$"{pa}/x", $"{pb}/y", $"{pc}/z"])).Count, "rows written by the refused flush");
+        foreach (var p in set)
+        {
+            Context.Equal(0, (await c.S.ReadJournalAsync(p, 0, 10)).Count, $"journal rows of partition {p} after the refused flush");
+            Context.Equal(0L, (await c.S.ProjectedAsync(p)).Written, $"position of partition {p} after the refused flush");
+            var (seen, tried) = ((await c.Row(p, $"s{p}"))!, (await c.Row(p, $"t{p}"))!);
+            Context.That(seen.Seen == 0 && seen.Trial == 0 && tried.Seen == 0 && tried.Trial == 0, $"the refused flush left a mark in partition {p}");
+        }
+
+        // The reset: a retakes what it keeps, each at a new epoch and the same position, and polls them.
+        var held = a.Taken.ToDictionary(f => f.Partition);
+        var kept = new List<PartitionFence>();
+        foreach (var p in new[] { pa, pc })
+        {
+            var again = await c.S.RetakeAsync(p, "a", held[p].Epoch, Context.Long);
+            Context.Equal(new PartitionFence(p, held[p].Epoch + 1, 0), again?.For(p), $"a's retake of kept partition {p}");
+            kept.Add(again!.For(p));
+        }
+        Context.That(await c.S.RetakeAsync(pb, "a", held[pb].Epoch, Context.Long) is null, $"a retook partition {pb}, which b holds");
+        var polled = (await c.S.PollAsync(kept, TimeSpan.Zero, 100)).Messages.Select(m => m.Message.Id.ToString()).Order(StringComparer.Ordinal);
+        Context.Equal(string.Join(" ", new[] { pa, pc }.SelectMany(p => new[] { $"m{p}", $"s{p}", $"t{p}" }).Order(StringComparer.Ordinal)), string.Join(" ", polled),
+            "the poll of the kept partitions at their new epochs: what a marked there is read back, nothing stranded");
+        foreach (var fence in kept)
+            foreach (var id in new[] { "m", "s", "t" })
+                Context.That((await c.Row(fence.Partition, $"{id}{fence.Partition}"))! is var row && row.Seen < fence.Epoch && row.Trial < fence.Epoch,
+                    $"{id}{fence.Partition} is marked at the kept partition's new epoch before anything marked it");
+
+        // a goes on with the kept partitions, and b with its own: each journal starts at 1, with no hole.
+        await c.Lands(() => c.S.CommitAsync(Flush(kept, [Make.New($"{pa}/x"), Make.New($"{pc}/z")], seen: [$"s{pa}", $"s{pc}"], trial: [$"t{pa}", $"t{pc}"])).AsTask(), "a's flush on the kept partitions after its reset");
+        await c.Lands(() => c.Commit(b!, pb, [Make.New($"{pb}/y")], seen: [$"s{pb}"]), $"b's commit in partition {pb}");
+        foreach (var p in set)
+            Context.Equal("1", string.Join(" ", (await c.S.ReadJournalAsync(p, 0, 10)).Select(j => j.Position)), $"journal positions of partition {p}");
+        foreach (var fence in kept)
+        {
+            var tried = (await c.Row(fence.Partition, $"t{fence.Partition}"))!;
+            Context.That(tried.Seen == fence.Epoch && tried.Trial == fence.Epoch, $"trial mark in kept partition {fence.Partition} is not at its new epoch");
+        }
     }
 
     private static async Task SubsetRelease(Context c)
