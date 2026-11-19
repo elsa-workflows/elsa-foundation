@@ -630,7 +630,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
             new Dictionary<string, ExpressionParameterBinding> {
                 ["own"] = new ActivityResultExpressionParameterBinding("deliver", "$result"),
                 ["prior"] = new ActivityResultExpressionParameterBinding("reserve", "$result")
-            }, JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+            }, JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         var scope = new ActivityNode("compensating-scope", "test", [], [], new(
             Elsa.Activities.Compensation.Activities.CompensationScope.StructureKind,
             Elsa.Activities.Compensation.Activities.CompensationScope.StructureSchemaVersion,
@@ -661,7 +661,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     private static ArgumentState Input(ArgumentValue value) => new("CustomerId", value, null, null, null, null);
     private static ArgumentValue PortableJson(string properties)
     {
-        using var json = JsonDocument.Parse("""{"language":"JavaScript","source":"p","resultType":{"alias":"String"},"options":{},"capabilityProfile":"binding-pure-v1",""" + properties + "}");
+        using var json = JsonDocument.Parse("""{"language":"JavaScript","source":"p","resultType":{"alias":"String"},"options":{},"capabilityProfile":"binding-readonly-v1",""" + properties + "}");
         return new(json.RootElement.Clone(), "JavaScript");
     }
     private static ArgumentValue Result(string producer, string projection = "$result", bool optional = false, string scope = "root") => new(
@@ -670,7 +670,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     {
         var definition = new ExpressionDefinition("JavaScript", "p", new("String"),
             new Dictionary<string, ExpressionParameterBinding> { ["p"] = new ActivityResultExpressionParameterBinding(producer, projection, optional) },
-            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         return Input(form switch {
             "direct" => Result(producer, projection, optional),
             "typed" => new(definition, "JavaScript"),

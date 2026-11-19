@@ -16,10 +16,19 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// <summary>Builds the closed Jint value world shared by portable expressions and scripts.</summary>
 internal static class IsolatedJintEngine
 {
-    public static Engine Create(FeatureOptions configured, CancellationToken cancellationToken)
+    /// <summary>
+    /// A fresh engine with the native intrinsics, <c>Date</c>, <c>Intl</c>, <c>Temporal</c> and <c>Math.random</c>
+    /// included (spec 1223 FR-004, FR-005), on the host clock in UTC with the invariant culture (FR-002).
+    /// </summary>
+    public static Engine Create(FeatureOptions configured, CancellationToken cancellationToken, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(configured);
-        var options = new JintOptions();
+        var options = new JintOptions
+        {
+            TimeSystem = new JintTimeSystem(timeProvider ?? TimeProvider.System),
+            TimeZone = TimeZoneInfo.Utc,
+            Culture = CultureInfo.InvariantCulture,
+        };
 
         if (configured.ExecutionTimeout is { } timeout && timeout > TimeSpan.Zero)
             options.TimeoutInterval(timeout);
@@ -36,7 +45,6 @@ internal static class IsolatedJintEngine
 
         var engine = new Engine(options);
         JintResultMaterializer.Initialize(engine);
-        DisableAmbientCapabilities(engine);
         return engine;
     }
 
@@ -194,17 +202,6 @@ internal static class IsolatedJintEngine
     {
         "toJSON", "toString", "valueOf", "toLocaleString", "then", "constructor"
     };
-
-    private static void DisableAmbientCapabilities(Engine engine)
-    {
-        // Time, randomness, locale, and environment data enter through pinned args, never intrinsics.
-        foreach (var name in new[] { "Date", "Temporal", "Intl" })
-            engine.Global.DefineOwnProperty(name, new PropertyDescriptor(JsValue.Undefined, writable: false, enumerable: false, configurable: false));
-
-        engine.GetValue("Math").AsObject().DefineOwnProperty(
-            "random",
-            new PropertyDescriptor(JsValue.Undefined, writable: false, enumerable: false, configurable: false));
-    }
 
     private static JsValue CreateValue(Engine engine, JsonElement element) => element.ValueKind switch
     {

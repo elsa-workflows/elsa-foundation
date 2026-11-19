@@ -103,7 +103,7 @@ public sealed class AnyValueReadParityTests
             new TypeReference("Any"),
             parameters,
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         return new ExpressionEvaluationRequest(definition, values, CancellationToken.None);
     }
 }

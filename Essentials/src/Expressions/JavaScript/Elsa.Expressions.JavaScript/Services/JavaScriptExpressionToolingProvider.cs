@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 namespace Elsa.Expressions.JavaScript.Services;
 
 /// <summary>Metadata-only JavaScript authoring assistance; it parses source but never loads Jint or evaluates it.</summary>
-internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionToolingProvider
+internal sealed partial class JavaScriptExpressionToolingProvider(IJavaScriptDotNetUsageAnalyzer? dotNetUsage = null) : IExpressionToolingProvider
 {
     public ExpressionToolingCapabilities DeclaredCapabilities { get; } = new(
         SupportsCompletions: true,
@@ -162,7 +162,7 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
     [GeneratedRegex(@"(?<=[A-Za-z0-9_$])\(\)(?=\.)", RegexOptions.CultureInvariant)]
     private static partial Regex EmptyAccessorCallPattern();
 
-    private static IReadOnlyList<ExpressionDiagnostic> ParseDiagnostics(string source, string revision)
+    private IReadOnlyList<ExpressionDiagnostic> ParseDiagnostics(string source, string revision)
     {
         try
         {
@@ -170,7 +170,7 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
             Node parsed = JavaScriptBindingSyntax.IsExpression(source)
                 ? new Parser().ParseExpression(source, strict: true)
                 : new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source, strict: true);
-            return ReservedNameDiagnostics(parsed, revision);
+            return ReservedNameDiagnostics(parsed, revision).Concat(DotNetUsageDiagnostics(source, revision)).ToArray();
         }
         catch (ParseErrorException exception)
         {
@@ -189,6 +189,20 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
             ];
         }
     }
+
+    /// <summary>
+    /// Live .NET objects and types are not available under the default JSON-only strategy (spec 1223 FR-017 to FR-019):
+    /// a .NET type reference or a PascalCase invocation on a value the expression did not define is refused at design
+    /// time and publish.
+    /// </summary>
+    private IEnumerable<ExpressionDiagnostic> DotNetUsageDiagnostics(string source, string revision) =>
+        (dotNetUsage?.Analyze(source) ?? [])
+            .Select(usage => new ExpressionDiagnostic(
+                "JavaScript/DotNetMemberUsage",
+                ExpressionDiagnosticSeverity.Error,
+                usage.Message,
+                revision,
+                usage.Range));
 
     /// <summary>
     /// <c>complete</c> is a reserved built-in name in every JavaScript surface (spec 1208 FR-007a, ADR 0045 §5): a binding

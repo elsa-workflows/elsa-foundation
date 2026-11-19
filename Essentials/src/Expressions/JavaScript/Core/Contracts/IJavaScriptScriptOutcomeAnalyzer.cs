@@ -21,7 +21,9 @@ public sealed class JavaScriptScriptOutcomeAnalysis
     public JavaScriptScriptOutcomeAnalysis(
         IReadOnlyList<string> literalOutcomes,
         IReadOnlyList<string> returnedStrings,
-        IReadOnlyList<ExpressionToolingRange> reservedNameDeclarations)
+        IReadOnlyList<ExpressionToolingRange> reservedNameDeclarations,
+        IReadOnlyList<string>? reservedRootDeclarations = null,
+        IReadOnlyList<string>? shadowedNameDeclarations = null)
     {
         ArgumentNullException.ThrowIfNull(literalOutcomes);
         ArgumentNullException.ThrowIfNull(returnedStrings);
@@ -29,6 +31,8 @@ public sealed class JavaScriptScriptOutcomeAnalysis
         LiteralOutcomes = Array.AsReadOnly(literalOutcomes.ToArray());
         ReturnedStrings = Array.AsReadOnly(returnedStrings.ToArray());
         ReservedNameDeclarations = Array.AsReadOnly(reservedNameDeclarations.ToArray());
+        ReservedRootDeclarations = Array.AsReadOnly((reservedRootDeclarations ?? []).ToArray());
+        ShadowedNameDeclarations = Array.AsReadOnly((shadowedNameDeclarations ?? []).ToArray());
     }
 
     /// <summary>
@@ -45,4 +49,17 @@ public sealed class JavaScriptScriptOutcomeAnalysis
     /// (destructuring included), function, class, parameter (default and rest included) or catch binding. Zero-based.
     /// </summary>
     public IReadOnlyList<ExpressionToolingRange> ReservedNameDeclarations { get; }
+
+    /// <summary>
+    /// The read roots the script declares that break pinning: <c>variables</c> (spec 1223 FR-027). Distinct, in source
+    /// order. A script's own <c>args</c> follows spec 1222 and is not listed.
+    /// </summary>
+    public IReadOnlyList<string> ReservedRootDeclarations { get; }
+
+    /// <summary>
+    /// The names the script declares that shadow a platform name it could otherwise use: the unused read roots
+    /// <c>input</c>, <c>activities</c> and <c>workflow</c>, a built-in function name or a registered namespace root
+    /// (spec 1223 FR-027). Distinct, in source order.
+    /// </summary>
+    public IReadOnlyList<string> ShadowedNameDeclarations { get; }
 }

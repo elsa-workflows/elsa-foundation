@@ -204,7 +204,7 @@ public sealed class WriteHttpResponseExecutionTests
                     WorkflowExecutionHarness.Timestamp)
                 .AsTask());
 
-        Assert.Contains("requires capability profile 'binding-pure-v1'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("requires capability profile 'binding-readonly-v1'", exception.Message, StringComparison.Ordinal);
     }
 
     private static WorkflowExecutionHarness NewHarness() =>

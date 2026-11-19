@@ -30,7 +30,7 @@ export function withWorkflowInputExpressionArgument(
     resultType: portableResultType(activityInput),
     parameters: {},
     options: {},
-    capabilityProfile: "binding-pure-v1"
+    capabilityProfile: "binding-readonly-v1"
   };
   const hasExisting = Object.prototype.hasOwnProperty.call(definition.parameters, workflowInput.name);
   const existing = hasExisting ? definition.parameters[workflowInput.name] : null;

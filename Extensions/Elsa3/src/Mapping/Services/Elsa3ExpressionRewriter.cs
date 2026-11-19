@@ -510,7 +510,7 @@ public sealed class Elsa3ExpressionRewriter
             resultType,
             parameters,
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
 
     private static bool TryAddParameter(
         IDictionary<string, ExpressionParameterBinding> parameters,

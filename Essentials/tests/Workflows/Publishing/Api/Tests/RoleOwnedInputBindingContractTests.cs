@@ -124,7 +124,7 @@ public sealed class RoleOwnedInputBindingContractTests
                 ["subtotal"] = new WorkflowRequestExpressionParameterBinding("subtotal")
             },
             JsonSerializer.SerializeToElement(new { strict = true }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var reordered = ExpressionBinding(
             new Dictionary<string, ExpressionParameterBinding>
             {
@@ -132,11 +132,11 @@ public sealed class RoleOwnedInputBindingContractTests
                 ["tax"] = new VariableExpressionParameterBinding("workflow", "tax")
             },
             JsonSerializer.SerializeToElement(new { strict = true }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var changedOptions = ExpressionBinding(
             first.Expression!.Parameters,
             JsonSerializer.SerializeToElement(new { strict = false }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var changedCapability = ExpressionBinding(
             first.Expression.Parameters,
             first.Expression.Options,
@@ -266,7 +266,7 @@ public sealed class RoleOwnedInputBindingContractTests
                 ["customerId"] = new WorkflowRequestExpressionParameterBinding("customer-id")
             },
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1,
+            ExpressionCapabilityProfiles.BindingReadonlyV1,
             new Dictionary<string, string> { ["origin"] = "elsa3-import" });
 
         var binding = compiler.Compile(
@@ -277,7 +277,7 @@ public sealed class RoleOwnedInputBindingContractTests
         Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
         var expression = Assert.IsType<RuntimeExpressionBinding>(binding.Expression);
         Assert.Equal("args.customerId", expression.Expression);
-        Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, expression.CapabilityProfile);
+        Assert.Equal(ExpressionCapabilityProfiles.BindingReadonlyV1, expression.CapabilityProfile);
         Assert.Equal("customer-id", Assert.IsType<WorkflowRequestExpressionParameterBinding>(expression.Parameters["customerId"]).MemberKey);
         Assert.Equal("elsa3-import", expression.Metadata["origin"]);
     }
@@ -299,7 +299,7 @@ public sealed class RoleOwnedInputBindingContractTests
             new TypeReference("Int32"),
             new Dictionary<string, ExpressionParameterBinding>(),
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var payload = SerializationServices.PayloadSerializer().SerializeToElement(definition);
 
         var binding = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create())

@@ -1355,10 +1355,10 @@ public sealed partial class WorkflowExecutableCompilerTests
         var expressionBinding = expression.RootActivity.InputBindings[nameof(WriteHttpResponse.StatusCode)];
         Assert.Equal(RuntimeInputBindingSource.Expression, expressionBinding.Source);
         Assert.Equal(
-            Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1,
+            Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingReadonlyV1,
             expressionBinding.Expression!.CapabilityProfile);
         Assert.Equal(
-            Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1,
+            Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingReadonlyV1,
             bodyExpression.RootActivity.InputBindings[nameof(WriteHttpResponse.Body)].Expression!.CapabilityProfile);
 
         var statusInput = typeof(WriteHttpResponse)

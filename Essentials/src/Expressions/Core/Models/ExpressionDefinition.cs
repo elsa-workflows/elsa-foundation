@@ -326,7 +326,7 @@ public sealed record WorkflowInstanceExpressionParameterBinding : ExpressionPara
 
 public static class ExpressionCapabilityProfiles
 {
-    public const string BindingPureV1 = "binding-pure-v1";
+    public const string BindingReadonlyV1 = "binding-readonly-v1";
 }
 
 /// <summary>A complete immutable parameter snapshot supplied to a pure evaluator.</summary>

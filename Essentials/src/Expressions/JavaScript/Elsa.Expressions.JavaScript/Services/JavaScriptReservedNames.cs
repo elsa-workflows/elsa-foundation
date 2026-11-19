@@ -11,10 +11,14 @@ namespace Elsa.Expressions.JavaScript.Services;
 /// </summary>
 internal static class JavaScriptReservedNames
 {
-    public static IReadOnlyList<Identifier> CollectCompleteDeclarations(Node root)
+    public static IReadOnlyList<Identifier> CollectCompleteDeclarations(Node root) =>
+        CollectDeclarations(root, name => StringComparer.Ordinal.Equals(name, JavaScriptScriptBuiltIns.Complete));
+
+    /// <summary>Every identifier <paramref name="root"/> declares whose name <paramref name="matches"/>, in source order.</summary>
+    public static IReadOnlyList<Identifier> CollectDeclarations(Node root, Func<string, bool> matches)
     {
         var declarations = new List<Identifier>();
-        Collect(root, declarations);
+        Collect(root, declarations, matches);
         return declarations;
     }
 
@@ -28,61 +32,61 @@ internal static class JavaScriptReservedNames
             new(Math.Max(0, end.Line - 1), Math.Max(0, end.Column)));
     }
 
-    private static void Collect(Node node, List<Identifier> declarations)
+    private static void Collect(Node node, List<Identifier> declarations, Func<string, bool> matches)
     {
         switch (node)
         {
             case VariableDeclarator declarator:
-                CollectBindings(declarator.Id, declarations);
+                CollectBindings(declarator.Id, declarations, matches);
                 break;
             case FunctionDeclaration { Id: { } functionId }:
-                CollectBindings(functionId, declarations);
+                CollectBindings(functionId, declarations, matches);
                 break;
             case FunctionExpression { Id: { } functionExpressionId }:
-                CollectBindings(functionExpressionId, declarations);
+                CollectBindings(functionExpressionId, declarations, matches);
                 break;
             case ClassDeclaration { Id: { } classId }:
-                CollectBindings(classId, declarations);
+                CollectBindings(classId, declarations, matches);
                 break;
             case ClassExpression { Id: { } classExpressionId }:
-                CollectBindings(classExpressionId, declarations);
+                CollectBindings(classExpressionId, declarations, matches);
                 break;
             case CatchClause { Param: { } parameter }:
-                CollectBindings(parameter, declarations);
+                CollectBindings(parameter, declarations, matches);
                 break;
         }
 
         if (node is IFunction function)
         {
             foreach (var parameter in function.Params)
-                CollectBindings(parameter, declarations);
+                CollectBindings(parameter, declarations, matches);
         }
 
         foreach (var child in node.ChildNodes)
-            Collect(child, declarations);
+            Collect(child, declarations, matches);
     }
 
     // The identifiers a binding pattern declares; a property key in a destructuring pattern declares nothing.
-    private static void CollectBindings(Node? pattern, List<Identifier> declarations)
+    private static void CollectBindings(Node? pattern, List<Identifier> declarations, Func<string, bool> matches)
     {
         switch (pattern)
         {
-            case Identifier identifier when StringComparer.Ordinal.Equals(identifier.Name, JavaScriptScriptBuiltIns.Complete):
+            case Identifier identifier when matches(identifier.Name):
                 declarations.Add(identifier);
                 break;
             case ObjectPattern objectPattern:
                 foreach (var property in objectPattern.Properties)
-                    CollectBindings(property is Property { Value: var value } ? value : property, declarations);
+                    CollectBindings(property is Property { Value: var value } ? value : property, declarations, matches);
                 break;
             case ArrayPattern arrayPattern:
                 foreach (var element in arrayPattern.Elements)
-                    CollectBindings(element, declarations);
+                    CollectBindings(element, declarations, matches);
                 break;
             case AssignmentPattern assignment:
-                CollectBindings(assignment.Left, declarations);
+                CollectBindings(assignment.Left, declarations, matches);
                 break;
             case RestElement rest:
-                CollectBindings(rest.Argument, declarations);
+                CollectBindings(rest.Argument, declarations, matches);
                 break;
         }
     }

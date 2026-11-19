@@ -4,6 +4,7 @@ using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Services;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Expressions.JavaScript;
 
@@ -24,5 +25,8 @@ public class JavaScriptFeature : IShellFeature
             .AddSingleton<IExpressionToolingProvider, JavaScriptExpressionToolingProvider>()
             .AddSingleton<IJavaScriptScriptOutcomeAnalyzer, JavaScriptScriptOutcomeAnalyzer>()
             .AddSingleton<IScriptVariableReadAnalyzer, JavaScriptVariableReadAnalyzer>();
+        // The default JSON-only strategy's .NET-usage analysis, shared by publish and the Elsa 3 converter (spec 1223
+        // FR-030); replaceable with the strategy.
+        services.TryAddSingleton<IJavaScriptDotNetUsageAnalyzer, JavaScriptDotNetUsageAnalyzer>();
     }
 }

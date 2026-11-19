@@ -543,7 +543,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             argumentsType,
             definitionResult.Parameters,
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         property.Activity.AdditionalProperties[ScriptArgumentsKey] = JsonSerializer.SerializeToElement(new JsonObject
         {
             ["typeName"] = argumentsType.Alias,

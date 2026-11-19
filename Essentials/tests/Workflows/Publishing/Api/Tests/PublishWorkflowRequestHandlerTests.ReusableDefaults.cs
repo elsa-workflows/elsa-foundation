@@ -193,7 +193,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             JsonSerializer.SerializeToElement(new { activities = Array.Empty<ActivityNode>(), connections = Array.Empty<object>() }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         var read = new ExpressionDefinition("JavaScript", "String(p)", new("String"),
             new Dictionary<string, ExpressionParameterBinding> { ["p"] = new ActivityResultExpressionParameterBinding("consumer", "$result") },
-            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         var fixture = await ReusableDefaultAsync(new("Literal", JsonSerializer.SerializeToElement("hello")),
             callerStructure: ignored, noPublicInputs: true,
             rootFactory: producer => SequenceNode("sequence", [producer, Node("capture", new WorkflowArgumentState("Text", new(read, "JavaScript"), null, null, null, null))]));
@@ -206,7 +206,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     private static ActivityInputDefault ResultDefault(bool portable, string producer) => portable
         ? new("JavaScript", JsonSerializer.SerializeToElement(new ExpressionDefinition("JavaScript", "p", new("String"),
             new Dictionary<string, ExpressionParameterBinding> { ["p"] = new ActivityResultExpressionParameterBinding(producer, "$result") },
-            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1)))
+            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1)))
         : new("ActivityResult", JsonSerializer.SerializeToElement(new { producerNodeId = producer, projectionKey = "$result", producerScopeId = "workflow" }));
 
     // The public default first passes the actual Graph provider and template coordinator. Only then is

@@ -2,7 +2,7 @@
 abstract Elsa.Expressions.Core.Models.ExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionParameterBinding!
 const Elsa.Expressions.Core.Constants.WellKnownExpressionDescriptorTypes.Object = "Object" -> string!
 const Elsa.Expressions.Core.Constants.WellKnownExpressionDescriptorTypes.Variable = "Variable" -> string!
-const Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1 = "binding-pure-v1" -> string!
+const Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingReadonlyV1 = "binding-readonly-v1" -> string!
 const Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId = "workflow" -> string!
 Elsa.Expressions.Core.Constants.WellKnownExpressionDescriptorTypes
 Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities
@@ -13,7 +13,7 @@ Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.AllowsMutation.
 Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.AllowsNondeterminism.get -> bool
 Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.AllowsServiceLocation.get -> bool
 Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Equals(Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? other) -> bool
-Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.IsBindingPure.get -> bool
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.IsBindingReadonly.get -> bool
 Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Profile.get -> string!
 Elsa.Expressions.Core.Contracts.IExpressionDescriptor
 Elsa.Expressions.Core.Contracts.IExpressionDescriptor.DisplayName.get -> string!

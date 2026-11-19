@@ -28,7 +28,7 @@ function Wait-ControlChild($Ctx, [string] $ArtifactId, [string] $ParentId) {
 function New-ControlWait([string] $NodeId, [string] $Version, [string] $EventName) {
     $correlation = New-LiteralInput -ReferenceKey 'CorrelationId' -Value $null
     $correlation.value = @{ expressionType = 'JavaScript'; value = @{
-        language = 'JavaScript'; source = 'args.instance'; capabilityProfile = 'binding-pure-v1';
+        language = 'JavaScript'; source = 'args.instance'; capabilityProfile = 'binding-readonly-v1';
         resultType = @{ alias = 'String'; collectionKind = 'single' };
         parameters = @{ instance = @{ kind = 'WorkflowInstance'; member = 'instanceId' } }; options = @{}
     } }

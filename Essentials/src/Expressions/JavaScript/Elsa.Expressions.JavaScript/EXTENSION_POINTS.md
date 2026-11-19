@@ -8,7 +8,7 @@ parameters.
 There are no binding-time script pre/post-processors, events, library injectors, configuration host
 functions, workflow contexts, raw Jint engine factories, mutable JavaScript execution contexts,
 delegate-backed host functions, or service-location seams. Extending the binding language requires
-a separately reviewed capability profile; a global registration cannot join `binding-pure-v1`.
+a separately reviewed capability profile; a global registration cannot join `binding-readonly-v1`.
 
 Jint reuses immutable prepared syntax under weak source-string ownership, with separate preparation for value
 bindings and script activities. A bounded, hash-only weak index also reuses script preparation across freshly

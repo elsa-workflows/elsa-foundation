@@ -8,8 +8,10 @@ namespace Elsa.Expressions.Core.Contracts;
 /// </summary>
 public sealed record ExpressionEvaluationCapabilities
 {
-    private static readonly ExpressionEvaluationCapabilities BindingPure = new(
-        ExpressionCapabilityProfiles.BindingPureV1, true, false, false, false, false);
+    // binding-readonly-v1 (ADR 0083, spec 1223 FR-001, FR-031): transforms plus the clock, randomness and GUIDs; no
+    // ambient workflow state beyond the declared reads, no mutation, no service location.
+    private static readonly ExpressionEvaluationCapabilities BindingReadonly = new(
+        ExpressionCapabilityProfiles.BindingReadonlyV1, true, false, false, false, true);
 
     private ExpressionEvaluationCapabilities(
         string profile,
@@ -32,20 +34,23 @@ public sealed record ExpressionEvaluationCapabilities
     public bool AllowsAmbientWorkflowState { get; }
     public bool AllowsMutation { get; }
     public bool AllowsServiceLocation { get; }
+
+    /// <summary>Whether expressions may read the clock and produce random values and GUIDs (ADR 0045 §5 D-1).</summary>
     public bool AllowsNondeterminism { get; }
 
-    public bool IsBindingPure =>
+    /// <summary>The <c>binding-readonly-v1</c> grant: transforms, time and randomness; no mutation or service location.</summary>
+    public bool IsBindingReadonly =>
         AllowsDeterministicTransforms &&
         !AllowsAmbientWorkflowState &&
         !AllowsMutation &&
         !AllowsServiceLocation &&
-        !AllowsNondeterminism;
+        AllowsNondeterminism;
 
     public static ExpressionEvaluationCapabilities Resolve(string profile)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profile);
-        return StringComparer.Ordinal.Equals(profile, ExpressionCapabilityProfiles.BindingPureV1)
-            ? BindingPure
+        return StringComparer.Ordinal.Equals(profile, ExpressionCapabilityProfiles.BindingReadonlyV1)
+            ? BindingReadonly
             : new ExpressionEvaluationCapabilities(profile, false, false, false, false, false);
     }
 }

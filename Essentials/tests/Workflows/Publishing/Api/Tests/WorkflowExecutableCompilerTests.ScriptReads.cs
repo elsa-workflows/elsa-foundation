@@ -89,7 +89,7 @@ public sealed partial class WorkflowExecutableCompilerTests
                 ["variables.greeting"] = new VariableExpressionParameterBinding("stale-scope", "stale-key", ExpressionParameterSurfaces.Variables)
             },
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var input = new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement(definition), "JavaScript"), null, null, null, null);
 
         var executable = await CompileReadsAsync(Node("consumer", input), [Greeting]);

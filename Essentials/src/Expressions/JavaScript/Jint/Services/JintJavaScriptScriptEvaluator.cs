@@ -11,8 +11,14 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services;
 
-/// <summary>Executes transient script-activity programs in the same closed value world as pure bindings.</summary>
-internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> featureOptions) : IJavaScriptScriptEvaluator
+/// <summary>
+/// Executes transient script-activity programs in the same closed value world as input bindings, with the same
+/// intrinsics, clock and registered functions (spec 1223 FR-003).
+/// </summary>
+internal sealed class JintJavaScriptScriptEvaluator(
+    IOptions<FeatureOptions> featureOptions,
+    JavaScriptHostFunctions hostFunctions,
+    TimeProvider? timeProvider = null) : IJavaScriptScriptEvaluator
 {
     public ValueTask<JavaScriptScriptEvaluationResult> EvaluateAsync(JavaScriptScriptEvaluationRequest request)
     {
@@ -20,7 +26,8 @@ internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> fea
         request.CancellationToken.ThrowIfCancellationRequested();
 
         var options = featureOptions.Value;
-        var engine = IsolatedJintEngine.Create(options, request.CancellationToken);
+        var engine = IsolatedJintEngine.Create(options, request.CancellationToken, timeProvider);
+        hostFunctions.Install(engine, options, variables: null, request.CancellationToken);
         IsolatedJintEngine.SetReadOnlyArgs(engine, request.Arguments, options);
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
 

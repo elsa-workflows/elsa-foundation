@@ -1,6 +1,6 @@
 # Elsa.Workflows.Design.JavaScript
 
-Bridges the workflow design surface and the JavaScript expression engine. Canonical input-binding expressions use the closed `binding-pure-v1` capability profile, so the editor exposes only the immutable `args` parameter map available to the isolated runtime evaluator.
+Bridges the workflow design surface and the JavaScript expression engine. Canonical input-binding expressions use the closed `binding-readonly-v1` capability profile, so the editor exposes only the immutable `args` parameter map available to the isolated runtime evaluator.
 
 ## Cross-domain contributions
 

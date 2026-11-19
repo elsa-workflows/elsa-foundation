@@ -360,7 +360,7 @@ public sealed class ExplicitExpressionParametersTests
             new TypeReference("Any"),
             bindings,
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         return new ExpressionEvaluationRequest(definition, values, CancellationToken.None);
     }
 }

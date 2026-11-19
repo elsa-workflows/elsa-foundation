@@ -18,7 +18,13 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// name or an aliased <c>complete</c> is checked at run time instead (<c>VF-ACT-006</c>).</item>
 /// <item><c>VF-AUTH-012</c> (warning): the script returns, at its top level, a string literal equal to an outcome
 /// connected on the node; a returned value is data and selects nothing (FR-008a).</item>
-/// <item>A script that declares <c>complete</c>, a reserved built-in name (FR-007a).</item>
+/// <item>A script that declares <c>complete</c>, a reserved built-in name (FR-007a), or <c>variables</c>, whose
+/// declaration would break the pinned reads (spec 1223 FR-027): an error.</item>
+/// <item><c>Scripts/DotNetMemberUsage</c> (error): the script references a .NET type or invokes a PascalCase member on
+/// a value it did not define; values are JSON and live .NET objects are not available (spec 1223 FR-017, FR-018).</item>
+/// <item><c>Scripts/ShadowedFunction</c> (warning): the script declares <c>input</c>, <c>activities</c>,
+/// <c>workflow</c>, a built-in function name or a registered namespace root, which its own declaration hides
+/// (spec 1223 FR-027).</item>
 /// </list>
 /// The outcome set follows the publish compiler's rule: static ports, plus literal configured items with the
 /// catch-all and the <c>Done</c> rule. A set decided by an expression is not checked here.
@@ -33,11 +39,14 @@ public sealed class ScriptOutcomeValidator(
     IOptions<WorkflowDesignValidatorOptions> options,
     ActivityTreeWalker activityTreeWalker,
     IActivityStructureService activityStructureService,
-    IJavaScriptScriptOutcomeAnalyzer? scriptOutcomeAnalyzer = null) : IDraftValidator
+    IJavaScriptScriptOutcomeAnalyzer? scriptOutcomeAnalyzer = null,
+    IJavaScriptDotNetUsageAnalyzer? dotNetUsageAnalyzer = null) : IDraftValidator
 {
     public const string UnknownOutcomeType = "Scripts/UnknownOutcome";
     public const string ReturnedOutcomeNameType = "Scripts/ReturnedOutcomeName";
     public const string ReservedNameType = "Scripts/ReservedName";
+    public const string ShadowedFunctionType = "Scripts/ShadowedFunction";
+    public const string DotNetMemberUsageType = "Scripts/DotNetMemberUsage";
     private const string Complete = JavaScriptScriptBuiltIns.Complete;
     private const string Done = "Done";
 
@@ -79,6 +88,19 @@ public sealed class ScriptOutcomeValidator(
             if (analysis.ReservedNameDeclarations.Count > 0)
                 errors.Add(new ValidationError($"{node.NodeId}/inputs/{scriptInput}", ReservedNameType,
                     $"The script of activity '{node.NodeId}' declares '{Complete}', a reserved built-in name: scripts select outcomes by returning {Complete}(result, outcomes). Rename it."));
+
+            foreach (var name in analysis.ReservedRootDeclarations)
+                errors.Add(new ValidationError($"{node.NodeId}/inputs/{scriptInput}", ReservedNameType,
+                    $"The script of activity '{node.NodeId}' declares '{name}', the reserved root through which scripts read workflow variables by name; its own declaration would hide every variable read. Rename it."));
+
+            foreach (var usage in dotNetUsageAnalyzer?.Analyze(script, scriptBody: true) ?? [])
+                errors.Add(new ValidationError($"{node.NodeId}/inputs/{scriptInput}", DotNetMemberUsageType,
+                    $"The script of activity '{node.NodeId}': {usage.Message}"));
+
+            foreach (var name in analysis.ShadowedNameDeclarations)
+                errors.Add(new ValidationError($"{node.NodeId}/inputs/{scriptInput}", ShadowedFunctionType,
+                    $"The script of activity '{node.NodeId}' declares '{name}', a name the platform reserves for a built-in function, a registered function namespace or a read root; inside the script its own declaration hides it. Rename it unless that is intended.")
+                { Severity = ValidationSeverities.Warning });
 
             if (OutcomeSet(node, payload) is { } outcomes)
             {

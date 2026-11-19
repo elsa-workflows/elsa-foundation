@@ -25,7 +25,7 @@ public sealed class ExpressionDefinitionContractTests
             new TypeReference("Decimal"),
             parameters,
             optionsDocument.RootElement,
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
 
         parameters.Clear();
         optionsDocument.Dispose();
@@ -99,8 +99,8 @@ public sealed class ExpressionDefinitionContractTests
             new Dictionary<string, JsonElement>(),
             CancellationToken.None);
 
-        Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, request.Capabilities.Profile);
-        Assert.True(request.Capabilities.IsBindingPure);
+        Assert.Equal(ExpressionCapabilityProfiles.BindingReadonlyV1, request.Capabilities.Profile);
+        Assert.True(request.Capabilities.IsBindingReadonly);
         Assert.True(request.Capabilities.AllowsDeterministicTransforms);
         Assert.False(request.Capabilities.AllowsAmbientWorkflowState);
         Assert.False(request.Capabilities.AllowsMutation);
@@ -146,7 +146,7 @@ public sealed class ExpressionDefinitionContractTests
             new TypeReference("Int32"),
             parameters,
             JsonSerializer.SerializeToElement(new { strict = true }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
 
     private static IEnumerable<Type> FlattenType(Type type)
     {

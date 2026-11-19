@@ -90,7 +90,7 @@ public sealed class ScriptValueIsolationTests
             new TypeReference("String"),
             parameters,
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
 
         return await scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>()
             .EvaluateAsync(new ExpressionEvaluationRequest(definition, values, CancellationToken.None));
