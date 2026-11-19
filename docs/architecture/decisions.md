@@ -252,10 +252,10 @@ under those cards. The independent architecture review, run on Claude Fable at t
 WITH CONDITIONS on 19 November at `2825b0ed1` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)): 0 Blockers, 0 Majors, 8 Minors and 6 Nits, fixed on
 the page, and 4 Conditions, FC-C1 to FC-C4, tracked in the plan's
 [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions). Measured there: the surface layer 3 reaches today is 32 types and 182 members
-(37 and 198 with the approved additions), beside `IKernelStore`'s 30; the whole contract after the cut is 39 types and
-169 members (actor side 19 and 97, ingress 11 and 39 with the operator command payload and the admission enums, read
+(37 and 198 with the approved additions), beside `IKernelStore`'s 30; the whole contract after the cut is 38 types and
+167 members (actor side 18 and 95, ingress 11 and 39 with the operator command payload and the admission enums, read
 models 9 and 33), and the model contract built on it 6 and 44; the reviewed revision counted 36 and 154 before the
-review's Minors added the job context, `now`, `AsOf`, `RetryAfter` and the enum values.
+review's Minors added the job context, `AsOf`, `RetryAfter` and the enum values (parameters are not counted).
 
 | Date | Rule | Source |
 |---|---|---|
@@ -263,7 +263,7 @@ review's Minors added the job context, `now`, `AsOf`, `RetryAfter` and the enum 
 | 19 Nov | **Owner decision 2, the actor record.** `model` leaves the actor table and goes into the actor type's `TypeData`; children, the notices with the parked form and the terminate cascade belong to the foundation; an actor type builds its read models from bounded labels plus the per-actor tail, with no tenant feed. This is the reading of the 15 November card. | Owner card; [foundation contract](foundation-contract.md#owner-decisions-19-november) |
 | 19 Nov | **Owner decision 3.** Cut both the identity-only ended row and the commit-time facts. | Owner card; [foundation contract](foundation-contract.md#owner-decisions-19-november) |
 | 19 Nov | **Owner decision 4, packaging.** Two packages: one a foundation adapter builds against and one an execution model builds against (option b; the page had recommended option a, one package with two namespaces). Provisional names: the foundation contract and the model contract. | Owner card; [foundation contract](foundation-contract.md#owner-decisions-19-november) |
-| 19 Nov | **Owner decision 6, the release 1 job context** (review M7). `IJob.Attempt` with the attempt id and number, `IJob.Deadline` and `StartJob(key, arguments, timeout)`, as the job workers page approved for release 1. | Owner card; [foundation contract](foundation-contract.md#owner-decisions-19-november) |
+| 19 Nov | **Owner decision 6, the release 1 job context** (review M7). `IJob.AttemptId`, `IJob.AttemptNumber`, `IJob.Deadline` and `StartJob(key, arguments, timeout)`, as the job workers page approved for release 1. | Owner card; [foundation contract](foundation-contract.md#owner-decisions-19-november) |
 | 19 Nov | **Owner decision 5, adapter acceptance.** FC-1 to FC-18, plus a contract-level run of the simulation's workloads against the adapter with the mutations that the contract can express. | Owner card; [foundation contract](foundation-contract.md#owner-decisions-19-november) |
 | 19 Nov | The contract sits between a foundation and layer 3's actor types. A foundation provides what layers 1 and 2 provide today; the built-in foundation is the kernel's own, and `IKernelStore` becomes internal to it, still the way it swaps EF Core, MongoDB and in-memory storage. | Coordinator design choice under the owner cards; [foundation contract](foundation-contract.md) |
 | 19 Nov | Plain words only. The guard list: no partition, virtual partition, epoch, fence, lease, position, node record, `IKernelStore` or SQL in the contracts package; K2's architecture guard fails a member whose name or type names one. The clock the contract names is "the foundation clock". | Coordinator design choice; [vocabulary](foundation-contract.md#the-vocabulary) |

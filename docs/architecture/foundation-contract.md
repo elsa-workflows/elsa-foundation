@@ -25,7 +25,7 @@ turn").
 
 What layer 3 can reach today, counted from the prototype on main (`src/Kernel.Workflows`, the `Kernel.Durable` and
 `Kernel.Runtime` types its models and `WorkflowInstance` use), against the contract below. Public types and their
-public members, positional record fields and enum values included, static helpers excluded; `IActorType` has 12
+public members, positional record fields and enum values included, static helpers and parameters excluded; `IActorType` has 12
 members on main, and the read-model records and command payloads are counted.
 
 | Surface | Types | Members |
@@ -33,14 +33,13 @@ members on main, and the read-model records and command payloads are counted.
 | Built today: `ITurn`, `IExecutionModel`, the metadata interfaces, `Message`, `StartSpec`, `SendOptions`, `InboxKey`, `Kinds`, `IJob`, the commit clock, `IActorType`, `ITurnServices`, `InstanceRef`, `EffectKey` and the rest | 32 | 182 |
 | Plus the gate 2 additions the pages approved and nobody built (`RestoreWaits` and its plan, `TimerSpec`, `JobSpec`, `SendOptions.DueAt`, `TerminalGrowth`, `IActorType.IsCommand`, `ITurn.Instance.Tenant`, `BoundScope`) | 37 | 198 |
 | Beside it, what the HTTP adapter and hosts reach for ingress and reads: `IKernelStore` (30 members), `Worker.Post`, `Requests`, `ReplyTo`, `EventRoute`, `EventRow`, `SubscriptionRow` | 7 | 50 or more |
-| **After the cut, the whole foundation contract:** actor side 19 types / 97 members, ingress 11 / 39 (the operator command payload and the admission enums counted here), read models 9 / 33 | **39** | **169** |
+| **After the cut, the whole foundation contract:** actor side 18 types / 95 members, ingress 11 / 39 (the operator command payload and the admission enums counted here), read models 9 / 33 | **38** | **167** |
 | Layer 3's own model contract, built on the actor turn (`ITurn`, `IExecutionModel`, `IModelMetadata`, `InstanceInfo`, `WorkflowStart`, `EffectKey`), counted apart | 6 | 44 |
 
 The reviewed revision `2825b0ed1` counted 36 types and 154 members. The review's Minors add the release 1 job context
-(`JobAttempt`, `IJob.Attempt` and `Deadline`, owner decision 6), `now` on `ProtectsDeletion` (counted as one member, as
-the review did), `ActorView.AsOf`, `Admission.RetryAfter` and the two admission enums, nine values in all, that the page
-had left as strings (N4), and drop `ParkView.Reason`: 39 types and 169 members, of which 11 are enum values the earlier
-figure left out. Members that
+(`IJob.AttemptId`, `AttemptNumber` and `Deadline`, owner decision 6), `ActorView.AsOf`, `Admission.RetryAfter` and the
+two admission enums, nine values in all, that the page had left as strings (N4), and drop `ParkView.Reason`: 38 types
+and 167 members. Parameters are not members: `now` on `ProtectsDeletion` and `timeout` on `StartJob` change no count. Members that
 today reach a model only through `Message` or `InstanceRef` (eighteen and nine) and the `IActorType` members that take
 rows and deliveries are the largest cut.
 
@@ -64,7 +63,7 @@ reaches its `dueAt`; and FC-4 checks the bound.
 | `EventDelivered` | `Key`, `Id`, `Wait` | The event's key and id and the wait that asked. Replaces parsing the delivery id |
 | `StartSpec` | `Type`, `TypeData`, `Input`, `Ephemeral`, `History` | What creates an actor: its actor type, the type's own opaque data (a workflow's model, definition and state version), the input, which arrives as the `Start` message's payload, the Ephemeral choice and the history level. How long an unwritten Ephemeral actor may wait in memory is the foundation's configuration, bounded by a request's deadline (walkthrough decision 4; FC-2) |
 | `Placement` | `WithParent`, `Spread` | A hint for `Start`: keep the child where its parent is, so a call tree stays cheap, or spread a wide fan-out. The foundation places |
-| `IJob`, `JobAttempt` | `Actor`, `Key`, `Arguments`, `Attempt`, `Deadline`; `(Id, Number)` | What `ExecuteJobAsync` receives (owner decision 6; [job workers](job-workers.md#release-1)): the attempt's opaque id, new for every execution, and its number, a lower bound on the executions so far; the deadline, the foundation clock's reading at which a `StartJob` timeout cancels the job, or null. A job may run more than once; its result changes state once (FC-5) |
+| `IJob` | `Actor`, `Key`, `Arguments`, `AttemptId`, `AttemptNumber`, `Deadline` | What `ExecuteJobAsync` receives (owner decision 6; [job workers](job-workers.md#release-1)): the attempt's opaque id, new for every execution, and its number, a lower bound on the executions so far; the deadline, the foundation clock's reading at which a `StartJob` timeout cancels the job, or null. A job may run more than once; its result changes state once (FC-5) |
 | `JobFinished` | `Key`, `Result`, `Error` | The payload of kind `job-finished`, the one message a job's completion becomes |
 | `ChildFinished` | `Child`, `Status`, `Output`, `Final` | The payload of kind `child-finished`, the foundation's notice to a parent. `Final` false is the parked notice (large fan-out decision 5): the parent keeps waiting for the final one, which the resolution decides (FC-8) |
 | `TimerSpec`, `JobSpec`, `SubscriptionSpec`, `RestorePlan` | `(Id, Kind, Payload, Due)`, `(Key, Arguments)`, `(Key, Wait, Keep)`, `(Timers, Jobs, Subscriptions)` | The waits an actor's committed state holds, as `RestoreWaits` returns them; a recover re-arms each from the spec alone. A job's effect key travels inside its `Arguments`, as `StartJob` and `IJob` carry it (observability, [recover](observability.md#recover); FC-10) |
@@ -172,7 +171,7 @@ reaches the foundation only through `IActorTurn`.
 | exact ref, `EndedAt`, `Selection` | One word for "this life of this actor", so creation numbers never cross the contract; the time of its last ending; and the opaque token that names actor, life and Park or end mark for an operator command |
 | `EventDelivered`, `SubscriptionSpec`, `RestorePlan` | The event delivery's own fields in place of a parsed id; the subscription entry named like `TimerSpec` and `JobSpec`; the plan that holds the three |
 | `IIngress`, `Target`, `AddOptions`, `RequestOptions`, `Admission`, `AdmissionOutcome`, `RefusalReason`, `Reply`, duplicate | The one way in from outside, its four target shapes, an add's two options (a due time for an actor, a window for an event or a send's deduplication), a request's options and the two answers with their outcome and refusal values; the storage model already says "admission" |
-| `JobAttempt` | The release 1 job context's attempt id and number, so activity code written for release 1 runs unchanged on a remote worker (owner decision 6) |
+| `AttemptId`, `AttemptNumber` | The release 1 job context's attempt id and number on `IJob`, so activity code written for release 1 runs unchanged on a remote worker (owner decision 6) |
 | `OperatorCommand`, `RecoverMode`, `Final` | An operator command's payload, the recover's three modes, and the parked notice's flag |
 | `IActorReads`, `ActorView`, `ActorQuery`, `ParkView`, `OpenResolution`, `JournalEntry`, `DeliveryView`, `Page`, `AsOf`, `PageToken` | The read models' words, replacing records that named instances, creations and trials |
 
@@ -210,7 +209,7 @@ reaches the foundation only through `IActorTurn`.
 | Contract item | Prototype today (`prototypes/kernel-model`) |
 |---|---|
 | `ActorRef`, exact ref | `InstanceRef` with the partition in the id; `CreationProtocol.Origin(id, creation)` and `CreationAddress` |
-| `IActorType`, `JobAttempt` | `IActorType` in `Kernel.Durable/Turns.cs` (12 members on main) and `WorkflowInstance`; the attempt id `{ticket id}@{epoch}` and the ticket's recorded attempts ([job workers](job-workers.md#release-1)) |
+| `IActorType`, `IJob.AttemptId` | `IActorType` in `Kernel.Durable/Turns.cs` (12 members on main) and `WorkflowInstance`; the attempt id `{ticket id}@{epoch}` and the ticket's recorded attempts ([job workers](job-workers.md#release-1)) |
 | `IActorTurn` | `DurableTurn` plus `TurnInput`, with `Turn` in `Kernel.Workflows` adding the workflow part and `Seal` building `InstanceRow` and `TurnOutcome` |
 | `End`, `SetHeader`, `ActorHeader` | `InstanceRow`'s columns `Status`, `Model`, `Definition`, `Suspended`, `Children`, `Fault`, `Parent`, `StateVersion`; `EndedAt` and the end mark are the terminal mark the data lifecycle page adds; `Labels` are new projected columns (K3) |
 | The atomic outcome | `Worker` flush → `IKernelStore.CommitAsync(CommitBatch)` with the k-row fence |
@@ -240,7 +239,7 @@ reference (a coordinator design choice under that decision).
 | FC-1 | Single writer: no two turns of one actor overlap or commit interleaved; after an owner change the new owner's first turn sees every committed outcome and a stale owner's outcome never lands |
 | FC-2 | Atomic outcome: state, header, journal entries, sends, timers, job starts, subscriptions, publishes and child starts of one turn land together or not at all; nothing is delivered, and nothing is released except to a request that opted out with `ReleaseBeforeCommit` (FC-14), before they land. An Ephemeral actor that ends in its first turn without sending writes nothing; one that waits only on its own timers and jobs may stay in memory up to the configured short wait and a request's deadline, and is written as it is afterwards (ADR 0099 section 6) |
 | FC-3 | Inbox: a message is delivered at least once and consumed only by a committed turn; two messages from one sender to one target with one id are one message; an id the foundation issued (`Send`, `Publish`, timers, job starts, notices) never equals an outside id; one sender's messages to one target arrive in the order sent; every message the foundation produces carries the W3C trace context of the turn or ingress call that produced it, and the foundation starts the turn, commit and job spans ([observability](observability.md#trace-context-on-every-message)) |
-| FC-4 | Timers: a send with `dueAt` is delivered no earlier than the delivering node's clock reading `dueAt`, and within the skew bound the foundation states after it (FC-C1), survives owner loss and process death, and `Recall` prevents delivery of a message not yet given |
+| FC-4 | Timers: a send with `dueAt` is delivered no earlier than the delivering node's reading of the foundation clock reaching `dueAt`, on clocks kept within the skew bound the foundation states (FC-C1), with no upper bound on when it is delivered; it survives owner loss and process death, and `Recall` prevents delivery of a message not yet given |
 | FC-5 | Jobs: a committed `StartJob` runs at least once after any owner change; its result changes state once; after `CancelJob` no result applies; an earlier run's result never applies after a restart; past the poison threshold the actor parks with the job's error |
 | FC-6 | Events, for a turn's `Publish` and for `SendAsync` or `RequestAsync` to `Event(key)` alike, over live waits (a wait whose removal has not committed): a publish committed after a wait's commit always reaches it; one whose matching finished before the wait's commit reaches it only when the wait keeps; one still being matched when the wait committed may reach it, with no clock bound (owner, 18 November); every delivery has kind `Kinds.Event` with the key in `Event.Key`; a turn's event id and a caller's never coincide, and the outside publish refuses one that could (owner, 18 November); an outside publish with the same `(key, id)` within its `KeepFor` window is one publication; a request to `Event(key)` is answered by the first live output of any waiter it reached, and with no live waiter at once with "no waiter" (FC-C2); a start subscription starts one actor per event |
 | FC-7 | Subscriptions: a wait exists from its commit; `Unsubscribe`, Park and `End` remove it, and a publish that commits after the removing commit never reaches the removed wait; the same wait subscribed twice is one wait; a start subscription takes events from `SetStartAsync` with a spec until `SetStartAsync` with none, and none after |
@@ -328,5 +327,5 @@ owner card in the [register](decisions.md#the-foundation-contract-19-november).
    model contract.
 5. **Adapter acceptance.** FC-1 to FC-18, plus a contract-level run of the simulation's workloads against the adapter
    with the mutations that the contract can express.
-6. **The release 1 job context** (review M7): `IJob.Attempt` with the attempt id and number, `IJob.Deadline`, and
+6. **The release 1 job context** (review M7): `IJob.AttemptId`, `IJob.AttemptNumber`, `IJob.Deadline` and
    `StartJob(key, arguments, timeout)`, as the job workers page approved for release 1.
