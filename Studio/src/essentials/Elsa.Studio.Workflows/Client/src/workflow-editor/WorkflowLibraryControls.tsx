@@ -145,6 +145,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
         </select></StudioField>
         <StudioButton onClick={() => setViewDialogOpen(true)}><Save size={15} aria-hidden="true" />Save view</StudioButton>
       </> : null}
+      {support.views ? <StudioLink className="studio-button" data-variant="default" href="/workflows/views"><Bookmark size={15} aria-hidden="true" />Manage views</StudioLink> : null}
       {permissions.canManageTags === true ? <StudioLink className="studio-button" data-variant="default" href="/workflows/tags"><Tags size={15} aria-hidden="true" />Manage tags</StudioLink> : null}
       </div>
     </div>
