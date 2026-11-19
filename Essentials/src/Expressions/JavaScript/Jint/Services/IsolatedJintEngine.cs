@@ -244,8 +244,22 @@ internal static class IsolatedJintEngine
         }
 
         /// <summary>One change per variable read or assigned, in the order the script first touched them.</summary>
+        /// <summary>
+        /// One change per variable read or assigned, for a script body that writes them: a value the script made
+        /// unserializable or grew past the JSON limits fails the evaluation with that error, so nothing is written.
+        /// </summary>
         public IReadOnlyList<(string Name, ScriptValueChange Change)> Collect() =>
+            _order.Select(name => (name, values.Collect(Key(name), _current[name], _assigned.Contains(name)))).ToArray();
+
+        /// <summary>
+        /// One change per variable read or assigned, for an input expression, which refuses any change: a value the script
+        /// made unserializable or grew past the JSON limits is reported as changed as a whole.
+        /// </summary>
+        public IReadOnlyList<(string Name, ScriptValueChange Change)> CollectForRefusal() =>
             _order.Select(name => (name, CollectOne(name))).ToArray();
+
+        /// <summary>Whether the script assigned the variable itself (<c>variables.x = v</c>), rather than only changing what it read.</summary>
+        public bool WasAssigned(string name) => _assigned.Contains(name);
 
         // A value the script made unserializable (a cycle, a BigInt) or grew past the JSON limits (depth, size) was
         // changed: it is reported as changed as a whole, so an input expression fails with its write diagnostic rather

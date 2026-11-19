@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Scripting.Services;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Exceptions;
@@ -11,10 +13,13 @@ namespace Elsa.Activities.Scripting.Activities;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The script receives only <c>args</c>, plain JavaScript values built from JSON; changing them is local to the run
-/// (spec 1228). It cannot read or write workflow variables,
-/// inputs, outputs, services, configuration, or the ambient activity context. A workflow assignment is a
-/// separate graph-visible <c>Set</c> intrinsic that consumes this activity's result.
+/// The script receives <c>args</c>, plain JavaScript values built from JSON; changing them is local to the run
+/// (spec 1228). It reads and writes workflow variables through <c>variables</c> (<c>variables.order</c>,
+/// <c>variables['order']</c>) and <c>getVariable(name)</c>, over the step's variable session (spec 1222 FR-033, ADR 0090):
+/// a read returns the committed value plus the step's own changes and is recorded; a change it makes, by assigning the
+/// variable or a member of a value it read, is written with the step, and a change made without assigning the
+/// variable is written too, with a warning (ADR 0090 C2). It cannot reach inputs, outputs, services, configuration or the
+/// ambient activity context.
 /// </para>
 /// <para>
 /// Constructor parameters are services; workflow data is hydrated into the ordinary properties below before
@@ -39,7 +44,7 @@ namespace Elsa.Activities.Scripting.Activities;
 // writes them (ADR 0090 decision 3), and a background worker has no access to variables. Marking it needs that access first.
 [ActivityValueOutcomes(RunJavaScript.PossibleOutcomesInputKey, UnmatchedOutcome = null, SelectsOnEveryCompletion = false)]
 [ActivityScriptOutcomes("script")]
-public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activity<RunJavaScriptResult>
+public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activity<RunJavaScriptResult>, IStepVariableSessionConsumer
 {
     /// <summary>
     /// The contract key of <see cref="PossibleOutcomes"/>. <c>ActivityValueOutcomes</c> resolves its source by
@@ -71,6 +76,19 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         if (string.IsNullOrWhiteSpace(Script))
             return ActivityTransition.Complete(new RunJavaScriptResult(null));
 
+        // A step body has a variable session; a context built by hand (outside a step) has none, and the script then has
+        // no `variables` root.
+        IStepVariableSession? session;
+        try
+        {
+            session = context.Variables as IStepVariableSession;
+        }
+        catch (InvalidOperationException)
+        {
+            session = null;
+        }
+
+        var variables = session is null ? null : new StepScriptVariables(session);
         JavaScriptScriptEvaluationResult evaluation;
         try
         {
@@ -79,7 +97,8 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
                 Arguments,
                 context.CancellationToken)
             {
-                Warnings = context.Warnings
+                Warnings = context.Warnings,
+                Variables = variables
             });
         }
         catch (JavaScriptCompletionException exception)
@@ -91,7 +110,15 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
             // Spec 1228 FR-013: the precision policy refused the result; the step faults and nothing of it is written. With
             // a protected input the fault names no number and no path from it (spec 1229 FR-006).
             return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code,
-                context.HasProtectedInputs ? exception.ValueFreeMessage : exception.Message));
+                context.HasProtectedInputs || session?.HasReadProtectedValue == true ? exception.ValueFreeMessage : exception.Message));
+        }
+
+        // Spec 1222 FR-011: a name no visible variable has read undefined; the warning names it unless a value the script
+        // read is protected, since a computed name can come from that value.
+        if (variables is not null)
+        {
+            foreach (var warning in variables.MissingNameWarnings())
+                context.Warnings.Report(session!.HasReadProtectedValue ? warning.ProtectedForm ?? warning : warning);
         }
 
         // The selection travels next to the result; whether its names are in this node's pinned outcome set is checked

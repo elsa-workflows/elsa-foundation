@@ -80,7 +80,7 @@ internal sealed class JintPortableJavaScriptEvaluator(
         // fails the evaluation, so nothing is written and nothing is dropped silently.
         if (variables is not null)
         {
-            foreach (var (name, change) in variables.Collect())
+            foreach (var (name, change) in variables.CollectForRefusal())
             {
                 if (change.Kind != ScriptValueChangeKind.Unchanged)
                     throw new InputExpressionWriteException(name, change.ChangedPaths.Count > 0 ? change.ChangedPaths[0] : change.Key, variables.IsDeclared(name));

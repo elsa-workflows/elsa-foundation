@@ -7,9 +7,9 @@
 This work changes existing code, not greenfield: tests go with each change; no test-first cadence is declared.
 
 **Gates**:
-- User Story 3's end-to-end test (T028) waits on S-7's step write path (ADR 0090).
 - User Story 6 waits on #3167 (S-0).
-- User Story 3, User Story 7 and T010's variable cases need S-4's script body read surface (spec 1222).
+- User Stories 3 and 7 needed S-4's script body read surface (spec 1222 Phase 8); it is built in the same PR (#4838),
+  on S-7's step variable session.
 
 Paths: `Jint/` = `Essentials/src/Expressions/JavaScript/Jint/`, `JsCore/` =
 `Essentials/src/Expressions/JavaScript/Core/` (the Jint project already references it), `Prim/` = `Essentials/src/Primitives/Primitives/`,
@@ -74,9 +74,9 @@ Paths: `Jint/` = `Essentials/src/Expressions/JavaScript/Jint/`, `JsCore/` =
 **Goal**: a script's changes reach S-7's step write path. The end-to-end test waits on S-7.
 **Independent Test**: spec User Story 3.
 
-- [ ] T026 [US3] On S-4's script body read surface, make `variables` assignable in script activities; in `Jint/Services/JintJavaScriptScriptEvaluator.cs` pass a script activity's changes to S-7's step write path with their ADR 0092 base — **Waits on** S-4's T047 (the `variables` root in the Run JavaScript body, S-4 Phase 8).
-- [ ] T027 [US3] Raise the ADR 0090 C2 visibility warning for a member change with no whole assignment in `Jint/Services/CopyComparePatchValueBridge.cs`, with a unit test — **Waits on** S-4's T047: the warning is raised when a script body's member change is committed, which needs the body's `variables` root.
-- [ ] T028 [US3] End-to-end tests, once S-7's write path is on the branch: member change keeps other members' text; whole assignment replaces; array written whole; equal-value member change keeps stored value; equal-value whole assignment is a write; string forces the write; visibility warning (acceptance 1–6) in `Essentials/tests/Workflows/Runtime/Tests/ScriptVariableWritesTests.cs` — **Waits on** T026, so S-4's T047 (the body's `variables` root); S-7's write path (#4761) is merged. US3 change detection is tested at the bridge level in `CopyComparePatchValueBridgeTests`.
+- [x] T026 [US3] On S-4's script body read surface, make `variables` assignable in script activities; in `Jint/Services/JintJavaScriptScriptEvaluator.cs` pass a script activity's changes to S-7's step write path with their ADR 0092 base — done: `JavaScriptValueWrites.WriteVariables` hands each change (a member change patched into the stored value, or a whole value) through the precision policy to the request's `IScriptVariableSession`, which writes it through S-7's step session (base = the session read, ADR 0092); every change is checked before any is written
+- [x] T027 [US3] Raise the ADR 0090 C2 visibility warning for a member change with no whole assignment in `Jint/Services/CopyComparePatchValueBridge.cs`, with a unit test — done: raised in `JavaScriptValueWrites.WriteVariables` (the bridge reports the change; the evaluator knows whether the script assigned the variable) as `VF-WRITE-001`, with its protected form; unit tests in `ScriptBodyVariableEvaluationTests`
+- [x] T028 [US3] End-to-end tests, once S-7's write path is on the branch: member change keeps other members' text; whole assignment replaces; array written whole; equal-value member change keeps stored value; equal-value whole assignment is a write; string forces the write; visibility warning (acceptance 1–6) in `Essentials/tests/Workflows/Runtime/Tests/ScriptVariableWritesTests.cs` — done in `Essentials/tests/Activities/Runtime/Tests/ScriptBodyVariablesRunTests.cs` (the harness with Run JavaScript lives in the activities runtime tests), acceptance 1–6
 
 ## Phase 7: User Story 4 — One name for dynamic data (P2)
 
@@ -105,8 +105,8 @@ Paths: `Jint/` = `Essentials/src/Expressions/JavaScript/Jint/`, `JsCore/` =
 
 **Independent Test**: spec User Story 7.
 
-- [ ] T040 [US7] At result materialization of a script body, take the strongest protection policy among its session reads in the read set (ADR 0092; input expressions keep the existing fold in `RuntimePortableExpressionEvaluator`) and attach it to the result, in `Jint/Services/JintResultMaterializer.cs` or the script activity's result capture — **Waits on** S-4's T047 (the script body's session reads).
-- [ ] T041 [US7] End-to-end tests: result of a sensitive read is sensitive and redacted; result with no protected read gets none (acceptance 1–2) in `Essentials/tests/Workflows/Runtime/Tests/ScriptResultProtectionTests.cs` — **Waits on** S-4's T047 (the script body's session reads).
+- [x] T040 [US7] At result materialization of a script body, take the strongest protection policy among its session reads in the read set (ADR 0092; input expressions keep the existing fold in `RuntimePortableExpressionEvaluator`) and attach it to the result, in `Jint/Services/JintResultMaterializer.cs` or the script activity's result capture — done: the invoke handler passes the strongest protection among the body's session reads to `ActivityCompletionProjector` (a new read-protection overload) for an engine script activity
+- [x] T041 [US7] End-to-end tests: result of a sensitive read is sensitive and redacted; result with no protected read gets none (acceptance 1–2) in `Essentials/tests/Workflows/Runtime/Tests/ScriptResultProtectionTests.cs` — done in `ScriptBodyVariablesRunTests.cs` (acceptance 1–2), next to the T028 tests
 
 ## Phase 10: Polish
 
@@ -114,8 +114,8 @@ Paths: `Jint/` = `Essentials/src/Expressions/JavaScript/Jint/`, `JsCore/` =
 - [x] T043 [P] Test that Liquid reads large numbers and long decimals without narrowing in `Essentials/tests/Expressions/Tests/LiquidNumberTests.cs`
 - [x] T044 Run the bridge benchmark on 1 KB, 100 KB and 1 MB inputs against today's engine (SC-007), keep it in the benchmark project so a later bridge can be compared, and record the result in the PR description — opt-in xunit benchmark `ScriptValueBridgeBenchmark` (no benchmark project exists and the plan adds no external dependency); the baseline is the pre-spec frozen conversion, kept in the benchmark; results in the PR
 - [x] T045 Re-run the JTest corpus measurement (SC-008) and compare with T002 — unchanged at the PR head: 8 of 36 convert and 6 of 36 publish (2 run to completion); one definition moved between refusal codes; SC-008 holds
-- [x] T046 Regenerate the dependency map and solution filters if project references changed; run the quickstart by hand — no project reference changed (only a package reference in the Jint project, whose lock files are updated), so the solution filters are unchanged and the dependency map is generated, not committed; quickstart steps 5 and 6 and the input-expression parts were run in the real app (PR description); steps 1 to 4 need the Run JavaScript body's `variables` root (S-4 T047)
-- [ ] T047 Set the spec status to `Implemented` in the finishing PR — **Waits on** US3, US6 and US7; the spec stays Approved, not Implemented, in this PR.
+- [x] T046 Regenerate the dependency map and solution filters if project references changed; run the quickstart by hand — no project reference changed (only a package reference in the Jint project, whose lock files are updated), so the solution filters are unchanged and the dependency map is generated, not committed; quickstart steps 5 and 6 and the input-expression parts were run in the real app (PR description); steps 1 to 4 (the Run JavaScript body) are covered end to end by `ScriptBodyVariablesRunTests`, since the Workbench does not enable the scripting feature
+- [ ] T047 Set the spec status to `Implemented` in the finishing PR — **Waits on** US6 (#3167); the spec stays Approved, not Implemented, in this PR.
 
 ## Dependencies
 

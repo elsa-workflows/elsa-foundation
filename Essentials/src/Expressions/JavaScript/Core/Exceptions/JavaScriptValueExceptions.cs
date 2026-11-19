@@ -14,6 +14,12 @@ public static class JavaScriptValueDiagnostics
 
     /// <summary>A JavaScript input expression tried to change a variable (FR-006a, ADR 0083 <c>binding-readonly-v1</c>).</summary>
     public const string InputExpressionWrite = "VF-BIND-001";
+
+    /// <summary>
+    /// A script changed a value it read without assigning the variable (<c>variables.order.total = 1</c> with no
+    /// <c>variables.order = …</c>): the change is written, and this warning makes the write visible (FR-007, ADR 0090 C2).
+    /// </summary>
+    public const string ChangeWithoutAssignment = "VF-WRITE-001";
 }
 
 /// <summary>

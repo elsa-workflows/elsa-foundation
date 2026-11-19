@@ -84,6 +84,37 @@ internal sealed class StepVariableSession : IStepVariableSession
 
     public string AttemptId { get; }
 
+    // ---- the script body's read plan (spec 1222 FR-004, FR-033; T049, T050) ----
+
+    public IReadOnlyDictionary<string, StepVariableTarget> PinnedReads => _pinnedReads ??= PinnedBodyReads();
+
+    private IReadOnlyDictionary<string, StepVariableTarget>? _pinnedReads;
+
+    public bool ReadsComputedNames => ScriptBodyReadPlan.Of(_node)?.VariableReadFallback is not null;
+
+    public IReadOnlyList<string> VisibleNames => _byName.Keys.ToArray();
+
+    public bool HasReadProtectedValue => _readOrder.Any(read =>
+        read.Policy.IsSensitive || read.Policy.RequiresEncryption || !string.IsNullOrWhiteSpace(read.Policy.RedactionMode));
+
+    // The plan pins each literal body read to its declaring scope at publish, keyed variables.<name>; a name the step can
+    // no longer see faults when it is read, as a pinned input read does.
+    private IReadOnlyDictionary<string, StepVariableTarget> PinnedBodyReads()
+    {
+        var plan = ScriptBodyReadPlan.Of(_node);
+        if (plan is null)
+            return new Dictionary<string, StepVariableTarget>(StringComparer.Ordinal);
+        const string prefix = Elsa.Expressions.Core.Models.ExpressionParameterSurfaces.VariablesKeyPrefix;
+        return plan.Parameters.ToDictionary(
+            parameter => parameter.Key.StartsWith(prefix, StringComparison.Ordinal) ? parameter.Key[prefix.Length..] : parameter.Key,
+            parameter =>
+            {
+                var name = parameter.Key.StartsWith(prefix, StringComparison.Ordinal) ? parameter.Key[prefix.Length..] : parameter.Key;
+                return new StepVariableTarget(parameter.Value.DeclaringScopeNodeId, parameter.Value.VariableKey, name);
+            },
+            StringComparer.Ordinal);
+    }
+
     /// <summary>The reads this attempt made, in first-read order, each variable once.</summary>
     public IReadOnlyList<VariableSessionRead> Reads => _readOrder;
 

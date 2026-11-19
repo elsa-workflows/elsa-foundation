@@ -17,12 +17,6 @@ public static class ScriptVariableReadDiagnostics
     /// <summary>A script reads variables by a computed or opaque name; the message lists its candidates (FR-009).</summary>
     public const string ComputedReadReported = "VF-READ-004";
 
-    /// <summary>
-    /// A script activity's body reads workflow variables, which its variable session (spec 1231, spec 1222 T047/T050) does
-    /// not serve yet: a warning, until the body read surface lands.
-    /// </summary>
-    public const string BodyReadNotYetServed = "VF-READ-006";
-
     /// <summary>A literal name now resolves to a different declaration than in the published version (FR-024).</summary>
     public const string ShadowChange = "VF-READ-005";
 

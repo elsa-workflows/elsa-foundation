@@ -30,6 +30,11 @@ internal sealed class JintJavaScriptScriptEvaluator(
         var engine = IsolatedJintEngine.Create(options, request.CancellationToken);
         using var values = valueBridge.Begin(engine);
         IsolatedJintEngine.SetArgs(engine, values, request.Arguments, options);
+        // Spec 1222 FR-033: the body reads and writes the step's variables through its session; every read is recorded
+        // there, literal or computed, so nothing is pinned into the engine.
+        var variables = request.Variables is { } session
+            ? IsolatedJintEngine.SetVariables(engine, values, NoPinnedValues, session, options)
+            : null;
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
 
         var returned = engine.Evaluate(PreparedJavaScript.Script(request.Source));
@@ -45,8 +50,27 @@ internal sealed class JintJavaScriptScriptEvaluator(
         else
             result = new JavaScriptScriptEvaluationResult(Write(completions, values, returned, out losses));
 
-        JavaScriptValueWrites.WarnLossyReads(values, losses, request.Warnings, logger);
+        var warnings = new List<Elsa.Expressions.Core.Models.ExecutionWarning>();
+        if (variables is not null)
+            losses = [.. losses, .. JavaScriptValueWrites.WriteVariables(variables, request.Variables!, precisionPolicy, warnings)];
+
+        // A value the script read through its session may be protected: its warnings then keep their protected form,
+        // which names no member of it (spec 1229 FR-006). A protected input is handled by the step's own collector.
+        var sink = request.Variables?.HasReadProtectedValue == true && request.Warnings is { } warningSink
+            ? new ProtectingWarningSink(warningSink)
+            : request.Warnings;
+        foreach (var warning in warnings)
+            sink?.Report(warning);
+        JavaScriptValueWrites.WarnLossyReads(values, losses, sink, logger);
         return ValueTask.FromResult(result);
+    }
+
+    private static readonly IReadOnlyDictionary<string, JsonElement> NoPinnedValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+
+    // Reports each warning's protected form, when it has one.
+    private sealed class ProtectingWarningSink(Elsa.Expressions.Core.Contracts.IExecutionWarningSink inner) : Elsa.Expressions.Core.Contracts.IExecutionWarningSink
+    {
+        public void Report(Elsa.Expressions.Core.Models.ExecutionWarning warning) => inner.Report(warning.ProtectedForm ?? warning);
     }
 
     /// <summary>The result leaves through the value bridge, and a lossy one meets the precision policy (spec 1228 FR-013).</summary>

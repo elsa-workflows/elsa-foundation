@@ -27,6 +27,63 @@ internal static class JavaScriptValueWrites
     }
 
     /// <summary>
+    /// Writes back what a script body changed (FR-003 to FR-007, spec 1222 FR-033): each variable it changed, member by
+    /// member or as a whole, goes through the precision policy and then to the step's variable session, which commits it
+    /// with the step (ADR 0090). A member change keeps the untouched members' stored text (C3). A change the script made
+    /// without assigning the variable is still a write, and a warning makes it visible (ADR 0090 C2). Returns the losses
+    /// the writes carried, so the read-only warning does not count them twice.
+    /// </summary>
+    public static IReadOnlyList<JavaScriptPrecisionLoss> WriteVariables(
+        IsolatedJintEngine.ScriptVariables variables,
+        IScriptVariableSession session,
+        IJavaScriptPrecisionPolicy policy,
+        ICollection<ExecutionWarning> warnings)
+    {
+        var losses = new List<JavaScriptPrecisionLoss>();
+        // Every change is checked before any is written, so a refusal writes nothing of the step.
+        var writes = new List<(string Name, ScriptValueWrite Write)>();
+        foreach (var (name, change) in variables.Collect())
+        {
+            if (change.Kind == ScriptValueChangeKind.Unchanged)
+                continue;
+            var write = Apply(new ScriptValueWrite(change.Value, change.Losses), change.Key, policy);
+            losses.AddRange(write.Losses);
+            writes.Add((name, write));
+            if (!variables.WasAssigned(name))
+                warnings.Add(ChangeWithoutAssignment(name, change));
+        }
+
+        foreach (var (name, write) in writes)
+            session.Write(name, write.Value);
+        return losses;
+    }
+
+    // ADR 0090 C2: names the variable and the changed paths; the protected form names the variable only, since a member
+    // path can be a key of the stored value.
+    private static ExecutionWarning ChangeWithoutAssignment(string name, ScriptValueChange change)
+    {
+        var key = change.Key;
+        var paths = string.Join(", ", change.ChangedPaths);
+        string Message(string where) =>
+            $"The script changed variable '{name}' ({where}) without assigning it, so the change is written. Assign the variable " +
+            $"({key} = …) to make the write explicit, or copy it ({{...{key}}}) to change a local copy only.";
+        return new ExecutionWarning(
+            JavaScriptValueDiagnostics.ChangeWithoutAssignment,
+            Message(paths),
+            ExecutionWarningSeverity.Warning,
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["variable"] = name, ["paths"] = paths })
+        {
+            ProtectedForm = StringComparer.Ordinal.Equals(paths, key)
+                ? null
+                : new ExecutionWarning(
+                    JavaScriptValueDiagnostics.ChangeWithoutAssignment,
+                    Message(key),
+                    ExecutionWarningSeverity.Warning,
+                    new Dictionary<string, string>(StringComparer.Ordinal) { ["variable"] = name, ["paths"] = key })
+        };
+    }
+
+    /// <summary>
     /// One warning per evaluation for the lossy numbers it read but did not write (FR-015). It never refuses. It goes to
     /// the run-time warning channel, which records it on the activity execution, and to the log. It names the paths and
     /// why, never a value (spec 1229 FR-006).

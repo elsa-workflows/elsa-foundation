@@ -40,6 +40,32 @@ public sealed class JavaScriptScriptEvaluationRequest
 
     /// <summary>Where the evaluator reports warnings (spec 1228); the activity passes its step's sink.</summary>
     public Elsa.Expressions.Core.Contracts.IExecutionWarningSink? Warnings { get; init; }
+
+    /// <summary>
+    /// The step's variables, served to the script as the <c>variables</c> root and <c>getVariable</c> (spec 1222 FR-033);
+    /// <see langword="null"/> when the step has no variable session, and the script then has no <c>variables</c> root.
+    /// </summary>
+    public IScriptVariableSession? Variables { get; init; }
+}
+
+/// <summary>
+/// A script activity's variables (spec 1222 FR-033 to FR-035, spec 1228 FR-006): each read goes through the step's
+/// variable session, which returns the committed value plus the step's own pending writes and records the read; each
+/// change the script made is written back through the same session, committed with the step (ADR 0090).
+/// </summary>
+public interface IScriptVariableSession : Elsa.Expressions.Core.Contracts.IExpressionVariableReader
+{
+    /// <summary>
+    /// Writes a variable's whole value: the stored value with the script's changes patched in, or the value it assigned
+    /// (ADR 0090 C3). An undeclared name, a read-only or transient variable faults the step.
+    /// </summary>
+    void Write(string name, JsonElement? value);
+
+    /// <summary>
+    /// Whether a value the script read is protected (sensitive, encrypted or redacted): its diagnostics then use their
+    /// value-free form (spec 1229 FR-006).
+    /// </summary>
+    bool HasReadProtectedValue { get; }
 }
 
 /// <summary>The state of a script's outcome selection; mirrors the activity runtime's outcome selection.</summary>

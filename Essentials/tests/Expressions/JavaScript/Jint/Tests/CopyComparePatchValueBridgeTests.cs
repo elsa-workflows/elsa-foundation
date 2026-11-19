@@ -348,7 +348,7 @@ public sealed class CopyComparePatchValueBridgeTests
         private IReadOnlyList<(string Name, ScriptValueChange Change)>? _changes;
         public IScriptValueEvaluation Values => values;
         public global::Jint.Native.JsValue Returned => returned;
-        public IReadOnlyList<(string Name, ScriptValueChange Change)> Changes => _changes ??= root.Collect();
+        public IReadOnlyList<(string Name, ScriptValueChange Change)> Changes => _changes ??= root.CollectForRefusal();
         public void Dispose() => values.Dispose();
     }
 }

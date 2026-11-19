@@ -411,7 +411,9 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         {
             if (SameJavaScriptValue(original, current, markers))
             {
+                // Kept as stored: its lossy numbers keep every digit, so they were not read and lost (FR-015).
                 original.WriteTo(writer);
+                _exact.AddRange(_lossy.Where(number => IsWithin(number.Path, path)));
                 return;
             }
 

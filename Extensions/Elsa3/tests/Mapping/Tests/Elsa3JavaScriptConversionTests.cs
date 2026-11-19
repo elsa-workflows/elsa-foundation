@@ -91,16 +91,33 @@ public sealed class Elsa3JavaScriptConversionTests
     }
 
     [Fact]
-    public async Task A_script_reads_through_arguments_and_returns_its_completion_value()
+    public async Task A_script_reads_a_variable_through_the_variables_root_and_returns_its_completion_value()
     {
+        // Spec 1222 FR-026a: the body reads variables over its session, so no arguments expression carries them.
         var script = Activity("node", "Elsa.RunJavaScript", ("script", Literal("var total = getVariable('total'); total + 1")));
 
         var result = await ConvertAsync(Sequence("root", script), new Elsa3Variable { Id = "total", Name = "total", TypeName = "Int32" });
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var node = Node(result.Value!.State, "node");
-        Assert.Equal("var total = args.total; return total + 1", Text(Input(node, "script")));
-        Assert.Equal("({ \"total\": args.total })", Source(Input(node, "arguments")));
+        Assert.Equal("var total = variables.total; return total + 1", Text(Input(node, "script")));
+        Assert.DoesNotContain(node.Inputs, input => input.ReferenceKey == "arguments");
+    }
+
+    [Fact]
+    public async Task A_script_reads_a_workflow_input_through_arguments()
+    {
+        // Inputs, activity results and metadata stay args (FR-035a).
+        var definition = ConversionServices.Definition(Sequence("root",
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal("var name = getInput('Customer'); name")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Customer", Type = "String" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var node = Node(result.Value!.State, "node");
+        Assert.Equal("var name = args.Customer; return name", Text(Input(node, "script")));
+        Assert.Equal("({ \"Customer\": args.Customer })", Source(Input(node, "arguments")));
     }
 
     /// <summary>
@@ -111,9 +128,11 @@ public sealed class Elsa3JavaScriptConversionTests
     [Fact]
     public async Task The_arguments_expression_declares_the_arguments_input_type()
     {
-        var script = Activity("node", "Elsa.RunJavaScript", ("script", Literal("return getVariable('greeting');")));
+        var definition = ConversionServices.Definition(Sequence("root",
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal("return getInput('greeting');")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "greeting", Type = "String" }];
 
-        var result = await ConvertAsync(Sequence("root", script), new Elsa3Variable { Id = "greeting", Name = "greeting", TypeName = "String" });
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var arguments = Assert.IsType<JsonElement>(Input(Node(result.Value!.State, "node"), "arguments").Value.Value);

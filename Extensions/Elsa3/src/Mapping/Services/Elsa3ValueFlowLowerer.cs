@@ -474,8 +474,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
     /// <summary>
     /// A RunJavaScript body (plan D-16). Elsa 3 stores it as a literal and runs it with its host functions; Elsa 4 runs
-    /// it as a function body that sees only <c>args</c>. The body is rewritten in script mode: its reads become
-    /// <c>args.&lt;name&gt;</c>, bound by an <c>arguments</c> object expression, and its completion value is returned.
+    /// it as a function body. The body is rewritten in script mode: its variable reads become <c>variables.&lt;name&gt;</c>,
+    /// read over the step's variable session and pinned at publish from the script itself (spec 1222 FR-026a, FR-033);
+    /// its other reads (inputs, activity results, metadata) become <c>args.&lt;name&gt;</c>, bound by an
+    /// <c>arguments</c> object expression; and its completion value is returned.
     /// The <c>arguments</c> expression declares the type of the activity's own <c>arguments</c> input, because
     /// publication requires the two to match exactly (#3287: Elsa 4's <c>RunJavaScript.Arguments</c> is a
     /// <c>JsonElement</c>). Without a known contract it declares <c>Object</c>.
@@ -530,10 +532,14 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             Elsa3Literal(property.Value, definitionResult.Source));
         if (rewrite.ScriptOutcomes is { } scriptOutcomes)
             DeclareScriptOutcomes(input, property, possibleOutcomes, scriptOutcomes, diagnostics);
-        if (definitionResult.Parameters.Count == 0)
+        // The body's variable reads are not arguments: it reads them itself.
+        var argumentParameters = definitionResult.Parameters
+            .Where(parameter => !parameter.Key.StartsWith(ExpressionParameterSurfaces.VariablesKeyPrefix, StringComparison.Ordinal))
+            .ToDictionary(parameter => parameter.Key, parameter => parameter.Value, StringComparer.Ordinal);
+        if (argumentParameters.Count == 0)
             return;
 
-        var members = definitionResult.Parameters.Keys
+        var members = argumentParameters.Keys
             .Order(StringComparer.Ordinal)
             .Select(name => $"{JsonSerializer.Serialize(name)}: {ArgumentAccess(name)}");
         var argumentsType = inputTypeOf?.Invoke(property.Activity, ScriptArgumentsKey) ?? new TypeReference(TypeAliasConvention.AnyAlias);
@@ -541,7 +547,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             "JavaScript",
             $"({{ {string.Join(", ", members)} }})",
             argumentsType,
-            definitionResult.Parameters,
+            argumentParameters,
             JsonSerializer.SerializeToElement(new { }),
             ExpressionCapabilityProfiles.BindingPureV1);
         property.Activity.AdditionalProperties[ScriptArgumentsKey] = JsonSerializer.SerializeToElement(new JsonObject

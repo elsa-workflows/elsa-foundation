@@ -611,6 +611,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 activityContract,
                 returnedTransition,
                 TimeProvider.GetUtcNow(),
+                activity is IStepVariableSessionConsumer ? ReadProtection(stepSession) : null,
                 cancellationToken);
             var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId,
@@ -1563,6 +1564,27 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         foreach (var change in completionChanges)
             changes[change.StateId] = change;
         return changes.Values.ToArray();
+    }
+
+    // Spec 1228 US7 (ADR 0092): an engine script activity's result takes the strongest protection among the values its
+    // body read through the session; null when it read none that is protected.
+    private static ActivityValuePolicy? ReadProtection(StepVariableSession? session)
+    {
+        if (session is null)
+            return null;
+        ActivityValuePolicy? strongest = null;
+        foreach (var read in session.Reads)
+        {
+            var policy = read.Policy;
+            if (!policy.IsSensitive && !policy.RequiresEncryption && string.IsNullOrWhiteSpace(policy.RedactionMode))
+                continue;
+            var minimum = new ActivityValuePolicy(IsPersistable: true, policy.IsSensitive, policy.RequiresEncryption, policy.RedactionMode);
+            strongest = strongest is null
+                ? minimum
+                : ValuePolicyCombiner.Combine(strongest, minimum, "Protection of the variables a script body read");
+        }
+
+        return strongest;
     }
 
     private static bool ProtectsAnyInput(ActivityInputSnapshot? snapshot) =>

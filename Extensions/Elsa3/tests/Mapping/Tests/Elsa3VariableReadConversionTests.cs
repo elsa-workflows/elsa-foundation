@@ -224,28 +224,30 @@ public sealed class Elsa3VariableReadConversionTests
     }
 
     [Fact]
-    public async Task A_run_javascript_body_keeps_reading_variables_through_args()
+    public async Task A_run_javascript_body_reads_variables_through_the_variables_root()
     {
-        // FR-026a: the body has no variables root until T047, so its reads stay args.
+        // FR-026a, FR-033: the body reads variables over its session, so its reads become variables.X and no arguments
+        // expression carries them.
         var script = Activity("node", "Elsa.RunJavaScript", ("script", Literal("var total = getVariable('Order').total; total + 1")));
 
         var result = await ConvertAsync(Sequence("root", script), Order);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var node = Node(result.Value!.State, "node");
-        Assert.Equal("var total = args.Order.total; return total + 1", Text(Input(node, "script")));
-        Assert.Equal("({ \"Order\": args.Order })", Source(Input(node, "arguments")));
+        Assert.Equal("var total = variables.Order.total; return total + 1", Text(Input(node, "script")));
+        Assert.DoesNotContain(node.Inputs, input => input.ReferenceKey == "arguments");
     }
 
     [Fact]
-    public async Task A_run_javascript_body_still_refuses_a_computed_read()
+    public async Task A_run_javascript_body_keeps_a_computed_read()
     {
-        // The body cannot serve a computed read until T047/T050 land.
+        // FR-027: the body serves a computed read through its session's run-time lookup.
         var script = Activity("node", "Elsa.RunJavaScript", ("script", Literal("const name = 'Order'; return getVariable(name);")));
 
         var result = await ConvertAsync(Sequence("root", script), Order);
 
-        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DynamicAccessor);
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("const name = 'Order'; return getVariable(name);", Text(Input(Node(result.Value!.State, "node"), "script")));
     }
 
     [Fact]
