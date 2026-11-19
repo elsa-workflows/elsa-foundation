@@ -1944,4 +1944,5 @@ are in [PARTITIONS.md](PARTITIONS.md) ("K1 slice 0" to "K1 costs").
   and its takeover 6.2 to 7.5 s, the lease (built-in runtime).
 - **F-K5. A wrapper that leaves a set operation to the interface's default changes its cost.** The suites' store
   wrappers sent a set poll as one poll per partition, each a scan of the in-memory inbox, so a burst over 4,096
-  partitions took 21.4 s. Forwarded as one call, it takes about 1 s.
+  partitions took 21.0 s. Forwarded as one call, it takes 0.92 s. `FaultyStore` then has one chance to inject a fault
+  per set poll, where it had one per partition, so set polls see fewer injected faults.

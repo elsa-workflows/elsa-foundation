@@ -21,3 +21,4 @@ as committed after it, before its `count=` option, which changes nothing at 1,02
 | `crash-case-phases.txt` | the same case at 1,024, 2,048 and 4,096 after the fix (`528eabf7e` with the markers) |
 | `conformance-after-setpoll.txt` | after the wrappers' set-poll fix (`961b599ea`): Orleans `cost 1024` twice, both runtime suites at the default count, 1,024 (and built-in 4,096), both runtime stresses, the in-memory store suite and its stress, EF SQLite |
 | `runtime-burst-after-setpoll.txt` | the built-in `cost 1024 10 1024` and `cost 4096 10 4096` after that fix |
+| `runtime-burst-before-setpoll.txt` | the same two cost runs at `2c1f7ecbf`, before that fix (rerun in a detached worktree for this record) |

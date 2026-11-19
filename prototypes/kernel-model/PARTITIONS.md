@@ -572,7 +572,7 @@ bookkeeping, below). The raw outputs are in
 | Takeover through the runtime: a node dies, the other three run rounds | (not run) | 786 / 530 / 256 / 138 | 1,041 / 700 / 341 / 212 | the survivors take the dead node's partitions one at a time (as the line above), plus 6 heartbeats; contiguous moves 341, with 85 one-row releases from `ContiguousOnlyBalancer` |
 | Release of 128, one set release (the store's; a stand-down sends it) | 2 tcp, 1 stmt | 1 / 1 / 128 / 0.9 | 1 / 1 / 128 / 0.8 | one round trip fewer (no transaction) |
 | Release of 128 through the per-node host, one scope each | (not run) | 128 / 128 / 128 / 34 | 128 / 128 / 128 / 27 | the runtime gives scopes up one at a time |
-| Rebalance: a fourth node joins, rounds until none changes | a different workload: one move of half a range (128 of 256) between two nodes, a set release (2 tcp, 1 stmt) and a set take (2 tcp, 1 stmt), so 4 tcp and 2 stmt | 796 / 540 / 256 moved / 160 | 1,567 / 1,054 / 513 moved / 328 | K1's workload is three nodes holding all 1,024 and a fourth joining, with 4 balancing rounds' heartbeats. Each move is a one-row release and a one-row take; contiguous moves twice as many (513 against 256, as the placement witness says) |
+| Rebalance: a fourth node joins, rounds until none changes | a different workload: one move of half a range (128 of 256) between two nodes, a set release (2 tcp, 1 stmt) and a set take (2 tcp, 1 stmt), so 4 tcp and 2 stmt | 796 / 540 / 256 moved / 160 | 1,567 / 1,054 / 513 moved / 328 | K1's workload is three nodes holding all 1,024 and a fourth joining, with 9 heartbeats (18 statements): the joiner's first round and 2 rounds of the four nodes. Each move is a one-row release and a one-row take; contiguous moves twice as many (513 against 256, as the placement witness says) |
 | Rebalance: a node leaves gracefully, its stop | (not run) | 256 / 256 / 256 / 52 | 256 / 256 / 256 / 55 | one release per scope |
 | Then the other three run rounds | (not run) | 530 / 274 / 256 moved / 99 | 785 / 444 / 341 moved / 150 | one-row takes; contiguous also has 85 one-row releases, because `ContiguousOnlyBalancer` shifts a survivor's range: 341 moved, 256 of them the leaver's |
 | Reset after a refused beat: retake the other 255 | (not modelled) | 258 / 258 / 255 / 62 | 258 / 258 / 255 / 58 | slice 2a's retake, one partition at a time |
@@ -650,7 +650,7 @@ third are the serial path that slices 2a and 5a recorded for this slice, and the
 
 **The crash case at 4,096 (raised in the 7a review; built-in runtime only).** The built-in runtime suite's case
 "crash: a crashed node's scopes are taken over" took 17 s at 1,024 and over 120 s at 4,096 in that review, and 15 s at
-1,024 here. A later re-check at 4,096 took 413 s, with the takeover settled 6.3 s after the kill.
+1,024 here.
 - **Where the time went: before the kill.** The case built the holder list of every partition once per partition, and
   the list read every watched activation once per scope, so cubic in the count. Timed by phase at 4,096 before the fix
   ([crash-case-phases-before.txt](measurements/k1-costs-2026-11-19/crash-case-phases-before.txt); `crash-case-phases.txt`
@@ -662,16 +662,21 @@ third are the serial path that slices 2a and 5a recorded for this slice, and the
   every scope is held again, takes 6.2 to 7.5 s at each count: the 6 s lease runs out and a balancing round takes the
   partitions. That phase does not grow from 1,024 to 4,096, so the serial gains (512 against 2,048 one-row takes on the
   in-memory store) add no measurable time.
-- **Turn throughput across a large set** (asked after the re-check). The runtime `cost` burst of k tokens over k
-  partitions took 1.3 s at 1,024 and 21.4 s at 4,096: growing with k squared. The suites' store wrappers (`FaultyStore`,
+- **Turn throughput across a large set** (asked after a re-check of 7a). The runtime `cost` burst of k tokens over k
+  partitions took 1.55 s at 1,024 and 21.0 s at 4,096, growing with k squared (one run each at `2c1f7ecbf`, before the
+  fix: [runtime-burst-before-setpoll.txt](measurements/k1-costs-2026-11-19/runtime-burst-before-setpoll.txt)). The suites' store wrappers (`FaultyStore`,
   `RecordingStore`, the runtime suite's `NodeStore`) did not forward the set poll, so it went through the interface's
   default, one poll per partition, and the in-memory store reads every message for each. A pass over k partitions was
-  k scans of the inbox. With the set poll as one call (`961b599ea`, the suites only) the burst takes 0.13 to 0.17 s at
-  1,024 and 0.9 to 1.1 s at 4,096 ([runtime-burst-after-setpoll.txt](measurements/k1-costs-2026-11-19/runtime-burst-after-setpoll.txt)).
-  The other candidates are small: `RuntimeNode` makes 4,258 to 4,479 pass calls a second at 4,096 with 1.4 worker
-  passes, the one-pass rule answers the rest with no store call, and on PostgreSQL the set poll over 1,024 is one
+  k scans of the inbox. With the set poll as one call (`961b599ea`, the suites only) the burst takes 0.13 s at 1,024
+  and 0.92 s at 4,096 (one run each: [runtime-burst-after-setpoll.txt](measurements/k1-costs-2026-11-19/runtime-burst-after-setpoll.txt)).
+  `FaultyStore` now gets one chance to inject a fault per set poll, where it had one per partition, so set polls in
+  the stress runs see fewer injected faults; the stresses still hold.
+  The other candidates are small: `RuntimeNode` makes 4,258 pass calls a second at 4,096 (4,700 before the fix) with
+  1.4 to 1.5 worker passes, the one-pass rule answers the rest with no store call, and on PostgreSQL the set poll over 1,024 is one
   query of 1.6 ms. Since that fix the cost run's "Store calls" column counts a set poll once; "Set polls" is unchanged.
-- After both fixes the built-in suite at 4,096 passes 17 of 17 in 46 s (215 s at `bc8021514`), and every suite run at
+- The built-in suite at 4,096 took 215 s at `bc8021514`, 50 s after the holder-read fix
+  ([conformance-after-merge.txt](measurements/k1-costs-2026-11-19/conformance-after-merge.txt)) and 46 s after the
+  set-poll forwarding as well. Every suite run at
   the default count and at 1,024 passes on both runtimes, with the stresses
   ([conformance-after-setpoll.txt](measurements/k1-costs-2026-11-19/conformance-after-setpoll.txt)).
 
@@ -726,8 +731,8 @@ three interleaved runs at load 2.6 to 2.8:
   of the whole set. With 1,024 ticks a second spread over the second, most of them land after the last pass. A slower
   pass gathers more ticks into one, which is why the old per-partition poll of the suite's wrappers showed about half.
 - **On a SQL store** that is about 110 queries a second per idle silo, each over 1,024 partitions, against one.
-- **The bursts were close:** after the fix, 1,024 tokens took 0.10 to 0.12 s on Orleans and 0.13 to 0.17 s on the
-  built-in runtime, with 27 commits of 37.9 partitions each on both.
+- **The bursts were close:** after the fix, 1,024 tokens took 0.10 and 0.12 s on Orleans (two runs) and 0.13 s on
+  the built-in runtime (one run), with 27 commits of 37.9 partitions each on both.
 
 **The seam question for the silo-level poll.** A silo-level poll would bring Orleans to one set poll per interval. The
 seam promises a wake per held scope (`RuntimeTiming.PollInterval`), so it needs the seam to say that one wake covers a
