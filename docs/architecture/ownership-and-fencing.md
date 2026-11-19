@@ -4,10 +4,12 @@
 > `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
 > and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
 >
-> **Proposed amendment, 19 November 2026: the node lease.** The owner replaced the per-partition lease renewal with
-> a node-level heartbeat ([register](decisions.md#the-node-lease-amendment-19-november-proposed)). This page states
-> the amended design. It is proposed until a narrow independent architecture review approves it, and milestone K1b
-> builds it. Fences stay per partition: what moves to the node is the lease, which only decides who may take.
+> **Amendment, 19 November 2026: the node lease, approved with conditions.** The owner replaced the per-partition
+> lease renewal with a node-level heartbeat ([register](decisions.md#the-node-lease-amendment-19-november)). The
+> independent architecture review approved it with conditions on its delta pass at `170ac1f7c`
+> ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7006654424); [first pass](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7005856502)); its condition is NL-C1 in the plan's
+> [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions). Milestone K1b builds it. Fences stay
+> per partition: what moves to the node is the lease, which only decides who may take.
 
 A runtime places each partition on a node. A lease, held by the node, helps it decide who should work there. The database fence decides whose changes can become durable. One partition holds many instances, so one fence can protect a batch of their turns.
 
@@ -149,16 +151,18 @@ partition down, and its next successful heartbeat and takes start again. On Mong
 no transaction; a take's write to the taker's node document can conflict with that process's concurrent heartbeat,
 and the transient conflict is retried.
 
-**Liveness follows the Worker's passes.** A host renews its node record only while each of its Workers has completed a
-pass within the last lease. A Worker whose pass does not complete, because a commit, poll or load hangs (a dead
+**Liveness follows the Worker's passes.** A host renews its node record only while each of its Workers that holds a partition has
+completed a pass within the last lease; a Worker that holds nothing is live and does not hold the heartbeat back, so a
+fresh node, or one that stood every partition down, heartbeats and takes again. A Worker whose pass does not complete, because a commit, poll or load hangs (a dead
 connection), stops the renewal: the lease expires, another process takes the partitions, and the takeover counts the
 death the trial protocol needs, as the per-partition beat did, since that beat ran inside the same pass. A host that
-withholds its heartbeat also takes nothing: the gate closes the Worker's gains and the runtime's activations, so takes
-cannot renew a wedged host's lease. Every host wakes each Worker for a pass at least once per poll interval (today
+withholds its heartbeat also takes nothing: the gate closes every take, the Worker's gains, its retakes after a reset and
+the runtime's activations, so takes cannot renew a wedged host's lease. Every host wakes each Worker for a pass at least once per poll interval (today
 every second), and passes run on their own loop, apart from the balancing round, so a long round of moves never holds
-passes back beyond the lease. A heartbeat statement carries a timeout of a third of the lease, on the server (PostgreSQL's
-statement timeout, SQL Server's attention, MySQL's `KILL QUERY`, MongoDB's `maxTimeMS`) as well as the client, so one
-sent just before the gate closes lands within that time or not at all: the lease expires within two and a third leases
+passes back beyond the lease. A heartbeat statement carries a timeout of a third of the lease. PostgreSQL's statement timeout
+and MongoDB's `maxTimeMS` enforce it on the server; on SQL Server (attention) and MySQL (`KILL QUERY`) the client's
+timer sends the cancel, so there the bound assumes the client's timer runs, and K4 qualifies it. Under that assumption
+a heartbeat sent just before the gate closes lands within that time or not at all: the lease expires within two and a third leases
 of the last completed pass, and the takeover follows within one lock bound (below) and one balancing round after that.
 
 A commit that stalls on a live connection holds its partition row locks until its transaction ends, and a take waits on
