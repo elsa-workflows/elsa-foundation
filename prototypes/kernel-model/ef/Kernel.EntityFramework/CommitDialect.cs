@@ -80,9 +80,10 @@ internal abstract class CommitDialect
     /// <summary>
     /// The fence, for k rows in ascending Id order: Position moves and the lease is renewed from database time where
     /// (Id, Epoch, Position) is what the owner believes. The result says how many rows matched (must be k) and the time.
+    /// A null <paramref name="leaseMs"/> (K1b, the node lease) renews nothing.
     /// <paramref name="ignoreCount"/> is the FenceIgnoresCount mutation: a dialect whose server checks the count skips that check too.
     /// </summary>
-    public abstract void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false);
+    public abstract void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long? leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false);
 
     /// <summary>A statement that must affect exactly <paramref name="count"/> rows, else the commit did not land.</summary>
     public abstract void Checked(OwnedCommand c, string dml, int count);
@@ -143,19 +144,19 @@ internal abstract class ReturningDialect(string now, string @true, string @false
     public override string True => @true;
     public override string False => @false;
 
-    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false)
+    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long? leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false)
     {
-        var lease = FormattableString.Invariant($"\"LeaseUntil\" = {Now} + {leaseMs}");
+        var lease = leaseMs is { } ms ? FormattableString.Invariant($", \"LeaseUntil\" = {Now} + {ms}") : "";     // none under the node lease: the unchanged update still locks and counts
         var columns = window is { } w ? FormattableString.Invariant($", \"WindowStart\" = {w.FromInclusive}, \"WindowEnd\" = {w.UntilExclusive}") : "";
         if (rows.Count == 1)
         {
             var r = rows[0];
-            c.Statement(FormattableString.Invariant($"""UPDATE "Partitions" SET "Position" = {r.NewPosition}, {lease}{columns} WHERE "Id" = {r.Id} AND ({(unfenced ? "1 = 1" : FormattableString.Invariant($"\"Epoch\" = {r.Epoch} AND \"Position\" = {r.Position}"))}) RETURNING {Now} AS "Value" """), Expect.Fence, 1);
+            c.Statement(FormattableString.Invariant($"""UPDATE "Partitions" SET "Position" = {r.NewPosition}{lease}{columns} WHERE "Id" = {r.Id} AND ({(unfenced ? "1 = 1" : FormattableString.Invariant($"\"Epoch\" = {r.Epoch} AND \"Position\" = {r.Position}"))}) RETURNING {Now} AS "Value" """), Expect.Fence, 1);
             return;
         }
         // k rows: locked in ascending Id order first, then one UPDATE.
         LockRows(c, rows);
-        c.Statement($"""UPDATE "Partitions" AS p SET "Position" = f.np, {lease}{columns} FROM (VALUES {Values(rows)}) AS f(id, epoch, pos, np) WHERE p."Id" = f.id AND ({(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}) RETURNING {Now} AS "Value" """, Expect.Fence, rows.Count);
+        c.Statement($"""UPDATE "Partitions" AS p SET "Position" = f.np{lease}{columns} FROM (VALUES {Values(rows)}) AS f(id, epoch, pos, np) WHERE p."Id" = f.id AND ({(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}) RETURNING {Now} AS "Value" """, Expect.Fence, rows.Count);
     }
 
     public override void Checked(OwnedCommand c, string dml, int count) => c.Statement(dml + " RETURNING 1", Expect.Count, count);
@@ -232,21 +233,21 @@ internal sealed class SqlServerCommitDialect : CommitDialect
     protected override void Lock(OwnedCommand c, IReadOnlyList<int> ids) =>
         c.Statement($"""IF (SELECT COUNT(*) FROM "Partitions" WITH (UPDLOCK, ROWLOCK) WHERE "Id" IN ({Ids(ids)})) <> {ids.Count} {Throw(FenceMissed, "kernel fence: a partition row is missing")}""");
 
-    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false)
+    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long? leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false)
     {
         if (window is not null) throw new NotSupportedException("Commit windows are PostgreSQL's.");
-        var lease = FormattableString.Invariant($"\"LeaseUntil\" = {Now} + {leaseMs}");
+        var lease = leaseMs is { } ms ? FormattableString.Invariant($", \"LeaseUntil\" = {Now} + {ms}") : "";     // none under the node lease: the unchanged update still locks and counts
         string matched;
         if (rows.Count == 1)
         {
             var r = rows[0];
-            matched = FormattableString.Invariant($"""UPDATE "Partitions" SET "Position" = {r.NewPosition}, {lease} WHERE "Id" = {r.Id} AND ({(unfenced ? "1 = 1" : FormattableString.Invariant($"\"Epoch\" = {r.Epoch} AND \"Position\" = {r.Position}"))})""");
+            matched = FormattableString.Invariant($"""UPDATE "Partitions" SET "Position" = {r.NewPosition}{lease} WHERE "Id" = {r.Id} AND ({(unfenced ? "1 = 1" : FormattableString.Invariant($"\"Epoch\" = {r.Epoch} AND \"Position\" = {r.Position}"))})""");
         }
         else
         {
             // k rows: an update lock on each in ascending Id order first, then one UPDATE.
             LockRows(c, rows);
-            matched = $"""UPDATE p SET "Position" = f.np, {lease} FROM "Partitions" p JOIN (VALUES {Values(rows)}) AS f(id, epoch, pos, np) ON p."Id" = f.id WHERE {(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}""";
+            matched = $"""UPDATE p SET "Position" = f.np{lease} FROM "Partitions" p JOIN (VALUES {Values(rows)}) AS f(id, epoch, pos, np) ON p."Id" = f.id WHERE {(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}""";
         }
         // The fence's count is checked twice: by the server, which stops the batch, and by the client, which reads it back. The
         // FenceIgnoresCount mutation skips both, else the server's check alone would mask it (COMMIT-SQL.md, the pins).

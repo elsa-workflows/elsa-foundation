@@ -55,8 +55,11 @@ public abstract class Engine
     /// <summary>Runs once, after the tables are created: database settings the engine needs.</summary>
     public virtual Task CreatedAsync(KernelDb db, CancellationToken cancellationToken) => Task.CompletedTask;
 
-    /// <summary>Statement 1 of the commit. Database time when it changed exactly one row, null when it matched nothing.</summary>
-    public abstract ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, CancellationToken cancellationToken);
+    /// <summary>
+    /// Statement 1 of the commit. Database time when it changed exactly one row, null when it matched nothing. Without
+    /// <paramref name="renew"/> (the node lease) it writes no lease: the unchanged update still locks and counts the row.
+    /// </summary>
+    public abstract ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, bool renew, CancellationToken cancellationToken);
 
     /// <summary>False when the id exists already.</summary>
     public abstract ValueTask<bool> AddAsync(KernelDb db, MessageEntity message, CancellationToken cancellationToken);
@@ -65,8 +68,11 @@ public abstract class Engine
 
     // Merge with round 3: the store operations it added that the engine writes by hand.
 
-    /// <summary>Insert or refresh the node's row with database time; returns that time.</summary>
-    public abstract ValueTask<long> HeartbeatAsync(KernelDb db, string node, CancellationToken cancellationToken);
+    /// <summary>
+    /// Insert or refresh the node's row with database time; returns that time. With <paramref name="lease"/> (K1b, the node
+    /// lease) it also sets <c>LeaseUntil</c> to that time plus the lease, in milliseconds.
+    /// </summary>
+    public abstract ValueTask<long> HeartbeatAsync(KernelDb db, string node, CancellationToken cancellationToken, long? lease = null);
 
     /// <summary>
     /// Inside a commit, the careful path of FINDINGS 25.2: insert a wait unless it is there ({0} key, {1} instance, {2} wait,
@@ -201,14 +207,14 @@ public sealed class SqlServerEngine : Engine
         return rows.Count == 1 ? rows[0] : null;
     }
 
-    public override async ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, CancellationToken cancellationToken)
+    public override async ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, bool renew, CancellationToken cancellationToken)
     {
         var rows = await db.Database.SqlQueryRaw<long>(
             $"""
-             UPDATE "Partitions" SET "Position" = {"{0}"}, "LeaseUntil" = {Now} + {"{1}"}
+             UPDATE "Partitions" SET "Position" = {"{0}"}{(renew ? $", \"LeaseUntil\" = {Now} + {"{4}"}" : "")}
              OUTPUT {Now} AS "Value"
-             WHERE "Id" = {"{2}"} AND ("Epoch" = {"{3}"} AND "Position" = {"{4}"} OR {(unfenced ? "1 = 1" : "1 = 0")})
-             """, batch.Position + batch.Positions, (long)batch.Lease.TotalMilliseconds, batch.Partition, batch.Epoch, batch.Position).ToListAsync(cancellationToken);
+             WHERE "Id" = {"{1}"} AND ("Epoch" = {"{2}"} AND "Position" = {"{3}"} OR {(unfenced ? "1 = 1" : "1 = 0")})
+             """, [batch.Position + batch.Positions, batch.Partition, batch.Epoch, batch.Position, .. renew ? [(long)batch.Lease.TotalMilliseconds] : Array.Empty<object>()]).ToListAsync(cancellationToken);
         return rows.Count == 1 ? rows[0] : null;
     }
 
@@ -243,16 +249,22 @@ public sealed class SqlServerEngine : Engine
         catch (SqlException x) when (x.Number is 2627 or 2601) { }
     }
 
-    public override async ValueTask<long> HeartbeatAsync(KernelDb db, string node, CancellationToken cancellationToken)
+    public override async ValueTask<long> HeartbeatAsync(KernelDb db, string node, CancellationToken cancellationToken, long? lease = null)
     {
         // No ON CONFLICT: a MERGE, serialised on the key so that a node's first two beats cannot both insert.
-        var rows = await db.Database.SqlQueryRaw<long>(
-            $"""
+        var rows = await db.Database.SqlQueryRaw<long>(lease is null
+            ? $"""
              MERGE "Nodes" WITH (HOLDLOCK) AS t USING (SELECT {"{0}"} AS "Id", {Now} AS "SeenAt") AS s ON t."Id" = s."Id"
              WHEN MATCHED THEN UPDATE SET "SeenAt" = s."SeenAt"
              WHEN NOT MATCHED THEN INSERT ("Id", "SeenAt") VALUES (s."Id", s."SeenAt")
              OUTPUT inserted."SeenAt" AS "Value";
-             """, node).ToListAsync(cancellationToken);
+             """
+            : $"""
+             MERGE "Nodes" WITH (HOLDLOCK) AS t USING (SELECT {"{0}"} AS "Id", n.now AS "SeenAt", n.now + {"{1}"} AS "LeaseUntil" FROM (SELECT {Now} AS now) n) AS s ON t."Id" = s."Id"
+             WHEN MATCHED THEN UPDATE SET "SeenAt" = s."SeenAt", "LeaseUntil" = s."LeaseUntil"
+             WHEN NOT MATCHED THEN INSERT ("Id", "SeenAt", "LeaseUntil") VALUES (s."Id", s."SeenAt", s."LeaseUntil")
+             OUTPUT inserted."SeenAt" AS "Value";
+             """, [node, .. lease is { } ms ? [ms] : Array.Empty<object>()]).ToListAsync(cancellationToken);
         return rows[0];
     }
 
@@ -333,15 +345,15 @@ public sealed class MySqlEngine : Engine
         return row[0];
     }
 
-    public override async ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, CancellationToken cancellationToken)
+    public override async ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, bool renew, CancellationToken cancellationToken)
     {
         // One command, two statements: the fence, then how many rows it matched and the time. The connection must
         // count matched rows, not changed ones (UseAffectedRows=false, Connector/NET's default).
         var rows = await db.Database.SqlQueryRaw<FenceRow>(Sql(
             $"""
-             UPDATE "Partitions" SET "Position" = {"{0}"}, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Epoch" = {"{3}"} AND "Position" = {"{4}"} OR {(unfenced ? "1 = 1" : "1 = 0")});
+             UPDATE "Partitions" SET "Position" = {"{0}"}{(renew ? $", \"LeaseUntil\" = {Now} + {"{4}"}" : "")} WHERE "Id" = {"{1}"} AND ("Epoch" = {"{2}"} AND "Position" = {"{3}"} OR {(unfenced ? "1 = 1" : "1 = 0")});
              SELECT ROW_COUNT() AS "Matched", {Now} AS "Now"
-             """), batch.Position + batch.Positions, (long)batch.Lease.TotalMilliseconds, batch.Partition, batch.Epoch, batch.Position).ToListAsync(cancellationToken);
+             """), [batch.Position + batch.Positions, batch.Partition, batch.Epoch, batch.Position, .. renew ? [(long)batch.Lease.TotalMilliseconds] : Array.Empty<object>()]).ToListAsync(cancellationToken);
         return rows.Count == 1 && rows[0].Matched == 1 ? rows[0].Now : null;
     }
 
@@ -362,14 +374,18 @@ public sealed class MySqlEngine : Engine
         await db.Database.ExecuteSqlRawAsync(Sql("""INSERT IGNORE INTO "Events" ("Key", "Id", "Payload", "KeepUntil") VALUES (@key, @id, @payload, @keep)"""),
             [new MySqlParameter("@key", e.Key), new MySqlParameter("@id", e.Id), new MySqlParameter("@payload", Value(e.Payload)), new MySqlParameter("@keep", e.KeepUntil)], cancellationToken);
 
-    public override async ValueTask<long> HeartbeatAsync(KernelDb db, string node, CancellationToken cancellationToken)
+    public override async ValueTask<long> HeartbeatAsync(KernelDb db, string node, CancellationToken cancellationToken, long? lease = null)
     {
         // No RETURNING: the upsert and the read of what it wrote, one command of two statements.
-        var rows = await db.Database.SqlQueryRaw<long>(Sql(
-            $"""
+        var rows = await db.Database.SqlQueryRaw<long>(Sql(lease is null
+            ? $"""
              INSERT INTO "Nodes" ("Id", "SeenAt") VALUES ({"{0}"}, {Now}) AS n ON DUPLICATE KEY UPDATE "SeenAt" = n."SeenAt";
              SELECT "SeenAt" AS "Value" FROM "Nodes" WHERE "Id" = {"{0}"}
-             """), node).ToListAsync(cancellationToken);
+             """
+            : $"""
+             INSERT INTO "Nodes" ("Id", "SeenAt", "LeaseUntil") VALUES ({"{0}"}, {Now}, {Now} + {"{1}"}) AS n ON DUPLICATE KEY UPDATE "SeenAt" = n."SeenAt", "LeaseUntil" = n."LeaseUntil";
+             SELECT "SeenAt" AS "Value" FROM "Nodes" WHERE "Id" = {"{0}"}
+             """), [node, .. lease is { } ms ? [ms] : Array.Empty<object>()]).ToListAsync(cancellationToken);
         return rows[0];
     }
 

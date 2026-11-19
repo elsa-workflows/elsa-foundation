@@ -22,6 +22,7 @@ public sealed class NodeEntity
 {
     public string Id { get; set; } = "";
     public long SeenAt { get; set; }        // database time of the last heartbeat
+    public long LeaseUntil { get; set; }    // K1b, the node lease: database time until which no other process may take this one's partitions
 }
 
 public sealed class InstanceEntity
@@ -145,7 +146,11 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
             e.Property(p => p.Epoch).IsConcurrencyToken();      // the fence, when it rides in the batch
             e.Property(p => p.Position).IsConcurrencyToken();
         });
-        model.Entity<NodeEntity>(e => e.ToTable("Nodes"));
+        model.Entity<NodeEntity>(e =>
+        {
+            e.ToTable("Nodes");
+            e.Property(n => n.LeaseUntil).HasDefaultValue(0L);      // the membership heartbeat's insert names SeenAt only
+        });
         model.Entity<InstanceEntity>(e =>
         {
             e.ToTable("Instances");
@@ -239,6 +244,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public bool SupportsCommitWindow => _windowInstalled;
 
     public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault(OwnedCommit) ?? true;
+
+    /// <summary>
+    /// K1b: the node lease (<see cref="IKernelStore.NodeLeaseAvailable"/>), on the owned SQL and the EF path. Off, the
+    /// per-partition lease stands. The take and the heartbeat are in EfStore.NodeLease.cs.
+    /// </summary>
+    public bool NodeLease { get; init; }
+    public bool NodeLeaseAvailable => NodeLease;
 
     /// <summary>MUTATION, for the stress test only: the fence statement loses its epoch and position conditions.</summary>
     public bool Unfenced { get; init; }
@@ -340,6 +352,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
+        if (NodeLease) return await TakeAsync([partition], node, lease, cancellationToken) is { Taken: [var one] } set ? new Lease(one.Epoch, one.Position, set.Now) : null;
         await using var db = create();
         await using var transaction = await (Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         Engine.TakeRow? taken;
@@ -365,8 +378,17 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
             $"""INSERT INTO "Nodes" ("Id", "SeenAt") VALUES ({"{0}"}, {Now}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt" RETURNING "SeenAt" AS "Value" """,
             node).ToListAsync(cancellationToken))[0];
+        return await MembershipAsync(db, now, window, cancellationToken);
+    }
+
+    // The membership reads: the nodes heard within the window, and the free partitions. Under the node lease a partition
+    // is free when it has no owner, or its owner's node record is missing or expired.
+    private async Task<Cluster> MembershipAsync(KernelDb db, long now, TimeSpan window, CancellationToken cancellationToken)
+    {
         var nodes = await db.Nodes.CountAsync(n => n.SeenAt >= now - (long)window.TotalMilliseconds, cancellationToken);
-        var free = await db.Partitions.Where(p => p.Owner == null || p.LeaseUntil < now).Select(p => p.Id).ToListAsync(cancellationToken);
+        var free = await (NodeLease
+            ? db.Partitions.Where(p => p.Owner == null || !db.Nodes.Any(n => n.Id == p.Owner && n.LeaseUntil >= now))
+            : db.Partitions.Where(p => p.Owner == null || p.LeaseUntil < now)).OrderBy(p => p.Id).Select(p => p.Id).ToListAsync(cancellationToken);
         return new Cluster(nodes, free, now);
     }
 
@@ -490,20 +512,25 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 db.Entry(fence).Property(p => p.WindowEnd).IsModified = true;
             }
             fence.Position = batch.Position + batch.Positions;
-            fence.LeaseUntil = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)batch.Lease.TotalMilliseconds;
-            db.Entry(fence).Property(p => p.LeaseUntil).IsModified = true;     // also when nothing else changes: the fence must always be sent
+            if (NodeLease) db.Entry(fence).Property(p => p.Position).IsModified = true;     // the node lease: no lease to renew, and the fence is still sent for k = 0
+            else
+            {
+                fence.LeaseUntil = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)batch.Lease.TotalMilliseconds;
+                db.Entry(fence).Property(p => p.LeaseUntil).IsModified = true;     // also when nothing else changes: the fence must always be sent
+            }
         }
         else if (Engine is not null)
         {
-            if (await Engine.FenceAsync(db, batch, Unfenced, cancellationToken) is not { } at) return new Committed(false, 0, []);
+            if (await Engine.FenceAsync(db, batch, Unfenced, !NodeLease, cancellationToken) is not { } at) return new Committed(false, 0, []);
             now = at;
         }
         else
         {
             // Statement 1, and the check that it changed exactly one row before anything else is sent.
+            // The node lease renews nothing here: the unchanged update still locks the row and is counted.
             var fence = await db.Database.SqlQueryRaw<long>(
-                $"""UPDATE "Partitions" SET "Position" = {"{0}"}, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Epoch" = {"{3}"} AND "Position" = {"{4}"} OR {(Unfenced ? "1 = 1" : "1 = 0")}) RETURNING {Now} AS "Value" """,
-                batch.Position + batch.Positions, (long)batch.Lease.TotalMilliseconds, batch.Partition, batch.Epoch, batch.Position).ToListAsync(cancellationToken);
+                $"""UPDATE "Partitions" SET "Position" = {"{0}"}{(NodeLease ? "" : $", \"LeaseUntil\" = {Now} + {"{4}"}")} WHERE "Id" = {"{1}"} AND ("Epoch" = {"{2}"} AND "Position" = {"{3}"} OR {(Unfenced ? "1 = 1" : "1 = 0")}) RETURNING {Now} AS "Value" """,
+                [batch.Position + batch.Positions, batch.Partition, batch.Epoch, batch.Position, .. NodeLease ? Array.Empty<object>() : [(long)batch.Lease.TotalMilliseconds]]).ToListAsync(cancellationToken);
             if (fence.Count != 1) return new Committed(false, 0, []);       // disposing the transaction rolls it back
             now = fence[0];
         }
@@ -893,7 +920,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         {
             if (Engine?.Classify(inner) is { } failure) return new StoreException(failure, inner.Message, e);
             if (inner is PostgresException pg)
-                return new StoreException(pg.SqlState is "40001" or "40P01" ? Failure.Transient : pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);
+                return new StoreException(pg.SqlState is "40001" or "40P01" or "55P03" ? Failure.Transient : pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);
             if (inner is SqliteException lite)
                 return new StoreException(lite.SqliteErrorCode is 5 or 6 ? Failure.Transient : lite.SqliteErrorCode == 19 ? Failure.Definite : Failure.Unknown, lite.Message, e);     // BUSY is retry, not reset
         }
