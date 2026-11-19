@@ -26,7 +26,7 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 ## C. Conversion — faithful (no refusal)
 
 12. Zone-independent `Date` usage (`Date.now()`, `getTime()`, `toISOString()`) and `Math.random()` convert without refusal under every date interpretation.
-12a. Zone-dependent usage (`getHours()`, `new Date('2026-10-28T09:15:00')`): under `Refuse` (default) it is refused and the message names both fixes (`SourceTimeZone` with the Elsa 3 server's IANA zone, `AssumeUtc`); under `AssumeUtc` it converts, evaluates in UTC and carries a behaviour warning; under `SourceTimeZone` = `Europe/Amsterdam` it evaluates as Elsa 3 did on a server in that zone (winter and summer dates), with no warning.
+12a. Zone-dependent usage (`getHours()`, `new Date('2026-10-28T09:15:00')`): under `Refuse` (default) it is refused and the message names both fixes (`SourceTimeZone` with the Elsa 3 server's IANA zone, `AssumeUtc`); under `AssumeUtc` it converts, evaluates in UTC and carries a behaviour warning; under `SourceTimeZone` = `Europe/Amsterdam` the converted code names the zone explicitly and, on a UTC engine, gives what Elsa 3 gave on a server in that zone (winter and summer dates), with no warning; local `toString()` on a `Date` is refused.
 12b. A non-literal parse (`new Date(input)`) behaves as zone-dependent usage under each value; `new Date('2026-10-28')` converts under every value.
 12f. The date interpretation is recorded on each converted workflow and in its conversion contract; S-9 applies the same setting at the JSON to .NET boundary.
 12c. `variables.due.getTime()` and `variables.due < new Date()` with `due: DateTime` in Elsa 3 convert and equal Elsa 3 (FR-032).

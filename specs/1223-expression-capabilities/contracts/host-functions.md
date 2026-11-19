@@ -11,7 +11,7 @@ The capabilities and functions available to Elsa 4 JavaScript expressions under 
 ## C2 — Native intrinsics
 
 - `Date`, `Temporal`, `Intl`, `Math` (incl. `Math.random`) are available and behave as standard JavaScript.
-- `new Date()`, `Date.now()` and `Temporal.Now.*` return the **host clock** time. The engine runs with `TimeZone = UTC` and `Culture = Invariant`. A converted Elsa 3 expression with a recorded source time zone evaluates with that zone as its local time zone (conversion contract D1a).
+- `new Date()`, `Date.now()` and `Temporal.Now.*` return the **host clock** time. The engine runs with `TimeZone = UTC` and `Culture = Invariant`. Every expression evaluates in UTC, converted or not; a converted Elsa 3 expression that reproduces local time names its zone explicitly in its code (conversion contract D1a).
 - `Temporal` and `Intl.DateTimeFormat` accept every IANA time zone ID the host knows; they are the built-in date helpers (FR-025).
 - `Math.random` uses the engine's native RNG. **No reproducibility guarantee.**
 

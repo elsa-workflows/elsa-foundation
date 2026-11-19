@@ -9,7 +9,7 @@ ADR 0083 defines the profile and spec 095's expression contract holds its full t
 | Element | Content |
 |---|---|
 | Native JS intrinsics (admitted) | `Date`, `Temporal`, `Intl`, `Math` (including `Math.random`), plus the always-present `String`/`Number`/`Array`/`Object`/`JSON` globals |
-| Clock | Native `Date`/`Date.now()`/`Temporal.Now` read the host `TimeProvider` via a custom Jint `ITimeSystem`; `TimeZone = UTC` (or the converted expression's source time zone), `Culture = Invariant` |
+| Clock | Native `Date`/`Date.now()`/`Temporal.Now` read the host `TimeProvider` via a custom Jint `ITimeSystem`; `TimeZone = UTC` for every expression, `Culture = Invariant`; a converted expression that needs Elsa 3's local time names the zone in its code |
 | Randomness | Native `Math.random` (uncontrolled RNG — accepted limitation) |
 | Functions | The built-in functions in §2 and host functions registered under §2's rules |
 | Boundary contract | Default strategy: every value in and out is a JSON value; no live .NET objects (ADR 0046 V10) |
@@ -121,7 +121,8 @@ Updates the conversion table in `Extensions/Elsa3/src/Mapping/README.md`.
 | Elsa 3 construct | Current | S-1 disposition |
 |---|---|---|
 | Zone-independent `Date` usage (`Date.now()`, `getTime()`, `toISOString()`, epoch arithmetic, UTC methods, parse with offset) | Refused | **Faithful** (native `Date`, clock-backed) |
-| Zone-dependent `Date` usage (local getters/setters, local formatting, local multi-argument constructor, offset-less literal parse) | Refused | `Refuse` (default): refused with guidance; `AssumeUtc`: converted in UTC with a warning; `SourceTimeZone`: **faithful** in that zone |
+| Zone-dependent `Date` usage (local getters/setters, local multi-argument constructor, offset-less literal parse) | Refused | `Refuse` (default): refused with guidance; `AssumeUtc`: converted in UTC with a warning; `SourceTimeZone`: **faithful**, rewritten with the zone written in the code |
+| Local `toString()`/`toDateString()`/`toTimeString()` on a `Date` | Refused | `AssumeUtc`: converted with a warning; `Refuse` and `SourceTimeZone`: refused (Elsa 3's text depends on the server OS) |
 | `Date` string parse of a non-literal | Refused | As zone-dependent usage (refused / UTC with warning / faithful in the zone) |
 | Date-only literal parse (`new Date('2026-10-28')`) | Refused | **Faithful** (UTC in ECMAScript) |
 | Read of a `DateTime`/`DateTimeOffset` variable, input or output | Value converts as ISO text | **Rewritten to a `Date`** (FR-032) |

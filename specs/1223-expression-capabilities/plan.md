@@ -14,9 +14,9 @@ Grant Elsa 4 JavaScript expressions the everyday capabilities workflow authors e
 Four moving parts, all in existing projects:
 
 1. **Profile** — rename `binding-pure-v1` to `binding-readonly-v1` everywhere (Expressions.Core, evaluators, converter, executable hash), with no alias; regenerate fixtures; drop the `Inline` replay comment.
-2. **Engine** — re-admit `Date`, `Intl`, `Temporal` and `Math.random` in the isolated Jint engine and the portable evaluator, wire the clock to the host `TimeProvider` (UTC, invariant), and accept a source time zone as the one evaluator option a converted expression may carry.
+2. **Engine** — re-admit `Date`, `Intl`, `Temporal` and `Math.random` in the isolated Jint engine and the portable evaluator, and wire the clock to the host `TimeProvider` (UTC, invariant) for every expression; no evaluator option and no ambient zone.
 3. **Functions** — extend spec 1222's host-function declaration with an implementation, install declared functions in the engine, enforce the naming rule, warn on lossy number arguments, and register the built-ins (GUID family incl. `parseGuid`, Base64 pair). No `toJson`: scripts serialize with `JSON.stringify`, and the converter rewrites Elsa 3's `toJson` with a warning.
-4. **Converter and publish** — flip the faithful Elsa 3 functions, add the converter's date interpretation setting (`Refuse` default, `AssumeUtc`, `SourceTimeZone`), classify `Date` usage by zone dependence, and add a .NET-usage analysis in Essentials that the converter (with Elsa 3 types) and publish validation both call.
+4. **Converter and publish** — flip the faithful Elsa 3 functions, add the converter's date interpretation setting (`Refuse` default, `AssumeUtc`, `SourceTimeZone`), classify `Date` usage by zone dependence and, under `SourceTimeZone`, rewrite zone-dependent calls into explicit `Temporal` code in that zone, and add a .NET-usage analysis in Essentials that the converter (with Elsa 3 types) and publish validation both call.
 
 [Research](research.md) records the findings and decisions. [Data model](data-model.md) defines the profile, the function catalog and the classification rules. [contracts/](contracts/) hold the function contract and the conversion/diagnostic contract. [Quickstart](quickstart.md) is the verification inventory.
 
@@ -25,7 +25,7 @@ Four moving parts, all in existing projects:
 | Area | Existing technology and planned boundary |
 |---|---|
 | Profile | `ExpressionCapabilityProfiles.BindingPureV1` and `ExpressionEvaluationCapabilities` in `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs`; checked in the portable, Jint, Liquid and runtime evaluators; emitted by `Elsa3ExpressionRewriter` and `Elsa3ValueFlowLowerer`; serialized as `capabilityProfile`; hashed by `WorkflowExecutableHasher`. Planned: rename to `BindingReadonlyV1`, allow time and randomness, regenerate fixtures and golden hashes. |
-| Expression engine | C#/.NET 10; **Jint 4.9.1** at `Essentials/src/Expressions/JavaScript/Jint`. `IsolatedJintEngine.DisableAmbientCapabilities` overwrites `Date`/`Temporal`/`Intl` and shadows `Math.random`; `JintPortableJavaScriptEvaluator` keeps `StrippedAmbientCapabilities` and rejects every evaluator option. Planned: remove the strip in both, set `TimeSystem` (over `TimeProvider`), `TimeZone`, `Culture=Invariant`; accept the source time zone option. |
+| Expression engine | C#/.NET 10; **Jint 4.9.1** at `Essentials/src/Expressions/JavaScript/Jint`. `IsolatedJintEngine.DisableAmbientCapabilities` overwrites `Date`/`Temporal`/`Intl` and shadows `Math.random`; `JintPortableJavaScriptEvaluator` keeps `StrippedAmbientCapabilities` and rejects every evaluator option. Planned: remove the strip in both, set `TimeSystem` (over `TimeProvider`), `TimeZone=UTC`, `Culture=Invariant`. The evaluator keeps rejecting evaluator options. |
 | Functions | `JavaScriptHostFunctionDeclaration(Name, ReadsVariables)` in `Expressions.JavaScript.Core/Contracts` (spec 1222); `variables`/`getVariable` installed by `IsolatedJintEngine.SetReadOnlyVariables`. Planned: add an implementation delegate (no effect metadata, D-6; #4831); install declared functions; naming checks at startup; V9 warning. |
 | Analysis | Essentials JavaScript analysis services (`JavaScriptVariableReadAnalyzer`, Acornima) and `ScriptOutcomeValidator` (`Scripts/*` errors). Planned: a .NET-usage analyzer there, called by publish validation (`Scripts/DotNetMemberUsage`, `Scripts/ReservedName` extended) and by the converter. |
 | Converter | Acornima analysis in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` (`JavaScriptAnalyzer.VisitNode`, `RefusedHostFunctions`, `ElsaThreeGlobals`, `IsNondeterministicCall`), `Internal/Elsa3JavaScriptNames.cs`, `Elsa3ImportDiagnosticCodes` (`VF-IMP-001..011`). Planned: flip faithful functions, `Date` classification, call the shared analyzer with Elsa 3 types, add `VF-IMP-012`. |
@@ -65,7 +65,7 @@ Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs     # profile con
 Essentials/src/Expressions/JavaScript/Core/Contracts/              # JavaScriptHostFunctionDeclaration (+implementation)
 Essentials/src/Expressions/JavaScript/Jint/Services/
   IsolatedJintEngine.cs                # remove strip; ITimeSystem/TimeZone/Culture; install declared functions
-  JintPortableJavaScriptEvaluator.cs   # remove StrippedAmbientCapabilities; accept the source time zone option
+  JintPortableJavaScriptEvaluator.cs   # remove StrippedAmbientCapabilities
   (new) TimeProviderTimeSystem, built-in function implementations
 Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Services/
   (new) JavaScript .NET-usage analyzer; reserved names extended
