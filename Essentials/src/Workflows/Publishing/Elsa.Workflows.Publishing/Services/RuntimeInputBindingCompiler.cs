@@ -894,7 +894,7 @@ public sealed class RuntimeInputBindingCompiler(
             // fault: surface it as the structured VF-COER-001 diagnostic (with node id + reference key) so preflight
             // returns a validation result instead of letting the raw JsonException/FormatException escape as a 500 (#924).
             throw ValueConversionPublicationException.LiteralCoercionFailed(
-                $"VF-COER-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{DescribeAuthoredValue(value.Value)}' cannot be converted to alias '{inputDefinition.Type.Alias}'.",
+                $"VF-COER-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{DescribeAuthoredValue(value.Value)}' cannot be converted to alias '{inputDefinition.Type.ToDisplayString()}'.",
                 ToValueTypeDescriptor(inputDefinition),
                 InputBindingContext(nodeId, inputDefinition),
                 exception);
@@ -979,7 +979,7 @@ public sealed class RuntimeInputBindingCompiler(
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
             throw new ArgumentException(
-                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to alias '{inputDefinition.Type.Alias}'.",
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to alias '{inputDefinition.Type.ToDisplayString()}'.",
                 exception);
         }
 
@@ -1018,7 +1018,7 @@ public sealed class RuntimeInputBindingCompiler(
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
             throw new ArgumentException(
-                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to alias '{inputDefinition.Type.Alias}'.",
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to alias '{inputDefinition.Type.ToDisplayString()}'.",
                 exception);
         }
     }
@@ -1063,11 +1063,10 @@ public sealed class RuntimeInputBindingCompiler(
                 $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' declares expression type '{authoredExpressionType}', but its portable definition declares language '{definition.Language}'.");
         }
 
-        if (!string.Equals(inputDefinition.Type.Alias, definition.ResultType.Alias, StringComparison.Ordinal) ||
-            inputDefinition.Type.CollectionKind != definition.ResultType.CollectionKind)
+        if (!DeclaredTypeFits(definition.ResultType, inputDefinition.Type))
         {
             throw new ArgumentException(
-                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' expects '{inputDefinition.Type.Alias}', but its portable expression declares result type '{definition.ResultType.Alias}'.");
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' expects '{inputDefinition.Type.ToDisplayString()}', but its portable expression declares result type '{definition.ResultType.ToDisplayString()}'.");
         }
 
         return new RuntimeInputBinding(
@@ -1107,6 +1106,25 @@ public sealed class RuntimeInputBindingCompiler(
         definition = payload.Deserialize<ExpressionDefinition>(DescriptorPayloadSerializer.Options)
             ?? throw new ArgumentException("Portable expression definition payload could not be deserialized.");
         return true;
+    }
+
+    // A portable expression's declared result type fits an input when the two name the same type. The dynamic kind
+    // has several names (Any, JsonElement, JsonElement?, JsonNode, their full .NET names): they are one kind here, so
+    // an Any expression binds to a JsonElement input with no conversion step. A JsonObject or JsonArray input accepts
+    // the dynamic kind too, and the run time checks the shape (spec 1228 FR-021).
+    private static bool DeclaredTypeFits(TypeReference resultType, TypeReference inputType)
+    {
+        if (resultType.CollectionKind != inputType.CollectionKind)
+            return false;
+
+        if (string.Equals(resultType.Alias, inputType.Alias, StringComparison.Ordinal))
+            return Equals(resultType.Element, inputType.Element);
+
+        if (resultType.Element is not null || inputType.Element is not null)
+            return false;
+
+        return TypeAliasConvention.IsDynamicKind(resultType.Alias) &&
+               (TypeAliasConvention.IsDynamicKind(inputType.Alias) || TypeAliasConvention.IsShapedJson(inputType.Alias));
     }
 
     // Closes the authored TypeReference (alias + collection kind) into a concrete CLR type via the
@@ -1178,7 +1196,7 @@ public sealed class RuntimeInputBindingCompiler(
         };
 
     private static ValueTypeDescriptor ToValueTypeDescriptor(InputDefinition inputDefinition) =>
-        new(inputDefinition.Type.Alias, inputDefinition.Type.CollectionKind);
+        ValueTypeDescriptor.FromTypeReference(inputDefinition.Type);
 
     private static bool AcceptsNull(InputDefinition inputDefinition) =>
         inputDefinition.IsNullable;

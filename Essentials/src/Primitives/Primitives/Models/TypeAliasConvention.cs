@@ -67,6 +67,59 @@ public static class TypeAliasConvention
         new HashSet<string>(PrimitiveAliasesByFullName.Values, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The names of the dynamic kind: any valid JSON value. <c>Any</c> is its alias; <c>Object</c>,
+    /// <c>System.Object</c> and <c>Elsa.Any</c> are older names for it, and <c>JsonElement</c> and <c>JsonNode</c>
+    /// are the .NET types an activity declares to hold it. <c>JsonObject</c> and <c>JsonArray</c> are not in the set:
+    /// they hold JSON of one shape only.
+    /// </summary>
+    private static readonly IReadOnlySet<string> DynamicKindNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "Any",
+        "Elsa.Any",
+        "Object",
+        "System.Object",
+        "JsonElement",
+        "System.Text.Json.JsonElement",
+        "JsonNode",
+        "System.Text.Json.Nodes.JsonNode"
+    };
+
+    /// <summary>
+    /// Whether <paramref name="alias"/> names the dynamic kind (spec 1228 FR-021): <c>Any</c>, one of its older names,
+    /// or <c>JsonElement</c>/<c>JsonNode</c> by their short or full .NET names, nullable or not. Publication treats all
+    /// of them as one kind when it compares a declared type with an input's. <c>JsonObject</c> and <c>JsonArray</c> are
+    /// not the dynamic kind: they accept it and check the shape at run time.
+    /// </summary>
+    public static bool IsDynamicKind(string? alias)
+    {
+        if (string.IsNullOrWhiteSpace(alias))
+            return false;
+
+        var name = alias.Trim();
+        if (name.EndsWith('?'))
+            name = name[..^1];
+
+        return DynamicKindNames.Contains(name);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="alias"/> names a JSON value of one shape: <c>JsonObject</c> or <c>JsonArray</c>, by short
+    /// or full .NET name, nullable or not. Such an input accepts the dynamic kind at publish and checks the shape at
+    /// run time (spec 1228 FR-021).
+    /// </summary>
+    public static bool IsShapedJson(string? alias)
+    {
+        if (string.IsNullOrWhiteSpace(alias))
+            return false;
+
+        var name = alias.Trim();
+        if (name.EndsWith('?'))
+            name = name[..^1];
+
+        return name is "JsonObject" or "JsonArray" or "System.Text.Json.Nodes.JsonObject" or "System.Text.Json.Nodes.JsonArray";
+    }
+
+    /// <summary>
     /// Returns the canonical alias for <paramref name="type"/>: the reserved bare alias for a known
     /// primitive/common value type, otherwise the namespace-qualified <see cref="Type.FullName"/>
     /// (no assembly name, no version). Reflection-only safe.

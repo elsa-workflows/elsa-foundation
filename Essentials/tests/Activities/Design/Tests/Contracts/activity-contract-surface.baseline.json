@@ -810,7 +810,7 @@
         {
           "key": "ResponseHeaders",
           "name": "ResponseHeaders",
-          "type": "System.String[]",
+          "type": "Dictionary<String, String[]>",
           "collectionKind": "Dictionary",
           "isRequired": true,
           "isNullable": true,
@@ -876,7 +876,7 @@
         {
           "key": "Headers",
           "name": "Headers",
-          "type": "System.String[]",
+          "type": "Dictionary<String, String[]>",
           "collectionKind": "Dictionary",
           "isRequired": false,
           "isNullable": true,
@@ -920,7 +920,7 @@
         {
           "key": "Headers",
           "name": "Headers",
-          "type": "System.String[]",
+          "type": "Dictionary<String, String[]>",
           "collectionKind": "Dictionary",
           "isRequired": true,
           "isNullable": false,

@@ -9,6 +9,7 @@ using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Design.Reconciliation.Clr.Contracts;
+using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
 using Elsa.Activities.Design.Tests.ClrIconFixture;
 using Elsa.Activities.Runtime.Core.Models;
@@ -393,7 +394,7 @@ public sealed class ActivitySerializedShapeSourceTests
     {
         var descriptor = new ClrActivityDescriptor(typeof(InheritedResultActivity).FullName!);
         var current = new ActivityVersionReconciliationModel(null, "1.0.0", descriptor.TypeAlias, "Inherited result", "Tests", null,
-            "elsa.clr-activity", "1", "elsa.clr-activity", "1", descriptor, [], [], []);
+            "elsa.clr-activity", ClrAssemblyScanner.SchemaVersion, "elsa.clr-activity", "1", descriptor, [], [], []);
         using var host = new Host(scanner: new FixedScanner(current));
         host.CopyMetadataAssembly(typeof(InheritedResultActivity).Assembly);
         var baseAsset = host.CopyMetadataAssembly(typeof(SerializedShapeBasePayload).Assembly);
@@ -472,7 +473,7 @@ public sealed class ActivitySerializedShapeSourceTests
     {
         var descriptor = new ClrActivityDescriptor(activityType.FullName!);
         var model = new ActivityVersionReconciliationModel(null, "1.0.0", descriptor.TypeAlias, "Metadata result", "Tests", null,
-            "elsa.clr-activity", "1", "elsa.clr-activity", "1", descriptor, [], [], []);
+            "elsa.clr-activity", ClrAssemblyScanner.SchemaVersion, "elsa.clr-activity", "1", descriptor, [], [], []);
         var host = new Host(scanner: new FixedScanner(model));
         host.CopyMetadataAssembly(activityType.Assembly);
         return host;

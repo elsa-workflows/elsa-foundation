@@ -395,5 +395,5 @@ public sealed class ValueConversionPublicationException : ArgumentException
 
     /// <summary>Formats a portable type contract as <c>alias/collectionKind/schema:version</c>.</summary>
     public static string DescribeContract(ValueTypeDescriptor type) =>
-        $"{type.Alias}/{type.CollectionKind}/schema:{type.SchemaVersion?.ToString() ?? "none"}";
+        $"{(type.Element is null ? type.Alias : type.ToDisplayString())}/{type.CollectionKind}/schema:{type.SchemaVersion?.ToString() ?? "none"}";
 }

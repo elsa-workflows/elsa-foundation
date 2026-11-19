@@ -33,7 +33,9 @@ public sealed class ClrAssemblyScanner(
     ILogger<ClrAssemblyScanner> logger) : IClrAssemblyScanner
 {
     public const string ProviderKey = "elsa.clr-activity";
-    public const string SchemaVersion = "1";
+    // 2: an input or output type names a nested collection element (spec 1228 FR-022), e.g. a dictionary of string
+    // arrays; version 1 described such a type by its value type alone.
+    public const string SchemaVersion = "2";
     private const long MaxJavaScriptSafeInteger = 9007199254740991L;
     // Matched by name: this project does not reference Elsa.Workflows.Runtime.Core, which declares the interface.
     private const string CheckpointParticipantInterfaceFullName = "Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityCheckpointParticipant";
