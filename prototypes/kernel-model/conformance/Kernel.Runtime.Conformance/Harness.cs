@@ -4,7 +4,8 @@ namespace Kernel.Runtime.Conformance;
 
 /// <param name="FaultRate">The share of store calls whose connection breaks, as in the store suite's stress test.</param>
 /// <param name="BrokenFence">MUTATION: the store's commit ignores epoch and position. The fence's cases and the stress test must fail with it.</param>
-public sealed record HarnessSetup(int Partitions, RuntimeTiming Timing, double FaultRate = 0, bool BrokenFence = false);
+/// <param name="WorkerPartitions">K1 slice 7: the count the node's host and workers place, when a case sets it apart from the store's and the runtime's.</param>
+public sealed record HarnessSetup(int Partitions, RuntimeTiming Timing, double FaultRate = 0, bool BrokenFence = false, int? WorkerPartitions = null);
 
 /// <summary>
 /// One cluster of one runtime over one fresh store, with layer 2 built by the suite: every node gets one worker for its
@@ -97,7 +98,7 @@ public sealed class Harness : IAsyncDisposable
         if (!_stores.TryAdd(name, store)) lock (Reused) Reused.Add(name);
         var options = new WorkerOptions
         {
-            Lease = Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000, Partitions = Partitions,
+            Lease = Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000, Partitions = Setup.WorkerPartitions ?? Partitions,
             OnTurn = (actor, _, _) => { Interlocked.Increment(ref _turns); Log.Enqueue((name, "turn", actor.Id, 0)); },
             OnObservedDelivery = row => Log.Enqueue((name, "seen", row.Message.Target.Id, row.Seq)),
             JobScheduler = TaskScheduler.Default,      // a job's body off the runtime's scheduler, whatever the runtime
@@ -105,7 +106,7 @@ public sealed class Harness : IAsyncDisposable
         // One worker per node: its trial gate is the node's. A worker per scope gets no shared gate: a runtime may run the
         // passes of a node's scopes at the same time, and the gate is not safe for that (FINDINGS, "The runtime
         // conformance suite and the Orleans adapter", R6).
-        var host = _oneWorkerPerNode ? DurableHost.ForNode(name, store, new WorkflowInstance(Stress.Models()), Partitions, options, _projections[name] = new NodeProjection(store, take: 2))
+        var host = _oneWorkerPerNode ? DurableHost.ForNode(name, store, new WorkflowInstance(Stress.Models()), Setup.WorkerPartitions ?? Partitions, options, _projections[name] = new NodeProjection(store, take: 2))
             : new DurableHost(Enumerable.Range(0, Partitions).Select(p => new Worker(name, p, store, new WorkflowInstance(Stress.Models()), options)));
         _hosts[name] = host;
         return new NodeServices(Watcher.Wrap(name, host), store);

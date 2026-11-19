@@ -110,8 +110,12 @@ public sealed class Watcher
             if (_busy.TryGetValue((node, scope), out var now) && now == what) _busy.Remove((node, scope));
     }
 
-    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost
+    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount
     {
+        // The start's count check is layer 2's: the watcher passes it through, so a mismatch refuses the node here too.
+        public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) =>
+            inner is IScopeCount counted ? counted.CheckScopesAsync(scopes, cancellationToken) : ValueTask.CompletedTask;
+
         public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
         {
             lock (watcher._lock)

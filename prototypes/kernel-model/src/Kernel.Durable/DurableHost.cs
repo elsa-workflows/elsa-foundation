@@ -73,7 +73,8 @@ public sealed class DurableHost : IScopeHost, IScopeCount
     {
         if (_counted is not { } counted) return;
         var stored = await counted.Store.PartitionCountAsync(cancellationToken);
-        if (counted.Placed != scopes || (counted.Part ? stored < scopes : stored is { } rows && rows != scopes))
+        // A store that does not say its count is refused too, unless the node places part of it (the simulation's).
+        if (counted.Placed != scopes || (counted.Part ? stored < scopes : stored != scopes))
             throw new InvalidOperationException($"The partition counts disagree: the runtime places {scopes} scopes, the workers place over {counted.Placed} partitions, and the store has {stored?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "an unknown number of"} partitions. Configure one count, the one the database was created with.");
     }
 
