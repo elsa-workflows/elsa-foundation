@@ -1827,9 +1827,13 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// <summary><c>R.name(args)</c> becomes <c>__elsa3Tz.call(R, "name", [args])</c> (FR-023).</summary>
         private void WrapLocalCall(CallExpression call, MemberExpression callee, string name)
         {
+            // From the member's dot (or ?.), so a parenthesized receiver keeps its closing parenthesis.
+            var dot = Source.LastIndexOf('.', callee.Property.Start - 1);
+            if (dot > 0 && Source[dot - 1] == '?')
+                dot--;
             var open = Source.IndexOf('(', callee.End);
             Edits.Add(new SourceEdit(call.Start, call.Start, $"{Elsa3ZonedDateHelper.Name}.call("));
-            Edits.Add(new SourceEdit(callee.Object.End, open + 1, $", {JsonSerializer.Serialize(name)}, ["));
+            Edits.Add(new SourceEdit(dot, open + 1, $", {JsonSerializer.Serialize(name)}, ["));
             Edits.Add(new SourceEdit(call.End - 1, call.End, "])"));
         }
 
@@ -1848,7 +1852,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             Literal => true,
             UnaryExpression { Operator: Operator.UnaryNegation or Operator.UnaryPlus } => true,
             BinaryExpression { Operator: Operator.Subtraction or Operator.Multiplication or Operator.Division or Operator.Remainder } => true,
-            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" or "valueOf" or "now" or "UTC" or "parse" } } } => true,
+            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" or "valueOf" or "now" or "UTC" or "parse" or "toISOString" or "toJSON" } } } => true,
             _ => IsKnownDate(argument),
         };
 

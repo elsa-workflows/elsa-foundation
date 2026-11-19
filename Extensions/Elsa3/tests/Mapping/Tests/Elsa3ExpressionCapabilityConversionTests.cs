@@ -30,6 +30,7 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("new Date('2026-10-28T09:15:00+01:00').getTime()")]
     [InlineData("Date.parse('2026-10-28T09:15:00Z')")]
     [InlineData("new Date(Date.now() - 1000).toISOString()")]
+    [InlineData("new Date(new Date().toISOString()).getTime()")]
     [InlineData("Math.random()")]
     [InlineData("newGuid()")]
     [InlineData("newGuidString()")]
@@ -153,6 +154,9 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("var s = '2026-10-28T09:15:00'; new Date(s).toISOString()", "2026-10-28T08:15:00.000Z")]
     [InlineData("var s = '2026-10-28T09:15:00Z'; new Date(s).toISOString()", "2026-10-28T09:15:00.000Z")]
     [InlineData("var s = '2026-10-28'; new Date(s).toISOString()", "2026-10-28T00:00:00.000Z")]
+    // A parenthesized receiver, and a nested local call.
+    [InlineData("(new Date(Date.UTC(2026, 9, 28, 8, 15))).getHours()", "9")]
+    [InlineData("new Date(2026, new Date(Date.UTC(2026, 9, 28, 8, 15)).getMonth(), 1).toISOString()", "2026-09-30T22:00:00.000Z")]
     // Zone-independent usage is untouched.
     [InlineData("new Date(Date.UTC(2026, 9, 28, 8, 15)).getUTCHours()", "8")]
     public async Task Under_source_time_zone_the_zone_is_written_in_the_code_and_matches_elsa3(string expression, string expected)

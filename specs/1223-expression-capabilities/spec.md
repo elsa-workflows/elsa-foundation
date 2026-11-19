@@ -208,6 +208,10 @@ Each question was decided as recommended; the spec text follows the decision.
 - **OQ-8**: Elsa 3 handed date-typed values to scripts as a JavaScript `Date`, Elsa 4 as ISO text. **Decided:** the converter rewrites direct reads into a `Date` (FR-032), which keeps converted scripts working; refusing every use of a date-typed value would refuse common, faithful scripts.
 - **OQ-9**: Elsa 3 used the server's culture. **Decided:** refuse locale-dependent calls without an explicit locale (FR-033). A source-culture option beside the source time zone would let them convert, but ADR 0046 does not define one, so it would need an ADR amendment; not proposed now.
 
+## Measured after implementation
+
+JTest corpus (36 definitions, local checkout, throwaway probe through `ConversionServices` against the real activity catalog, 2026-11-19): **19/36** convert under `Refuse`, **21/36** under `AssumeUtc` and under `SourceTimeZone` = `Europe/Amsterdam` (SC-001). The two extra are `javascript-date-methods` (`new Date(dateInput)`) and `performance-minimal-baseline` (`new Date(getStartTime())`): non-literal parses, refused under `Refuse` with guidance naming both settings (SC-007). `composition-execute-workflow-root` is refused for activity reasons outside this spec. No S-1 construct refuses any other definition: the GUID functions and `toJson` (`javascript-json-methods`, with the rewrite warning) convert; the remaining JavaScript refusals are the byte helpers (`javascript-elsa-functions`, FR-013) and `base64Encode`/`base64Decode`, which Elsa 3 never had (`javascript-script-handler-functions`). `VF-IMP-012` refuses no corpus definition, as the OQ-4 scan found (SC-002 is held by the representative cases in the converter tests).
+
 ## Assumptions
 
 - The host provides an injectable clock (`TimeProvider`) that the expression engine draws current time from; tests control time through it.
