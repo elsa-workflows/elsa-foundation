@@ -350,42 +350,49 @@ The follow-ups that slice 2a recorded for this slice:
   partitions under the k-row fence, and that flush is held on its way to the store. While it is held, Orleans migrates
   the grain of 2 to the second silo (`MigrateOnIdle` with a placement hint, through `IRuntimeNode.MoveAsync`). The
   deactivation's loss waits for the flush: the flush lands, 2 is given up only after it returns, and 0, 1 and 3 keep
-  their epochs (a quiet loss, no reset). The second silo takes 2, and both partitions go on in order. A host lock that
+  their epochs and their memory (a quiet loss, no reset). The second silo takes 2, and both partitions go on in order. A host lock that
   admits every caller fails the case (2 is given up before the flush returns), and so does a loss that always resets.
 - **The reset by a guarded retake.** The fence case now checks, on an owned set, that the refused commit reset the
   worker and that it took 1, 2 and 3 back by `RetakeAsync`, releasing none, while the thief kept 0. It runs on both
   runtimes. With the retake switched off it fails.
-- **The poll tick.** Each grain woke its scope for the poll at its own interval, counted from its activation. Under one
-  worker per silo each of those wakes can cost a poll of the whole set, and the grains' ticks drift apart. The ticks
-  now sit on a grid of the poll interval that the process shares, at most one interval away, so the poll guarantee is
-  unchanged. At 64 grains over 30 idle seconds this halved the set polls, from 5.0 to 2.5 a second.
 - **The cost of a pass** (`Kernel.Runtime.Conformance.Run ... cost` and `Kernel.Runtime.Orleans.Conformance ... cost`,
-  in-memory store). One node holds every partition, with a 6 s lease and a 1 s poll interval: 10 idle seconds, then a
-  burst of tokens over the partitions (400, 1,024 and 4,096), each with a hint. "Set polls" is partition polls over partitions: the harness's
-  store answers a set poll with one poll per partition, where a SQL store sends one query.
+  in-memory store, load average 2.5 to 3). One node holds every partition, with a 6 s lease and a 1 s poll interval: 10
+  idle seconds, then a burst of tokens over the partitions (400, 1,024 and 4,096), each with a hint. The columns are the
+  tool's. "Set polls" is the node's partition polls over the partitions: the harness's store answers a set poll with
+  one poll per partition, where a SQL store sends one query. "Store calls" counts each partition poll, so it overstates
+  both runtimes' polls against a SQL store.
 
   | Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
   |---|---|---|---|---|---|---|---|---|
-  | orleans | 16 | idle, a second | 24.2 | 2.8 | 2.3 | 0 | - | 37.3 |
+  | orleans | 16 | idle, a second | 24 | 2.5 | 2.0 | 0 | - | 32.5 |
+  | built-in | 16 | idle, a second | 17.6 | 1.1 | 0.9 | 0 | - | 15.5 |
   | orleans | 16 | 400 tokens | 33 | 18 | 18 | 11 | 14.8 | 791 |
-  | built-in | 16 | idle, a second | 25.5 | 1.5 | 1.0 | 0 | - | 17.2 |
-  | built-in | 16 | 400 tokens | 58 | 13 | 11 | 11 | 14.8 | 679 |
-  | orleans | 64 | idle, a second | 96 | 2.6 | 2.1 | 0 | - | 134.9 |
-  | orleans | 64 | 1024 tokens | 38 | 38 | 37 | 27 | 37.9 | 4868 |
+  | built-in | 16 | 400 tokens | 74 | 14 | 12 | 11 | 14.8 | 696 |
+  | orleans | 64 | idle, a second | 96 | 3.4 | 2.9 | 0 | - | 186.1 |
   | built-in | 64 | idle, a second | 96 | 1.5 | 1.0 | 0 | - | 65.2 |
-  | built-in | 64 | 1024 tokens | 160 | 36 | 35 | 34 | 30.1 | 5201 |
-  | orleans | 256 | idle, a second | 384 | 3.3 | 2.8 | 0 | - | 717.3 |
-  | orleans | 256 | 4096 tokens | 414 | 340 | 340 | 334 | 12.3 | 99186 |
-  | built-in | 256 | idle, a second | 384 | 1.5 | 1.0 | 0 | - | 257.2 |
-  | built-in | 256 | 4096 tokens | 630 | 345 | 345 | 342 | 12.0 | 100962 |
+  | orleans | 64 | 1,024 tokens | 37 | 37 | 37 | 27 | 37.9 | 4,703 |
+  | built-in | 64 | 1,024 tokens | 162 | 36 | 35 | 34 | 30.1 | 5,193 |
+  | orleans | 256 | idle, a second | 384 | 6.3 | 5.8 | 0 | - | 1,485.3 |
+  | built-in | 256 | idle, a second | 383.9 | 1.4 | 1.0 | 0 | - | 257.1 |
+  | orleans | 256 | 4,096 tokens | 416 | 350 | 350 | 343 | 11.9 | 101,876 |
+  | built-in | 256 | 4,096 tokens | 768 | 256 | 255 | 252 | 16.3 | 77,832 |
 
-  On Orleans each grain's call costs about what the built-in loop's visit to a scope costs, and the one-pass rule
-  answers most of them. The difference is the poll: idle, Orleans polls the set 2.1 to 2.8 times a second where the built-in
-  loop polls it once, because the grains' poll wakes still arrive a few milliseconds apart, and a wake that comes after
-  a pass began costs another poll. The burst costs about the same on both: about as many worker passes, polls and commits, and one
-  commit spans as many partitions (the harness caps a batch at 40 turns). Orleans makes fewer pass calls in a burst,
-  because a hint reaches only its own grain. "Store calls" counts each partition poll, so it overstates both rows' polls
-  against a SQL store. Slice 8's cost table should count the set polls per interval on Orleans at 1,024 partitions.
+  - **Pass calls.** Each grain calls its pass about as often as the built-in loop visits a scope, and the one-pass rule
+    answers most of those calls.
+  - **Idle polls.** The poll is the difference. The built-in loop wakes every scope at once and polls the set about once
+    a second. Each Orleans grain wakes the node's worker at its own poll tick, counted from its activation, and a wake
+    that comes after a pass began costs another poll of the whole set. On a quiet machine Orleans polled the set 2.0 to
+    5.8 times a second here, growing with the grains. A review under load (load average 8 to 85) measured 2.1 to 16 a
+    second.
+  - **The poll grid that was dropped.** One version of this slice put the grains' ticks on a shared grid. A first run
+    showed it halving the polls, but the review's interleaved pairs did not reproduce that benefit, so it is not kept.
+  - **Under load.** The two runtimes are close. One commit spans many partitions on both (the harness caps a batch at
+    40 turns). Orleans makes fewer pass calls, because a hint reaches only its own grain.
+  - **For slice 8.** It measures the Orleans set polls per poll interval on a quiet machine at 1,024 partitions.
+- **Open seam question, for slice 8.** A silo-level poll would bring Orleans to one set poll per interval: the silo
+  wakes its owned set once, as the built-in loop does. The seam today promises a wake per held scope (`RuntimeTiming.PollInterval`),
+  and a per-scope host (a store without owned sets) still needs that. So the change needs the seam to say that one wake
+  covers a node's set, which is a seam decision to take before anyone builds it.
 
 ## Placement and rebalance (`sim --placement-check`)
 

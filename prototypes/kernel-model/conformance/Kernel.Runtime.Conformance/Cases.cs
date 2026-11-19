@@ -283,6 +283,8 @@ public static class Cases
             var b = await h.StartAsync();
             var (store, worker) = (h.StoreOf(a.Name), h.WorkerOf(a.Name)!);
             That(Set(worker) == "0 1 2 3", $"the first node does not hold every partition: [{Set(worker)}]");
+            foreach (var p in new[] { 1, 3 }) await h.AddAsync(Token(p, "c", "k" + p));
+            foreach (var p in new[] { 1, 3 }) await Applied(h, p, "c", ["k" + p], Slack);
             var kept = new[] { 0, 1, 3 }.Select(worker.EpochOf).ToList();
             // Two tokens, in 0 and in 2, reach the store while the node's calls wait, so the first poll that reads one
             // reads both and one flush spans both partitions. That flush is held on its way to the store.
@@ -298,10 +300,13 @@ public static class Cases
             That(held == "landed" && store.HeldPartitions.SequenceEqual([0, 2]) && askedAt < landedAt && store.ReleaseBegan(2) >= landedAt,
                 $"the held commit over [{string.Join(" ", store.HeldPartitions)}] {held}; the move was asked {landedAt - askedAt} ms before it returned, " +
                 $"and 2 was given up {store.ReleaseBegan(2) - landedAt} ms after");
-            // A quiet loss: the partitions kept keep their epochs, so nothing was reset.
+            // A quiet loss: the partitions kept keep their epochs and their memory, so nothing was reset.
             That(Set(worker) == "0 1 3" && new[] { 0, 1, 3 }.Select(worker.EpochOf).SequenceEqual(kept), $"the first node now holds [{string.Join(", ", worker.Fences)}], before {string.Join(" ", kept)}");
-            foreach (var p in new[] { 0, 2 }) await h.AddAsync(Token(p, "c", "g" + p));
-            foreach (var p in new[] { 0, 2 }) await Applied(h, p, "c", ["f" + p, "g" + p], Slack);
+            var memory = worker.Instances.Select(i => i.Id).ToHashSet();
+            That(new[] { 0, 1, 3 }.All(p => memory.Contains(InstanceRef.In(p, "c").Id)) && !memory.Contains(InstanceRef.In(2, "c").Id),
+                $"memory after the move of 2: [{string.Join(" ", memory)}]");
+            foreach (var p in Enumerable.Range(0, 4)) await h.AddAsync(Token(p, "c", "g" + p));
+            foreach (var p in Enumerable.Range(0, 4)) await Applied(h, p, "c", p % 2 == 0 ? ["f" + p, "g" + p] : ["k" + p, "g" + p], Slack);
         }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(4) } }, OwnedSet: true, Placement: Placement.Runtime),
 
         new("owned set: partitions join and leave the set between flushes, never during one", Level.Required, async h =>

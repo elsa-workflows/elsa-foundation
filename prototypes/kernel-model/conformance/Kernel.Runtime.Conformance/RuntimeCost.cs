@@ -7,8 +7,9 @@ namespace Kernel.Runtime.Conformance;
 /// What a pass costs with several scopes on one node (K1 slice 6), counted on layer 2's side of the seam: one node holds
 /// every partition, on the default lease (6 s) and poll interval (1 s). An idle spell, then a burst of counter tokens
 /// spread over the partitions, each added with a hint. The counts are the node's: calls to a scope's pass and the worker
-/// passes they ran, its partition polls (one per held partition for each poll of the set), its commits with turns and
-/// the partitions those spanned, and every store call (the built-in runtime's balancing heartbeats among them).
+/// passes they ran, its set polls (the harness's store answers a set poll with one poll per partition, so these are its
+/// partition polls over the partitions), its commits with turns and the partitions those spanned, and every store call
+/// (each partition poll, and the built-in runtime's balancing heartbeats, among them).
 /// </summary>
 public static class RuntimeCost
 {
@@ -27,15 +28,15 @@ public static class RuntimeCost
         var (host, node) = (h.HostOf(a.Name), h.StoreOf(a.Name));
         (long, long, long, long, long, long) Now() => (host.PassCounts.Calls, host.PassCounts.Passes, node.Counts.Polls, node.Counts.TurnCommits, node.Counts.TurnPartitions, node.Counts.Calls);
         string Row(string what, (long, long, long, long, long, long) from, (long, long, long, long, long, long) to, double per) =>
-            $"| {runtime.Name} | {partitions} | {what} | {(to.Item1 - from.Item1) / per:0.#} | {(to.Item2 - from.Item2) / per:0.#} | {(to.Item3 - from.Item3) / per:0.#} | " +
+            $"| {runtime.Name} | {partitions} | {what} | {(to.Item1 - from.Item1) / per:0.#} | {(to.Item2 - from.Item2) / per:0.#} | {(to.Item3 - from.Item3) / per / partitions:0.#} | " +
             $"{(to.Item4 - from.Item4) / per:0.#} | {(to.Item4 == from.Item4 ? "-" : ((double)(to.Item5 - from.Item5) / (to.Item4 - from.Item4)).ToString("0.0"))} | {(to.Item6 - from.Item6) / per:0.#} |";
 
         var idle = Now();
         await Task.Delay(TimeSpan.FromSeconds(seconds));
         var busy = Now();
-        output.WriteLine("| Runtime | Partitions | Window | Pass calls | Worker passes | Partition polls | Commits with turns | Partitions per commit | Store calls |");
+        output.WriteLine("| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |");
         output.WriteLine("|---|---|---|---|---|---|---|---|---|");
-        output.WriteLine(Row("idle, per second", idle, busy, seconds));
+        output.WriteLine(Row("idle, a second", idle, busy, seconds));
 
         var watch = Stopwatch.StartNew();
         for (var i = 0; i < tokens; i++)
@@ -50,7 +51,7 @@ public static class RuntimeCost
             return true;
         }, TimeSpan.FromSeconds(60));
         var end = Now();
-        output.WriteLine(Row($"{tokens} tokens, in all", busy, end, 1));
+        output.WriteLine(Row($"{tokens} tokens", busy, end, 1));
         output.WriteLine($"{runtime.Name}: the burst {(done ? "applied" : "DID NOT APPLY")} in {watch.ElapsedMilliseconds} ms");
         return done ? 0 : 1;
     }
