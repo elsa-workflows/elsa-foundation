@@ -22,7 +22,7 @@ Not decided here:
   and it must agree with them (decisions 2 and 5). The two stay separate ADRs that refer to each other; rules that
   appear in both (no key policy on data, the default member matching and its scoped conversion contracts) are stated
   once, here.
-- The representation of null versus missing, in spec S-2 under decision D-10.
+- The representation of null versus missing: decision D-10, in the ADR 0045 §2 amendment, applied by spec S-2.
 
 This ADR only constrains how those serialize.
 
@@ -83,11 +83,12 @@ transformed. The risk sits where data becomes a .NET type and back:
   variable defaults (`RuntimeInputBindingCompiler.cs:1019`, `:1044`, `:719`), workflow-input validation
   (`WorkflowExecutableInputValidator.cs:119`) and stateful activity state (`StatefulActivity.cs`) all use the defaults:
   case-sensitive member matching, PascalCase on write, and a `DateTime` with an offset converted to server-local time.
-- **The two sides of one value disagree.** An activity result is written with Web options, so camelCased
+- **The two sides of one value disagreed.** An activity result was written with Web options, so camelCased
   (`ActivityCompletionProjector.cs:16,63`), and read into the next activity's input with the defaults, so
-  case-sensitively. A .NET-typed result bound to a .NET-typed input can silently lose its properties. Code-first
-  literals follow the same pattern (`WorkflowBuilder.cs:334` writes Web, `RuntimeInputBindingCompiler.cs` reads with
-  the defaults). This is inferred from the code and not yet reproduced by a test.
+  case-sensitively. A .NET-typed result bound to a .NET-typed input could silently lose its properties. That is fixed
+  since: both sides now use one activity-value option set (Web naming, case-insensitive reads, strict numbers), which
+  S-9 moves to the conversion contract of decision 2. Code-first literals still follow the old pattern
+  (`WorkflowBuilder` writes Web, `RuntimeInputBindingCompiler` reads with the defaults).
 - **The same text is accepted on one path and refused on another.** Web options read numbers from strings (`"5"` into
   `Int32`); the defaults refuse them.
 - **Numbers lost digits outside the script engine too.** ForEach turned every item number into a `double` (the
@@ -194,7 +195,7 @@ a re-parse per value.
   that the edit left alone do not keep their original formatting on their own account.
 - A value that passes through a script unchanged can change today: the adapter converts the whole input into
   JavaScript values up front, and Jint holds every number as a double, so an integer beyond ±2^53 or a long decimal
-  loses digits (`IsolatedJintEngine.cs:168-169`). That loss is the JavaScript adapter's, not the
+  loses digits (`IsolatedJintEngine.CreateValue`). That loss is the JavaScript adapter's, not the
   serializer's. The ADR 0046 amendment fixes
   it there (V9): a read never looks like a change and only what the script changes is written, so values the script
   did not change keep their original text. The implementing spec chooses the mechanism; copy, compare, patch is the
@@ -237,13 +238,12 @@ makes it a rule. Data is deserialized into .NET types only inside an activity or
 
 That deserialization is a boundary too. It uses the conversion contract for the target type (decision 2), in both
 directions: a copy of the baseline whose naming and matching that contract selects, with the protected settings of
-decision 6 unchanged. Today it does not (see Context): activity inputs, expression-result coercion, publish-time
-literals and stateful activity state use System.Text.Json's defaults, while activity results are written with Web
-options. Every conversion between data and a given .NET type, in or out, uses the same effective contract, so a value
+decision 6 unchanged. Today it does not (see Context): expression-result coercion, publish-time literals and stateful
+activity state use System.Text.Json's defaults, and activity inputs and results use their own Web-based option set.
+Every conversion between data and a given .NET type, in or out, uses the same effective contract, so a value
 written by one activity reads back the same in the next. The ADR 0046 amendment's adapter rules for these conversions
-(member matching with a warning for unmatched members; a `DateTime` or `DateTimeOffset` without an offset is never
-silently read as UTC, but needs a source time zone or an explicit assume-UTC policy recorded in the published
-conversion contract, and is refused otherwise) are applied through that contract,
+(member matching with a warning for unmatched members, and the date rules of ADR 0046 *Dates*: a `DateTime` or
+`DateTimeOffset` without an offset is never silently read as UTC) are applied through that contract,
 not as special cases at each call site. A number is never narrowed to `long` or `double` on the way, unless the target
 type asks for it.
 
@@ -315,7 +315,9 @@ that representation to each store. This ADR only requires that the serializer ke
   - Changing a hash input later is a separate, explicit decision with its identity, versioning and migration
     consequences assessed.
 - **Stored data.** Rows written today were normalized when first written and stay as they are. New rows keep the
-  received text and explicit nulls. Readers are unaffected, because a missing member still reads as null. Exported
+  received text and explicit nulls. Readers are unaffected, because a missing member still reads as null.
+  `IPayloadSerializer` reads member names case-insensitively today; deriving from the baseline makes its reads of
+  Elsa's own contracts exact, so S-9 confirms that every stored row it reads was written with the camelCase names. Exported
   artifacts gain `null` members, so their bytes differ from earlier exports.
 - **Code.**
   - The option constructions and attributes become either "derived from the baseline" or register entries. Existing
@@ -325,7 +327,8 @@ that representation to each store. This ADR only requires that the serializer ke
   - Two contract tests that assert camelCased keys are inverted, along with four assertions that pin
     `DictionaryKeyPolicy`. Their test helpers, `CompatibilityJson` and `AddDefinitionDeserializationTests` follow.
 - **Docs.** [docs/serialization.md](../serialization.md) gains the baseline, the data rule and the deviation register.
-  Its "HTTP boundary" exception still names FastEndpoints and is updated.
+  Its "case-insensitive on read" note changes to exact reads, and its "HTTP boundary" exception still names
+  FastEndpoints and is updated.
 - **Constitution.** A shared baseline that all modules derive from is a new cross-cutting pattern. It goes through
   the framework constitution's §2.24.3 pattern gate together with this ADR.
 
@@ -367,7 +370,7 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
   meaning. If they do not, the change is a stamped format change (decision 7).
 - **Nulls.** `IPayloadSerializer` keeps explicit nulls, and existing rows still read the same.
 - **.NET-typed values round trip.** A .NET-typed activity result bound to a .NET-typed input of the same type arrives
-  with every property set. Test this first: it reproduces today's suspected loss (Context).
+  with every property set. This is a regression check for the loss described in Context.
 - **Activity input matching and dates.**
   - Under the default contract, a key spelled exactly as the contract's name for `CustomerName` fills it; a key that
     differs only in case does not, and gives the unmatched-member warning while the step continues.
