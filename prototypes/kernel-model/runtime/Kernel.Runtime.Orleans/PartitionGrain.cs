@@ -84,12 +84,12 @@ public sealed class PartitionGrain(OrleansActorRuntime runtime) : Grain, IPartit
             _activation = await host.ActivateAsync(Scope, crashing);
             if (_activation is null) return Options.RetryEvery;
             await _activation.WokenAsync(null, crashing);     // a take starts from empty memory: the first pass reads the inbox
-            _pollAt = Now + (long)Options.PollInterval.TotalMilliseconds;
+            _pollAt = NextPoll();
         }
         else if (Now >= _pollAt)
         {
             await _activation.WokenAsync(null, crashing);
-            _pollAt = Now + (long)Options.PollInterval.TotalMilliseconds;
+            _pollAt = NextPoll();
         }
         // A take that landed after the silo crashed starts no pass: its lease runs out, as after a crash.
         if (crashing.IsCancellationRequested) return Options.RetryEvery;
@@ -100,6 +100,18 @@ public sealed class PartitionGrain(OrleansActorRuntime runtime) : Grain, IPartit
             { } delay when delay < untilPoll => delay,
             _ => untilPoll,
         };
+    }
+
+    /// <summary>
+    /// The next poll tick, on a grid of the poll interval that every grain of the process shares, and at most one interval
+    /// away. Under one worker per node (K1 D2) the silo's grains then wake its one worker at about the same moment, and a
+    /// few polls of the set serve them all. With a tick per grain, from its own activation, the ticks drift apart, and
+    /// each can cost a poll of the whole set.
+    /// </summary>
+    private long NextPoll()
+    {
+        var every = Math.Max(1, (long)Options.PollInterval.TotalMilliseconds);
+        return (Now / every + 1) * every;
     }
 
     private void Arm(TimeSpan due) => _timer?.Change(due, Timeout.InfiniteTimeSpan);
