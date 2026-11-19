@@ -1,8 +1,10 @@
 # Fairness, quotas and backpressure
 
-> **Proposed.** The kernel design awaits owner approval. This page answers design-now question 3 of the
-> [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#open-questions); it does not authorize product
-> implementation.
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+> This page answers design-now question 3 of the
+> [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#open-questions).
 
 Partitions share nodes, and the instances of a virtual partition share one owner, one poll and one committer. One
 tenant's burst can therefore delay every other tenant whose instances hash to the same virtual partitions or run on the
@@ -21,18 +23,18 @@ whose due time has passed. Future timers do not count towards due depth.
 
 ## What the prototype does today
 
-Built, in `prototypes/kernel-model` at main `433c79341`:
+Built, in `prototypes/kernel-model` at main `433c79341`, with the rows K1 changed (range ownership, slices 5 to 8) as of main `36bc9860a`:
 
 | Behaviour | Where | Effect on fairness |
 |---|---|---|
-| A poll reads at most `PollLimit` (500) rows in `seq` order | `WorkerOptions`, `Worker.PollAsync`, the [poll query](storage-model.md#poll-query-and-indexes) | First in, first out across all senders of the partition. A burst ahead of another tenant's message fills the poll window first. |
-| A pass gives every ready instance one turn, in ordinal id order | `Worker.RunAsync` (`ReadyForTurns(...).Order(StringComparer.Ordinal)`) | No instance takes two turns before another ready instance takes one. A pass has no turn budget, so its length grows with the ready set. |
+| One worker per node owns the node's set of virtual partitions (K1 D1); its poll reads at most `PollLimit` (500) rows of the whole set in `seq` order | `DurableHost.ForNode`, `Worker.PollAsync`, the [poll query](storage-model.md#poll-query-and-indexes) | First in, first out across all senders of every partition the node holds. A burst ahead of another tenant's message fills the poll window first, in any partition of the set. A full poll that read something new is read on at the next pass (K1 slice 5b). |
+| A pass gives every ready instance of the node's set one turn, in ordinal id order | `Worker.RunAsync` (`ReadyForTurns(...).Order(StringComparer.Ordinal)`) | No instance takes two turns before another ready instance takes one, across the set. A pass has no turn budget, so its length grows with the ready set. The runtime suite's case "fairness: a hot partition does not hold back the rest of the node's set" checks it. |
 | A turn takes the instance's contiguous deliverable messages | `Worker.Deliverable` | A deep inbox costs fewer turns. A generation-tracked parent takes each child completion alone (`WorkflowInstance.SingleMessage`). |
-| A flush writes at most `MaxBatch` (500) instance commits | `Worker.FlushAsync` | Bounds one transaction; the remainder waits for the next pass. |
+| A flush writes at most `MaxBatch` (500) instance commits, over every partition of the set it touches, under one k-row fence | `Worker.FlushAsync` | Bounds one transaction; the remainder waits for the next pass. |
 | At most `MaxInstances` idle instances stay in memory | `Worker.Evict`, FINDINGS section 19, invariant 21 | Bounds owner memory. The default is unbounded. |
-| One loop per node runs the passes of its scopes one after another, in scope order | `RuntimeNode.LoopAsync` | Round robin over scopes. A long pass delays every other scope on the node. |
-| A node holds its fair share of partitions, by node count | `PartitionRuntime.BalanceAsync`, FINDINGS section 9 | Balances partitions, not load. |
-| A poison trial stops every other turn in the process | `TrialGate`, FINDINGS F11 | A deliberate, rare fairness cost. |
+| One loop per node calls the passes of its scopes one after another, in scope order; the node's host runs one worker pass per round for all of them | `RuntimeNode.LoopAsync`, `DurableHost` (the one-pass rule) | Every scope of the node waits on the same pass, so a long pass delays the whole set. |
+| A node holds its fair share of partitions, by node count, moving the fewest | `PartitionRuntime.BalanceAsync`, `Balancer.Plan` | Balances partitions, not load. A node's set may be scattered. |
+| A poison trial stops every other turn in the process | `TrialGate`, FINDINGS F11 | A deliberate, rare fairness cost. Under one worker per node it holds back every partition of the set (K1 slice 5b). |
 | The ETL spike keeps at most 8 children outstanding per coordinator | `models/Etl/EtlModel.cs`, [ETL.md](../../prototypes/kernel-model/models/Etl/ETL.md) | The one credit protocol on the kernel; measured locally, below. |
 | A Native invocation inbox with a capacity: input above `Capacity` or `ReceiptCapacity` is answered `Full` or `ReceiptFull` | `models/Native/InvocationInbox.cs`, `models/Admission.Run` (its `IgnoreCapacity` control) | A bounded inbox inside one instance's state, in layer 3, that refuses by reply. M0 research, not the production contract. |
 
@@ -98,7 +100,7 @@ An inline Ephemeral start that writes no row passes the tenant rate check only.
 |---|---|---|---|
 | Tenant rate: a token bucket per tenant and `AdmissionKind` (rate, burst) | Per node | In memory | Exact per node. Cluster-wide it is the configured rate divided by the node count from membership, so approximate while nodes join or leave, and below the configured rate when ingress traffic is uneven across nodes |
 | Admissions in flight | Per node | In memory | Exact |
-| Due depth of the target's virtual partition | Per virtual partition | The pressure list, below | Approximate by up to one refresh interval of arrivals |
+| Due depth of the target's virtual partition | Per virtual partition | The pressure list, below | Approximate by up to one refresh interval of arrivals (plus one heartbeat interval under the node lease amendment) |
 
 Background jobs are limited in a different way: the job scheduler gives each tenant a number of slots per node, and a
 job beyond them waits for a slot. That limit refuses nothing.
@@ -169,8 +171,14 @@ delete writes no index entry and leaves dead tuples for vacuum. All of this is u
 measure the query plan and the scan cost under update and delete churn, with WRITES.md's method.
 
 **The pressure list (decision 2).** The owner writes its estimate into a new `backlog` column of the virtual partition's
-fence row, with its next commit or beat. Both already update that row, so this adds bytes and no round trip; it adds one
-assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).
+fence row, with its next commit, which already updates that row, so this adds bytes and no round trip; it adds one
+assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)). Under the node lease amendment (19 November) the
+heartbeat no longer writes partition rows, so only commits write the estimate: an owner with work commits at least its
+seen marks while messages arrive, and its last commit before the partition falls idle writes the estimate it leaves.
+When a sampled estimate crosses the low- or high-water mark and the partition has had no commit for one heartbeat
+interval, the owner sends a fenced commit with no journal rows that writes it, so a partition whose commits stall
+still publishes its depth within one heartbeat interval; a partition whose estimate stays on one side of the marks
+writes nothing.
 Ingress nodes keep a list of the virtual partitions above the low-water mark. Under the built-in runtime, the heartbeat
 already queries the partition rows for free ones (`EfStore.HeartbeatAsync`), and that query can return the list as
 well. Another runtime refreshes it with one query per node per interval:
@@ -181,7 +189,7 @@ SELECT id, backlog FROM partition WHERE backlog >= :lowWater;
 
 Admission refuses a start or command whose target virtual partition is above the high-water mark, and admits again
 below the low-water mark. For admitted starts and commands the threshold is soft: they can overshoot it by one refresh
-interval plus one sample interval of ingress. The fan-out of an outside publish and all internal arrivals are not
+interval plus one sample interval of ingress, plus, under the node lease amendment, one heartbeat interval. The fan-out of an outside publish and all internal arrivals are not
 limited by it at all. A provider without a
 relational fence row stores the field beside its fence record; MongoDB stores it in the partition document.
 
@@ -238,9 +246,9 @@ tenant: a later option, if measurements show the need.
   ([PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md)). The bound, the estimate and the `backlog` field are per
   virtual partition, so the store-wide ingress threshold is 1,024 times the high-water mark. Internal arrivals can take
   the due rows above it.
-- **Range ownership (later, the Worker refactor).** A scope becomes a range of virtual partitions with one pass. The
-  turn budget and the round robin then span the range; the capped count runs per behind virtual partition of the range.
-  Until that refactor the kernel's Worker owns one partition and the same rules apply to it.
+- **Range ownership (built in K1).** A node's one worker owns a set of virtual partitions, possibly scattered, with
+  one pass. The turn budget and the round robin span the set; the capped count runs per behind virtual partition of
+  the set.
 - **Embedded.** One node: admission is exact, and the pressure list is local memory.
 - **Cluster.** Each node runs its own limiters. The rate per node is the configured cluster rate divided by the node
   count the membership reports. The balancer counts nodes and does not see load; with a fence row per virtual

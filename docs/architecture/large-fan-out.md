@@ -1,8 +1,10 @@
 # Large fan-out and fan-in
 
-> **Proposed.** The kernel design awaits owner approval. This page answers design-now question 4 of the
-> [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#open-questions); it does not authorize product
-> implementation.
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+> This page answers design-now question 4 of the
+> [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#open-questions).
 
 A ForEach over 100,000 items, or an ETL job split into 100,000 partitions of work, starts many pieces of work and
 collects their results. On the kernel every piece that runs as a child instance reports to its parent with a message.
@@ -151,7 +153,7 @@ outstanding children exist; sub-ranges past the cursor were never started and ne
 still hold many children that it started over many turns, one per turn being enough, up to the marker-space bound
 on its registries: 384 × children + 12,416 × jobs ≤ 16,441,344 bytes, so at most 42,816 children with no jobs
 (derived, measured at K4; [data lifecycle](data-lifecycle.md#proposed-the-qualified-delete)). A child start or a job
-arm past that bound fails its turn, and the instance parks; the same check also reserves the model's terminal growth, so the terminate's ending commit always fits (sixth review R6-B1). Its terminate does not send them all in one commit: the ending turn sends the first `P_cascade` = 1,000 (proposed), and layer 2 sends
+arm past that bound fails its turn, and the instance parks; the same check counts the projected terminal row (the model's terminal growth, `CustomHandles`, which keeps a creator handle for each child start, and the other variable fields), so the terminate's ending commit always fits and a live row parks below 42,816 children, at a count measured at K3 ([observability](observability.md#every-park-operation-names-its-park), "The ending commit always fits", seventh review R7-B1). Its terminate does not send them all in one commit: the ending turn sends the first `P_cascade` = 1,000 (proposed), and layer 2 sends
 the rest in pages of at most `P_cascade`, each its own bounded kernel commit under a durable cursor, so 10,001
 children end in 11 commits; the send cap binds every turn unchanged, and each page is a kernel commit of at most
 `P_cascade` entries and one `kernel.cascade` (proposed, fifth review R5-B2;

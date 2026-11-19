@@ -1,8 +1,10 @@
 # Tenancy in the kernel
 
-> **Proposed.** The kernel design awaits owner approval. This page answers finding M2 of the gate 2 architecture
-> review ([review comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)); it
-> does not authorize product implementation.
+> **Approved design, with conditions.** Gate 2 granted design approval on 18 November 2026 at
+> `addffea7c850063d1ebe710b07866ff1640a93cb` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The implementation evidence is owed at K1 to K12,
+> and the [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) stay open until it lands.
+> This page answers finding M2 of the gate 2 architecture
+> review ([review comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)).
 
 Several tenants share one Cluster database, its 1,024 virtual partitions and its owners. This page defines how the
 kernel learns a tenant, how every name a caller can choose is kept apart per tenant, and what each ingress, match, read
@@ -177,7 +179,7 @@ tenants opaque ids, which the grammar allows.
 
 | Provider | Limit | Left for the caller's name |
 |---|---|---|
-| SQL Server | `Messages.Id` `nvarchar(450)` (`EfStore.cs`); clustered composite keys of `Subscriptions (Key, Instance, Wait)` and `Events (Key, Id)` within 900 bytes, 450 UTF-16 units in all | 385 for a message id; 380 for an actor id `{vp}/Q`, and 322 for a caller key, since every id the instance issues is its caller key plus 128 characters (`Q` and `{vp}/`, 70, and the issued id's prefix and suffix, 58: `c`, a 3-digit unit count, since ids here stay under 1,000 units, four separators, a 20-digit creation and revision and a 10-digit ordinal; observability's `N` + 129 counts a 4-digit unit count at the admission limit), so caller-key admission applies that bound (derived, unmeasured, K4); `Subscriptions` 385 for raw key, instance id and wait together, 315 when the instance has a caller key; `Events` 385 for raw key and event id together; a turn's generated event id is its actor id plus at most 58 units of prefix and suffix, so a turn's `Publish` leaves 257 for raw key and caller key together (derived, unmeasured, measured at K4; fifth review R5-M1, [observability](observability.md#resolving-a-park-a-bounded-drain)) |
+| SQL Server | `Messages.Id` `nvarchar(450)` (`EfStore.cs`); clustered composite keys of `Subscriptions (Key, Instance, Wait)` and `Events (Key, Id)` within 900 bytes, 450 UTF-16 units in all | 385 for a message id; 380 for an actor id `{vp}/Q`, and 322 for a caller key, since every id the instance issues is its caller key plus 128 characters (`Q` and `{vp}/`, 70, and the issued id's prefix and suffix, 58: `c`, a 3-digit unit count, since ids here stay under 1,000 units, four separators, a 20-digit creation and revision and a 10-digit ordinal; observability's `N` + 129 counts a 4-digit unit count at the admission limit for an issued message id, and a turn's event id, with its reserved `~`, is `N` + 130 there (seventh review R7-M1)), so caller-key admission applies that bound (derived, unmeasured, K4); `Subscriptions` 385 for raw key, instance id and wait together, 315 when the instance has a caller key; `Events` 385 for raw key and event id together; a turn's generated event id is its actor id plus at most 59 units of prefix and suffix, the reserved `~` included (seventh review R7-M1), so a turn's `Publish` leaves 256 for raw key and caller key together (derived, unmeasured, measured at K4; fifth review R5-M1, [observability](observability.md#resolving-a-park-a-bounded-drain)) |
 | MySQL | `Messages.Id` 255 characters (`EfStore.cs`) | 190 for a message id; 185 for an actor id, and 127 for a caller key, by the same issued-id bound (a 3-digit unit count) (derived, unmeasured, K4). The composite keys use the provider's default key width, recorded at K4 |
 | PostgreSQL | No column limit; a B-tree index entry is at most about 2,704 bytes | Composite keys stay within that, 65 bytes less for each qualified column |
 | SQLite, MongoDB | None that `Q` reaches | Not limited by `Q` |
@@ -192,7 +194,8 @@ tenants opaque ids, which the grammar allows.
 | Keyed request wire id | Caller | `key/` + SHA-256 over the binding's actor id and the operation's exact code units (below) | The store |
 | Message id a turn sends | Kernel | Derived from sender id and revision, as today | The store, since sender ids are |
 | Correlation key (subscription and event) | Caller or model | `Q(t, key)`; a sensitive key is `Q(t, "h:" + HMAC)` with the per-tenant key (data lifecycle) | The store |
-| Outside event id | Caller | `(Q(t, key), id)` | The qualified key |
+| Outside event id | Caller | `(Q(t, key), id)`; an id provider-equal, under the pinned equality of `Events.Id`, to one starting with `~` is refused `InvalidEventId` with nothing written (owner decision, 18 November (seventh review), R7-M1) | The qualified key |
+| Turn event id (proposed) | Kernel | `(Q(t, key), ~{origin}#{revision}.{ordinal})`, the reserved `~` ahead of the publish ticket's issued id ([observability](observability.md#recover), "Turn and caller event ids are disjoint") | The qualified key, and disjoint from every outside event id |
 | Value row | Kernel | `(instance, digest)`; the digest is keyed per tenant where erasure needs it | The instance |
 | Effect key | Kernel | `{instance origin}/{node}/{iteration path}/{attempt}`, as decided | The store, since the origin is the store-unique id with its creation |
 
@@ -270,8 +273,8 @@ Two consequences need no further rule:
 - **Placement.** The hash runs over the qualified name, so a tenant's caller keys spread over the virtual partitions
   independently of another tenant's.
 
-Host-wide records carry no tenant (ADR 0097 (e): cluster membership is host-wide): `partition` rows (fence, lease,
-position, backlog), `node` rows and the projector's `projection` cursor. A virtual partition's journal holds rows of
+Host-wide records carry no tenant (ADR 0097 (e): cluster membership is host-wide): `partition` rows (fence,
+position, backlog), `node` rows (membership and, under the node lease amendment, the lease) and the projector's `projection` cursor. A virtual partition's journal holds rows of
 many tenants; each journal row carries its instance's tenant.
 
 **Layer 3 stays host-neutral.** Ids stay opaque strings to layer 3; only layer 2 forms and parses `Q` and `{vp}/`.
@@ -302,9 +305,9 @@ feature.
 | Keyed start or command | Bound scope | `{vp}/Q(t, key)`, read from the key's binding row before routing, so every spelling equal under the pinned collation reaches one actor; outside id `Q(t, id)` | The command's permission in the tenant | Duplicate: the tenant's own earlier answer, for a key equivalent under the pinned collation and the exact same operation id. Another tenant's equal key is a different name and never answers |
 | HTTP trigger | Host or route (ADR 0097 (c)) | The route table is per tenant | The route's own rule | No route for this tenant: 404 |
 | Ingress adapter (broker, webhook, schedule) | The adapter's binding, one scope per configured source, or a trusted header verified against the adapter's authenticated identity | `Q(t, source event id)` | The adapter's grant for that tenant | Unbound or mismatched: refused and logged host-side, not inserted |
-| Outside publish | Bound scope | Event `(Q(t, key), id)`; proposed (fifth review R5-M2): a kernel-issued publish ticket `pub:` + SHA-256 of `(Q(t, key), id)`, 68 ASCII bytes, in the virtual partition its digest places ([observability](observability.md#recover)) | Publish permission, and the ticket's partition high-water rule | Matches only `Q(t, key)` waits and the tenant's own event-start subscriptions |
+| Outside publish | Bound scope | Event `(Q(t, key), id)`; proposed (fifth review R5-M2): a kernel-issued publish ticket `pub:` + SHA-256 of `(Q(t, key), id, incarnation)`, 68 ASCII bytes, in the virtual partition its digest places, the incarnation being the event row's (sixth review R6-B2, [observability](observability.md#recover)) | Publish permission, and the ticket's partition high-water rule; a caller event id provider-equal to one starting with the reserved `~` is refused `InvalidEventId`, nothing written (owner decision, 18 November (seventh review), R7-M1) | Matches only `Q(t, key)` waits and the tenant's own event-start subscriptions |
 | A turn's send, start, publish, subscribe, job, timer | The instance's row | Derived ids; qualified names for caller-chosen keys | Kernel-internal | A target under another tenant is a missing target (above) |
-| Event match | The event's qualified key | The match digest over the stored qualified key and event id ([observability](observability.md#resolving-a-park-a-bounded-drain)), so two tenants' matches never share a digest | Kernel-internal | None: other tenants' waits are never candidates |
+| Event match | The event's qualified key | The match digest over the stored qualified key, event id and publication incarnation ([observability](observability.md#resolving-a-park-a-bounded-drain)), so two tenants' matches never share a digest | Kernel-internal | None: other tenants' waits are never candidates |
 | Reply to a synchronous request | The request's bound scope, recorded in the reply address | One reply address per request | The owner sends output only to reply addresses on messages in its instance's inbox; the receiving node checks the reply's tenant against the waiting request's | A mismatch is dropped and counted, never written to a response |
 | Instance list, get, viewer (rows and journal tail), parked work, plan outcomes, inbox inspection | Bound scope | Read-model rows keyed by tenant | Read permissions; payloads need their own (observability) | Another tenant's id: 404, the same status and body as a missing id |
 | Recover, retry, discard, suspend, resume, terminate, delete, migrate, plans | Bound scope | Operation id `Q(t, op)` | Separate operator permissions per tenant, audited (observability) | Another tenant's instance: not found, as above |

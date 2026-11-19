@@ -1,14 +1,20 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-17
 ---
 
 # Clean-slate execution kernel: actor runtime, durable actors, execution models
 
-Status: proposed (17 November 2026). Program [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229),
-gate 2. The decisions below are the owner's, listed with dates and sources in the
-[kernel decision register](../architecture/decisions.md). Design approval follows the independent architecture review;
-until then this ADR authorizes no product code. Detail lives in the [architecture references](../architecture/README.md)
+Status: accepted with conditions (18 November 2026); proposed on 17 November 2026. Program
+[#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229), gate 2. Gate 2 granted design approval at the
+reviewed revision `addffea7c850063d1ebe710b07866ff1640a93cb`, on the eighth independent architecture review's verdict,
+APPROVE WITH CONDITIONS, with 0 Blockers, 0 Majors and 3 Minors
+([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6990560103)). The approval covers
+the design. Implementation starts at K1, the prototype Worker refactor, before product wiring. Product slices follow from K2, behind a host switch, with the old core the default until gate 4. The work lands milestone by milestone under the
+[program plan](../program-goals/clean-slate-kernel.md#milestones); the implementation evidence is owed at K1 to K12,
+and the review's conditions stay open in the plan's [gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions)
+until their evidence lands. The decisions below are the owner's, listed with dates and sources in the
+[kernel decision register](../architecture/decisions.md). Detail lives in the [architecture references](../architecture/README.md)
 and the [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md); this record does not repeat it.
 
 ## Context
@@ -72,7 +78,7 @@ implements `RestoreWaits`, which returns the waits its committed state holds, ea
 absolute time on `ITurn.Now`'s clock that the kernel writes unchanged; each job comes back as a `JobSpec` (job key,
 arguments captured at arm, effect key) and each subscription counts toward the plan's bounds (fourth review, also a
 coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fourth-review-round-18-november))
-([observability](../architecture/observability.md#recover)). Termination is bounded kernel work (fifth review, a coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fifth-review-round-18-november)): a terminate's cascade is a durable obligation that layer 2 discharges in pages of at most `P_cascade` entries, with an idempotent job cancel, and every terminate of that cascade carries a kernel-only cascade origin mark that each recipient checks against its recorded parent in every state, while a model's own `kernel.terminate` keeps its existing authorization ([observability](../architecture/observability.md#every-park-operation-names-its-park)). Events reach waits without a clock: every publish, a turn's or an outside one, is a publish ticket whose match step reads the committed subscriptions, so a wait that did not ask for kept events receives every event accepted after it committed and an earlier one only while that step is outstanding, and a wait that keeps events is entitled from max(its registration, the tenant's sweep horizon plus 1 ms) to every event whose window was open, which the sweep keeps while the wait's catch-up on that key is outstanding (fifth review, a coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fifth-review-round-18-november)).
+([observability](../architecture/observability.md#recover)). Termination is bounded kernel work (fifth review, a coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fifth-review-round-18-november)): a terminate's cascade is a durable obligation that layer 2 discharges in pages of at most `P_cascade` entries, with an idempotent job cancel, and every terminate of that cascade carries a kernel-only cascade origin mark that each recipient checks against its recorded parent in every state, while a model's own `kernel.terminate` keeps its existing authorization ([observability](../architecture/observability.md#every-park-operation-names-its-park)). Events reach waits without a clock: every publish, a turn's or an outside one, is a publish ticket whose match step reads the committed subscriptions, so a wait that did not ask for kept events receives every event accepted after it committed and an earlier one only while that step is outstanding, with no clock bound, and a wait that keeps events is entitled from max(its registration, the tenant's sweep horizon plus 1 ms) to every event whose window was open, which the sweep keeps while the wait's catch-up on that key is outstanding (fifth review, a coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fifth-review-round-18-november); the non-keeping wait's window is an owner decision of 18 November, [register](../architecture/decisions.md#the-gate-2-sixth-review-round-18-november)). The sixth review's repairs are coordinator design choices too ([register](../architecture/decisions.md#the-gate-2-sixth-review-round-18-november)). A live row's envelope check reserves its model's terminal growth, reported by the layer 3 hook `TerminalGrowth(state)` (Native: 7 bytes per open invocation inbox and 23 per non-final receipt, measured; 0 for a model with no terminal growth), beside its registries at the marker's sizes, so a terminate's ending commit always fits; a terminate drain withholds physical job entry, and a model's own job cancel is the cascade's idempotent cancel. Event deliveries are bound to a publication: an event row's 16-byte `Incarnation`, a random value the kernel generates, enters the match digest, the delivery id and the outside publish ticket's id (version 2 of the canonical encoding), so a later publication of the same key and event id never collides with an earlier one's delivery or receipt. A keeping wait's catch-up is one chain with a stable `CatchUpId`, and its coverage is keyed by the subscription incarnation and that id. Match steps page subscriptions and meet steps page matches, each within a byte allowance. The seventh review's answers ([register](../architecture/decisions.md#the-gate-2-seventh-review-round-18-november)): a live row's envelope check counts the projected terminal row, so `CustomHandles` and every other variable-length field are counted at their encoded size beside the state, its terminal growth and the registries, and a fixed reserve covers only the bounded fields (a coordinator design choice); and a turn's event id carries the reserved first code unit `~`, while the outside publish refuses `InvalidEventId` any caller event id provider-equal to one starting with `~`, so workflow-issued and caller-issued event ids never share an event row (an owner decision of 18 November).
 
 ### 3. Four logical seams
 
@@ -98,19 +104,23 @@ stored as a digest, while an operator command's operation id stays its outside i
 
 Persistence mode, actor runtime and provider vary independently; a profile is a named preset. **Embedded** (built-in
 runtime, one node) and **Cluster** (built-in runtime, partitions shared over nodes) ship in release 1. **Orleans** waits
-for proven demand. **Log** (replicated-log groups) is planned and not designed. A workflow behaves the same under every
+for proven demand, and before it ships a silo-level wake brings an idle silo's set polls to about one a second
+(owner, 19 November; K1 measured 107 to 117 a second per idle silo at 1,024). **Log** (replicated-log groups) is planned and not designed. A workflow behaves the same under every
 profile, and no capability flag makes it fail on one. Inline execution is chosen per workflow or route
 ([sketch, profiles](../reports/clean-slate-kernel/design-sketch-draft-5.md#deployment-profiles-not-runtimes)).
 
 ### 5. Virtual partitions and the fence
 
-1,024 fixed virtual partitions, one fence row each: decided on 16 November and not built. The prototype still has
-`VirtualPartitions.Provisional = 4096` and fences one row per commit until the Worker refactor to range ownership
-of the 1,024 virtual partitions, with a journal per virtual partition. That refactor is release 1's first milestone,
-right after design approval and before product wiring, and rebalance moves the fewest partitions, so a node's
-partitions may be scattered (owner, 17 November: PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit lands only while the
+1,024 fixed virtual partitions, one fence row each: decided on 16 November and built by K1, the Worker refactor to
+range ownership, accepted on main on 19 November at `0352a8cde`. A node's Worker owns a set of the 1,024, with a fence
+row and a journal per virtual partition, and a commit over several of them fences each of their rows, locked in
+ascending id. Rebalance moves the fewest partitions, so a node's partitions may be scattered (owner, 17 November:
+PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit lands only while the
 row still has the owner's epoch and expected position, checked in the same transaction, so a stale owner never lands a
-commit. Leases decide who should write; the fence decides who can. The kernel writes its own commit SQL on PostgreSQL,
+commit. Leases decide who should write; the fence decides who can. A lease is held by the process, in one node record
+its heartbeat renews, and covers every partition it owns; a partition row carries none (owner, 19 November; the
+[node lease amendment](../architecture/decisions.md#the-node-lease-amendment-19-november), approved with conditions
+by the independent review on 19 November ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7006654424))). The kernel writes its own commit SQL on PostgreSQL,
 SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the schema, migrations and cold paths
 ([ownership and fencing](../architecture/ownership-and-fencing.md),
 [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md), [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).
@@ -156,7 +166,7 @@ inspect, retry and discard; values by reference
 
 ### 11. The seven design-now answers
 
-Each answer is a Proposed page with the owner's decisions of 17 November at its end:
+Each answer is an Approved design page with the owner's decisions of 17 November at its end:
 
 | Question | Page | Decisions in short |
 |---|---|---|
@@ -189,7 +199,9 @@ The gate 2 review added an eighth page, [tenancy](../architecture/tenancy.md), w
   machines, deleted and regenerated at the switch (owner, 17 November). The activity library and definitions carry
   over with an adapted activity context; the runtime API and Studio's run views are re-pointed
   ([program plan](../program-goals/clean-slate-kernel.md)).
-- **Costs accepted.** Failover takes about one lease (10 s). Activity code runs at least once in Balanced. No instance
+- **Costs accepted.** Failover takes about one lease (10 s) after a process dies; a process whose Worker is wedged on a
+  hung store call is taken over within about three and a third leases plus a balancing round (the node lease
+  amendment). Activity code runs at least once in Balanced. No instance
   reads another's state; lists and counts lag the projector. The whole state is rewritten at each commit, which values
   by reference bound. One shared database is the cluster's write ceiling. The sketch's
   [trade-offs](../reports/clean-slate-kernel/design-sketch-draft-5.md#trade-offs) list the rest.
@@ -240,7 +252,7 @@ until then the listed ADRs keep governing the current core.
 | 0063 BPMN library, 0064 Flowchart dead paths, 0086 compensation | Keep | The kernel hosts Bpmn.Semantics; the graph engine keeps dead-path joins; compensation semantics are the models' |
 | 0027, 0028, 0045, 0046, 0048, 0089, 0090 variables and value flow | Keep | Layer 3 native-model semantics; a step's unit of work commits with its turn |
 | 0043 publication slots, 0038–0040 artifacts, 0079 host package sets | Keep | Definition, artifact and hosting rules; the route table is built from publications |
-| [0077](0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) schema upgrade | Keep, applied to the kernel | F14 withholding covers model state versions only. The kernel's own schema and protocol families, with every reader and writer (owned SQL, take and beat, poll, sweeper, projector, viewer), follow 0077's coordination rule: a process refuses before it processes a family version it cannot read. The plan names the families, adds the refusal checks at K4 and a mixed-version rehearsal at K12, and documents the rollback floor ([plan](../program-goals/clean-slate-kernel.md#kernel-schema-and-protocol-compatibility-proposed)) |
+| [0077](0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) schema upgrade | Keep, applied to the kernel | F14 withholding covers model state versions only. The kernel's own schema and protocol families, with every reader and writer (owned SQL, take and heartbeat, poll, sweeper, projector, viewer), follow 0077's coordination rule: a process refuses before it processes a family version it cannot read. The plan names the families, adds the refusal checks at K4 and a mixed-version rehearsal at K12, and documents the rollback floor ([plan](../program-goals/clean-slate-kernel.md#kernel-schema-and-protocol-compatibility-proposed)) |
 | [0075](0075-oracle-is-not-a-supported-ef-core-engine.md) Oracle not supported | Keep | It fixes the four relational engines the owned commit SQL covers |
 | [0076](0076-persistence-tooling-runs-inside-the-host-closure.md) persistence tooling in the host closure | Keep | The kernel's EF schema and migrations use the same tooling; the owned commit SQL needs no tooling of its own |
 | [0035](0035-serialization-unifies-on-the-alias-registry-and-retires-open-object-polymorphism.md) serialization alias registry | Keep | The kernel treats state and payloads as opaque; the native model serializes its state, messages and job arguments under 0035, with state versions added on top |

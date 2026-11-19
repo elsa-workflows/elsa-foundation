@@ -104,6 +104,8 @@ The dispatcher looks up the executable. It checks that the executable is still t
 
 Where do executables come from? Publishing compiles a definition version and saves the result to the executable store. That store is in memory by default. With database persistence switched on, it is a database store with a cache in front.
 
+> **Limitation:** Native publish (including Studio's **Review & publish**) and direct BPMN publish save the compiled material before the publication that retains it is committed. Until that publication exists, the saved material is not guaranteed to be kept. After the artifact-creation grace period (5 minutes by default), garbage collection may remove it. An interrupted publish can be retried. The default Workbench does not run the garbage-collection pump, so the local demo does not exercise this path.
+
 ### 3. The mailbox makes sure only one writer touches the run
 
 The dispatcher doesn't run anything itself. It drops the command into the run's **mailbox**. There is one mailbox per execution, and it handles one command at a time (ADR 0031, the single-writer rule).
