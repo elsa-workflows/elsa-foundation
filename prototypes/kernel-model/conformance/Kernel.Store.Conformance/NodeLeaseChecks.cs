@@ -11,12 +11,14 @@ internal static class NodeLeaseChecks
     private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(300);
     private static readonly TimeSpan PastShort = TimeSpan.FromMilliseconds(700);
     private static readonly TimeSpan Window = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan Brief = TimeSpan.FromMilliseconds(1500);       // NL-7: a lease near expiry, with 1.2 s of margin for the renewing takes
 
     internal static IReadOnlyList<Case> Cases { get; } =
     [
         new("node lease: the heartbeat renews the node record and lists its partitions with their epochs; membership frees an expired owner's partitions; the fence renews no lease", Level.Required, Heartbeat, 4, NodeLease: true),
         new("node lease: a partition whose owner has no node record is taken, and the take counts one death", Level.Required, MissingRecord, 3, NodeLease: true),
         new("node lease: a pending partition's retake counts one death per trial message of the previous epoch; a plain retake counts none", Level.Required, PendingRetake, 4, NodeLease: true),
+        new("node lease: a commit whose batch was sent more than its lease ago is rolled back, not committed (the commit-step deadline)", Level.Required, CommitStep, 2, NodeLease: true),
         new("node lease NL-2: a paused owner's flush is refused whole, its heartbeat lists none of its partitions, one death per trial message; no take from a live process", Level.Required, PausedOwner, 4, NodeLease: true),
         new("node lease NL-4: a renewal racing a take keeps only the partitions the take left alone", Level.Required, RenewalRacingTake, 7, NodeLease: true),
         new("node lease NL-5: a flush of seen marks only is refused whole when a take lands while it is on the wire", Level.Required, MarksOnly, 5, NodeLease: true),
@@ -42,7 +44,7 @@ internal static class NodeLeaseChecks
         foreach (var n in set) await c.S.AddAsync(Make.M($"t{n}", n));
         var taken = await c.S.TakeAsync(set, node, lease);
         foreach (var f in taken.Taken)
-            await c.Lands(() => c.S.CommitAsync(CommitBatch.Owned([f], lease, false, [], [], [$"t{f.Partition}"])).AsTask(), $"{node}'s flush putting t{f.Partition} on trial");
+            await c.Lands(() => c.S.CommitAsync(CommitBatch.Owned([f], Context.Long, false, [], [], [$"t{f.Partition}"])).AsTask(), $"{node}'s flush putting t{f.Partition} on trial");
         return taken;
     }
 
@@ -112,6 +114,22 @@ internal static class NodeLeaseChecks
         Context.Equal(At(plain!.For(1), pending!.For(2)), Listed(await Beat(c, "p")), "p's heartbeat answer after its retakes");
     }
 
+    /// <summary>
+    /// The store rolls back instead of sending COMMIT once the batch's lease (<see cref="CommitBatch.Lease"/>, the guard)
+    /// has passed since it was sent. A batch whose lease is one tick has passed it by COMMIT on a store with a wire; the
+    /// in-memory store commits at once. The negative control: the same batch under a long lease lands.
+    /// </summary>
+    private static async Task CommitStep(Context c)
+    {
+        Require(c);
+        if (c.S is InMemoryStore) throw new SkipException("the in-memory store commits in one step, with no time between the batch and COMMIT");
+        var p = await c.S.TakeAsync([1], "p", Context.Long);
+        Context.Equal("not landed", await c.Refused(() => c.S.CommitAsync(CommitBatch.Owned([.. p.Taken], TimeSpan.FromTicks(1), false, [Make.New("1/late")], [], [])).AsTask(), "a commit past its commit-step deadline"),
+            "outcome of a commit past its commit-step deadline");
+        Context.Equal(0, (await c.S.LoadAsync(["1/late"])).Count, "rows written by the commit past its deadline");
+        await c.Lands(() => c.S.CommitAsync(CommitBatch.Owned([.. p.Taken], Context.Long, false, [Make.New("1/on-time")], [], [])).AsTask(), "the same commit within its lease");
+    }
+
     private static async Task PausedOwner(Context c)
     {
         Require(c);
@@ -123,12 +141,12 @@ internal static class NodeLeaseChecks
             await c.S.AddAsync(Make.M($"t{n}", n));
         }
         var p = await c.S.TakeAsync(set, "p", Short);
-        await c.Lands(() => c.S.CommitAsync(CommitBatch.Owned([.. p.Taken], Short, false, [], [], [.. set.Select(n => (InboxKey)$"t{n}")])).AsTask(), "p's flush putting a message of each partition on trial");
+        await c.Lands(() => c.S.CommitAsync(CommitBatch.Owned([.. p.Taken], Context.Long, false, [], [], [.. set.Select(n => (InboxKey)$"t{n}")])).AsTask(), "p's flush putting a message of each partition on trial");
         // The invariant the mutation breaks: no take from a live process except a release or a forced take.
         Context.Equal("", Ids(await c.S.TakeAsync(set, "q", Context.Long)), "partitions q took from the live p");
 
         // p pauses past its lease, holding a flush of a turn and seen marks over all three.
-        var flush = CommitBatch.Owned([.. p.Taken], Short, false, [Make.New("1/x")], [.. set.Select(n => (InboxKey)$"m{n}")], []);
+        var flush = CommitBatch.Owned([.. p.Taken], Context.Long, false, [Make.New("1/x")], [.. set.Select(n => (InboxKey)$"m{n}")], []);
         await Task.Delay(PastShort);
         var q = await c.S.TakeAsync(set, "q", Context.Long);
         Context.Equal("1 2 3", Ids(q), "partitions q took from the expired p");
@@ -263,10 +281,10 @@ internal static class NodeLeaseChecks
     private static async Task TakeRenews(Context c)
     {
         Require(c);
-        var q = await c.S.TakeAsync([1], "q", Short);
-        await c.S.TakeAsync([3], "p", Short);
-        await c.S.TakeAsync([4], "z", Short);
-        await Task.Delay(Short / 3);
+        var q = await c.S.TakeAsync([1], "q", Brief);
+        await c.S.TakeAsync([3], "p", Brief);
+        await c.S.TakeAsync([4], "z", Brief);
+        await Task.Delay(Brief / 5);       // well inside the brief lease, on a loaded runner too
         var renewing = await c.S.TakeAsync([2], "q", Context.Long);
         Context.Equal("2", Ids(renewing), "q's take of 2");
         var empty = await c.S.TakeAsync([3], "z", Context.Long);
@@ -274,7 +292,7 @@ internal static class NodeLeaseChecks
         Context.Equal(0L, empty.Now, "the time of z's empty take, which a caller must not read");
         if (c.S is InMemoryStore store)
             Context.Equal(renewing.Now + (long)Context.Long.TotalMilliseconds, store.Nodes["q"].LeaseUntil, "q's node lease after its take of 2");
-        await Task.Delay(PastShort);
+        await Task.Delay(Brief + TimeSpan.FromMilliseconds(500));
         Context.Equal("3", Ids(await c.S.TakeAsync([1, 2, 3, 4], "r", Context.Long)), "partitions r took: p's only");
         Context.Equal($"1@{q.Taken[0].Epoch} {At(renewing.Taken[0])}", Listed(await Beat(c, "q")), "q's heartbeat answer");
     }

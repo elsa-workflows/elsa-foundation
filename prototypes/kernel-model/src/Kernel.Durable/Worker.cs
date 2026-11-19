@@ -122,7 +122,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly List<TurnOutcome> _queue = [];
     private long _generation, _anchor = long.MinValue, _local, _observed;
     private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
-    private long _safeUntil;    // local monotonic deadline, measured from the start of a successful take or commit
+    private long _safeUntil = long.MinValue;    // local monotonic deadline, measured from the start of a successful take or commit; none before the first
     private long _expiredGeneration = -1; // monotonically latched by an off-turn callback; only the owner resets state
     private bool _aliasesChangedDuringLoad, _retryAliases;
     private long _aliasRead, _aliasBirths = 1, _birthComparison, _previousBirths;
@@ -418,7 +418,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             RunTurn(id, cancellationToken);
         }
         if (!cancellationToken.IsCancellationRequested) await FlushAsync(cancellationToken);
-        if (!cancellationToken.IsCancellationRequested && Owns && DbNow >= RenewBy) await BeatAsync(cancellationToken);
+        if (!cancellationToken.IsCancellationRequested && Owns && !NodeLease && DbNow >= RenewBy) await BeatAsync(cancellationToken);    // the node lease: the host's heartbeat renews
         if (!Owns) return null;
         Evict();
         if (busy || cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
@@ -426,7 +426,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value - now)
             .Concat(_slots.Values.Where(s => s.Unwritten && s.Until > now).Select(s => s.Until - now)).DefaultIfEmpty(long.MaxValue).Min();
         var caller = Callers.Select(to => ReplyTo.Parse(to).Deadline - now).DefaultIfEmpty(long.MaxValue).Min();
-        var delay = TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(caller, Math.Min(next, RenewBy - DbNow))));
+        var delay = TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(caller, Math.Min(next, NodeLease ? (long)(_options.Lease.TotalMilliseconds / 3) : RenewBy - DbNow))));
         // Flush can receive a result after the last Ready scan. Give that inbox another pass before advising sleep.
         return _lastReceivedJob != receivedBeforePass || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _jobsWaitingForTrial && _gate.Idle ? TimeSpan.Zero : delay;
     }
@@ -459,6 +459,61 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (seen >= generation) break;
         } while (Interlocked.CompareExchange(ref _expiredGeneration, generation, seen) != seen);
         return false;
+    }
+
+    /// <summary>K1b: the store keeps the node lease, so the host's heartbeat renews and a commit renews nothing.</summary>
+    private bool NodeLease => _store.NodeLeaseAvailable;
+
+    /// <summary>
+    /// The node lease's guard (decisions, "The local lease guard"): one deadline, the latest send time plus the lease over
+    /// the successful heartbeats and takes whose reply arrived before their own send time plus the lease. A late reply
+    /// restarts nothing and never moves the deadline earlier.
+    /// </summary>
+    private void RenewGuard(long sent)
+    {
+        var until = sent + (long)_options.Lease.TotalMilliseconds;
+        if (_options.Monotonic() >= until) return;
+        long seen;
+        do
+        {
+            seen = Volatile.Read(ref _safeUntil);
+            if (seen >= until) return;
+        } while (Interlocked.CompareExchange(ref _safeUntil, until, seen) != seen);
+    }
+
+    /// <summary>What the host records just before it sends the node's heartbeat, to judge its answer by (K1b).</summary>
+    public sealed record HeartbeatSent(long At, long Generation, IReadOnlyList<PartitionFence> Held);
+
+    /// <summary>Taken by the host just before it sends the heartbeat: the monotonic time, this generation and what is held.</summary>
+    public HeartbeatSent BeforeHeartbeat()
+    {
+        lock (_turnSync) return new(_options.Monotonic(), _generation, Fences);
+    }
+
+    /// <summary>
+    /// The heartbeat's answer, as the host hands it over (ownership-and-fencing, "The node's heartbeat"). Judged only
+    /// within the generation it was sent in: a Worker that reset meanwhile discards it. Otherwise it renews the guard, if
+    /// the reply came within its send time plus the lease, and stands down every partition held at the send that the
+    /// answer omits or lists at another epoch, through <see cref="LoseAsync"/>: when nothing of those partitions is in
+    /// flight their memory goes and the rest keep their epochs, otherwise the Worker resets and takes the rest back. While a
+    /// release or retake is in flight the answer still renews the guard, and only the stand-down side waits.
+    /// </summary>
+    public async Task HeartbeatAnsweredAsync(HeartbeatSent sent, NodeBeat answer, CancellationToken cancellationToken = default)
+    {
+        HashSet<int> lost;
+        lock (_turnSync)
+        {
+            if (sent.Generation != _generation) return;
+            RenewGuard(sent.At);
+            Observe(answer.Now);
+            if (_releasing || _retaking) return;    // the stand-down side waits: the release or retake in flight covers these rows
+            var listed = answer.Owned.ToDictionary(o => o.Partition, o => o.Epoch);
+            lost = sent.Held.Where(f => (!listed.TryGetValue(f.Partition, out var epoch) || epoch != f.Epoch)
+                && _held.TryGetValue(f.Partition, out var held) && held.Epoch == f.Epoch).Select(f => f.Partition).ToHashSet();
+        }
+        // As a cooperative hand-over goes: drain, then drop when quiet, or reset and take the rest back. Its release of the
+        // lost rows at their old epochs is a no-op, by the store's epoch guard: they moved to another epoch.
+        if (lost.Count > 0) await LoseAsync(lost, cancellationToken);
     }
 
     private bool LeaseUsable()
@@ -564,7 +619,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 _held[taken.Partition] = new(taken.Epoch, taken.Position) { Renewed = lease.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds };
                 _mine.Add((taken.Partition, taken.Epoch));
             }
-            Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
+            if (NodeLease) RenewGuard(started);
+            else Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
         }
         _options.OnJournal?.Invoke([.. lease.Taken.Select(t => t.Partition)]);     // a take may find a journal not projected yet
         LeaseUsable(); // an answer delayed past the safe deadline cannot authorize work
@@ -672,6 +728,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 _mine.Add((partition, lease.Epoch));
                 Observe(lease.Now);
                 Renewed();
+                if (NodeLease) RenewGuard(started);
                 _caughtUp = false;      // F1: until a short poll has read the new partition's inbox, nothing is handed over in memory
                 (_woken, installed) = (true, true);
             }
@@ -1932,12 +1989,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
         return [.. touched.Where(Holds).Select(p => new PartitionFence(p, _held[p].Epoch, _held[p].Position))];
     }
 
-    /// <summary>The lease as the worker reckons it: that of the partition renewed longest ago.</summary>
+    /// <summary>
+    /// The lease as the worker reckons it: that of the partition renewed longest ago. Under the node lease a commit renews
+    /// nothing, so only <see cref="RenewGuard"/> moves the deadline.
+    /// </summary>
     private void Renewed()
     {
         if (!Owns) return;
         _renewed = _held.Values.Min(h => h.Renewed);
-        Volatile.Write(ref _safeUntil, _held.Values.Min(h => h.SafeUntil));
+        if (!NodeLease) Volatile.Write(ref _safeUntil, _held.Values.Min(h => h.SafeUntil));
     }
 
     /// <summary>A message held in memory and never written: one that needs no delete when it is cancelled.</summary>

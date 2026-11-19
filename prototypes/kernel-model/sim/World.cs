@@ -151,6 +151,17 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         return Send("take", $"retake p{partition} e{epoch}", () => world.Store.RetakeAsync(partition, node, epoch, lease));
     }
 
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default)
+    {
+        if (!countDeaths) return RetakeAsync(partition, node, epoch, lease, cancellationToken);
+        actor.PendingSendings.RemoveAll(s => new InstanceRef(s.Instance).Partition == partition);
+        actor.Took(partition);
+        return Send("take", $"retake p{partition} e{epoch}, counting deaths", () => world.Store.RetakeAsync(partition, node, epoch, lease, countDeaths: true));
+    }
+
+    public bool NodeLeaseAvailable => world.Store.NodeLeaseAvailable;
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.NodeHeartbeatAsync(node, lease, window);
+
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(partition, epoch);
     public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(owned);
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.HeartbeatAsync(node, window);

@@ -8,6 +8,7 @@ public static class LeaseChecks
         int failures = 0;
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
         await WorkerSetChecks.Run(Check);
+        await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
         await StarterContextChecks.Run(Check, CaseInsensitive);
@@ -777,6 +778,15 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
         var result = await inner.RetakeAsync(partition, node, epoch, lease, ct);
         if (DelayRetake) { DelayRetake = false; Retaken.TrySetResult(); await RetakeReply.Task; }
         return result;
+    }
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken ct = default) =>
+        countDeaths ? inner.RetakeAsync(partition, node, epoch, lease, countDeaths, ct) : RetakeAsync(partition, node, epoch, lease, ct);
+    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
+    public Func<NodeBeat, Task<NodeBeat>>? HeartbeatReply;      // K1b: the answer as the wire delivers it (delayed or altered)
+    public async ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken ct = default)
+    {
+        var answer = await inner.NodeHeartbeatAsync(node, lease, window, ct);
+        return HeartbeatReply is { } reply ? await reply(answer) : answer;
     }
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken ct = default) => inner.HeartbeatAsync(node, window, ct);
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken ct = default) => inner.ReleaseAsync(partition, epoch, ct);

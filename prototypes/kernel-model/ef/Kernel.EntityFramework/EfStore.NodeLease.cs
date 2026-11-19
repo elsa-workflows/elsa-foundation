@@ -46,6 +46,13 @@ public sealed partial class EfStore
         return transaction;
     }
 
+    /// <summary>
+    /// The store's commit-step deadline under the node lease: when the monotonic time since the batch was sent has passed
+    /// the lease (<see cref="CommitBatch.Lease"/>), the owner's guard has expired too, so the store rolls back instead of
+    /// sending COMMIT and answers "not landed". This covers a client that pauses between the batch's answer and COMMIT.
+    /// </summary>
+    private bool PastCommitStep(long sent, CommitBatch batch) => NodeLease && System.Diagnostics.Stopwatch.GetElapsedTime(sent) > batch.Lease;
+
     private Task<IDbContextTransaction> BeginReadCommittedAsync(KernelDb db, CancellationToken cancellationToken) =>
         Engine is null && !postgres ? db.Database.BeginTransactionAsync(cancellationToken) : db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 
