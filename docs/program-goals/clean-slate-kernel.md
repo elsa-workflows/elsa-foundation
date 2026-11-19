@@ -82,7 +82,7 @@ Each changes kernel behaviour, so each needs two independent reviews when built.
 
 | Change | Page |
 |---|---|
-| A `backlog` column on the fence row, written by commit and beat | [Fairness](../architecture/fairness-and-backpressure.md) 2 |
+| A `backlog` column on the fence row, written by commits (and, under the node lease amendment, by a fenced commit with no journal rows when a stalled partition's estimate crosses a mark) | [Fairness](../architecture/fairness-and-backpressure.md) 2 |
 | The send cap on every turn, model and actor-type alike, checked when a turn's outcome is sealed; a cascade page is a kernel commit bounded by `P_cascade` | Fairness 3 |
 | Park keeps by reason and by full identity: `KeptBy` holds the row's kept reason (`Consumed` or `Arrived`); the delivery handle `(Id, Scope, Match)` names a kept row, encoded and decoded in layer 2 only; Park journals at every history level | [Observability](../architecture/observability.md#what-park-keeps) 2, B2 |
 | The restore transition that clears `Done` on a restored row and resets its poison counters; the sweep's predicate excludes kept rows, with an index on `(Target, Seq)` partial on `KeptBy IS NOT NULL OR (ReleasedBy IS NOT NULL AND NOT Done)` where the engine supports it (MySQL takes the full index) | [Observability](../architecture/observability.md#recover), M1 |
@@ -211,7 +211,7 @@ projector no way to read a new durable marker. The kernel's families:
 
 | Family | What it covers | Writers | Readers |
 |---|---|---|---|
-| Store schema | Fence and partition rows, node rows, actor rows, message rows (with `KeptBy`, `trace` and codec columns), subscriptions, events, journal, projection cursor, value rows | EF migrations; owned commit SQL; take and beat; sweeper (deletes); projector (views and cursor) | Take, poll, load, owned commit SQL, sweeper, projector, viewer tail read, read-model APIs |
+| Store schema | Fence and partition rows, node rows, actor rows, message rows (with `KeptBy`, `trace` and codec columns), subscriptions, events, journal, projection cursor, value rows | EF migrations; owned commit SQL; take and heartbeat (the heartbeat writes `Nodes.SeenAt` and `Nodes.LeaseUntil`); sweeper (deletes); projector (views and cursor) | Take, poll, load, owned commit SQL, sweeper, projector, viewer tail read, read-model APIs |
 | Message protocol | Kernel message kinds (control kinds, tickets, recover, discard, migrate), derived message-id grammar, the `Done`, `keep_until` and `KeptBy` meanings, ticket generations | Turns through owned SQL; API and ingress adds | Worker delivery and poison handling; sweeper; recover |
 | Journal and payload codec | The journal envelope and the codec header on every payload | Owned commit SQL | Projector, viewer, retention worker through read models |
 
