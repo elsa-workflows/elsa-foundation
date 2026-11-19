@@ -149,6 +149,30 @@ public sealed class BackgroundRefreshTests
     }
 
     // With nothing changed between Start and admission, the inputs Start read are the ones the worker receives.
+    // Spec 1229 with spec 1230 US6: a background step's result commits after the step, in its own commit. Its write
+    // record and its Completed stamp carry that commit's number, later than the commit that started the step, so the
+    // journal shows the write in the result commit and the history orders it there.
+    [Fact]
+    public async Task A_background_result_is_numbered_in_its_own_commit_after_the_step_started()
+    {
+        await using var harness = NewHarness();
+        var executable = WorkflowExecutionHarness.NewExecutable(
+            VariableLifecycleTestGraph.Increment("node-right", typeof(BackgroundIncrementActivity), ActivityExecutionPlacement.Background),
+            VariableLifecycleTestGraph.CountDeclaration());
+
+        var run = await RunAsync(harness, executable);
+
+        var state = run.State("node-right");
+        var record = Assert.Single(state.VariableWrites!);
+        var started = state.Transitions!.First(stamp => stamp.Kind == ActivityLifecycleTransitionKind.Started).CommitSequence;
+        var completed = state.Transitions!.Last(stamp => stamp.Kind == ActivityLifecycleTransitionKind.Completed).CommitSequence;
+        Assert.Equal(VariableWriteSource.BackgroundResult, record.Writer.Source);
+        Assert.True(completed > started);
+        Assert.Equal(completed, record.CommitSequence);
+        Assert.True(state.FirstCommitSequence <= started);
+        Assert.Equal(completed, state.LastCommitSequence);
+    }
+
     [Fact]
     public async Task Unchanged_inputs_are_not_refreshed()
     {

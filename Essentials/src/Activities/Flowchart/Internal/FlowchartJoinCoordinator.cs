@@ -124,7 +124,8 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
         state = FlowchartDiagnosticAccumulator.Add(state, arrivals.Length > 1 ? FlowchartDiagnosticKind.Joined : FlowchartDiagnosticKind.Scheduled, targetNodeId, connectionId, scheduledPath.ExecutionPathId, executionScopeId,
             DescribeFiring(targetNodeId, arrivals));
 
-        return ScheduleNode(context, state, targetNodeId, scheduledPath.ExecutionPathId, executionScopeId, scheduledPath.IterationKey, schedulingActivityExecutionId, arrivals.Length > 1 ? "join" : "continuation");
+        return ScheduleNode(context, state, targetNodeId, scheduledPath.ExecutionPathId, executionScopeId, scheduledPath.IterationKey, schedulingActivityExecutionId, arrivals.Length > 1 ? "join" : "continuation",
+            arrivals.Length > 1 ? arrivals.Select(arrival => (string?)arrival.ProducingActivityExecutionId).Prepend(schedulingActivityExecutionId) : null);
     }
 
     /// <summary>

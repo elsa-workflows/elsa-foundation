@@ -255,6 +255,14 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<IWorkflowExecutionStartService>();
         provider.GetRequiredService<IActivityExecutionInspectionService>();
         provider.GetRequiredService<IWorkflowInstanceDetailsService>();
+        // Spec 1229: the variable lifecycle reads compose; their audit sink logs, which the host provides.
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IVariableLifecycleInspectionService));
+        var withLogging = new ServiceCollection();
+        foreach (var descriptor in services)
+            withLogging.Add(descriptor);
+        using (var logged = withLogging.AddLogging().BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }))
+        using (var lifecycleScope = logged.CreateScope())
+            lifecycleScope.ServiceProvider.GetRequiredService<IVariableLifecycleInspectionService>();
         provider.GetRequiredService<IWorkflowInstanceListService>();
         provider.GetRequiredService<IWorkflowIncidentListService>();
         provider.GetRequiredService<IWorkflowDispatchInspectionService>();

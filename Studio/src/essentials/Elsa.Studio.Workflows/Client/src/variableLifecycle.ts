@@ -116,7 +116,7 @@ export interface ValueStatePresentation {
 
 /**
  * How a value state reads. A captured operational value (overwritten or refused) is kept for recovery; its payload read
- * is the write-history read of spec 1229, so Studio says so instead of offering a read it cannot make yet.
+ * is the run's write history (spec 1229, the Variables tab), so the detail points there.
  */
 export function presentValueState(value: VariableLifecycleValueState | null | undefined): ValueStatePresentation {
   if (!value) return { label: "Not recorded", detail: "The runtime recorded no value here.", tone: "muted" };
@@ -124,7 +124,7 @@ export function presentValueState(value: VariableLifecycleValueState | null | un
     case "captured":
       if (value.evidenceId) return { label: "Captured", detail: "Captured as value evidence of this step.", tone: "neutral" };
       return value.isOperational
-        ? { label: "Kept for recovery", detail: "Kept on the write history; Studio cannot show it yet.", tone: "neutral" }
+        ? { label: "Kept for recovery", detail: "Kept on the write history; the run's Variables tab shows it where the host can read it.", tone: "neutral" }
         : { label: "Captured", detail: "Kept on the durable record; Studio cannot show it yet.", tone: "neutral" };
     case "redacted":
       return { label: "Redacted", detail: "Not shown: the value is sensitive or withheld, or you may not view values in this run.", tone: "warning" };
