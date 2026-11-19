@@ -13,13 +13,17 @@ namespace Elsa.Activities.Scripting.Tests;
 public sealed class ActivitiesScriptingFeatureTests
 {
     [Fact]
-    public void ConfigureServices_RegistersNoServices()
+    public void ConfigureServices_DeclaresOnlyThatRunJavaScriptRunsJavaScript()
     {
+        // Spec 1228 FR-028: the declaration pins RunJavaScript nodes to the JavaScript value adapter.
         var services = new ServiceCollection();
 
         new ActivitiesScriptingFeature().ConfigureServices(services);
 
-        Assert.Empty(services);
+        var descriptor = Assert.Single(services);
+        var declaration = Assert.IsType<Elsa.Expressions.Core.Models.ScriptActivityLanguage>(descriptor.ImplementationInstance);
+        Assert.Equal(Elsa.Activities.Scripting.Activities.RunJavaScript.ActivityType, declaration.ActivityType);
+        Assert.Equal("JavaScript", declaration.Language);
     }
 
     [Fact]

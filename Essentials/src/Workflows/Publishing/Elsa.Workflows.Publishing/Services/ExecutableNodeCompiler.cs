@@ -46,7 +46,7 @@ public sealed class ExecutableNodeCompiler(
     /// Pins the value adapter version of each expression language a node uses into its metadata (spec 1228 FR-028). Run
     /// on the complete tree, before the executable is hashed.
     /// </summary>
-    public ExecutableNode PinValueAdapters(ExecutableNode root) => ValueAdapterPinner.Pin(root, _valueAdapters, _scriptActivities);
+    public ExecutableNode PinValueAdapters(ExecutableNode root) => ExecutableNodeValueAdapters.PinTree(root, _valueAdapters, _scriptActivities);
 
     /// <summary>
     /// The scoped-variable visibility of one compilation, iteration scopes included, kept per tree projection so the

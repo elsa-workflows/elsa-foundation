@@ -160,15 +160,44 @@ public sealed partial class WorkflowExecutableCompilerTests
             ((VariableExpressionParameterBinding)published.NodesById["consumer"].InputBindings["Text"].Expression!.Parameters["variables.greeting"]).DeclaringScopeNodeId);
     }
 
+    [Fact]
+    public async Task An_input_expression_that_assigns_a_variable_refuses_publication()
+    {
+        // Spec 1228 FR-006a, ADR 0083 binding-readonly-v1.
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            CompileReadsAsync(Node("consumer", JavaScriptText("variables.greeting = 'x'")), [Greeting]).AsTask());
+
+        Assert.Contains(ScriptVariableReadDiagnostics.InputExpressionWrite, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'consumer'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'Text'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("variable 'greeting' at 'variables.greeting'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Input expressions only read", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_node_that_uses_javascript_is_pinned_to_the_value_adapter_and_the_pin_changes_the_hash()
+    {
+        // Spec 1228 FR-028: the pin is node content, so the executable's hash covers it.
+        var node = Node("consumer", JavaScriptText("variables.greeting + '!'"));
+        var unpinned = await CompileReadsAsync(node, [Greeting]);
+        var pinned = await CompileReadsAsync(node, [Greeting], [new ExpressionValueAdapter("JavaScript", "json-1")]);
+
+        Assert.Equal("json-1", pinned.RootActivity.Metadata[ExecutableNodeValueAdapters.Key("JavaScript")]);
+        Assert.False(unpinned.RootActivity.Metadata.ContainsKey(ExecutableNodeValueAdapters.Key("JavaScript")));
+        Assert.NotEqual(unpinned.Identity.ArtifactHash, pinned.Identity.ArtifactHash);
+    }
+
     private ValueTask<WorkflowExecutable> CompileReadsAsync(
         Elsa.Workflows.Design.Core.Models.ActivityNode root,
-        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> variables) =>
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> variables,
+        IEnumerable<ExpressionValueAdapter>? valueAdapters = null) =>
         TestCompiler.Create(
                 new FakeVersionStore(WorkflowVersion(root, variables: variables)),
                 new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
                 _activityStructureService,
                 TestWellKnownTypeRegistry.Create(),
-                scriptVariableReadResolver: ReadResolver)
+                scriptVariableReadResolver: ReadResolver,
+                valueAdapters: valueAdapters)
             .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
 
     /// <summary>
@@ -182,7 +211,12 @@ public sealed partial class WorkflowExecutableCompilerTests
         public ScriptVariableReadAnalysis Analyze(string source, bool scriptBody = false) =>
             new(
                 Regex.Matches(source, @"variables\.([A-Za-z_][\w]*)").Select(match => match.Groups[1].Value).ToArray(),
-                source.Contains("variables[", StringComparison.Ordinal));
+                source.Contains("variables[", StringComparison.Ordinal))
+            {
+                Writes = Regex.Matches(source, @"(variables\.([A-Za-z_]\w*)[\w.]*)\s*=[^=]")
+                    .Select(match => new ScriptVariableWrite(match.Groups[2].Value, match.Groups[1].Value))
+                    .ToArray()
+            };
     }
 
     [ActivityScriptOutcomes("script")]

@@ -16,6 +16,12 @@ hydrated equal source strings; dead source/preparation is not kept alive by that
 limits, cancellation and engine state remain per evaluation;
 discarding executable source also releases its preparation. No engine or evaluated result is cached.
 
+Values enter scripts and bindings alike as plain, changeable JavaScript values through `IScriptValueBridge` (spec 1228);
+a JavaScript input expression only reads, so any change the bridge reports fails its evaluation with `VF-BIND-001`, and
+one the source shows is refused at publish. Each node that uses JavaScript is pinned to `JavaScriptValueAdapter.Version`
+(`ExpressionValueAdapter`, registered by `JavaScriptFeature` and `JintFeature`); the runtime refuses a node with no pin
+or another version (`VF-ADPT-001`).
+
 `IJavaScriptScriptEvaluator` is a separate typed activity-script contract used by `RunJavaScript`.
 It accepts one explicit JSON argument document and returns a `JavaScriptScriptEvaluationResult`: the
 script's JSON result and, on a separate channel, its outcome selection (`Unspecified`, `Named` with
@@ -78,6 +84,39 @@ with portable expression evaluation.
   service collection as a singleton; the analyzer then treats a call to it as an opaque read, so publish sets the
   fallback marker. The isolated engine has no way to install host functions yet, so a declaration only affects publish
   until one exists; such a function would read through the request's `IExpressionVariableReader`.
+
+### IScriptValueBridge *(Jint — Elsa.Expressions.JavaScript.Jint)*
+
+- **Kind:** replacement contract: exactly one implementation is active per host (spec 1228 FR-009, ADR 0046 V12).
+- **Contract:** `Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge` — `Begin(engine)` starts the values of
+  one evaluation (`IScriptValueEvaluation`): `Enter(key, json)` puts a value in as a plain, changeable JavaScript value
+  and records its lossy numbers; `Collect(key, current, assigned)` reports, after the run, unchanged, a member change
+  (untouched members keep their stored text) or a whole assignment (a changed array is written whole); `Write(value,
+  path)` converts a value leaving the evaluation, writing an unchanged entered value from its original JSON and
+  reporting the lossy entered numbers the written JSON carries; `TryFindLoss(double)` serves host-function argument
+  checks. Script activities and JavaScript input expressions use the same bridge (D-15).
+- **Implementation:** `CopyComparePatchValueBridge` (internal), registered with `TryAddSingleton` by `JintFeature`.
+  It compares JavaScript with JavaScript (ADR 0090 C2) and records its cost per evaluation on the
+  `Elsa.Expressions.JavaScript` meter (`elsa.javascript.value_bridge.enter.duration`, `…collect.duration`, `…bytes`).
+- **Override when:** a faster bridge (for example one built on proxies) behaves identically; replace the registration
+  from a host feature (`services.Replace(...)`). One that behaves differently is a new JSON profile, so a new adapter
+  version (`JavaScriptValueAdapter.Version`).
+- **Contract text:** [`docs/reference/value-adapters.md`](../../../../../docs/reference/value-adapters.md).
+
+### IJavaScriptPrecisionPolicy *(Core — Elsa.Expressions.JavaScript.Core)*
+
+- **Kind:** replacement contract: exactly one policy is active per host, host-wide, with no per-workflow or per-node
+  override (D-17, spec 1228 FR-012).
+- **Contract:** `Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptPrecisionPolicy` — `Decide(context)` gets the
+  target being written (`result` or `variables.<name>`) and each `JavaScriptPrecisionLoss` (path, the lossy entered
+  number with its stored text, the written text, and the array written whole when there is one), and returns allow or
+  refuse with one `JavaScriptPrecisionDiagnostic` per loss. A refusal faults the step with `VF-PREC-001`
+  (`JavaScriptPrecisionException`); nothing of the step is written. Only writes that carry a loss reach the policy;
+  computing with a lossy value and passing one to a host function warn (`VF-PREC-002`).
+- **Implementation:** `RefusingPrecisionPolicy` (public, no options), registered with `TryAddSingleton` by `JintFeature`.
+- **Override when:** a host wants other handling of a loss. Replace the registration from a host feature
+  (`services.Replace(ServiceDescriptor.Singleton<IJavaScriptPrecisionPolicy, MyPolicy>())`); Elsa's default then does
+  not run.
 
 ## Cross-references
 

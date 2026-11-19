@@ -377,6 +377,19 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             writer.WriteString("executionPlacement", node.ExecutionPlacement.ToString());
         if (node.ActivityContract is { } activityContract)
             writer.WriteString("sideEffectProfile", activityContract.SideEffectProfile.ToString());
+        // Spec 1228 FR-028: the value adapter versions a node runs with are behavior, so they are part of its identity.
+        // Written only when pinned, so a node that uses no adapter keeps its hash.
+        var valueAdapters = node.Metadata
+            .Where(item => item.Key.StartsWith(ExecutableNodeValueAdapters.KeyPrefix, StringComparison.Ordinal))
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .ToArray();
+        if (valueAdapters.Length > 0)
+        {
+            writer.WriteStartObject("valueAdapters");
+            foreach (var (key, version) in valueAdapters)
+                writer.WriteString(key[ExecutableNodeValueAdapters.KeyPrefix.Length..], version);
+            writer.WriteEndObject();
+        }
         writer.WriteStartObject("descriptor");
         writer.WriteString("consumerKey", node.Descriptor.ConsumerKey);
         writer.WriteString("schemaVersion", node.Descriptor.SchemaVersion);

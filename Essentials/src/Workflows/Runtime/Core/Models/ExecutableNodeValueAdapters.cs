@@ -45,12 +45,64 @@ public static class ExecutableNodeValueAdapters
     public static IReadOnlyDictionary<string, string> Pin(IReadOnlyDictionary<string, string> metadata, IReadOnlyList<ExpressionValueAdapter> required)
     {
         ArgumentNullException.ThrowIfNull(metadata);
-        if (required.Count == 0)
+        if (required.Count == 0 || required.All(adapter => StringComparer.Ordinal.Equals(metadata.GetValueOrDefault(Key(adapter.Language)), adapter.Version)))
             return metadata;
         var pinned = new Dictionary<string, string>(metadata, StringComparer.Ordinal);
         foreach (var adapter in required)
             pinned[Key(adapter.Language)] = adapter.Version;
         return pinned;
+    }
+
+    /// <summary>
+    /// Pins every node of a tree (spec 1228 FR-028). Publication runs it on the complete tree, placed reusable activities
+    /// included, before the executable is hashed, so the pin is part of the artifact's identity.
+    /// </summary>
+    public static ExecutableNode PinTree(
+        ExecutableNode root,
+        IReadOnlyCollection<ExpressionValueAdapter> adapters,
+        IReadOnlyCollection<ScriptActivityLanguage> scriptActivities)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(adapters);
+        ArgumentNullException.ThrowIfNull(scriptActivities);
+        return adapters.Count == 0 ? root : PinNode(root, adapters, scriptActivities);
+    }
+
+    private static ExecutableNode PinNode(
+        ExecutableNode node,
+        IReadOnlyCollection<ExpressionValueAdapter> adapters,
+        IReadOnlyCollection<ScriptActivityLanguage> scriptActivities)
+    {
+        var changed = false;
+        var childSlots = node.ChildSlots.Select(slot =>
+        {
+            var children = slot.Activities.Select(child => PinNode(child, adapters, scriptActivities)).ToArray();
+            if (children.Zip(slot.Activities).All(pair => ReferenceEquals(pair.First, pair.Second)))
+                return slot;
+            changed = true;
+            return new ExecutableChildSlot(slot.Name, children, slot.OperatorSchedulingCapability);
+        }).ToArray();
+
+        var metadata = Pin(node.Metadata, Required(node.ActivityType, node.InputBindings.Values, adapters, scriptActivities));
+        changed |= !ReferenceEquals(metadata, node.Metadata);
+        if (!changed)
+            return node;
+
+        return new ExecutableNode(
+            executableNodeId: node.ExecutableNodeId,
+            authoredActivityId: node.AuthoredActivityId,
+            activityType: node.ActivityType,
+            activityTypeVersion: node.ActivityTypeVersion,
+            descriptor: node.Descriptor,
+            inputBindings: node.InputBindings,
+            outputCaptures: node.OutputCaptures,
+            metadata: metadata,
+            executionPlacement: node.ExecutionPlacement,
+            childSlots: childSlots,
+            structure: node.Structure,
+            activityContract: node.ActivityContract,
+            intrinsicKind: node.IntrinsicKind,
+            intrinsicVariable: node.IntrinsicVariable);
     }
 
     /// <summary>Refuses to run a node whose pin is missing or differs from the version this host runs.</summary>
