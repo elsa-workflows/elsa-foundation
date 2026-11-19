@@ -124,13 +124,13 @@ so a release or retake whose answer was lost cannot leave a row owned by a live 
 release that fails is retried at the next heartbeat. When the Worker stands a partition down, it drops that partition's memory and work, and a later take may claim it
 again at a new epoch.
 
-**Lock order.** A take and a heartbeat each write their own node record first and touch partition rows after it: the
-heartbeat reads them, and the take locks them in ascending id. A commit locks only partition rows, in ascending id.
-The take reads the owners' node records with a plain read after writing its own and before it locks any partition
-row, never as a locking read or a subquery inside the update (MySQL makes those locking). With this order no cycle
-forms, including under SQL Server without RCSI: there the heartbeat's read of partition rows takes shared locks and
-waits for a commit or take that holds them, and the take's read of another node record releases its shared lock
-before the take locks a partition row.
+**Lock order.** A take first reads the node records of the owners it may take from, with a plain read that holds
+nothing afterwards (never a locking read or a subquery inside the update, which MySQL makes locking); then it writes
+its own node record; then it locks the partition rows in ascending id. A heartbeat writes its own node record, then
+reads partition rows. A commit locks only partition rows, in ascending id. With this order no cycle forms, including
+under SQL Server without RCSI, where a plain read takes shared locks: a take reads while it holds no lock; a take or
+heartbeat that holds its own node record then waits only for partition rows, and whoever holds those never waits for
+another process's node record.
 
 The heartbeat takes over both jobs of the former per-partition renewal, an empty fenced commit per idle partition: it
 renews the lease, now once for the whole set, and it tells the owner that a partition was taken from it. A commit no
@@ -237,8 +237,8 @@ MongoDB (K1b), and on the providers (K4). Process P owns partitions {a, b, c}; Q
 | NL-5 | **A flush of seen marks only.** P's batch with no journal rows over a and b is on the wire when Q's take of b lands (after P's lease expired, or by a forced take); the batch then tries to land, on every store and on the owned and EF paths, MongoDB included | Refused whole; no seen or trial mark of P's epoch is written in a or b. Mutation: the fence of a batch with no journal rows is a plain read (on MongoDB, the partition document is not written), so P's stale marks land in b (M1) | K1b, K4 |
 | NL-6 | **A restart under the same host.** P's process restarts as P′ (a new process name) while P's node lease is still live; P′ tries to take a | P′'s take of a is refused until P's node lease expires; then a, b and c move at new epochs, each counting a death for P's trial messages. Mutation: `StableNodeName` (a restarted process keeps its predecessor's name), so P′ retakes a at once as the recorded owner with no death and inherits b and c | K1b |
 | NL-7 | **A take renews its taker.** Q, with a lease near expiry, takes a | Q's node record is renewed in the take's transaction. If the take's reply arrives before its own send time plus the lease, Q's guard deadline becomes the later of its current deadline and that send time plus the lease; it never moves earlier. A reply after its send time plus the lease restarts nothing: a newer heartbeat's later deadline stands, and with no live deadline Q stays latched expired and stands down as [LEASE.md](../../prototypes/kernel-model/LEASE.md) requires. Schedules: a take sent at 0 with its reply at 11 while a heartbeat set the deadline to 15 leaves 15; the same reply with no newer heartbeat leaves Q expired. A heartbeat answer read before the take does not stand a down | K1b, K4 |
-| NL-8 | **A lost release.** P releases b, and the release's answer is lost (the store call fails after or before it lands); P stays live | Within one heartbeat b is free, or held and worked by P at its epoch; no row stays P's while P does not work it. Mutation `KeepUnheldRows`: the heartbeat answer is reconciled one way only, and b stays P's while P lives | K1b, K4 |
-| NL-9 | **Take, heartbeat and commit together.** One process's gain take, its heartbeat and its commit overlap with another process's take of overlapping partitions, on SQL Server with RCSI off and with RCSI, MySQL and PostgreSQL | No deadlock; every outcome is a landed or refused statement. Mutation: the heartbeat reads partition rows before writing its node record | K1b (prototype engines), K4 |
+| NL-8 | **A lost release or retake.** P releases b and the release's answer is lost (the store call fails after or before it lands), or P's retake of b after a reset fails; P stays live | Within one heartbeat b is free, or held and worked by P at its epoch; no row stays P's while P does not work it. Mutation `KeepUnheldRows`: the heartbeat answer is reconciled one way only, and b stays P's while P lives | K1b, K4 |
+| NL-9 | **Take, heartbeat and commit together.** One process's gain take, its heartbeat and its commit overlap with another process's take of overlapping partitions, on SQL Server with RCSI off and with RCSI, MySQL and PostgreSQL | No deadlock; every outcome is a landed or refused statement. A second run has two processes, both past their leases, whose set takes cover each other's partitions. Mutation: the take reads the owners' node records after it has locked partition rows (or as a subquery of its update), so under SQL Server without RCSI a take holding partition rows waits behind a heartbeat whose read waits on those rows | K1b (prototype engines), K4 |
 | NL-10 | **A late heartbeat.** P's heartbeat is delayed past its lease while P holds work | P's guard expires and P starts no new turn or job body; P stands every partition down; its next heartbeat and takes start again at new epochs. Replaces the `--lease-check` witnesses whose renewal was a commit | K1b |
 | NL-11 | **An Orleans silo.** A silo with grains for 256 partitions stays idle for ten leases | The silo's heartbeat keeps every partition; no partition is taken and no grain's guard expires | K1b |
 
