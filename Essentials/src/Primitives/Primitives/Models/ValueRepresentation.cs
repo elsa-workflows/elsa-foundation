@@ -33,13 +33,25 @@ public static class ValueRepresentationDefaults
             return ValueRepresentation.TransientResource;
         if (type.CollectionKind != CollectionKind.Single)
             return ValueRepresentation.StructuredValue;
-        if (StringComparer.OrdinalIgnoreCase.Equals(alias, "Any") ||
-            StringComparer.OrdinalIgnoreCase.Equals(alias, "Elsa.Any") ||
-            StringComparer.OrdinalIgnoreCase.Equals(alias, "JsonNode") ||
-            StringComparer.OrdinalIgnoreCase.Equals(alias, "JsonObject") ||
-            StringComparer.OrdinalIgnoreCase.Equals(alias, "JsonElement"))
+        if (StructuredAliases.Contains(alias))
             return ValueRepresentation.StructuredValue;
 
         return ValueRepresentation.TypedValue;
     }
+
+    // Compared after the leading "System." is stripped, so "System.Text.Json.JsonElement?" matches
+    // "Text.Json.JsonElement?". JsonElement is a struct, so its nullable aliases carry a trailing "?".
+    private static readonly HashSet<string> StructuredAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Any",
+        "Elsa.Any",
+        "JsonNode",
+        "JsonObject",
+        "JsonElement",
+        "JsonElement?",
+        "Text.Json.JsonElement",
+        "Text.Json.JsonElement?",
+        "Text.Json.Nodes.JsonNode",
+        "Text.Json.Nodes.JsonObject"
+    };
 }
