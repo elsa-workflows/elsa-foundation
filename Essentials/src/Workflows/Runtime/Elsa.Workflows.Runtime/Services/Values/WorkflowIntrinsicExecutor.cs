@@ -800,14 +800,12 @@ public sealed class WorkflowIntrinsicExecutor(
     private void ValidateAssignmentPayload(RuntimeInputBinding binding, ValueEnvelope value, string nodeId)
     {
         if (value.Presence != ValuePresence.Present || value.Policy.RequiresEncryption ||
-            value.Type is { Alias: "Elsa.Any", CollectionKind: CollectionKind.Single })
+            value.Type is { CollectionKind: CollectionKind.Single } && TypeAliasConvention.IsAny(value.Type.Alias))
             return;
         var validator = inputValidator
             ?? throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' on node '{nodeId}' requires an IWorkflowExecutableInputValidator.");
-        // Elsa.Any is a portable runtime token; Object is its CLR element type in the registry.
-        var validationType = binding.TargetType.Alias == "Elsa.Any"
-            ? new TypeReference("Object", binding.TargetType.CollectionKind)
-            : binding.TargetType.ToTypeReference();
+        // A collection of Any still has a shape to fit; Any resolves to its CLR type in the registry.
+        var validationType = binding.TargetType.ToTypeReference();
         var contract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion,
             [new WorkflowDeclaredInput(binding.InputName, validationType, isRequired: true)]);
         var validation = validator.Validate(contract,
@@ -978,7 +976,7 @@ public sealed class WorkflowIntrinsicExecutor(
     {
         if (!frame.Values.TryGetValue(variableKey, out var current))
             throw new InvalidOperationException($"Set intrinsic '{nodeId}' targets undeclared variable '{variableKey}' in frame '{frame.FrameId}'.");
-        if ((!StringComparer.Ordinal.Equals(current.Type.Alias, "Elsa.Any") && !SameType(current.Type, binding.TargetType)) ||
+        if ((!TypeAliasConvention.IsAny(current.Type.Alias) && !SameType(current.Type, binding.TargetType)) ||
             !SameType(binding.TargetType, value.Type))
             throw new InvalidOperationException($"Set intrinsic '{nodeId}' value type '{value.Type.Alias}' does not match variable '{variableKey}' type '{current.Type.Alias}'.");
         if (!value.Policy.Satisfies(current.Policy))

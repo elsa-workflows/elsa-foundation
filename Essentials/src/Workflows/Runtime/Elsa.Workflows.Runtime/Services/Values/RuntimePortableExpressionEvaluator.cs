@@ -141,9 +141,46 @@ internal sealed class RuntimePortableExpressionEvaluator(
             ThrowIfRefused(fallback, definition, expression, inputName, nodeId, effectivePolicy);
         }
 
+        // The diagnostic names the input and the two JSON kinds only, never the value, so it needs no redaction.
+        if (ShapeMismatch(targetType, value) is { } mismatch)
+        {
+            throw new ExpressionInputFailureException(
+                ExpressionInputFailureException.InputMaterializationFailed,
+                inputName,
+                expression.Language,
+                ExpressionInputFailureException.MaterializationPhase,
+                $"Input '{inputName}' on executable node '{nodeId}' is declared '{targetType.Alias}' and accepts only a JSON {mismatch.Expected}, but its expression returned a JSON {mismatch.Actual}.");
+        }
+
         foreach (var warning in warnings.Warnings)
             resolutionContext.Warnings?.Report(warning.WithDetail("input", inputName));
         return new PortableExpressionEvaluation(value, effectivePolicy);
+    }
+
+    // A JsonObject or JsonArray input accepts the dynamic kind at publish; the shape is checked here, at run time
+    // (spec 1228 FR-021). Null is left to the input's own null rule.
+    private static (string Expected, string Actual)? ShapeMismatch(ValueTypeDescriptor targetType, JsonElement value)
+    {
+        if (targetType.CollectionKind != CollectionKind.Single ||
+            !TypeAliasConvention.IsShapedJson(targetType.Alias) ||
+            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return null;
+
+        var expected = targetType.Alias.TrimEnd('?').EndsWith("JsonArray", StringComparison.Ordinal)
+            ? JsonValueKind.Array
+            : JsonValueKind.Object;
+        return value.ValueKind == expected
+            ? null
+            : (Describe(expected), Describe(value.ValueKind));
+
+        static string Describe(JsonValueKind kind) => kind switch
+        {
+            JsonValueKind.Object => "object",
+            JsonValueKind.Array => "array",
+            JsonValueKind.String => "string",
+            JsonValueKind.Number => "number",
+            _ => "boolean"
+        };
     }
 
     private static void ThrowIfRefused(

@@ -49,7 +49,7 @@ internal static class TestWellKnownTypeRegistry
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(int), "Int32");
         registry.RegisterType(typeof(bool), "Boolean");
-        registry.RegisterType(typeof(object), "Object");
+        registry.RegisterType(typeof(System.Text.Json.JsonElement), "Any");
         registry.RegisterType(typeof(double), "Double");
         registry.RegisterType(typeof(long), "Int64");
         registry.RegisterType(typeof(decimal), "Decimal");

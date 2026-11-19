@@ -53,7 +53,7 @@ public sealed partial class ActivityResultConversionPlanLinkerTests
         var linked = new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver()).Link(
             Tree(
                 Producer("String", ValueRepresentation.FormattedContent),
-                Consumer("Elsa.Any", new RuntimeValueConversionRequest(ValueConversionMode.Json))));
+                Consumer("Any", new RuntimeValueConversionRequest(ValueConversionMode.Json))));
 
         var binding = NodeById(linked, "consumer").InputBindings["value"];
 

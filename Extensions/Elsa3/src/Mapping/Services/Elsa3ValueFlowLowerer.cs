@@ -501,7 +501,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var rewrite = expressionRewriter.Rewrite(
             "JavaScript",
             expression.Value,
-            new TypeReference("Object"),
+            new TypeReference(TypeAliasConvention.AnyAlias),
             ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient),
             Elsa3JavaScriptMode.Script,
             new Elsa3ScriptOutcomeContext(possibleOutcomes is null ? [] : PossibleOutcomeItems(property.Activity.AdditionalProperties[possibleOutcomes])));
@@ -536,7 +536,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var members = definitionResult.Parameters.Keys
             .Order(StringComparer.Ordinal)
             .Select(name => $"{JsonSerializer.Serialize(name)}: {ArgumentAccess(name)}");
-        var argumentsType = inputTypeOf?.Invoke(property.Activity, ScriptArgumentsKey) ?? new TypeReference("Object");
+        var argumentsType = inputTypeOf?.Invoke(property.Activity, ScriptArgumentsKey) ?? new TypeReference(TypeAliasConvention.AnyAlias);
         var arguments = new ExpressionDefinition(
             "JavaScript",
             $"({{ {string.Join(", ", members)} }})",
@@ -1027,8 +1027,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     private static TypeReference ReadType(JsonElement value)
     {
         if (!value.TryGetProperty("typeName", out var typeName) || typeName.ValueKind != JsonValueKind.String)
-            return new TypeReference("Object");
-        var alias = typeName.GetString() ?? "Object";
+            return new TypeReference(TypeAliasConvention.AnyAlias);
+        var alias = typeName.GetString() ?? TypeAliasConvention.AnyAlias;
         var comma = alias.IndexOf(',');
         if (comma >= 0)
             alias = alias[..comma];
@@ -1059,8 +1059,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     private static readonly IReadOnlyDictionary<string, TypeReference> Elsa3TypeShapes = new Dictionary<string, TypeReference>(StringComparer.Ordinal)
     {
         ["HttpStatusCode"] = new("Int32"),
-        ["HttpHeaders"] = new("String[]", CollectionKind.Dictionary),
-        ["ObjectDictionary"] = new("Object", CollectionKind.Dictionary),
+        // A dictionary of string arrays, named in full (spec 1228 FR-022), as WriteHttpResponse.Headers declares it.
+        ["HttpHeaders"] = new("String", CollectionKind.Dictionary, new TypeReference("String", CollectionKind.Array)),
+        // A dictionary of any JSON value: Any, the dynamic kind (spec 1228 FR-019).
+        ["ObjectDictionary"] = new(TypeAliasConvention.AnyAlias, CollectionKind.Dictionary),
     };
 
     /// <summary>
@@ -1082,8 +1084,17 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             value.CollectionKind == CollectionKind.Single &&
             member.CollectionKind == CollectionKind.Single)
             return true;
-        return valueName.Equals(memberName, StringComparison.OrdinalIgnoreCase) && value.CollectionKind == member.CollectionKind;
+        return valueName.Equals(memberName, StringComparison.OrdinalIgnoreCase) && value.CollectionKind == member.CollectionKind &&
+               ElementsMatch(value.Element, member.Element);
     }
+
+    // The nested element of a collection of collections (spec 1228 FR-022), compared by simple name like the alias.
+    private static bool ElementsMatch(TypeReference? value, TypeReference? member) =>
+        value is null || member is null
+            ? value is null && member is null
+            : SimpleName(value.Alias).Equals(SimpleName(member.Alias), StringComparison.OrdinalIgnoreCase) &&
+              value.CollectionKind == member.CollectionKind &&
+              ElementsMatch(value.Element, member.Element);
 
     /// <summary>
     /// Whether the property's declared value may bind the member. A literal must also parse as the member's scalar type

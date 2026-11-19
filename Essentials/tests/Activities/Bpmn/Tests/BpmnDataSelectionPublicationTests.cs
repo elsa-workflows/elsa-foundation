@@ -175,7 +175,7 @@ public sealed class BpmnDataSelectionPublicationTests
         };
         var capture = new ActivityNode("capture", "elsa.intrinsic.set-output@1",
             [Input("name", "decisionResult"), Input("value", read, kind)], [])
-        { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any")) };
+        { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Any")) };
 
         var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
             fixture.Compile(BpmnChildResultFactsTests.Process(children: [capture, Decision()])).AsTask());
@@ -192,10 +192,10 @@ public sealed class BpmnDataSelectionPublicationTests
     private static ActivityNode Decision(string id = "decision") => new(id, "decision-version", [Input("Outcome", "Done")], []);
     private static ActivityNode Capture(string producer = "decision") => new("capture", "elsa.intrinsic.set-output@1",
         [Input("name", "decisionResult"), Input("value", new { producerNodeId = producer, producerScopeId = "process", projectionKey = "$result" }, "ActivityResult")], [])
-    { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any")) };
+    { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Any")) };
     private static ActivityNode Capture(object? read) => new("capture", "elsa.intrinsic.set-output@1",
         read is null ? [Input("name", "decisionResult")] : [Input("name", "decisionResult"), Input("value", read, "ActivityResult")], [])
-    { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any")) };
+    { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Any")) };
 
     private sealed class Fixture : IDisposable
     {
@@ -218,7 +218,7 @@ public sealed class BpmnDataSelectionPublicationTests
             Catalog = new([Version(typeof(BpmnProcess), "process-version"), Version(typeof(BpmnDecision), "decision-version",
                 new InputDefinition("Outcome", "Outcome", new TypeReference("String"), null, "Outcome", null, IsNullable: true)),
                 Version(typeof(ReadBack), "read-version",
-                    new InputDefinition("Value", "Value", new TypeReference("Elsa.Any"), null, "Value", null, IsNullable: true))]);
+                    new InputDefinition("Value", "Value", new TypeReference("Any"), null, "Value", null, IsNullable: true))]);
             var services = new ServiceCollection();
             services.AddOptions();
             new Elsa.Events.EventsFeature().ConfigureServices(services);

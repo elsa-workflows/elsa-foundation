@@ -242,7 +242,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
     }
 
     private static string FormatType(Elsa.Primitives.Models.ValueTypeDescriptor type) =>
-        $"{type.Alias}:{type.CollectionKind}:{type.SchemaVersion}:{CanonicalJson(type.Schema)}";
+        $"{type.Alias}:{type.CollectionKind}:{type.SchemaVersion}:{CanonicalJson(type.Schema)}" +
+        (type.Element is null ? string.Empty : $":element:{type.Element.ToDisplayString()}");
 
     private static string FormatPolicy(ValueProtectionPolicy policy)
     {

@@ -271,17 +271,17 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
     [Fact]
     public async Task Materialization_applies_formatted_request_and_variable_conversion_plans_once()
     {
-        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var plan = JsonPlan(new ValueTypeDescriptor("Any"));
         var requestBinding = new RuntimeInputBinding(
             "customer-id",
-            new ValueTypeDescriptor("Elsa.Any"),
+            new ValueTypeDescriptor("Any"),
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.WorkflowRequest,
             workflowRequest: new RuntimeWorkflowRequestReference("payload"),
             conversionPlan: plan);
         var variableBinding = new RuntimeInputBinding(
             "customer-id",
-            new ValueTypeDescriptor("Elsa.Any"),
+            new ValueTypeDescriptor("Any"),
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.VariableRead,
             variable: new RuntimeVariableReference("customer", VariableReference.WorkflowScopeId),
@@ -298,12 +298,12 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
         var materializer = new RuntimeActivityInputMaterializer(_resolver);
 
         var request = await materializer.MaterializeSnapshotAsync(
-            NewConsumerNode(requestBinding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            NewConsumerNode(requestBinding, inputType: new ValueTypeDescriptor("Any")),
             "consumer",
             context,
             DateTimeOffset.UnixEpoch);
         var variable = await materializer.MaterializeSnapshotAsync(
-            NewConsumerNode(variableBinding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            NewConsumerNode(variableBinding, inputType: new ValueTypeDescriptor("Any")),
             "consumer",
             context,
             DateTimeOffset.UnixEpoch);
@@ -316,10 +316,10 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
     [Fact]
     public async Task Materialization_applies_expression_conversion_plan_to_the_expression_source_type_once()
     {
-        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var plan = JsonPlan(new ValueTypeDescriptor("Any"));
         var binding = new RuntimeInputBinding(
             "customer-id",
-            new ValueTypeDescriptor("Elsa.Any"),
+            new ValueTypeDescriptor("Any"),
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding("Test", "payload"),
@@ -330,7 +330,7 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
             new ConstantPortableExpressionEvaluator("""{"name":"Ada","tags":["expression"]}"""));
 
         var snapshot = await materializer.MaterializeSnapshotAsync(
-            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Any")),
             "consumer",
             NewContext(),
             DateTimeOffset.UnixEpoch);
@@ -342,10 +342,10 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
     [Fact]
     public async Task Materialization_applies_expression_parameter_conversion_plan_before_evaluation_once()
     {
-        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var plan = JsonPlan(new ValueTypeDescriptor("Any"));
         var binding = new RuntimeInputBinding(
             "customer-id",
-            new ValueTypeDescriptor("Elsa.Any"),
+            new ValueTypeDescriptor("Any"),
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(
@@ -365,7 +365,7 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
             new EchoParameterPortableExpressionEvaluator("payload"));
 
         var snapshot = await materializer.MaterializeSnapshotAsync(
-            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Any")),
             "consumer",
             NewContext(),
             DateTimeOffset.UnixEpoch);
@@ -384,7 +384,7 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
         // committed state. An instance without a correlation id binds JSON null.
         var binding = new RuntimeInputBinding(
             "customer-id",
-            new ValueTypeDescriptor("Elsa.Any"),
+            new ValueTypeDescriptor("Any"),
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(
@@ -401,7 +401,7 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
         var context = new RuntimeInputBindingResolutionContext("workflow-1", "consumer", correlationId: correlationId);
 
         var snapshot = await materializer.MaterializeSnapshotAsync(
-            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Any")),
             "consumer",
             context,
             DateTimeOffset.UnixEpoch);

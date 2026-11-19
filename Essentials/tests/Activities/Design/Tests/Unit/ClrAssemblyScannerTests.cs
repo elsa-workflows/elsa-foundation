@@ -107,10 +107,11 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
-        { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
+        { typeof(TriggerFixtureActivity), "7D221A0FEEFBD55AEA961DECEFFBF4709A66D759F9AAB53FF065A8B310A9E1E3" },
         // Approved UX wording change: Start new workflows plus its help text.
         // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
-        { typeof(HttpEndpoint), "9E51C9A62A34D0953536D79C15C947C7E3CDDE704B3595DC7CCB7812E4AE0EB9" }
+        // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
+        { typeof(HttpEndpoint), "F28E2D5C692AE81A7652872385379DDFC7D13A84C1EB196701AB439E277C9FCE" }
     };
 
     [Theory]
@@ -168,8 +169,9 @@ public sealed class ClrAssemblyScannerTests
         // PlainFixtureActivity still declares nothing, so it keeps the pre-sensitivity catalog hash.
         // ComplexInputFixtureActivity declares input tiers, which are hashed, so its snapshot moves
         // with this PR rather than throwing on re-reconcile.
-        { typeof(PlainFixtureActivity), "41ADAB509FABBD50A14009DB8FD9D1BCA14B7C4ED67E86725937D1C6B2ABC87E" },
-        { typeof(ComplexInputFixtureActivity), "950B126E699A6CEB156EA274E9DB0B9563BD628566AEE99C6BC5AE1E9623B7AE" }
+        // Spec 1228 FR-022: the CLR provider schema version went to 2, which moves both snapshots.
+        { typeof(PlainFixtureActivity), "4D43EA4D1174EF977273A98C264FCE3679229FC229C5CC430C5676415855C760" },
+        { typeof(ComplexInputFixtureActivity), "E903892E9FB46DB7E0A1972EC2804C62844F217530CEFA5535D3B0997EEDAD1B" }
     };
 
     [Theory]
@@ -844,10 +846,11 @@ public sealed class ClrAssemblyScannerTests
         // on the descriptors but excluded from descriptor hashes.
         // Approved UX wording change: Start new workflows plus its help text.
         // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
-        { typeof(HttpEndpoint), "9E51C9A62A34D0953536D79C15C947C7E3CDDE704B3595DC7CCB7812E4AE0EB9" },
-        { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
-        { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
-        { typeof(SendHttpRequest), "DA2CB2C41FBEAFD5CAF24C71595147064A429258E9C1679BEAF3F173BED514FA" }
+        // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
+        { typeof(HttpEndpoint), "F28E2D5C692AE81A7652872385379DDFC7D13A84C1EB196701AB439E277C9FCE" },
+        { typeof(WriteLine), "6447F219BF705C43390B61BF9478005F9C7AFD93FC07E9D3941EC0FF42BE1979" },
+        { typeof(ParallelActivity), "4748F128F029398F93C1D7BF29D3E266AFED437FCC4BD030DFDD4D4F8938FE61" },
+        { typeof(SendHttpRequest), "92CDE66B36CEAB09480364A18F334C879ECB5B0770730F2D427F0B8C1EB9634F" }
     };
 
     [Theory]

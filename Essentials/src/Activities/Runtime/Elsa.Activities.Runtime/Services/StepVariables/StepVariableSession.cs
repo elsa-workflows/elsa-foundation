@@ -355,12 +355,11 @@ internal sealed class StepVariableSession : IStepVariableSession
     private void Validate(ResolvedVariable variable, ValueEnvelope value)
     {
         if (value.Presence != ValuePresence.Present || _validator is null ||
-            value.Type is { Alias: "Elsa.Any", CollectionKind: CollectionKind.Single })
+            value.Type is { CollectionKind: CollectionKind.Single } && TypeAliasConvention.IsAny(value.Type.Alias))
             return;
 
-        var validationType = value.Type.Alias == "Elsa.Any"
-            ? new TypeReference("Object", value.Type.CollectionKind)
-            : value.Type.ToTypeReference();
+        // A collection of Any still has a shape to fit; Any resolves to its CLR type in the registry.
+        var validationType = value.Type.ToTypeReference();
         var contract = new WorkflowExecutableInputContract(
             WorkflowExecutableInputContract.CurrentVersion,
             [new WorkflowDeclaredInput(variable.Name, validationType, isRequired: true)]);

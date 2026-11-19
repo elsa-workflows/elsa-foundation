@@ -46,7 +46,7 @@ public sealed class ValueConversionPlanResolverTests
         Assert.Equal(ValueConversionOperation.NumericWidening, resolver.Resolve(Type("System.UInt32"), ValueRepresentation.TypedValue, Type("System.Int64")).Operation);
         Assert.Equal(ValueConversionOperation.RecursiveCollection, resolver.Resolve(Type("UInt16", CollectionKind.List), ValueRepresentation.TypedValue, Type("Int32", CollectionKind.List)).Operation);
         Assert.Equal(ValueConversionOperation.RecursiveCollection, resolver.Resolve(Type("UInt16", CollectionKind.Array), ValueRepresentation.TypedValue, Type("Int32", CollectionKind.List)).Operation);
-        Assert.Equal(ValueConversionOperation.CanonicalAny, resolver.Resolve(Type("Customer"), ValueRepresentation.TypedValue, Type("Elsa.Any")).Operation);
+        Assert.Equal(ValueConversionOperation.CanonicalAny, resolver.Resolve(Type("Customer"), ValueRepresentation.TypedValue, Type("Any")).Operation);
     }
 
     [Theory]
@@ -79,7 +79,7 @@ public sealed class ValueConversionPlanResolverTests
                 Type("Customer"),
                 ValueConversionMode.Profile,
                 new ValueConversionProfileReference("partner.json", "8")));
-        var explicitJson = resolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("Elsa.Any"), ValueConversionMode.Json);
+        var explicitJson = resolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("Any"), ValueConversionMode.Json);
         var autoJson = resolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("JsonObject"));
 
         Assert.Contains("not format-sniffed", rawText.Message, StringComparison.Ordinal);
@@ -144,7 +144,7 @@ public sealed class ValueConversionPlanResolverTests
             typedResolver.Resolve(
                 Type("String"),
                 ValueRepresentation.FormattedContent,
-                Type("Elsa.Any"),
+                Type("Any"),
                 ValueConversionMode.Xml));
 
         Assert.Equal(ValueConversionOperation.Profile, explicitXml.Operation);
@@ -160,7 +160,7 @@ public sealed class ValueConversionPlanResolverTests
     public void Transient_values_cannot_be_pinned_across_a_durable_binding()
     {
         var exception = Assert.Throws<ValueConversionPublicationException>(() =>
-            resolver.Resolve(Type("Stream"), ValueRepresentation.TransientResource, Type("Elsa.Any")));
+            resolver.Resolve(Type("Stream"), ValueRepresentation.TransientResource, Type("Any")));
 
         Assert.Contains("transient resources", exception.Message, StringComparison.Ordinal);
     }
@@ -206,7 +206,7 @@ public sealed class ValueConversionPlanResolverTests
     {
         var input = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create(), resolver).Compile(
             "reader",
-            Input("Elsa.Any"),
+            Input("Any"),
             new ArgumentState(
                 "value",
                 new ArgumentValue("""{"name":"Grace"}""", "Literal"),

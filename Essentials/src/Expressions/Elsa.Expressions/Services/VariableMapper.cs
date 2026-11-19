@@ -16,7 +16,7 @@ internal sealed class VariableMapper(IWellKnownTypeRegistry wellKnownTypeRegistr
     public IVariable Map(VariableDefinition source)
     {
         var elementType = ResolveAlias(source.Type.Alias);
-        var closedType = TypeReferenceFactory.Close(elementType, source.Type.CollectionKind);
+        var closedType = TypeReferenceFactory.Close(elementType, source.Type);
 
         var variableGenericType = typeof(Variable<>).MakeGenericType(closedType);
         var variable = (Variable)Activator.CreateInstance(variableGenericType)!;

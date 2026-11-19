@@ -200,6 +200,8 @@ public sealed record ValueConversionPlan
         writer.WriteStartObject(propertyName);
         writer.WriteString("alias", type.Alias);
         writer.WriteString("collectionKind", type.CollectionKind.ToString());
+        if (type.Element is not null)
+            writer.WriteString("element", type.Element.ToDisplayString());
         if (type.SchemaVersion.HasValue)
             writer.WriteNumber("schemaVersion", type.SchemaVersion.Value);
         else
