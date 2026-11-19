@@ -295,11 +295,12 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     await s.select(copiedConsumer.nodeId); await expect(s.reference()).toContainText('"a.b"'); await expect(s.reference()).toContainText('""');
     await capture(page, info, "scope-copied-reference");
     // The case condition lives in the Slots tab; the Inputs tab only points there.
-    await s.select(copiedSwitch.nodeId); await page.getByRole("tab", { name: "Slots", exact: true }).click();
+    const sections = page.getByLabel("Activity inspector sections", { exact: true });
+    await s.select(copiedSwitch.nodeId); await sections.getByRole("tab", { name: "Slots", exact: true }).click();
     const condition = page.locator(".wf-slot-list .wf-data-reference-source");
     await expect(condition).toContainText("Payload"); await expect(condition).toContainText("enabled");
     await condition.scrollIntoViewIfNeeded(); await capture(page, info, "switch-copied-condition");
-    await page.getByRole("tab", { name: "Inputs", exact: true }).click();
+    await sections.getByRole("tab", { name: "Inputs", exact: true }).click();
     // The preserved body reads args.customer; keep its remapped producer, the copied Get Customer, in view beside it.
     await s.select(copiedPortable.nodeId);
     await expect(page.locator(".wf-inspector-content")).toContainText("args.customer.customerId");
