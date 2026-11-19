@@ -116,7 +116,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly List<Delivery> _meets = [];
     private readonly HashSet<InboxKey> _cancelling = [];        // tickets of jobs cancelled by a commit in flight
     private readonly HashSet<InboxKey> _consumed = [];          // while a poll is in flight
-    private readonly HashSet<InboxKey> _behind = [];            // own rows written while catching up, not yet polled
+    private readonly Dictionary<InboxKey, int> _behind = [];    // own rows written while catching up, not yet polled, with their partition
     private readonly List<TurnOutcome> _queue = [];
     private long _generation, _anchor = long.MinValue, _local, _observed;
     private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
@@ -634,6 +634,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // ---- the node's owned set (D1) -------------------------------------------------------------------------------
 
     /// <summary>A wake, a job result or a deferred job came since the last pass: the next call must run a pass.</summary>
+    /// <summary>The worker's monotonic clock (<see cref="WorkerOptions.Monotonic"/>), in milliseconds: the host times a shared pass answer by it.</summary>
+    internal long Monotonic => _options.Monotonic();
+
     internal bool PassWanted => _woken || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
 
     /// <summary>
@@ -657,6 +660,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
         finally { _taking = false; }
         if (lease is null) return false;
+        var installed = false;
         lock (_turnSync)
             if (generation == _generation && Owns && !_releasing && !_retaking)
             {
@@ -665,9 +669,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 Observe(lease.Now);
                 Renewed();
                 _caughtUp = false;      // F1: until a short poll has read the new partition's inbox, nothing is handed over in memory
-                _woken = true;
-                return true;
+                (_woken, installed) = (true, true);
             }
+        if (installed) return LeaseUsable() && Holds(partition);    // an answer delayed past the safe deadline cannot authorize work, as in Install
         try { await _store.ReleaseAsync(partition, lease.Epoch, cancellationToken); }      // the set changed meanwhile: give it back
         catch (Exception) { /* then the lease runs out instead */ }
         return false;
@@ -677,8 +681,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// Hand part of the set over, cooperatively, between passes. What those partitions hold in memory only is written
     /// first, as a stand-down does (decision 4). Then, if nothing of theirs is in flight, their memory goes, their fence
     /// rows are released at their epochs and nothing else changes: the partitions kept keep their epochs, positions and
-    /// memory. If something of theirs is still in flight (a turn, a running job, a trial), the worker resets, releases
-    /// them, and takes the rest back at new epochs, as after a refused fence. Handing over every partition is a stand-down.
+    /// memory. If something of theirs is still in flight (a turn, a running job, a trial), the worker writes what every
+    /// partition holds in memory only, resets, releases them, and takes the rest back at new epochs, as after a refused
+    /// fence. Handing over every partition is a stand-down.
     /// </summary>
     internal async Task LoseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
     {
@@ -689,24 +694,38 @@ public sealed class Worker : IScopeActivation, ITurnServices
             await ReleaseAsync(cancellationToken);
             return;
         }
+        var captured = Fences.Where(f => partitions.Contains(f.Partition)).ToList();
         ReceiveJobPublications(cancellationToken);
-        if (!_flushing && !Has(Flaw.ForgetShortWaits))
-            lock (_turnSync) WriteUnwritten(HandedOver);
-        while (_queue.Count > 0 && !_flushing && LeaseUsable()) await FlushAsync(cancellationToken);   // a refusal resets and retakes
+        await DrainAsync(HandedOver, cancellationToken);
         List<PartitionFence> leaving, kept = [];
+        var quiet = false;
         lock (_turnSync)
         {
             var held = Fences;
             leaving = [.. held.Where(f => partitions.Contains(f.Partition))];
-            if (leaving.Count == 0) return;
-            if (leaving.Count < held.Count && Quiet(HandedOver)) Drop(HandedOver, leaving);
-            else
+            if (leaving.Count > 0 && leaving.Count < held.Count && Quiet(HandedOver))
             {
+                Drop(HandedOver, leaving);
+                quiet = true;
+            }
+        }
+        if (leaving.Count > 0 && !quiet)
+        {
+            // The fallback resets everything, so what the kept partitions hold in memory only is written first too, as a
+            // stand-down writes it.
+            await DrainAsync(_ => true, cancellationToken);
+            lock (_turnSync)
+            {
+                var held = Fences;
+                leaving = [.. held.Where(f => partitions.Contains(f.Partition))];
                 kept = [.. held.Where(f => !partitions.Contains(f.Partition))];
                 Reset();
                 if (kept.Count > 0) (_retaking, _retakeStoodDown) = (true, false);
             }
         }
+        // A drain refused down to a reset with no retake holds nothing: give up what was captured, as ReleaseAsync does.
+        // The store's epoch guard makes it a no-op for a row that moved or was taken again since.
+        if (leaving.Count == 0) leaving = captured;
         try
         {
             if (leaving.Count == 1) await _store.ReleaseAsync(leaving[0].Partition, leaving[0].Epoch, cancellationToken);
@@ -714,6 +733,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         catch (Exception) { /* then the leases run out instead */ }
         if (kept.Count > 0) await RetakeAsync(kept, cancellationToken);
+    }
+
+    // Decision 4: write what these instances hold in memory only, and flush until the queue is empty. A refusal resets
+    // and retakes, as any flush's does.
+    private async Task DrainAsync(Func<string, bool> handedOver, CancellationToken cancellationToken)
+    {
+        if (!_flushing && !Has(Flaw.ForgetShortWaits))
+            lock (_turnSync) WriteUnwritten(handedOver);
+        while (_queue.Count > 0 && !_flushing && LeaseUsable()) await FlushAsync(cancellationToken);
     }
 
     // Nothing of the partitions handed over is in flight: no read, commit or turn, no running job, no trial. A job result
@@ -735,10 +763,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
         foreach (var item in items)
         {
             Forget(item);
-            _behind.Remove(item.Message.InboxKey);
             _cancelling.Remove(item.Message.InboxKey);
         }
-        foreach (var (id, _) in slots) RemoveSlot(id);
+        // Rows sent to these partitions that the poll would have read back: it no longer reads them, so they must not
+        // keep the worker from catching up (F1).
+        var gone = leaving.Select(f => f.Partition).ToHashSet();
+        foreach (var key in _behind.Where(b => gone.Contains(b.Value)).Select(b => b.Key).ToList()) _behind.Remove(key);
+        foreach (var (id, slot) in slots)
+        {
+            slot.TurnFence++;       // a second guard: a turn of a dropped slot that still completes is fenced out
+            RemoveSlot(id);
+        }
         foreach (var alias in _aliases.Where(a => handedOver(a.Value)).Select(a => a.Key).ToList()) _aliases.Remove(alias);
         foreach (var fence in leaving)
         {
@@ -2004,7 +2039,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (!handOver)
             foreach (var message in unit.Sent)
-                if (Holds(message.Target.Partition) && message.Due is null && !unit.Volatile.Contains(message.InboxKey) && !unit.Promoted.Contains(message.InboxKey)) _behind.Add(message.InboxKey);
+                if (Holds(message.Target.Partition) && message.Due is null && !unit.Volatile.Contains(message.InboxKey) && !unit.Promoted.Contains(message.InboxKey)) _behind[message.InboxKey] = message.Target.Partition;
         if (unit.Slot is { } committed)
         {
             InvalidateAliasMisses(unit);
@@ -2130,7 +2165,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     if (!hold)
                     {
                         // Keep the existing job/result, but do not mark or deliver it until poll reaches its row.
-                        if (message.Due is null || message.Due <= Now + (long)_options.Horizon.TotalMilliseconds) _behind.Add(message.InboxKey);
+                        if (message.Due is null || message.Due <= Now + (long)_options.Horizon.TotalMilliseconds) _behind[message.InboxKey] = message.Target.Partition;
                         (held.Durable, held.Marked, held.AwaitPoll, held.Taken) = (true, false, true, false);
                         if (_slots.TryGetValue(Canonical(message.Target.Id), out var waiting))
                         {

@@ -269,14 +269,20 @@ Layer 1 still activates one scope per virtual partition.
   over in memory until a short poll has read its inbox (F1). The set may be scattered.
 - **Giving a scope up** removes the partition (`Worker.LoseAsync`). What it holds in memory only is written first, as at
   a stand-down (decision 4). If nothing of the partition is in flight (no read, commit or turn, running job or trial),
-  its memory goes and its fence row is released at its epoch, and nothing else changes. Otherwise the worker resets,
-  releases it and takes the rest back at new epochs, as after a refused fence: safe, at the cost of the rest's memory.
-  Giving up the last partition is a stand-down.
+  its memory goes and its fence row is released at its epoch, and nothing else changes; rows sent to it that the poll
+  would have read back no longer keep the worker behind (F1). Otherwise the worker writes what every partition holds
+  in memory only, as a stand-down does, then resets, releases it and takes the rest back at new epochs, as after a
+  refused fence. That is safe; its cost is the rest's memory, and the reset tells the callers it held "lost", as every
+  reset does. Giving up the last partition is a stand-down.
 - **One at a time.** The node's passes, activations and give-ups run one at a time, so the set changes only between
   passes, and so between flushes. One pass serves every scope: a scope that another scope's pass served since its own
-  last call, with no wake or job result since, gets that pass's answer, so the node runs one pass per round however many
-  scopes it holds.
+  last call, with no wake or job result since, gets what is left of that pass's answer, so the node runs one pass per
+  round however many scopes it holds. Once that answer's time has run out, the call runs the pass itself, so a timer is
+  never postponed after the scope that ran the last pass is given up.
 - **A store without owned sets** (`commit=ef`) gets a worker per scope from the same host, as before.
+- **Start-up cost, for slice 8.** Gains are one-row takes, one at a time under the host's lock, so a node that starts
+  with 1,024 free partitions makes up to 1,024 sequential take round trips. A batched take of the activations a round
+  asks for together would be one; slice 8 measures it before anything changes.
 
 The fixed host (a worker per scope, given up front) stays for the models and the simulation, whose worlds are slice 7's.
 The built-in runtime's conformance suite runs on the per-node host; the Orleans adapter keeps a worker per scope until

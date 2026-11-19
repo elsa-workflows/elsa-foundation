@@ -248,8 +248,8 @@ public static class Cases
         {
             var a = await h.StartAsync();
             await Settle(h);
-            foreach (var p in new[] { 0, 3 }) await h.AddAsync(Token(p, "c", "k" + p));
-            foreach (var p in new[] { 0, 3 }) await Applied(h, p, "c", ["k" + p], Slack);
+            foreach (var p in Enumerable.Range(0, 4)) await h.AddAsync(Token(p, "c", "k" + p));
+            foreach (var p in Enumerable.Range(0, 4)) await Applied(h, p, "c", ["k" + p], Slack);
             var worker = h.WorkerOf(a.Name)!;
             var before = worker.Fences;
             var b = await h.StartAsync();
@@ -263,9 +263,10 @@ public static class Cases
             That(worker.Fences.SequenceEqual(kept) && moved.All(p => store.ReleaseBegan(p) is not null) && kept.All(f => store.ReleaseBegan(f.Partition) is null),
                 $"the hand-over touched more than the moved partitions {string.Join(" ", moved)}: before [{string.Join(", ", before)}], now [{string.Join(", ", worker.Fences)}]");
             var memory = worker.Instances.Select(i => i.Id).ToHashSet();
-            That(memory.Contains(InstanceRef.In(0, "c").Id) && !memory.Contains(InstanceRef.In(3, "c").Id), $"memory after the hand-over: [{string.Join(" ", memory)}]");
-            foreach (var p in new[] { 0, 3 }) await h.AddAsync(Token(p, "c", "m" + p));
-            foreach (var p in new[] { 0, 3 }) await Applied(h, p, "c", ["k" + p, "m" + p], Slack);
+            That(kept.All(f => memory.Contains(InstanceRef.In(f.Partition, "c").Id)) && moved.All(p => !memory.Contains(InstanceRef.In(p, "c").Id)),
+                $"memory after the hand-over of {string.Join(" ", moved)}: [{string.Join(" ", memory)}]");
+            foreach (var p in Enumerable.Range(0, 4)) await h.AddAsync(Token(p, "c", "m" + p));
+            foreach (var p in Enumerable.Range(0, 4)) await Applied(h, p, "c", ["k" + p, "m" + p], Slack);
         }, OwnedSet: true),
 
         new("owned set: partitions join and leave the set between flushes, never during one", Level.Required, async h =>
@@ -281,7 +282,6 @@ public static class Cases
             await h.AddAsync(Token(0, "c", "f0"));
             That(await h.WaitAsync(() => store.Stalls > 0, Slack), "no commit with a turn in 0 entered the hold");
             await h.Outside.ReleaseAsync(3, probe);
-            var landedAt = store.Held.ContinueWith(_ => Environment.TickCount64, TaskContinuationOptions.ExecuteSynchronously);
             var gaining = Task.Run(async () => (await host.ActivateAsync(3), Environment.TickCount64));
             var losing = Task.Run(async () =>
             {
@@ -290,8 +290,10 @@ public static class Cases
             });
             var (gained, gainedAt) = await gaining;
             var lostAt = await losing;
-            That(await store.Held == "landed" && gained is not null && gainedAt >= await landedAt && lostAt >= await landedAt && store.ReleaseBegan(2) >= await landedAt,
-                $"the held commit {await store.Held}; the gain of 3 ({gained is not null}) and the loss of 2 ended {gainedAt - await landedAt} and {lostAt - await landedAt} ms after it returned");
+            var held = await store.Held;
+            var landedAt = store.HeldAt;      // recorded by the store before Held completed
+            That(held == "landed" && gained is not null && gainedAt >= landedAt && lostAt >= landedAt && store.ReleaseBegan(2) >= landedAt,
+                $"the held commit {held}; the gain of 3 ({gained is not null}) and the loss of 2 ended {gainedAt - landedAt} and {lostAt - landedAt} ms after it returned");
             That((worker.EpochOf(0), worker.EpochOf(1)) == kept, $"the change of the set changed the epochs of 0 and 1 (before {kept}): [{string.Join(", ", worker.Fences)}]");
             await h.AddAsync(Token(3, "c", "g3"));
             await Applied(h, 0, "c", ["f0"], Slack);
