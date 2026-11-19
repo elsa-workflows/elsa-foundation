@@ -190,6 +190,28 @@ public sealed record ActivityExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? LastCommitSequence { get; init; }
 
+    /// <summary>
+    /// The number of lost-update warnings among this row's <see cref="VariableWrites"/> (spec 1229 FR-009, Q7), set when
+    /// the row is committed so the instance details can sum it from a store column without reading row documents.
+    /// Absent when the row recorded none, and on older records.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LostUpdateWarningCount { get; init; }
+
+    /// <summary>The lost-update warnings counted from <see cref="VariableWrites"/>, or null when there are none.</summary>
+    public static int? CountLostUpdateWarnings(IReadOnlyList<VariableWriteRecord>? records)
+    {
+        var count = records?.Count(record => record.Outcome == VariableCommitOutcome.LostUpdateWarning) ?? 0;
+        return count == 0 ? null : count;
+    }
+
+    /// <summary>Returns this row with <see cref="LostUpdateWarningCount"/> matching its write records.</summary>
+    public ActivityExecutionState WithLostUpdateWarningCount()
+    {
+        var count = CountLostUpdateWarnings(VariableWrites);
+        return count == LostUpdateWarningCount ? this : this with { LostUpdateWarningCount = count };
+    }
+
     /// <summary>Appends write-history records to this invocation.</summary>
     public ActivityExecutionState WithVariableWrites(IReadOnlyCollection<VariableWriteRecord> records)
     {

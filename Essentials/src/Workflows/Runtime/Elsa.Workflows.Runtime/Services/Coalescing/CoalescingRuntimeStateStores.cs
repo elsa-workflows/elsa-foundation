@@ -124,6 +124,16 @@ public sealed class CoalescingActivityExecutionStateStore(
         return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
     }
 
+    // Spec 1229: lifecycle inspection reads committed rows only, so these reads go to the store, past any session.
+    public ValueTask<IReadOnlyList<ActivityExecutionState>> ListByCommitSequenceAsync(ActivityExecutionStateCommitSequenceQuery query, CancellationToken cancellationToken = default) =>
+        _inner.ListByCommitSequenceAsync(query, cancellationToken);
+
+    public ValueTask<IReadOnlyList<ActivityExecutionState>> ListWithoutCommitSequenceAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        _inner.ListWithoutCommitSequenceAsync(workflowExecutionId, cancellationToken);
+
+    public ValueTask<long> SumLostUpdateWarningCountAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        _inner.SumLostUpdateWarningCountAsync(workflowExecutionId, cancellationToken);
+
     public async ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         if (sessionAccessor.Current is not { } session || !session.AppliesTo(workflowExecutionId))

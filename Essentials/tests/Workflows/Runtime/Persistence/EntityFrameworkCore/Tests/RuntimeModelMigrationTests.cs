@@ -43,8 +43,8 @@ public sealed class RuntimeModelMigrationTests
             Assert.Contains(RuntimeModelStateEfModule.InputTable, after.Keys);
             var upgradedHistory = await History(connection);
             Assert.Equal(history, upgradedHistory.Take(history.Length));
-            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
-            Assert.Equal(history.Length + 4, upgradedHistory.Length);
+            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "VariableLifecycleInspection"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
+            Assert.Equal(history.Length + 5, upgradedHistory.Length);
             await using (var nativeKinds = connection.CreateCommand())
             {
                 nativeKinds.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeArtifactEfModule.WorkflowExecutableTableName}\" WHERE IsModelMaterial <> 0";
@@ -55,6 +55,12 @@ public sealed class RuntimeModelMigrationTests
             {
                 claimDeliveries.CommandText = $"SELECT COUNT(*) FROM \"{RuntimePostCommitOutboxEfModule.TableName}\" WHERE ClaimDeliveredAtUtcTicks IS NOT NULL";
                 Assert.Equal(0L, (long)(await claimDeliveries.ExecuteScalarAsync())!);
+            }
+            // Spec 1229: legacy activity rows get no commit range or lost-update count; inspection reads them as unnumbered.
+            await using (var lifecycleColumns = connection.CreateCommand())
+            {
+                lifecycleColumns.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeActivityExecutionEfModule.ActivityExecutionStateTableName}\" WHERE FirstCommitSequence IS NOT NULL OR LastCommitSequence IS NOT NULL OR LostUpdateWarningCount IS NOT NULL";
+                Assert.Equal(0L, (long)(await lifecycleColumns.ExecuteScalarAsync())!);
             }
             // Schema upgrade only: no execution is resumed and no direct-host acceptance is implied.
         }
@@ -90,7 +96,9 @@ public sealed class RuntimeModelMigrationTests
                 // Compare every original column; the newly added columns are verified separately above.
                 var columns = Enumerable.Range(0, reader.FieldCount).Where(i =>
                     (table != RuntimeArtifactEfModule.WorkflowExecutableTableName || reader.GetName(i) != "IsModelMaterial") &&
-                    (table != RuntimePostCommitOutboxEfModule.TableName || reader.GetName(i) != "ClaimDeliveredAtUtcTicks")).ToArray();
+                    (table != RuntimePostCommitOutboxEfModule.TableName || reader.GetName(i) != "ClaimDeliveredAtUtcTicks") &&
+                    (table != RuntimeActivityExecutionEfModule.ActivityExecutionStateTableName ||
+                     reader.GetName(i) is not ("FirstCommitSequence" or "LastCommitSequence" or "LostUpdateWarningCount"))).ToArray();
                 var row = columns.Select(i => reader.IsDBNull(i) ? null : reader.GetValue(i)).ToArray();
                 rows.Add(JsonSerializer.Serialize(row));
             }

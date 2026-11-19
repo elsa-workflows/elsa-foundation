@@ -170,6 +170,8 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   useStudioWorkspaceTitle(workflowExecutionId ? `Run ${workflowExecutionId.length > 10 ? `${workflowExecutionId.slice(0, 8)}…` : workflowExecutionId}` : null, "Execution");
   const initialInspectorTab = requestedInspectorTab === "issues"
     ? "issues"
+    : requestedInspectorTab === "variables"
+      ? "variables"
     : requestedInspectorTab === "details"
       ? "details"
       : requestedInspectorTab === "timeline"

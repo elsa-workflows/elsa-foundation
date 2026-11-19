@@ -770,6 +770,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Default implementation:** `InMemoryActivityExecutionStateStore` *(single-node in-memory default for the current runtime slice)*.
 - **EF Core implementation:** `EfActivityExecutionStateStore` *(opt-in `WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence`;)*.
 - **Optional capability:** `IRunRowPresenceProbe`, below.
+- **Inspection reads (spec 1229 FR-016):** `ListByCommitSequenceAsync(ActivityExecutionStateCommitSequenceQuery)` (the rows whose commit-sequence range reaches a commit, ordered by `FirstCommitSequence` and id, keyset `ActivityExecutionStateCommitSequenceKey`), `ListWithoutCommitSequenceAsync` and `SumLostUpdateWarningCountAsync`. Their defaults read every row; a durable provider should answer them from columns, as `EfActivityExecutionStateStore` does (`FirstCommitSequence`, `LastCommitSequence`, `LostUpdateWarningCount`, index `IX_elsa_runtime_activity_execution_state_commit_range`). Consumer: the variable lifecycle inspection reads in `Elsa.Workflows.Runtime.Api`.
 
 ### `IActivityExecutionInspectionStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement query surface (one store owns committed inspection projections for concrete activity executions in a runtime composition).
@@ -1127,7 +1128,7 @@ and the [benchmark results](../../../../../docs/reports/elsa-4-architecture-revi
 
 | Contract | Ownership and use |
 |---|---|
-| `IWorkflowAlterationStore` | Single-owner durable plan/target/job storage. Its claim, seal, terminal, and paging operations preserve fenced at-least-once execution. |
+| `IWorkflowAlterationStore` | Single-owner durable plan/target/job storage. Its claim, seal, terminal, and paging operations preserve fenced at-least-once execution. `ListVariableWriteJobsAsync` (spec 1229) lists an instance's terminal jobs whose outcomes carry variable write records; its default lists none, so a store that keeps jobs should implement it. |
 | `IWorkflowAlterationPayloadProtector` | Protects deferred envelope JSON with plan/tenant/request associated data. Durable hosts replace the development-only key material with a restart-stable retained key ring. |
 | `IWorkflowAlterationRegistry` | Singleton descriptor-only catalog. It returns stable kind/version/display metadata and never resolves handler instances. |
 | `IWorkflowAlterationPreflightHandler` | Scoped, trusted custom contribution registered through `AddWorkflowAlterationHandler<T>`. It validates its own payload and may only update projection/staging state. |

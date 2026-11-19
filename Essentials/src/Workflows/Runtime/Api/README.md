@@ -28,7 +28,7 @@ CShells__Shells__default__Features__WorkflowsRuntimeApi__WorkflowAlterationPaylo
 | Executables | `GET /runtime/workflows/executables`, `GET /runtime/workflows/executables/{artifactId}`, `GET /runtime/workflows/executables/{artifactId}/provenance` |
 | Execution | `POST /runtime/workflows/executables/{artifactId}/execute`, `POST /runtime/workflows/stimuli` |
 | Activation slots | `GET /runtime/workflows/activation-slots/{definitionId}`, `GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` |
-| Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/page`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}` |
+| Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/page`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}`; variable lifecycle (spec 1229): `GET .../variables`, `GET .../variable-writes`, `GET .../variable-writes/{entryId}/payload`, `GET .../journal`, `GET .../compare/{otherWorkflowExecutionId}`; the instance details carry `lostUpdateWarningCount` |
 | Detached dispatches | `GET /runtime/workflows/dispatches?parentWorkflowExecutionId=...|childWorkflowExecutionId=...|status=...`, `GET /runtime/workflows/dispatches/{dispatchId}` |
 | Diagnostics | `GET/PUT /runtime/workflows/diagnostics/settings` |
 | Alteration plans | `POST /runtime/workflows/alteration-plans`, `GET /runtime/workflows/alteration-plans/{planId}`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/page`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/{jobId}`, `POST /runtime/workflows/alteration-plans/{planId}/cancel` |

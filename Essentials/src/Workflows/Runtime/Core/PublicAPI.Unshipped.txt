@@ -10715,6 +10715,44 @@ static Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.IsRecorded(Elsa.Wo
 Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind.Superseded = 7 -> Elsa.Workflows.Runtime.Core.Models.ActivityLifecycleTransitionKind
 const Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.PendingCommitSequence = -1 -> long
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.InputSnapshotCarriedFrom = "runtime.inputSnapshotCarriedFrom" -> string!
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.ActivityExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.ActivityExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.ActivityExecutionStateCommitSequenceKey() -> void
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.ActivityExecutionStateCommitSequenceKey(long FirstCommitSequence, string! ActivityExecutionId) -> void
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.Deconstruct(out long FirstCommitSequence, out string! ActivityExecutionId) -> void
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.Equals(Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey other) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.FirstCommitSequence.get -> long
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.FirstCommitSequence.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.<Clone>$() -> Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery!
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.ActivityExecutionStateCommitSequenceQuery(string! workflowExecutionId, long fromCommitSequence, int limit, Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey? after = null) -> void
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.After.get -> Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey?
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.Equals(Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery? other) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.FromCommitSequence.get -> long
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.Limit.get -> int
+Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.Alterations.IWorkflowAlterationStore.ListVariableWriteJobsAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.Alterations.WorkflowAlterationJobState!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore.ListByCommitSequenceAsync(Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore.ListWithoutCommitSequenceAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore.SumLostUpdateWarningCountAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<long>
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.LostUpdateWarningCount.get -> int?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.LostUpdateWarningCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.WithLostUpdateWarningCount() -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!
+Elsa.Workflows.Runtime.Core.Models.ActivitySchedulingProvenance.CausedBy.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Workflows.Runtime.Core.Models.ActivitySchedulingProvenance.CausedBy.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivitySchedulingProvenance.WithCausedBy(System.Collections.Generic.IEnumerable<string?>? causedBy) -> Elsa.Workflows.Runtime.Core.Models.ActivitySchedulingProvenance!
+override Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.operator !=(Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey left, Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey right) -> bool
+static Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.operator ==(Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey left, Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey right) -> bool
+static Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.operator !=(Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery? left, Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery.operator ==(Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery? left, Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.CountLostUpdateWarnings(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord!>? records) -> int?
+~override Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.Equals(object obj) -> bool
+~override Elsa.Workflows.Runtime.Core.Contracts.ActivityExecutionStateCommitSequenceKey.ToString() -> string
 Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot.ComputedVariableReads.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableComputedRead!>?
 Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot.ComputedVariableReads.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeExpressionBinding.RuntimeExpressionBinding(string! language, string! expression, Elsa.Workflows.Runtime.Core.Models.RuntimeValueTypeDescriptor? resultType = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.ExpressionParameterBinding!>? parameters = null, System.Text.Json.JsonElement? options = null, string? capabilityProfile = null, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ValueConversionPlan!>? parameterConversionPlans = null, Elsa.Expressions.Core.Models.VariableReadFallback? variableReadFallback = null) -> void

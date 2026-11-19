@@ -112,6 +112,8 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<WorkflowInstanceDeletionService>();
         services.TryAddScoped<WorkflowInstanceDetailsService>();
         services.TryAddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
+        // Spec 1229 (S-6): variable lifecycle inspection.
+        services.TryAddScoped<IVariableLifecycleInspectionService, VariableLifecycleInspectionService>();
         services.TryAddScoped<WorkflowInstanceListService>();
         services.TryAddScoped<IWorkflowInstanceListService>(sp => sp.GetRequiredService<WorkflowInstanceListService>());
         services.TryAddScoped<WorkflowIncidentListService>();
