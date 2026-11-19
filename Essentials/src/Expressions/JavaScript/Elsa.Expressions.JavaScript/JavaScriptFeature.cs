@@ -1,3 +1,5 @@
+using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript.Core.Exceptions;
 ﻿using CShells.Features;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Contracts;
@@ -24,5 +26,8 @@ public class JavaScriptFeature : IShellFeature
             .AddSingleton<IExpressionToolingProvider, JavaScriptExpressionToolingProvider>()
             .AddSingleton<IJavaScriptScriptOutcomeAnalyzer, JavaScriptScriptOutcomeAnalyzer>()
             .AddSingleton<IScriptVariableReadAnalyzer, JavaScriptVariableReadAnalyzer>();
+        // Spec 1228 FR-028: publication pins this version into each node that uses JavaScript; the runtime checks it.
+        if (!services.Any(descriptor => descriptor.ImplementationInstance is ExpressionValueAdapter { Language: "JavaScript" }))
+            services.AddSingleton(new ExpressionValueAdapter("JavaScript", JavaScriptValueAdapter.Version));
     }
 }

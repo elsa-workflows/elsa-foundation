@@ -35,8 +35,19 @@ public sealed class ExecutableNodeCompiler(
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
     IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null,
     ValueConversionPlanResolver? conversionPlanResolver = null,
-    ScriptVariableReadResolver? scriptVariableReadResolver = null)
+    ScriptVariableReadResolver? scriptVariableReadResolver = null,
+    IEnumerable<ExpressionValueAdapter>? valueAdapters = null,
+    IEnumerable<ScriptActivityLanguage>? scriptActivities = null)
 {
+    private readonly IReadOnlyCollection<ExpressionValueAdapter> _valueAdapters = (valueAdapters ?? []).ToArray();
+    private readonly IReadOnlyCollection<ScriptActivityLanguage> _scriptActivities = (scriptActivities ?? []).ToArray();
+
+    /// <summary>
+    /// Pins the value adapter version of each expression language a node uses into its metadata (spec 1228 FR-028). Run
+    /// on the complete tree, before the executable is hashed.
+    /// </summary>
+    public ExecutableNode PinValueAdapters(ExecutableNode root) => ValueAdapterPinner.Pin(root, _valueAdapters, _scriptActivities);
+
     /// <summary>
     /// The scoped-variable visibility of one compilation, iteration scopes included, kept per tree projection so the
     /// recursive node compilation reads it without threading it through every call (spec 1222 FR-001, FR-004a).
@@ -282,6 +293,7 @@ public sealed class ExecutableNodeCompiler(
                 continue;
             }
 
+            EnsureReadOnly(nodeId, key, plan);
             EnsureResolvable(nodeId, key, plan);
             var parameters = expression.Parameters
                 .Where(parameter => !ExpressionParameterSurfaces.TryGetVariableName(parameter.Key, out _))
@@ -317,6 +329,20 @@ public sealed class ExecutableNodeCompiler(
         }
 
         return pinned;
+    }
+
+    /// <summary>
+    /// Spec 1228 FR-006a, ADR 0083 <c>binding-readonly-v1</c>: an input expression only reads. One that the source shows
+    /// assigning a variable, or a member of one, is refused here; a write publication cannot see fails at run time.
+    /// </summary>
+    private static void EnsureReadOnly(string nodeId, string inputKey, ScriptVariableReadPlan plan)
+    {
+        if (plan.Writes.Count == 0)
+            return;
+        var write = plan.Writes[0];
+        throw new ArgumentException(
+            $"Input '{inputKey}' on activity node '{nodeId}': " +
+            ScriptVariableReadDiagnostics.DescribeInputExpressionWrite(write.Name, write.Path));
     }
 
     private static void EnsureResolvable(string nodeId, string inputKey, ScriptVariableReadPlan plan)

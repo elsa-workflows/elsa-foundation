@@ -295,6 +295,8 @@ public sealed class WorkflowExecutableCompiler(
             // contract before computing the behavioral hash.
             compiledRoot = (activityResultConversionPlanLinker ?? new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver()))
                 .Link(compiledRoot);
+            // Spec 1228 FR-028: the value adapter versions are part of the node content the hash covers.
+            compiledRoot = executableNodeCompiler.PinValueAdapters(compiledRoot);
 
             var inputContract = BuildInputContract(state.Inputs);
             var dependencies = BuildDependencies(dependencyClaims);

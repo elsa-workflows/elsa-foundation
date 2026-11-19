@@ -1,5 +1,6 @@
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Expressions.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Scripting;
@@ -25,5 +26,7 @@ public sealed class ActivitiesScriptingFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         // The JavaScriptJintEngine feature supplies IJavaScriptScriptEvaluator for constructor injection.
+        // Spec 1228 FR-028: a RunJavaScript node is pinned to the JavaScript value adapter even when no input is an expression.
+        services.AddSingleton(new ScriptActivityLanguage(Activities.RunJavaScript.ActivityType, "JavaScript"));
     }
 }

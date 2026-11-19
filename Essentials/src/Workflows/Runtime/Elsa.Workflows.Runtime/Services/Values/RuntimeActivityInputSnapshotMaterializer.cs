@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,11 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
         var inputMaterializer = serviceProvider.GetService<IRuntimeActivityInputMaterializer>()
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an input snapshot materializer.");
         cancellationToken.ThrowIfCancellationRequested();
+        // Spec 1228 FR-028: a node runs only with the value adapter versions it was published with.
+        ExecutableNodeValueAdapters.Ensure(
+            executableNode,
+            serviceProvider.GetServices<ExpressionValueAdapter>(),
+            serviceProvider.GetServices<ScriptActivityLanguage>());
         // The built-in literal and secret-reference paths need no execution state. Secret values
         // remain withheld here and are resolved only at activation. Custom implementations keep
         // their complete context, including custom binding resolvers inside the default materializer.

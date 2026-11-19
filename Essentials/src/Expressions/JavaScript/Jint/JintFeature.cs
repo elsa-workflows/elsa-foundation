@@ -1,6 +1,8 @@
 ﻿using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Exceptions;
 using Elsa.Expressions.JavaScript.Core.Services;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
@@ -87,5 +89,8 @@ public class JintFeature : IShellFeature
         // default with services.Replace(...); there is no per-workflow or per-node override.
         services.TryAddSingleton<IScriptValueBridge, CopyComparePatchValueBridge>();
         services.TryAddSingleton<IJavaScriptPrecisionPolicy, RefusingPrecisionPolicy>();
+        // Spec 1228 FR-028: publication pins this version into each node that uses JavaScript; the runtime checks it.
+        if (!services.Any(descriptor => descriptor.ImplementationInstance is ExpressionValueAdapter { Language: "JavaScript" }))
+            services.AddSingleton(new ExpressionValueAdapter("JavaScript", JavaScriptValueAdapter.Version));
     }
 }
