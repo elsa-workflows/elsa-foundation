@@ -259,10 +259,11 @@ lost updates. Values appear only through their states and the payload read.
 
 ## What is not covered yet
 
-- Read sets cover Elsa's instrumented read paths: variable-read bindings, declared expression parameters and the
-  ambient variables an expression references. An expression with computed access (`variables[x]`, `getVariable(x)`)
-  is handed every visible variable, so all of them enter its read set: the conservative direction, which can raise a
-  warning (or, under `Fault`, a fault) for a variable it did not use. Arbitrary host access is not tracked.
+- Read sets cover Elsa's instrumented read paths: variable-read bindings, declared expression parameters, script reads
+  by a literal name (pinned at publish as parameters) and computed reads (`variables[x]`, `getVariable(x)`), which go
+  through a recorded lookup so only the variables actually read enter the read set
+  ([spec 1222](../specs/1222-scripts-read-by-name/spec.md)). The inspector does not list an invocation's
+  computed reads separately yet. Arbitrary host access is not tracked.
 - An intrinsic cannot write a closed scope's variables yet; only captures write rows. A step session cannot either: a
   session write to a reusable activity's body variable faults the step.
 - A step session cannot read or write a variable that requires encryption or is stored externally yet; it faults the
