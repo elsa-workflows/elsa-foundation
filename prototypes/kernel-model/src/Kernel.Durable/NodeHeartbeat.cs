@@ -4,7 +4,8 @@ namespace Kernel.Durable;
 /// K1b: a host's node heartbeat and its pass gate (ownership and fencing, "The node's heartbeat" and "Liveness follows
 /// the Worker's passes"). The host sends it on its own cadence; this decides whether it may, sends it, and hands the
 /// answer to each Worker with the monotonic time just before it was sent. The hand-over renews each Worker's guard at once,
-/// off the host's turn; each Worker's next pass runs the answer's stand-down side (<see cref="Worker.HeartbeatAnswered"/>).
+/// off the host's turn; each Worker's next pass runs the answer's stand-down side (<see cref="Worker.HeartbeatAnswered"/>),
+/// and the host gives a pass to a Worker whose answer waits (<see cref="Worker.AnswerWaiting"/>).
 /// <para>
 /// The gate: the host renews only while each of its Workers that holds a partition, pending ones included, has completed
 /// a pass within the last lease (<see cref="Worker.Live"/>). A withheld heartbeat closes every take of the host's Workers

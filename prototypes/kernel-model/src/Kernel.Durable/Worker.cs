@@ -521,7 +521,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// heartbeat sent after the guard had expired renews nothing; the next pass stands everything down, pending. The rest
     /// is recorded (the latest answer only, since a newer one judges the same rows again) and the next pass runs it at its
     /// start, under the host's turn (<see cref="AnsweredAsync"/>): a stand-down never runs beside a pass, whose flush
-    /// state sits outside the turn's lock.
+    /// state sits outside the turn's lock. While one waits (<see cref="AnswerWaiting"/>), the host gives the Worker a pass.
     /// </para>
     /// </summary>
     public void HeartbeatAnswered(HeartbeatSent sent, NodeBeat answer, Func<int, bool>? sibling = null)
@@ -532,9 +532,21 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (Owns && sent.At >= Volatile.Read(ref _safeUntil)) return;     // sent after the guard expired: the next pass stands down
             RenewGuard(sent.At);
             Observe(answer.Now);
-            _answered = new(sent, answer, sibling);
+            // Recorded only when it may ask something of the pass: a partition pending, or held and listed apart. An answer
+            // that matches what is held leaves nothing to do, and replaces an older record, whose rows it judged again.
+            var listed = answer.Owned.ToDictionary(o => o.Partition, o => o.Epoch);
+            var waits = _pending.Count > 0 || listed.Count != _held.Count || sent.Held.Count != _held.Count
+                || listed.Any(l => !(_held.TryGetValue(l.Key, out var held) && held.Epoch == l.Value))
+                || sent.Held.Any(f => listed.GetValueOrDefault(f.Partition, -1) != f.Epoch);
+            _answered = waits ? new(sent, answer, sibling) : null;
         }
     }
+
+    /// <summary>
+    /// K1b: a heartbeat answer waits for the stand-down side, which runs at the start of the next pass. The host gives the
+    /// Worker a pass, whether or not it holds a partition: an answer can release rows of a Worker that holds none.
+    /// </summary>
+    public bool AnswerWaiting => Volatile.Read(ref _answered) is not null;
 
     /// <summary>
     /// K1b: the stand-down side of the last answer, at the start of a pass. Every partition held at the send that the
@@ -551,10 +563,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
         HashSet<int> lost;
         List<PartitionFence> release = [];
         List<int> retake = [];
+        HeartbeatSent sent;
+        NodeBeat answer;
+        Func<int, bool>? sibling;
         lock (_turnSync)
         {
             if (_answered is not { } answered || _releasing || _retaking) return;
-            var (sent, answer, sibling) = answered;
+            (sent, answer, sibling) = answered;
             _answered = null;
             if (sent.Generation != _generation) return;
             var listed = answer.Owned.ToDictionary(o => o.Partition, o => o.Epoch);
@@ -562,7 +577,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (listed.GetValueOrDefault(partition, -1) == epoch) retake.Add(partition);
                 else _pending.Remove(partition);
             if (!sent.Taking && !_taking && sent.Takes == Interlocked.Read(ref _takesStarted))
-                release = [.. listed.Where(l => !(_held.TryGetValue(l.Key, out var held) && held.Epoch == l.Value) && !_pending.ContainsKey(l.Key) && !(sibling?.Invoke(l.Key) ?? false))
+                release = [.. listed.Where(l => !(_held.TryGetValue(l.Key, out var held) && held.Epoch == l.Value) && !_pending.ContainsKey(l.Key))
                     .Select(l => new PartitionFence(l.Key, l.Value, 0))];
             lost = sent.Held.Where(f => (!listed.TryGetValue(f.Partition, out var epoch) || epoch != f.Epoch)
                 && _held.TryGetValue(f.Partition, out var held) && held.Epoch == f.Epoch).Select(f => f.Partition).ToHashSet();
@@ -570,6 +585,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // As a cooperative hand-over goes: drain, then drop when quiet, or reset and take the rest back. Its release of the
         // lost rows at their old epochs is a no-op, by the store's epoch guard: they moved to another epoch.
         if (lost.Count > 0) await LoseAsync(lost, cancellationToken);
+        release = [.. release.Where(f => !(sibling?.Invoke(f.Partition) ?? false))];     // outside this Worker's lock: a sibling's pass may ask this one
         if (release.Count > 0)
             try { await _store.ReleaseAsync(release, cancellationToken); }
             catch (Exception) { /* retried at the next answer, which lists them again */ }
@@ -852,7 +868,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal long Monotonic => _options.Monotonic();
 
     /// <summary>A wake, a job result or a deferred job came since the last pass: the next call must run a pass.</summary>
-    internal bool PassWanted => _woken || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
+    internal bool PassWanted => _woken || AnswerWaiting || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
 
     /// <summary>
     /// Add one partition to the set while running, between passes: take its fence row alone, at a new epoch, and keep

@@ -26,6 +26,9 @@ public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount
         finally { done.SetResult(); }
     }
 
+    /// <summary>K1b: a whole pass of the node's Worker, queued as the host's own operations are (under its turn).</summary>
+    public async Task RunNodeAsync(CancellationToken cancellationToken = default) => await Queued(() => host.RunNodeAsync(cancellationToken));
+
     public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default) =>
         await Queued(() => host.ActivateAsync(scope, cancellationToken)) is { } activation
             ? _scopes.TryGetValue(scope, out var known) ? known : _scopes[scope] = new SerialScope(this, activation)

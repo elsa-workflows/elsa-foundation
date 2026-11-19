@@ -573,10 +573,11 @@ public sealed partial class World
                 {
                     var actor = Of(node, partition);
                     var worker = actor.Worker;
-                    // K1b: a Worker whose only partitions are pending keeps getting passes, so that its gate reopens.
-                    if (Config.NodeLease && !worker.Owns && worker.Pending.Count > 0 && worker.Pending.ContainsKey(partition) && !actor.Passing)
+                    // K1b: a Worker whose only partitions are pending keeps getting passes, so that its gate reopens, and one
+                    // that holds none gets a pass while a heartbeat answer waits for it (its release side).
+                    if (Config.NodeLease && !worker.Owns && (worker.Pending.ContainsKey(partition) || worker.AnswerWaiting) && !actor.Passing)
                     {
-                        Watch(Adopting(actor, actor.Host is { } host ? host.RunNodeAsync().AsTask() : worker.RunAsync().AsTask()));
+                        Watch(Adopting(actor, actor.Serial is { } host ? host.RunNodeAsync() : worker.RunAsync().AsTask()));
                         if (_dying.Count != 0) FinishDeaths();
                         continue;
                     }

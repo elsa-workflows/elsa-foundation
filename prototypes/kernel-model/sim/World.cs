@@ -93,6 +93,7 @@ public sealed class Actor(int id, int node, int partition)
     public bool Passing;                    // K1b: a whole pass is in flight
     public CancellationTokenSource? PassCancel;     // cancelled when the process dies: no turn after that, and no flush
     public DurableHost? Host;           // a set world's node host (ForNode), whose worker this is
+    public SerialHost? Serial;          // a set world: that host as its layer 1 sees it, one operation at a time
     public Projector Projector = null!;
     public Projector[] Projectors = [];     // a set world: a projector per partition of the world, on every node
     public Projector ProjectorOf(int partition) => Set ? Projectors[partition] : Projector;
@@ -122,6 +123,9 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => world.Store.PartitionCountAsync(cancellationToken);
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
     {
+        // A dead or dying process sends nothing more: work queued behind its last pass (a give-up waiting for the host's
+        // turn) stops here. A call it sent before it died may still land.
+        if (actor.Dead || world.IsDying(actor)) return new ValueTask<T>(new TaskCompletionSource<T>().Task);
         if (world.Auto)
         {
             try
@@ -371,6 +375,9 @@ public sealed partial class World
         set { if (value is { } node) MarkDying(Of(node, 0)); else _dying.Clear(); }
     }
 
+    /// <summary>The actor's process is dying: killed by its own turn or job, and not yet replaced.</summary>
+    public bool IsDying(Actor actor) => _dying.Exists(prior => prior.Runtime == actor.Runtime);
+
     private void MarkDying(Actor actor)
     {
         if (actor.Dead || _dying.Exists(prior => prior.Runtime == actor.Runtime)) return;
@@ -426,7 +433,7 @@ public sealed partial class World
         Processes[first.Worker.Node] = new Requests($"node{node}.{Incarnation[node]}", Config.Flaws);
         IMembership membership = Config.Rows > Config.Partitions ? new Placed(Store, Config.Partitions) : Store;
         var runtime = Runtimes[node] = new PartitionRuntime(first.Worker.Node, membership, Config.Partitions, TimeSpan.FromSeconds(25), flaws: Config.Flaws);
-        IScopeHost host = first.Set ? new SerialHost(first.Host!) : new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker));
+        IScopeHost host = first.Set ? first.Serial = new SerialHost(first.Host!) : new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker));
         runtime.StartAsync(host).AsTask().Wait();
         for (var partition = 0; partition < Config.Partitions; partition++) Of(node, partition).Runtime = runtime;
         // K1b: the node's heartbeat and pass gate, over the Workers of this incarnation, on its first actor's wire.
@@ -554,11 +561,12 @@ public sealed partial class World
             if (!actor.Runtime.Owns(fence.Partition) && !actor.Runtime.Activating(fence.Partition)) await actor.Runtime.ActivateAsync(fence.Partition);
     }
 
-    // A set world's pass runs under its host's turn, as the host's own passes, gains and losses do.
+    // A set world's pass runs under its host's turn, queued as the host's own passes, gains and losses are: a contended
+    // turn would resume off the simulation's thread.
     private static async Task Pass(Actor actor)
     {
         using var cancel = actor.PassCancel = new CancellationTokenSource();
-        try { await (actor.Host is { } host ? host.RunNodeAsync(cancel.Token) : actor.Worker.RunAsync(cancel.Token)); }
+        try { await (actor.Serial is { } host ? host.RunNodeAsync(cancel.Token) : actor.Worker.RunAsync(cancel.Token).AsTask()); }
         finally { (actor.Passing, actor.PassCancel) = (false, null); }
     }
 
