@@ -119,8 +119,8 @@ PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit 
 row still has the owner's epoch and expected position, checked in the same transaction, so a stale owner never lands a
 commit. Leases decide who should write; the fence decides who can. A lease is held by the process, in one node record
 its heartbeat renews, and covers every partition it owns; a partition row carries none (owner, 19 November; the
-[node lease amendment](../architecture/decisions.md#the-node-lease-amendment-19-november-proposed), proposed until its
-narrow independent review). The kernel writes its own commit SQL on PostgreSQL,
+[node lease amendment](../architecture/decisions.md#the-node-lease-amendment-19-november), approved with conditions
+by the independent review on 19 November ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7006654424))). The kernel writes its own commit SQL on PostgreSQL,
 SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the schema, migrations and cold paths
 ([ownership and fencing](../architecture/ownership-and-fencing.md),
 [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md), [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).
@@ -199,7 +199,9 @@ The gate 2 review added an eighth page, [tenancy](../architecture/tenancy.md), w
   machines, deleted and regenerated at the switch (owner, 17 November). The activity library and definitions carry
   over with an adapted activity context; the runtime API and Studio's run views are re-pointed
   ([program plan](../program-goals/clean-slate-kernel.md)).
-- **Costs accepted.** Failover takes about one lease (10 s). Activity code runs at least once in Balanced. No instance
+- **Costs accepted.** Failover takes about one lease (10 s) after a process dies; a process whose Worker is wedged on a
+  hung store call is taken over within about three and a third leases plus a balancing round (the node lease
+  amendment). Activity code runs at least once in Balanced. No instance
   reads another's state; lists and counts lag the projector. The whole state is rewritten at each commit, which values
   by reference bound. One shared database is the cluster's write ceiling. The sketch's
   [trade-offs](../reports/clean-slate-kernel/design-sketch-draft-5.md#trade-offs) list the rest.

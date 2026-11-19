@@ -100,7 +100,7 @@ An inline Ephemeral start that writes no row passes the tenant rate check only.
 |---|---|---|---|
 | Tenant rate: a token bucket per tenant and `AdmissionKind` (rate, burst) | Per node | In memory | Exact per node. Cluster-wide it is the configured rate divided by the node count from membership, so approximate while nodes join or leave, and below the configured rate when ingress traffic is uneven across nodes |
 | Admissions in flight | Per node | In memory | Exact |
-| Due depth of the target's virtual partition | Per virtual partition | The pressure list, below | Approximate by up to one refresh interval of arrivals (plus one heartbeat interval under the node lease amendment, proposed) |
+| Due depth of the target's virtual partition | Per virtual partition | The pressure list, below | Approximate by up to one refresh interval of arrivals (plus one heartbeat interval under the node lease amendment) |
 
 Background jobs are limited in a different way: the job scheduler gives each tenant a number of slots per node, and a
 job beyond them waits for a slot. That limit refuses nothing.
@@ -172,7 +172,7 @@ measure the query plan and the scan cost under update and delete churn, with WRI
 
 **The pressure list (decision 2).** The owner writes its estimate into a new `backlog` column of the virtual partition's
 fence row, with its next commit, which already updates that row, so this adds bytes and no round trip; it adds one
-assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)). Under the node lease amendment (proposed, 19 November) the
+assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)). Under the node lease amendment (19 November) the
 heartbeat no longer writes partition rows, so only commits write the estimate: an owner with work commits at least its
 seen marks while messages arrive, and its last commit before the partition falls idle writes the estimate it leaves.
 When a sampled estimate crosses the low- or high-water mark and the partition has had no commit for one heartbeat
