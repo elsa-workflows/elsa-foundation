@@ -239,7 +239,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         {
             var now = Nodes[node] = clock();
             var free = Enumerable.Range(0, Partitions.Length).Where(p => Partitions[p].Owner is null || Partitions[p].LeaseUntil < now).ToList();
-            return new(new Cluster(Nodes.Values.Count(seen => seen >= now - (long)window.TotalMilliseconds), free, now));
+            var heard = Nodes.Where(n => n.Value >= now - (long)window.TotalMilliseconds).Select(n => n.Key).Order(StringComparer.Ordinal).ToList();
+            return new(new Cluster(heard.Count, free, now, heard.IndexOf(node)));
         }
     }
 

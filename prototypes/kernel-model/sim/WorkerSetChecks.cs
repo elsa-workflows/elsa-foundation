@@ -78,6 +78,32 @@ internal static class WorkerSetChecks
         await LossLeavesNothingBehind(check);
         await LossNotQuiet(check);
         await NodeWithoutOwnedSets(check);
+        await ProjectorRetry(check);
+    }
+
+    // Review of #4817 (reviewer A): a projector round that throws is tried again, and the tail is projected. Five journal
+    // rows in partition 0, pages of two, and the first read of the journal throws: one failed round, then three.
+    private static async Task ProjectorRetry(Action<bool, string> check)
+    {
+        const long time = 100;
+        var store = new InMemoryStore(1, () => time);
+        var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => time, Partitions = 1 });
+        var scope = (await host.ActivateAsync(0))!;
+        for (var i = 0; i < 5; i++) await store.AddAsync(Add(InstanceRef.In(0, "c" + i), "t" + i));
+        await scope.WokenAsync(null);
+        for (var i = 0; i < 5; i++) await scope.RunAsync();
+        var flaky = new DelayedCommit(store) { FailJournalReads = 1 };
+        var projection = new NodeProjection(flaky, take: 2);
+        projection.Nudge([0]);
+        var caughtUp = false;
+        for (var i = 0; i < 250 && !caughtUp; i++)
+        {
+            await Task.Delay(20);
+            caughtUp = (await store.ProjectedAsync(0)) is { Written: 5 } p && p.Position == 5;
+        }
+        await projection.Idle;
+        check(caughtUp && flaky.JournalReadsFailed == 1 && projection.RoundsOf(0) == 4,
+            $"a projector round that throws is tried again and the tail is projected: caught up {caughtUp}, failed reads {flaky.JournalReadsFailed}, rounds {projection.RoundsOf(0)}");
     }
 
     // Review of #4816 (reviewer B): on a store without owned sets (commit=ef) the node's host gives each scope its own

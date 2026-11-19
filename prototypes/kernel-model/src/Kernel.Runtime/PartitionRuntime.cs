@@ -92,8 +92,8 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     /// <summary>
     /// A node's fair share of the partitions. A round says "I am alive", counts the nodes heard from, gives up what is
-    /// above the share and asks for free partitions up to it. Leases decide who should write and the fence who can;
-    /// this only decides who asks, so a wrong count costs availability, never correctness.
+    /// above the share and asks for free partitions up to it (<see cref="Balancer.Plan"/>). Leases decide who should write
+    /// and the fence who can; this only decides who asks, so a wrong count costs availability, never correctness.
     /// </summary>
     public async Task BalanceAsync(CancellationToken cancellationToken = default)
     {
@@ -103,18 +103,14 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         try { cluster = await membership.HeartbeatAsync(node, window, cancellationToken); }
         catch (Exception) { return; }
         finally { _balancing = false; }
-        var share = (partitions + cluster.Nodes - 1) / Math.Max(1, cluster.Nodes);    // rounded up, so the shares cover every partition
-        if ((flaws & Flaw.GreedyBalancer) != 0) share = partitions;
         var scopes = Enumerable.Range(0, partitions).ToList();
-        var held = scopes.Count(s => Owns(s) || Activating(s));
-        foreach (var surplus in scopes.Where(Owns).Reverse().Take(held - share).ToList())
+        var (release, take) = Balancer.Plan(partitions, cluster, scopes.Where(Owns).ToList(), scopes.Where(Activating).ToList(), flaws);
+        foreach (var surplus in release)
         {
             cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
             await DeactivateAsync(surplus, cancellationToken);
-            held--;
         }
-        var takes = scopes.Where(s => !Owns(s) && !Activating(s) && cluster.Free.Contains(s)).Take(share - held).Select(s => ActivateAsync(s, cancellationToken)).ToList();
-        await Task.WhenAll(takes);
+        await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
     }
 
     /// <summary>One pass of a scope this node holds, never two at once. Null when it holds none, or a pass is under way.</summary>
@@ -124,5 +120,30 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         _passing[scope] = true;
         try { return await activation.RunAsync(cancellationToken); }
         finally { _passing[scope] = false; }
+    }
+}
+
+/// <summary>
+/// The built-in balancer's round as a pure decision (K1: fewest moves). A node's share is the partitions over the nodes
+/// heard from, rounded up so the shares cover every partition. It gives up only what is above its share, the highest
+/// first, and asks for free partitions up to it, the lowest first. A join therefore moves only the surplus above the new
+/// share and a leave only the leaver's partitions, and a node's set may be scattered, which costs nothing with a fence row
+/// per partition (PARTITIONS.md).
+/// </summary>
+public static class Balancer
+{
+    public static (IReadOnlyList<int> Release, IReadOnlyList<int> Take) Plan(int partitions, Cluster cluster, IReadOnlyCollection<int> owned, IReadOnlyCollection<int> activating, Flaw flaws = Flaw.None)
+    {
+        bool Asked(int p) => !owned.Contains(p) && !activating.Contains(p);
+        if ((flaws & Flaw.ContiguousOnlyBalancer) != 0)
+        {
+            // MUTATION: one contiguous range per node, its fair one by rank. Whatever lies outside it moves.
+            var range = VirtualPartitions.FairRanges(partitions, Math.Max(1, cluster.Nodes)).ElementAtOrDefault(cluster.Rank);
+            return ([.. owned.Where(p => !range.Contains(p)).OrderDescending()], [.. cluster.Free.Where(p => range.Contains(p) && Asked(p)).Order()]);
+        }
+        var share = (flaws & Flaw.GreedyBalancer) != 0 ? partitions : (partitions + cluster.Nodes - 1) / Math.Max(1, cluster.Nodes);
+        var release = owned.OrderDescending().Take(Math.Max(0, owned.Count + activating.Count - share)).ToList();
+        var held = owned.Count + activating.Count - release.Count;
+        return (release, [.. cluster.Free.Where(Asked).Order().Take(Math.Max(0, share - held))]);
     }
 }

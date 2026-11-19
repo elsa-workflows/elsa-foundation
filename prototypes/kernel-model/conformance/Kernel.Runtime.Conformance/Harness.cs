@@ -17,6 +17,7 @@ public sealed class Harness : IAsyncDisposable
     private readonly ProvidedStore _provided;
     private readonly ConcurrentDictionary<string, NodeStore> _stores = new();
     private readonly ConcurrentDictionary<string, DurableHost> _hosts = new();
+    private readonly ConcurrentDictionary<string, NodeProjection> _projections = new();
     private bool _oneWorkerPerNode;
     private readonly List<IRuntimeNode> _nodes = [];
     private readonly HashSet<string> _gone = [];
@@ -81,6 +82,12 @@ public sealed class Harness : IAsyncDisposable
     /// <summary>The node's one worker (K1 D1), or null when the runtime gets a worker per scope.</summary>
     public Worker? WorkerOf(string node) => _hosts[node].NodeWorker;
 
+    /// <summary>The node's projection rounds (K1: per virtual partition, nudged by its commits), or null with a worker per scope.</summary>
+    public NodeProjection? ProjectionOf(string node) => _projections.GetValueOrDefault(node);
+
+    /// <summary>What the nodes' workers did, in order: a row read for the first time ("seen", with its seq) and a turn ("turn").</summary>
+    public ConcurrentQueue<(string Node, string What, string Actor, long Seq)> Log { get; } = new();
+
     /// <summary>Held commits that the fence refused, on every node so far.</summary>
     public int HeldRefused => _stores.Values.Sum(s => s.HeldRefused);
 
@@ -91,13 +98,14 @@ public sealed class Harness : IAsyncDisposable
         var options = new WorkerOptions
         {
             Lease = Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000, Partitions = Partitions,
-            OnTurn = (_, _, _) => Interlocked.Increment(ref _turns),
+            OnTurn = (actor, _, _) => { Interlocked.Increment(ref _turns); Log.Enqueue((name, "turn", actor.Id, 0)); },
+            OnObservedDelivery = row => Log.Enqueue((name, "seen", row.Message.Target.Id, row.Seq)),
             JobScheduler = TaskScheduler.Default,      // a job's body off the runtime's scheduler, whatever the runtime
         };
         // One worker per node: its trial gate is the node's. A worker per scope gets no shared gate: a runtime may run the
         // passes of a node's scopes at the same time, and the gate is not safe for that (FINDINGS, "The runtime
         // conformance suite and the Orleans adapter", R6).
-        var host = _oneWorkerPerNode ? DurableHost.ForNode(name, store, new WorkflowInstance(Stress.Models()), options)
+        var host = _oneWorkerPerNode ? DurableHost.ForNode(name, store, new WorkflowInstance(Stress.Models()), options, _projections[name] = new NodeProjection(store, take: 2))
             : new DurableHost(Enumerable.Range(0, Partitions).Select(p => new Worker(name, p, store, new WorkflowInstance(Stress.Models()), options)));
         _hosts[name] = host;
         return new NodeServices(Watcher.Wrap(name, host), store);

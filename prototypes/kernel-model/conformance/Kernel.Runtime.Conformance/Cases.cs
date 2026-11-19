@@ -300,6 +300,71 @@ public static class Cases
             await Applied(h, 3, "c", ["g3"], Slack);
         }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(4) } }, OwnedSet: true),
 
+        new("balance: a join and a leave move the fewest partitions", Level.Required, async h =>
+        {
+            await h.StartAsync();
+            await Steady(h);
+            async Task<int> Moved(Func<Task> change)
+            {
+                var before = h.Watcher.Activations;
+                await change();
+                await Steady(h);
+                return h.Watcher.Activations - before;
+            }
+            string Shares() => string.Join(" ", h.Alive.Select(n => h.Watcher.Holders(h.Partitions).Count(x => x.Contains(n.Name))));
+            // Eight partitions: a join of a second node moves 4, of a third 2 (shares of 3), and the second's leave its 3.
+            IRuntimeNode? b = null;
+            var joined = await Moved(async () => b = await h.StartAsync());
+            var third = await Moved(() => h.StartAsync());
+            var left = await Moved(() => h.StopAsync(b!));
+            That((joined, third, left) == (4, 2, 3), $"moves on join, join and leave: {joined}, {third}, {left}; the fewest are 4, 2 and 3; shares now [{Shares()}]");
+        }, Default with { Partitions = 8 }, OwnedSet: true),
+
+        new("projector: rounds run per partition whose journal moved, nudged by the node's commits", Level.Required, async h =>
+        {
+            var a = await h.StartAsync();
+            await Settle(h);
+            var projection = h.ProjectionOf(a.Name)!;
+            foreach (var p in new[] { 1, 3 })
+                for (var i = 0; i < 5; i++) await h.AddAsync(Token(p, "c", $"j{p}.{i}"));
+            foreach (var p in new[] { 1, 3 }) await Applied(h, p, "c", [.. Enumerable.Range(0, 5).Select(i => $"j{p}.{i}")], Slack);
+            async Task<bool> CaughtUp() => (await h.Outside.ProjectedAsync(1)) is { Written: > 0 } one && one.Position == one.Written
+                && (await h.Outside.ProjectedAsync(3)) is { Written: > 0 } three && three.Position == three.Written;
+            That(await Harness.WaitAsync(CaughtUp, Slack), "the journals of 1 and 3 were not projected in time");
+            await projection.Idle;
+            // A take nudges once, and finds nothing; after that only the partitions whose journal moved have rounds (pages
+            // of two, so a written partition also gets continuation rounds). No timer sweeps 0 and 2.
+            That(projection.RoundsOf(0) == 1 && projection.RoundsOf(2) == 1 && projection.RoundsOf(1) > 1 && projection.RoundsOf(3) > 1,
+                $"rounds per partition: {string.Join(", ", Enumerable.Range(0, 4).Select(p => $"{p}: {projection.RoundsOf(p)}"))}");
+        }, OwnedSet: true),
+
+        new("fairness: a hot partition does not hold back the rest of the node's set", Level.Required, async h =>
+        {
+            var a = await h.StartAsync();
+            await Settle(h);
+            // 600 messages for 60 counters in partition 0, then one for a counter in 3, then 600 more in 0.
+            async Task Burst(string round)
+            {
+                for (var i = 0; i < 600; i++) await h.AddAsync(Token(0, "h" + i % 60, round + i), wake: false);
+            }
+            await Burst("a");
+            await h.AddAsync(Token(3, "q", "q0"));
+            await Burst("b");
+            await Applied(h, 3, "q", ["q0"], h.Lease * 4 + Slack);
+            var quiet = InstanceRef.In(3, "q").Id;
+            var log = h.Log.Where(e => e.Node == a.Name).ToList();
+            var seen = log.FindIndex(e => e.What == "seen" && e.Actor == quiet);
+            var turn = log.FindIndex(Math.Max(0, seen), e => e.What == "turn" && e.Actor == quiet);
+            That(seen >= 0 && turn > seen, $"the quiet message was read at {seen} and turned at {turn} of {log.Count}");
+            // The set's poll is first in, first out: nothing that arrived after the quiet message was read before it. Once
+            // read, it takes its turn in the next pass at the latest (the pass that reads it marks it): no instance takes
+            // more than two turns between its read and its turn.
+            var overtaken = log.Take(seen).Count(e => e.What == "seen" && e.Seq > log[seen].Seq);
+            var most = log.Skip(seen).Take(turn - seen).Where(e => e.What == "turn").GroupBy(e => e.Actor).Select(g => g.Count()).DefaultIfEmpty(0).Max();
+            var ahead = log.Take(seen).Count(e => e.What == "seen");
+            That(overtaken == 0 && most <= 2, $"{overtaken} later rows were read before the quiet one; an instance took {most} turns between its read and its turn ({ahead} rows read ahead of it)");
+        }, OwnedSet: true),
+
         new("join: a node that joins gets a share of the scopes", Level.Reference, async h =>
         {
             await h.StartAsync();
