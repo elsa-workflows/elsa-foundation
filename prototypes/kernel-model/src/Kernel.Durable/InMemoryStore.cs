@@ -93,7 +93,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         lock (_gate)
         {
             var now = clock();
-            return new(new OwnedLease([.. Take(partitions, node, lease, now).Select(t => t.Lease.For(t.Partition))], now));
+            var taken = Take(partitions, node, lease, now);
+            return new(new OwnedLease([.. taken.Select(t => t.Lease.For(t.Partition))], taken.Count > 0 ? now : 0));   // 0 when nothing was taken, as on EF and MongoDB
         }
     }
 

@@ -66,6 +66,12 @@ public abstract class ProvidedStore : IAsyncDisposable
     /// </summary>
     public virtual Func<int, Task>? CutPartitionRows => null;
 
+    /// <summary>
+    /// K1b: delete a process's node record, as a store holding a partition row whose owner has no node record would
+    /// have it; null when the provider cannot.
+    /// </summary>
+    public virtual Func<string, Task>? DeleteNodeRecord => null;
+
     /// <summary>Things the store itself saw go wrong (the in-memory store's ghost list), checked after a stress run.</summary>
     public virtual IReadOnlyList<string> Ghosts => [];
 
@@ -111,6 +117,7 @@ public sealed class InMemoryProvider : IStoreProvider
         public override IKernelStore Store => store;
         public override string MissingConsumeOutcome => "unknown";
         public override IReadOnlyList<string> Ghosts { get { lock (store.Ghost) return store.Ghost.ToList(); } }
+        public override Func<string, Task>? DeleteNodeRecord => node => { store.Nodes.Remove(node); return Task.CompletedTask; };   // the cases call it with no store call in flight
 
         public override InstanceRow? Refused(InstanceRow row)
         {

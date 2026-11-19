@@ -2,7 +2,7 @@ namespace Kernel.Store.Conformance;
 
 /// <summary>
 /// K1b: the node lease (ownership-and-fencing.md, "The partition record", "The node's heartbeat" and the acceptance
-/// cases NL-1 to NL-11), the store-level parts. Each case asks for its store with the node lease on, and is skipped on a
+/// cases NL-1 to NL-10), the store-level parts. Each case asks for its store with the node lease on, and is skipped on a
 /// store without <see cref="IKernelStore.NodeLeaseAvailable"/>. Process p owns partitions; q and r are other processes.
 /// A case whose acceptance names a store mutation fails under it (<c>semantic-flaw</c>); the others carry a negative control.
 /// </summary>
@@ -15,6 +15,7 @@ internal static class NodeLeaseChecks
     internal static IReadOnlyList<Case> Cases { get; } =
     [
         new("node lease: the heartbeat renews the node record and lists its partitions with their epochs; membership frees an expired owner's partitions; the fence renews no lease", Level.Required, Heartbeat, 4, NodeLease: true),
+        new("node lease: a partition whose owner has no node record is taken, and the take counts one death", Level.Required, MissingRecord, 3, NodeLease: true),
         new("node lease NL-2: a paused owner's flush is refused whole, its heartbeat lists none of its partitions, one death per trial message; no take from a live process", Level.Required, PausedOwner, 4, NodeLease: true),
         new("node lease NL-4: a renewal racing a take keeps only the partitions the take left alone", Level.Required, RenewalRacingTake, 4, NodeLease: true),
         new("node lease NL-5: a flush of seen marks only is refused whole when a take lands while it is on the wire", Level.Required, MarksOnly, 5, NodeLease: true),
@@ -59,6 +60,21 @@ internal static class NodeLeaseChecks
         Context.Equal("0 2", string.Join(" ", beat.Cluster.Free), "free partitions after r's and f's leases ran out");
         Context.Equal("0 2", Ids(await c.S.TakeAsync([0, 1, 2, 3], "q", Context.Long)), "partitions q took: r's and f's, and none of the renewed p's");
         Context.Equal(r.Taken[0].Epoch + 1, (await Beat(c, "q")).Owned[0].Epoch, "epoch of 0 after q's take");
+    }
+
+    /// <summary>A missing node record counts as expired. The negative control: with p's record in place, q takes nothing.</summary>
+    private static async Task MissingRecord(Context c)
+    {
+        Require(c);
+        if (c.Provided.DeleteNodeRecord is not { } delete) throw new SkipException("the provider cannot delete a node record");
+        await c.S.AddAsync(Make.M("t1", 1));
+        var p = await c.S.TakeAsync([1], "p", Context.Long);
+        await c.Lands(() => c.S.CommitAsync(CommitBatch.Owned([.. p.Taken], Context.Long, false, [], [], ["t1"])).AsTask(), "p's flush putting t1 on trial");
+        Context.Equal("", Ids(await c.S.TakeAsync([1], "q", Context.Long)), "partitions q took from the live p");
+        await delete("p");
+        Context.That((await Beat(c, "q")).Cluster.Free.Contains(1), "partition 1 is not free once its owner has no node record");
+        Context.Equal(At(p.Taken[0] with { Epoch = p.Taken[0].Epoch + 1 }), At([.. (await c.S.TakeAsync([1], "q", Context.Long)).Taken]), "q's take of 1, whose owner has no node record");
+        await Attempts(c, "after q's take", ("t1", 1, 1));
     }
 
     private static async Task PausedOwner(Context c)
@@ -208,7 +224,9 @@ internal static class NodeLeaseChecks
         await Task.Delay(Short / 3);
         var renewing = await c.S.TakeAsync([2], "q", Context.Long);
         Context.Equal("2", Ids(renewing), "q's take of 2");
-        Context.Equal("", Ids(await c.S.TakeAsync([3], "z", Context.Long)), "z's take of 3 from the live p");
+        var empty = await c.S.TakeAsync([3], "z", Context.Long);
+        Context.Equal("", Ids(empty), "z's take of 3 from the live p");
+        Context.Equal(0L, empty.Now, "the time of z's empty take, which a caller must not read");
         if (c.S is InMemoryStore store)
             Context.Equal(renewing.Now + (long)Context.Long.TotalMilliseconds, store.Nodes["q"].LeaseUntil, "q's node lease after its take of 2");
         await Task.Delay(PastShort);
@@ -245,5 +263,13 @@ internal static class NodeLeaseChecks
         Context.Equal($"{Next(4)} {At(at[5])}", Listed(await Beat(c, "p")), "p's heartbeat answer between its retakes");
         await c.S.RetakeAsync(5, "p", at[5].Epoch, Context.Long);
         Context.Equal(Next(4, 5), Listed(await Beat(c, "p")), "p's heartbeat answer after its retakes");
+
+        // A retake renews its taker: s, near the end of a short lease, retakes 0, and is still live after that lease.
+        var s = await c.S.TakeAsync([0], "s", Short);
+        await Task.Delay(Short / 3);
+        Context.That(await c.S.RetakeAsync(0, "s", s.Taken[0].Epoch, Context.Long) is not null, "s's retake of 0 was refused");
+        await Task.Delay(PastShort);
+        Context.That(!(await Beat(c, "q")).Cluster.Free.Contains(0), "partition 0 is free after s's retake renewed s");
+        Context.Equal("", Ids(await c.S.TakeAsync([0], "q", Context.Long)), "q's take of 0 from s, renewed by its retake");
     }
 }
