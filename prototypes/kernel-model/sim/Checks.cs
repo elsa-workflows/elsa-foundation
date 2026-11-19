@@ -547,9 +547,9 @@ public sealed partial class World
             Time += Config.NodeLease ? 1_000 : round == 0 || missing ? 11_000 : 1_000;
             var beaten = new HashSet<Actor>();
             if (Config.NodeLease)       // K1b: each node's heartbeat, which its pass gate may withhold
-                for (var n = 0; n < Config.Nodes; n++)
+                foreach (var beat in Beats.ToList())
                 {
-                    if (Beats[n] is { } beat) Watch(Heartbeat(beat));
+                    Watch(Heartbeat(beat));
                     if (_dying.Count != 0) FinishDeaths();
                 }
             else for (var p = 0; p < Config.Partitions; p++)
@@ -582,10 +582,11 @@ public sealed partial class World
                         continue;
                     }
                     if (!worker.Holds(partition)) continue;
-                    // K1b: a node-lease Worker brings partitions back by itself (a pending retake, a retake after a reset
-                    // whose activation the runtime had dropped meanwhile); the node, as their host, adopts them first.
-                    if (Config.NodeLease && !actor.Runtime.Owns(partition) && !actor.Runtime.Activating(partition)) Watch(actor.Runtime.ActivateAsync(partition));
-                    if (!actor.Runtime.Owns(partition)) Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it");
+                    // K1b: a node-lease Worker brings partitions back by itself (a pending retake); the node, as their host,
+                    // adopts them first. One its runtime gave up since its last activation is not adopted: that is the bug.
+                    if (Config.NodeLease && Adoptable(actor, partition)) Watch(actor.Runtime.ActivateAsync(partition));
+                    if (!actor.Runtime.Owns(partition))
+                        Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it{(actor.GiveUps.GivenUp.Contains(partition) ? ": the runtime gave it up" : "")}");
                     // An eager host: every pass reads the inbox, and runs whatever is ready before it flushes. A process that
                     // dies (now, or before the pass) cancels it: no turn after that, and no flush.
                     using (_pass = new CancellationTokenSource())

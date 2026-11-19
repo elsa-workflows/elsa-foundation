@@ -31,7 +31,7 @@ public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Messa
         "release" when S != "" => $"actor {A} gives {S} up",
         "release" => $"actor {A} releases its partition",
         "balance" => $"node {A} balances: heartbeat, release the surplus, take up to its share",
-        "heartbeat" => $"node {A} sends its node heartbeat, if its Workers' passes allow",
+        "heartbeat" => $"actor {A}'s process sends its node heartbeat, if its Workers' passes allow",
         "pass" => $"actor {A} runs a pass",
         "pause" => $"node {A} pauses",
         "resume" => $"node {A} resumes",
@@ -94,6 +94,8 @@ public sealed class Actor(int id, int node, int partition)
     public CancellationTokenSource? PassCancel;     // cancelled when the process dies: no turn after that, and no flush
     public DurableHost? Host;           // a set world's node host (ForNode), whose worker this is
     public SerialHost? Serial;          // a set world: that host as its layer 1 sees it, one operation at a time
+    public NodeHeartbeat? Beat;         // K1b: its incarnation's node heartbeat
+    public GiveUps GiveUps = null!;     // K1b: what its runtime gave up, so a partition is adopted only when the runtime did not
     public Projector Projector = null!;
     public Projector[] Projectors = [];     // a set world: a projector per partition of the world, on every node
     public Projector ProjectorOf(int partition) => Set ? Projectors[partition] : Projector;
@@ -125,7 +127,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     {
         // A dead or dying process sends nothing more: work queued behind its last pass (a give-up waiting for the host's
         // turn) stops here. A call it sent before it died may still land.
-        if (actor.Dead || world.IsDying(actor)) return new ValueTask<T>(new TaskCompletionSource<T>().Task);
+        if (Gone) return new ValueTask<T>(new TaskCompletionSource<T>().Task);
         if (world.Auto)
         {
             try
@@ -172,8 +174,11 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) =>
         Send("beat", $"heartbeat of {node}", () => world.Store.NodeHeartbeatAsync(node, lease, window));
 
-    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(partition, epoch);
-    public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(owned);
+    // CR-1: a dead or dying process sends no release either, as Send stops its other calls. A release stays immediate, as before.
+    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => Gone ? Never : world.Store.ReleaseAsync(partition, epoch);
+    public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default) => Gone ? Never : world.Store.ReleaseAsync(owned);
+    private bool Gone => actor.Dead || world.IsDying(actor);
+    private static ValueTask Never => new(new TaskCompletionSource().Task);
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.HeartbeatAsync(node, window);
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
@@ -406,7 +411,6 @@ public sealed partial class World
         if (config.Partitions > config.Rows) throw new ArgumentOutOfRangeException(nameof(config), "A world places at most the store's partitions.");
         Native = new NativeOracle(config.Partitions);
         Store = new InMemoryStore(config.Rows, () => Time, config.Flaws) { ObserveLifecycles = true, Refuses = row => row.State.Contains(Fragile.Sour), NodeLeaseAvailable = config.NodeLease };
-        Beats = new NodeHeartbeat?[config.Nodes];
         Store.Lifecycle!.AppliedCancellation = (state, consumed) => state is HttpState { AppliedCancellations: { } applied }
             ? applied.Find(cancel => _httpCancelInputs?.TryGetValue(cancel, out _) == true && consumed.Any(d => ReferenceEquals(d.Message, cancel))) : null;
         Current = new int[config.Nodes, config.Partitions];
@@ -433,16 +437,22 @@ public sealed partial class World
         Processes[first.Worker.Node] = new Requests($"node{node}.{Incarnation[node]}", Config.Flaws);
         IMembership membership = Config.Rows > Config.Partitions ? new Placed(Store, Config.Partitions) : Store;
         var runtime = Runtimes[node] = new PartitionRuntime(first.Worker.Node, membership, Config.Partitions, TimeSpan.FromSeconds(25), flaws: Config.Flaws);
-        IScopeHost host = first.Set ? first.Serial = new SerialHost(first.Host!) : new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker));
+        IScopeHost inner = first.Set ? first.Serial = new SerialHost(first.Host!) : new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker));
+        var host = new GiveUps(inner);
         runtime.StartAsync(host).AsTask().Wait();
-        for (var partition = 0; partition < Config.Partitions; partition++) Of(node, partition).Runtime = runtime;
+        for (var partition = 0; partition < Config.Partitions; partition++) (Of(node, partition).Runtime, Of(node, partition).GiveUps) = (runtime, host);
         // K1b: the node's heartbeat and pass gate, over the Workers of this incarnation, on its first actor's wire.
+        // CR-2: the heartbeat belongs to the incarnation, so a zombie that lives on keeps renewing its own record.
         if (Config.NodeLease)
-            Beats[node] = new NodeHeartbeat(first.Worker.Node, first.Wire, [.. (first.Set ? [first] : Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p))).Select(a => a.Worker)],
-                TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(25));
+        {
+            var actors = first.Set ? [first] : Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p)).ToList();
+            var beat = new NodeHeartbeat(first.Worker.Node, first.Wire, [.. actors.Select(a => a.Worker)], TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(25));
+            foreach (var actor in actors) actor.Beat = beat;
+        }
     }
 
-    public readonly NodeHeartbeat?[] Beats;
+    /// <summary>K1b: the node heartbeats of the processes still running, one per incarnation, zombies included.</summary>
+    public IEnumerable<NodeHeartbeat> Beats => Actors.Where(a => !a.Dead && a.Beat is not null).Select(a => a.Beat!).Distinct();
 
     /// <summary>A process is alive while any of its workers is.</summary>
     public bool Running(string process) => Actors.Exists(a => !a.Dead && a.Worker.Node == process);
@@ -558,8 +568,13 @@ public sealed partial class World
         await pass;
         if (!Config.NodeLease || actor.Dead) return;
         foreach (var fence in actor.Worker.Fences)
-            if (!actor.Runtime.Owns(fence.Partition) && !actor.Runtime.Activating(fence.Partition)) await actor.Runtime.ActivateAsync(fence.Partition);
+            if (Adoptable(actor, fence.Partition)) await actor.Runtime.ActivateAsync(fence.Partition);
     }
+
+    // Held by the Worker, unknown to its runtime, and never given up by it since its last activation: the Worker brought it
+    // back by itself (a pending retake). A partition the runtime gave up is not adopted: the settling loop reports it.
+    public static bool Adoptable(Actor actor, int partition) =>
+        actor.Worker.Holds(partition) && !actor.Runtime.Owns(partition) && !actor.Runtime.Activating(partition) && !actor.GiveUps.GivenUp.Contains(partition);
 
     // A set world's pass runs under its host's turn, queued as the host's own passes, gains and losses are: a contended
     // turn would resume off the simulation's thread.
@@ -691,7 +706,7 @@ public sealed partial class World
             }
             case "heartbeat":
             {
-                if (Paused[act.A] || Beats[act.A] is not { } beat) return null;
+                if (Live(act.A) is not { Beat: { } beat }) return null;     // a dead incarnation sends no heartbeat
                 var calls = Actors.Sum(a => a.Calls.Count);
                 var withheld = beat.Withheld;
                 Watch(Heartbeat(beat));
@@ -892,10 +907,10 @@ public sealed class Generator(int seed, World world)
             // K1b: under the node lease the beat is the node's heartbeat, and whole passes feed its pass gate.
             case < 40 when world.Config.NodeLease: return new Act("flush", actor.Id);
             case < 44 when world.Config.NodeLease: return new Act("pass", actor.Id);
-            case < 46 when world.Config.NodeLease: return new Act("heartbeat", actor.Node);
+            case < 46 when world.Config.NodeLease: return new Act("heartbeat", actor.Id);
             case < 46: return new Act("flush", actor.Id);
             case < 47: return actor.Set ? OnPartition("release", actor, world.Place(actor, r)) : new Act("release", actor.Id);
-            case < 48 when world.Config.NodeLease: return new Act("heartbeat", actor.Node);
+            case < 48 when world.Config.NodeLease: return new Act("heartbeat", actor.Id);
             case < 48: return new Act("beat", actor.Id);
             case < 52: return new Act("meet", actor.Id);
             case < 82:

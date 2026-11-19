@@ -157,6 +157,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private int _gaining = -1;
     private bool _retaking, _retakeStoodDown;      // a stand-down during a retake (RetakeAsync) cancels it
     private readonly HashSet<int> _retakeLost = [];     // partitions given up during a retake: it does not take them back
+    private readonly HashSet<int> _retakeSet = [];      // what a retake after a reset takes back: the Worker's still, for Claims
+    private readonly HashSet<int> _handingOver = [];    // K1b: what a LoseAsync under way gives up: never kept pending
+    private readonly HashSet<int> _givenUp = [];        // K1b: partitions the host gave up while their gain or counting retake was in flight
 
     public Worker(string node, int partition, IKernelStore store, IActorType type, WorkerOptions? options = null)
         : this(node, [partition], store, type, options) { }
@@ -393,6 +396,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default)
     {
+        if (_releasing) return null;        // a release in flight: no pass runs, and none counts for the host's gate
         var next = await PassAsync(cancellationToken);
         if (!cancellationToken.IsCancellationRequested) Volatile.Write(ref _lastPass, _options.Monotonic());     // a completed pass, for the host's gate
         return next;
@@ -539,7 +543,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var waits = _pending.Count > 0 || listed.Count != _held.Count || sent.Held.Count != _held.Count
                 || listed.Any(l => !(_held.TryGetValue(l.Key, out var held) && held.Epoch == l.Value))
                 || sent.Held.Any(f => listed.GetValueOrDefault(f.Partition, -1) != f.Epoch);
-            _answered = waits ? new(sent, answer, sibling) : null;
+            // CR-4: an older answer that arrives last never replaces a newer one's record.
+            if (_answered is not { } recorded || sent.At >= recorded.Sent.At) _answered = waits ? new(sent, answer, sibling) : null;
         }
     }
 
@@ -612,13 +617,22 @@ public sealed class Worker : IScopeActivation, ITurnServices
             (_taking, _gaining) = (true, partition);
             Interlocked.Increment(ref _takesStarted);
             try { lease = await _store.RetakeAsync(partition, Node, epoch, _options.Lease, countDeaths: true, cancellationToken); }
-            catch (Exception) { continue; }     // not known: the next answer judges it
-            finally { (_taking, _gaining) = (false, -1); }
+            catch (Exception)
+            {
+                lock (_turnSync)
+                {
+                    (_taking, _gaining) = (false, -1);
+                    // Given up meanwhile: no longer pending, so the next answer releases the row at whichever epoch it lists.
+                    if (_givenUp.Remove(partition)) _pending.Remove(partition);
+                }
+                continue;       // not known: the next answer judges it
+            }
             var installed = false;
             lock (_turnSync)
             {
                 _pending.Remove(partition);
-                if (lease is not null && generation == _generation && !_releasing && !_retaking)
+                var given = _givenUp.Remove(partition);     // CR-5: the host gave it up meanwhile: released, not installed
+                if (lease is not null && generation == _generation && !_releasing && !_retaking && !given)
                 {
                     var fresh = !Owns;
                     if (fresh) Volatile.Write(ref _lastPass, _options.Monotonic());
@@ -630,10 +644,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     _caughtUp = false;      // F1: until a poll has read the partition's inbox, nothing is handed over in memory
                     (_woken, installed) = (true, true);
                 }
+                (_taking, _gaining) = (false, -1);      // after the install: Claims never sees neither
             }
             if (installed)
             {
                 _options.OnJournal?.Invoke([partition]);
+                if (!LeaseUsable()) continue;       // an answer delayed past the safe deadline cannot authorize work, as in GainAsync
                 any = true;
             }
             else if (lease is not null)
@@ -647,9 +663,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (!Owns) return false;
         if (CanStartWork) return true;
+        // Stood down by the guard: pending, except what the host is giving up (a release, or a hand-over under way). The
+        // next answer lists those rows as this process's, unheld and not pending, and releases them.
         if (NodeLease)
             lock (_turnSync)
-                foreach (var fence in Fences) _pending[fence.Partition] = fence.Epoch;     // stood down by the guard: pending
+                foreach (var fence in Fences)
+                    if (!_releasing && !_handingOver.Contains(fence.Partition)) _pending[fence.Partition] = fence.Epoch;
         Reset();
         return false;
     }
@@ -677,7 +696,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>The partition is this Worker's: held, pending, or being taken. A host with several Workers divides an answer by it.</summary>
     public bool Claims(int partition)
     {
-        lock (_turnSync) return _held.ContainsKey(partition) || _pending.ContainsKey(partition) || _gaining == partition || (_taking && Assigned.Contains(partition));
+        lock (_turnSync)
+            return _held.ContainsKey(partition) || _pending.ContainsKey(partition) || _gaining == partition || (_taking && Assigned.Contains(partition))
+                || (_retaking && _retakeSet.Contains(partition));
     }
 
     // ---- ownership ---------------------------------------------------------------------------------------------
@@ -716,9 +737,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             else if (await _store.TakeAsync(partitions[0], Node, _options.Lease, cancellationToken) is { } one) lease = new([one.For(partitions[0])], one.Now);
         }
         catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
-        finally { _taking = false; }
-        if (lease is not { Taken.Count: > 0 }) return;    // a take of a set keeps what it got
-        Install(lease, started);
+        lock (_turnSync)
+        {
+            if (lease is { Taken.Count: > 0 }) Install(lease, started);    // a take of a set keeps what it got
+            _taking = false;        // after the install: Claims never sees neither
+        }
     }
 
     /// <summary>
@@ -734,6 +757,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             {
                 _retaking = false;      // a take in flight replaces the retake; a closed gate takes nothing
                 _retakeLost.Clear();
+                _retakeSet.Clear();
             }
             return;
         }
@@ -774,6 +798,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 taken.RemoveAll(t => _retakeLost.Contains(t.Partition));
             }
             _retakeLost.Clear();
+            _retakeSet.Clear();     // in the same critical section as the install: Claims sees the retake's set, or the held one
             if (!stoodDown && taken.Count > 0)
             {
                 Install(new(taken, now), started);
@@ -828,6 +853,22 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         long generation;
         IReadOnlyList<PartitionFence> held;     // every change of the set resets, so the generation guards it
+        List<PartitionFence> pendingGiven;
+        lock (_turnSync)
+        {
+            // K1b (CR-5): a release gives the pending partitions up too, at the epochs they were held, and a gain or counting
+            // retake in flight releases what its reply returns instead of installing it.
+            if (_gaining >= 0) _givenUp.Add(_gaining);
+            pendingGiven = [.. _pending.Select(p => new PartitionFence(p.Key, p.Value, 0))];
+            _pending.Clear();
+        }
+        if (pendingGiven.Count > 0)
+            try
+            {
+                if (pendingGiven.Count == 1) await _store.ReleaseAsync(pendingGiven[0].Partition, pendingGiven[0].Epoch, cancellationToken);
+                else await _store.ReleaseAsync(pendingGiven, cancellationToken);
+            }
+            catch (Exception) { /* the next answer lists it as this process's, unheld and no longer pending, and releases it */ }
         lock (_turnSync)
         {
             if (_retaking) { _retakeStoodDown = true; return; }     // the retake in flight gives up what it gets
@@ -919,11 +960,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         Interlocked.Increment(ref _takesStarted);
         try { lease = await _store.TakeAsync(partition, Node, _options.Lease, cancellationToken); }
         catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
-        finally { (_taking, _gaining) = (false, -1); }
-        if (lease is null) return false;
         var installed = false;
         lock (_turnSync)
-            if (generation == _generation && Owns && !_releasing && !_retaking)
+        {
+            var given = _givenUp.Remove(partition);     // CR-5: the host gave it up meanwhile: released, not installed
+            if (lease is not null && generation == _generation && Owns && !_releasing && !_retaking && !given)
             {
                 _held[partition] = new(lease.Epoch, lease.Position) { Renewed = lease.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds };
                 _mine.Add((partition, lease.Epoch));
@@ -933,6 +974,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 _caughtUp = false;      // F1: until a short poll has read the new partition's inbox, nothing is handed over in memory
                 (_woken, installed) = (true, true);
             }
+            (_taking, _gaining) = (false, -1);      // after the install: Claims never sees neither
+        }
+        if (lease is null) return false;
         if (installed)
         {
             _options.OnJournal?.Invoke([partition]);       // a take may find a journal not projected yet
@@ -954,8 +998,21 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     internal async Task LoseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
     {
+        // K1b: a guard expiry during the hand-over keeps nothing of these partitions pending: the host gave them up.
+        lock (_turnSync) _handingOver.UnionWith(partitions);
+        try { await HandOverAsync(partitions, cancellationToken); }
+        finally
+        {
+            lock (_turnSync) _handingOver.ExceptWith(partitions);
+        }
+    }
+
+    private async Task HandOverAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken)
+    {
         bool HandedOver(string id) => StoreBatchRules.AddressPartition(id) is { } p && partitions.Contains(p);
+        List<PartitionFence> pendingGiven = [];
         lock (_turnSync)
+        {
             if (_retaking && !_releasing)
             {
                 // A retake after a reset is in flight: the Worker holds nothing to drain, and the retake leaves these
@@ -963,6 +1020,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 _retakeLost.UnionWith(partitions);
                 return;
             }
+            // CR-5: a pending partition, or one whose gain or counting retake is in flight, is given up too. One in flight is
+            // released at the epoch its reply returns, instead of installed; a pending one at the epoch it was held.
+            foreach (var partition in partitions)
+                if (_gaining == partition) _givenUp.Add(partition);
+                else if (_pending.Remove(partition, out var epoch)) pendingGiven.Add(new(partition, epoch, 0));
+        }
+        if (pendingGiven.Count > 0)
+            try
+            {
+                if (pendingGiven.Count == 1) await _store.ReleaseAsync(pendingGiven[0].Partition, pendingGiven[0].Epoch, cancellationToken);
+                else await _store.ReleaseAsync(pendingGiven, cancellationToken);
+            }
+            catch (Exception) { /* the next answer lists it as this process's, unheld and no longer pending, and releases it */ }
         if (_releasing || _retaking || !partitions.Any(Holds)) return;
         if (Fences.All(f => partitions.Contains(f.Partition)))
         {
@@ -998,6 +1068,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     kept = [.. held.Where(f => !partitions.Contains(f.Partition))];
                     Reset();
                     if (kept.Count > 0) (_retaking, _retakeStoodDown) = (true, false);
+                    _retakeSet.UnionWith(kept.Select(f => f.Partition));
                 }
             }
         }
@@ -2295,6 +2366,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Fail(units);
             retake = held.Count > 1 && !releasing && !Has(Flaw.NoResetAfterFailedCommit);
             if (retake) (_retaking, _retakeStoodDown) = (true, false);
+            if (retake) _retakeSet.UnionWith(held.Select(f => f.Partition));
         }
         if (retake) await RetakeAsync(held, cancellationToken);
     }
@@ -2466,7 +2538,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (hold && durable && fenced is not null && !fenced.Contains(message.Target.Partition) && Holds(message.Target.Partition) && !unit.Promoted.Contains(message.InboxKey))
             {
                 if (seqs is not null) seqs.Dequeue();
-                if (message.Due is null) _behind[message.InboxKey] = message.Target.Partition;
+                // Tracked as the promoted path tracks it: a row the poll's horizon reads must be read before a catch-up.
+                if (message.Due is null || message.Due <= Now + (long)_options.Horizon.TotalMilliseconds) _behind[message.InboxKey] = message.Target.Partition;
                 _caughtUp = false;
                 continue;
             }
