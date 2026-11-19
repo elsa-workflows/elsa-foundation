@@ -53,8 +53,8 @@ An analysis of `main` found:
   names with the writer's encoder.
   - With the default encoder, used by the Runtime and Design owner contexts and by `IPayloadSerializer`:
     `René` becomes `Ren\u00E9`, `<` becomes `\u003C`, and `+` becomes `\u002B`.
-  - With the relaxed encoder, used by Publishing and Activities Design: `Ren\u00e9` becomes `René`,
-    `a\/b` becomes `a/b`, and emoji are escaped.
+  - With the relaxed encoder, used by Publishing and Activities Design and by the composed host HTTP options (the
+    ASP.NET Core default): `Ren\u00e9` becomes `René`, `a\/b` becomes `a/b`, and emoji are escaped.
 
   The value stays the same, but the text does not. Numbers keep their written text (`1.0`, `0.10`, a 23-digit
   integer) as long as they stay `JsonElement`. A converter that writes `GetRawText()` with `WriteRawValue` keeps
@@ -90,9 +90,10 @@ transformed. The risk sits where data becomes a .NET type and back:
   the defaults). This is inferred from the code and not yet reproduced by a test.
 - **The same text is accepted on one path and refused on another.** Web options read numbers from strings (`"5"` into
   `Int32`); the defaults refuse them.
-- **Numbers lose digits outside the script engine too.** ForEach turns every item number into a `double`
-  (`ForEach.cs:261`: the conditional `long : double` has type `double`), so a large or precise number changes, `1.0`
-  becomes `1`, and `1e400` faults the loop.
+- **Numbers lost digits outside the script engine too.** ForEach turned every item number into a `double` (the
+  conditional `long : double` has type `double`), so a large or precise number changed, `1.0` became `1`, and `1e400`
+  faulted the loop. That is fixed since: ForEach keeps the collection as `JsonElement`, and each item keeps its JSON
+  text. The required evidence keeps it as a regression check.
 - **No `DateTime` converter exists.** Date handling is the System.Text.Json default, or `Convert.ChangeType` for
   publish-time literals, which pins the publishing server's offset into the executable.
 
@@ -195,8 +196,9 @@ a re-parse per value.
   JavaScript values up front, and Jint holds every number as a double, so an integer beyond ±2^53 or a long decimal
   loses digits (`IsolatedJintEngine.cs:168-169`). That loss is the JavaScript adapter's, not the
   serializer's. The ADR 0046 amendment fixes
-  it there with copy, compare, patch (V9): only the paths the script changed are written, so values the script did
-  not change keep their original text. Values the script changes or computes are new values and come back in the
+  it there (V9): a read never looks like a change and only what the script changes is written, so values the script
+  did not change keep their original text. The implementing spec chooses the mechanism; copy, compare, patch is the
+  expected one. Values the script changes or computes are new values and come back in the
   default format.
 - Because stored text keeps whatever notation arrived, two equal values can have different text. Nothing that decides
   whether two values are equal compares their stored or freshly serialized text: it uses a defined semantic comparison
@@ -292,9 +294,9 @@ type asks for it.
 The baseline keeps nulls (decision 2). That alone does not let readers tell an explicit `null` from a missing member,
 because `JsonElement?` and `object?` merge them on read. Members that must distinguish them under D-10 need a
 representation that keeps the difference. One example is a non-nullable `JsonElement` where `Undefined` means missing,
-with a writer that omits it. For declared members, S-2 reuses the `Absent` and `ExplicitNull` states that
-`ValueEnvelope` already has, rather than inventing a new representation. Spec S-2 chooses that representation. This ADR only requires that the serializer keep
-whatever S-2 chooses.
+with a writer that omits it. For declared members, S-2 reuses the `Absent` and `ExplicitNull` states of the core value
+model (ADR 0046 V8), which `ValueEnvelope` already has, rather than inventing a new representation. Spec S-2 applies
+that representation to each store. This ADR only requires that the serializer keep it.
 
 ## Consequences
 
