@@ -114,6 +114,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public bool PhysicalRetirementAvailable => world.Store.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => world.Store.CommitClockAvailable;
     public bool OwnedSetsAvailable => world.Store.OwnedSetsAvailable;     // the set operations go through this wire's own calls
+    public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => world.Store.PartitionCountAsync(cancellationToken);
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
     {
         if (world.Auto)

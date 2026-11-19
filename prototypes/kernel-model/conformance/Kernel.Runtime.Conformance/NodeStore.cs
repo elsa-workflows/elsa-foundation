@@ -14,6 +14,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
+    public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => inner.PartitionCountAsync(cancellationToken);
     private readonly object _lock = new();
     private TaskCompletionSource? _stall;
     private long _until;                    // when the stall ends, on Environment.TickCount64

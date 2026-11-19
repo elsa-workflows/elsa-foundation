@@ -16,8 +16,9 @@ namespace Kernel.Durable;
 /// and the simulation use it, and so does a node on a store without owned sets (<c>commit=ef</c>: one partition per worker).</item>
 /// </list>
 /// </summary>
-public sealed class DurableHost : IScopeHost
+public sealed class DurableHost : IScopeHost, IScopeCount
 {
+    private (IKernelStore Store, int Placed)? _counted;     // a node's host (ForNode): what its start checks
     private readonly Dictionary<int, Worker> _workers = [];
     private readonly Func<int, Worker?> _fixed;
     private readonly Worker? _node;
@@ -48,7 +49,23 @@ public sealed class DurableHost : IScopeHost
     {
         if (projection is not null)
             options = (options ?? new()) with { OnJournal = options?.OnJournal is { } earlier ? moved => { earlier(moved); projection.Nudge(moved); } : projection.Nudge };
-        return store.OwnedSetsAvailable ? new(Worker.ForNode(node, store, type, options)) : new(scope => new Worker(node, scope, store, type, options));
+        var host = store.OwnedSetsAvailable ? new DurableHost(Worker.ForNode(node, store, type, options)) : new DurableHost(scope => new Worker(node, scope, store, type, options));
+        host._counted = (store, (options ?? new()).Partitions);
+        return host;
+    }
+
+    /// <summary>
+    /// K1 slice 7, a node's host when the runtime starts it: the runtime's scopes and the workers' placement count
+    /// (<see cref="WorkerOptions.Partitions"/>, which spread placement hashes over) must be equal, and the store must have
+    /// a partition row for each of them. Fewer than the store's is allowed: a node may place part of a larger database,
+    /// as the simulation's worlds do. A mismatch refuses the start, naming the three counts. The fixed host is not checked.
+    /// </summary>
+    public async ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default)
+    {
+        if (_counted is not { } counted) return;
+        var stored = await counted.Store.PartitionCountAsync(cancellationToken);
+        if (counted.Placed != scopes || stored < scopes)
+            throw new InvalidOperationException($"The partition counts disagree: the runtime places {scopes} scopes, the workers place over {counted.Placed} partitions, and the store has {stored?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "an unknown number of"} partitions. Configure one count, the one the database was created with.");
     }
 
     /// <summary>Calls to a scope's pass, and the worker passes they ran; the rest were answered by the one-pass rule.</summary>

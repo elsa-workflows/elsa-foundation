@@ -52,10 +52,10 @@ public sealed class OrleansActorRuntime(IGrainFactory grains, OrleansRuntimeOpti
 
     public int ScopeOf(InstanceRef actor) => actor.Partition;
 
-    public ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
+    public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
+        if (host is IScopeCount counted) await counted.CheckScopesAsync(options.Partitions, cancellationToken);     // refuses a mismatch
         _host.TrySetResult(host);
-        return ValueTask.CompletedTask;
     }
 
     public async ValueTask WakeAsync(InstanceRef actor, CancellationToken cancellationToken = default) =>

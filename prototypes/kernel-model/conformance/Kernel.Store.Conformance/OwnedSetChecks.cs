@@ -18,6 +18,7 @@ internal static class OwnedSetChecks
         new("owned sets, the K1 witness: b of {a, b, c} moves by lease expiry while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on", Level.Required, c => Witness(c, release: false), Partitions),
         new("owned sets, the K1 witness: b of {a, b, c} moves by a release while a flush over all three is held; it is refused whole, a retakes a and c with no hole and no stranded mark, and goes on", Level.Required, c => Witness(c, release: true), Partitions),
         new("owned sets: a database created at 64 partitions refuses to open at 1,024, and opens at 64", Level.Required, ReopenAtAnotherCount, 64),
+        new("owned sets: a first open cut short after 40 of 64 partition rows is finished by an open at 64, and refused at 1,024", Level.Required, ReopenAfterCut, 64),
         new("owned sets: a release of a subset leaves the kept rows untouched", Level.Required, SubsetRelease, Partitions),
         new("owned sets: a take of a scattered set, and one poll over it", Level.Required, ScatteredTake, Partitions),
         new("owned sets: the k-row fence locks in ascending partition id", Level.Required, LockOrder, Partitions),
@@ -202,6 +203,26 @@ internal static class OwnedSetChecks
         }
         await reopen(64);
         Context.Equal("kept", string.Join(" ", (await c.S.PollAsync(63, (await c.Take(63)).Epoch, TimeSpan.Zero, 10)).Messages.Select(m => m.Message.Id)), "partition 63 after the open at 64");
+    }
+
+    /// <summary>
+    /// A store that writes its partition rows one at a time (Mongo) records the count first, so an open cut short after
+    /// some rows is finished by the next open at the same count, and refused at another. EF writes them in one
+    /// transaction, so the case does not apply there.
+    /// </summary>
+    private static async Task ReopenAfterCut(Context c)
+    {
+        if (c.Provided.Reopen is not { } reopen || c.Provided.CutPartitionRows is not { } cut) throw new SkipException("the store writes its partition rows in one transaction");
+        await cut(40);
+        try
+        {
+            await reopen(VirtualPartitions.Small);
+            throw new ConformanceException("a database created for 64 partitions, with 40 written, opened at 1,024");
+        }
+        catch (StoreException e) { Context.Equal(Failure.Definite, e.Failure, "the failure of an open at another count after a cut"); }
+        await reopen(64);
+        await c.S.AddAsync(Make.M("late", 63));
+        Context.Equal("late", string.Join(" ", (await c.S.PollAsync(63, (await c.Take(63)).Epoch, TimeSpan.Zero, 10)).Messages.Select(m => m.Message.Id)), "partition 63 after the open at 64 finished the rows");
     }
 
     private static async Task SubsetRelease(Context c)

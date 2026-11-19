@@ -74,6 +74,12 @@ public sealed class MongoProvider(string connection, MongoStoreOptions options) 
         public override IKernelStore Store => store;
         public override ICostCounter? Counter => counter;
         public override Func<int, Task>? Reopen => partitions => new MongoStore(provider._admin.Value, database).CreateAsync(partitions);
+        public override Func<int, Task>? CutPartitionRows => async from =>
+        {
+            var db = provider._admin.Value.GetDatabase(database);
+            foreach (var name in new[] { "partitions", "clocks", "projections" })
+                await db.GetCollection<BsonDocument>(name).DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gte", from)));
+        };
 
         public override IKernelStore NewClient() => new MongoStore(provider._outside.Value[Interlocked.Increment(ref _next) % 2], database);
 

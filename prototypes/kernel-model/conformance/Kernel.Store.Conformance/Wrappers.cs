@@ -13,6 +13,7 @@ public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKe
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
+    public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => inner.PartitionCountAsync(cancellationToken);
     private readonly Random _random = new(seed);
     private long _before, _after;
     public bool Calm { get; set; }
@@ -76,6 +77,7 @@ public class RecordingStore(IKernelStore inner) : IKernelStore
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
+    public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => inner.PartitionCountAsync(cancellationToken);
     public sealed record Landed(int Partition, long Epoch, long Position, int Positions, string Turns);
 
     public ConcurrentQueue<Landed> Commits { get; } = new();
