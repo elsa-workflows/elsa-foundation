@@ -56,7 +56,10 @@ internal static class IsolatedJintEngine
     /// engine's zone. Every expression evaluates in UTC with no ambient zone (spec 1223 FR-002, FR-023), so the
     /// constructor defaults <c>timeZone</c> to <c>UTC</c>; an explicit zone is kept. Installed before user code runs.
     /// </summary>
-    private static void DefaultIntlToUtc(Engine engine) => engine.Execute(
+    private static void DefaultIntlToUtc(Engine engine) => engine.Execute(IntlUtcDefault);
+
+    // Parsed once: every evaluation's engine runs the same wrapper.
+    private static readonly Prepared<Acornima.Ast.Script> IntlUtcDefault = Engine.PrepareScript(
         "(function () {" +
         " var Native = Intl.DateTimeFormat;" +
         " function withUtc(options) {" +
