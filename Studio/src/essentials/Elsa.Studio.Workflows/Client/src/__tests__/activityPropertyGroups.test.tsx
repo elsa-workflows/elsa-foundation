@@ -372,6 +372,27 @@ describe("activity property organization", () => {
     expect(container.textContent).not.toContain("Liquid");
   });
 
+  it("renders a missing-editor hint as a direct child of the field so its buttons sit beside the text (#4742)", () => {
+    const container = renderPanel([
+      input("Text", { isWrapped: true, defaultSyntax: "Literal" })
+    ], {
+      // Minimal composition: the backend has no JavaScript descriptor and no editor module is registered.
+      expressionDescriptors: backendExpressionDescriptors.filter(descriptor => descriptor.type === "Literal"),
+      activity: activity({
+        text: { typeName: "System.String", expression: { type: "JavaScript", value: { language: "JavaScript", source: "args.manual" } } }
+      })
+    });
+
+    const hint = container.querySelector<HTMLElement>(".wf-expression-editor-hint")!;
+    expect(hint.textContent).toContain("No editor is available for JavaScript.");
+    // styles.css lays this field out as a row with `:has(> .wf-expression-editor > .wf-expression-editor-hint)`,
+    // which only matches while the hint and the inline buttons keep this structure.
+    const field = hint.parentElement!.parentElement!;
+    expect(hint.parentElement!.classList.contains("wf-expression-editor")).toBe(true);
+    expect(field.classList.contains("wf-expression-field")).toBe(true);
+    expect(field.querySelector(":scope > .wf-syntax-picker.inline")).not.toBeNull();
+  });
+
   it("reports loading and failed expression metadata without replacing a preserved backend snapshot", () => {
     const retry = vi.fn();
     const loading = renderPanel([input("Message", { isWrapped: true })], {
