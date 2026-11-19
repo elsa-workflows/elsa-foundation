@@ -202,3 +202,5 @@ static Elsa.Expressions.JavaScript.Core.Services.RefusingPrecisionPolicy.Diagnos
 static Elsa.Expressions.JavaScript.Core.Services.RefusingPrecisionPolicy.Reason(Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber! number) -> string!
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Value.get -> System.Text.Json.JsonElement?
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Value.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Warnings.init -> void

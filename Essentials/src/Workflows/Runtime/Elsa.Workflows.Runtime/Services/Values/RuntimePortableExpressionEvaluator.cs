@@ -52,6 +52,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
         var activityResultPolicyResolved = !hasActivityResultDependency;
         ExpressionEvaluationRequest request;
         RuntimeVariableReadFallback? fallback = null;
+        // Spec 1228: an evaluation's warnings are kept only when it succeeds; a failed one reports its failure instead.
+        var warnings = new ExecutionWarningCollector();
         try
         {
             var dependencyPolicy = DetermineDependencyPolicy(expression, resolutionContext, nodeId, inputName);
@@ -71,7 +73,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
             fallback = expression.VariableReadFallback is null
                 ? null
                 : await RuntimeVariableReadFallback.LoadAsync(resolutionContext.VisibleVariables, externalPayloadStore, cancellationToken);
-            request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken);
+            request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken) { Warnings = warnings };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -139,6 +141,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
             ThrowIfRefused(fallback, definition, expression, inputName, nodeId, effectivePolicy);
         }
 
+        foreach (var warning in warnings.Warnings)
+            resolutionContext.Warnings?.Report(warning.WithDetail("input", inputName));
         return new PortableExpressionEvaluation(value, effectivePolicy);
     }
 

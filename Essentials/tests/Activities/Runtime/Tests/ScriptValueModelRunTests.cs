@@ -39,6 +39,28 @@ public sealed class ScriptValueModelRunTests
         // SC-001: no stored value changes after a read; the stored text, large id and 10.50 included, is the same.
         Assert.Equal(Order, frame.Values["var-order"].InlineValue!.Value.GetRawText());
         Assert.Equal(Other, frame.Values["var-other"].InlineValue!.Value.GetRawText());
+
+        // Spec 1228 FR-015: the script computed with a lossy id it did not write, so the step records one warning; the
+        // input expression passed the order through unchanged, so it raised none.
+        var state = run.AssertCompleted("node-js");
+        var warning = Assert.Single(state.Warnings!);
+        Assert.Equal(JavaScriptValueDiagnostics.PrecisionLossRead, warning.Code);
+        Assert.Equal("args.order.id", warning.Details!["paths"]);
+        Assert.Null(state.InputSnapshot!.Warnings);
+    }
+
+    [Fact]
+    public async Task An_input_expression_that_computes_with_a_lossy_number_records_its_warning_with_the_input()
+    {
+        var run = await RunAsync("return args.total;", "({ total: variables.order.price * 2 })");
+
+        run.AssertWorkflowCompleted();
+        var state = run.AssertCompleted("node-js");
+        var warning = Assert.Single(state.InputSnapshot!.Warnings!);
+        Assert.Equal(JavaScriptValueDiagnostics.PrecisionLossRead, warning.Code);
+        Assert.Equal("arguments", warning.Details!["input"]);
+        Assert.Equal("variables.order.id", warning.Details["paths"]);
+        Assert.Null(state.Warnings);
     }
 
     [Fact]

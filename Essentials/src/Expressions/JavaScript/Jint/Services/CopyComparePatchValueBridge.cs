@@ -40,6 +40,9 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         private readonly Engine _engine;
         private readonly FeatureOptions _options;
         private readonly Dictionary<ObjectInstance, JsonElement> _origins = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<ObjectInstance, string> _originPaths = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<string, string> _markerPaths = new(StringComparer.Ordinal);
+        private readonly List<JavaScriptLossyNumber> _exact = [];
         private readonly Dictionary<ObjectInstance, bool> _unchanged = new(ReferenceEqualityComparer.Instance);
         private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
         private readonly List<JavaScriptLossyNumber> _lossy = [];
@@ -134,6 +137,12 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
 
         public bool TryFindLoss(double value, out JavaScriptLossyNumber? number) => _lossyByValue.TryGetValue(value, out number);
 
+        public IReadOnlyCollection<JavaScriptLossyNumber> WrittenExactly => _exact;
+
+        private static bool IsWithin(string path, string prefix) =>
+            path == prefix ||
+            (path.StartsWith(prefix, StringComparison.Ordinal) && path.Length > prefix.Length && path[prefix.Length] is '.' or '[');
+
         public void Dispose()
         {
             if (_disposed)
@@ -208,6 +217,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     return candidate;
                 var marker = _markerPrefix + _currentMarkers.Count.ToString(CultureInfo.InvariantCulture);
                 _currentMarkers[marker] = origin;
+                _markerPaths[marker] = _originPaths[instance];
                 return new JsString(marker);
             });
             // Plain operators only, so nothing the script changed on the prototypes can intercept the replacer.
@@ -247,6 +257,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     foreach (var property in element.EnumerateObject())
                         value.DefineOwnProperty(property.Name, new PropertyDescriptor(Create(property.Value, ValuePaths.Member(path, property.Name)), writable: true, enumerable: true, configurable: true));
                     _origins[value] = element;
+                    _originPaths[value] = path;
                     return value;
                 }
                 case JsonValueKind.Array:
@@ -260,6 +271,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     }
 
                     _origins[value] = element;
+                    _originPaths[value] = path;
                     return value;
                 }
                 case JsonValueKind.String:
@@ -302,6 +314,9 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             {
                 case JsonValueKind.String when markers.TryGetValue(element.GetString()!, out var origin):
                     origin.WriteTo(writer);
+                    // Written from its original JSON: its lossy numbers keep every digit.
+                    if (_markerPaths.TryGetValue(element.GetString()!, out var originPath))
+                        _exact.AddRange(_lossy.Where(number => IsWithin(number.Path, originPath)));
                     break;
                 case JsonValueKind.Number:
                     var text = element.GetRawText();

@@ -77,7 +77,10 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
             evaluation = await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
                 Script,
                 Arguments,
-                context.CancellationToken));
+                context.CancellationToken)
+            {
+                Warnings = context.Warnings
+            });
         }
         catch (JavaScriptCompletionException exception)
         {

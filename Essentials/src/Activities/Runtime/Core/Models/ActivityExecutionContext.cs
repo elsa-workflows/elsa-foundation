@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using System.Text.Json;
 
@@ -105,6 +106,30 @@ public sealed record ActivityExecutionContext
 
     private IStepVariables _variables = StepVariables.Unavailable;
 
+    /// <summary>
+    /// Where this step reports a warning (the shared run-time warning channel, spec 1228): the runtime records each one on
+    /// the activity execution, and inspection shows it. A warning never carries a value. Outside a step body (a background
+    /// worker, a test that builds the context by hand) reports are dropped.
+    /// </summary>
+    public IExecutionWarningSink Warnings => _warnings;
+
+    private IExecutionWarningSink _warnings = DroppedWarnings.Instance;
+
+    /// <summary>Returns a copy whose <see cref="Warnings"/> is <paramref name="warnings"/>: the runtime hands a step its sink this way.</summary>
+    public ActivityExecutionContext WithWarnings(IExecutionWarningSink warnings)
+    {
+        ArgumentNullException.ThrowIfNull(warnings);
+        var copy = this with { };
+        copy._warnings = warnings;
+        return copy;
+    }
+
+    private sealed class DroppedWarnings : IExecutionWarningSink
+    {
+        public static DroppedWarnings Instance { get; } = new();
+        public void Report(Elsa.Expressions.Core.Models.ExecutionWarning warning) { }
+    }
+
     /// <summary>Returns a copy whose <see cref="Variables"/> is <paramref name="variables"/>: the runtime hands a step its session this way.</summary>
     public ActivityExecutionContext WithVariables(IStepVariables variables)
     {
@@ -129,7 +154,7 @@ public sealed record ActivityExecutionContext
             TriggerNodeId,
             operationKey,
             targetOperationKey,
-            logicalInvocationId ?? LogicalInvocationId).WithVariables(Variables);
+            logicalInvocationId ?? LogicalInvocationId).WithVariables(Variables).WithWarnings(Warnings);
 }
 
 /// <summary>Author-facing base for a transient activity that returns one atomic typed result.</summary>

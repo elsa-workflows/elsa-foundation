@@ -37,6 +37,9 @@ public sealed class JavaScriptScriptEvaluationRequest
     public string Source { get; }
     public JsonElement Arguments { get; }
     public CancellationToken CancellationToken { get; }
+
+    /// <summary>Where the evaluator reports warnings (spec 1228); the activity passes its step's sink.</summary>
+    public Elsa.Expressions.Core.Contracts.IExecutionWarningSink? Warnings { get; init; }
 }
 
 /// <summary>The state of a script's outcome selection; mirrors the activity runtime's outcome selection.</summary>

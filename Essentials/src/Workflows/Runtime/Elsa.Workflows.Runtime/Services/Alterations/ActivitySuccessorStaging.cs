@@ -128,13 +128,15 @@ internal static class ActivitySuccessorStaging
             // The kept values keep the read set they were materialized against (spec 1221), so the successor's captures
             // are still judged against the versions those values were read at.
             InputSnapshot = source.InputSnapshot is { } input ? new ActivityInputSnapshot(successorId,
-                input.ContractFingerprint, input.BindingFingerprint, input.Values, input.MaterializedAt) { InputReadSet = input.InputReadSet, ComputedVariableReads = input.ComputedVariableReads, Evaluation = input.Evaluation } : null,
+                input.ContractFingerprint, input.BindingFingerprint, input.Values, input.MaterializedAt) { InputReadSet = input.InputReadSet, ComputedVariableReads = input.ComputedVariableReads, Evaluation = input.Evaluation, Warnings = input.Warnings } : null,
             // Per-invocation history belongs to the source row: the successor starts its own lifecycle and history, and
             // a refused completion stays with the row that refused it.
             RecordedCompletion = null,
             // Session reads belong to their own attempt and row (spec 1231 FR-007); a retry or acceptance keeps the
             // invocation's own advanced bases (it is the same logical invocation), never its reads.
             SessionReads = null,
+            // So are the warnings its steps raised (spec 1228); the input snapshot's warnings travel with the snapshot.
+            Warnings = null,
             Transitions = null,
             InputRefreshes = null,
             FirstCommitSequence = null,

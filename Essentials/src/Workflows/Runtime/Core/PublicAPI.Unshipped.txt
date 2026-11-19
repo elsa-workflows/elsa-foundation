@@ -10859,3 +10859,10 @@ static Elsa.Workflows.Runtime.Core.Models.ExecutableValueAdapters.Required(Syste
 static Elsa.Workflows.Runtime.Core.Models.ExecutableValueAdapters.Stamp(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! compatibilityMetadata, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! pins) -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
 static Elsa.Workflows.Runtime.Core.Models.ExecutableValueAdapters.Ensure(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! executable, System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.ExpressionValueAdapter!>! adapters, System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.ScriptActivityLanguage!>! scriptActivities) -> void
 Elsa.Workflows.Runtime.Core.Models.ExecutableValueAdapters
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>?
+Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>?
+Elsa.Workflows.Runtime.Core.Models.ActivityInputSnapshot.Warnings.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.WithWarnings(System.Collections.Generic.IReadOnlyCollection<Elsa.Expressions.Core.Models.ExecutionWarning!>! warnings) -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.Warnings.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.Warnings.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.Warnings.get -> Elsa.Expressions.Core.Models.ExecutionWarningCollector?

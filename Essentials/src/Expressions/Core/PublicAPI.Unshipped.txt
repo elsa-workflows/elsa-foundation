@@ -823,3 +823,33 @@ Elsa.Expressions.Core.Models.ScriptActivityLanguage.<Clone>$() -> Elsa.Expressio
 Elsa.Expressions.Core.Models.ScriptActivityLanguage.Deconstruct(out string! ActivityType, out string! Language) -> void
 Elsa.Expressions.Core.Models.ExpressionValueAdapter.ExpressionValueAdapter(string! Language, string! Version) -> void
 Elsa.Expressions.Core.Models.ScriptActivityLanguage.ScriptActivityLanguage(string! ActivityType, string! Language) -> void
+Elsa.Expressions.Core.Models.ExecutionWarningSeverity.Information = 0 -> Elsa.Expressions.Core.Models.ExecutionWarningSeverity
+Elsa.Expressions.Core.Models.ExecutionWarningSeverity.Warning = 1 -> Elsa.Expressions.Core.Models.ExecutionWarningSeverity
+Elsa.Expressions.Core.Contracts.IExecutionWarningSink
+Elsa.Expressions.Core.Models.ExecutionWarningSeverity
+Elsa.Expressions.Core.Models.ExecutionWarningCollector
+Elsa.Expressions.Core.Models.ExecutionWarningCollector.ExecutionWarningCollector() -> void
+Elsa.Expressions.Core.Models.ExecutionWarning.Code.get -> string!
+Elsa.Expressions.Core.Models.ExecutionWarning.Severity.get -> Elsa.Expressions.Core.Models.ExecutionWarningSeverity
+Elsa.Expressions.Core.Models.ExecutionWarning.Message.get -> string!
+Elsa.Expressions.Core.Models.ExecutionWarning.Details.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Elsa.Expressions.Core.Models.ExecutionWarning.Code.init -> void
+Elsa.Expressions.Core.Models.ExecutionWarning.Severity.init -> void
+Elsa.Expressions.Core.Models.ExecutionWarning.Message.init -> void
+Elsa.Expressions.Core.Models.ExecutionWarning.Details.init -> void
+Elsa.Expressions.Core.Models.ExecutionWarning
+override Elsa.Expressions.Core.Models.ExecutionWarning.ToString() -> string!
+static Elsa.Expressions.Core.Models.ExecutionWarning.operator !=(Elsa.Expressions.Core.Models.ExecutionWarning? left, Elsa.Expressions.Core.Models.ExecutionWarning? right) -> bool
+static Elsa.Expressions.Core.Models.ExecutionWarning.operator ==(Elsa.Expressions.Core.Models.ExecutionWarning? left, Elsa.Expressions.Core.Models.ExecutionWarning? right) -> bool
+override Elsa.Expressions.Core.Models.ExecutionWarning.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExecutionWarning.Equals(object? obj) -> bool
+Elsa.Expressions.Core.Models.ExecutionWarning.Equals(Elsa.Expressions.Core.Models.ExecutionWarning? other) -> bool
+Elsa.Expressions.Core.Models.ExecutionWarning.<Clone>$() -> Elsa.Expressions.Core.Models.ExecutionWarning!
+Elsa.Expressions.Core.Models.ExecutionWarning.Deconstruct(out string! Code, out string! Message, out Elsa.Expressions.Core.Models.ExecutionWarningSeverity Severity, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>? Details) -> void
+Elsa.Expressions.Core.Contracts.IExecutionWarningSink.Report(Elsa.Expressions.Core.Models.ExecutionWarning! warning) -> void
+Elsa.Expressions.Core.Models.ExecutionWarningCollector.Report(Elsa.Expressions.Core.Models.ExecutionWarning! warning) -> void
+Elsa.Expressions.Core.Models.ExecutionWarning.ExecutionWarning(string! Code, string! Message, Elsa.Expressions.Core.Models.ExecutionWarningSeverity Severity = Elsa.Expressions.Core.Models.ExecutionWarningSeverity.Warning, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? Details = null) -> void
+Elsa.Expressions.Core.Models.ExecutionWarningCollector.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>!
+Elsa.Expressions.Core.Models.ExecutionWarning.WithDetail(string! key, string! value) -> Elsa.Expressions.Core.Models.ExecutionWarning!
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Warnings.init -> void

@@ -88,7 +88,7 @@ internal sealed class JintPortableJavaScriptEvaluator(
             throw new InvalidOperationException("A JavaScript binding must produce a value. Use an expression or return a value from the statement block; undefined is not supported.");
 
         var written = JavaScriptValueWrites.Apply(values.Write(result, "result"), "result", precisionPolicy);
-        JavaScriptValueWrites.WarnLossyReads(values, written.Losses, logger);
+        JavaScriptValueWrites.WarnLossyReads(values, written.Losses, request.Warnings, logger);
         return ValueTask.FromResult(written.Value!.Value);
     }
 

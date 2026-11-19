@@ -45,7 +45,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
         else
             result = new JavaScriptScriptEvaluationResult(Write(completions, values, returned, out losses));
 
-        JavaScriptValueWrites.WarnLossyReads(values, losses, logger);
+        JavaScriptValueWrites.WarnLossyReads(values, losses, request.Warnings, logger);
         return ValueTask.FromResult(result);
     }
 

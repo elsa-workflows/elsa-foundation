@@ -46,6 +46,12 @@ public interface IScriptValueEvaluation : IDisposable
     IReadOnlyList<JavaScriptLossyNumber> LossyNumbers { get; }
 
     /// <summary>
+    /// The lossy entered numbers written from their original JSON so far, inside an unchanged value that was written:
+    /// they keep every digit, so they are neither a loss nor a warning (FR-011a, FR-015).
+    /// </summary>
+    IReadOnlyCollection<JavaScriptLossyNumber> WrittenExactly { get; }
+
+    /// <summary>
     /// Whether <paramref name="value"/> is, as a double, a lossy entered number. A host function checks its arguments
     /// with it and logs a warning without refusing the call (FR-015).
     /// </summary>
