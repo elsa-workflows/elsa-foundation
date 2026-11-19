@@ -115,7 +115,7 @@ written it does not, and this page claims no bound for it:
 
 | Aspect | Today (in process, built) | Proposed (in process and remote) |
 |---|---|---|
-| Who owns an attempt | The partition owner, under its partition lease | In process: unchanged. Remote: the job actor grants an attempt with its own lease and a grant token. |
+| Who owns an attempt | The partition owner, under its node lease (proposed, 19 November; formerly the partition lease) | In process: unchanged. Remote: the job actor grants an attempt with its own lease and a grant token. |
 | Timeouts | None in the kernel; the model decides | An attempt deadline (hard), an attempt lease (renewed by heartbeat) and an optional invocation deadline. Each is a timer message in the job actor's commit, recalled when the attempt ends. In process, the deadline cancels the job's token. |
 | Retries | The model receives `job-finished` with an error and decides | The worker classifies a failure: retryable with an optional backoff, or terminal (Zeebe's fail-job command). The job actor keeps the count, enforces the attempt limit and applies the backoff as a due time. An expired lease or a passed deadline is a failed attempt that the job actor records itself. |
 | What the code receives | Key, arguments, creation (`JobContext`) | Also the effect key, the attempt number, the attempt id, the deadline and a cancellation signal. |
@@ -230,7 +230,7 @@ keeps it in memory. The rules that keep it inside the commit contract:
   commit per lease period per attempt) and expires nothing.
 - **A renewal is answered only by an owner within its local lease guard.** An owner past its guard starts no new work
   and answers no renewal ([LEASE.md](../../prototypes/kernel-model/LEASE.md)). An extension it gave therefore ends no
-  later than its partition lease plus one attempt lease.
+  later than its node lease plus one attempt lease.
 - **A takeover grants a grace.** A new owner cannot know the renewals its predecessor received, so it extends every
   attempt in flight to one attempt lease past its take. That covers every extension the predecessor could have given.
 - **A lost renewal shortens a lease.** The worker learns it from its next renewal (`Stale`) and stops; another attempt

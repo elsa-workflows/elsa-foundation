@@ -273,8 +273,8 @@ Two consequences need no further rule:
 - **Placement.** The hash runs over the qualified name, so a tenant's caller keys spread over the virtual partitions
   independently of another tenant's.
 
-Host-wide records carry no tenant (ADR 0097 (e): cluster membership is host-wide): `partition` rows (fence, lease,
-position, backlog), `node` rows and the projector's `projection` cursor. A virtual partition's journal holds rows of
+Host-wide records carry no tenant (ADR 0097 (e): cluster membership is host-wide): `partition` rows (fence,
+position, backlog), `node` rows (membership and, under the node lease amendment, the lease) and the projector's `projection` cursor. A virtual partition's journal holds rows of
 many tenants; each journal row carries its instance's tenant.
 
 **Layer 3 stays host-neutral.** Ids stay opaque strings to layer 3; only layer 2 forms and parses `Q` and `{vp}/`.
