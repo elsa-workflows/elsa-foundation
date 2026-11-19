@@ -463,10 +463,12 @@ The follow-ups that slice 2a recorded for this slice:
 - **Runtime conformance at 4,096** (built-in runtime). The case "crash: a crashed node's scopes are taken over" did not
   end within 120 s in review (it takes 17 s at 1,024 and 33 s at 2,048). Above 1,024 a case's settling bounds and its
   time now grow with the count, so it records the takeover instead of failing, and the crash case logs how long the
-  takeover took. Run here: 17 of 17 passed in 215 s. The crash case took 175 s, while its takeover (2,048 of 4,096
-  scopes) settled 6.6 s after the kill, so most of the case's time lies before the kill (two nodes taking 4,096
-  partitions one at a time) and after it. Slice 8 found the time before the kill in the suite's own holder read, and
-  fixed it ("K1 costs" below).
+  takeover took. That time was the harness's: the case read its holder list once per partition, and each read scanned
+  every activation per scope, cubic in the count, slow enough that a live node's lease lapsed ("the killed node gave
+  partition 0 up"). The watcher now groups the activations by scope in one pass, and the case reads the list once
+  (slice 8's fix, cherry-picked). Run here three times: 17 of 17 passed in 48 to 49 s, and the crash case alone three
+  more times in 14 s; its takeover (2,048 of 4,096 scopes) settles 7.4 to 7.6 s after the kill, the 6 s lease running
+  out and a balancing round.
 - **A runtime-suite case for the count check** ("count: a node whose workers place another count than its store and
   runtime is refused at its start") runs on the built-in runtime and the Orleans adapter. The runtime suite's watcher
   passes the check through to layer 2's host, and a store that does not say its count is refused too.
