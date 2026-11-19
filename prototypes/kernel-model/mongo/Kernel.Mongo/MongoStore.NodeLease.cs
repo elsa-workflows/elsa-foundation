@@ -28,7 +28,8 @@ public sealed partial class MongoStore
 
     /// <summary>
     /// A transaction that a write conflict with this process's own heartbeat (a single-document write to its node document)
-    /// can abort: tried again while the driver labels the failure transient, a few times.
+    /// can abort: tried again while the driver labels the failure transient, a few times. Under the node lease a conflict
+    /// still failing after the last attempt is a take that did not land: a transient failure, taken again at the next round.
     /// </summary>
     private async Task<T> RetriedAsync<T>(Func<IClientSessionHandle, Task<T>> body, CancellationToken cancellationToken)
     {
@@ -42,8 +43,13 @@ public sealed partial class MongoStore
                 await session.CommitTransactionAsync(cancellationToken);
                 return result;
             }
-            catch (MongoException e) when (attempt < 5 && e.HasErrorLabel("TransientTransactionError") && !cancellationToken.IsCancellationRequested)
+            catch (MongoException e) when (e.HasErrorLabel("TransientTransactionError") && !cancellationToken.IsCancellationRequested)
             {
+                if (attempt >= 5)
+                {
+                    if (_options.NodeLease) throw new StoreException(Failure.Transient, $"The take's transaction still conflicted after {attempt} attempts.", e);
+                    throw;
+                }
                 await Task.Delay(Random.Shared.Next(5, 30), cancellationToken);
             }
         }
