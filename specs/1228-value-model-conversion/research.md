@@ -57,17 +57,23 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 
 ## R-2 Checking a number for loss (ADR 0046 V9, settled)
 
-- **Decision**: parse the JSON number text exactly, as a big-integer mantissa and a base-10 exponent; take the
-  double the engine would hold and its exact value; compare the two exact values. Different value → lossy. A number
-  that becomes `Infinity` is lossy.
-- **Rationale**: `10.50` and `10.5` are the same value; `9007199254740993` and `9007199254740992` are not. `System.Decimal`
-  is not enough: it keeps about 28 digits and does not parse `1e30` or `1e400`. The check runs once per number at
-  entry.
+- **Decision**: read the stored JSON number text exactly, as a big-integer mantissa and a base-10 exponent; take the
+  double the engine would hold and the JSON text JavaScript writes for it (`Number.prototype.toString`), read exactly
+  the same way; compare the two values. Different value → lossy. A number that becomes `Infinity`, or a non-zero
+  number that becomes `0`, is lossy.
+- **Rationale**: this is V9 as written ("the JavaScript number, written as JSON, differs in value from the stored
+  one"). `10.50` and `10.5`, `0.1` and `0.1`, `1e30` and `1e+30` have the same value; `9007199254740993` and
+  `9007199254740992` do not, nor do `0.1000000000000000055511151231257827` and `0.1`. `System.Decimal` is not enough:
+  it keeps about 28 digits and does not parse `1e30` or `1e400`. The check runs once per number at entry.
+- **Amended in implementation (2026-11-19)**: the defined draft compared the stored value with the double's exact
+  binary value. That would make every decimal that a double does not hold in binary (`0.1`, `0.2`) lossy, so an
+  ordinary price would be refused at a write; it also contradicted V9. The implementation follows V9.
 - **Matching in a written value (FR-011a)**: an unchanged entered value is written from its original JSON, so a pass-
   through never loses. Otherwise a written number that equals, as a double, the double of a lossy entered number
   carries that loss.
 - **Alternatives considered**: a plain magnitude check (`|n| > 2^53 − 1`) misses long decimals such as
-  `0.1000000000000000055511151231257827`; comparing texts flags `10.50` falsely.
+  `0.1000000000000000055511151231257827`; comparing texts flags `10.50` falsely; comparing with the double's exact
+  binary value flags `0.1` falsely.
 
 ## R-3 Precision handling (settled, D-17)
 
