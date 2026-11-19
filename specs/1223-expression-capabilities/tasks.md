@@ -37,10 +37,10 @@
 **Goal**: Functions behave identically on both surfaces, exchange only JSON, follow the naming rule and warn on precision loss.
 **Independent test**: quickstart A5, B8–B11b.
 
-- [ ] T013 [US4] Register `stringToBase64`, `stringFromBase64` and `toJson` (System.Text.Json with `JavaScriptEncoder.Create(UnicodeRanges.All)`, compact, no naming policy) as built-ins (FR-007, FR-009).
-- [ ] T014 [US4] Enforce the naming rule at startup: reserved names (`variables`, `args`, the built-ins), namespace prefix for host functions, duplicate detection; failure names the function (FR-027).
-- [ ] T015 [US4] Extend the reserved-name publish check (`JavaScriptReservedNames` and the `Scripts/ReservedName` validation) to the read roots and built-in names, as a warning (FR-027).
-- [ ] T016 [US4] Warn on a number argument JavaScript cannot hold exactly, naming the function and the argument path; never refuse, never stringify (FR-028).
+- [ ] T013 [US4] Register `stringToBase64`, `stringFromBase64` (invalid Base64 fails, invalid UTF-8 → U+FFFD) and `toJson` (System.Text.Json with `JavaScriptEncoder.Create(UnicodeRanges.All)`, compact, no naming policy; `Date` → Elsa 3's UTC `DateTime` text, `undefined` → `null`, `NaN`/`Infinity`/functions fail) as built-ins (FR-007, FR-009); map other script arguments as a script result is mapped (FR-011).
+- [ ] T014 [US4] Enforce the naming rule at startup: reserved names (`variables`, `input`, `activities`, `workflow`, `args`, the built-ins, namespace roots), namespace prefix for host functions, duplicate detection; failure names the function. Install a namespace as a read-only global object holding its functions (FR-027).
+- [ ] T015 [US4] Extend the publish check (`JavaScriptReservedNames`): declaring a read root → the existing error `Scripts/ReservedName`; declaring a built-in name or namespace root → the new warning `Scripts/ShadowedFunction` (FR-027).
+- [ ] T016 [US4] Warn on a number argument that carries spec 1228's loss information, naming the function and the argument path; never refuse, never stringify (FR-028).
 - [ ] T017 [P] [US4] xUnit: Base64 round trip and Elsa 3 parity; `toJson` equals the T001 fixtures; no live .NET object in or out — quickstart B8–B10, SC-005, SC-008.
 - [ ] T018 [P] [US4] xUnit: naming failures, reserved-name warning, no fallback read marker for built-ins, `Effectful` recorded and never changes call count, V9 warning — quickstart B11–B11b.
 - [ ] T019 [P] [US4] xUnit: surface parity — each intrinsic and built-in identical in an input binding and a `RunJavaScript` script (FR-003) — quickstart A5, SC-004.
@@ -51,9 +51,11 @@
 **Independent test**: quickstart C, D.
 
 - [ ] T020 [US2] In `Elsa3ExpressionRewriter.cs`, remove `Math.random`/`Date.now` from `IsNondeterministicCall` (keep `crypto.randomUUID`), take `Date` out of the refused globals, move the GUID family, `parseGuid`, the Base64 pair and `toJson` out of `RefusedHostFunctions`, and reword `TimeGuidance`/`UniqueValueGuidance` (FR-014, FR-015).
-- [ ] T021 [US2] Classify `Date` usage (contract D1a): zone-independent converts; zone-dependent converts only with the source time zone (assume-UTC = `UTC`) and is otherwise refused with a quoted diagnostic; a non-literal parse warns without a zone (FR-021, FR-022, FR-024).
+- [ ] T021 [US2] Classify `Date` usage (contract D1a): zone-independent converts; zone-dependent converts only with the source time zone (assume-UTC = `UTC`) and is otherwise refused with a quoted diagnostic; a non-literal parse is refused without a zone; generic method names count only on a known `Date` receiver (FR-021, FR-022, FR-024).
+- [ ] T042 [US2] Rewrite each direct read of a `DateTime`/`DateTimeOffset`-typed Elsa 3 variable, input or activity output to `v == null ? v : new Date(v)` and mark it a known `Date` (FR-032).
+- [ ] T043 [US2] Refuse locale-dependent calls without an explicit locale (`toLocale*String`, `localeCompare`, `Intl` constructors) with a quoted diagnostic (FR-033).
 - [ ] T022 [US2] Carry the source time zone into the converted expression as an evaluator option; accept that option in `JintPortableJavaScriptEvaluator` (it rejects all options today) and apply it as Jint `Options.TimeZone`; the option enters the executable hash (FR-023).
-- [ ] T023 [P] [US2] xUnit for D1a: refusal without a zone; `Europe/Amsterdam` winter and summer equal Elsa 3; `UTC`; zone-independent usage in both modes; non-literal parse warning — quickstart C12–C12b, SC-007.
+- [ ] T023 [P] [US2] xUnit for D1a: refusal without a zone; `Europe/Amsterdam` winter and summer equal Elsa 3; `UTC`; zone-independent usage in both modes; non-literal parse refusal; date-only literal; date-typed value rewrite; locale refusal — quickstart C12–C12e, SC-007.
 - [ ] T024 [P] [US2] xUnit conversion tests (faithful): `new Date()`, `Date.now()`, `Math.random()`, GUID family, `parseGuid`, Base64 pair, `toJson`, and GUIDs used as text convert; `isNullOrEmpty`/`isNullOrWhiteSpace` still inline (FR-010) — quickstart C13, C14, SC-008.
 - [ ] T025 [P] [US2] xUnit conversion tests (refused): bytes/streams, `getConfig`/`getConfiguration`, `crypto.randomUUID`; `Guid`/`DateTime`/`Random` keep `VF-IMP-005` with the new guidance (FR-013, FR-015) — quickstart D16, D17.
 - [ ] T026 [US2] SC-001 coverage check against the available corpus — quickstart C15.
@@ -65,7 +67,7 @@
 **Goal**: Member use on values that were .NET objects in Elsa 3, and .NET type references, are refused with a quoted diagnostic at conversion and publish.
 **Independent test**: quickstart E.
 
-- [ ] T029 [US3] Add the .NET-usage analyzer in `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Services/` behind a contract the Elsa 3 extension can call: .NET-type rule, PascalCase-invocation rule with the JS-global receiver and same-script-member exemptions, and the known-.NET-object rule fed by caller-supplied value sources; quotes the offending expression from node offsets (FR-016 to FR-019).
+- [ ] T029 [US3] Add the .NET-usage analyzer in `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Services/` behind a contract the Elsa 3 extension can call: .NET-type rule, PascalCase-invocation rule with the JS-global receiver, same-script-member, script-declared-name and registered-function/namespace exemptions, the list/dictionary native-member allowance, and the known-.NET-object rule fed by caller-supplied value sources; quotes the offending expression from node offsets (FR-016 to FR-019).
 - [ ] T030 [US3] Add the .NET type catalog and the JS-global allow set (data-model §3.2) as data in the analyzer; add the wrapped-.NET-type catalog beside the Elsa 3 type map in the converter (data-model §3.1).
 - [ ] T031 [US3] In the converter, call the analyzer with the known .NET-object sources (`newGuid()`/`parseGuid()` results; variables, inputs and outputs whose Elsa 3 type is in the wrapped catalog) and their `const`/`let` aliases; emit `VF-IMP-012` (new constant in `Elsa3ImportDiagnosticCodes`); leave `ElsaThreeGlobals` on `VF-IMP-005` (FR-016, FR-017).
 - [ ] T032 [US3] Call the analyzer from publish validation and emit `Scripts/DotNetMemberUsage` (FR-017, FR-018).
@@ -89,7 +91,7 @@
 - **Setup (T001)** and **Foundational (T002–T005)** block everything; T003 follows T002.
 - **US1 (T006–T012)** depends on Foundational; T008 depends on T005.
 - **US4 (T013–T019)** depends on T008.
-- **US2 (T020–T028)** depends on US1 and T013 (the converter resolves to registered built-ins).
+- **US2 (T020–T028, T042, T043)** depends on US1 and T013 (the converter resolves to registered built-ins).
 - **US3 (T029–T037)** depends on Foundational; its converter task T031 shares `Elsa3ExpressionRewriter.cs` with US2 — run T020–T022 before T031.
 - **Polish (T038–T041)** after the stories.
 

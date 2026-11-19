@@ -17,17 +17,20 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 6. `newGuid`, `newGuidString`, `getGuidString` return a 36-character GUID string; `parseGuid('{6F9619FF-8B86-D011-B42D-00CF4FC964FF}')` returns `6f9619ff-8b86-d011-b42d-00cf4fc964ff`; invalid text fails the evaluation.
 7. `newShortGuid` / `getShortGuid` for a fixed GUID equal Elsa 3's algorithm output (standard Base64 of `ToByteArray()` with `/`, `+`, `=` removed).
 8. `stringFromBase64(stringToBase64(x)) === x` for representative UTF-8 `x`, and `stringToBase64` matches Elsa 3 for the same `x`.
-9. `toJson` equals Elsa 3 3.5.3's output for representative values, including HTML-sensitive characters (`<` → `<`) and non-ASCII letters (kept).
+9. `toJson` equals Elsa 3.5.3's output for golden values: HTML-sensitive characters (`<` → `\u003C`), non-ASCII and non-BMP characters, a `Date` argument, `undefined`; `toJson(NaN)` fails. Invalid Base64 fails; invalid UTF-8 gives U+FFFD.
 10. No built-in accepts or returns a live .NET object.
-11. **Registration** — a duplicate name, an unprefixed host function or a reserved name fails startup with the function's name; `const newGuid = 1` in a script gets the publish warning `Scripts/ReservedName`; calling a built-in adds no fallback read marker (`ReadsVariables = false`).
+11. **Registration** — a duplicate name, an unprefixed host function or a reserved name fails startup with the function's name; `const newGuid = 1` gets the publish warning `Scripts/ShadowedFunction`; `const workflow = 1` gets the publish error `Scripts/ReservedName`; a host function `acme.lookup` is callable as `acme.lookup(x)`; calling a built-in adds no fallback read marker (`ReadsVariables = false`).
 11a. **Effect declaration** — a function registered with `Effectful` reports it, one without reports effect-free; a call runs exactly as often either way.
-11b. **Precision** — a number argument beyond 2^53 − 1 passed to a host function logs a warning naming the function and the argument path; the call returns.
+11b. **Precision** — a number argument carrying the value model's loss information passed to a host function logs a warning naming the function and the argument path; the call returns.
 
 ## C. Conversion — faithful (no refusal)
 
 12. Zone-independent `Date` usage (`Date.now()`, `getTime()`, `toISOString()`) and `Math.random()` convert without refusal, with or without a source time zone.
 12a. Zone-dependent usage (`getHours()`, `toLocaleString()`, `new Date('2026-10-28T09:15:00')`) is refused without a source time zone; with `Europe/Amsterdam` it converts and evaluates as Elsa 3 did on a server in that zone (winter and summer dates); with source time zone `UTC` (assume-UTC) it converts and evaluates in UTC.
-12b. A non-literal parse (`new Date(input)`) converts with a behaviour warning without a source time zone, and without a warning with one.
+12b. A non-literal parse (`new Date(input)`) is refused without a source time zone and converts with one; `new Date('2026-10-28')` converts without one.
+12c. `variables.due.getTime()` and `variables.due < new Date()` with `due: DateTime` in Elsa 3 convert and equal Elsa 3 (FR-032).
+12d. `n.toLocaleString()`, `a.localeCompare(b)` and `new Intl.NumberFormat()` without a locale are refused; with `'nl-NL'` they convert (FR-033).
+12e. `toLocaleString()` on a number is not treated as zone-dependent; `toString()` on a `Date` is.
 13. The GUID functions and `parseGuid` convert without refusal; `'id-' + newGuid()`, `newGuid().toString()` and `toJson(newGuid())` convert.
 14. `stringToBase64`/`stringFromBase64` and `toJson` convert without refusal.
 15. **SC-001 measure**: 100% of the available corpus workflows whose JS uses only faithful functions and zone-independent `Date` usage convert without refusal; with a source time zone set, also those with zone-dependent usage. **SC-007**: none with zone-dependent usage converts without a source time zone.
@@ -42,6 +45,7 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 18. Conversion: `newGuid().toString('N')`, `const g = parseGuid(s); g.toByteArray()`, `variables.upload.openReadStream()` and `toJson(variables.upload)` (with `upload: FormFile` in Elsa 3) are refused `VF-IMP-012`; the message quotes the offending expression.
 19. A .NET type reference (`TimeSpan.FromHours(1)`, `new Uri(s)`) is refused at conversion (`VF-IMP-012`) and at publish (`Scripts/DotNetMemberUsage`).
 20. A PascalCase invocation on a value the script did not define (`a.Where(f)`) is refused at conversion and publish.
+20a. On `items: List<string>` in Elsa 3, `variables.items.map(f)` is allowed and `variables.items.Add(x)` refused; `const Path = {…}; Path.join(a, b)` and `acme.Lookup(x)` are allowed.
 21. PascalCase property reads (`payload.OrderId`, `variables.Order.Status`), native calls (`s.toUpperCase()`, `a.map(f)`, `JSON.stringify(o)`, `new Date()`, `Intl.DateTimeFormat('en-GB')`) are **allowed**.
 22. A computed member invocation (`o[name]()`) is **allowed** (recorded gap).
 22a. An invocation of a member the script defines (`helpers.Format(x)`) is **allowed**.
