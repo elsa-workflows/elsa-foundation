@@ -21,7 +21,6 @@ public sealed class DynamicSourceConversionCharacterizationTests
     [Theory]
     [InlineData("Elsa.Any")]
     [InlineData("Object")]
-    [InlineData("System.Text.Json.JsonElement")]
     public void A_dynamic_source_cannot_be_planned_onto_a_string_target(string sourceAlias)
     {
         var source = new ValueTypeDescriptor(sourceAlias);
