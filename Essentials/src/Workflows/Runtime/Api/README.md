@@ -28,14 +28,16 @@ CShells__Shells__default__Features__WorkflowsRuntimeApi__WorkflowAlterationPaylo
 | Executables | `GET /runtime/workflows/executables`, `GET /runtime/workflows/executables/{artifactId}`, `GET /runtime/workflows/executables/{artifactId}/provenance` |
 | Execution | `POST /runtime/workflows/executables/{artifactId}/execute`, `POST /runtime/workflows/stimuli` |
 | Activation slots | `GET /runtime/workflows/activation-slots/{definitionId}`, `GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` |
-| Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/page`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}` |
+| Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/page`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}`; variable lifecycle (spec 1229): `GET .../variables`, `GET .../variable-writes`, `GET .../variable-writes/{entryId}/payload`, `GET .../journal`, `GET .../compare/{otherWorkflowExecutionId}`; the instance details carry `lostUpdateWarningCount` |
 | Detached dispatches | `GET /runtime/workflows/dispatches?parentWorkflowExecutionId=...|childWorkflowExecutionId=...|status=...`, `GET /runtime/workflows/dispatches/{dispatchId}` |
 | Diagnostics | `GET/PUT /runtime/workflows/diagnostics/settings` |
 | Alteration plans | `POST /runtime/workflows/alteration-plans`, `GET /runtime/workflows/alteration-plans/{planId}`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/page`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/{jobId}`, `POST /runtime/workflows/alteration-plans/{planId}/cancel` |
 
 Executable, provenance, instance, and diagnostics reads use `workflows/runtime:read`; execution/stimulus operations use `workflows/runtime:execute`; diagnostics mutation uses `workflows/runtime:manage`. The shared wildcard permission remains supported. Foundation Identity policy authorization and the host's ASP.NET Core authentication middleware establish the principal and challenges; the module mapper emits the RFC 7807 error contract.
 
-`POST .../execute` and `POST .../stimuli` are **synchronous to quiescence**: the in-process actor drains the run inline (ADR 0031 sticky single-writer drain) before the response is written, so the workflow has already reached completion, a fault, or its first durable suspension by the time the caller responds. The response is not an async hand-off acknowledgement — it returns `200 OK` and the body's `commandDispatchStatus` reflects the actual drain outcome (`Accepted`, `AcceptedButFaulted`, `Duplicate`, or `Deferred`). A `Rejected` dispatch returns `409 Conflict`. `AcceptedButFaulted` still returns `200` with a body: the drain completed but the drain encountered a failure; a `WaitForIntervention` policy can preserve a Running workflow with a blocking incident, which callers detect from `commandDispatchStatus`, not the HTTP code. `GET .../instances/{workflowExecutionId}` remains the polling surface for later state.
+`POST .../execute` and `POST .../stimuli` are **synchronous to quiescence**: the in-process actor drains the run inline (ADR 0031 sticky single-writer drain) before the response is written, so the workflow has already reached completion, a fault, or its first durable suspension by the time the caller responds. The response is not an async hand-off acknowledgement — it returns `200 OK` and the body's `commandDispatchStatus` reflects the actual drain outcome (`Accepted`, `AcceptedButFaulted`, `Duplicate`, or `Deferred`). A `Rejected` dispatch returns `409 Conflict`. A start whose inputs break the workflow's input contract (a missing required input, an unknown name or a mistyped value) is refused before anything is enqueued: `execute` answers `400`, and `stimuli` reports that start as `Refused` with its reason code and answers `400` when every matched start was refused and nothing resumed (#3728). `AcceptedButFaulted` still returns `200` with a body: the drain completed but the drain encountered a failure; a `WaitForIntervention` policy can preserve a Running workflow with a blocking incident, which callers detect from `commandDispatchStatus`, not the HTTP code. `GET .../instances/{workflowExecutionId}` remains the polling surface for later state.
+
+A drain can also end its turn early by yielding: to a Cancel for the same execution that waits for its mailbox, or to a passivation of the mailbox, such as a distributed member handing the execution off while it drains or stops (#3678). The response is then `200` with `Accepted` while the run has not reached a quiescence point: the Cancel takes effect at the yield checkpoint, or the run continues from it: on this node after a re-drive, through the resumption sweep, or on the next owner. Read the instance for its state.
 
 `POST .../stimuli` accepts an optional `idempotencyKey` for its start path. With a key, each matching workflow is started under an execution id derived from the key and the workflow's artifact (#2195), so a repeated call never starts it twice: reusing a key for the same artifact is answered `SkippedDuplicate` **permanently**, on every node and after restarts, and a caller that wants a second start sends a new key. Without a key, a repeated call may start a second instance.
 
@@ -83,6 +85,20 @@ resolve value payloads can read it through the value-payload read.
   (`.../value-evidence/{evidenceId}/payload`) answers `unavailable` for it, whatever the record carries beside its
   marker. For any other record, `isSensitive` is the flag the runtime recorded: the invoke path flags an input when
   its value's effective policy or its pinned input contract marks it sensitive.
+- **Variable lifecycle on the activity-execution detail** (spec 1221, Studio #4735): the same read carries, when the
+  execution's durable state has them, `variableWrites[]` (each write-history record: `outcome` such as
+  `LostUpdateWarning` or `LostUpdateFault`, `writer` and `overwrittenWriter`, `baseVersion`, `currentVersion`,
+  `newVersion`, `commitOrder`, `commitSequence`, `frameId`, `occurredAt`), `recordedCompletion` (the completion a
+  `Fault` lost update refused: selection, outcome names, attempt and its variable writes; its presence is when
+  `AcceptRecordedCompletion/1` applies) and `inputRefreshes[]` (each superseded background input evaluation, the
+  evaluation that replaced it and the changed variables with the version read and the current one). Values are never
+  inline: each written, overwritten, refused, recorded or superseded value is a value state (`captured`, `omitted`,
+  `redacted`; `expired` is reserved for spec 1229's history read), so a captured `null` never reads as a missing value.
+  A value's `digest` (an unsalted hash of the value) is shown only to a caller who may both inspect sensitive values
+  and resolve their payloads, and never beside a `redacted` value. A written value links its `VariableWrite` value evidence by `evidenceId` for the
+  value-payload read above; the
+  overwritten and refused values are operational (`isOperational: true`) and become readable through spec 1229's
+  write-history payload read.
 - **Descendants** (`.../activity-executions/{activityExecutionId}/descendants`) carry no value evidence.
 
 Known limit: an unmatched authored input (no executable node matched by its node id holds a compiled binding or a

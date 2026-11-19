@@ -1,0 +1,50 @@
+{
+  "passed": true,
+  "phase": "concurrent-prepared",
+  "controls": [
+    {
+      "name": "actual-public-host-snapshot",
+      "exitCode": 0,
+      "databaseSha256": "3e233f32f99452999fd57d1f9483620333d9fe85dc7709dd372b57362ae95621",
+      "outputSha256": "2b5dc91c1180e3c8f8793bcc0fdbffd7903779770aba69b8e3e75ccba42d4242",
+      "unchanged": true
+    },
+    {
+      "name": "wrong-snapshot-hash",
+      "exitCode": 2,
+      "databaseSha256": "3e233f32f99452999fd57d1f9483620333d9fe85dc7709dd372b57362ae95621",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-api-artifactHash",
+      "exitCode": 2,
+      "databaseSha256": "3e233f32f99452999fd57d1f9483620333d9fe85dc7709dd372b57362ae95621",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-api-artifactVersion",
+      "exitCode": 2,
+      "databaseSha256": "3e233f32f99452999fd57d1f9483620333d9fe85dc7709dd372b57362ae95621",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "owed-orphan-hidden-behind-canonical-source",
+      "exitCode": 2,
+      "databaseSha256": "263da223c843c793f12b02cc6788e1342ef7506fa0489a5a025516ac27cc7f35",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "actual-dispatch-loses-consumer-declaration",
+      "exitCode": 2,
+      "databaseSha256": "e7dc95a0150c399e703b397954ee82388507dff198827b0daae25f0d581902da",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    }
+  ],
+  "originalSnapshotUnchanged": true,
+  "scope": "default"
+}

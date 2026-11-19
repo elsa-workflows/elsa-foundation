@@ -130,6 +130,74 @@ public sealed class TaskScheduleTests
     public void A_wait_that_never_ends_never_arms() =>
         Assert.Equal(Timeout.InfiniteTimeSpan, ScheduledTaskExecution.NextArm(Timeout.InfiniteTimeSpan));
 
+    [Fact]
+    public async Task A_finite_tick_exactly_one_millisecond_late_runs_and_schedules_its_next_run()
+    {
+        var clock = new ControlledTimestampProvider();
+        var ranTwice = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var actions = 0;
+        var intervals = 0;
+        await using var execution = new ScheduledTaskExecution(
+            () => { if (Interlocked.Increment(ref actions) == 2) ranTwice.TrySetResult(); return Task.CompletedTask; },
+            () =>
+            {
+                if (Interlocked.Increment(ref intervals) == 3) return Timeout.InfiniteTimeSpan;
+                // ScheduleNextRun captured the start first. Both real timer callbacks therefore
+                // observe 101ms elapsed for their finite 100ms wait, without an OS timing guess.
+                clock.Advance(TimeSpan.FromMilliseconds(101));
+                return TimeSpan.FromMilliseconds(100);
+            }, timeProvider: clock);
+
+        await ranTwice.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(2, Volatile.Read(ref actions));
+    }
+
+    [Fact]
+    public async Task A_configured_infinite_wait_does_not_run_when_the_clock_advances()
+    {
+        var clock = new ControlledTimestampProvider();
+        var ran = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var execution = new ScheduledTaskExecution(
+            () => { ran.TrySetResult(); return Task.CompletedTask; },
+            () => Timeout.InfiniteTimeSpan, timeProvider: clock);
+
+        clock.Advance(TimeSpan.FromDays(100));
+        var observation = Task.Delay(TimeSpan.FromMilliseconds(200));
+        Assert.Same(observation, await Task.WhenAny(ran.Task, observation));
+    }
+
+    [Fact]
+    public async Task Early_finite_callbacks_keep_waiting_until_the_original_deadline()
+    {
+        var clock = new ControlledTimestampProvider();
+        var ran = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reads = 0;
+        await using var execution = new ScheduledTaskExecution(
+            () => { ran.TrySetResult(); return Task.CompletedTask; },
+            () => Interlocked.Increment(ref reads) == 1 ? TimeSpan.FromMilliseconds(100) : Timeout.InfiniteTimeSpan,
+            timeProvider: clock);
+
+        await clock.TwoCallbacks.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(ran.Task.IsCompleted);
+        clock.Advance(TimeSpan.FromMilliseconds(101));
+        await ran.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    private sealed class ControlledTimestampProvider : TimeProvider
+    {
+        private long _timestamp;
+        private int _reads;
+        public TaskCompletionSource TwoCallbacks { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp()
+        {
+            var value = Interlocked.Read(ref _timestamp);
+            if (Interlocked.Increment(ref _reads) == 3) TwoCallbacks.TrySetResult();
+            return value;
+        }
+        public void Advance(TimeSpan elapsed) => Interlocked.Add(ref _timestamp, elapsed.Ticks);
+    }
+
     private async Task<LogEntry> WaitForErrorAsync()
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);

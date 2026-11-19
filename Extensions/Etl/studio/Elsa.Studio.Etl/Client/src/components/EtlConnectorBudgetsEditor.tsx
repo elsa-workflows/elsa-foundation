@@ -10,7 +10,7 @@ type BudgetValue = number | EtlJsonNumber | undefined;
 type NumericBudgetObject<T> = { [K in keyof T]: BudgetValue };
 
 const connectorLimitFields: Array<BudgetField<keyof EtlConnectorLimits>> = [
-  { key: "filePartitionCount", label: "Requested CSV partitions", help: "The source is split into this many disjoint ranges when enough records exist." },
+  { key: "filePartitionCount", label: "Requested file partitions", help: "A CSV or JSON Lines source is split into this many disjoint ranges when enough records exist." },
   { key: "maxPartitions", label: "Maximum partitions", help: "The highest partition count accepted by this pipeline." },
   { key: "maxRecordBytes", label: "Maximum record bytes", help: "Largest raw UTF-8 size for one logical source record." },
   { key: "maxFields", label: "Maximum fields per record", help: "Applies to source and optional lookup fields." },

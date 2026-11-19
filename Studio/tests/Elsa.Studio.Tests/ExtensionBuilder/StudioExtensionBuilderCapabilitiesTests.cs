@@ -16,7 +16,7 @@ namespace Elsa.Studio.Tests.ExtensionBuilder;
 /// standing in for the backend host so the status mapping, the <c>extension-builder:read</c> gate, and the "zero
 /// outbound calls when unconfigured" fail-closed guarantee are asserted against the wire.
 /// </summary>
-public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncDisposable
+public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncLifetime
 {
     private const string CapabilitiesRoute = StudioExtensionBuilderBridge.RouteGroup + StudioExtensionBuilderBridge.CapabilitiesRoute;
     private const string BackendCapabilitiesPath = StudioExtensionBuilderBridge.BackendRoot + "/capabilities";
@@ -172,7 +172,9 @@ public sealed class StudioExtensionBuilderCapabilitiesTests : IAsyncDisposable
         return _app.GetTestClient();
     }
 
-    public async ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         if (_app is not null)
             await _app.DisposeAsync();

@@ -28,7 +28,7 @@ public sealed class ActivitiesDesignApiContractTests
         ["Availability.SaveSettings"] = "Elsa.Activities.Design.Api.Commands.SaveActivityAvailabilitySettings",
         ["AuthoringCapabilities.Get"] = null,
         ["Catalog.List"] = "Elsa.Activities.Design.Api.Requests.ListActivityAuthoringCatalog",
-        ["Definitions.Add"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDefinition",
+        ["Definitions.Add"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDefinitionRequest",
         ["Definitions.PreviewFork"] = "Elsa.Activities.Design.Api.Commands.PreviewReusableActivityFork",
         ["Definitions.List"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityDefinitions",
         ["Definitions.Get"] = "Elsa.Activities.Design.Api.Commands.GetReusableActivityDefinition",
@@ -36,12 +36,12 @@ public sealed class ActivitiesDesignApiContractTests
         ["Definitions.Recommendation"] = "Elsa.Activities.Design.Api.Commands.SetRecommendedReusableActivityVersion",
         ["Definitions.Picker"] = "Elsa.Activities.Design.Api.Requests.ListRecommendedActivityDefinitions",
         ["Definitions.ListDrafts"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityDrafts",
-        ["Definitions.AddDraft"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraftRequest",
+        ["Definitions.AddDraft"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraftBody",
         ["Definitions.ListVersions"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityVersions",
         ["Drafts.Get"] = "Elsa.Activities.Design.Api.Commands.GetReusableActivityDraft",
-        ["Drafts.Replace"] = "Elsa.Activities.Design.Api.Commands.ReplaceReusableActivityDraft",
+        ["Drafts.Replace"] = "Elsa.Activities.Design.Api.Commands.ReplaceReusableActivityDraftRequest",
         ["Drafts.UpdatePresentation"] = "Elsa.Activities.Design.Api.Commands.UpdateReusableActivityDraftPresentation",
-        ["Drafts.ConflictCopy"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraftConflictCopy",
+        ["Drafts.ConflictCopy"] = "Elsa.Activities.Design.Api.Commands.DraftConflictCopyRequest",
         ["Drafts.Validate"] = "Elsa.Activities.Design.Api.Commands.ValidateReusableActivityDraft",
         ["Drafts.MigrateProvider"] = "Elsa.Activities.Design.Api.Commands.MigrateReusableActivityDraft",
         ["Drafts.ProposeContract"] = "Elsa.Activities.Design.Api.Commands.ProposeReusableActivityContract",
@@ -106,16 +106,31 @@ public sealed class ActivitiesDesignApiContractTests
     };
 
     [Fact]
-    public async Task Post_migration_real_host_exposes_exactly_the_reviewed_38_operations()
+    public async Task Real_host_retains_all_38_reviewed_operations_and_the_additive_data_context()
     {
         await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
         var endpoints = OwnedEndpoints(host).ToArray();
 
-        Assert.Equal(38, endpoints.Length);
-        Assert.Equal(38, endpoints.Select(endpoint => Identity(endpoint)).Distinct().Count());
+        Assert.Equal(39, endpoints.Length);
+        Assert.Equal(39, endpoints.Select(endpoint => Identity(endpoint)).Distinct().Count());
         Assert.Equal(
-            ActivitiesDesignCompatibilityCases.Manifest.Select(route => route.Endpoint).OrderBy(endpoint => endpoint.ToString()),
+            ActivitiesDesignCompatibilityCases.Manifest.Select(route => route.Endpoint)
+                .Append(new EndpointIdentity("/design/activities/drafts/{draftId}/activity-data/context", "POST")).OrderBy(endpoint => endpoint.ToString()),
             endpoints.Select(Identity).OrderBy(endpoint => endpoint.ToString()));
+    }
+
+    [Fact]
+    public async Task Data_context_publishes_its_independent_read_gate_and_owner_wire_contract()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var endpoint = Assert.Single(OwnedEndpoints(host), candidate => Identity(candidate) ==
+            new EndpointIdentity("/design/activities/drafts/{draftId}/activity-data/context", "POST"));
+        var disposition = Assert.IsType<EndpointSecurityDispositionMetadata>(endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>());
+        var policy = new PermissionPolicyCodec().Parse(disposition.Value!);
+        Assert.Equal([PermissionKey.Normalize("activities/design:read")], policy.Descriptor!.Permissions);
+        Assert.Equal("Elsa.Activities.Design.Api.Models.ActivityDataSelectionContextRequest", endpoint.Metadata.GetMetadata<IAcceptsMetadata>()!.RequestType!.FullName);
+        Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), x =>
+            x.StatusCode == 200 && x.Type?.FullName == "Elsa.Activities.Design.Api.Models.ActivityDataSelectionContextResponse");
     }
 
     [Fact]

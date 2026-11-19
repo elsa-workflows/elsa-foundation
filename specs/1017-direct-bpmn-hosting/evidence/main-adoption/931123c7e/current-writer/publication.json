@@ -1,0 +1,17 @@
+{
+  "publicationId": "publication-14mKh6HXAem",
+  "definitionId": "14mKh5quFos",
+  "versionId": "14mKh5qycNe",
+  "definitionVersionId": "14mKh5qycNe",
+  "artifactId": "artifact-0ad24e4359c1",
+  "slotName": "default",
+  "status": "active",
+  "sourceReferenceId": "activation-ref:publication-14mKh6HXAem",
+  "createdAt": "2026-10-30T13:36:54.275332+00:00",
+  "activatedAt": "2026-10-30T13:36:54.495545+00:00",
+  "retiredAt": null,
+  "artifactVersion": "1.0.0",
+  "artifactHash": "sha256:0ad24e4359c190b071c14cf227f3f88a69b845783aba759a7d6d6d7c05d371ef",
+  "rootActivityId": "real-wait",
+  "nodeCount": 1
+}

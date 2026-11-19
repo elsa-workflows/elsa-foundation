@@ -65,6 +65,23 @@ def status_object(text):
     return rows[0]
 
 
+def native_preflight_qualified(code, data, temp_parent=None):
+    """A filesystem label alone cannot qualify the native directory-name provider."""
+    if not isinstance(data, dict) or not (code == 0 and data.get("status") == "passed" and data.get("preflight") is True
+            and data.get("membership") == "Unenrolled" and data.get("rootIdentityPresent") is True):
+        return False
+    filesystem = data.get("filesystemType")
+    if not isinstance(filesystem, str) or not filesystem.strip() or len(filesystem) > 64:
+        return False
+    try:
+        parent, root = Path(data["tempDirectory"]), Path(data["root"])
+        return (parent.is_absolute() and root.is_absolute() and root.parent == parent
+                and root.name.startswith("studio-store-probe-")
+                and (temp_parent is None or parent == Path(temp_parent)))
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
 def self_test():
     good = {"status": "failed", "stage": "standard-runtime", "error": "intended", "toolSha256": "tool"}
     result_gate(1, good, "tool", "standard-runtime", "intended")
@@ -101,12 +118,12 @@ class Qualification:
     def save(self):
         (self.root / "report.json").write_text(json.dumps(self.report, indent=2) + "\n")
 
-    def run(self, label, command, expected=0):
+    def run(self, label, command, expected=0, env=None):
         self.report["stage"] = label
         self.save()
         print(label, flush=True)
         with (self.root / (label + ".log")).open("w") as log:
-            result = subprocess.run(command, cwd=REPO, stdout=log, stderr=subprocess.STDOUT)
+            result = subprocess.run(command, cwd=REPO, stdout=log, stderr=subprocess.STDOUT, env=env)
         if expected is not None:
             check(result.returncode == expected, f"{label} exited {result.returncode}; see {self.root / (label + '.log')}")
         return result.returncode
@@ -137,7 +154,8 @@ class Qualification:
         self.all.mkdir()
         inventory = json.loads((REPO / "tools/ci/studio-package-identities.json").read_text())
         ids = {x["id"] for x in inventory["packable_projects"]}
-        for folder, selected in [(studio, ids), (modules, {"Elsa.Modularity.Core", "Elsa.Modularity.Nuplane"})]:
+        support_ids = {item["id"] for item in inventory["support_projects"]}
+        for folder, selected in [(studio, ids), (modules, support_ids)]:
             for path in folder.rglob("*.nupkg"):
                 name, version = identity(path)
                 if name not in selected:
@@ -151,7 +169,7 @@ class Qualification:
                     doc = ET.fromstring(archive.read(next(n for n in archive.namelist() if n.endswith(".nuspec"))))
                     repository = next((dict(n.attrib) for n in doc.iter() if n.tag.rsplit("}", 1)[-1] == "repository"), {})
                 self.packages[name] = {"path": str(destination), "version": version, "archiveSha256": sha(path), "repository": repository}
-        check(set(self.packages) == ids | {"Elsa.Modularity.Core", "Elsa.Modularity.Nuplane"}, "Missing genuine candidates")
+        check(set(self.packages) == ids | support_ids, "Missing genuine candidates")
         versions = {v["version"] for v in self.packages.values()}
         check(len(versions) == 1, "Candidate versions differ")
         self.version = versions.pop()
@@ -194,7 +212,7 @@ class Qualification:
         api = PROBES / "ApiPackageClosure.Probe/qualify.py"
         for label, negative in [("api-normal", False), ("api-omission", True), ("api-restored", False)]:
             child = self.root / label
-            code = self.run(label, [sys.executable, str(api), "--packages", str(self.studio), "--output", str(child), *(["--omit-api-core-dependency"] if negative else [])], expected=None)
+            code = self.run(label, [sys.executable, str(api), "--packages", str(self.all), "--output", str(child), *(["--omit-api-core-dependency"] if negative else [])], expected=None)
             data = self.record(label, code, child)
             if negative:
                 check(code == 1 and data["status"] == "failed" and data["stage"] == "publish" and data["toolSha256"] == sha(api)
@@ -214,7 +232,7 @@ class Qualification:
                  ("hosting-restored", [], None)]
         for label, flags, error in cases:
             child = self.root / label
-            code = self.run(label, [sys.executable, str(hosting), "--packages", str(self.studio), "--output", str(child), *flags], expected=None)
+            code = self.run(label, [sys.executable, str(hosting), "--packages", str(self.studio), "--support-packages", str(self.all), "--output", str(child), *flags], expected=None)
             data = self.record(label, code, child)
             result_gate(code, data, sha(hosting), "standard-runtime" if error else "complete", error)
             check(data["browserDriverSha256"] == sha(hosting.with_name("browser.mjs")), "Hosting browser driver differs")
@@ -241,6 +259,27 @@ class Qualification:
         guard = data["results"]["noUpdateControlGuard"]
         check(guard["status"] == "failed" and guard["expectedFailureObserved"] and guard["stage"] == "expected-package-update", "No-update guard was not exercised")
 
+    def native_scratch(self, dll):
+        # Both candidates are observed by the actual native provider. Only child probe processes
+        # receive TMPDIR; package production, other consumers and the parent environment stay intact.
+        owned = self.root / "native-probe-scratch"
+        owned.mkdir()
+        owned_env = dict(os.environ, TMPDIR=str(owned))
+        observations = []
+        for label, env, parent in [("default", None, None), ("owned", owned_env, owned)]:
+            name = "pruning-filesystem-" + label
+            code = self.run(name, ["dotnet", str(dll), "--filesystem-preflight"], expected=None, env=env)
+            data = status_object((self.root / (name + ".log")).read_text())
+            observations.append(dict(data, location=label, exitCode=code,
+                                     qualified=native_preflight_qualified(code, data, parent)))
+            self.report["nativeFilesystems"] = observations
+            self.save()
+        selected = next((row for row in reversed(observations) if row["qualified"]), None)
+        check(selected is not None, "No existing scratch location qualified the native filesystem precondition; see nativeFilesystems")
+        self.report["nativeScratchLocation"] = selected["location"]
+        self.save()
+        return owned_env if selected["location"] == "owned" else None
+
     def lifecycle(self):
         specs = [("reuse", "Runner/HostingReuse.Probe.csproj", "HostingReuse.Probe", "--disable-auto-reload", "An update did not replace the serving shell generation.", "completed", 4, 1),
                  ("pruning", "StorePruning/StorePruning.csproj", "StorePruning", "--release-reader-before-read", "Admitted HTTP range response failed.", "groups", 6, 4)]
@@ -250,9 +289,10 @@ class Qualification:
             self.run(label + "-build", ["dotnet", "build", str(project), "-c", "Release", "--no-restore"])
             dll = project.parent / ("bin/Release/net10.0/" + assembly + ".dll")
             check(dll.exists(), "Lifecycle build output is absent: " + str(dll))
+            env = self.native_scratch(dll) if label == "pruning" else None
             for variant, negative in [("normal", False), ("control", True), ("restored", False)]:
                 name = label + "-" + variant
-                code = self.run(name, ["dotnet", str(dll), *([flag] if negative else [])], expected=None)
+                code = self.run(name, ["dotnet", str(dll), *([flag] if negative else [])], expected=None, env=env)
                 data = status_object((self.root / (name + ".log")).read_text())
                 check(code == (1 if negative else 0) and data["status"] == ("failed" if negative else "passed")
                       and len(data[groups]) == (negative_count if negative else positive_count), "Lifecycle outcome differs: " + name)
@@ -337,7 +377,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, help="New owned qualification directory")
     parser.add_argument("--packages", type=Path, help="Actual22Studio candidate archives; otherwise produce a committed snapshot")
-    parser.add_argument("--modularity-packages", type=Path, help="Matching actual Modularity.Core/Nuplane archives")
+    parser.add_argument("--modularity-packages", type=Path, help="Matching actual mandatory support archives from the Studio inventory")
     parser.add_argument("--reference-web", type=Path, help="Matching actual published reference distribution")
     parser.add_argument("--expected-producer-commit", help="CI producer/tool commit required by all supplied archive metadata")
     parser.add_argument("--version", default="4.0.0-studio-ci-qualification", help="Local snapshot candidate version")

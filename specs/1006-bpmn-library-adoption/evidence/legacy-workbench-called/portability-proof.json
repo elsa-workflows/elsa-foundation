@@ -1,0 +1,9 @@
+{
+  "legacyBuildAbsentBeforeColdStart": true,
+  "legacyPrivateTmpAliasAbsentBeforeColdStart": true,
+  "actualApiPassed": true,
+  "legacyBuildStillAbsentAfterActualContinuation": true,
+  "oldOutputRestored": true,
+  "snapshotSha256": "9564bddf9b83c8ccf78cbc0f5ce2e42fb3a239671a7eb233e087b4d83ae2e354",
+  "writerExitedBeforeBackup": true
+}

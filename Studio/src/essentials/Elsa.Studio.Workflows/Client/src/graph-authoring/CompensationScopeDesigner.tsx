@@ -167,6 +167,15 @@ export function CompensationScopeDesigner({
   const scopeName = runtime?.scopeLabel || "this scope";
 
   const change = (edit: (current: CompensationStep[]) => CompensationStep[], status: string) => onChangeSteps?.(edit, status);
+  const removeActivity = (step: CompensationStep, index: number, cell: "step" | "compensation") => {
+    const property = cell === "step" ? "activity" : "compensation";
+    const activity = step[property];
+    const name = step.name.trim() || `Step ${index + 1}`;
+    change(current => updateCompensationStep(current, index, { [property]: null }),
+      cell === "step" ? `Removed the activity from ${name}` : `Removed the compensation for ${name}`);
+    if (activity && selectedNodeId === activity.nodeId) onSelect(null);
+    queueMicrotask(() => rootRef.current?.querySelector<HTMLElement>(`[data-step-index="${index}"] [data-empty-cell="${cell}"]`)?.focus());
+  };
   const request = (target: CompensationActivityTarget, event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     onRequestActivity?.(target, {
@@ -273,9 +282,6 @@ export function CompensationScopeDesigner({
         </section>
       ) : (
         <div className="wf-compensation-table">
-          <div className="wf-compensation-columns" aria-hidden="true">
-            <span>#</span><span>Step</span><span>Compensation</span>
-          </div>
           <div className="wf-compensation-rows" role="list" aria-label="Compensation steps">
           {steps.map((step, index) => {
             const name = step.name.trim() || `Step ${index + 1}`;
@@ -293,9 +299,8 @@ export function CompensationScopeDesigner({
                 aria-label={`Step ${index + 1}, ${name}${handlerLabel ? `, compensated by ${handlerLabel}` : ", no compensation"}`}
                 data-step-index={index}
               >
-                <span className="wf-compensation-ordinal" aria-hidden="true">{index + 1}</span>
-
-                <div className="wf-compensation-step">
+                <header className="wf-compensation-row-heading">
+                  <span className="wf-compensation-ordinal" aria-hidden="true">{index + 1}</span>
                   {readOnly ? (
                     <span className="wf-compensation-name">{name}</span>
                   ) : (
@@ -311,6 +316,26 @@ export function CompensationScopeDesigner({
                       }}
                     />
                   )}
+                  {!readOnly ? (
+                    <div className="wf-compensation-actions" aria-label={`${name} actions`}>
+                      <button type="button" aria-label={`Move ${name} up`} title="Move up" disabled={index === 0}
+                        onClick={() => change(current => moveCompensationStep(current, index, index - 1), `Moved ${name} up`)}>
+                        <ArrowUp size={14} aria-hidden="true" />
+                      </button>
+                      <button type="button" aria-label={`Move ${name} down`} title="Move down" disabled={index === steps.length - 1}
+                        onClick={() => change(current => moveCompensationStep(current, index, index + 1), `Moved ${name} down`)}>
+                        <ArrowDown size={14} aria-hidden="true" />
+                      </button>
+                      <button type="button" aria-label={`Delete step ${name}`} title="Delete step"
+                        onClick={() => change(current => removeCompensationStep(current, index), `Deleted step ${name}`)}>
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  ) : null}
+                </header>
+
+                <div className="wf-compensation-step">
+                  <span className="wf-compensation-column-label" aria-hidden="true">Step activity</span>
                   <ActivityCell
                     node={forwardNode}
                     role="step"
@@ -320,6 +345,7 @@ export function CompensationScopeDesigner({
                     readOnly={readOnly}
                     onSelect={() => step.activity && onSelect(step.activity.nodeId)}
                     onChoose={event => request({ kind: "step-activity", index }, event)}
+                    onRemove={step.activity ? () => removeActivity(step, index, "step") : undefined}
                     onOpenSlot={onOpenSlot}
                   />
                   {row ? (
@@ -336,6 +362,7 @@ export function CompensationScopeDesigner({
                 </div>
 
                 <div className="wf-compensation-handler">
+                  <span className="wf-compensation-column-label" aria-hidden="true">Compensation</span>
                   {step.compensation ? (
                     <>
                       <ActivityCell
@@ -346,25 +373,15 @@ export function CompensationScopeDesigner({
                         selected={selectedNodeId === step.compensation.nodeId}
                         readOnly={readOnly}
                         onSelect={() => onSelect(step.compensation!.nodeId)}
+                        onRemove={() => removeActivity(step, index, "compensation")}
                         onOpenSlot={onOpenSlot}
                       />
                       <span className="wf-compensation-undoes"><Undo2 size={12} aria-hidden="true" /> Undoes: {name}</span>
-                      {!readOnly ? (
-                        <button
-                          type="button"
-                          className="wf-compensation-icon-button"
-                          aria-label={`Remove compensation for ${name}`}
-                          title="Remove compensation"
-                          onClick={() => change(current => updateCompensationStep(current, index, { compensation: null }), `Removed the compensation for ${name}`)}
-                        >
-                          <X size={14} aria-hidden="true" />
-                        </button>
-                      ) : null}
                     </>
                   ) : readOnly ? (
                     <span className="wf-compensation-none">No compensation</span>
                   ) : (
-                    <button type="button" className="wf-compensation-add" aria-label={`Add compensation for ${name}`} onClick={event => request({ kind: "compensation", index }, event)}>
+                    <button type="button" className="wf-compensation-add" data-empty-cell="compensation" aria-label={`Add compensation for ${name}`} onClick={event => request({ kind: "compensation", index }, event)}>
                       <Plus size={14} aria-hidden="true" /> Add compensation
                     </button>
                   )}
@@ -375,22 +392,6 @@ export function CompensationScopeDesigner({
                     : null}
                 </div>
 
-                {!readOnly ? (
-                  <div className="wf-compensation-actions" aria-label={`${name} actions`}>
-                    <button type="button" aria-label={`Move ${name} up`} title="Move up" disabled={index === 0}
-                      onClick={() => change(current => moveCompensationStep(current, index, index - 1), `Moved ${name} up`)}>
-                      <ArrowUp size={14} aria-hidden="true" />
-                    </button>
-                    <button type="button" aria-label={`Move ${name} down`} title="Move down" disabled={index === steps.length - 1}
-                      onClick={() => change(current => moveCompensationStep(current, index, index + 1), `Moved ${name} down`)}>
-                      <ArrowDown size={14} aria-hidden="true" />
-                    </button>
-                    <button type="button" aria-label={`Delete step ${name}`} title="Delete step"
-                      onClick={() => change(current => removeCompensationStep(current, index), `Deleted step ${name}`)}>
-                      <Trash2 size={14} aria-hidden="true" />
-                    </button>
-                  </div>
-                ) : null}
 
                 {problem ? <p className="wf-compensation-problem" id={problemId}><AlertTriangle size={12} aria-hidden="true" /> {problem}</p> : null}
               </article>
@@ -468,6 +469,7 @@ function ActivityCell({
   readOnly,
   onSelect,
   onChoose,
+  onRemove,
   onOpenSlot
 }: {
   node: Node<WorkflowNodeData> | undefined;
@@ -478,15 +480,25 @@ function ActivityCell({
   readOnly: boolean;
   onSelect(): void;
   onChoose?(event: MouseEvent<HTMLButtonElement>): void;
+  onRemove?(): void;
   onOpenSlot?: CompensationScopeDesignerProps["onOpenSlot"];
 }) {
+  const removeButton = !readOnly && onRemove ? <button
+    type="button"
+    className="wf-compensation-icon-button"
+    aria-label={role === "step" ? `Remove activity from ${stepName}` : `Remove compensation for ${stepName}`}
+    title={role === "step" ? "Remove step activity" : "Remove compensation"}
+    onClick={onRemove}
+  ><X size={14} aria-hidden="true" /></button> : null;
   if (!node) {
-    if (readOnly || !onChoose) return <span className="wf-compensation-none">No activity</span>;
-    return (
-      <button type="button" className="wf-compensation-add" aria-label={`Choose the activity for ${stepName}`} onClick={onChoose}>
+    if (readOnly) return <span className="wf-compensation-none">No activity</span>;
+    return <div className="wf-compensation-cell" data-role={role}>
+      {onChoose ? <button type="button" className="wf-compensation-add" data-empty-cell={role}
+        aria-label={`Choose the activity for ${stepName}`} onClick={onChoose}>
         <Plus size={14} aria-hidden="true" /> Choose activity
-      </button>
-    );
+      </button> : <span className="wf-compensation-none">No activity</span>}
+      {removeButton}
+    </div>;
   }
 
   const { icon, fallback, tone } = resolveNodeActivityVisual(node.data);
@@ -508,6 +520,7 @@ function ActivityCell({
         </span>
         <span className="wf-compensation-activity-label">{node.data.label}</span>
       </button>
+      {removeButton}
       {onOpenSlot ? node.data.childSlots.map(slot => (
         <button
           key={slot.id}

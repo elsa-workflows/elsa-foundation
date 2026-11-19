@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Actual pre-claim writer inputs for the T027 old-input upgrade/replay hosting controls. Members are restored, never regenerated on a newer writer.",
+  "archives": [
+    {
+      "kind": "pre-claim-api",
+      "sourceCommit": "1d77ed131de3305da8b8236f739c63085bff3e73",
+      "name": "elsa-bpmn-human-preclaim-1d77ed131.zip",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-human-preclaim-1d77ed131.zip",
+      "bytes": 471073,
+      "sha256": "be273c4f5bb18312f0841170e5c77701e93688911f8f8c37276c61bbe832c5c8",
+      "files": 24,
+      "members": [
+        {
+          "path": "unclaimed-wait-runtime.sqlite.gz",
+          "bytes": 119368,
+          "sha256": "1f83b078eafb3d230315c0117b9b463406dc7e18556431aa5d74b5403ec23d02",
+          "target": "preclaim/unclaimed-wait-runtime.sqlite.gz"
+        },
+        {
+          "path": "unclaimed-wait-design.sqlite.gz",
+          "bytes": 111857,
+          "sha256": "4ec3d5b2273f540a7644453c6f16467f715877525f1ffe79f837967689cb736f",
+          "target": "preclaim/unclaimed-wait-design.sqlite.gz"
+        },
+        {
+          "path": "unclaimed-completed-runtime.sqlite.gz",
+          "bytes": 120684,
+          "sha256": "50098afebd419f88da8ed2f3038f2a070ff85513f8ab50af7a74eedb3a88c0ce",
+          "target": "preclaim/unclaimed-completed-runtime.sqlite.gz"
+        },
+        {
+          "path": "unclaimed-completed-design.sqlite.gz",
+          "bytes": 112520,
+          "sha256": "8e1197b317a6b91362a4f6db3975bba37844a03085bab4ff22249e2a498d21c2",
+          "target": "preclaim/unclaimed-completed-design.sqlite.gz"
+        },
+        {
+          "path": "completion.json",
+          "bytes": 280,
+          "sha256": "52adbf1cae831f73a36421d2048addfaedcdeb26fa70a85d630e0234359b5f1d",
+          "target": "preclaim/completion.json"
+        },
+        {
+          "path": "completion-replay.json",
+          "bytes": 279,
+          "sha256": "e661778af241a43f95baef10a76914aef87b4135ca9d389961953bd0a415b300",
+          "target": "preclaim/completion-replay.json"
+        },
+        {
+          "path": "completed.json",
+          "bytes": 885,
+          "sha256": "43288682588b577ecc6be54794d84d53df34a1d3131c6e1e3bf5f68c3cee7a85",
+          "target": "preclaim/completed.json"
+        },
+        {
+          "path": "work-before-restart.json",
+          "bytes": 310,
+          "sha256": "f066d5915f81f45206ac2e17a24d902a23d060d2cc779cb76d806ad317c4d4a0",
+          "target": "preclaim/work-before-restart.json"
+        },
+        {
+          "path": "execution-before-restart.json",
+          "bytes": 828,
+          "sha256": "ba4c4f1f8d44d3b73665a1434a12f590086180f874aacf9a3252ff3fc61a4baa",
+          "target": "preclaim/execution-before-restart.json"
+        }
+      ]
+    },
+    {
+      "kind": "p1-studio",
+      "sourceCommit": "11437c0bd2c0ee9d1dbf0a6bcc926f2f4672cd1a",
+      "name": "elsa-bpmn-studio-human-11437c0bd.zip",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-studio-human-11437c0bd.zip",
+      "bytes": 7124971,
+      "sha256": "a76aba44d0a2f3d0a6b716eb70166398dab946c0dd2ed96938b597d4e111a7bb",
+      "files": 143,
+      "members": [
+        {
+          "path": "studio-human-11437c0bd/human-wait-runtime.sqlite.gz",
+          "bytes": 119763,
+          "sha256": "37e31c05c657312d37bf34595076c8fa4598b0d609cd4c72dc42adc83f2de7d1",
+          "target": "human/human-wait-runtime.sqlite.gz"
+        },
+        {
+          "path": "studio-human-11437c0bd/human-wait-design.sqlite.gz",
+          "bytes": 112261,
+          "sha256": "914d756277f8ba8bbd3523dfdb6de77007a5ed44db03055732e79bd85f3644ca",
+          "target": "human/human-wait-design.sqlite.gz"
+        },
+        {
+          "path": "studio-human-11437c0bd/finished-runtime.sqlite.gz",
+          "bytes": 121267,
+          "sha256": "880ad3726333b768718dd98af8c29e45539a1b1fe1646cd341b8956ee76d0a88",
+          "target": "human/finished-runtime.sqlite.gz"
+        },
+        {
+          "path": "studio-human-11437c0bd/finished-design.sqlite.gz",
+          "bytes": 112782,
+          "sha256": "34e0f3734fc155db33731288c1f8804960257d54beab2f0ee837f60a3819d891",
+          "target": "human/finished-design.sqlite.gz"
+        },
+        {
+          "path": "studio-human-11437c0bd/browser-receipt.json",
+          "bytes": 81126,
+          "sha256": "a74fd7799181dd79768015c0f9efd1ba69dbfa5765370fec8fe14c516d36736c",
+          "target": "human/browser-receipt.json"
+        },
+        {
+          "path": "studio-human-11437c0bd/human-wait-bpmn-views.json",
+          "bytes": 10437,
+          "sha256": "163fa77af95f756adc33bc4ea3f5c78a462b5dbe44232490e2645743231fd8de",
+          "target": "human/human-wait-bpmn-views.json"
+        },
+        {
+          "path": "studio-human-11437c0bd/finished-bpmn-views.json",
+          "bytes": 10136,
+          "sha256": "6c86c34043a37812aecfda8c83e165e370fc6ee5c288dedfe183f65887d15433",
+          "target": "human/finished-bpmn-views.json"
+        }
+      ],
+      "filesNote": "Zip entries including ARCHIVE-MANIFEST.json; the publication receipt counts its 142 listed members."
+    }
+  ]
+}

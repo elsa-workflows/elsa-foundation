@@ -8,6 +8,12 @@ import type { AttentionSnapshot } from "../attentionApi";
 describe("Attention widget rendering", () => {
   it("distinguishes complete all-clear from incomplete empty data", async () => { const clear = await render({ generatedAt: "", items: [], failures: [] }); expect(clear.container.textContent).toContain("All clear"); clear.unmount(); const partial = await render({ generatedAt: "", items: [], failures: [{ contributorId: "host.backend", displayName: "Backend attention", status: "unavailable", evaluatedAt: "" }] }); expect(partial.container.textContent).not.toContain("All clear"); expect(partial.container.textContent).toContain("data is incomplete"); partial.unmount(); });
   it("filters critical items and preserves inspect destinations", async () => { const view = await render({ generatedAt: "", failures: [], items: [item("warning", "/warning"), item("critical", "/critical")] }); expect(view.container.querySelector('a[href="/warning"]')).not.toBeNull(); click([...view.container.querySelectorAll("button")].find(value => value.textContent === "Critical")!); expect(view.container.querySelector('a[href="/warning"]')).toBeNull(); expect(view.container.querySelector('a[href="/critical"]')?.textContent).toBe("Inspect"); view.unmount(); });
+  it("keeps native Inspect links bound to the selected backend", async()=>{
+    window.history.replaceState({},"","/?backend=runtime");
+    const view=await render({generatedAt:"",failures:[],items:[item("warning","/workflows/instances/shared-id")]});
+    try {expect(view.container.querySelector("a")?.getAttribute("href")).toBe("/workflows/instances/shared-id?backend=runtime");}
+    finally {view.unmount();window.history.replaceState({},"","/");}
+  });
   it("caps members before correlation grouping according to widget size", async () => {
     const items = Array.from({ length: 20 }, (_, index) => ({ ...item("warning", `/item-${index}`), id: `item-${index}`, correlations: [{ kind: "workflow", value: "shared" }] }));
     const wide = await render({ generatedAt: "", failures: [], items }, "wide");

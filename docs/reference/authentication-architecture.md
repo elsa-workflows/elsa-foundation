@@ -57,6 +57,11 @@ identity's exact runtime `AuthenticationType` must also be registered in
 authorization selects exactly one matching identity and passes only that identity to grant sources;
 zero or multiple matches are challenged so tenants/providers cannot be unioned accidentally.
 
+`elsa.identity.user_id` (`IdentityClaimTypes.UserId`) is an internal claim too: normalization strips any incoming
+copy, and only the ASP.NET Core Identity claims projector re-emits it, carrying the Elsa user ID. Consumers that bind a
+durable actor (for example human review decisions) prefer it and fall back to `NameIdentifier`/`sub`, which the
+OpenIddict tokens already set to the Elsa user ID, so other token factories need not emit it.
+
 The built-in trusted runtime types are `Elsa.Foundation.Identity` for the normalized external
 principal factory, the ASP.NET Core Identity cookie scheme for reconstructed cookie requests, and
 the OpenIddict validation scheme for validated bearer requests. OpenIddict's token-construction

@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "task": "T017 bounded continued MI/listener callback replay after actual legacy upgrade and pruning; remaining task gates open",
+  "sourceParentCommit": "7ea72f7280051db88986c7357d9f307073f2f2b5",
+  "filesSha256": {
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnUpgradeRecoveryEfTests.cs": "ccc4042040ef682eee1b66589cd1dc7bbfd92259eec4345f9ec41fcb73550afe",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnUpgradeRecoveryEfTests.ContinuedReplay.cs": "b381aac7d53799a73d131c686123cfda07e1cba3f568fa25b9d1d32e58188461",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnWorkLedger.cs": "beeaae7aa7aee9db0bea042c0c27697d75c7de65e5177f8c2581ef32d6df440b",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityAttemptActivationClaimer.cs": "1ff1e4d57f32718b3cc92f4ffdaa74a954a770abe552704c35650211671de31c",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs": "e5b927efaf48caee929132475b7b0062ff30bba973746a43df4f9e5e6d9105ae",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "specs/1006-bpmn-library-adoption/tasks.md": "f1a23ed2f8b06cd17c083ad637f7b0fd2118a52fe198ac15cf846638eaede718",
+    "specs/1006-bpmn-library-adoption/evidence/reader-matrix.md": "94ab7d79c1d1e7ac45a3dfa8c6bf07f4a70709ce0137b5df9888bde98237f1c7",
+    "specs/1006-bpmn-library-adoption/evidence/continued-legacy-callback-replay.md": "f60742244b93249b52b3451d090a94d79512395847a63c158ac706b6c7af6366"
+  },
+  "binariesSha256": {
+    "Bpmn.Model.dll": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776",
+    "Bpmn.Semantics.dll": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923",
+    "Elsa.Activities.Bpmn.dll": "c108b9f1d9cf8ce0bed7f828b4871357323387f33a333460b1afc58e1c215479",
+    "Elsa.Activities.Runtime.dll": "7a86eb411c0aa0f08be9838c8f7005ff720e21273f99979b02d171d8b91f8c76",
+    "Elsa.Workflows.Runtime.dll": "e47233a3d405d3662125c49b1f0469b4398f89df806c2fed1a5a725ff905f192",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "dd2746bed23a28954bb9370d32d7ca684c9b9ff284c43202b8b36114f16db190",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll": "2b258f105b057e9d04dac5faf987797c086dbf41138432791f159acdbd9de509"
+  },
+  "releasedPackages": [
+    "Bpmn.Model/0.5.0",
+    "Bpmn.Semantics/0.5.0"
+  ],
+  "actualLegacyCheckpoints": {
+    "parallel-mi": {
+      "receiptSha256": "91738281dd197a5c8e62794914c18d158638e32a9daa26b36369be8ef01ccb25",
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734",
+      "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+      "stateVersion": 1
+    },
+    "listener-rearm": {
+      "receiptSha256": "ed4c3c8577655ee70b53ab8c9c59098460390ef34ae1f3db196459faefae5e73",
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d",
+      "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+      "stateVersion": 1
+    }
+  },
+  "checks": [
+    {
+      "name": "actual continued MI/listener callbacks, focused",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "cf4a87882e7a8f5cb0deb31b37a106cc16d048735211581e99929f7f2f2bafbf"
+    },
+    {
+      "name": "whole Runtime EF",
+      "passed": 1651,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "8a2a0498b70f1fc4a86c211cc18a669606cf3b375f1a9026301673147103d2c5"
+    }
+  ],
+  "mutations": {
+    "sourceRestored": true,
+    "sourceSha256": {
+      "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityAttemptActivationClaimer.cs": "1ff1e4d57f32718b3cc92f4ffdaa74a954a770abe552704c35650211671de31c",
+      "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnWorkLedger.cs": "beeaae7aa7aee9db0bea042c0c27697d75c7de65e5177f8c2581ef32d6df440b"
+    },
+    "mutants": [
+      {
+        "name": "ignore-processed-callback",
+        "failed": 2,
+        "passed": 0,
+        "skipped": 0,
+        "compileFailure": false,
+        "logSha256": "e8baf691ee10d8bc5389a0dd03a4a64269fc4bbc1a56dd736ecdf757d52403aa"
+      },
+      {
+        "name": "first-node-iteration-match",
+        "failed": 1,
+        "passed": 1,
+        "skipped": 0,
+        "compileFailure": false,
+        "logSha256": "72454bb408b56ab3a4dfb8e114cd860565d5d537033a28723b3692547edcea14"
+      }
+    ]
+  },
+  "qualification": {
+    "actualUnchangedLegacyDatabaseCopies": true,
+    "normalResumeOfExactCurrentNativeEvent": true,
+    "preexistingNonblankTokenAndExactNodeTokenIterationParentWorkBinding": true,
+    "actualNormalSchedulerHandlerInputCapturedAndForwarded": true,
+    "completedChildHasExactProcessedCallbackReceipt": true,
+    "originalSemanticTokenPruned": true,
+    "otherOriginalActivityFactsUnchangedByFirstCallback": true,
+    "siblingPhysicalBookmarkGenerationAndScopeUnchanged": true,
+    "listenerNewInvocationAtSameNodeAndNullIterationDistinct": true,
+    "freshProviderReceivesIdenticalActualWorkItem": true,
+    "replayQueuePresenceAndImmediateConsumptionProven": true,
+    "noPoisonOrAdapterReevaluation": true,
+    "completeActivityFactsAndPhysicalBookmarkObservationsUnchangedByReplay": true,
+    "remainingOriginalWorkCompletes": true
+  },
+  "initialFailure": {
+    "passed": 0,
+    "failed": 2,
+    "reason": "Dispatcher-level observation did not see the selected callback; it was replaced by a passive forwarding observer of actual normal parent-completion scheduler-handler input. No callback was invented or reconstructed.",
+    "qualified": false,
+    "logSha256": "6f1efd45c179e031482c61451829c6e4250c74b9c9e118c4a7d23f0cd1848b2f"
+  },
+  "reviewFindingsFixed": [
+    "After-only token absence was vacuous: require preexisting nonblank token and exact live-work/parent correlation before continuation.",
+    "Bookmark content alone omitted physical replacement identity: include actual ObserveAsync Generation and Scope for siblings/replay."
+  ],
+  "mutationLimits": [
+    "Processed-callback guard omission fails both cases in the actual fresh-provider replay phase at complete activity-fact equality.",
+    "First node/iteration matching fails the listener during initial recovery/capture; MI still passes. It proves rearm history sensitivity, not execution of that mutant through replay."
+  ],
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "actualOldCaptureWriterInvoked": false,
+  "reviews": {
+    "type": "three independent bounded source/actual/portable audits; not full PR",
+    "remainingActionable": []
+  },
+  "remainingGates": [
+    "Remaining T017 fault/cancel scenarios and full task reconciliation",
+    "T021/T022/T024/T025/T029/T045 native-composite/combined/control delivery and actual final Workbench/Studio acceptance",
+    "T032 duplicate semantic writer deletion and T033/T034/T035 guards/audits",
+    "T036/T037/T038 final qualification/full PR/required checks/protected merge/resulting-main; separate ADR0063",
+    "Independent production #2898/#2907/program evidence; Orleans/task-runner deferred"
+  ],
+  "notQualified": [
+    "outbox acknowledgment-loss or source redrive",
+    "full-process Workbench crash/restart by these provider tests",
+    "running old-binary rollback",
+    "final current Studio or production acceptance"
+  ],
+  "fullPrRounds": 0
+}

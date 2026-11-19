@@ -1,0 +1,25 @@
+{
+  "preIncrementSourceRevision": "d0b0fc008a20214c734c2d7ea138bf4fd0bf02d0",
+  "originalReaderSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "originalReaderPath": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStatePersister.cs",
+  "originalReaderSha256": "9189d14118f7d2464342abd516801ba8989d8a73ce52559017369c35c8ae9972",
+  "originalReaderUnchanged": true,
+  "bpmnTests": {
+    "passed": 273,
+    "failed": 0,
+    "skipped": 0
+  },
+  "runtimeEfTests": {
+    "passed": 1015,
+    "failed": 0,
+    "skipped": 0
+  },
+  "actualLegacyRecoveryAndRefusalCases": 10,
+  "redControl": "Actual frozen parallel-mi checkpoint with wrong terminal reporter bpmn.elementId advanced the parent before the correction.",
+  "readerProof": "Original production v1 reader parses actual newly written upgraded MI/listener continuations and original deferred fault; recursive legacy-field equality. Fresh v2 is explicitly refused.",
+  "limits": [
+    "Reader parsing does not qualify running rollback.",
+    "Supersession-chain controls are synthetic boundary controls, not full operator alteration qualification.",
+    "Actual callback replay after pruning, late child fault and combined durability remain open."
+  ]
+}

@@ -131,9 +131,11 @@ export function serializeDefaultValue(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
-export function parseLiteralDefault(source: string): { ok: true; value: unknown } | { ok: false } {
+export function parseLiteralDefault(source: string): { ok: true; value: unknown } | { ok: false; error?: string } {
   try {
-    return { ok: true, value: JSON.parse(source) as unknown };
+    const value = JSON.parse(source) as unknown;
+    if (hasLossyJsonNumbers(source)) return { ok: false, error: "This JSON number cannot be saved without losing precision. Use a JSON variable or binding." };
+    return { ok: true, value };
   } catch {
     return { ok: false };
   }
@@ -173,4 +175,27 @@ function initialTypeSelection(capabilities: ActivityAuthoringCapabilities) {
     collectionKind: type.supportedCollectionKinds.includes("Single") ? "Single" : type.supportedCollectionKinds[0],
     storageDriverKey: drivers[0]
   };
+}
+
+/** JSON.parse-backed editors must refuse numeric values their save payload would silently change. */
+function hasLossyJsonNumbers(source: string) {
+  // Consume quoted strings as complete tokens so digits and escaped quotes inside strings are ignored.
+  const tokens = source.matchAll(/"(?:\\[\s\S]|[^"\\])*"|(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/g);
+  for (const token of tokens) {
+    if (!token[1]) continue;
+    const value = Number(token[1]);
+    if (!Number.isFinite(value) || Object.is(value, -0) || normalizedDecimal(token[1]) !== normalizedDecimal(String(value))) return true;
+  }
+  return false;
+}
+
+function normalizedDecimal(token: string) {
+  const [mantissa, exponent = "0"] = token.toLowerCase().split("e");
+  const negative = mantissa.startsWith("-");
+  const unsigned = negative ? mantissa.slice(1) : mantissa;
+  const [whole, fraction = ""] = unsigned.split(".");
+  const digits = (whole + fraction).replace(/^0+/, "");
+  if (!digits) return "0";
+  const significant = digits.replace(/0+$/, "");
+  return `${negative ? "-" : ""}${significant}e${Number(exponent) - fraction.length + digits.length - significant.length}`;
 }

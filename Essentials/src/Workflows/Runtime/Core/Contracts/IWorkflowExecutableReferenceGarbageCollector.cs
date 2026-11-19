@@ -10,6 +10,10 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowExecutableReferenceGarbageCollector
 {
+    /// <summary>Whether this composition queries saved stimulus roots during initial and guarded final reachability reads.</summary>
+    /// <remarks>Legacy compositions remain usable for ordinary work; they cannot support enabling durable recipient publication.</remarks>
+    bool SupportsStimulusDeliveryRetention => false;
+
     /// <summary>Runs one sweep as of the current time and reports what it removed.</summary>
     ValueTask<WorkflowExecutableReferenceSweepResult> SweepAsync(CancellationToken cancellationToken = default);
 

@@ -10,9 +10,11 @@ This project owns the Design-time provider for reusable activity graphs. The can
 | Provider reference rewriting | `elsa.activity-graph` | `GraphActivitiesDesignFeature` registers `GraphActivityProviderReferenceRewriter : IActivityProviderReferenceRewriter` | Implemented |
 | Provider manifest schemas | `1`, `2` | `ActivityGraphManifest` parsing and canonical serialization; schema 2 adds `outcomeMappings` (spec 138) and accepts `Complete` nodes (spec 237) | Implemented |
 | Complete-outside-graph draft rule | `Graph/CompleteOutsideGraph` | `GraphActivitiesDesignFeature` registers `CompleteOutsideGraphDraftValidator : IDraftValidator` (scoped) | Implemented |
+| Canonical analysis projection | exact provider manifest/public contract | The same singleton `GraphActivityProvider` is exposed as `IActivityDataSelectionDocumentProjector`; the scoped coordinator owns analysis | Implemented |
 | Runtime boundary contract | `elsa.graph-activity` / `1` | Pinned `RuntimeActivityDescriptor` and value-flow `ActivityContract` | Implemented |
 | Closed value scope (spec 265) | compiler fingerprint `elsa.activity-graph/compiler/3.0.0` | The boundary descriptor carries `scopeModel: "closed"` and `variables[]` (`referenceKey`, `name`, `type`, `storageDriverKey`). Publishing's `ActivityTemplatePlacer` reads both to remap body references to the placement, compile body captures into graph variables, and mark the boundary `runtime.activityExecutionScope = closed`. Body occurrences carry their authored `outputs` in `ActivityTemplateOccurrenceCompilation.OutputBindings`. | Implemented |
 | Body reference refusals (spec 265) | `activity.graph.body-input-unknown`, `-variable-unknown`, `-variable-scope-invisible`, `-producer-unknown`, `-capture-target-unknown`, `-capture-type-incompatible` | `GraphActivityProvider.ValidateAsync` and `CompileAsync` (`GraphBodyReferenceValidator`); the producer projection and capture type checks need resolved dependencies, so they run at compile only. See [values inside a graph body](../../../../../docs/reference/activity-definition-authoring-composition.md#values-inside-a-graph-body). | Implemented |
+| Unordered-write warnings (spec 266) | `activity.graph.unordered-variable-write`, `activity.graph.duplicate-capture-target` (severity Warning) | `GraphActivityProvider.ValidateAsync` and `CompileAsync` run the `IUnorderedVariableWriteAnalyzer` (Workflows.Design.Validations), which `GraphActivitiesDesignFeature` requires; only a provider built directly with the earlier three-argument constructor has none and reports no write-order warning, over the body's captures into graph variables; compilation still succeeds. See [variable write order](../../../../../docs/reference/variable-write-order.md). | Implemented |
 
 The provider may reference provider-neutral Design and Runtime Core contracts to compile executable material. It must not reference the graph Runtime implementation, Runtime API, or a concrete persistence provider.
 
@@ -30,6 +32,13 @@ single-owner defaults.
 | `IActivityTemplateProviderCompiler` | Workflows Publishing Core | Provider features register one compiler per stable provider/schema pair. `IActivityTemplateProviderCompilerRegistry` and `ActivityTemplateCompiler` consume it. | `GraphActivityProvider` |
 | `IActivityTemplateDependencyDiscoverer` | Workflows Publishing Core | Provider features register one discoverer per stable provider/schema pair. `IActivityTemplateDependencyDiscovererRegistry` and `ActivityTemplateCompiler` consume it. | `GraphActivityProvider` |
 | `IDraftValidator` | Workflows Design Validations Core | Features register enumerable scoped validators; the draft validation gate runs them all and promotion refuses a Draft with errors. | `CompleteOutsideGraphDraftValidator` *(cross-domain)* |
+| `IActivityDataSelectionDocumentProjector` | Workflows Design Validations Core | `TryProjectAsync(manifest, contract, resourceId, contractRevision, cancellationToken)` returns the actual closed graph body/input/output/variable document or null for another provider/schema. Activity Design and Publishing coordinators require one matching owner after authorization. | `GraphActivityProvider` *(cross-domain)* |
+
+This analysis projection is a cross-domain contribution to Workflows Design Validations, not a new
+persisted workflow or a scoped service captured by the singleton provider. It reads no stores and fails
+on malformed owned manifests. `ActivityTemplateCompiler` and Activity Design API consume it through the
+same shared analyzer; that contract's replacement/collection rules live in the
+[Validations catalog](../../../Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
 
 At draft time the provider recognises `Complete` nodes through `IActivityDefinitionLookup`, resolved in a scope
 created from `IServiceScopeFactory` because the provider is a singleton; without a registered lookup, draft

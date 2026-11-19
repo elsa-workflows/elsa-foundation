@@ -1,0 +1,15 @@
+#nullable enable
+Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature
+Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature.ActivitiesBpmnDesignFeature() -> void
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure.Activities.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Design.Core.Models.ActivityNode!>!
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure.BpmnAuthoredStructure(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Design.Core.Models.ActivityNode!>? activities = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnElement!>? elements = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnSequenceFlow!>? sequenceFlows = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnPool!>? pools = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnLane!>? lanes = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition!>? variables = null, System.Text.Json.JsonElement? diagram = null, bool isTransaction = false, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnMessageFlow!>? messageFlows = null) -> void
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure.Diagram.get -> System.Text.Json.JsonElement?
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure.Elements.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnElement!>!
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure.IsTransaction.get -> bool
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure.Lanes.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnLane!>!
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure.MessageFlows.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnMessageFlow!>!
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure.Pools.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnPool!>!
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure.SequenceFlows.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnSequenceFlow!>!
+Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure.Variables.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition!>!
+virtual Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

@@ -53,6 +53,39 @@ public interface IPermissionAuthorizationService
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Re-evaluates one permission for a persisted subject from the identity provider's current state,
+/// for deferred work that has no incoming principal. It never trusts a saved permission snapshot.
+/// The default refuses as <see cref="CurrentSubjectPermissionStatus.Unsupported"/>; only a provider
+/// that owns the subject's current users, memberships and roles replaces it. A store read failure
+/// propagates so callers can keep their work owed instead of treating it as a denial.
+/// </summary>
+[ReplacementContract]
+public interface ICurrentSubjectPermissionAuthorizer
+{
+    ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(
+        CurrentSubjectPermissionRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record CurrentSubjectPermissionRequest(string TenantId, string SubjectId, string Permission, object? Resource = null);
+
+public enum CurrentSubjectPermissionStatus
+{
+    Granted,
+    Denied,
+    Unsupported
+}
+
+public sealed record CurrentSubjectPermissionResult(CurrentSubjectPermissionStatus Status, string? Failure = null)
+{
+    public static CurrentSubjectPermissionResult Granted { get; } = new(CurrentSubjectPermissionStatus.Granted);
+
+    public static CurrentSubjectPermissionResult Denied(string failure) => new(CurrentSubjectPermissionStatus.Denied, failure);
+
+    public static CurrentSubjectPermissionResult Unsupported(string failure) => new(CurrentSubjectPermissionStatus.Unsupported, failure);
+}
+
 public interface IPermissionResourceHandler
 {
     ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default);
@@ -135,9 +168,23 @@ public static class IdentityClaimTypes
 {
     public const string Normalized = "elsa.identity.normalized";
 
+    /// <summary>
+    /// The Elsa user ID of the subject, set by the projection that owns the persisted user record. Unlike
+    /// <c>NameIdentifier</c> or <c>sub</c>, it never carries an external provider's subject, so deferred work that
+    /// binds an actor (for example a review decision) uses it.
+    /// </summary>
+    public const string UserId = "elsa.identity.user_id";
+
     public const string TenantId = "elsa.identity.tenant_id";
 
     public const string Provider = "elsa.identity.provider";
+
+    /// <summary>
+    /// On a first-party token issued to a subject that is no Elsa user: the provider that authenticated that subject,
+    /// which with the tenant scopes the <c>TokenSubject</c> the token is stored under. <see cref="Provider"/> on such a
+    /// token names the issuing module instead. Stripped from incoming external principals like every internal claim.
+    /// </summary>
+    public const string SubjectProvider = "elsa.identity.subject_provider";
 
     public const string Role = "elsa.identity.role";
 

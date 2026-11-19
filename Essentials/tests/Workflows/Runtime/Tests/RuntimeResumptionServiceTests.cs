@@ -15,7 +15,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class RuntimeResumptionServiceTests
+public sealed partial class RuntimeResumptionServiceTests
 {
     private const string MarkerKind = "Test.Marker";
     private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);

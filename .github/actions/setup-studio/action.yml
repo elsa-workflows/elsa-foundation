@@ -1,0 +1,17 @@
+name: Setup Studio
+description: Install the locked Studio dependencies with the repository pnpm and Node versions.
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      with:
+        package_json_file: Studio/package.json
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+        cache-dependency-path: Studio/pnpm-lock.yaml
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+      working-directory: Studio

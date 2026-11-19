@@ -2,7 +2,7 @@ using Elsa.Activities.Bpmn.Interchange.Contracts;
 using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints.Documents.Export;
 
@@ -17,9 +17,9 @@ public sealed class Endpoint(IBpmnDocumentExporter exporter) : ApiEndpoint<Expor
         options.BodyMode = EndpointBodyMode.Required;
     }
 
-    public override Task<ExportBpmnDocumentResult> HandleAsync(ExportBpmnDocumentRequest request, CancellationToken cancellationToken) =>
-        Task.FromResult(new ExportBpmnDocumentResult(exporter.Export(request.ProcessNode, new BpmnExportOptions
-        {
-            ProcessId = request.ProcessId
-        })));
+    public override async Task<ExportBpmnDocumentResult> HandleAsync(ExportBpmnDocumentRequest request, CancellationToken cancellationToken)
+    {
+        var exported = await exporter.ExportAsync(request.ProcessNode, new BpmnExportOptions { ProcessId = request.ProcessId }, cancellationToken);
+        return new(exported.Xml, exported.Omissions);
+    }
 }

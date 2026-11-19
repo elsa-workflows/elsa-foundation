@@ -1,0 +1,24 @@
+{
+  "ownedProcessId": 9373,
+  "actualFiniteWaitTicks": 10000000,
+  "nativeTimerDueTime": 4294967295,
+  "nativeTimerPeriod": 4294967295,
+  "nativeTimerCanceled": false,
+  "nativeTimerCallbacksRunning": 0,
+  "lifetimeCancellationState": 0,
+  "consecutiveSweepFailures": 0,
+  "activeResumptionAsyncStacks": 0,
+  "resumptionArmedTimestamp": 267665462138250,
+  "otherLivePumpArmedTimestamp": 268224045244291,
+  "elapsedTimestampUnits": "Stopwatch ticks on the captured process; compare only within this process.",
+  "exactLateElapsedValueObserved": false,
+  "interpretation": "Unarmed finite timer is consistent with the computed minus-one-millisecond sentinel branch; the exact live elapsed value was not observed. Deterministic real-timer regressions separately reproduce and qualify the source defect.",
+  "rawHeapDumpPrivateNeverPublished": true,
+  "rawHeapDumpDeletedAfterBoundedExtraction": true,
+  "removedDiagnosticLines": [
+    "Loading core dump file path",
+    "File assembly absolute paths"
+  ],
+  "sourceRoutingChanged": false,
+  "concurrentHostCaseQualified": false
+}

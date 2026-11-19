@@ -1,0 +1,43 @@
+{
+  "caseId": "terminal-b1b42730eece4f88919605e4ea42e3c8",
+  "phase": "called-control-before-acknowledgment",
+  "providerEvent": "ActualIntentDispatcherReturnedBeforeDeliveryResult",
+  "sourceOutboxItemId": "commit:3a6adb7ec05d7606:checkpoint:WorkflowCompleted:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root:intent:dispatch-resume:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216",
+  "sourceCommitId": "commit:3a6adb7ec05d7606:checkpoint:WorkflowCompleted:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root",
+  "intentFingerprint": "00f4077f240ab4506d9b2868153eacd15845ef7e8683a09c6b93595eff2723ba",
+  "scope": "default",
+  "ownerId": "runtime-outbox-71008c217c88434caf4cb18686f73319",
+  "fencingToken": 1,
+  "visibleAfter": "2026-10-28T07:21:01.48304+00:00",
+  "workflowExecutionId": "14iZs5IOeZa",
+  "intentKind": "Elsa.Activities.DispatchWorkflow.ResumeParent",
+  "transport": {
+    "dispatchId": "dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216",
+    "parentWorkflowExecutionId": "14iZs5IOeZa",
+    "callingActivityExecutionId": "14iZs7B1wU1",
+    "consumerActivityExecutionId": "14iZs5jdNXX",
+    "parentExecutable": {
+      "artifactId": "artifact-e04aea951b8e",
+      "definitionId": "14iZs51pKS6",
+      "definitionVersionId": "14iZs51laEm",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:e04aea951b8eb37033cf17416fb76ae1f03204ef798cc0f745d8b52ce6e18a39"
+    },
+    "sourceCommitId": "commit:3a6adb7ec05d7606:checkpoint:WorkflowCompleted:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root",
+    "sourceIntentId": "intent:dispatch-resume:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216",
+    "sourceOutboxItemId": "commit:3a6adb7ec05d7606:checkpoint:WorkflowCompleted:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root:intent:dispatch-resume:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216",
+    "batch": {
+      "version": 1,
+      "consumerKey": "elsa.bpmn",
+      "consumerVersion": 1,
+      "childWorkflowExecutionId": "wfexec:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216",
+      "rootActivityExecutionId": "dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root",
+      "sourceWorkItemId": "c86fdf196f776334:parent:dispatch:v1:9a8b202d29a694af301af2df123128708c78aefce8ec82853d8d58081a7a0216:activity:root:child:14iZsFyEhSn",
+      "ordinal": 1,
+      "isTerminal": true,
+      "notifications": [],
+      "authoredFailureCode": null
+    }
+  },
+  "capturedAtUtc": "2026-10-28T07:20:01.624239+00:00"
+}

@@ -1,0 +1,17 @@
+{
+  "source": "1d77ed131de3305da8b8236f739c63085bff3e73",
+  "name": "elsa-bpmn-human-preclaim-1d77ed131.zip",
+  "sha256": "be273c4f5bb18312f0841170e5c77701e93688911f8f8c37276c61bbe832c5c8",
+  "bytes": 471073,
+  "files": 24,
+  "assetId": 698003029,
+  "checksumAssetId": 698003100,
+  "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-human-preclaim-1d77ed131.zip",
+  "releaseId": 405917534,
+  "tag": "contributor-preview-2026-10-07.1",
+  "releasePublishedAtUnchanged": "2026-10-07T15:44:19Z",
+  "uploader": "elsa-workflows-codex[bot]",
+  "downloadVerified": true,
+  "allMembersVerified": true,
+  "newReleaseOrTag": false
+}

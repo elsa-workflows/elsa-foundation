@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Current/legacy preflight format controls, not producer execution, authority or quiescence",
+  "sourceParentCommit": "a86c5d08c6705d1bcb278849aa4a86eee3361fe1",
+  "producerTest": "StimulusDeliveryStoreTests.Upgrade_preflight_exports_checked_current_and_legacy_format_boundaries",
+  "deliveryActivationQualified": false,
+  "stores": [
+    {
+      "scenario": "legacy-pending",
+      "sourceName": "legacy-pending.sqlite.gz",
+      "compressedSha256": "3763d443d8a41a0997ad83f4251dc24156a79bf2c8a10f1ddc8b2ea7076b3214",
+      "databaseSha256": "182cd4763c65216761b5fe071d17795d19dcc2b123085f4235c152dc7b52aa49",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "LegacyRecoveryRequired": 1
+      },
+      "expectedStatus": "RecoveryRequired",
+      "construction": "Actual current provider writes with constructed publisher/source; no workflow execution"
+    },
+    {
+      "scenario": "legacy-delivered",
+      "sourceName": "legacy-delivered.sqlite.gz",
+      "compressedSha256": "3120819abaac842cf482dca7a37b557004563ff35e9f5d5428c27de84b435bef",
+      "databaseSha256": "3290a46003265952a9939930cf391b04d57c5121c8c5054657a258bf78751beb",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "LegacyDelivered": 1
+      },
+      "expectedStatus": "NoLegacyPublishResponsibilityOwed",
+      "construction": "Actual current provider writes with constructed publisher/source; no workflow execution"
+    },
+    {
+      "scenario": "declared",
+      "sourceName": "declared.sqlite.gz",
+      "compressedSha256": "392bcfa54463b92e8ad043eab79e6d7d63936cbbdfd0340ad87e9f09edf5ac38",
+      "databaseSha256": "9a993a5b570c932b8812bbd662d3a134df5bbe217525b42ca7459397e1a38f10",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "ProtocolAwaitingSelection": 1
+      },
+      "expectedStatus": "NoLegacyPublishResponsibilityOwed",
+      "construction": "Actual current provider writes with constructed publisher/source; no workflow execution"
+    },
+    {
+      "scenario": "declared-delivered",
+      "sourceName": "declared-delivered.sqlite.gz",
+      "compressedSha256": "50a76f203595e49bf96c96aa3b48b5e8b6c04af140dd5f78df0b72f1f3e423a5",
+      "databaseSha256": "39edfe35aa14a63472d0be5a4a4cff005c50e7b39fb3563f601e3eb6ed540c14",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "ProtocolRecoveryRequired": 1
+      },
+      "expectedStatus": "RecoveryRequired",
+      "construction": "Actual current provider writes with constructed publisher/source; no workflow execution"
+    },
+    {
+      "scenario": "accepted",
+      "sourceName": "accepted.sqlite.gz",
+      "compressedSha256": "e988c144e4a89f1ab2438ad1b35099545223c584548b494b32c28b5520dea180",
+      "databaseSha256": "11420339c60f58766e858df415678b9511dd869cc61b3295bc31037d23fc27ee",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "ProtocolCohortRecorded": 1
+      },
+      "expectedStatus": "NoLegacyPublishResponsibilityOwed",
+      "construction": "Actual current provider writes with constructed publisher/source; no workflow execution"
+    },
+    {
+      "scenario": "accepted-empty",
+      "sourceName": "accepted-empty.sqlite.gz",
+      "compressedSha256": "58673fb41938539a228b85b0cde9eb90a06e05620e10a58989d9968a017c2d8f",
+      "databaseSha256": "aa92890779b9f3537067eab1b74574edeb20ad3ead025479b9f76fb3491a7b15",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "ProtocolCohortRecorded": 1
+      },
+      "expectedStatus": "NoLegacyPublishResponsibilityOwed",
+      "construction": "Actual current provider writes with constructed publisher/source; no workflow execution"
+    },
+    {
+      "scenario": "accepted-delivered",
+      "sourceName": "accepted-delivered.sqlite.gz",
+      "compressedSha256": "a48c27ad47b556adf593faad73b5e08bc49866394cc59030031067b7fcaf634a",
+      "databaseSha256": "4e9ef8f16694d67149d888b2231fb2a44e8a81804bfdfd800490bec77c656e8b",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "ProtocolDelivered": 1
+      },
+      "expectedStatus": "NoLegacyPublishResponsibilityOwed",
+      "construction": "Actual current provider writes with constructed publisher/source; no workflow execution"
+    },
+    {
+      "scenario": "accepted-failed-final",
+      "sourceName": "accepted-failed-final.sqlite.gz",
+      "compressedSha256": "a6caf6ca2c0499fb73c1fe5f7ade3d8eb0c8868679c7e1ad616761f00a57a13f",
+      "databaseSha256": "16274a11dedae49d7df796e24cc359da0bcaf30bc55e54cc6bc35e025b117160",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "ProtocolCohortRecorded": 1
+      },
+      "expectedStatus": "NoLegacyPublishResponsibilityOwed",
+      "construction": "Actual current provider writes with constructed publisher/source; no workflow execution"
+    },
+    {
+      "scenario": "accepted-cancelled",
+      "sourceName": "accepted-cancelled.sqlite.gz",
+      "compressedSha256": "d0450b5853a684b2943c47dd1e248f037ffd04007936d3f776faee083552c1be",
+      "databaseSha256": "da368b45105518a5cdb9b8102598e1fd0c18887b3d578649095aa08e96dbd717",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "ProtocolCohortRecorded": 1
+      },
+      "expectedStatus": "NoLegacyPublishResponsibilityOwed",
+      "construction": "Actual current provider writes with constructed publisher/source; no workflow execution"
+    },
+    {
+      "scenario": "data-only",
+      "sourceName": "data-only.sqlite.gz",
+      "compressedSha256": "57cc1d6d3722b64ff017edcfcfc6ea02c10046610b1e9403cfa96ba0e3334566",
+      "databaseSha256": "f8096020838a188e227603d2b3027b17f50e76b866a4cea9e4d0837743d2dc63",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "ProtocolRecoveryRequired": 1
+      },
+      "expectedStatus": "RecoveryRequired",
+      "construction": "Actual current provider writes with constructed publisher/source; remove only historical marker from wire"
+    },
+    {
+      "scenario": "data-only-delivered",
+      "sourceName": "data-only-delivered.sqlite.gz",
+      "compressedSha256": "a9268a53ff9a2903aaf0506c81deb065befa89413ebd95f0d81eca07b69cd214",
+      "databaseSha256": "026b39cf4b0e05882588459b1cced2665f8d00daa4bc07829a941261f615d079",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "ProtocolRecoveryRequired": 1
+      },
+      "expectedStatus": "RecoveryRequired",
+      "construction": "Actual current provider writes with constructed publisher/source; remove only historical marker from wire"
+    },
+    {
+      "scenario": "scope-only",
+      "sourceName": "scope-only.sqlite.gz",
+      "compressedSha256": "80ed05f378635e4451cff08050ea9f2b79c951639d9c6817eb347173d1ad2ac6",
+      "databaseSha256": "5320153ef86df6e3f598c4eb7a6c001689a376e0e01fb1358c87efeda74fccb5",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "LegacyScopeOnlyRecoveryRequired": 1
+      },
+      "expectedStatus": "RecoveryRequired",
+      "construction": "Actual current provider writes with constructed publisher/source; remove only historical marker from wire"
+    },
+    {
+      "scenario": "scope-only-delivered",
+      "sourceName": "scope-only-delivered.sqlite.gz",
+      "compressedSha256": "eaa72ab432c009c3269e34cbed04632cb5106896c56782fedd9169f1859e81b9",
+      "databaseSha256": "cc6c2d1b30d430dc7ede0ca7737db21b84a11dccb718697f38aceb9609ff3a34",
+      "publishRows": 1,
+      "expectedClassifications": {
+        "LegacyScopeOnlyDelivered": 1
+      },
+      "expectedStatus": "NoLegacyPublishResponsibilityOwed",
+      "construction": "Actual current provider writes with constructed publisher/source; remove only historical marker from wire"
+    },
+    {
+      "scenario": "generic-scope-only",
+      "sourceName": "generic-scope-only.sqlite.gz",
+      "compressedSha256": "0d6c8eaad5954603dddce36bf2dbddcee77d241bbb63cc2e34b97fc9e1173b09",
+      "databaseSha256": "c67c31df204acfdc892f23ba7f682b0cb28d82c4076833f768fe4e1159960e37",
+      "publishRows": 0,
+      "expectedClassifications": {},
+      "expectedStatus": "NoLegacyPublishResponsibilityOwed",
+      "construction": "Actual current provider writes with constructed publisher/source; remove only historical marker from wire"
+    }
+  ]
+}

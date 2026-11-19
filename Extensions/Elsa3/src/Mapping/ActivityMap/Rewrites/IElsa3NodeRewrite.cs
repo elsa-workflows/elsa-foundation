@@ -75,7 +75,12 @@ internal sealed class Elsa3RewriteContext(
             Activity.AdditionalProperties.Remove(propertyName);
     }
 
-    public void SetProperty(string key, JsonElement value) => Activity.AdditionalProperties[key] = value;
+    /// <summary>Writes an Elsa 4 property; it survives the removal of the consumed Elsa 3 structure members.</summary>
+    public void SetProperty(string key, JsonElement value)
+    {
+        Activity.AdditionalProperties[key] = value;
+        Node.RewrittenProperties.Add(key);
+    }
 
     /// <param name="property">The Elsa 3 property the diagnostic is about.</param>
     /// <param name="withinProperty">The path inside that property's value, such as <c>[1].condition</c>.</param>

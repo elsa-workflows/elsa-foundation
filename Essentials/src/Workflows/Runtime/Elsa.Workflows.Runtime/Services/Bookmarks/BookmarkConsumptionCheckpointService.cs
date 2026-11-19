@@ -134,7 +134,13 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                         StateId: request.ActivityExecutionState.Execution.ActivityExecutionId,
                         Operation: RuntimeStateChangeOperation.Upsert,
                         State: request.ActivityExecutionState,
-                        Metadata: metadata)
+                        Metadata: metadata),
+                    // Container frames the resumed step's session wrote (spec 1231), in the same commit.
+                    .. request.VariableOwnerChanges.Select(owner => new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: owner.InvocationId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: owner,
+                        Metadata: metadata))
                 ],
                 bookmarks: !request.ConsumesBookmarks
                     ? []
@@ -170,6 +176,8 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                 .ToArray(),
             Metadata: metadata)
         {
+            ExpectedBookmarkResume = request.TransitionKind == BookmarkResumeCheckpointTransitionKind.InitialTriggerClaim
+                ? request.ResumePayload.ExpectedBookmarkResume : null,
             RetainSchedulerWork = request.TransitionKind is
                 BookmarkResumeCheckpointTransitionKind.InitialTriggerClaim or
                 BookmarkResumeCheckpointTransitionKind.RedeliveryClaim

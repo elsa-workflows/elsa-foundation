@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "task": "T046",
+  "sourceParentCommit": "674b9f11db79521226e8c3c0f5b6772bb69688df",
+  "sourceFilesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommitFingerprint.cs": "15d250d882f6c7c9d86e870b1cb6dbe987c8a802fe437eba30c7f995310e3388",
+    "Essentials/src/Workflows/Runtime/Core/Models/PostCommitDeliveryContext.cs": "ce39a611af99932331cbcbbed6ac772595851ccde5fc3a0e75087c6bf296efd6",
+    "Essentials/src/Workflows/Runtime/Core/Models/StimulusDeliverySnapshot.cs": "15c9600b5fad3a83af5ff1800f2523799f65bbd43ec752201b2a75147f27cb91",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IStimulusDeliveryStore.cs": "a39bdf3019d0f29e2ebf5610b1166ff4d8d4161858120acb6cc68d835ce0bf37",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/StimulusDeliveryBoundaryException.cs": "957d6cd6e40b0579b791da5eb0315117a45bdd51b3c6e7e3e5a0ecd11f401078",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "e3fb2d03ba3902c9ec94b7c9ab7b4a44f6f33e2bbcff2515845e44cc9a8898fb",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "c7e8c6ae4de5d7b38dfb7799fc30e64dde63bc07c1d36e964aab62f67d11c0f9",
+    "Essentials/tests/Workflows/Runtime/Tests/PostCommitDeliveryContextTests.cs": "f0c860986349a8ebd607896f71a17b673c39b3d37f2bb4bc1f9a22ecdc1dcbd8",
+    "Essentials/tests/Workflows/Runtime/Tests/StimulusDeliverySnapshotTests.cs": "e1862e003f88d5f88308a7a74513eb0819d63e6aaf9d85ef81b926591b749f03"
+  },
+  "checks": [
+    {
+      "command": "dotnet test Essentials/tests/Workflows/Runtime/Tests --no-restore",
+      "passed": 2735,
+      "failed": 0
+    },
+    {
+      "contractCases": 74,
+      "numericRedBeforeFix": 7,
+      "historicalCheckpointWriterTail": "byte-identical to source parent"
+    }
+  ],
+  "mutations": [
+    {
+      "name": "fence",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    73, Skipped:     0, Total:    74, Duration: 86 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)"
+    },
+    {
+      "name": "utf16",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    73, Skipped:     0, Total:    74, Duration: 95 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)"
+    },
+    {
+      "name": "legacy-replay",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    73, Skipped:     0, Total:    74, Duration: 93 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)"
+    },
+    {
+      "name": "required-scope",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    73, Skipped:     0, Total:    74, Duration: 99 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)"
+    },
+    {
+      "name": "required-binding",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    73, Skipped:     0, Total:    74, Duration: 97 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)"
+    },
+    {
+      "name": "wait-generation",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    73, Skipped:     0, Total:    74, Duration: 96 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)"
+    },
+    {
+      "name": "numeric-intent",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     9, Passed:    65, Skipped:     0, Total:    74, Duration: 84 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)"
+    }
+  ],
+  "additiveCoreApiEntries": 54,
+  "authoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "componentReview": {
+    "correctness": "clean",
+    "standards": "clean",
+    "acceptance": "clean",
+    "fullPrRounds": 0
+  },
+  "scope": "Immutable Core/source/wire contracts and earlier finite preflight only; provider authorization/CAS, delivery/recovery and quiescence remain unproved."
+}

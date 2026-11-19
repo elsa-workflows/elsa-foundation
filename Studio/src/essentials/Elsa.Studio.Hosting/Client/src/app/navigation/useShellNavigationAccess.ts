@@ -1,10 +1,9 @@
-import React from "react";
-import { AuthContext } from "../../auth/AuthContext";
+import { useOptionalAuthContext } from "@elsa-workflows/studio-sdk";
 import { useHostControlAccess } from "../useHostControlAccess";
 import type { NavigationAccess } from "./placement";
 
 export function useShellNavigationAccess(enabledFeatures?: ReadonlySet<string> | readonly string[]): NavigationAccess {
-  const auth = React.useContext(AuthContext);
+  const auth = useOptionalAuthContext();
   const hostAccess = useHostControlAccess();
   const session = auth?.session;
   return {

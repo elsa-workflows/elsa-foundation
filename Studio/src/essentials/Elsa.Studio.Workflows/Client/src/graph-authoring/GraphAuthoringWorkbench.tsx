@@ -10,6 +10,7 @@ import { PanelTabList } from "../workflow-editor/PanelTabList";
 import type { useSidePanelLayout } from "../workflow-editor/useSidePanelLayout";
 import { GraphAuthoringWorkspace } from "./GraphAuthoringWorkspace";
 import "./graphAuthoringLayouts.css";
+import "./workspaceAppearance.css";
 
 type SidePanelLayout = ReturnType<typeof useSidePanelLayout>;
 
@@ -18,6 +19,8 @@ interface WorkbenchPanel {
   tabLabel: string;
   tabs: WorkflowEditorPanelTab[];
   activeTabId: string;
+  /** Opt into stable panel containers, retaining these tabs when inactive. Hidden panels are inert. */
+  keepMountedTabIds?: readonly string[];
   onSelect(tabId: string): void;
 }
 
@@ -96,7 +99,12 @@ export function GraphAuthoringWorkbench({
             onToggleCollapsed={() => layout.toggleSidePanelCollapsed("inspector")}
             onToggleMaximized={() => layout.toggleSidePanelMaximized("inspector")}
           />
-          {layout.inspectorExpanded ? activeInspector.render() : null}
+          {inspector.keepMountedTabIds !== undefined ? inspector.tabs.filter(tab => layout.inspectorExpanded && tab.id === activeInspector.id || inspector.keepMountedTabIds?.includes(tab.id)).map(tab => (
+            <div key={tab.id} className="wf-workbench-panel-content" hidden={!layout.inspectorExpanded || tab.id !== activeInspector.id}
+              inert={!layout.inspectorExpanded || tab.id !== activeInspector.id}>
+              {tab.render()}
+            </div>
+          )) : layout.inspectorExpanded ? activeInspector.render() : null}
         </aside>
       )}
     />

@@ -26,6 +26,8 @@ import {
   hasCapabilityLink,
   resolveCapabilityLink
 } from "./capabilities";
+import type { WorkflowTagFilter } from "./workflowOrganization";
+import { workflowQueryOptionsAvailable } from "./workflowOrganizationCapabilities";
 
 export interface DefinitionListRequest {
   search: string;
@@ -37,6 +39,11 @@ export interface DefinitionListRequest {
   continuationToken?: string;
   folderId?: string | null;
   unfiled?: boolean;
+  includeDescendants?: boolean;
+  favoritesOnly?: boolean;
+  sort?: "name" | "name-desc" | "modified";
+  tagFilters?: WorkflowTagFilter[];
+  publicationState?: string;
 }
 
 type WorkflowDraftResponse = Omit<WorkflowDraft, "validationErrors"> & {
@@ -133,7 +140,7 @@ export async function workflowDefinitionFolderMovePath(context: StudioEndpointCo
 
 async function optionalWorkflowFolderMutationPath(
   context: StudioEndpointContext,
-  relation: "workflow-folder-rename" | "workflow-folder-move" | "workflow-folder-delete-empty",
+  relation: "workflow-folder-rename" | "workflow-folder-move" | "workflow-folder-delete-empty" | "workflow-folder-deletion-preview" | "workflow-folder-delete",
   folderId: string
 ) {
   try {
@@ -146,12 +153,36 @@ async function optionalWorkflowFolderMutationPath(
 
 export async function getWorkflowFolderMutationSupport(context: StudioEndpointContext) {
   const probeId = "capability-check";
-  const [rename, move, deleteEmpty] = await Promise.all([
+  const [rename, move, deleteEmpty, deletionPreview, deleteContents] = await Promise.all([
     optionalWorkflowFolderMutationPath(context, "workflow-folder-rename", probeId),
     optionalWorkflowFolderMutationPath(context, "workflow-folder-move", probeId),
-    optionalWorkflowFolderMutationPath(context, "workflow-folder-delete-empty", probeId)
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-delete-empty", probeId),
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-deletion-preview", probeId),
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-delete", probeId)
   ]);
-  return { rename: !!rename, move: !!move, deleteEmpty: !!deleteEmpty };
+  return { rename: !!rename, move: !!move, deleteEmpty: !!deleteEmpty, deleteContents: !!deletionPreview && !!deleteContents };
+}
+
+export interface FolderDeletionPreview {
+  folder: WorkflowFolder;
+  parent: WorkflowFolder | null;
+  workflowCount: number;
+  deletedWorkflowCount: number;
+  childFolderCount: number;
+  revision: string;
+}
+
+export async function previewWorkflowFolderDeletion(context: StudioEndpointContext, folderId: string) {
+  const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-deletion-preview", folderId);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-deletion-preview");
+  return context.http.getJson<FolderDeletionPreview>(path);
+}
+
+export async function deleteWorkflowFolder(context: StudioEndpointContext, folderId: string,
+  request: { previewRevision: string; deleteWorkflows: boolean; operationKey: string }) {
+  const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-delete", folderId);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-delete");
+  await context.http.postJson<unknown>(path, request);
 }
 
 export interface WorkflowFolderPage {
@@ -182,22 +213,22 @@ export async function createWorkflowFolder(context: StudioEndpointContext, reque
   return "folder" in response ? response.folder : response;
 }
 
-export async function renameWorkflowFolder(context: StudioEndpointContext, folderId: string, name: string) {
+export async function renameWorkflowFolder(context: StudioEndpointContext, folderId: string, name: string, revision?: string) {
   const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-rename", folderId);
   if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-rename");
-  await context.http.postJson<unknown>(path, { name });
+  await context.http.postJson<unknown>(path, { name, ...(revision ? { revision } : {}) });
 }
 
-export async function moveWorkflowFolder(context: StudioEndpointContext, folderId: string, parentId: string | null) {
+export async function moveWorkflowFolder(context: StudioEndpointContext, folderId: string, parentId: string | null, revision?: string) {
   const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-move", folderId);
   if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-move");
-  await context.http.postJson<unknown>(path, { parentId });
+  await context.http.postJson<unknown>(path, { parentId, ...(revision ? { revision } : {}) });
 }
 
-export async function deleteEmptyWorkflowFolder(context: StudioEndpointContext, folderId: string) {
+export async function deleteEmptyWorkflowFolder(context: StudioEndpointContext, folderId: string, revision?: string) {
   const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-delete-empty", folderId);
   if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-delete-empty");
-  await context.http.deleteJson<unknown>(path);
+  await context.http.deleteJson<unknown>(revision ? `${path}?${new URLSearchParams({ revision })}` : path);
 }
 
 /** Moves one or more definitions to a persisted folder, or to Unfiled when folderId is null. */
@@ -210,7 +241,7 @@ export async function moveWorkflowDefinitions(
   await context.http.postJson<unknown>(path, request);
 }
 
-export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest, signal?: AbortSignal) {
+export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest, signal?: AbortSignal): Promise<WorkflowDefinitionsResponse> {
   const requestOptions: [options?: { signal: AbortSignal }] = signal ? [{ signal }] : [];
   const parameters = new URLSearchParams({
     state: request.state ?? "active"
@@ -218,23 +249,52 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
   const search = request.search.trim();
   if (search) parameters.set("searchTerm", search);
 
-  const pagedPath = await definitionPagePath(context);
+  // Older paged hosts can ignore unknown query parameters. Never turn an unsupported
+  // organization predicate into a broader apparently successful result.
+  const needsQueryOptions = Boolean(request.tagFilters?.length || request.includeDescendants || request.favoritesOnly || request.publicationState || (request.sort && request.sort !== "name"));
+  if (needsQueryOptions && !await workflowQueryOptionsAvailable(context)) {
+    throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-definitions-query");
+  }
+  if ((request.folderId || request.unfiled || request.includeDescendants) && !await isWorkflowFolderBrowsingAvailable(context)) {
+    throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folders");
+  }
+  if (request.tagFilters?.length && !await hasCapabilityLink(context, capabilityIds.workflowDesign, "workflow-tags")) {
+    throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-tags");
+  }
+  if (request.favoritesOnly && !await hasCapabilityLink(context, capabilityIds.workflowDesign, "workflow-favorites")) {
+    throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-favorites");
+  }
+
+  const pagedPath = needsQueryOptions && await hasCapabilityLink(context, capabilityIds.workflowDesign, "workflow-definitions-query")
+    ? await resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-definitions-query")
+    : await definitionPagePath(context);
   if (pagedPath) {
     parameters.set("pageSize", String(request.pageSize));
     if (request.continuationToken) parameters.set("continuationToken", request.continuationToken);
     if (request.folderId) parameters.set("folderId", request.folderId);
     if (request.unfiled) parameters.set("unfiled", "true");
+    if (request.includeDescendants) parameters.set("includeDescendants", "true");
+    if (request.favoritesOnly) parameters.set("favoritesOnly", "true");
+    if (request.sort && request.sort !== "name") parameters.set("sort", request.sort);
+    if (request.tagFilters?.length) parameters.set("tagFilters", JSON.stringify(request.tagFilters));
+    if (request.publicationState) parameters.set("publicationState", request.publicationState);
     const response = await context.http.getJson<{
       items: WorkflowDefinitionsResponse["definitions"];
       nextContinuationToken?: string | null;
+      totalCount?: number;
     }>(`${pagedPath}?${parameters.toString()}`, ...requestOptions);
     return {
       definitions: response.items ?? [],
       page: request.page,
       pageSize: request.pageSize,
       nextContinuationToken: response.nextContinuationToken ?? null,
+      ...(typeof response.totalCount === "number" ? { totalCount: response.totalCount } : {}),
       isPaged: true
     } satisfies WorkflowDefinitionsResponse;
+  }
+
+  if (request.folderId || request.unfiled || request.includeDescendants || request.favoritesOnly || request.tagFilters?.length || request.publicationState || (request.sort && request.sort !== "name")) {
+    throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-definitions-page");
   }
 
   const response = await context.http.getJson<{ items: WorkflowDefinitionsResponse["definitions"] }>(
@@ -257,6 +317,9 @@ export async function getDefinition(context: StudioEndpointContext, definitionId
 }
 
 export async function createDefinition(context: StudioEndpointContext, request: CreateDefinitionRequest) {
+  if (request.folderId != null && !await isWorkflowFolderBrowsingAvailable(context)) {
+    throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folders");
+  }
   const wireRequest = request.initialState
     ? { ...request, initialState: canonicalizeStateForWire(request.initialState) }
     : request;
@@ -385,22 +448,31 @@ export async function preflightDraftPromotion(
 export async function promoteDraft(
   context: StudioEndpointContext,
   draftId: string,
-  requestedVersion?: string
+  requestedVersion?: string,
+  operationKey?: string,
+  signal?: AbortSignal
 ) {
+  const init = operationKey || signal ? { ...(operationKey ? { retryOnUnauthorized: false } : {}), ...(signal ? { signal } : {}) } : undefined;
   if (requestedVersion !== undefined) {
     const path = await resolveCapabilityLink(
       context,
       capabilityIds.workflowDesign,
       promotionVersionRelations.exact,
       { draftId });
-    return context.http.postJson<PromoteDraftResponse>(path, { requestedVersion });
+    if (signal?.aborted) throw new DOMException("The draft promotion was aborted.", "AbortError");
+    return init
+      ? context.http.postJson<PromoteDraftResponse>(path, { requestedVersion, ...(operationKey ? { operationKey } : {}) }, init)
+      : context.http.postJson<PromoteDraftResponse>(path, { requestedVersion });
   }
   const draftPath = await resolveCapabilityLink(
     context,
     capabilityIds.workflowDesign,
     "workflow-drafts",
     { draftId });
-  return context.http.postJson<PromoteDraftResponse>(`${draftPath}/promote`, {});
+  if (signal?.aborted) throw new DOMException("The draft promotion was aborted.", "AbortError");
+  return init
+    ? context.http.postJson<PromoteDraftResponse>(`${draftPath}/promote`, operationKey ? { operationKey } : {}, init)
+    : context.http.postJson<PromoteDraftResponse>(`${draftPath}/promote`, {});
 }
 
 export async function analyzeScopedVariables(

@@ -1,0 +1,170 @@
+[
+  {
+    "name": "bpmn",
+    "phase": "discovery",
+    "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+      "-c",
+      "Release",
+      "--list-tests"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 4.254663125029765,
+    "log": "bpmn-discovery.log",
+    "discoveredCases": 509
+  },
+  {
+    "name": "bpmn",
+    "phase": "whole",
+    "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--results-directory",
+      "/tmp/elsa-2898-review10-corrections/qualification/backend",
+      "--logger",
+      "trx;LogFileName=bpmn.trx"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 88.06127504096366,
+    "log": "bpmn-whole.log",
+    "counts": {
+      "total": "509",
+      "executed": "509",
+      "passed": "509",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    }
+  },
+  {
+    "name": "runtime-ef",
+    "phase": "discovery",
+    "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "-c",
+      "Release",
+      "--list-tests"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 6.845411165966652,
+    "log": "runtime-ef-discovery.log",
+    "discoveredCases": 1816
+  },
+  {
+    "name": "runtime-ef",
+    "phase": "whole",
+    "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--results-directory",
+      "/tmp/elsa-2898-review10-corrections/qualification/backend",
+      "--logger",
+      "trx;LogFileName=runtime-ef.trx"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 113.8721834999742,
+    "log": "runtime-ef-whole.log",
+    "counts": {
+      "total": "1816",
+      "executed": "1816",
+      "passed": "1816",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    }
+  },
+  {
+    "name": "runtime",
+    "phase": "discovery",
+    "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+      "-c",
+      "Release",
+      "--list-tests"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 4.899243791936897,
+    "log": "runtime-discovery.log",
+    "discoveredCases": 3079
+  },
+  {
+    "name": "runtime",
+    "phase": "whole",
+    "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--results-directory",
+      "/tmp/elsa-2898-review10-corrections/qualification/backend",
+      "--logger",
+      "trx;LogFileName=runtime.trx"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 2.1909701669355854,
+    "log": "runtime-whole.log",
+    "counts": {
+      "total": "3090",
+      "executed": "3090",
+      "passed": "3090",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    }
+  }
+]

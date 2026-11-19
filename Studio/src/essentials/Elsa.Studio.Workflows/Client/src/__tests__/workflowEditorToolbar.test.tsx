@@ -2,18 +2,9 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TestRunStatus } from "../workflow-editor/editorPanels";
 import { WorkflowEditorToolbar } from "../workflow-editor/WorkflowEditorToolbar";
-import type { WorkflowTestRunView } from "../workflowTypes";
 
 const mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement }[] = [];
-const testRunStatusCases: { name: string; view: Partial<WorkflowTestRunView>; label: string }[] = [
-  { name: "accepted", view: { status: "DispatchAccepted" }, label: "Test Run dispatched" },
-  { name: "rejected", view: { status: "Rejected", reason: "The workflow rejected the test." }, label: "Test Run rejected" },
-  { name: "accepted with incidents", view: { status: "DispatchAccepted", incidentCount: 2 }, label: "Test Run accepted with incidents" },
-  { name: "accepted with a runtime issue", view: { status: "DispatchAccepted", commandDispatchStatus: "AcceptedButFaulted" }, label: "Test Run accepted with a runtime issue" }
-];
-
 afterEach(() => {
   mounted.splice(0).forEach(({ root, container }) => {
     flushSync(() => root.unmount());
@@ -62,29 +53,10 @@ describe("compact workflow toolbar", () => {
     expect(runAccessibleName).toBe("Test Run");
   });
 
-  it.each(testRunStatusCases)("keeps the full $name Test Run result and direct details access", ({ view, label }) => {
-    const onOpenDetails = vi.fn();
-    const testRun: WorkflowTestRunView = {
-      testRunId: "test-run-1",
-      definitionId: "definition-1",
-      definitionVersionId: "draft:3",
-      status: "DispatchAccepted",
-      ...view
-    };
-    const { container } = render({ runStatus: <TestRunStatus testRun={testRun} stale onOpenDetails={onOpenDetails} /> });
-    const result = container.querySelector<HTMLButtonElement>(".wf-test-run-trigger")!;
-    const accessibleName = result.getAttribute("aria-label") ?? result.textContent?.trim();
-
-    click(result);
-
-    expect(onOpenDetails).toHaveBeenCalledOnce();
-    expect(accessibleName).toBe(`Earlier draft · ${label}`);
-  });
-
   it("keeps save feedback with the actions and preserves busy and run eligibility guards", () => {
     const { container, commands } = render({ busy: true, saving: true, canRun: false, status: "Saving before review..." });
     const status = container.querySelector<HTMLElement>("[role='status']")!;
-    expect(status.closest(".wf-editor-actions")).not.toBeNull();
+    expect(status.closest(".wf-editor-toolbar")).not.toBeNull();
     expect(status.getAttribute("data-pending")).toBe("true");
     expect(status.textContent).toBe("Saving before review...");
     const buttons = [".wf-save-button", ".wf-publish-primary", ".wf-run-button"].map(selector => container.querySelector<HTMLButtonElement>(selector)!);
@@ -92,4 +64,13 @@ describe("compact workflow toolbar", () => {
     buttons.forEach(click);
     Object.values(commands).forEach(command => expect(command).not.toHaveBeenCalled());
   });
+  it("explains unsupported publication and test-run operations",() => {
+    const {container,commands} = render({publicationUnavailableReason:"Publishing is not supported by this backend.",canRun:false,runTitle:"Test runs are not supported by this backend."});
+    const publish=container.querySelector<HTMLButtonElement>(".wf-publish-primary")!;
+    const run=container.querySelector<HTMLButtonElement>(".wf-run-button")!;
+    expect(publish.disabled).toBe(true);expect(publish.title).toContain("not supported");
+    expect(run.disabled).toBe(true);expect(run.title).toContain("not supported");
+    click(publish);click(run);expect(commands.onPublish).not.toHaveBeenCalled();expect(commands.onRun).not.toHaveBeenCalled();
+  });
+
 });

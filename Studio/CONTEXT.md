@@ -96,6 +96,10 @@ _Avoid_: Attention code embedded in a domain core module, Dashboard integration 
 A Slot owned by the Workflows module for extending the workflow designer, such as panel tabs, toolbar actions, node actions, or property editors. Built-in designer tabs are also Contributions into these Slots.
 _Avoid_: Hardcoded designer area
 
+**Reusable Workflow Template**:
+A Workflows-module resource, with its own identity and persisted template revision, from which a new Workflow Definition can start. It is edited and saved as its own resource, and it is not a Workflow Definition.
+_Avoid_: Workflow Definition, workflow version
+
 **Graph Activity Definition**:
 An Activity Definition whose behavior is designed as a graph of activities. It is a reusable activity, not a Workflow Definition.
 _Avoid_: Graph workflow, Workflow Definition
@@ -172,6 +176,10 @@ _Avoid_: Separate inline editor implementation, reduced-intelligence editor
 The design-time document for one Expression Type applied to one activity property in one workflow draft. Its stable identity includes the draft, activity, property, and Expression Type so editor state, diagnostics, and language tooling cannot collide with another expression.
 _Avoid_: Property-name document, source file
 
+**Expression Module**:
+The module that owns one Expression Type's support: its editors, metadata, validation diagnostics, Weaver Tools and help, as [Studio ADR 0002](docs/adr/0002-keep-expression-specific-support-in-expression-modules.md) decides. The Workflows module may disclose an expression's type and content, but interpretation, semantic diagnostics and expression edits belong to the Expression Module; without its Weaver Tools they are unavailable.
+_Avoid_: Workflows module when referring to expression-specific behavior, expression language
+
 **JavaScript Expression Module**:
 A module that owns JavaScript expression support in Studio, including editor Contributions, expression metadata, validation diagnostics, Weaver Tools, and JavaScript-specific help.
 _Avoid_: Workflows module when referring to JavaScript-specific behavior
@@ -205,8 +213,12 @@ An internal compatibility term used by backend contracts, provider-neutral profi
 _Avoid_: Assistant when referring to user-facing Weaver
 
 **Operation Batch**:
-A structured set of workflow draft changes proposed by Weaver for review and draft-local application.
+A structured set of changes to a working state, a workflow draft or a Reusable Workflow Template, proposed by Weaver for review and applied locally to that working state as one Undo step. Saving the result remains the user's explicit action.
 _Avoid_: Execution, save, publish
+
+**Context Kind**:
+A module-owned, versioned description of one kind of Studio context that Weaver may read, such as `workflow.definition` for the active draft. Each Context Kind declares its own bounds and the revision identity it is attributed to. Resource content, such as a workflow's names, descriptions and expression text, is untrusted data, kept distinct from installed-module guidance, which a module contributes as its own kind (for example `workflow.guidance`).
+_Avoid_: Attachment type, prompt context
 
 **Weaver Tool**:
 A module-contributed capability that Weaver can invoke to inspect, propose, or mutate Studio-managed resources according to the user's goal, available skills, permissions, and policy.

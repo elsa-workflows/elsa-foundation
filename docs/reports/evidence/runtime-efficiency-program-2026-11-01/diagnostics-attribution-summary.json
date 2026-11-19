@@ -1,0 +1,383 @@
+{
+  "libraryHead": "63e4c1fc48be2b99505f0c26eb2aae46ff2c5d26",
+  "timingEligible": false,
+  "identicalForegroundSqlMultiset": true,
+  "scope": "Single marked HTTP4 request after three warmups and settling, five-second before/request-tail/after EF observation phases; full selected records, no parameter values.",
+  "caveat": "Untraced asynchronous OpenTelemetry counts belong to the bounded observation, not an exact trace-filtered cost per execution. EF commands/transactions are observed; socket round trips are not measured.",
+  "cases": {
+    "on": {
+      "case": "attribution-on-r2",
+      "recordedEvents": 265,
+      "markedTraceCommandCount": 82,
+      "markedTraceCommandsByContext": {
+        "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityIamSqliteDbContext": 2,
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext": 78,
+        "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext": 2
+      },
+      "markedTraceTransactionCommits": 4,
+      "otelObservedCommands": 105,
+      "otelCommandsByTable": [
+        {
+          "verb": "DELETE",
+          "table": "elsa_otel_capture_ledger",
+          "commands": 2
+        },
+        {
+          "verb": "DELETE",
+          "table": "elsa_otel_trace_summary_memberships",
+          "commands": 2
+        },
+        {
+          "verb": "INSERT",
+          "table": "elsa_otel_capture_ledger",
+          "commands": 6
+        },
+        {
+          "verb": "INSERT",
+          "table": "elsa_otel_spans",
+          "commands": 45
+        },
+        {
+          "verb": "INSERT",
+          "table": "elsa_otel_trace_summaries",
+          "commands": 1
+        },
+        {
+          "verb": "INSERT",
+          "table": "elsa_otel_trace_summary_memberships",
+          "commands": 6
+        },
+        {
+          "verb": "INSERT",
+          "table": "elsa_otel_traces",
+          "commands": 6
+        },
+        {
+          "verb": "SELECT",
+          "table": "elsa_otel_capture_ledger",
+          "commands": 6
+        },
+        {
+          "verb": "SELECT",
+          "table": "elsa_otel_instruments",
+          "commands": 2
+        },
+        {
+          "verb": "SELECT",
+          "table": "elsa_otel_logs",
+          "commands": 4
+        },
+        {
+          "verb": "SELECT",
+          "table": "elsa_otel_metric_points",
+          "commands": 4
+        },
+        {
+          "verb": "SELECT",
+          "table": "elsa_otel_resources",
+          "commands": 6
+        },
+        {
+          "verb": "SELECT",
+          "table": "elsa_otel_spans",
+          "commands": 4
+        },
+        {
+          "verb": "SELECT",
+          "table": "elsa_otel_trace_summaries",
+          "commands": 2
+        },
+        {
+          "verb": "SELECT",
+          "table": "elsa_otel_traces",
+          "commands": 6
+        },
+        {
+          "verb": "UPDATE",
+          "table": "elsa_otel_resources",
+          "commands": 2
+        },
+        {
+          "verb": "UPDATE",
+          "table": "elsa_otel_trace_summaries",
+          "commands": 1
+        }
+      ],
+      "otelObservedTransactionCommits": 4,
+      "structuredLogsObservedWriteCommands": 0,
+      "groups": [
+        {
+          "phase": "before",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 4
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionCommandTransportSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityProviderConfigurationSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.StructuredLogsSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.StudioPreferencesSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityIamSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.PublishingSnapshotReviewPostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.WorkflowsDesignPostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Secrets.Persistence.EntityFrameworkCore.SecretsSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignPostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityIamSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 2
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 110
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 11
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "event": "TransactionStarted",
+          "count": 4
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "event": "TransactionCommitted",
+          "count": 4
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+          "event": "TransactionStarted",
+          "count": 4
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 105
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+          "event": "TransactionCommitted",
+          "count": 4
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionCommandTransportSqliteDbContext",
+          "event": "TransactionStarted",
+          "count": 1
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionCommandTransportSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 2
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionCommandTransportSqliteDbContext",
+          "event": "TransactionCommitted",
+          "count": 1
+        },
+        {
+          "phase": "after",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 3
+        }
+      ],
+      "allFourInstancesCompleted": true
+    },
+    "off": {
+      "case": "attribution-off-r3",
+      "recordedEvents": 151,
+      "markedTraceCommandCount": 82,
+      "markedTraceCommandsByContext": {
+        "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityIamSqliteDbContext": 2,
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext": 78,
+        "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext": 2
+      },
+      "markedTraceTransactionCommits": 4,
+      "otelObservedCommands": 0,
+      "otelCommandsByTable": [],
+      "otelObservedTransactionCommits": 0,
+      "structuredLogsObservedWriteCommands": 0,
+      "groups": [
+        {
+          "phase": "before",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 4
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Secrets.Persistence.EntityFrameworkCore.SecretsSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionCommandTransportSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.PublishingSnapshotReviewPostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.WorkflowsDesignPostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignPostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityProviderConfigurationSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityIamSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "before",
+          "context": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.StudioPreferencesSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 1
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityIamSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 2
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 110
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 11
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "event": "TransactionStarted",
+          "count": 4
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "event": "TransactionCommitted",
+          "count": 4
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionCommandTransportSqliteDbContext",
+          "event": "TransactionStarted",
+          "count": 1
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionCommandTransportSqliteDbContext",
+          "event": "CommandExecuted",
+          "count": 2
+        },
+        {
+          "phase": "request",
+          "context": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionCommandTransportSqliteDbContext",
+          "event": "TransactionCommitted",
+          "count": 1
+        },
+        {
+          "phase": "after",
+          "context": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+          "event": "CommandExecuted",
+          "count": 3
+        }
+      ],
+      "allFourInstancesCompleted": true
+    }
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "reviewedSourceParentCommit": "35ed1215b9a4d91385015a6d2e467ffa2da0ad83",
+  "reviewRound": 3,
+  "fullPrRoundBound": 6,
+  "deduplicatedFindingsFixed": 1,
+  "newExactHeadReviewRequired": true,
+  "actualFixedSourceHostProofPending": true,
+  "executedRedFailures": 16,
+  "redValidControlsPassed": 1,
+  "actualRegisteredSerializerCases": 5,
+  "omissionNamingPolicyCases": 12,
+  "focusedGreenCases": 17,
+  "wholePassedCases": 6829,
+  "wholeFailedCases": 0,
+  "wholeSkippedCases": 0,
+  "newDispatchCases": 17,
+  "productionAttributeChanges": 2,
+  "clrSignaturesOrConstructorChanges": false,
+  "filesSha256": {
+    "Essentials/src/Serialization/Core/JsonPayloadConverterRegistry.cs": "eee565c195d50414c26edf2abad4c319321ecba7544dfd277917264386b64627",
+    "Essentials/src/Serialization/SystemText/SerializationFeature.cs": "ee5f6f092d9766b228f546557a340773645339a3b1d2fde90a875d9fec2c8769",
+    "Essentials/src/Serialization/SystemText/Services/JsonPayloadSerializer.cs": "04c48d7f7fbc220a5637fd45e160cd2482f6d93e93e58cac1bb713e65144635f",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControl.cs": "ab9d50feffb97a28dbeab3b971c47337ad9850f9598f9964caa04623e4f28b35",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/ChildControlContractTests.NullOmission.cs": "a8a8f0df1a5d1fb72e4155fd9604dd200ccf9ea77e9754a0c68fdc0d1a8ca12f",
+    "specs/1006-bpmn-library-adoption/contracts/called-workflow-control.md": "50cb5b187a1298643849d23e82f98c116c05c1f51e044488b998b2a72e44d3cb",
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer-fix.md": "b3f92969a8a61a2f0d068d902ee2c5b02c3594d43a23b7e379d1884bd3988bd9",
+    "specs/1006-bpmn-library-adoption/tasks.md": "00fac73fc732ae5586611ace91f7d52acb4ca659ee17f16b347b34087dcb9d8c"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/activities-discovery.txt": {
+      "sha256": "a3c14bb640643c209674d5f88f1aa83ddbc1e1ff929006729cefbfdc037527a4",
+      "bytes": 119793
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/activities-whole.log.gz": {
+      "sha256": "160e83debf1bcc0f0691b76337853b6a9fdd8d36bcd11c2d3cf68f0765266dfc",
+      "bytes": 298
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/activities-whole.trx.gz": {
+      "sha256": "a8fda037955d6510b6791536c2039e233e2bc49623e6b1d9b9dac9079bdf0a0a",
+      "bytes": 189721
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/architecture-discovery.txt": {
+      "sha256": "2eca032f99674ed370cc4bcec1cb5781661cbdb60d817775ad4d209908f9020f",
+      "bytes": 177106
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/architecture-whole.log.gz": {
+      "sha256": "0e92892673ddded7ca88974a7ea01b3f7d1fca993d553fb22a02b8bb965c6af4",
+      "bytes": 3665
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/architecture-whole.trx.gz": {
+      "sha256": "c90e61f9e2b26999a3c32e11f1bc723038c2545c5d1879b1a4e06724950f0830",
+      "bytes": 154591
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/bpmn-discovery.txt": {
+      "sha256": "3faad1eaadf25822150ebff07152e03ca394c4ab375e4e8724fc80ea38387c8f",
+      "bytes": 56055
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/bpmn-whole.log.gz": {
+      "sha256": "31d4bd572d0ec42b4ec6138d033924bdb4e48c334899e193ad3bf9f8036e2628",
+      "bytes": 298
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/bpmn-whole.trx.gz": {
+      "sha256": "8e9f4fcb7fd02490526ade20780d36e620d7b080472f2726e42224e048e9e26c",
+      "bytes": 87951
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/dispatch-discovery.txt": {
+      "sha256": "bb0d79196f61e750f1b3c25803ad67485750c290b91cf225d8babef27e895e25",
+      "bytes": 70985
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/dispatch-whole.log.gz": {
+      "sha256": "57ceddc92f14bec1dd44e464f61b5db442c3288a8b73946f6e523cdd88b47146",
+      "bytes": 308
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/dispatch-whole.trx.gz": {
+      "sha256": "d4746a8e41b22019a1857c22a0e66e77df9fc42bffcd3ec988ad83a049c48e60",
+      "bytes": 93460
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/ef-discovery.txt": {
+      "sha256": "834ec6f26a3c8c69cdb43a5b8a28b2063816e5838b59deabbcb18c9bde3ebf67",
+      "bytes": 357151
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/ef-whole.log.gz": {
+      "sha256": "33614ac15da74200bf911b6dc62c1ecc09082cbe18f62d71d4ee91f3ab773fc4",
+      "bytes": 330
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/ef-whole.trx.gz": {
+      "sha256": "0ca6ca03ded002cdee67fe5cdc80655c7be7fc466689be528869c78c85096a29",
+      "bytes": 468328
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/maps.log.gz": {
+      "sha256": "331099547a70ba6594d7004b2f491da5fa852cfb2cebba8b98e78c4d02acfc47",
+      "bytes": 76
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/null-omission-green.log.gz": {
+      "sha256": "e687f58302595489e5f505253cae611957fd393565c4aaef7c5f8c2129c13688",
+      "bytes": 4214
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/null-omission-green.trx.gz": {
+      "sha256": "e6a48f901a8039abc9c70ba24c4de0e1353273c90ed36e4da8c7f9f15dc6cc0d",
+      "bytes": 3191
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/null-omission-red.log.gz": {
+      "sha256": "88445ef74c3c70bfeed12499d3e7677d6a31b20da6c319828c19078bd2554dd2",
+      "bytes": 5863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/null-omission-red.trx.gz": {
+      "sha256": "058cdf54af88a07f8ba868baca076441da29d994c44123bfd48cd241495ca48f",
+      "bytes": 5784
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/runtime-discovery.txt": {
+      "sha256": "d5623c8fcd59f9de7eda456283c7de80136f64f2eb47ac3e804747fe1fbe2a4b",
+      "bytes": 450618
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/runtime-whole.log.gz": {
+      "sha256": "82779f215114426b0a42c3c707c7380bff4e4351dc9aed5909f322ea90926228",
+      "bytes": 303
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/runtime-whole.trx.gz": {
+      "sha256": "392788460bbc810100f06587019cecb7b5468299f51d71d4aff5e68a4cdfd0e3",
+      "bytes": 827097
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/unchanged-source-regression-red.json": {
+      "sha256": "1c4e56f169d4a7ad16b64263cdba5a7824edb50993f6e8128cb6ad497c2c1b82",
+      "bytes": 754
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round3-null-writer/whole-project-reconciliation.json": {
+      "sha256": "b019ecd5ef41d4ecb046a1dd0c1a20e7e442d00295198219c612cd7f4883db9f",
+      "bytes": 5542
+    }
+  },
+  "frozenAuthoringSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "remaining": [
+    "Exact-code actual host/Studio refresh",
+    "Full-PR round4 and required exact-head checks",
+    "Protected merge/resulting-main and separate ADR0063",
+    "Independent production/program evidence"
+  ]
+}

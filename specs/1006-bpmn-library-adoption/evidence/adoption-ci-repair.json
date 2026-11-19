@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "task": "Repair observed architecture/readability/waited-dispatch CI failures on the adoption PR",
+  "sourceParentCommit": "15e89eae6de56d2c7fe62d4293ffd588cd7a5414",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlContext.cs": "29f4672eee5d8dac97f5f1f603c86ff7caa878d7c88661b2a3f3338c060397e9",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "090553bbd51de1c251546715db5b1be79e5f706bb7c412be604c1b718e16e78c",
+    "Essentials/tests/Activities/Behavioral/Tests/Drives/DispatchWorkflowDrive.cs": "d4ebcf4efa9ce9eea8345ffcc23a4aad20c790d013ee140a6ac0aa12677a9775",
+    "Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj": "fbf28a2b58b7d4c9be6afb2b4e94c43cec42abdb70d7297113c52f2c2a97544c",
+    "Essentials/tests/Activities/Behavioral/Tests/packages.lock.json": "149bdacf61018f48954ac630ea97c72e7408774a0421368feacd0eec96707fc8",
+    "Essentials/tests/Cluster/Readability/Tests/EfSchemaReadabilitySourceTests.cs": "fbeb7647bebaf8455e42b8696f423ef17830bcbb5f2a5afab2403ac522f130ba",
+    "Essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe.csproj": "912b7de0d480e0138cf6bc0ced3aea69cd1db5afd8de76b4deda4b170057f540",
+    "Essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/Program.cs": "525ad091aad9bdf68bbf53fa76321ec97e25ab4182dc2d77080cf4531b29d9bf",
+    "Essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/packages.lock.json": "37ed70db0492bdce1805f57b53760c273fb4cfe9823ae36b0dc4f658bac8bfda",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs": "b9ac70abd71a187054f08b674c77a71929d426bf896f0328ddf8fec8fe99406d",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs": "01b161949858149289465d50f01a84db5bc272bd4429294d574063c4a6b98aa2"
+  },
+  "checks": [
+    {
+      "project": "Activity Behavioral",
+      "passed": 215,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "project": "Workflow Publishing",
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "project": "Cluster Readability",
+      "passed": 117,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "project": "BPMN activities",
+      "passed": 297,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "project": "DispatchWorkflow",
+      "passed": 339,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "project": "Core implementation-shape architecture guard",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "coreApiAdditions": 7,
+  "coreApiRemovals": 0,
+  "lockedRestores": [
+    "Activity Behavioral, full reference graph",
+    "Workflow Publishing including runtime ExecutionProbe, full reference graph"
+  ],
+  "lockfileChanges": "Only Elsa.Events and Elsa.Events.Strategies project entries added to each of the two consumer locks; every existing package/version/content hash/dependency retained.",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "unchanged": true,
+  "diagnosedFailure": {
+    "sourceCiRun": 40369434902,
+    "sourceCiHead": "913b7450fe670a83e75ddb34550edcb6e06adae1",
+    "parentResumeStatus": "Dispatched / AcceptedButFaulted",
+    "cause": "No service for type Elsa.Events.Core.Contracts.IInlineEventPublisher has been registered.",
+    "boundary": "Two manual fixture compositions omitted Events, already declared as a DispatchWorkflowRuntimeFeature dependency. Temporary diagnostic logging was restored."
+  },
+  "reviews": {
+    "correctness": "source and final receipt clean",
+    "standards": "source/API/model shape and final receipt clean",
+    "acceptance": "source/control limits and final receipt clean",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Local repair verification is not green remote CI; exact new-head required checks must still run and pass.",
+    "The actual fresh runtime process export/import journey proves its existing ordinary waited-parent/child scenario only; it does not replace T045 or T051 upgraded-host/broadcast recovery/Studio qualification.",
+    "T049 final GC composition, T050 activation/exact recipient and immutable input projection, T051, other story/deletion/final whole-PR checks/resulting-main and ADR0063 gates remain open.",
+    "GitGuardian incident38996611 still flags an older public source SHA256 receipt value; no required check or protection is bypassed."
+  ]
+}

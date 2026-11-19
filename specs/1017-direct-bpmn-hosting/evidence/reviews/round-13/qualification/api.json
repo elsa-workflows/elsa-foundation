@@ -1,0 +1,152 @@
+{
+  "productSource": "c53167925de74d026be739ce4248ed4047c0e578",
+  "passedComparisons": 18,
+  "parameterNameRuleEnabled": true,
+  "suppressionsUsed": false,
+  "comparisons": [
+    {
+      "packageId": "Elsa.Workflows.Runtime.Core",
+      "publishedVersion": "4.0.55-preview",
+      "leftSha256": "b966bef99337d45bb771f4c748f6798165cb35bd489d331e6659cd8d46b9673b",
+      "rightSha256": "3eceb288a2046e3f3a35ae6a601d8b3817b803c6de871bf3a6e2aa0d5bcff69f",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Runtime",
+      "publishedVersion": "4.0.69-preview",
+      "leftSha256": "a5e86d52117881aef94bde22afcf26193652d495406d04f1c7dfd4d499759602",
+      "rightSha256": "fe9bee136e3a2429af86f0b28ab15ad1cb6d373a8e1eef0bc61c4e63d501177a",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Persistence.EntityFramework",
+      "publishedVersion": "4.0.32-preview",
+      "leftSha256": "a7627fd69b5c6d48ce0ebaf0f8e6eba0c33217ecee79c4e1f8eda740f92a29c1",
+      "rightSha256": "a3362ff2dae07e5e1288f1a2a7ccb4f22026e86aabb0c5f1f3a09f42dd13ad6d",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Runtime",
+      "publishedVersion": "4.0.70-preview",
+      "leftSha256": "c9574bdcf1d701ef64cfb79ebf27992c958dc62b20953b54a8da55c14aabe329",
+      "rightSha256": "fe9bee136e3a2429af86f0b28ab15ad1cb6d373a8e1eef0bc61c4e63d501177a",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Runtime.Core",
+      "publishedVersion": "4.0.56-preview",
+      "leftSha256": "51729832b0f58044dc39fbce1b762f4b05ac8712d89e5a89683903c35de4ebeb",
+      "rightSha256": "3eceb288a2046e3f3a35ae6a601d8b3817b803c6de871bf3a6e2aa0d5bcff69f",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Activities.Bpmn",
+      "publishedVersion": "4.0.15-preview",
+      "leftSha256": "c59d0e255bfbf4e9f08f6f9a64fba1ebb9e8a9edbef71069ecdc4cb89ac74133",
+      "rightSha256": "760dccce8275c49f2d54057330235ed7d78c14d438295cf5adc444855295684a",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Activities.Bpmn.Interchange",
+      "publishedVersion": "4.0.16-preview",
+      "leftSha256": "4d2ae22bf02d54812372ecc7f9742510b022efb3360f45ae2e79fa6a9074895f",
+      "rightSha256": "82bddf6587f5090629b4696bac5c1701b97ecfbd189900d530451f5ac1a3e667",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+      "publishedVersion": "4.0.24-preview",
+      "leftSha256": "c5f33fc6e5995ad4be3d2719bfb1948da9ee27da1b960f39f9d6fa4c52bbc303",
+      "rightSha256": "08a7d773b4b0533ca993bff7e9cfcea919497c1c9e0b3a8c52ff3cad374335af",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Publishing",
+      "publishedVersion": "4.0.36-preview",
+      "leftSha256": "5e9897c98a1a0ca48fe25641e310e1e342511bc3df83d3cd88ba5efda0d859ad",
+      "rightSha256": "c0e5d00a0758932f0b0596601a7149d9c2e514f1d87fcb789bda7eba75bd1114",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "publishedVersion": "4.0.43-preview",
+      "leftSha256": "733e3baeb9fd3524fdb139969126367772cc3cc7fd4ae29ed0d1d19b948f66a2",
+      "rightSha256": "1d1110f842b23aeb2609beb72ba2fcd2b1a0405edacaee21f6832c2b1fd43ea5",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Activities.Bpmn",
+      "publishedVersion": "4.0.16-preview",
+      "leftSha256": "9ba34ec27fce1b957a723ef9accec4179690316f8840935b4260c993c80bc284",
+      "rightSha256": "760dccce8275c49f2d54057330235ed7d78c14d438295cf5adc444855295684a",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Publishing",
+      "publishedVersion": "4.0.37-preview",
+      "leftSha256": "2ff96fcc35a97c278208aef3842fe0a4a08a2ded516b2a5bbb8c1404fd149aab",
+      "rightSha256": "c0e5d00a0758932f0b0596601a7149d9c2e514f1d87fcb789bda7eba75bd1114",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+      "publishedVersion": "4.0.25-preview",
+      "leftSha256": "4abd2a665d05856dd3c172e5fae48e1b23b6e057ee833dd48b28b199f49d5e71",
+      "rightSha256": "08a7d773b4b0533ca993bff7e9cfcea919497c1c9e0b3a8c52ff3cad374335af",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Runtime",
+      "publishedVersion": "4.0.72-preview",
+      "leftSha256": "3e597f3e4a5c3cc863f02d44448d75fe27d06ea4a6e394c11812e08ef139231b",
+      "rightSha256": "fe9bee136e3a2429af86f0b28ab15ad1cb6d373a8e1eef0bc61c4e63d501177a",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Runtime.Core",
+      "publishedVersion": "4.0.58-preview",
+      "leftSha256": "2da742237ecb24b7009eb7f63a8c8b69c1809b4ec1bb66baf8252f57f4e89575",
+      "rightSha256": "3eceb288a2046e3f3a35ae6a601d8b3817b803c6de871bf3a6e2aa0d5bcff69f",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Persistence.EntityFramework",
+      "publishedVersion": "4.0.33-preview",
+      "leftSha256": "01bd176944bec1f8a0bd451272a086fb004376ecf0d4dfd975e3cb8f7a866a3b",
+      "rightSha256": "a3362ff2dae07e5e1288f1a2a7ccb4f22026e86aabb0c5f1f3a09f42dd13ad6d",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Publishing",
+      "publishedVersion": "4.0.38-preview",
+      "leftSha256": "61b898cf9283bf194709bfaa2ee66e00ed5c7a7f3c78087dbad9ee41f7f99fa8",
+      "rightSha256": "c0e5d00a0758932f0b0596601a7149d9c2e514f1d87fcb789bda7eba75bd1114",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    },
+    {
+      "packageId": "Elsa.Workflows.Runtime",
+      "publishedVersion": "4.0.73-preview",
+      "leftSha256": "2c2e670435e1eccddc7b431ac01aaa1e2b48f1dfe88d8747af1582ee8672cab3",
+      "rightSha256": "fe9bee136e3a2429af86f0b28ab15ad1cb6d373a8e1eef0bc61c4e63d501177a",
+      "exitCode": 0,
+      "unresolvedReferences": []
+    }
+  ]
+}

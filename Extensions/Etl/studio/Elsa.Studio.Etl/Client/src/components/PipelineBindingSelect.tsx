@@ -19,7 +19,8 @@ export function PipelineBindingSelect({
   onChange,
   kind,
   bindingsLoading = false,
-  bindingsUnavailable = false
+  bindingsUnavailable = false,
+  subjectLabel
 }: {
   label: string;
   role: EtlBindingRole;
@@ -31,13 +32,15 @@ export function PipelineBindingSelect({
   kind?: EtlConnectorBindingSummary["kind"];
   bindingsLoading?: boolean;
   bindingsUnavailable?: boolean;
+  /** Overrides the role and kind wording, for approvals whose kind is broader than the declared format. */
+  subjectLabel?: string;
 }) {
   const id = useId();
   const roleCandidates = bindings.filter(binding => binding.role === role);
   const candidates = roleCandidates.filter(binding => kind === undefined || ("kind" in binding && binding.kind === kind));
   const currentIsAvailable = candidates.some(binding => binding.alias === value);
   const currentIsLoaded = roleCandidates.some(binding => binding.alias === value);
-  const subject = kind === undefined ? roleLabels[role] : connectorRoleLabels[role][kind];
+  const subject = subjectLabel ?? (kind === undefined ? roleLabels[role] : connectorRoleLabels[role][kind]);
 
   return (
     <div className="etl-editor-field">
@@ -52,15 +55,20 @@ export function PipelineBindingSelect({
       <small>{bindingsLoading ? "Loading host-approved aliases. Existing selections are retained while they load."
         : bindingsUnavailable && candidates.length === 0 ? "Approved aliases could not be loaded. Retry loading bindings before choosing a replacement."
         : candidates.length === 0
-        ? `No ${subject.toLowerCase()} aliases are in the loaded bindings yet. Load more to check other pages.`
-        : `Choose a host-approved ${subject.toLowerCase()} binding.`}</small>
+        ? `No ${inSentence(subject)} aliases are in the loaded bindings yet. Load more to check other pages.`
+        : `Choose a host-approved ${inSentence(subject)} binding.`}</small>
     </div>
   );
 }
 
 const connectorRoleLabels: Record<EtlBindingRole, Record<EtlConnectorBindingSummary["kind"], string>> = {
-  Source: { csv: "Source CSV", http: "Source HTTP", jsonl: "Source JSONL" },
-  Lookup: { csv: "Lookup CSV", http: "Lookup HTTP", jsonl: "Lookup JSONL" },
-  MainOutput: { csv: "Accepted CSV output", http: "Accepted HTTP output", jsonl: "Accepted JSONL output" },
-  ErrorOutput: { csv: "Rejected CSV output", http: "Rejected HTTP output", jsonl: "Rejected JSONL output" }
+  Source: { csv: "Source CSV", http: "Source HTTP", jsonl: "Source JSONL", sql: "Source SQL table", rabbitMq: "Source RabbitMQ" },
+  Lookup: { csv: "Lookup CSV", http: "Lookup HTTP", jsonl: "Lookup JSONL", sql: "Lookup SQL", rabbitMq: "Lookup RabbitMQ" },
+  MainOutput: { csv: "Accepted CSV output", http: "Accepted HTTP output", jsonl: "Accepted JSONL output", sql: "Accepted SQL table", rabbitMq: "Accepted RabbitMQ exchange" },
+  ErrorOutput: { csv: "Rejected CSV output", http: "Rejected HTTP output", jsonl: "Rejected JSONL output", sql: "Rejected SQL table", rabbitMq: "Rejected RabbitMQ exchange" }
 };
+
+/** Lower-cases only the first letter, so acronyms such as CSV, HTTP, SQL and RabbitMQ keep their case mid-sentence. */
+function inSentence(subject: string) {
+  return subject.charAt(0).toLowerCase() + subject.slice(1);
+}

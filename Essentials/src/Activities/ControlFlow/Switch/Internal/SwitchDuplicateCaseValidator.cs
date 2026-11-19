@@ -28,7 +28,10 @@ public sealed class SwitchDuplicateCaseValidator(IActivityStructureService activ
             if (!StringComparer.Ordinal.Equals(node.Structure?.Kind, SwitchActivity.StructureKind))
                 continue;
 
-            var cases = SwitchAuthoredStructureReader.Read(node).Cases;
+            var structure = SwitchAuthoredStructureReader.Read(node);
+            var cases = structure.Cases;
+            foreach (var error in SwitchCaseRules.StructureErrors(node, structure))
+                errors.Add(new ValidationError(node.NodeId, "Switch/CaseCondition", error));
 
             foreach (var duplicate in SwitchCaseRules.DuplicateMatches(cases.Select(@case => @case.Match)))
             {

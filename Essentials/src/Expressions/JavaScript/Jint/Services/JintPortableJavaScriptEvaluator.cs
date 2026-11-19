@@ -3,7 +3,6 @@ using System.Text.RegularExpressions;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Exceptions;
-using Elsa.Expressions.JavaScript.Services;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Jint.Native;
@@ -39,18 +38,11 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         if (definition.Options.EnumerateObject().Any())
             throw new InvalidOperationException("The JavaScript binding-pure-v1 evaluator does not support evaluator options.");
 
-        var isExpression = JavaScriptBindingSyntax.IsExpression(definition.Source);
-        var prepared = Engine.PrepareScript(
-            isExpression ? $"(\n{definition.Source}\n)" : definition.Source,
-            strict: true,
-            options: new ScriptPreparationOptions
-            {
-                ParsingOptions = new() { AllowReturnOutsideFunction = !isExpression }
-            });
+        var prepared = PreparedJavaScript.Binding(definition.Source);
 
         var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken);
-        IsolatedJintEngine.SetReadOnlyArgs(engine, request.ParameterValues, featureOptions.Value);
-        IsolatedJintEngine.SetReadOnlyVariables(engine, request.AmbientVariables, featureOptions.Value);
+        IsolatedJintEngine.SetReadOnlyArgs(engine, request.ArgumentValues(), featureOptions.Value);
+        IsolatedJintEngine.SetReadOnlyVariables(engine, request.PinnedVariableValues(), request.VariableReader, featureOptions.Value);
 
         JsValue result;
         try

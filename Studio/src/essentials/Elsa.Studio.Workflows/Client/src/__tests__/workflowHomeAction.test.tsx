@@ -13,6 +13,7 @@ import {
 describe("Home workflow actions", () => {
   it("opens the existing create flow once and preserves the rest of the URL and history state", async () => {
     const historyState = { preserved: "home-navigation-state" };
+    const originalHistoryState = structuredClone(historyState);
     const fetchMock = async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
       if (url.pathname.endsWith("/definition-pages")) return response({ items: [], nextContinuationToken: null });
@@ -32,7 +33,9 @@ describe("Home workflow actions", () => {
     await waitForCondition(() => {
       expect(`${window.location.pathname}${window.location.search}${window.location.hash}`)
         .toBe("/workflows/definitions?keep=one&keep=two#home-anchor");
-      expect(window.history.state).toEqual(historyState);
+      // Browse history adds its own namespace while preserving the Home caller's state.
+      expect(window.history.state).toMatchObject(originalHistoryState);
+      expect(historyState).toEqual(originalHistoryState);
     });
     await click(button(rendered.container, "Cancel"));
     expect(rendered.container.querySelector("[role='dialog']")).toBeNull();

@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import type { StudioActivityDescriptor, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { ActivityAvailabilityDiagnostics, ActivityCatalogItem, WorkflowDraft } from "../workflowTypes";
+import type { ActivityAvailabilityDiagnostics, ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import { findActivityAvailabilityDiagnostic } from "../activityAvailability";
 import {
   getActivityDesignerSupport,
@@ -112,8 +112,14 @@ export function useWorkflowScope({
   const isBpmnDesigner = !isUnsupportedDesigner && scope?.slot.mode === "bpmn";
   const canAddActivitiesToCanvas = !root || !isUnsupportedDesigner;
 
+  // Resolves any node's descriptor the way the inspector does, for surfaces that name a node's inputs (rename notice).
+  const describeActivity = useCallback(
+    (node: ActivityNode) => resolveActivityDescriptor(node, catalogByVersion, descriptorsByType, descriptorsByVersion),
+    [catalogByVersion, descriptorsByType, descriptorsByVersion]);
+
   return {
     catalogByVersion,
+    describeActivity,
     availabilityLookup,
     scopeOwner,
     isUnsupportedDesigner,

@@ -1,3 +1,4 @@
+import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useMemo, useState } from "react";
 import type { ElsaStudioModuleApi, StudioRouteComponentProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
@@ -181,7 +182,7 @@ export function register(api: ElsaStudioModuleApi) {
   moduleApi = api;
 
   api.navigation.add({
-    id: "open-telemetry",
+    id: "open-telemetry", requiresBackend:[{id:"elsa.api.open-telemetry",contractVersion:"1"}],
     label: "OpenTelemetry",
     path: "/diagnostics/open-telemetry",
     activePathPrefix: "/diagnostics/open-telemetry",
@@ -191,14 +192,14 @@ export function register(api: ElsaStudioModuleApi) {
   });
 
   api.routes.add({
-    id: "open-telemetry",
+    id: "open-telemetry", requiresBackend:[{id:"elsa.api.open-telemetry",contractVersion:"1"}],
     label: "OpenTelemetry",
     path: "/diagnostics/open-telemetry",
     component: OpenTelemetryPage
   });
 
   api.panels.add({
-    id: "open-telemetry",
+    id: "open-telemetry", requiresBackend:[{id:"elsa.api.open-telemetry",contractVersion:"1"}],
     title: "OpenTelemetry",
     order: 1_020,
     component: OpenTelemetryPanel
@@ -223,13 +224,8 @@ export function OpenTelemetryPage({ navigate }: { navigate?: StudioRouteComponen
   const selectedSpan = selectedTrace?.spans.find(span => span.spanId === state.selectedSpanId) ?? selectedTrace?.spans[0] ?? null;
 
   return (
-    <section className="otel-page">
-      <header className="otel-header">
-        <div>
-          <h2>OpenTelemetry</h2>
-          <p>{state.message}</p>
-        </div>
-      </header>
+    <section className="studio-page otel-page">
+      <StudioPageHeader headingLevel={2} title={<>OpenTelemetry</>} description={<>{state.message}</>} />
 
       <aside className="otel-capability-note" aria-label="OpenTelemetry signal availability">
         <p>Trace inspection is supported. Metrics and OpenTelemetry Logs are not available in this experience.</p>

@@ -1,0 +1,3657 @@
+{
+  "originalMap": "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/242-method-map.json",
+  "originalMapSha256": "bc497feeafb900bc488b53b1030a70c0b5f1266444702fdd1680d5a6f08d9c65",
+  "baselineMethods": 242,
+  "baselineExecutedCases": 251,
+  "additionalMethods": [
+    {
+      "class": "ActivitiesBpmnFeatureTests",
+      "method": "Duplicate_runtime_replacements_are_rejected_at_shell_startup",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.ActivitiesBpmnFeatureTests.Duplicate_runtime_replacements_are_rejected_at_shell_startup",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCalledControlAdapterTests",
+      "method": "Authored_terminal_code_routes_by_exact_code_even_when_cancellation_wins_actual_status",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Authored_terminal_code_routes_by_exact_code_even_when_cancellation_wins_actual_status(reportedCode: \"ORDER\", localOutcome: \"Cancelled\", caught: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Authored_terminal_code_routes_by_exact_code_even_when_cancellation_wins_actual_status(reportedCode: \"OTHER\", localOutcome: \"Cancelled\", caught: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Authored_terminal_code_routes_by_exact_code_even_when_cancellation_wins_actual_status(reportedCode: \"ORDER\", localOutcome: \"Faulted\", caught: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Authored_terminal_code_routes_by_exact_code_even_when_cancellation_wins_actual_status(reportedCode: \"OTHER\", localOutcome: \"Faulted\", caught: False)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCalledControlAdapterTests",
+      "method": "Boundary_read_outage_before_semantic_effects_preserves_actual_host_work_for_retry",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Boundary_read_outage_before_semantic_effects_preserves_actual_host_work_for_retry(duringCallback: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Boundary_read_outage_before_semantic_effects_preserves_actual_host_work_for_retry(duringCallback: False)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCalledControlAdapterTests",
+      "method": "Boundary_read_outage_in_a_parent_notification_keeps_its_structural_source_owed",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Boundary_read_outage_in_a_parent_notification_keeps_its_structural_source_owed",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCalledControlAdapterTests",
+      "method": "Called_root_emits_whole_control_instead_of_a_local_parent_notice",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Called_root_emits_whole_control_instead_of_a_local_parent_notice(scenario: \"signal-wait-fault\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Called_root_emits_whole_control_instead_of_a_local_parent_notice(scenario: \"signal-fault\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Called_root_emits_whole_control_instead_of_a_local_parent_notice(scenario: \"signal-end\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCalledControlAdapterTests",
+      "method": "Constructed_control_cannot_bypass_exact_local_call_identity",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Constructed_control_cannot_bypass_exact_local_call_identity(defect: \"protocol\", expected: \"consumer protocol\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Constructed_control_cannot_bypass_exact_local_call_identity(defect: \"sibling\", expected: \"unique durable direct-child\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Constructed_control_cannot_bypass_exact_local_call_identity(defect: \"token\", expected: \"work-token identity\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCalledControlAdapterTests",
+      "method": "Earlier_signal_cannot_start_work_before_later_unhandled_authored_failure_is_folded",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Earlier_signal_cannot_start_work_before_later_unhandled_authored_failure_is_folded(indivisible: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Earlier_signal_cannot_start_work_before_later_unhandled_authored_failure_is_folded(indivisible: True)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCalledControlAdapterTests",
+      "method": "Interrupting_terminal_prefix_suppresses_second_notice_and_settles_stopped_handle",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Interrupting_terminal_prefix_suppresses_second_notice_and_settles_stopped_handle(fault: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Interrupting_terminal_prefix_suppresses_second_notice_and_settles_stopped_handle(fault: False)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCalledControlAdapterTests",
+      "method": "Only_a_call_under_a_new_declared_executable_opts_into_control",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Only_a_call_under_a_new_declared_executable_opts_into_control(declared: False, call: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Only_a_call_under_a_new_declared_executable_opts_into_control(declared: False, call: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Only_a_call_under_a_new_declared_executable_opts_into_control(declared: True, call: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Only_a_call_under_a_new_declared_executable_opts_into_control(declared: True, call: True)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCalledControlAdapterTests",
+      "method": "Retirement_from_an_earlier_callback_suppresses_later_notice_but_still_settles_terminal",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Retirement_from_an_earlier_callback_suppresses_later_notice_but_still_settles_terminal",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCalledControlAdapterTests",
+      "method": "Running_call_escalation_uses_its_exact_handle_and_cancels_only_when_interrupting",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Running_call_escalation_uses_its_exact_handle_and_cancels_only_when_interrupting(interrupting: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCalledControlAdapterTests.Running_call_escalation_uses_its_exact_handle_and_cancels_only_when_interrupting(interrupting: False)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCodedErrorMappingTests",
+      "method": "Coded_error_matching_uses_bpmn_category_and_authored_fault_type_separately_from_incident_code",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCodedErrorMappingTests.Coded_error_matching_uses_bpmn_category_and_authored_fault_type_separately_from_incident_code(category: \"bpmn.error\", authoredCode: \"OTHER\", incidentCode: \"PAYMENT-DECLINED\", caught: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCodedErrorMappingTests.Coded_error_matching_uses_bpmn_category_and_authored_fault_type_separately_from_incident_code(category: \"bpmn.error\", authoredCode: \"PAYMENT-DECLINED\", incidentCode: \"incident.payment\", caught: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCodedErrorMappingTests.Coded_error_matching_uses_bpmn_category_and_authored_fault_type_separately_from_incident_code(category: \"ordinary.category\", authoredCode: \"PAYMENT-DECLINED\", incidentCode: \"PAYMENT-DECLINED\", caught: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCodedErrorMappingTests.Coded_error_matching_uses_bpmn_category_and_authored_fault_type_separately_from_incident_code(category: null, authoredCode: null, incidentCode: \"PAYMENT-DECLINED\", caught: False)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCombinedOutcomeTests",
+      "method": "Interrupting_combined_outcome_preserves_other_same_node_null_iteration_invocation_and_exact_wait",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCombinedOutcomeTests.Interrupting_combined_outcome_preserves_other_same_node_null_iteration_invocation_and_exact_wait",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCombinedOutcomeTests",
+      "method": "Ordered_signals_then_original_fault_commit_one_verdict_without_leaking_unissued_work",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCombinedOutcomeTests.Ordered_signals_then_original_fault_commit_one_verdict_without_leaking_unissued_work(interrupting: True, routingFault: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCombinedOutcomeTests.Ordered_signals_then_original_fault_commit_one_verdict_without_leaking_unissued_work(interrupting: False, routingFault: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCombinedOutcomeTests.Ordered_signals_then_original_fault_commit_one_verdict_without_leaking_unissued_work(interrupting: True, routingFault: False)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCombinedOutcomeTests",
+      "method": "Outward_ordered_notifications_survive_inner_final_fault_and_reach_outer_bpmn_combined_outcome",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCombinedOutcomeTests.Outward_ordered_notifications_survive_inner_final_fault_and_reach_outer_bpmn_combined_outcome",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "method": "ThrowEvent_BoundSignal_PreservesBroadcastBinding",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.ThrowEvent_BoundSignal_PreservesBroadcastBinding",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnDeliveryBoundaryTests",
+      "method": "Notifications_cannot_bypass_an_ended_verdict_or_initialize_a_missing_checkpoint",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDeliveryBoundaryTests.Notifications_cannot_bypass_an_ended_verdict_or_initialize_a_missing_checkpoint(prior: \"missing\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDeliveryBoundaryTests.Notifications_cannot_bypass_an_ended_verdict_or_initialize_a_missing_checkpoint(prior: \"fault\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDeliveryBoundaryTests.Notifications_cannot_bypass_an_ended_verdict_or_initialize_a_missing_checkpoint(prior: \"terminate\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnDeliveryBoundaryTests",
+      "method": "Terminal_callback_validates_complete_durable_identity_before_semantic_dispatch",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDeliveryBoundaryTests.Terminal_callback_validates_complete_durable_identity_before_semantic_dispatch(defect: \"broken-supersession\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDeliveryBoundaryTests.Terminal_callback_validates_complete_durable_identity_before_semantic_dispatch(defect: \"duplicate-handle\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDeliveryBoundaryTests.Terminal_callback_validates_complete_durable_identity_before_semantic_dispatch(defect: \"element\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDeliveryBoundaryTests.Terminal_callback_validates_complete_durable_identity_before_semantic_dispatch(defect: \"superseded-chain\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDeliveryBoundaryTests.Terminal_callback_validates_complete_durable_identity_before_semantic_dispatch(defect: \"duplicate-token\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "method": "TimerEventSubprocess_ValidCronCycle_PreservesGraphBinding",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.TimerEventSubprocess_ValidCronCycle_PreservesGraphBinding",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphAdapterTests",
+      "method": "Complete_child_inventory_rejects_an_orphan_on_the_actual_runtime_path",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphAdapterTests.Complete_child_inventory_rejects_an_orphan_on_the_actual_runtime_path",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "method": "Distinct_coded_error_boundaries_share_one_host_without_losing_code_selection",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.Distinct_coded_error_boundaries_share_one_host_without_losing_code_selection",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "method": "Immediate_cycle_is_refused_before_runtime_dispatch",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.Immediate_cycle_is_refused_before_runtime_dispatch",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnSemanticOwnershipTests",
+      "method": "Deleted_semantic_sources_types_and_host_pruning_do_not_return",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnSemanticOwnershipTests.Deleted_semantic_sources_types_and_host_pruning_do_not_return",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnSemanticOwnershipTests",
+      "method": "Foundation_defines_no_type_with_a_public_Semantics_simple_name",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnSemanticOwnershipTests.Foundation_defines_no_type_with_a_public_Semantics_simple_name",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Actual_compensation_checkpoint_cannot_default_missing_responsibility",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"tokens/1/iterationKey\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"compensationRuns/0/pendingCompensableIds\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"tokens/1/flowId\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"activeChildren/0/iterationId\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"loops\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"compensationRuns/0/pendingCompensableIds\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"tokens/1/kind\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"compensationRuns/0/pendingCompensableIds\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"cancelling\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"cancelling\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"races\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"pendingFault\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"compensables/0/status\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"compensationRuns\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"compensables/0/status\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"activeWork/0/iterationId\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"compensationRuns/0/pendingCompensableIds\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"races\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"tokens/1/iterationKey\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"compensables/0/status\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"races\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"tokens/1/producingWorkHandle\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"loops\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"tokens/1/producingActivityExecutionId\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"compensables\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"tokens/1/kind\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"compensables\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"compensationRuns\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"cancelling\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"compensables\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"tokens/1/parentTokenId\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"compensationRuns\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"loops\", explicitNull: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"tokens/1/flowId\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"compensables/0/status\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"loops\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"races\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"compensables\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"tokens/1/parentTokenId\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 2, path: \"compensationRuns\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"pendingFault\", explicitNull: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_cannot_default_missing_responsibility(version: 1, path: \"cancelling\", explicitNull: False)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Actual_compensation_checkpoint_refuses_case_shadowed_responsibility",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_case_shadowed_responsibility(version: 2, nested: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_case_shadowed_responsibility(version: 2, nested: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_case_shadowed_responsibility(version: 1, nested: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_case_shadowed_responsibility(version: 1, nested: False)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Actual_compensation_checkpoint_refuses_inconsistent_replay_identity",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 2, defect: \"unknown-pending-id\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 1, defect: \"undefined-registration-status\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 2, defect: \"missing-handler-parent\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 1, defect: \"unknown-pending-id\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 2, defect: \"reversed-head\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 1, defect: \"missing-handler-parent\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 2, defect: \"duplicate-registration-id\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 2, defect: \"undefined-registration-status\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 1, defect: \"null-registration\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 1, defect: \"reversed-head\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 2, defect: \"null-registration\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Actual_compensation_checkpoint_refuses_inconsistent_replay_identity(version: 1, defect: \"duplicate-registration-id\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Complete_actual_compensation_shape_keeps_original_replay_order",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Complete_actual_compensation_shape_keeps_original_replay_order(version: 2)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Complete_actual_compensation_shape_keeps_original_replay_order(version: 1)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Continuing_v1_keeps_its_wire_names_and_version_and_retains_additive_stopped_identity",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Continuing_v1_keeps_its_wire_names_and_version_and_retains_additive_stopped_identity",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Deferred_fault_text_is_preserved_without_a_new_nonblank_policy",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Deferred_fault_text_is_preserved_without_a_new_nonblank_policy(version: 1)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Deferred_fault_text_is_preserved_without_a_new_nonblank_policy(version: 2)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Explicit_json_null_is_a_valid_snapshotted_collection_item",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Explicit_json_null_is_a_valid_snapshotted_collection_item",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Fresh_state_uses_new_version_and_scope_correlation_is_not_callback_correlation",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Fresh_state_uses_new_version_and_scope_correlation_is_not_callback_correlation",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Legacy_translation_preserves_work_producer_and_deferred_fault_that_a_direct_read_loses",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Legacy_translation_preserves_work_producer_and_deferred_fault_that_a_direct_read_loses",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Missing_legacy_work_and_conflicting_aliases_are_refused",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Missing_legacy_work_and_conflicting_aliases_are_refused",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Scope_correlation_keys_retain_distinct_case_sensitive_identities",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Scope_correlation_keys_retain_distinct_case_sensitive_identities",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Truncated_checkpoint_is_not_a_fresh_empty_execution",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Truncated_checkpoint_is_not_a_fresh_empty_execution(version: 2, json: \"{}\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Truncated_checkpoint_is_not_a_fresh_empty_execution(version: 1, json: \"{\\\"activeChildren\\\":[]}\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStateCodecTests",
+      "method": "Unsupported_envelopes_are_refused_without_initializing_a_new_execution",
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Unsupported_envelopes_are_refused_without_initializing_a_new_execution(version: 3, alias: \"Elsa.Bpmn.ExecutionState\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Unsupported_envelopes_are_refused_without_initializing_a_new_execution(version: 1, alias: \"wrong.alias\")",
+          "outcome": "Passed"
+        }
+      ]
+    }
+  ],
+  "wholeBpmnCases": 372,
+  "rows": [
+    {
+      "class": "BpmnGatewayTests",
+      "originalMethod": "ParallelForkAndJoin_RunsBothBranches_JoinsOnce_AndCompletes",
+      "currentMethod": "ParallelForkAndJoin_RunsBothBranches_JoinsOnce_AndCompletes",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGatewayTests.ParallelForkAndJoin_RunsBothBranches_JoinsOnce_AndCompletes",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGatewayTests",
+      "originalMethod": "ExclusiveGateway_WithBoundDecision_RoutesByOutcome",
+      "currentMethod": "ExclusiveGateway_WithBoundDecision_RoutesByOutcome",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGatewayTests.ExclusiveGateway_WithBoundDecision_RoutesByOutcome",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGatewayTests",
+      "originalMethod": "ExclusiveGateway_WithoutMatch_TakesDefaultFlow",
+      "currentMethod": "ExclusiveGateway_WithoutMatch_TakesDefaultFlow",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGatewayTests.ExclusiveGateway_WithoutMatch_TakesDefaultFlow",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGatewayTests",
+      "originalMethod": "InclusiveGateway_ActivationAwareJoin_FiresWithSingleActivatedBranch",
+      "currentMethod": "InclusiveGateway_ActivationAwareJoin_FiresWithSingleActivatedBranch",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGatewayTests.InclusiveGateway_ActivationAwareJoin_FiresWithSingleActivatedBranch",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGatewayTests",
+      "originalMethod": "InclusiveGateway_BothBranchesActivated_JoinWaitsForBoth",
+      "currentMethod": "InclusiveGateway_BothBranchesActivated_JoinWaitsForBoth",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGatewayTests.InclusiveGateway_BothBranchesActivated_JoinWaitsForBoth",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventBasedGatewayTests",
+      "originalMethod": "FirstCatchWins_CancelsLosingSiblingTokenAndSubtree_AndCleansItsBookmark",
+      "currentMethod": "FirstCatchWins_CancelsLosingSiblingTokenAndSubtree_AndCleansItsBookmark",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventBasedGatewayTests.FirstCatchWins_CancelsLosingSiblingTokenAndSubtree_AndCleansItsBookmark",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventBasedGatewayTests",
+      "originalMethod": "ThreeMemberRace_CancelsBothLosers",
+      "currentMethod": "ThreeMemberRace_CancelsBothLosers",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventBasedGatewayTests.ThreeMemberRace_CancelsBothLosers",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventBasedGatewayTests",
+      "originalMethod": "RacingChildCompletions_InOneDrain_AreAbsorbed_WithoutFault",
+      "currentMethod": "RacingChildCompletions_InOneDrain_AreAbsorbed_WithoutFault",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventBasedGatewayTests.RacingChildCompletions_InOneDrain_AreAbsorbed_WithoutFault",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventBasedGatewayTests",
+      "originalMethod": "WinnerRoutingFault_DoesNotStageCancellations_AndSurfacesTheRoutingFault",
+      "currentMethod": "WinnerRoutingFault_DoesNotStageCancellations_AndSurfacesTheRoutingFault",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventBasedGatewayTests.WinnerRoutingFault_DoesNotStageCancellations_AndSurfacesTheRoutingFault",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventBasedGatewayTests",
+      "originalMethod": "Terminate_WhileRaceLive_CancelsMembersLogically_WithoutSeamATeardown",
+      "currentMethod": "Terminate_WhileRaceLive_CancelsMemberSubtrees_AndCleansBookmarks",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventBasedGatewayTests.Terminate_WhileRaceLive_CancelsMemberSubtrees_AndCleansBookmarks",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventBasedGatewayTests",
+      "originalMethod": "IdenticalRuns_ProduceIdenticalTokenAndRaceIds",
+      "currentMethod": "IdenticalRuns_ProduceIdenticalTokenAndRaceIds",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventBasedGatewayTests.IdenticalRuns_ProduceIdenticalTokenAndRaceIds",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCyclicFlowTests",
+      "originalMethod": "DoWhile_ExclusiveGatewayCountLoop_RunsBodyPerPass_AndCompletes",
+      "currentMethod": "DoWhile_ExclusiveGatewayCountLoop_RunsBodyPerPass_AndCompletes",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCyclicFlowTests.DoWhile_ExclusiveGatewayCountLoop_RunsBodyPerPass_AndCompletes",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCyclicFlowTests",
+      "originalMethod": "ParallelForkJoinInsideLoop_JoinsOncePerIteration_WithCorrectPairing",
+      "currentMethod": "ParallelForkJoinInsideLoop_JoinsOncePerIteration_WithCorrectPairing",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCyclicFlowTests.ParallelForkJoinInsideLoop_JoinsOncePerIteration_WithCorrectPairing",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCyclicFlowTests",
+      "originalMethod": "CatchEventInsideLoop_ReArmsPerIteration_WithDistinctIterationKeys",
+      "currentMethod": "CatchEventInsideLoop_ReArmsPerIteration_WithDistinctIterationKeys",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCyclicFlowTests.CatchEventInsideLoop_ReArmsPerIteration_WithDistinctIterationKeys",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCyclicFlowTests",
+      "originalMethod": "MultiInstanceHostInsideLoop_EachPassRunsItsOwnInstances",
+      "currentMethod": "MultiInstanceHostInsideLoop_EachPassRunsItsOwnInstances",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCyclicFlowTests.MultiInstanceHostInsideLoop_EachPassRunsItsOwnInstances",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCyclicFlowTests",
+      "originalMethod": "BoundaryHostInsideLoop_ListenerArmsAndTearsDownPerPass",
+      "currentMethod": "BoundaryHostInsideLoop_ListenerArmsAndTearsDownPerPass",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCyclicFlowTests.BoundaryHostInsideLoop_ListenerArmsAndTearsDownPerPass",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCyclicFlowTests",
+      "originalMethod": "IdenticalRuns_ProduceIdenticalIterationKeys",
+      "currentMethod": "IdenticalRuns_ProduceIdenticalIterationKeys",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCyclicFlowTests.IdenticalRuns_ProduceIdenticalIterationKeys",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphBackwardEdgeTests",
+      "originalMethod": "SelfLoopOnATask_ClassifiesOnlyTheLoopBackEdge",
+      "currentMethod": "SelfLoopOnATask_ClassifiesOnlyTheLoopBackEdge",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphBackwardEdgeTests.SelfLoopOnATask_ClassifiesOnlyTheLoopBackEdge",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphBackwardEdgeTests",
+      "originalMethod": "DoWhileShape_ClassifiesTheGatewayLoopBackEdge",
+      "currentMethod": "DoWhileShape_ClassifiesTheGatewayLoopBackEdge",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphBackwardEdgeTests.DoWhileShape_ClassifiesTheGatewayLoopBackEdge",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphBackwardEdgeTests",
+      "originalMethod": "NestedLoops_ClassifyBothLoopBackEdges_AndNoForwardEdge",
+      "currentMethod": "NestedLoops_ClassifyBothLoopBackEdges_AndNoForwardEdge",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphBackwardEdgeTests.NestedLoops_ClassifyBothLoopBackEdges_AndNoForwardEdge",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphBackwardEdgeTests",
+      "originalMethod": "MultipleStartEvents_ClassificationIsStableRegardlessOfStartOrder",
+      "currentMethod": "MultipleStartEvents_ClassificationIsStableRegardlessOfStartOrder",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphBackwardEdgeTests.MultipleStartEvents_ClassificationIsStableRegardlessOfStartOrder",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphBackwardEdgeTests",
+      "originalMethod": "ParallelForkJoinInsideLoop_ClassifiesOnlyTheSingleLoopBackEdge",
+      "currentMethod": "ParallelForkJoinInsideLoop_ClassifiesOnlyTheSingleLoopBackEdge",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphBackwardEdgeTests.ParallelForkJoinInsideLoop_ClassifiesOnlyTheSingleLoopBackEdge",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphBackwardEdgeTests",
+      "originalMethod": "LoopBackIntoStartEvent_IsRejectedByTheStartEventRule",
+      "currentMethod": "LoopBackIntoStartEvent_IsRejectedByTheStartEventRule",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphBackwardEdgeTests.LoopBackIntoStartEvent_IsRejectedByTheStartEventRule",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphBackwardEdgeTests",
+      "originalMethod": "LoopBackIntoBoundaryEvent_IsRejectedByTheBoundaryRule",
+      "currentMethod": "LoopBackIntoBoundaryEvent_IsRejectedByTheBoundaryRule",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphBackwardEdgeTests.LoopBackIntoBoundaryEvent_IsRejectedByTheBoundaryRule",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphBackwardEdgeTests",
+      "originalMethod": "LoopBackIntoEventGatewayArmedCatch_IsRejectedByTheExactlyOneInboundRule",
+      "currentMethod": "LoopBackIntoEventGatewayArmedCatch_IsRejectedByTheExactlyOneInboundRule",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphBackwardEdgeTests.LoopBackIntoEventGatewayArmedCatch_IsRejectedByTheExactlyOneInboundRule",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnFaultAndTerminateTests",
+      "originalMethod": "TerminateEndEvent_EndsProcess_WhileSiblingBranchStillPending",
+      "currentMethod": "TerminateEndEvent_EndsProcess_WhileSiblingBranchStillPending",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnFaultAndTerminateTests.TerminateEndEvent_EndsProcess_WhileSiblingBranchStillPending",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnFaultAndTerminateTests",
+      "originalMethod": "FaultingChild_FaultsProcess_InsteadOfHanging",
+      "currentMethod": "FaultingChild_FaultsProcess_InsteadOfHanging",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnFaultAndTerminateTests.FaultingChild_FaultsProcess_InsteadOfHanging",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnFaultAndTerminateTests",
+      "originalMethod": "ParallelJoin_UnreachableInboundFlow_FaultsAsDeadlock",
+      "currentMethod": "ParallelJoin_UnreachableInboundFlow_FaultsAsDeadlock",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnFaultAndTerminateTests.ParallelJoin_UnreachableInboundFlow_FaultsAsDeadlock",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnFaultAndTerminateTests",
+      "originalMethod": "TaskWithoutMatchingFlow_AndNoDefault_Faults",
+      "currentMethod": "TaskWithoutMatchingFlow_AndNoDefault_Faults",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnFaultAndTerminateTests.TaskWithoutMatchingFlow_AndNoDefault_Faults",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "CyclicGraph_IsAccepted_AndClassifiesTheLoopBackFlow",
+      "currentMethod": "CyclicGraph_IsAccepted_AndClassifiesTheLoopBackFlow",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.CyclicGraph_IsAccepted_AndClassifiesTheLoopBackFlow",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MissingStartEvent_IsRejected",
+      "currentMethod": "MissingStartEvent_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MissingStartEvent_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "UnknownFlowTarget_IsRejected",
+      "currentMethod": "UnknownFlowTarget_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.UnknownFlowTarget_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "SubprocessWithoutChild_IsRejected",
+      "currentMethod": "SubprocessWithoutChild_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.SubprocessWithoutChild_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "CallActivity_ResolvesToTaskFamily_BoundChildAndBoundaryHostAndMultiInstance_AreLegal",
+      "currentMethod": "CallActivity_ResolvesToTaskFamily_BoundChildAndBoundaryHostAndMultiInstance_AreLegal",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.CallActivity_ResolvesToTaskFamily_BoundChildAndBoundaryHostAndMultiInstance_AreLegal",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "ChildlessCallActivity_IsLegalAtValidation",
+      "currentMethod": "ChildlessCallActivity_IsLegalAtValidation",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.ChildlessCallActivity_IsLegalAtValidation",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "GatewayBindingRules_ParallelGatewayCannotBindChild",
+      "currentMethod": "GatewayBindingRules_ParallelGatewayCannotBindChild",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.GatewayBindingRules_ParallelGatewayCannotBindChild",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "UnboundChildActivity_IsRejected",
+      "currentMethod": "UnboundChildActivity_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.UnboundChildActivity_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "UnsupportedElementType_IsRejected",
+      "currentMethod": "UnsupportedElementType_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.UnsupportedElementType_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "CatchEventWithoutChild_IsRejected",
+      "currentMethod": "CatchEventWithoutChild_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.CatchEventWithoutChild_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "CatchEventWithoutEventDefinitions_IsRejected",
+      "currentMethod": "CatchEventWithoutEventDefinitions_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.CatchEventWithoutEventDefinitions_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "CatchEventWithMultipleEventDefinitions_IsRejected",
+      "currentMethod": "CatchEventWithMultipleEventDefinitions_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.CatchEventWithMultipleEventDefinitions_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "CatchEventWithUnsupportedEventDefinition_IsRejected",
+      "currentMethod": "CatchEventWithUnsupportedEventDefinition_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.CatchEventWithUnsupportedEventDefinition_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "EventBasedGateway_WithSingleOutboundFlow_IsRejected",
+      "currentMethod": "EventBasedGateway_WithSingleOutboundFlow_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.EventBasedGateway_WithSingleOutboundFlow_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "EventBasedGateway_TargetingNonCatchEvent_IsRejected",
+      "currentMethod": "EventBasedGateway_TargetingNonCatchEvent_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.EventBasedGateway_TargetingNonCatchEvent_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "EventBasedGateway_TargetCatchWithExtraInboundFlow_IsRejected",
+      "currentMethod": "EventBasedGateway_TargetCatchWithExtraInboundFlow_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.EventBasedGateway_TargetCatchWithExtraInboundFlow_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "EventBasedGateway_WithConditionalOutboundFlow_IsRejected",
+      "currentMethod": "EventBasedGateway_WithConditionalOutboundFlow_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.EventBasedGateway_WithConditionalOutboundFlow_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "EventBasedGateway_BindingChild_IsRejected",
+      "currentMethod": "EventBasedGateway_BindingChild_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.EventBasedGateway_BindingChild_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "BoundaryEvent_AttachedToMissingHost_IsRejected",
+      "currentMethod": "BoundaryEvent_AttachedToMissingHost_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.BoundaryEvent_AttachedToMissingHost_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "BoundaryEvent_AttachedToNonHostFamily_IsRejected",
+      "currentMethod": "BoundaryEvent_AttachedToNonHostFamily_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.BoundaryEvent_AttachedToNonHostFamily_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "BoundaryEvent_AttachedToChildlessHost_IsRejected",
+      "currentMethod": "BoundaryEvent_AttachedToChildlessHost_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.BoundaryEvent_AttachedToChildlessHost_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "BoundaryEvent_WithInboundFlow_IsRejected",
+      "currentMethod": "BoundaryEvent_WithInboundFlow_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.BoundaryEvent_WithInboundFlow_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "BoundaryEvent_WithoutOutboundFlow_IsRejected",
+      "currentMethod": "BoundaryEvent_WithoutOutboundFlow_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.BoundaryEvent_WithoutOutboundFlow_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "CatchBoundaryEvent_WithoutChild_IsRejected",
+      "currentMethod": "CatchBoundaryEvent_WithoutChild_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.CatchBoundaryEvent_WithoutChild_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "ErrorBoundaryEvent_WithChild_IsRejected",
+      "currentMethod": "ErrorBoundaryEvent_WithChild_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.ErrorBoundaryEvent_WithChild_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "NonInterruptingErrorBoundaryEvent_IsRejected",
+      "currentMethod": "NonInterruptingErrorBoundaryEvent_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.NonInterruptingErrorBoundaryEvent_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MultipleErrorBoundaryEvents_OnOneHost_AreRejected",
+      "currentMethod": "MultipleCatchAllErrorBoundaryEvents_OnOneHost_AreRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MultipleCatchAllErrorBoundaryEvents_OnOneHost_AreRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "BoundaryEvent_WithDefaultFlow_IsRejected",
+      "currentMethod": "BoundaryEvent_WithDefaultFlow_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.BoundaryEvent_WithDefaultFlow_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "ValidTimerBoundaryEvent_IsAccepted",
+      "currentMethod": "ValidTimerBoundaryEvent_IsAccepted",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.ValidTimerBoundaryEvent_IsAccepted",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MultiInstance_OnChildlessHost_IsRejected",
+      "currentMethod": "MultiInstance_OnChildlessHost_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MultiInstance_OnChildlessHost_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MultiInstance_OnGateway_IsRejected",
+      "currentMethod": "MultiInstance_OnGateway_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MultiInstance_OnGateway_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MultiInstance_BothCardinalityAndCollection_IsRejected",
+      "currentMethod": "MultiInstance_BothCardinalityAndCollection_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MultiInstance_BothCardinalityAndCollection_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MultiInstance_NeitherCardinalityNorCollection_IsRejected",
+      "currentMethod": "MultiInstance_NeitherCardinalityNorCollection_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MultiInstance_NeitherCardinalityNorCollection_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MultiInstance_NonPositiveCardinality_IsRejected",
+      "currentMethod": "MultiInstance_NonPositiveCardinality_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MultiInstance_NonPositiveCardinality_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MultiInstance_CollectionMode_UndeclaredVariable_IsRejected",
+      "currentMethod": "MultiInstance_CollectionMode_UndeclaredVariable_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MultiInstance_CollectionMode_UndeclaredVariable_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MultiInstance_CollectionMode_DeclaredVariable_IsAccepted",
+      "currentMethod": "MultiInstance_CollectionMode_DeclaredVariable_IsAccepted",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MultiInstance_CollectionMode_DeclaredVariable_IsAccepted",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MultiInstance_CollectionMode_ReservedItemVariable_IsRejected",
+      "currentMethod": "MultiInstance_CollectionMode_ReservedItemVariable_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MultiInstance_CollectionMode_ReservedItemVariable_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnGraphValidationTests",
+      "originalMethod": "MultiInstance_CardinalityHost_IsAccepted",
+      "currentMethod": "MultiInstance_CardinalityHost_IsAccepted",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnGraphValidationTests.MultiInstance_CardinalityHost_IsAccepted",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnProcessTests",
+      "originalMethod": "LinearProcess_RunsBoundTask_AndCompletes",
+      "currentMethod": "LinearProcess_RunsBoundTask_AndCompletes",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnProcessTests.LinearProcess_RunsBoundTask_AndCompletes",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnProcessTests",
+      "originalMethod": "UnboundAbstractTask_IsPassThrough",
+      "currentMethod": "UnboundAbstractTask_IsPassThrough",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnProcessTests.UnboundAbstractTask_IsPassThrough",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnProcessTests",
+      "originalMethod": "EmptyProcess_CompletesImmediately",
+      "currentMethod": "EmptyProcess_CompletesImmediately",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnProcessTests.EmptyProcess_CompletesImmediately",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnProcessTests",
+      "originalMethod": "NestedBpmnProcess_AsSubprocessChild_RunsToCompletion",
+      "currentMethod": "NestedBpmnProcess_AsSubprocessChild_RunsToCompletion",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnProcessTests.NestedBpmnProcess_AsSubprocessChild_RunsToCompletion",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnBoundaryEventTests",
+      "originalMethod": "InterruptingTimerBoundary_FiresFirst_TearsDownHostChild_AndRoutesBoundaryPath",
+      "currentMethod": "InterruptingTimerBoundary_FiresFirst_TearsDownHostChild_AndRoutesBoundaryPath",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnBoundaryEventTests.InterruptingTimerBoundary_FiresFirst_TearsDownHostChild_AndRoutesBoundaryPath",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnBoundaryEventTests",
+      "originalMethod": "HostCompletesFirst_TearsDownListener_AndRoutesHostPath",
+      "currentMethod": "HostCompletesFirst_TearsDownListener_AndRoutesHostPath",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnBoundaryEventTests.HostCompletesFirst_TearsDownListener_AndRoutesHostPath",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnBoundaryEventTests",
+      "originalMethod": "NonInterruptingMessageBoundary_Fires_BoundaryRuns_AndHostStillCompletes",
+      "currentMethod": "NonInterruptingMessageBoundary_Fires_BoundaryRuns_AndHostStillCompletes",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnBoundaryEventTests.NonInterruptingMessageBoundary_Fires_BoundaryRuns_AndHostStillCompletes",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnBoundaryEventTests",
+      "originalMethod": "ErrorBoundary_AbsorbsHostChildFault_ResolvesIncident_AndRoutesErrorPath",
+      "currentMethod": "ErrorBoundary_AbsorbsHostChildFault_ResolvesIncident_AndRoutesErrorPath",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnBoundaryEventTests.ErrorBoundary_AbsorbsHostChildFault_ResolvesIncident_AndRoutesErrorPath",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnBoundaryEventTests",
+      "originalMethod": "ErrorBoundary_RoutesToTask_AbsorbsFault_TaskRunsAndCompletes",
+      "currentMethod": "ErrorBoundary_RoutesToTask_AbsorbsFault_TaskRunsAndCompletes",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnBoundaryEventTests.ErrorBoundary_RoutesToTask_AbsorbsFault_TaskRunsAndCompletes",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnBoundaryEventTests",
+      "originalMethod": "ErrorBoundary_WithSiblingCatchListener_CancelsListener_OnAbsorb",
+      "currentMethod": "ErrorBoundary_WithSiblingCatchListener_CancelsListener_OnAbsorb",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnBoundaryEventTests.ErrorBoundary_WithSiblingCatchListener_CancelsListener_OnAbsorb",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnBoundaryEventTests",
+      "originalMethod": "ChildFault_WithoutErrorBoundary_FaultsComposite_Unchanged",
+      "currentMethod": "ChildFault_WithoutErrorBoundary_FaultsComposite_Unchanged",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnBoundaryEventTests.ChildFault_WithoutErrorBoundary_FaultsComposite_Unchanged",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnBoundaryEventTests",
+      "originalMethod": "MultipleBoundaries_OnOneHost_BehavePerKind",
+      "currentMethod": "MultipleBoundaries_OnOneHost_BehavePerKind",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnBoundaryEventTests.MultipleBoundaries_OnOneHost_BehavePerKind",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnBoundaryEventTests",
+      "originalMethod": "IdenticalRuns_ProduceIdenticalTokenIds",
+      "currentMethod": "IdenticalRuns_ProduceIdenticalTokenIds",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnBoundaryEventTests.IdenticalRuns_ProduceIdenticalTokenIds",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCatchEventTests",
+      "originalMethod": "TimerCatchEvent_SuspendsOnDelayChild_ThenRoutesOnTimerResume",
+      "currentMethod": "TimerCatchEvent_SuspendsOnDelayChild_ThenRoutesOnTimerResume",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCatchEventTests.TimerCatchEvent_SuspendsOnDelayChild_ThenRoutesOnTimerResume",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCatchEventTests",
+      "originalMethod": "MessageOrSignalCatchEvent_WaitsOnEventChild_ThenRoutesOnStimulusResume",
+      "currentMethod": "MessageOrSignalCatchEvent_WaitsOnEventChild_ThenRoutesOnStimulusResume",
+      "passedCases": 2,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCatchEventTests.MessageOrSignalCatchEvent_WaitsOnEventChild_ThenRoutesOnStimulusResume(definitionType: \"message\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCatchEventTests.MessageOrSignalCatchEvent_WaitsOnEventChild_ThenRoutesOnStimulusResume(definitionType: \"signal\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCatchEventTests",
+      "originalMethod": "TwoCatchEvents_OnParallelBranches_ResumeIndependently_AndJoin",
+      "currentMethod": "TwoCatchEvents_OnParallelBranches_ResumeIndependently_AndJoin",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCatchEventTests.TwoCatchEvents_OnParallelBranches_ResumeIndependently_AndJoin",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "NonInterrupting_FiresAlongsideRunningNestedProcess_BothPathsComplete",
+      "currentMethod": "NonInterrupting_FiresAlongsideRunningNestedProcess_BothPathsComplete",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.NonInterrupting_FiresAlongsideRunningNestedProcess_BothPathsComplete",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "Interrupting_TearsDownNestedProcess_AndRoutesBoundaryPath",
+      "currentMethod": "Interrupting_TearsDownNestedProcess_AndRoutesBoundaryPath",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.Interrupting_TearsDownNestedProcess_AndRoutesBoundaryPath",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "SpecificCode_BeatsCatchAll",
+      "currentMethod": "SpecificCode_BeatsCatchAll",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.SpecificCode_BeatsCatchAll",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "UnmatchedSpecificCode_FallsToCatchAll",
+      "currentMethod": "UnmatchedSpecificCode_FallsToCatchAll",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.UnmatchedSpecificCode_FallsToCatchAll",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "DistinctCode_NoMatch_BubblesToRoot_NoOp",
+      "currentMethod": "DistinctCode_NoMatch_BubblesToRoot_NoOp",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.DistinctCode_NoMatch_BubblesToRoot_NoOp",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "RootProcessThrow_IsDiagnosticNoOp",
+      "currentMethod": "RootProcessThrow_IsDiagnosticNoOp",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.RootProcessThrow_IsDiagnosticNoOp",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "EscalationEndEvent_Variant_FiresBoundary",
+      "currentMethod": "EscalationEndEvent_Variant_FiresBoundary",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.EscalationEndEvent_Variant_FiresBoundary",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "TwoLevelBubbling_L3Throw_L2NoMatch_L1Catches",
+      "currentMethod": "TwoLevelBubbling_L3Throw_L2NoMatch_L1Catches",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.TwoLevelBubbling_L3Throw_L2NoMatch_L1Catches",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "RepeatedNonInterrupting_FiresPerNotification",
+      "currentMethod": "RepeatedNonInterrupting_FiresPerNotification",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.RepeatedNonInterrupting_FiresPerNotification",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "IdenticalRuns_ProduceIdenticalEscalationIds",
+      "currentMethod": "IdenticalRuns_ProduceIdenticalEscalationIds",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.IdenticalRuns_ProduceIdenticalEscalationIds",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "LateRace_NonInterrupting_FiresAfterHostCompletion",
+      "currentMethod": "LateRace_NonInterrupting_FiresAfterHostCompletion",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.LateRace_NonInterrupting_FiresAfterHostCompletion",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationTests",
+      "originalMethod": "MultiInstanceHost_InstanceThrow_InterruptingCancelsCoordinator",
+      "currentMethod": "MultiInstanceHost_InstanceThrow_InterruptingCancelsCoordinator",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationTests.MultiInstanceHost_InstanceThrow_InterruptingCancelsCoordinator",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationValidationTests",
+      "originalMethod": "ValidEscalationGraph_BuildsCleanly",
+      "currentMethod": "ValidEscalationGraph_BuildsCleanly",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationValidationTests.ValidEscalationGraph_BuildsCleanly",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationValidationTests",
+      "originalMethod": "EscalationThrow_WithoutCode_IsRejected",
+      "currentMethod": "EscalationThrow_WithoutCode_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationValidationTests.EscalationThrow_WithoutCode_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationValidationTests",
+      "originalMethod": "EscalationEnd_WithoutCode_IsRejected",
+      "currentMethod": "EscalationEnd_WithoutCode_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationValidationTests.EscalationEnd_WithoutCode_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationValidationTests",
+      "originalMethod": "EscalationThrow_BindingChild_IsRejected",
+      "currentMethod": "EscalationThrow_BindingChild_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationValidationTests.EscalationThrow_BindingChild_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationValidationTests",
+      "originalMethod": "EscalationBoundary_OnTaskHost_IsRejected",
+      "currentMethod": "EscalationBoundary_OnTaskHost_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationValidationTests.EscalationBoundary_OnTaskHost_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationValidationTests",
+      "originalMethod": "EscalationBoundary_BindingChild_IsRejected",
+      "currentMethod": "EscalationBoundary_BindingChild_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationValidationTests.EscalationBoundary_BindingChild_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationValidationTests",
+      "originalMethod": "EscalationBoundary_WithNoOutbound_IsRejected",
+      "currentMethod": "EscalationBoundary_WithNoOutbound_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationValidationTests.EscalationBoundary_WithNoOutbound_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationValidationTests",
+      "originalMethod": "EscalationBoundary_DuplicateCode_OnOneHost_IsRejected",
+      "currentMethod": "EscalationBoundary_DuplicateCode_OnOneHost_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationValidationTests.EscalationBoundary_DuplicateCode_OnOneHost_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationValidationTests",
+      "originalMethod": "EscalationBoundary_TwoCatchAlls_OnOneHost_IsRejected",
+      "currentMethod": "EscalationBoundary_TwoCatchAlls_OnOneHost_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationValidationTests.EscalationBoundary_TwoCatchAlls_OnOneHost_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEscalationValidationTests",
+      "originalMethod": "EscalationBoundary_CodedPlusCatchAll_OnOneHost_BuildsCleanly",
+      "currentMethod": "EscalationBoundary_CodedPlusCatchAll_OnOneHost_BuildsCleanly",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEscalationValidationTests.EscalationBoundary_CodedPlusCatchAll_OnOneHost_BuildsCleanly",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "OwnScope_Interrupting_StopsSiblingBranch_AndScopeCompletesAfterBody",
+      "currentMethod": "OwnScope_Interrupting_StopsSiblingBranch_AndScopeCompletesAfterBody",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.OwnScope_Interrupting_StopsSiblingBranch_AndScopeCompletesAfterBody",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "OwnScope_NonInterrupting_RunsBothBranches",
+      "currentMethod": "OwnScope_NonInterrupting_RunsBothBranches",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.OwnScope_NonInterrupting_RunsBothBranches",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "ChildThrownEscalation_CaughtByParentEventSubprocess_Interrupting",
+      "currentMethod": "ChildThrownEscalation_CaughtByParentEventSubprocess_Interrupting",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.ChildThrownEscalation_CaughtByParentEventSubprocess_Interrupting",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "Ladder_BoundaryExact_BeatsEventSubprocessCatchAll",
+      "currentMethod": "Ladder_BoundaryExact_BeatsEventSubprocessCatchAll",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.Ladder_BoundaryExact_BeatsEventSubprocessCatchAll",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "Ladder_EventSubprocessExact_BeatsBoundaryCatchAll",
+      "currentMethod": "Ladder_EventSubprocessExact_BeatsBoundaryCatchAll",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.Ladder_EventSubprocessExact_BeatsBoundaryCatchAll",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "UnmatchedEscalation_Bubbles_EventSubprocessDoesNotFire",
+      "currentMethod": "UnmatchedEscalation_Bubbles_EventSubprocessDoesNotFire",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.UnmatchedEscalation_Bubbles_EventSubprocessDoesNotFire",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "ErrorEventSubprocess_AbsorbsChildFault_ResolvesIncident_RunsBody_ScopeCompletes",
+      "currentMethod": "ErrorEventSubprocess_AbsorbsChildFault_ResolvesIncident_RunsBody_ScopeCompletes",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.ErrorEventSubprocess_AbsorbsChildFault_ResolvesIncident_RunsBody_ScopeCompletes",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "EscalationEventSubprocess_DoesNotAbsorbChildFault_CompositeFaults",
+      "currentMethod": "EscalationEventSubprocess_DoesNotAbsorbChildFault_CompositeFaults",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.EscalationEventSubprocess_DoesNotAbsorbChildFault_CompositeFaults",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "RepeatedNonInterrupting_ActivatesBodyPerNotification",
+      "currentMethod": "RepeatedNonInterrupting_ActivatesBodyPerNotification",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.RepeatedNonInterrupting_ActivatesBodyPerNotification",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "BodyFault_RidesCompositeFaultPath",
+      "currentMethod": "BodyFault_RidesCompositeFaultPath",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.BodyFault_RidesCompositeFaultPath",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTests",
+      "originalMethod": "Determinism_IdenticalRuns_ProduceIdenticalTokensAndDiagnostics",
+      "currentMethod": "Determinism_IdenticalRuns_ProduceIdenticalTokensAndDiagnostics",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTests.Determinism_IdenticalRuns_ProduceIdenticalTokensAndDiagnostics",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTier2Tests",
+      "originalMethod": "ArmedListener_DoesNotBlockCompletion_TearsDownWhenRealWorkEnds",
+      "currentMethod": "ArmedListener_DoesNotBlockCompletion_TearsDownWhenRealWorkEnds",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTier2Tests.ArmedListener_DoesNotBlockCompletion_TearsDownWhenRealWorkEnds",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTier2Tests",
+      "originalMethod": "ArmedListener_WithNoOtherWork_CompletesImmediately",
+      "currentMethod": "ArmedListener_WithNoOtherWork_CompletesImmediately",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTier2Tests.ArmedListener_WithNoOtherWork_CompletesImmediately",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTier2Tests",
+      "originalMethod": "MessageNonInterrupting_FiresTwice_ViaReArm",
+      "currentMethod": "MessageNonInterrupting_FiresTwice_ViaReArm",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTier2Tests.MessageNonInterrupting_FiresTwice_ViaReArm",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTier2Tests",
+      "originalMethod": "MessageInterrupting_DrainsOtherWorkAndSiblingListeners_BodyRuns_ScopeCompletes",
+      "currentMethod": "MessageInterrupting_DrainsOtherWorkAndSiblingListeners_BodyRuns_ScopeCompletes",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTier2Tests.MessageInterrupting_DrainsOtherWorkAndSiblingListeners_BodyRuns_ScopeCompletes",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTier2Tests",
+      "originalMethod": "TimerNonInterrupting_RepeatsViaReArm",
+      "currentMethod": "TimerNonInterrupting_RepeatsViaReArm",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTier2Tests.TimerNonInterrupting_RepeatsViaReArm",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTier2Tests",
+      "originalMethod": "DeadlockDetector_RealJoinWaiter_StillFaults_WithListenerArmed",
+      "currentMethod": "DeadlockDetector_RealJoinWaiter_StillFaults_WithListenerArmed",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTier2Tests.DeadlockDetector_RealJoinWaiter_StillFaults_WithListenerArmed",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTier2Tests",
+      "originalMethod": "InterruptingEscalation_DrainsTier2Listeners",
+      "currentMethod": "InterruptingEscalation_DrainsTier2Listeners",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTier2Tests.InterruptingEscalation_DrainsTier2Listeners",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTier2Tests",
+      "originalMethod": "Terminate_KillsArmedListener",
+      "currentMethod": "Terminate_KillsArmedListener",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTier2Tests.Terminate_KillsArmedListener",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessTier2Tests",
+      "originalMethod": "Determinism_IdenticalRuns_ProduceIdenticalTokensAndDiagnostics",
+      "currentMethod": "Determinism_IdenticalRuns_ProduceIdenticalTokensAndDiagnostics",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessTier2Tests.Determinism_IdenticalRuns_ProduceIdenticalTokensAndDiagnostics",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "ValidEscalationEventSubprocess_BuildsCleanly_AndIndexesCatcher",
+      "currentMethod": "ValidEscalationEventSubprocess_BuildsCleanly_AndIndexesCatcher",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.ValidEscalationEventSubprocess_BuildsCleanly_AndIndexesCatcher",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "ValidErrorEventSubprocess_BuildsCleanly_AndIndexesCatcher",
+      "currentMethod": "ValidErrorEventSubprocess_BuildsCleanly_AndIndexesCatcher",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.ValidErrorEventSubprocess_BuildsCleanly_AndIndexesCatcher",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "EventSubprocess_WithSequenceFlow_IsRejected",
+      "currentMethod": "EventSubprocess_WithSequenceFlow_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.EventSubprocess_WithSequenceFlow_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "EventSubprocess_HostingBoundary_IsRejected",
+      "currentMethod": "EventSubprocess_HostingBoundary_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.EventSubprocess_HostingBoundary_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "EventSubprocess_BodyWithNoneStart_IsRejected",
+      "currentMethod": "EventSubprocess_BodyWithNoneStart_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.EventSubprocess_BodyWithNoneStart_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "EventSubprocess_BodyWithTwoStarts_IsRejected",
+      "currentMethod": "EventSubprocess_BodyWithTwoStarts_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.EventSubprocess_BodyWithTwoStarts_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "EventSubprocess_BodyWithUnsupportedTrigger_IsRejected",
+      "currentMethod": "EventSubprocess_BodyWithUnsupportedTrigger_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.EventSubprocess_BodyWithUnsupportedTrigger_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "NonInterruptingErrorEventSubprocess_IsRejected",
+      "currentMethod": "NonInterruptingErrorEventSubprocess_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.NonInterruptingErrorEventSubprocess_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "EventSubprocess_NestedInsideBody_IsRejected",
+      "currentMethod": "EventSubprocess_NestedInsideBody_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.EventSubprocess_NestedInsideBody_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "TwoEscalationEventSubprocesses_SameCode_IsRejected",
+      "currentMethod": "TwoEscalationEventSubprocesses_SameCode_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.TwoEscalationEventSubprocesses_SameCode_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "ErrorEventSubprocess_AlongsideEscalationSibling_BuildsBothCatchers",
+      "currentMethod": "ErrorEventSubprocess_AlongsideEscalationSibling_BuildsBothCatchers",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.ErrorEventSubprocess_AlongsideEscalationSibling_BuildsBothCatchers",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "TwoErrorEventSubprocesses_SameScope_IsRejected",
+      "currentMethod": "TwoErrorEventSubprocesses_SameScope_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.TwoErrorEventSubprocesses_SameScope_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "ValidExternalTriggerEventSubprocess_BuildsCleanly_AndIndexesCatcher",
+      "currentMethod": "ValidExternalTriggerEventSubprocess_BuildsCleanly_AndIndexesCatcher",
+      "passedCases": 3,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.ValidExternalTriggerEventSubprocess_BuildsCleanly_AndIndexesCatcher(definitionType: \"message\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.ValidExternalTriggerEventSubprocess_BuildsCleanly_AndIndexesCatcher(definitionType: \"timer\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.ValidExternalTriggerEventSubprocess_BuildsCleanly_AndIndexesCatcher(definitionType: \"signal\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "ExternalTriggerEventSubprocess_WithoutListenerNode_IsRejected",
+      "currentMethod": "ExternalTriggerEventSubprocess_WithoutListenerNode_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.ExternalTriggerEventSubprocess_WithoutListenerNode_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "EscalationEventSubprocess_WithListenerNode_IsRejected",
+      "currentMethod": "EscalationEventSubprocess_WithListenerNode_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.EscalationEventSubprocess_WithListenerNode_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "ListenerNode_BoundByTwoElements_IsRejected",
+      "currentMethod": "ListenerNode_BoundByTwoElements_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.ListenerNode_BoundByTwoElements_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "OrphanListenerNode_IsRejected",
+      "currentMethod": "OrphanListenerNode_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.OrphanListenerNode_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventSubprocessValidationTests",
+      "originalMethod": "TimerEventSubprocess_WithCron_IsRejected",
+      "currentMethod": "TimerEventSubprocess_CronWithoutCycle_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventSubprocessValidationTests.TimerEventSubprocess_CronWithoutCycle_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Sequential_EachInstanceSeesItsOwnLoopIndex_AndRoutesOnce",
+      "currentMethod": "Sequential_EachInstanceSeesItsOwnLoopIndex_AndRoutesOnce",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Sequential_EachInstanceSeesItsOwnLoopIndex_AndRoutesOnce",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Sequential_RunsOneInstanceAtATime_NeverTwoLive",
+      "currentMethod": "Sequential_RunsOneInstanceAtATime_NeverTwoLive",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Sequential_RunsOneInstanceAtATime_NeverTwoLive",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Parallel_RunsConcurrentSameNodeInstances_WithDistinctIdentity_AndRoutesOnLastCompletion",
+      "currentMethod": "Parallel_RunsConcurrentSameNodeInstances_WithDistinctIdentity_AndRoutesOnLastCompletion",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Parallel_RunsConcurrentSameNodeInstances_WithDistinctIdentity_AndRoutesOnLastCompletion",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "InterruptingBoundary_MidLoop_TearsDownAllLiveInstances_AndRoutesBoundaryPath",
+      "currentMethod": "InterruptingBoundary_MidLoop_TearsDownAllLiveInstances_AndRoutesBoundaryPath",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.InterruptingBoundary_MidLoop_TearsDownAllLiveInstances_AndRoutesBoundaryPath",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "InstanceFault_WithoutErrorBoundary_FaultsComposite",
+      "currentMethod": "InstanceFault_WithoutErrorBoundary_FaultsComposite",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.InstanceFault_WithoutErrorBoundary_FaultsComposite",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "InstanceFault_WithErrorBoundary_AbsorbsAndRoutesErrorPath",
+      "currentMethod": "InstanceFault_WithErrorBoundary_AbsorbsAndRoutesErrorPath",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.InstanceFault_WithErrorBoundary_AbsorbsAndRoutesErrorPath",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "IdenticalRuns_ProduceIdenticalTokenAndLoopIds",
+      "currentMethod": "IdenticalRuns_ProduceIdenticalTokenAndLoopIds",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.IdenticalRuns_ProduceIdenticalTokenAndLoopIds",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Collection_Sequential_EachInstanceSeesItsItemInOrder_AndRoutesOnce",
+      "currentMethod": "Collection_Sequential_EachInstanceSeesItsItemInOrder_AndRoutesOnce",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Collection_Sequential_EachInstanceSeesItsItemInOrder_AndRoutesOnce",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Collection_Parallel_RunsConcurrentSameNodeInstances_EachObservingItsItem",
+      "currentMethod": "Collection_Parallel_RunsConcurrentSameNodeInstances_EachObservingItsItem",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Collection_Parallel_RunsConcurrentSameNodeInstances_EachObservingItsItem",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Collection_EmptyArray_RoutesImmediately_WithoutScheduling",
+      "currentMethod": "Collection_EmptyArray_RoutesImmediately_WithoutScheduling",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Collection_EmptyArray_RoutesImmediately_WithoutScheduling",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Collection_NullVariable_RoutesImmediately_WithoutScheduling",
+      "currentMethod": "Collection_NullVariable_RoutesImmediately_WithoutScheduling",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Collection_NullVariable_RoutesImmediately_WithoutScheduling",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Collection_NonArrayValue_FaultsDeterministically",
+      "currentMethod": "Collection_NonArrayValue_FaultsDeterministically",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Collection_NonArrayValue_FaultsDeterministically",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Collection_WithheldVariable_FaultsWithTheWithheldValueCode",
+      "currentMethod": "Collection_WithheldVariable_FaultsWithTheWithheldValueCode",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Collection_WithheldVariable_FaultsWithTheWithheldValueCode",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Collection_SnapshotPersistsOnLoopRecord_AndDrivesSequentialProgression",
+      "currentMethod": "Collection_SnapshotPersistsOnLoopRecord_AndDrivesSequentialProgression",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Collection_SnapshotPersistsOnLoopRecord_AndDrivesSequentialProgression",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Collection_IdenticalRuns_ProduceIdenticalTokenAndLoopIds",
+      "currentMethod": "Collection_IdenticalRuns_ProduceIdenticalTokenAndLoopIds",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Collection_IdenticalRuns_ProduceIdenticalTokenAndLoopIds",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Collection_InterruptingBoundary_MidLoop_TearsDownAllInstances",
+      "currentMethod": "Collection_InterruptingBoundary_MidLoop_TearsDownAllInstances",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Collection_InterruptingBoundary_MidLoop_TearsDownAllInstances",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMultiInstanceTests",
+      "originalMethod": "Collection_LoopStartReachedViaChildCompletion_ReadsCollectionThroughCompletionHandlerSeam",
+      "currentMethod": "Collection_LoopStartReachedViaChildCompletion_ReadsCollectionThroughCompletionHandlerSeam",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMultiInstanceTests.Collection_LoopStartReachedViaChildCompletion_ReadsCollectionThroughCompletionHandlerSeam",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationTests",
+      "originalMethod": "RefLessThrow_ReplaysHandlersInReverseCompletionOrder_OneAtATime",
+      "currentMethod": "RefLessThrow_ReplaysHandlersInReverseCompletionOrder_OneAtATime",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationTests.RefLessThrow_ReplaysHandlersInReverseCompletionOrder_OneAtATime",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationTests",
+      "originalMethod": "ReplayLifecycle_RegisteredThenClaimedThenCompensated_ObservableWhileAlive",
+      "currentMethod": "ReplayLifecycle_RegisteredThenClaimedThenCompensated_ObservableWhileAlive",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationTests.ReplayLifecycle_RegisteredThenClaimedThenCompensated_ObservableWhileAlive",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationTests",
+      "originalMethod": "ActivityRefThrow_CompensatesOnlyTheReferencedHost",
+      "currentMethod": "ActivityRefThrow_CompensatesOnlyTheReferencedHost",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationTests.ActivityRefThrow_CompensatesOnlyTheReferencedHost",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationTests",
+      "originalMethod": "EmptyLog_Throw_CompletesImmediately_NoHandlerRuns_NoRun",
+      "currentMethod": "EmptyLog_Throw_CompletesImmediately_NoHandlerRuns_NoRun",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationTests.EmptyLog_Throw_CompletesImmediately_NoHandlerRuns_NoRun",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationTests",
+      "originalMethod": "CompensateEnd_ReplaysThenConsumesToken",
+      "currentMethod": "CompensateEnd_ReplaysThenConsumesToken",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationTests.CompensateEnd_ReplaysThenConsumesToken",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationTests",
+      "originalMethod": "Cycle_RegistersPerCompletion_AndReplaysEachRegistration",
+      "currentMethod": "Cycle_RegistersPerCompletion_AndReplaysEachRegistration",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationTests.Cycle_RegistersPerCompletion_AndReplaysEachRegistration",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationTests",
+      "originalMethod": "HandlerFault_FaultsComposite",
+      "currentMethod": "HandlerFault_FaultsComposite",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationTests.HandlerFault_FaultsComposite",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationTests",
+      "originalMethod": "ConcurrentThrows_ClaimDisjointTargets_EachHandlerRunsExactlyOnce",
+      "currentMethod": "ConcurrentThrows_ClaimDisjointTargets_EachHandlerRunsExactlyOnce",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationTests.ConcurrentThrows_ClaimDisjointTargets_EachHandlerRunsExactlyOnce",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationTests",
+      "originalMethod": "Terminate_MidReplay_StaysLogicalOnly_RunAndClaimsRetained",
+      "currentMethod": "Terminate_MidReplay_StaysLogicalOnly_RunAndClaimsRetained",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationTests.Terminate_MidReplay_StaysLogicalOnly_RunAndClaimsRetained",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationTests",
+      "originalMethod": "IdenticalRuns_ProduceIdenticalCompensationAndTokenIds",
+      "currentMethod": "IdenticalRuns_ProduceIdenticalCompensationAndTokenIds",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationTests.IdenticalRuns_ProduceIdenticalCompensationAndTokenIds",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "ValidCompensationGraph_BuildsCleanly",
+      "currentMethod": "ValidCompensationGraph_BuildsCleanly",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.ValidCompensationGraph_BuildsCleanly",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "CompensationBoundary_ReferencingMissingHandler_IsRejected",
+      "currentMethod": "CompensationBoundary_ReferencingMissingHandler_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.CompensationBoundary_ReferencingMissingHandler_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "CompensationBoundary_ReferencingNonHandler_IsRejected",
+      "currentMethod": "CompensationBoundary_ReferencingNonHandler_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.CompensationBoundary_ReferencingNonHandler_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "CompensationBoundary_WithOutboundFlow_IsRejected",
+      "currentMethod": "CompensationBoundary_WithOutboundFlow_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.CompensationBoundary_WithOutboundFlow_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "CompensationBoundary_BindingChild_IsRejected",
+      "currentMethod": "CompensationBoundary_BindingChild_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.CompensationBoundary_BindingChild_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "CompensationBoundary_OnMultiInstanceHost_IsRejected",
+      "currentMethod": "CompensationBoundary_OnMultiInstanceHost_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.CompensationBoundary_OnMultiInstanceHost_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "Handler_NotTaskFamilyOrSubprocess_IsRejected",
+      "currentMethod": "Handler_NotTaskFamilyOrSubprocess_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.Handler_NotTaskFamilyOrSubprocess_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "Handler_WithoutChild_IsRejected",
+      "currentMethod": "Handler_WithoutChild_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.Handler_WithoutChild_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "Handler_WithSequenceFlow_IsRejected",
+      "currentMethod": "Handler_WithSequenceFlow_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.Handler_WithSequenceFlow_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "OrphanHandler_ReferencedByNoBoundary_IsRejected",
+      "currentMethod": "OrphanHandler_ReferencedByNoBoundary_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.OrphanHandler_ReferencedByNoBoundary_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "Handler_HostingBoundary_IsRejected",
+      "currentMethod": "Handler_HostingBoundary_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.Handler_HostingBoundary_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "ThrowEvent_WithNonCompensationDefinition_IsRejected",
+      "currentMethod": "ThrowEvent_UnboundSignal_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.ThrowEvent_UnboundSignal_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "ThrowEvent_BindingChild_IsRejected",
+      "currentMethod": "ThrowEvent_BindingChild_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.ThrowEvent_BindingChild_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "ActivityRef_NamingUnknownElement_IsRejected",
+      "currentMethod": "ActivityRef_NamingUnknownElement_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.ActivityRef_NamingUnknownElement_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "ActivityRef_NamingHostWithoutCompensationBoundary_IsRejected",
+      "currentMethod": "ActivityRef_NamingHostWithoutCompensationBoundary_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.ActivityRef_NamingHostWithoutCompensationBoundary_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCompensationValidationTests",
+      "originalMethod": "ActivityRef_NamingCompensationHost_ValidatesCleanly",
+      "currentMethod": "ActivityRef_NamingCompensationHost_ValidatesCleanly",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCompensationValidationTests.ActivityRef_NamingCompensationHost_ValidatesCleanly",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionTests",
+      "originalMethod": "RootTransaction_CancelEnd_ReplaysCompensablesNewestFirst_CompletesCancelled",
+      "currentMethod": "RootTransaction_CancelEnd_ReplaysCompensablesNewestFirst_CompletesCancelled",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionTests.RootTransaction_CancelEnd_ReplaysCompensablesNewestFirst_CompletesCancelled",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionTests",
+      "originalMethod": "RootTransaction_EmptyLog_CompletesCancelledImmediately",
+      "currentMethod": "RootTransaction_EmptyLog_CompletesCancelledImmediately",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionTests.RootTransaction_EmptyLog_CompletesCancelledImmediately",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionTests",
+      "originalMethod": "RootTransaction_CancelEnd_StopsOtherLiveBranch",
+      "currentMethod": "RootTransaction_CancelEnd_StopsOtherLiveBranch",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionTests.RootTransaction_CancelEnd_StopsOtherLiveBranch",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionTests",
+      "originalMethod": "ParentBoundary_TransactionCancelled_RoutesCancellationPath",
+      "currentMethod": "ParentBoundary_TransactionCancelled_RoutesCancellationPath",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionTests.ParentBoundary_TransactionCancelled_RoutesCancellationPath",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionTests",
+      "originalMethod": "ParentBoundary_MissingCancelBoundary_Faults",
+      "currentMethod": "ParentBoundary_MissingCancelBoundary_Faults",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionTests.ParentBoundary_MissingCancelBoundary_Faults",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionTests",
+      "originalMethod": "DoneTransaction_RoutesNormally_LikePlainSubprocess",
+      "currentMethod": "DoneTransaction_RoutesNormally_LikePlainSubprocess",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionTests.DoneTransaction_RoutesNormally_LikePlainSubprocess",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionTests",
+      "originalMethod": "DoneTransaction_WithCompensationBoundary_RegistersCompensable_AndComposesWithSpec124",
+      "currentMethod": "DoneTransaction_WithCompensationBoundary_RegistersCompensable_AndComposesWithSpec124",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionTests.DoneTransaction_WithCompensationBoundary_RegistersCompensable_AndComposesWithSpec124",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionTests",
+      "originalMethod": "HandlerFault_MidCancel_FaultsComposite",
+      "currentMethod": "HandlerFault_MidCancel_FaultsComposite",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionTests.HandlerFault_MidCancel_FaultsComposite",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionTests",
+      "originalMethod": "IdenticalRuns_ProduceIdenticalCancelIds",
+      "currentMethod": "IdenticalRuns_ProduceIdenticalCancelIds",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionTests.IdenticalRuns_ProduceIdenticalCancelIds",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionValidationTests",
+      "originalMethod": "IsTransaction_OnNonSubProcess_IsRejected",
+      "currentMethod": "IsTransaction_OnNonSubProcess_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionValidationTests.IsTransaction_OnNonSubProcess_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionValidationTests",
+      "originalMethod": "IsTransaction_WithLoopCharacteristics_IsRejected",
+      "currentMethod": "IsTransaction_WithLoopCharacteristics_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionValidationTests.IsTransaction_WithLoopCharacteristics_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionValidationTests",
+      "originalMethod": "CancelEnd_OutsideTransactionStructure_IsRejected",
+      "currentMethod": "CancelEnd_OutsideTransactionStructure_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionValidationTests.CancelEnd_OutsideTransactionStructure_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionValidationTests",
+      "originalMethod": "CancelBoundary_OnNonTransactionHost_IsRejected",
+      "currentMethod": "CancelBoundary_OnNonTransactionHost_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionValidationTests.CancelBoundary_OnNonTransactionHost_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionValidationTests",
+      "originalMethod": "TwoCancelBoundaries_OnOneTransactionHost_IsRejected",
+      "currentMethod": "TwoCancelBoundaries_OnOneTransactionHost_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionValidationTests.TwoCancelBoundaries_OnOneTransactionHost_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionValidationTests",
+      "originalMethod": "CancelBoundary_WithoutOutboundFlow_IsRejected",
+      "currentMethod": "CancelBoundary_WithoutOutboundFlow_IsRejected",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionValidationTests.CancelBoundary_WithoutOutboundFlow_IsRejected",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionValidationTests",
+      "originalMethod": "ValidNestedTransaction_WithCancelEnd_Validates",
+      "currentMethod": "ValidNestedTransaction_WithCancelEnd_Validates",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionValidationTests.ValidNestedTransaction_WithCancelEnd_Validates",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnTransactionValidationTests",
+      "originalMethod": "ValidParentTransaction_WithCancelBoundary_Validates",
+      "currentMethod": "ValidParentTransaction_WithCancelBoundary_Validates",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnTransactionValidationTests.ValidParentTransaction_WithCancelBoundary_Validates",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCallActivityTests",
+      "originalMethod": "NonFailureOutcome_RoutesNormalOutbound",
+      "currentMethod": "NonFailureOutcome_RoutesNormalOutbound",
+      "passedCases": 2,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.NonFailureOutcome_RoutesNormalOutbound(outcome: \"Dispatched\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.NonFailureOutcome_RoutesNormalOutbound(outcome: \"Completed\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCallActivityTests",
+      "originalMethod": "CompletedOutcome_DiscriminatedByConditionOutcomeFlow",
+      "currentMethod": "CompletedOutcome_DiscriminatedByConditionOutcomeFlow",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.CompletedOutcome_DiscriminatedByConditionOutcomeFlow",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCallActivityTests",
+      "originalMethod": "TwoCallActivities_InOneProcess_BothRoute",
+      "currentMethod": "TwoCallActivities_InOneProcess_BothRoute",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.TwoCallActivities_InOneProcess_BothRoute",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCallActivityTests",
+      "originalMethod": "FailureOutcome_WithErrorBoundary_FiresBoundary_NoIncident",
+      "currentMethod": "FailureOutcome_WithErrorBoundary_FiresBoundary_NoIncident",
+      "passedCases": 3,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.FailureOutcome_WithErrorBoundary_FiresBoundary_NoIncident(outcome: \"DispatchFailed\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.FailureOutcome_WithErrorBoundary_FiresBoundary_NoIncident(outcome: \"Faulted\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.FailureOutcome_WithErrorBoundary_FiresBoundary_NoIncident(outcome: \"Cancelled\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCallActivityTests",
+      "originalMethod": "Failure_WithErrorBoundary_TearsDownSiblingCatchListener",
+      "currentMethod": "Failure_WithErrorBoundary_TearsDownSiblingCatchListener",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.Failure_WithErrorBoundary_TearsDownSiblingCatchListener",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCallActivityTests",
+      "originalMethod": "Failure_NoBoundary_ButErrorEventSubprocess_ActivatesInterrupting",
+      "currentMethod": "Failure_NoBoundary_ButErrorEventSubprocess_ActivatesInterrupting",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.Failure_NoBoundary_ButErrorEventSubprocess_ActivatesInterrupting",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCallActivityTests",
+      "originalMethod": "FailureOutcome_NoCatcher_FaultsCompositeWithPinnedCode",
+      "currentMethod": "FailureOutcome_NoCatcher_FaultsCompositeWithPinnedCode",
+      "passedCases": 3,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.FailureOutcome_NoCatcher_FaultsCompositeWithPinnedCode(outcome: \"Faulted\", faultCode: \"bpmn.call-activity.faulted\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.FailureOutcome_NoCatcher_FaultsCompositeWithPinnedCode(outcome: \"Cancelled\", faultCode: \"bpmn.call-activity.cancelled\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.FailureOutcome_NoCatcher_FaultsCompositeWithPinnedCode(outcome: \"DispatchFailed\", faultCode: \"bpmn.call-activity.dispatch-failed\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCallActivityTests",
+      "originalMethod": "MultiInstanceCallActivity_InstanceFailure_FiresBoundary_InterruptsCoordinator",
+      "currentMethod": "MultiInstanceCallActivity_InstanceFailure_FiresBoundary_InterruptsCoordinator",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.MultiInstanceCallActivity_InstanceFailure_FiresBoundary_InterruptsCoordinator",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCallActivityTests",
+      "originalMethod": "MultiInstanceCallActivity_AllInstancesComplete_RoutesCoordinatorOutbound",
+      "currentMethod": "MultiInstanceCallActivity_AllInstancesComplete_RoutesCoordinatorOutbound",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.MultiInstanceCallActivity_AllInstancesComplete_RoutesCoordinatorOutbound",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnCallActivityTests",
+      "originalMethod": "IdenticalRuns_ProduceIdenticalTokenIds",
+      "currentMethod": "IdenticalRuns_ProduceIdenticalTokenIds",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnCallActivityTests.IdenticalRuns_ProduceIdenticalTokenIds",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "ActivitiesBpmnFeatureTests",
+      "originalMethod": "ConfigureServices_RegistersEngineBehaviorsAndStructureHandler",
+      "currentMethod": "ConfigureServices_RegistersReleasedRuntimeAndStructureHandler",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.ActivitiesBpmnFeatureTests.ConfigureServices_RegistersReleasedRuntimeAndStructureHandler",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnDecisionTests",
+      "originalMethod": "BpmnDecision_declares_its_outcome_as_echoed_to_output",
+      "currentMethod": "BpmnDecision_declares_its_outcome_as_echoed_to_output",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDecisionTests.BpmnDecision_declares_its_outcome_as_echoed_to_output",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnDecisionTests",
+      "originalMethod": "ExclusiveGateway_WithBpmnDecision_RoutesByEvaluatedOutcome",
+      "currentMethod": "ExclusiveGateway_WithBpmnDecision_RoutesByEvaluatedOutcome",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDecisionTests.ExclusiveGateway_WithBpmnDecision_RoutesByEvaluatedOutcome",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnDecisionTests",
+      "originalMethod": "BlankOutcome_FallsThroughToDefaultFlow",
+      "currentMethod": "BlankOutcome_FallsThroughToDefaultFlow",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnDecisionTests.BlankOutcome_FallsThroughToDefaultFlow",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartRuntimeTests",
+      "originalMethod": "TriggerDelivery_SeedsOnlyTargetedStart_AndRoutesToCompletion",
+      "currentMethod": "TriggerDelivery_SeedsOnlyTargetedStart_AndRoutesToCompletion",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartRuntimeTests.TriggerDelivery_SeedsOnlyTargetedStart_AndRoutesToCompletion",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartRuntimeTests",
+      "originalMethod": "DirectInvocation_SeedsOnlyNoneStarts_AndLeavesEventStartsDormant",
+      "currentMethod": "DirectInvocation_SeedsOnlyNoneStarts_AndLeavesEventStartsDormant",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartRuntimeTests.DirectInvocation_SeedsOnlyNoneStarts_AndLeavesEventStartsDormant",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartRuntimeTests",
+      "originalMethod": "DirectInvocation_WithOnlyEventDefinedStarts_FaultsDeterministically",
+      "currentMethod": "DirectInvocation_WithOnlyEventDefinedStarts_FaultsDeterministically",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartRuntimeTests.DirectInvocation_WithOnlyEventDefinedStarts_FaultsDeterministically",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartRuntimeTests",
+      "originalMethod": "TriggerDelivery_WithUnresolvableStartElement_FaultsDeterministically",
+      "currentMethod": "TriggerDelivery_WithUnresolvableStartElement_FaultsDeterministically",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartRuntimeTests.TriggerDelivery_WithUnresolvableStartElement_FaultsDeterministically",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartRuntimeTests",
+      "originalMethod": "TriggerDelivery_TokenIds_AreDeterministicAcrossRuns",
+      "currentMethod": "TriggerDelivery_TokenIds_AreDeterministicAcrossRuns",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartRuntimeTests.TriggerDelivery_TokenIds_AreDeterministicAcrossRuns",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "Extract_IndexesOneBindingPerEventDefinedStart_WithElementIdMetadata",
+      "currentMethod": "Extract_IndexesOneBindingPerEventDefinedStart_WithElementIdMetadata",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.Extract_IndexesOneBindingPerEventDefinedStart_WithElementIdMetadata",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "Extract_IntentionallyNonStarting_WhenNoEventDefinedStarts",
+      "currentMethod": "Extract_IntentionallyNonStarting_WhenNoEventDefinedStarts",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.Extract_IntentionallyNonStarting_WhenNoEventDefinedStarts",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "Extract_IntentionallyNonStarting_WhenNestedProcessCannotStart",
+      "currentMethod": "Extract_IntentionallyNonStarting_WhenNestedProcessCannotStart",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.Extract_IntentionallyNonStarting_WhenNestedProcessCannotStart",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "Extract_Indexes_WhenCanStartWorkflowExplicitlyTrue",
+      "currentMethod": "Extract_Indexes_WhenCanStartWorkflowExplicitlyTrue",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.Extract_Indexes_WhenCanStartWorkflowExplicitlyTrue",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "Describe_RefusesASecretReadCanStartWorkflowWithTheFixedPublishCode",
+      "currentMethod": "Describe_RefusesASecretReadCanStartWorkflowWithTheFixedPublishCode",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.Describe_RefusesASecretReadCanStartWorkflowWithTheFixedPublishCode",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "BpmnProcess_declares_CanStartWorkflow_as_fixed_at_publish",
+      "currentMethod": "BpmnProcess_declares_CanStartWorkflow_as_fixed_at_publish",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.BpmnProcess_declares_CanStartWorkflow_as_fixed_at_publish",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "Extract_FailsPublish_WhenTwoStartsShareEventName",
+      "currentMethod": "Extract_FailsPublish_WhenTwoStartsShareEventName",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.Extract_FailsPublish_WhenTwoStartsShareEventName",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "Extract_FailsPublish_WhenMessageStartHasNoName",
+      "currentMethod": "Extract_FailsPublish_WhenMessageStartHasNoName",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.Extract_FailsPublish_WhenMessageStartHasNoName",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "Extract_FailsPublish_WhenTimerExpressionInvalid",
+      "currentMethod": "Extract_FailsPublish_WhenTimerExpressionInvalid",
+      "passedCases": 2,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.Extract_FailsPublish_WhenTimerExpressionInvalid(interval: null, cron: null)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.Extract_FailsPublish_WhenTimerExpressionInvalid(interval: \"PT5M\", cron: \"0 * * * *\")",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "ScheduleProvider_FansOutOneDescriptorPerTimerStart_WithTriggerParity",
+      "currentMethod": "ScheduleProvider_FansOutOneDescriptorPerTimerStart_WithTriggerParity",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.ScheduleProvider_FansOutOneDescriptorPerTimerStart_WithTriggerParity",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "ScheduleProvider_ReturnsEmpty_ForForeignActivityType_AndNonStartingProcess",
+      "currentMethod": "ScheduleProvider_ReturnsEmpty_ForForeignActivityType_AndNonStartingProcess",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.ScheduleProvider_ReturnsEmpty_ForForeignActivityType_AndNonStartingProcess",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "MessageStartStimulus_MatchesEventStimulus_ForRoutingParity",
+      "currentMethod": "MessageStartStimulus_MatchesEventStimulus_ForRoutingParity",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.MessageStartStimulus_MatchesEventStimulus_ForRoutingParity",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnEventStartTriggerTests",
+      "originalMethod": "TimerStartStimulus_IsIsolatedFromTimerAndCronActivities_AndPerElement",
+      "currentMethod": "TimerStartStimulus_IsIsolatedFromTimerAndCronActivities_AndPerElement",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnEventStartTriggerTests.TimerStartStimulus_IsIsolatedFromTimerAndCronActivities_AndPerElement",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMessageTests",
+      "originalMethod": "MessageThrow_RoutesOnwardImmediately_AndSendLandsPostCommit",
+      "currentMethod": "MessageThrow_RoutesOnwardImmediately_AndSendLandsPostCommit",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMessageTests.MessageThrow_RoutesOnwardImmediately_AndSendLandsPostCommit",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMessageTests",
+      "originalMethod": "MessageEnd_ConsumesToken_AndSendLandsPostCommit",
+      "currentMethod": "MessageEnd_ConsumesToken_AndSendLandsPostCommit",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMessageTests.MessageEnd_ConsumesToken_AndSendLandsPostCommit",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMessageTests",
+      "originalMethod": "SendTask_SendsAndRoutesOnward",
+      "currentMethod": "SendTask_SendsAndRoutesOnward",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMessageTests.SendTask_SendsAndRoutesOnward",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMessageTests",
+      "originalMethod": "ReceiveTask_SuspendsOnEventBookmark_ThenResumes",
+      "currentMethod": "ReceiveTask_SuspendsOnEventBookmark_ThenResumes",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMessageTests.ReceiveTask_SuspendsOnEventBookmark_ThenResumes",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnMessageTests",
+      "originalMethod": "MultiInstanceSendTask_SendsPerIteration",
+      "currentMethod": "MultiInstanceSendTask_SendsPerIteration",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnMessageTests.MultiInstanceSendTask_SendsPerIteration",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStructureHandlerTests",
+      "originalMethod": "ReplaceChildren_PreservesCollaborationMetadata",
+      "currentMethod": "ReplaceChildren_PreservesCollaborationMetadata",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStructureHandlerTests.ReplaceChildren_PreservesCollaborationMetadata",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "class": "BpmnStructureHandlerTests",
+      "originalMethod": "RemapExecutableStructure_RewritesOnlyElementActivityBindings",
+      "currentMethod": "RemapExecutableStructure_RewritesOnlyElementActivityBindings",
+      "passedCases": 1,
+      "cases": [
+        {
+          "name": "Elsa.Activities.Bpmn.Tests.BpmnStructureHandlerTests.RemapExecutableStructure_RewritesOnlyElementActivityBindings",
+          "outcome": "Passed"
+        }
+      ]
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { NodeProps } from "@xyflow/react";
+import { ReactFlowProvider, type NodeProps } from "@xyflow/react";
 import { BpmnElementNode } from "../bpmn/BpmnElementNode";
 import type { BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { NodeSlotBadges } from "../workflow-editor/NodeSlotBadges";
@@ -30,7 +30,7 @@ afterEach(() => {
 
 function render(ui: React.ReactElement, slotNavigation: WorkflowSlotNavigation | null = null) {
   flushSync(() => root.render(
-    <WorkflowSlotNavigationContext.Provider value={slotNavigation}>{ui}</WorkflowSlotNavigationContext.Provider>
+    <ReactFlowProvider><WorkflowSlotNavigationContext.Provider value={slotNavigation}>{ui}</WorkflowSlotNavigationContext.Provider></ReactFlowProvider>
   ));
 }
 
@@ -61,7 +61,7 @@ function bpmnNode(data: Partial<BpmnNodeData>) {
     childSlots: [],
     ...data
   };
-  return <BpmnElementNode {...({ data: nodeData, selected: false } as unknown as NodeProps)} />;
+  return <ReactFlowProvider><BpmnElementNode {...({ id: "sub-1", data: nodeData, selected: false } as unknown as NodeProps)} /></ReactFlowProvider>;
 }
 
 const boundContainer = {

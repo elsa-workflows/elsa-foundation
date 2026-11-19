@@ -92,7 +92,9 @@ public enum RuntimeSchedulerDrainStopReason
     OutboxDeliveryFailed,
     CycleCapExhausted,
     WorkflowTerminated,
-    Deferred
+    Deferred,
+    /// <summary>A waiting control command needs the actor turn; buffered work is flushed before handoff.</summary>
+    Yielded
 }
 
 public sealed class RuntimeSchedulerWorkItemResult

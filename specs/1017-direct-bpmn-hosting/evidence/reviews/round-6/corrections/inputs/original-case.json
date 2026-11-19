@@ -1,0 +1,85 @@
+{
+  "writerSource": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448",
+  "originalArchiveSha256": "980c6c4b1eaed15d8733450d00f1f2078a71adb8de6112e8b33635d5280ef9a3",
+  "originalArchiveMember": "after-expiry-runtime.sqlite.gz",
+  "fixtureSha256": "b2d11893782fa8deb82cd021fba2b022cb95efa905c6bcb37ca1270170ad6508",
+  "executionId": "bpmn:33d5f0dd245993d696e85c4e71855bc192d9bad472d7844133a5496260edba37",
+  "inputId": "r6-start-beyond-date-range",
+  "published": {
+    "executable": {
+      "artifactId": "sha256:aa0f9a8071e785dfb9aa74e0ed37c72c6874499c51aaf9af6a7a7375df5b65ea",
+      "definitionId": "bpmn-model:sha256:aa0f9a8071e785dfb9aa74e0ed37c72c6874499c51aaf9af6a7a7375df5b65ea",
+      "definitionVersionId": "sha256:aa0f9a8071e785dfb9aa74e0ed37c72c6874499c51aaf9af6a7a7375df5b65ea",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:aa0f9a8071e785dfb9aa74e0ed37c72c6874499c51aaf9af6a7a7375df5b65ea"
+    },
+    "incarnationId": "cc8292cbbb684ceea27f2aa77080ae89",
+    "sourceReferenceId": "bpmn-source:752853514095fcf46238cd9327e1fa2126556bee2c7d305f01961fe204e009b2",
+    "profile": "foundation-native-work-v1"
+  },
+  "definition": {
+    "formatVersion": 4,
+    "humanBindings": [
+      "review-work"
+    ],
+    "timerBindings": [
+      "timeout-work"
+    ],
+    "process": {
+      "processId": "r6-duration-admission",
+      "elements": [
+        {
+          "elementId": "start",
+          "elementType": "startEvent"
+        },
+        {
+          "elementId": "review",
+          "elementType": "userTask",
+          "bindingRef": "review-work"
+        },
+        {
+          "elementId": "timeout",
+          "elementType": "boundaryEvent",
+          "bindingRef": "timeout-work",
+          "attachedToRef": "review",
+          "cancelActivity": true,
+          "eventDefinitions": [
+            {
+              "type": "timer",
+              "properties": {
+                "interval": "P3000000D"
+              }
+            }
+          ]
+        },
+        {
+          "elementId": "done",
+          "elementType": "endEvent"
+        },
+        {
+          "elementId": "timed-out",
+          "elementType": "endEvent"
+        }
+      ],
+      "sequenceFlows": [
+        {
+          "flowId": "start-review",
+          "sourceRef": "start",
+          "targetRef": "review"
+        },
+        {
+          "flowId": "review-done",
+          "sourceRef": "review",
+          "targetRef": "done"
+        },
+        {
+          "flowId": "timeout-end",
+          "sourceRef": "timeout",
+          "targetRef": "timed-out"
+        }
+      ]
+    }
+  },
+  "capturedBeforeCorrection": true,
+  "noSqlStateEdits": true
+}

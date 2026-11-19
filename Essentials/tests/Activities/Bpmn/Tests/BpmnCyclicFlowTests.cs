@@ -14,6 +14,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+using BpmnTokenStatus = global::Bpmn.Model.State.BpmnTokenStatus;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -355,6 +358,7 @@ public sealed class BpmnCyclicFlowTests
 /// </summary>
 [ActivityOutcome(LoopBack)]
 [ActivityOutcome(Exit)]
+[SelectsOutcomeOnEveryCompletion]
 public sealed class BpmnLoopDecisionActivity(BpmnLoopDecisionCounter counter) : Activity<ActivityUnit>
 {
     public const string LoopBack = "again";

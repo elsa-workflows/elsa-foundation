@@ -1,0 +1,12 @@
+{
+  "worker": "w1",
+  "series": "memory-paired-r1",
+  "status": "failed",
+  "blob": "w1-memory-paired-r1.tar.xz",
+  "bytes": 73144,
+  "sha256": "d342170e431c7dcb75d609fe891df23fc9365b6ee2f5aca5e35ac58d82c4df89",
+  "files": 64,
+  "protectedValuesAbsent": true,
+  "upload": "passed",
+  "localArchiveAndAllFileHashesVerified": true
+}

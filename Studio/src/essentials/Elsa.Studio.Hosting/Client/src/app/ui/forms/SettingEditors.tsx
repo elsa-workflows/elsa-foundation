@@ -4,7 +4,7 @@ import type {
   StudioSettingDescriptor,
   StudioSettingEditorContribution,
   StudioSettingEditorProps
-} from "../../../sdk";
+} from "@elsa-workflows/studio-sdk";
 
 export function registerBuiltInSettingEditors(api: ElsaStudioModuleApi) {
   const contributions: StudioSettingEditorContribution[] = [

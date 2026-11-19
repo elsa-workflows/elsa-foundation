@@ -62,7 +62,7 @@ Finally, undo just the two exercise edits. Inspect `git diff --` for those paths
 dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
 ```
 
-The hosted [backend source platform workflow](../../.github/workflows/backend-source-platform.yml) replays the same exercise on Ubuntu 24.04 with PowerShell 7 and Windows Server 2025 with Windows PowerShell 5.1. It classifies the expected-red test from its TRX result and assertion text, restores both files byte-for-byte even on failure, reruns the original focused test, and rebuilds the original Workbench output. This is automated command replay; it does not claim an interactive human trial.
+The hosted [backend source platform workflow](../../.github/workflows/ci.yml) replays the same exercise on Ubuntu 24.04 with PowerShell 7 and Windows Server 2025 with Windows PowerShell 5.1. It classifies the expected-red test from its TRX result and assertion text, restores both files byte-for-byte even on failure, reruns the original focused test, and rebuilds the original Workbench output. This is automated command replay; it does not claim an interactive human trial.
 
 ## Verified baseline
 

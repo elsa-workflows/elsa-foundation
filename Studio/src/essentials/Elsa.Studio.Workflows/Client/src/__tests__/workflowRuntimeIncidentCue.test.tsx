@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import type { NodeProps } from "@xyflow/react";
+import { ReactFlowProvider, type NodeProps } from "@xyflow/react";
 import { WorkflowActivityNode } from "../workflow-editor/graph";
 import type { WorkflowNodeData } from "../workflowAdapter";
 
@@ -49,9 +49,9 @@ describe("workflow activity runtime incident cue", () => {
       onIncidentClick
     };
     flushSync(() => root!.render(
-      <div onClick={onNodeClick}>
+      <ReactFlowProvider><div onClick={onNodeClick}>
         <WorkflowActivityNode {...({ id: "activity-node", data, selected: false } as unknown as NodeProps)} />
-      </div>
+      </div></ReactFlowProvider>
     ));
 
     const action = container.querySelector<HTMLButtonElement>("button.wf-node-incident-action");
@@ -95,9 +95,9 @@ describe("workflow activity runtime incident cue", () => {
       onIncidentClick
     };
     flushSync(() => root!.render(
-      <div onClick={onNodeClick}>
+      <ReactFlowProvider><div onClick={onNodeClick}>
         <WorkflowActivityNode {...({ id: "sequence-node", data, selected: false } as unknown as NodeProps)} />
-      </div>
+      </div></ReactFlowProvider>
     ));
 
     const parent = container.querySelector<HTMLElement>(".wf-node");
@@ -115,4 +115,11 @@ describe("workflow activity runtime incident cue", () => {
     expect(onIncidentClick).toHaveBeenCalledWith("child-incident", null);
     expect(onNodeClick).not.toHaveBeenCalled();
   });
+});
+
+it("renders no source port for an explicitly empty executable outcome contract", () => {
+  container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+  const data: WorkflowNodeData = { label: "Terminal", activityVersionId: "terminal@1", childSlots: [], acceptsInbound: true, sourcePorts: [] };
+  flushSync(() => root!.render(<ReactFlowProvider><WorkflowActivityNode {...({ id: "terminal", data, selected: false } as unknown as NodeProps)} /></ReactFlowProvider>));
+  expect(container.querySelector(".wf-node-port-label")).toBeNull();
 });

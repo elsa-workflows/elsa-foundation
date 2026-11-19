@@ -10,6 +10,7 @@ export default defineConfig({
   timeout: 180_000,
   use: {
     baseURL: process.env.ELSA_STUDIO_URL,
+    launchOptions: process.env.ELSA_BROWSER_HOST_RESOLVER_RULES ? {args:[`--host-resolver-rules=${process.env.ELSA_BROWSER_HOST_RESOLVER_RULES}`]} : undefined,
     trace: "retain-on-failure",
     viewport: { width: 1440, height: 900 }
   },

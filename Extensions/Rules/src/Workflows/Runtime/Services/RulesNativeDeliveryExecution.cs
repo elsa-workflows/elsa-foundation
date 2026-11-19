@@ -49,6 +49,9 @@ internal sealed class RulesNativeDeliveryExecution(
         {
             if (before.Bookmark is null)
                 return false;
+            // Owned hosting tests freeze a real in-flight delivery claim here, after the terminal result exists and
+            // before the parent is resumed, by naming a hold file in ELSA_HOLD_RULES_NATIVE_DELIVERY. Production hosts never set it.
+            await HoldNativeDeliveryForTestAsync(Environment.GetEnvironmentVariable(NativeDeliveryHoldVariable), cancellationToken);
             await DispatchAsync(lease.Identity.Scope, envelope, cancellationToken);
             // A separate operation scope avoids retaining the dispatcher's in-flight execution view.
             proof = (await InspectAsync(lease.Identity, view.Fingerprint, envelope, cancellationToken)).Proof;
@@ -111,6 +114,31 @@ internal sealed class RulesNativeDeliveryExecution(
                 resolution.ResumeTarget.ExecutableNodeId != address.NodeId)
                 throw RulesNativeBoundary.Invalid();
         }
+    }
+
+    internal const string NativeDeliveryHoldVariable = "ELSA_HOLD_RULES_NATIVE_DELIVERY";
+    internal const string HoldClaimMode = "hold-claim";
+
+    /// <summary>
+    /// When <paramref name="holdPath"/> names an existing file whose text is <c>hold-claim</c>, writes a sibling
+    /// <c>.engaged</c> marker and then waits until cancelled, so the claimed delivery lease stays unacknowledged exactly
+    /// as a crash between claim and dispatch would leave it. Any other path or content returns at once.
+    /// </summary>
+    internal static async ValueTask HoldNativeDeliveryForTestAsync(string? holdPath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(holdPath) || !File.Exists(holdPath))
+            return;
+        string mode;
+        try { mode = File.ReadAllText(holdPath).Trim(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new IOException("The configured Rules native delivery test hold could not be read.", error);
+        }
+        if (mode != HoldClaimMode)
+            return;
+        try { File.WriteAllText(holdPath + ".engaged", DateTimeOffset.UtcNow.ToString("O")); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { /* The marker only helps the test observe the hold. */ }
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
     }
 
     private static RuleRunStatus StatusFor(RuleTerminalKind kind) => kind switch

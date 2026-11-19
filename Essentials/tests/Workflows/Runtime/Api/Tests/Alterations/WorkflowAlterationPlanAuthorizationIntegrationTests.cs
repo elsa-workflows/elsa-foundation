@@ -508,13 +508,16 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
     public async Task Modify_variable_api_rejects_stale_missing_container_type_and_unsupported_protection_without_value_leakage()
     {
         await AssertModificationFailureAsync("stale", rootFrame: true, new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline,
-            "stable-name", JsonSerializer.SerializeToElement("replacement-secret"), "RootVariableFrameRevisionConflict", async services =>
+            "stable-name", JsonSerializer.SerializeToElement("replacement-secret"), "VariableVersionConflict", async services =>
             {
+                // The target variable changes after capture. Writing an equal value would change nothing (spec 1221), so
+                // a different value is written; the alteration's per-variable version check then refuses it.
                 using var scope = services.CreateScope();
                 var store = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
                 var workflow = (await store.FindAsync("variable-stale"))!;
                 var frame = workflow.RootVariableFrame!;
-                await store.SaveAsync(workflow with { RootVariableFrame = frame.Set("stable-name", frame.Values["stable-name"], frame.Revision) });
+                var changed = ValueEnvelope.Inline(frame.Values["stable-name"].Type, JsonSerializer.SerializeToElement("changed-after-capture"), frame.Values["stable-name"].Policy);
+                await store.SaveAsync(workflow with { RootVariableFrame = frame.Set("stable-name", changed, frame.Revision) });
             });
         await AssertModificationFailureAsync("missing", rootFrame: true, new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline,
             "missing-key", JsonSerializer.SerializeToElement("replacement-secret"), "VariableNotDeclared");

@@ -4,3 +4,4 @@ const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.ModuleManagementMa
 const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.ModuleManagementReadPermission = "module-management:read" -> string!
 const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.ModuleManagementReadPolicyName = "StudioManagementBridge:ModuleManagement.Read" -> string!
 const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.PolicyName = "StudioManagementBridge" -> string!
+const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.TenantClaimType = "elsa.studio.tenant" -> string!

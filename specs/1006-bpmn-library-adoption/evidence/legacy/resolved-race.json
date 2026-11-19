@@ -1,0 +1,55 @@
+{
+  "scenario": "resolved-race",
+  "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "runtimeBaselineRevision": "fbe694d2f3d126e324c3e46578bc1a560b0217f1",
+  "modelPackage": "0.1.1-preview.19",
+  "interchangePackage": "0.1.1-preview.19",
+  "stateAlias": "Elsa.Bpmn.ExecutionState",
+  "stateVersion": 1,
+  "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f",
+  "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+  "oldHostControl": "fresh provider over a separate exact database copy passed",
+  "facts": {
+    "parentId": "legacy-activity-0",
+    "pendingFault": null,
+    "canceledLoser": true,
+    "queuedLoser": false,
+    "queuedBeforeCancellation": false,
+    "loserQueuedObservation": null,
+    "firstCancellationObservation": 19,
+    "activeWork": [
+      {
+        "nodeId": "node-final",
+        "elementId": "catch-final",
+        "tokenId": "token:24",
+        "schedulingCause": "element:intermediateCatchEvent",
+        "iterationId": null
+      }
+    ],
+    "children": [
+      {
+        "invocationId": "legacy-activity-1",
+        "node": "node-winner",
+        "status": 4,
+        "iterationId": null,
+        "token": "token:7"
+      },
+      {
+        "invocationId": "legacy-activity-2",
+        "node": "node-loser",
+        "status": 6,
+        "iterationId": null,
+        "token": "token:9"
+      },
+      {
+        "invocationId": "legacy-activity-3",
+        "node": "node-final",
+        "status": 3,
+        "iterationId": null,
+        "token": "token:24"
+      }
+    ],
+    "bookmarkCount": 1,
+    "queuedIds": []
+  }
+}

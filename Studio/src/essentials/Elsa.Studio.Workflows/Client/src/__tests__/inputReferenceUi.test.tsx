@@ -49,6 +49,13 @@ const inputs: WorkflowInput[] = [
 ];
 
 describe("workflow Input reference Contribution", () => {
+  it("lets any activity select workflow inputs for a nullable JSON input", () => {
+    const { container } = renderPicker({ typeName: "System.Text.Json.JsonElement?" });
+    const options = [...container.querySelectorAll<HTMLOptionElement>("optgroup option")];
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.every(option => !option.disabled)).toBe(true);
+  });
+
   it("initializes an empty Input expression through the complete Activity Property Editor Slot", () => {
     const { container, onChange } = renderPicker({ syntax: "Literal", value: "" });
 

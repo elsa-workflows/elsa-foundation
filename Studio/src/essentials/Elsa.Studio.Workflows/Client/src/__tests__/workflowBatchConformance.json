@@ -1,0 +1,99 @@
+{
+  "description": "Spec 1193 slice C: one contract, two implementations. Elsa.Weaver.Tests prepares each case's operations against `snapshot` and `catalog`; the Studio Workflows Vitest applies the frozen batch to `draft`. An accepted case must freeze exactly `frozen`, which the applier must apply; a refused case must be refused by the server, and its `clientFrozen` (what a laxer server would have frozen) must be refused by the applier. A refused case names the reason each side must give (`serverReason`, `clientReason`), and `snapshot` is exactly what the Studio bridge builds from `draft`.",
+  "catalog": [
+    { "activityVersionId": "flowchart-v1", "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart", "version": "1.0.0", "category": "Composition", "displayName": "Flowchart", "executionType": "Action", "inputs": [], "outputs": [],
+      "designFacets": [{ "kind": "elsa.flowchart.structure", "schemaVersion": "1.0.0", "payload": { "mode": "flowchart", "supportsScopedVariables": true,
+        "slots": [{ "name": "Flowchart.Activities", "property": "activities", "displayName": "Activities", "cardinality": "many" }],
+        "initialPayload": { "activities": [], "connections": [], "startNodeId": null, "nodeMetadata": {}, "connectionMetadata": {} } } }] },
+    { "activityVersionId": "sequence-v1", "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence", "version": "1.0.0", "category": "Composition", "displayName": "Sequence", "executionType": "Action", "inputs": [], "outputs": [],
+      "designFacets": [{ "kind": "elsa.sequence.structure", "schemaVersion": "1.0.0", "payload": { "mode": "sequence", "supportsScopedVariables": true,
+        "slots": [{ "name": "Sequence.Activities", "property": "activities", "displayName": "Activities", "cardinality": "many" }],
+        "initialPayload": { "activities": [] } } }] },
+    { "activityVersionId": "write-v1", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "category": "Primitives", "displayName": "Write Line", "executionType": "Action", "outputs": [], "designFacets": [],
+      "inputs": [{ "referenceKey": "text", "name": "Text", "typeName": "String" }] }
+  ],
+  "draft": {
+    "id": "draft-1", "definitionId": "wf-1", "sourceVersionId": "version-1", "validationErrors": [],
+    "state": { "variables": [], "inputs": [], "outputs": [], "rootActivity": {
+      "nodeId": "flow", "activityVersionId": "flowchart-v1", "inputs": [], "outputs": [],
+      "structure": { "kind": "elsa.flowchart.structure", "schemaVersion": "1.0.0", "payload": {
+        "activities": [
+          { "nodeId": "a", "activityVersionId": "write-v1", "inputs": [], "outputs": [], "text": { "typeName": "String", "expression": { "type": "Literal", "value": "First" }, "memoryReference": { "id": "keep-me" } } },
+          { "nodeId": "b", "activityVersionId": "write-v1", "inputs": [], "outputs": [] },
+          { "nodeId": "seq", "activityVersionId": "sequence-v1", "inputs": [], "outputs": [],
+            "structure": { "kind": "elsa.sequence.structure", "schemaVersion": "1.0.0", "payload": { "activities": [
+              { "nodeId": "inner", "activityVersionId": "write-v1", "inputs": [], "outputs": [] } ] } } } ],
+        "connections": [
+          { "id": "a-b", "source": { "nodeId": "a", "port": "Done" }, "target": { "nodeId": "b" } },
+          { "id": "a-seq", "source": { "nodeId": "a", "port": "Done" }, "target": { "nodeId": "seq" } } ],
+        "startNodeId": "a", "nodeMetadata": {}, "connectionMetadata": {} } } } },
+    "layout": [{ "nodeId": "a", "x": 100, "y": 100 }, { "nodeId": "inner", "x": 50, "y": 50 }],
+    "activityPresentation": [{ "nodeId": "seq", "displayName": "Inner sequence" }, { "nodeId": "ghost", "displayName": "Removed earlier" }]
+  },
+  "snapshot": {
+    "workflowDefinitionId": "wf-1", "draftId": "draft-1", "revision": "rev-1", "selectedNodeId": null, "workingState": "draft",
+    "activities": [
+      { "id": "flow", "type": "Elsa.Activities.Flowchart.Activities.Flowchart", "displayName": "Flowchart" },
+      { "id": "a", "type": "Elsa.Activities.Primitives.Activities.WriteLine", "displayName": "Write Line" },
+      { "id": "b", "type": "Elsa.Activities.Primitives.Activities.WriteLine", "displayName": "Write Line" },
+      { "id": "seq", "type": "Elsa.Activities.Sequence.Activities.Sequence", "displayName": "Inner sequence" },
+      { "id": "inner", "type": "Elsa.Activities.Primitives.Activities.WriteLine", "displayName": "Write Line" } ],
+    "structure": {
+      "versions": [{ "id": "flowchart-v1", "nodes": [0] }, { "id": "write-v1", "nodes": [1, 2, 4] }, { "id": "sequence-v1", "nodes": [3] }],
+      "containers": [
+        { "id": "flow", "parentId": null, "slot": null, "slots": [{ "id": "elsa.flowchart.structure:activities", "mode": "flowchart", "cardinality": "many", "nodes": [1, 2, 3] }] },
+        { "id": "seq", "parentId": "flow", "slot": "elsa.flowchart.structure:activities", "slots": [{ "id": "elsa.sequence.structure:activities", "mode": "sequence", "cardinality": "many", "nodes": [4] }] } ],
+      "reservedIds": ["ghost"] },
+    "connections": [{ "source": "a", "target": "b", "sourcePort": "Done" }, { "source": "a", "target": "seq", "sourcePort": "Done" }],
+    "positions": [{ "nodeId": "a", "x": 100, "y": 100 }, { "nodeId": "inner", "x": 50, "y": 50 }],
+    "secretReferences": []
+  },
+  "cases": [
+    { "name": "nested-six-kinds", "accepted": true,
+      "operations": [
+        { "kind": "add", "ref": "greet", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "scopePath": ["flow", "seq"], "slot": "elsa.sequence.structure:activities", "position": { "x": 300, "y": 120 } },
+        { "kind": "set-property", "activity": { "id": "a" }, "property": "Text", "value": { "literal": "Hello" } },
+        { "kind": "update", "activity": { "id": "b" }, "fields": { "displayName": "Second" } },
+        { "kind": "position", "activity": { "name": "Inner sequence" }, "x": 400, "y": 420 },
+        { "kind": "disconnect", "source": { "id": "a" }, "target": { "id": "seq" } },
+        { "kind": "connect", "source": { "id": "b" }, "target": { "id": "seq" } } ],
+      "frozen": { "schemaVersion": "1", "highComplexity": false, "risk": "destructive", "operations": [
+        { "index": 0, "kind": "add", "risk": "reviewRequired", "nodeId": "greet", "activityVersionId": "write-v1", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "scopePath": ["flow", "seq"], "slot": "elsa.sequence.structure:activities", "position": { "x": 300, "y": 120 } },
+        { "index": 1, "kind": "set-property", "risk": "reviewRequired", "nodeId": "a", "property": "text", "inputName": "Text", "typeName": "String", "value": { "literal": "Hello" } },
+        { "index": 2, "kind": "update", "risk": "reviewRequired", "nodeId": "b", "fields": { "displayName": "Second" }, "startInput": null },
+        { "index": 3, "kind": "position", "risk": "reviewRequired", "nodeId": "seq", "x": 400, "y": 420 },
+        { "index": 4, "kind": "disconnect", "risk": "destructive", "source": "a", "target": "seq", "sourcePort": "Done" },
+        { "index": 5, "kind": "connect", "risk": "reviewRequired", "source": "b", "target": "seq", "sourcePort": "Done", "targetPort": null, "scopeOwnerId": "flow", "slot": "elsa.flowchart.structure:activities" } ] } },
+    { "name": "add-into-an-added-container", "accepted": false,
+      "serverReason": "is added by this batch, so its slots cannot be confirmed yet", "clientReason": "is added by this batch; activities are added into it in a following batch",
+      "operations": [
+        { "kind": "add", "ref": "box", "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence", "version": "1.0.0", "scopePath": ["flow"], "slot": "elsa.flowchart.structure:activities" },
+        { "kind": "add", "ref": "inside", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "scopePath": ["flow", "box"], "slot": "elsa.sequence.structure:activities" } ],
+      "clientFrozen": { "schemaVersion": "1", "highComplexity": false, "risk": "reviewRequired", "operations": [
+        { "index": 0, "kind": "add", "risk": "reviewRequired", "nodeId": "box", "activityVersionId": "sequence-v1", "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence", "version": "1.0.0", "scopePath": ["flow"], "slot": "elsa.flowchart.structure:activities", "position": null },
+        { "index": 1, "kind": "add", "risk": "reviewRequired", "nodeId": "inside", "activityVersionId": "write-v1", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "scopePath": ["flow", "box"], "slot": "elsa.sequence.structure:activities", "position": null } ] } },
+    { "name": "two-set-roots", "accepted": false,
+      "serverReason": "a batch installs at most one root", "clientReason": "A batch installs at most one root",
+      "operations": [
+        { "kind": "add", "ref": "one", "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart", "version": "1.0.0", "scopePath": [], "slot": "root" },
+        { "kind": "add", "ref": "two", "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart", "version": "1.0.0", "scopePath": [], "slot": "root" },
+        { "kind": "set-root", "activity": { "ref": "one" } },
+        { "kind": "set-root", "activity": { "ref": "two" } } ],
+      "clientFrozen": { "schemaVersion": "1", "highComplexity": false, "risk": "destructive", "operations": [
+        { "index": 0, "kind": "add", "risk": "reviewRequired", "nodeId": "one", "activityVersionId": "flowchart-v1", "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart", "version": "1.0.0", "scopePath": [], "slot": "root", "position": null },
+        { "index": 1, "kind": "add", "risk": "reviewRequired", "nodeId": "two", "activityVersionId": "flowchart-v1", "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart", "version": "1.0.0", "scopePath": [], "slot": "root", "position": null },
+        { "index": 2, "kind": "set-root", "risk": "destructive", "nodeId": "one", "replacesRoot": true },
+        { "index": 3, "kind": "set-root", "risk": "destructive", "nodeId": "two", "replacesRoot": true } ] } },
+    { "name": "reuses-an-id-only-presentation-holds", "accepted": false,
+      "serverReason": "never reuses an existing or removed id", "clientReason": "is already used",
+      "operations": [
+        { "kind": "add", "ref": "ghost", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "scopePath": ["flow"], "slot": "elsa.flowchart.structure:activities" } ],
+      "clientFrozen": { "schemaVersion": "1", "highComplexity": false, "risk": "reviewRequired", "operations": [
+        { "index": 0, "kind": "add", "risk": "reviewRequired", "nodeId": "ghost", "activityVersionId": "write-v1", "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "scopePath": ["flow"], "slot": "elsa.flowchart.structure:activities", "position": null } ] } },
+    { "name": "removes-the-root", "accepted": false,
+      "serverReason": "the root cannot be removed", "clientReason": "The root cannot be removed",
+      "operations": [{ "kind": "remove", "activity": { "id": "flow" } }],
+      "clientFrozen": { "schemaVersion": "1", "highComplexity": false, "risk": "destructive", "operations": [
+        { "index": 0, "kind": "remove", "risk": "destructive", "nodeId": "flow" } ] } }
+  ]
+}

@@ -1,78 +1,36 @@
 name: CI
 
-# Build-and-test gate for pull requests targeting main, and for main itself.
-#
-# Neither of the other build workflows guards PRs:
-#   - docker.yml   builds images only after a merge into main or on manual dispatch (#2751).
-#   - packages.yml runs on push to main only (#2622) and deliberately packs/compiles only
-#     the src/ libraries -- it does NOT build test projects or run tests.
-# Net result: PRs could merge to main with compile errors or failing tests undetected.
-# This bit in PR #543: a semantic merge conflict between #539 and #541 that compiled
-# on each branch but not when combined (HashMismatchTests.cs referenced
-# ActivityVersionHashMismatchException.Version, removed by #539).
-#
-# TIERS (spec 263)
-# tools/ci/test-tiers.json assigns every test project to the PR tier or the integration tier and groups them into
-# shards. This workflow is the PR tier: "Plan tiers" reads the manifest, every "PR shard (n)" builds the FULL solution
-# -- including test projects, which is what catches semantic-merge compile breaks -- and runs its projects or test-class
-# groups in parallel, and "Build & test" is their aggregate. Each failing test is re-run once; a pass on retry is
-# reported, a quarantined test's failure is reported without failing the run (tools/ci/test_results.py). The full tier
-# (integration-tier projects and the EF container suites) is ci-full.yml's required "Full tier" check on ready PRs.
-# Until the manifest's integrationLeavesPrTier switch is on, the PR shards also run the integration-tier projects, so
-# no test stops gating merges before "Full tier" is required (FR-011). See docs/contributing/merging.md#ci-tiers.
-#
-# "Build & test" IS a required status check on main. Branch protection matches the context
-# by JOB name, not by workflow file, so the job names below are load-bearing and must not be
-# renamed. Note that `enforce_admins` is off, so a required check is a speed bump for an
-# admin rather than a wall -- which is the hole the push trigger below covers.
-#
-# TRIGGERS
-#   - pull_request: the merge gate.
-#   - push to main: reports post-merge breakage AGAINST MAIN. Until PR #1302 this ran on
-#     pull_request only, so nothing ever evaluated main itself. On 2026-08-12 PR #1270 was
-#     force-merged at 00:20Z with three checks red and this very job still pending; main was
-#     then left unable to activate the Workbench at all, with HistoricalSchemaUpgradeTests
-#     failing 8 of 8, and showed all-green for about nine hours because every workflow that
-#     did run on push (Maps, Packages, Docker Images, Code Quality) is blind to test results.
-#   - workflow_dispatch: re-run on demand, without pushing an empty commit. Input `tier`: `full` (the default) runs
-#     both tiers, the EF container suites included; `pr` runs the PR tier only.
-#   - schedule: once a night, both tiers: the PR shards, the integration shards once the switch is on, and every EF
-#     container suite, each run whole with its required-provider mode armed where it has one, plus the Secrets EF
-#     composition proof (full-tier.yml).
-#
-# A push to main runs the PR tier and, once the switch is on, the integration shards: the same tests "Build & test" ran
-# on main before spec 263 (FR-010). The EF container suites stay nightly and on dispatch on main.
-#
-# The push run is deliberately the SAME jobs, not a scoped-down variant. Scoping it would mean
-# a second job name (the required-check context is tied to this one) and a second thing to
-# keep in step with the PR gate, in exchange for saving one run per merge. Docker Images and Packages run in parallel;
-# post-merge verification waits for the actual results rather than treating their completion as test evidence.
-#
-# Blocking is not available on push: the commit has already landed. A red run on main is a
-# request to fix forward or revert; the alert job at the bottom makes sure someone is told.
-#
-# DOCUMENTATION-ONLY FAST PATH (spec 257)
-# A pull request whose every changed path is documentation, specs or agent instructions skips the .NET
-# build and tests: tools/ci/change_scope.py classifies the diff as the first step of "Plan tiers", which
-# still runs the Python guards and the catalog link check (the files CatalogLinkGuardTests reads). The shards,
-# Architecture guards and Core-only build & test skip on that output, and "Build & test" reports success under its own
-# name, so the required context is a real result, never "skipped" or pending. Any path a build or test reads
-# (EXTENSION_POINTS.md, spec contracts, build and analyzer config) forces the
-# full run, and so does anything the classifier cannot read. Push, schedule and dispatch are always full
-# runs, so main itself is never judged by the fast path. "Generated maps fresh" always runs in full; it
-# builds only the generator.
+# All source validation lives here; publishing and trusted maintenance have separate tokens.
+# Required check names stay stable. Marking a PR ready runs both tiers and maps in one suite;
+# splitting the required contexts across draft/ready suites can block protected merges (#3708).
+# A merge-queue entry (merge_group) runs both tiers on the exact merge result and reports all three
+# required checks. Focused manual runs select a suite below.
+# Path filters live in tools/ci/workflow-paths.json and are applied by plan-scope.
+# Pull requests to an initiative branch (docs/contributing/initiatives.md) run exactly what a pull request to main runs,
+# diffed against the initiative branch: the same tier selection and the same documentation-only fast path.
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
     branches:
       - main
+      - 'initiative/**'
   push:
     branches:
       - main
+  # The merge queue on main requires `Build & test`, `Generated maps fresh` and `Full tier` from this run. A required
+  # check that a merge_group run does not report keeps the entry waiting until the queue times it out.
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
     inputs:
       # FR-008: the one way to run the full tier early, on any branch, a draft's head included. The literals "tier"
       # and "full" are what docs/contributing/merging.md#ci-tiers documents; test_tiers.py check-docs keeps them in step.
+      suite:
+        description: Validation to run
+        type: choice
+        options: [ci, studio, backend-source, weaver, published-images, studio-order]
+        default: ci
       tier:
         description: Which tier to run
         type: choice
@@ -85,21 +43,44 @@ on:
 permissions:
   contents: read
 
-# A newer head supersedes its own PR, and a newer push to main supersedes an older main run (#2622): five
+# A ready transition or newer head supersedes its own PR; one group prevents stale ready runs
+# surviving a later push. A newer push to main supersedes an older main run (#2622): five
 # queued main runs once each ran the whole EF matrix for an hour. Manual and scheduled runs get a group of
-# their own and are never cancelled. A cancelled run is not a failure, so the alert job below stays quiet
+# their own and are never cancelled. So are merge-queue runs: github.ref is the entry's own gh-readonly-queue
+# branch, and cancelling one would fail the entry. A cancelled run is not a failure, so the alert job below stays quiet
 # for it, and the jobs that use always()-style conditions use !cancelled() so a cancellation cannot turn
 # into a red aggregate that files a "main is red" issue.
 concurrency:
   group: >-
     ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number)
     || github.event_name == 'push' && format('ci-push-{0}', github.ref)
+    || github.event_name == 'merge_group' && format('ci-merge-group-{0}', github.ref)
     || format('ci-run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
+  plan-scope:
+    name: Select focused validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      weaver: ${{ steps.scope.outputs.weaver }}
+      studio: ${{ steps.scope.outputs.studio }}
+      published-images: ${{ steps.scope.outputs.published-images }}
+      studio-order: ${{ steps.scope.outputs.studio-order }}
+      backend-source: ${{ steps.scope.outputs.backend-source }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select jobs from the event and changed paths
+        id: scope
+        run: python3 tools/ci/workflow_scope.py
+
   # Python only, so the shards start within a minute: the change scope, the cheap guards, and the shard matrix.
   plan-tiers:
+    if: (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci')
     name: Plan tiers
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -120,21 +101,29 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check evidence artifact sizes
+        run: |
+          python3 tools/ci/check_evidence_sizes.py --self-test
+          python3 tools/ci/check_evidence_sizes.py
+          python3 tools/bpmn/test_restore_evidence.py
+
       - name: Classify the change scope
         id: scope
-        # Pull requests only; every other event is a full run. The classifier exits 0 whatever it finds, and a diff
-        # it cannot read classifies as a full run.
+        # Pull requests and merge-queue entries only; every other event is a full run. The classifier exits 0 whatever
+        # it finds, and a diff it cannot read classifies as a full run.
         #
-        # BASE_SHA is the first parent of the merge commit GitHub tests: today's main. The diff from it is exactly what
-        # the pull request would change. pull_request.base.sha is the base from when the PR was opened or last
-        # retargeted, so on an older PR it also counted everything merged into main since, and a documentation-only PR
-        # got a full run (#2683: one docs file, classified by an .editorconfig change on main). The same base serves
-        # the quarantine guard and the switch check below.
+        # BASE_SHA is the first parent of the merge commit GitHub tests: the base branch today (main or initiative/*).
+        # The diff from it is exactly what the pull request would change. pull_request.base.sha is the base from when the
+        # PR was opened or last retargeted, so on an older PR it also counted everything merged into main since, and a
+        # documentation-only PR got a full run (#2683: one docs file, classified by an .editorconfig change on main). A
+        # merge-queue entry's base is merge_group.base_sha, the commit the entry was built on; its head, GITHUB_SHA, is
+        # the merge result.
+        # The same base serves the quarantine guard and the switch check below.
         env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
         run: |
           python3 tools/ci/change_scope.py --self-test
-          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == pull_request || "$GITHUB_EVENT_NAME" == merge_group ]]; then
             python3 tools/ci/change_scope.py --base "$BASE_SHA" --head "$GITHUB_SHA" \
               --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
           else
@@ -144,6 +133,9 @@ jobs:
       - name: Check contributor checkpoint workflow guards
         run: python3 tools/contributor-checkpoints/test_workflow_guards.py
 
+      - name: Check retained migration generator guards
+        run: python3 tools/ef/test_generate_module_migrations.py
+
       - name: Check Studio asset gate
         run: python3 tools/ci/verify-studio-assets.py --self-test
 
@@ -152,6 +144,9 @@ jobs:
           python3 tools/ci/studio_image_tags.py --self-test
           python3 tools/ci/test_studio_docker_publish.py
 
+      - name: Check the package publish gate
+        run: python3 -m unittest discover -s tools/ci -p 'test_await_ci_result.py'
+
       # Same files and rules as CatalogLinkGuardTests, without the build. It is the documentation-reading check a
       # documentation-only PR can still break (by moving or deleting a doc a catalog or module README links to).
       - name: Check catalog and module README links
@@ -159,21 +154,25 @@ jobs:
 
       - name: Exercise the tier tooling
         run: |
+          python3 -m unittest discover -s tools/ci -p 'test_workflow_scope.py'
+          python3 -m unittest discover -s tools/ci -p 'test_run_shard_retry_policy.py'
           python3 tools/ci/test_tiers.py --self-test
+          python3 tools/ci/affected_tests.py --self-test
           python3 tools/ci/test_results.py --self-test
           python3 tools/ci/test_tiers.py check-workflows
           python3 tools/ci/test_tiers.py check-docs
 
-      # FR-013. On a pull request only the entries its diff adds or changes, against today's main, are checked, so
-      # closing a tracking issue never turns unrelated PRs red. The checkout has full history, so the base is always
+      # FR-013. On a pull request or a merge-queue entry only the entries its diff adds or changes, against today's
+      # main, are checked, so closing a tracking issue never turns unrelated PRs red or stalls the queue. The checkout
+      # has full history, so the base is always
       # readable; check-quarantine exits 2 rather than widen the check if it is not. On main and nightly every entry is
       # checked, and a closed issue fails the run and files "main is red".
       - name: Check the quarantine list's tracking issues
         env:
           GH_TOKEN: ${{ github.token }}
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == pull_request || "$GITHUB_EVENT_NAME" == merge_group ]]; then
             python3 tools/ci/test_results.py check-quarantine --base "$BASE_SHA"
           else
             python3 tools/ci/test_results.py check-quarantine
@@ -184,17 +183,20 @@ jobs:
         env:
           # select reads ruleset main-2 when a change turns integrationLeavesPrTier on (FR-011); gh needs a token for it.
           GH_TOKEN: ${{ github.token }}
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
           DISPATCH_TIER: ${{ inputs.tier }}
         run: |
           case "$GITHUB_EVENT_NAME" in
-            pull_request) tier=pr ;;
-            schedule) tier=nightly ;;
-            workflow_dispatch) [[ "$DISPATCH_TIER" == pr ]] && tier=pr || tier=nightly ;;
-            *) tier=push ;;
+            # A merge-queue entry runs the PR tier here and the full tier through plan-full, as a ready PR does.
+            pull_request | merge_group) tier="pr" ;;
+            schedule) tier="nightly" ;;
+            workflow_dispatch) [[ "$DISPATCH_TIER" == pr ]] && tier="pr" || tier="nightly" ;;
+            *) tier="push" ;;
           esac
+          # --event: on a pull request only the shards its changes can affect run (#3787); every other event, the
+          # merge queue included, runs them all. pr_count can be 0, and Build & test accepts skipped shards then.
           python3 tools/ci/test_tiers.py select --tier "$tier" ${BASE_SHA:+--base "$BASE_SHA" --head "$GITHUB_SHA"} \
-            --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+            --event "$GITHUB_EVENT_NAME" --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
 
   # One shard of the PR tier. Each shard rebuilds the solution rather than downloading a shared build: the 4.2 GB
   # output takes about 6 minutes to download against a 3-minute build (spec 263 research R4).
@@ -233,6 +235,9 @@ jobs:
       - name: Restore repository-local .NET tools
         run: dotnet tool restore
 
+      - name: Restore original BPMN test fixtures
+        run: python3 tools/bpmn/restore_evidence.py
+
       - name: Build (full solution, including test projects)
         # Building the whole solution -- test projects included -- is what catches
         # semantic-merge compile breaks like #543. Every shard builds it, so every shard gates on it.
@@ -267,19 +272,31 @@ jobs:
   # The required context. It reports one result for the PR tier: the plan, every shard, the architecture guards and the
   # core-only leg. !cancelled() rather than always(): a superseded run must not turn into a red aggregate.
   build-and-test:
-    name: Build & test
-    needs: [plan-tiers, pr-shard, architecture-guards, core-only]
-    if: ${{ !cancelled() }}
+    name: "${{ github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Build & test (not requested)' || 'Build & test' }}"
+    needs: [plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       docs_only: ${{ needs.plan-tiers.outputs.docs_only }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify selected Studio proofs before the docs-only fast path
+        env:
+          STUDIO_SELECTED: ${{ needs.plan-scope.outputs.studio }}
+          STUDIO_FRONTEND: ${{ needs.studio-lint-and-test.result }}
+          STUDIO_BROWSER: ${{ needs.studio-browser-tests.result }}
+          STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}
+          STUDIO_UX: ${{ needs.studio-ux-acceptance.result }}
+        run: python3 tools/ci/studio_gate.py
       - name: Verify the PR tier passed
         env:
           PLAN: ${{ needs.plan-tiers.result }}
           DOCS_ONLY: ${{ needs.plan-tiers.outputs.docs_only }}
           SHARDS: ${{ needs.pr-shard.result }}
+          PR_COUNT: ${{ needs.plan-tiers.outputs.pr_count }}
           ARCHITECTURE: ${{ needs.architecture-guards.result }}
           CORE: ${{ needs.core-only.result }}
         run: |
@@ -289,6 +306,11 @@ jobs:
           if [[ "$DOCS_ONLY" == true ]]; then
             echo "Documentation-only change: the .NET build and tests were skipped (spec 257)."; exit 0
           fi
+          # A pull request whose changes reach no PR-tier test selects no shard (#3787), and the shard job is skipped.
+          # Only an explicit count of 0 allows that; Architecture guards and Core-only still have to pass.
+          if [[ "$PR_COUNT" == 0 && "$SHARDS" == skipped ]]; then
+            echo "No PR-tier shard is affected by this change (see Plan tiers' summary)."; SHARDS=success
+          fi
           failed=0
           for pair in "PR shards:$SHARDS" "Architecture guards:$ARCHITECTURE" "Core-only build & test:$CORE"; do
             if [[ "${pair##*:}" != success ]]; then
@@ -297,41 +319,184 @@ jobs:
           done
           exit "$failed"
 
-  # The full tier outside pull requests: on a push to main the integration shards once the switch is on; nightly and on
-  # a `tier: full` dispatch also the EF container suites. Pull requests get it from ci-full.yml.
-  full-tier-shards:
-    needs: plan-tiers
+  integration-shard:
+    name: Integration shard (${{ matrix.shard }})
+    needs: [plan-tiers, plan-full]
     if: >-
-      ${{ github.event_name != 'pull_request'
-      && (needs.plan-tiers.outputs.integration_count != '0' || needs.plan-tiers.outputs.container_count != '0') }}
-    uses: ./.github/workflows/full-tier.yml
-    with:
-      integration_matrix: ${{ needs.plan-tiers.outputs.integration_matrix }}
-      integration_count: ${{ needs.plan-tiers.outputs.integration_count }}
-      container_matrix: ${{ needs.plan-tiers.outputs.container_matrix }}
-      container_count: ${{ needs.plan-tiers.outputs.container_count }}
+      ${{ !cancelled() && ((github.event_name == 'pull_request' || github.event_name == 'merge_group')
+      && needs.plan-full.outputs.run == 'true' && needs.plan-full.outputs.integration_count != '0'
+      || github.event_name != 'pull_request' && github.event_name != 'merge_group' && needs.plan-tiers.result == 'success'
+      && needs.plan-tiers.outputs.docs_only != 'true' && needs.plan-tiers.outputs.integration_count != '0') }}
+    runs-on: ubuntu-latest
+    # The serial BPMN host cases are split across two shards of about 25 minutes each (#3784).
+    # Leave room for setup and artifact upload; run_shard.py still bounds each test.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.plan-full.outputs.integration_matrix || needs.plan-tiers.outputs.integration_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  # One result for the alert job. Deliberately not named "Full tier": that is ci-full.yml's required context on PRs.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
+
+      - name: Restore repository-local .NET tools
+        run: dotnet tool restore
+
+      # The whole solution, as in the PR shards: the integration projects launch hosts, probes and the CLI from
+      # sibling build outputs that their own project references do not build (spec 263 research R4).
+      - name: Restore original BPMN test fixtures
+        run: python3 tools/bpmn/restore_evidence.py
+
+      - name: Build (full solution)
+        run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+
+      - name: Test the shard, retrying each failure once
+        env:
+          SHARD: ${{ toJSON(matrix) }}
+        run: >-
+          python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the shard outcome
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-outcomes-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/test-outcomes.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload the shard TRX files
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: trx-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/try*/**/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Several EF suites per job, one after another: the suites' own build is paid once per job instead of once per suite,
+  # which keeps the full tier within the organization's 20-job limit (FR-022). Each suite still runs whole, with its
+  # required-provider mode armed for that suite only, so an engine that fails to start fails rather than skips.
+  ef-container-shard:
+    name: EF container shard (${{ matrix.shard }})
+    needs: [plan-tiers, plan-full]
+    if: >-
+      ${{ !cancelled() && ((github.event_name == 'pull_request' || github.event_name == 'merge_group')
+      && needs.plan-full.outputs.run == 'true' && needs.plan-full.outputs.container_count != '0'
+      || github.event_name != 'pull_request' && github.event_name != 'merge_group' && needs.plan-tiers.result == 'success'
+      && needs.plan-tiers.outputs.docs_only != 'true' && needs.plan-tiers.outputs.container_count != '0') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.plan-full.outputs.container_matrix || needs.plan-tiers.outputs.container_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # Configuration-driven CShells composition, migration/validation, CRUD/OCC, runtime resolution, restart
+      # persistence and the packed-module child-host proof on a native PostgreSQL. Npgsql is the only relational
+      # provider package in that project.
+      - name: Start PostgreSQL for the Secrets EF shell proof
+        if: ${{ matrix.secrets }}
+        run: |
+          docker run --detach --name secrets-ef-postgresql --publish 5432:5432 \
+            --env POSTGRES_HOST_AUTH_METHOD=trust postgres:17.6-alpine3.22
+          for attempt in {1..60}; do
+            if docker exec secrets-ef-postgresql pg_isready -U postgres > /dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs secrets-ef-postgresql
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Restore original BPMN test fixtures
+        run: python3 tools/bpmn/restore_evidence.py
+
+      - name: Restore and build the shard's suites
+        env:
+          SHARD: ${{ toJSON(matrix) }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import json, os
+          entry = json.loads(os.environ["SHARD"])
+          projects = [suite["project"] for suite in entry["suites"]] + ([entry["secretsProject"]] if entry["secrets"] else [])
+          print("\n".join(dict.fromkeys(projects)))' > "$RUNNER_TEMP/projects.txt"
+          while IFS= read -r project; do
+            dotnet restore "$project" --locked-mode -p:WarningsNotAsErrors=NU1603
+            dotnet build "$project" -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+          done < "$RUNNER_TEMP/projects.txt"
+
+      - name: Test the suites using their declared retry policy
+        env:
+          SHARD: ${{ toJSON(matrix) }}
+          ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+        run: >-
+          python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --parallel 1
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the shard outcome
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-outcomes-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/test-outcomes.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # One result for main/nightly alerts; the PR and merge-queue aggregate below owns the required Full tier context.
   # !cancelled() rather than always(): a cancelled run must not turn into a red aggregate that files a "main is red" issue.
   full-tier-result:
     name: Full tier result
-    needs: [plan-tiers, full-tier-shards]
-    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    needs: [plan-tiers, integration-shard, ef-container-shard]
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify the full-tier shards passed
         env:
           PLAN: ${{ needs.plan-tiers.result }}
-          SHARDS: ${{ needs.full-tier-shards.result }}
+          INTEGRATION: ${{ needs.integration-shard.result }}
+          CONTAINERS: ${{ needs.ef-container-shard.result }}
         run: |
           if [[ "$PLAN" != success ]]; then
             echo "::error::Plan tiers did not succeed ($PLAN)."; exit 1
           fi
-          if [[ "$SHARDS" != success && "$SHARDS" != skipped ]]; then
-            echo "::error::The full-tier shards did not succeed ($SHARDS)."; exit 1
-          fi
-          echo "Full-tier shards: $SHARDS."
+          for result in "$INTEGRATION" "$CONTAINERS"; do
+            if [[ "$result" != success && "$result" != skipped ]]; then
+              echo "::error::A full-tier shard did not succeed ($result)."; exit 1
+            fi
+          done
 
   # Container-free architecture guards (dependency direction, endpoint security, feature
   # composition, the EF dependency allowlist, and the fail-closed guard that keeps the retired
@@ -454,15 +619,78 @@ jobs:
       - core-only
     # A cancelled run (superseded by a newer push) is not a failure and files nothing. The nightly schedule
     # files too: its failure mail goes to whoever last edited the cron, which is nobody watching, and on main it is the
-    # only automatic run of the EF container suites. full-tier-result is skipped on pull requests, where ci-full.yml
-    # reports the full tier, and a skipped need is not a failure.
+    # only automatic run of the EF container suites. full-tier-result is skipped on pull requests and merge-queue entries,
+    # where the PR aggregate reports the full tier, and a skipped need is not a failure. A red merge-queue entry is
+    # removed from the queue and never lands, so it files nothing either.
     if: ${{ failure() && !cancelled() && (github.event_name == 'push' || github.event_name == 'schedule') }}
     permissions:
       contents: read
       issues: write
-    uses: ./.github/workflows/main-red-alert.yml
-    with:
-      gate: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: File or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GATE: CI
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          title="main is red: $GATE"
+
+          # Attribute only what the event actually says. On a schedule github.actor is whoever
+          # last touched the workflow file, not anyone who caused the failure, so naming them
+          # would pin a breakage on someone who had nothing to do with it.
+          case "$EVENT_NAME" in
+            push) trigger="push by @$ACTOR" ;;
+            schedule) trigger="scheduled run" ;;
+            *) trigger="$EVENT_NAME" ;;
+          esac
+
+          # Exact-title match over the open issues rather than `--search`, whose index lags
+          # issue creation by up to a minute -- long enough for two merges in quick succession
+          # to file the same issue twice. If the lookup itself fails, file without dedup.
+          if ! issues=$(gh issue list --state open --limit 300 --json number,title); then
+            echo "::warning::Could not list open issues; filing without deduplication."
+            issues='[]'
+          fi
+          existing=$(jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty' <<<"$issues")
+
+          # No "main is broken" claim: the body states which gate failed and leaves the diagnosis
+          # to the run. (The benchmark gate that motivated this wording was retired in #1668.)
+          body=$(cat <<EOF
+          The **$GATE** gate failed against \`main\`.
+
+          - Commit: \`$COMMIT_SHA\`
+          - Trigger: $trigger
+          - Run: $RUN_URL
+
+          This gate cannot block anything: on a push the commit has already landed, and a
+          scheduled run is after the fact by definition. Fix forward or revert.
+
+          Close this issue once the gate is green again and the cause is understood. A later
+          green run does not close it automatically, and a gate that stays red comments here
+          instead of filing a second issue.
+          EOF
+          )
+
+          if [ -n "$existing" ]; then
+            echo "Commenting on existing issue #$existing."
+            gh issue comment "$existing" --body "$body"
+          else
+            echo "Filing a new issue."
+            # The label is a convenience. If it is ever renamed or deleted, `gh issue create`
+            # rejects the whole call, so fall back to filing unlabeled rather than losing the
+            # alert entirely.
+            gh issue create --title "$title" --body "$body" --label needs-triage || {
+              echo "::warning::Labeled create failed; filing without the needs-triage label."
+              gh issue create --title "$title" --body "$body"
+            }
+          fi
 
   # Freshness gate for the one generated output that IS committed: the solution filters (Elsa.Server.*.slnf),
   # regenerated into a scratch directory and byte-compared with what is committed. It also runs the generator's own
@@ -479,17 +707,17 @@ jobs:
   # "Generated maps fresh" is a required status check on main, matched by JOB name, so the name below is
   # load-bearing and must not be renamed. Until #2622 it lived in maps.yml and the filter check in
   # solution-filters.yml ("Solution filters fresh"); both were folded in here to cut the workflows a push
-  # queues. It runs on pull_request, push to main and this workflow's schedule, on every PR including
+  # queues. It runs on pull_request, merge_group, push to main and this workflow's schedule, on every PR including
   # documentation-only ones.
   #
-  # This job is deliberately NOT among the alert job's needs, as it was never wired to main-red-alert.yml in
-  # maps.yml either: stale filters are a request to open a refresh PR, and the actionable output is the refresh
+  # This job is deliberately NOT among the alert job's needs, as the former maps workflow also kept these failures separate: stale filters are a request to open a refresh PR, and the actionable output is the refresh
   # command in the run summary.
   #
   # The generator is built once and each check runs whenever that build succeeded, so one failing check does not
   # hide another.
   generated-maps:
-    name: Generated maps fresh
+    name: "${{ github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Generated maps (not requested)' || 'Generated maps fresh' }}"
+    if: (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -690,3 +918,651 @@ jobs:
 
       - name: Commit the maps to the generated-maps branch
         run: bash tools/maps/publish-generated-maps.sh "$RUNNER_TEMP/maps" "$GITHUB_SHA"
+
+  # A pull request, or a merge-queue entry: the queue is where the full tier proves the exact merge result.
+  plan-full:
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    name: Plan full tier
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+      integration_matrix: ${{ steps.select.outputs.integration_matrix }}
+      integration_count: ${{ steps.select.outputs.integration_count }}
+      container_matrix: ${{ steps.select.outputs.container_matrix }}
+      container_count: ${{ steps.select.outputs.container_count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # BASE_SHA is the first parent of the merge commit GitHub tests, the base branch today (main or initiative/*), so
+      # both diffs below see only what the pull request changes; pull_request.base.sha can be days old on an open PR
+      # (see ci.yml). On a merge-queue entry it is merge_group.base_sha, the commit the entry was built on.
+      - name: Classify the change scope
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
+        run: >-
+          python3 tools/ci/change_scope.py --base "$BASE_SHA" --head "$GITHUB_SHA"
+          --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Decide whether the full tier runs
+        id: decide
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          DOCS_ONLY: ${{ steps.scope.outputs.docs_only }}
+        run: |
+          set -euo pipefail
+          # The spec's "Manifest change" edge case: a draft that changes the tiers runs both tiers.
+          tier_change=$(git diff --name-only --no-renames "$BASE_SHA...$GITHUB_SHA" -- \
+            tools/ci/test-tiers.json tools/ci/test_tiers.py tools/ci/affected_tests.py tools/ci/test_results.py \
+            tools/ci/run_shard.py .github/workflows/ci.yml tools/ci/workflow_scope.py tools/ci/workflow-paths.json | head -1)
+          if [[ "$DOCS_ONLY" == true ]]; then
+            run=false; reason="documentation only (spec 257)"
+          elif [[ "$GITHUB_EVENT_NAME" == merge_group ]]; then
+            run=true; reason="merge queue: the full tier proves the merge result"
+          elif [[ "$DRAFT" != true ]]; then
+            run=true; reason="the pull request is ready for review"
+          elif [[ -n "$tier_change" ]]; then
+            run=true; reason="this draft changes the tiers ($tier_change)"
+          else
+            run=false; reason="draft: the full tier runs once the pull request is ready for review"
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          printf '### Full tier\n\n%s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
+
+      # On a pull request only the integration units and EF suites its changes can affect run (#3787); both counts can
+      # be 0, and the shard jobs are then skipped by their count conditions. A merge-queue entry runs them all.
+      - name: Select the full-tier shards
+        id: select
+        env:
+          # The same switch check as Plan tiers runs when a change turns integrationLeavesPrTier on; gh needs a token.
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
+        run: >-
+          python3 tools/ci/test_tiers.py select --tier full --base "$BASE_SHA" --head "$GITHUB_SHA"
+          --event "$GITHUB_EVENT_NAME" --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
+
+  full-tier:
+    name: "${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' && 'Full tier (not requested)' || (needs.plan-full.result != 'success' || needs.plan-full.outputs.run == 'true' || !github.event.pull_request.draft) && 'Full tier' || 'Full tier (not run: draft)' }}"
+    needs: [plan-full, integration-shard, ef-container-shard]
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify the full tier passed
+        env:
+          PLAN: ${{ needs.plan-full.result }}
+          RUN: ${{ needs.plan-full.outputs.run }}
+          DOCS_ONLY: ${{ needs.plan-full.outputs.docs_only }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          INTEGRATION: ${{ needs.integration-shard.result }}
+          CONTAINERS: ${{ needs.ef-container-shard.result }}
+          INTEGRATION_COUNT: ${{ needs.plan-full.outputs.integration_count }}
+          CONTAINER_COUNT: ${{ needs.plan-full.outputs.container_count }}
+        run: |
+          if [[ "$PLAN" != success ]]; then
+            echo "::error::Plan full tier did not succeed ($PLAN), so nothing proves the full tier."; exit 1
+          fi
+          if [[ "$RUN" == false && "$DOCS_ONLY" == true ]]; then
+            echo "Documentation-only change: the full tier has nothing to test (spec 257)."; exit 0
+          fi
+          if [[ "$RUN" == false && "$DRAFT" == true ]]; then
+            echo "Not run: draft. The full tier runs once the pull request is marked ready for review."; exit 0
+          fi
+          if [[ "$RUN" != true ]]; then
+            echo "::error::Plan full tier gave no decision (run='$RUN')."; exit 1
+          fi
+          if [[ ( "$INTEGRATION_COUNT" != 0 && "$INTEGRATION" != success ) || ( "$CONTAINER_COUNT" != 0 && "$CONTAINERS" != success ) ]]; then
+            echo "::error::The full-tier shards did not succeed ($INTEGRATION, $CONTAINERS)."; exit 1
+          fi
+          if [[ "$INTEGRATION_COUNT" == 0 && "$CONTAINER_COUNT" == 0 ]]; then
+            echo "No full-tier shard is affected by this change (see Plan full tier's summary)."; exit 0
+          fi
+          echo "Every selected integration shard and EF container shard passed."
+
+  studio-lint-and-test:
+    needs: plan-scope
+    if: needs.plan-scope.outputs.studio == 'true'
+    name: Studio frontend lint, typecheck & unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Studio dependencies
+        uses: ./.github/actions/setup-studio
+
+      - name: Lint
+        run: pnpm lint
+        working-directory: Studio
+
+      - name: Typecheck
+        run: pnpm typecheck
+        working-directory: Studio
+
+      - name: Unit tests
+        # Run one workspace at a time so these tests stay deterministic under the hosted runner.
+        run: pnpm --recursive --workspace-concurrency=1 test
+        working-directory: Studio
+
+      - name: Check Workflows bundle budget
+        run: pnpm check:bundle:workflows
+        working-directory: Studio
+
+  studio-browser-tests:
+    needs: plan-scope
+    if: needs.plan-scope.outputs.studio == 'true'
+    name: Studio browser tests (Chromium ${{ matrix.shard }}/2)
+    runs-on: ubuntu-latest
+    # Keep the complete inventory within the budget as it grows; no cases are omitted.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Studio dependencies
+        uses: ./.github/actions/setup-studio
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: Studio
+
+      - name: Run browser tests
+        id: browser-tests
+        run: pnpm test:browser --shard=${{ matrix.shard }}/2
+        working-directory: Studio
+
+      # Playwright retains a trace and error context only for failed cases; specs also write their own screenshots there.
+      # Without this step the job discards the folder. Scoped to the test step so setup failures upload nothing, and
+      # including the cancelled outcome so a shard that hits the 45-minute job timeout still surfaces what failed first.
+      # always() only lifts the implicit success() gate that would otherwise skip this step on a red job; the outcome
+      # checks keep it off on green runs and on setup failures.
+      - name: Upload failed browser traces
+        if: ${{ always() && (steps.browser-tests.outcome == 'failure' || steps.browser-tests.outcome == 'cancelled') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failures-${{ matrix.shard }}
+          path: Studio/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  studio-ux-acceptance:
+    name: UX acceptance (composed Studio)
+    needs: plan-scope
+    if: needs.plan-scope.outputs.studio == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/setup-studio
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: Studio
+      - name: Verify acceptance tooling and gate failure controls
+        run: |
+          python3 -m unittest discover -s tools/ux-acceptance -p 'test_*.py'
+          python3 -m unittest discover -s tools/ci -p 'test_studio_gate.py'
+      - name: Exercise real composed hosts with disposable stores
+        env:
+          UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/ux-acceptance"
+      - name: Qualify shared decision execution and runtime-only restart
+        run: python3 tools/decisions/qualify-execution.py --output "$RUNNER_TEMP/ux-acceptance/decision-execution"
+      - name: Retain reviewable success and failure evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ux-acceptance
+          if-no-files-found: error
+          retention-days: 14
+
+  studio-dotnet-build-and-test:
+    needs: plan-scope
+    if: needs.plan-scope.outputs.studio == 'true'
+    name: Studio .NET build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Local CI artifacts share one prerelease version, including their Modularity project dependencies.
+      STUDIO_PACKAGE_VERSION: 4.0.0-studio-ci.${{ github.run_id }}.${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Studio dependencies
+        uses: ./.github/actions/setup-studio
+
+      - name: Build Studio host and RCL frontend assets
+        run: pnpm build
+        working-directory: Studio
+
+      - name: Verify generated Studio host and RCL assets
+        run: python3 ../tools/ci/verify-studio-assets.py --root ..
+        working-directory: Studio
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-studio-nuget-${{ hashFiles('Studio/Directory.Packages.props', 'Extensions/**/studio/**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-studio-nuget-
+
+      - name: Restore
+        run: dotnet restore Elsa.Studio.slnx --locked-mode -p:WarningsNotAsErrors=NU1603
+        working-directory: Studio
+
+      - name: Build
+        run: dotnet build Elsa.Studio.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603 "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA"
+        working-directory: Studio
+
+      - name: Test
+        run: dotnet test Elsa.Studio.slnx -c Release --no-build -p:WarningsNotAsErrors=NU1603 "-p:Version=$STUDIO_PACKAGE_VERSION"
+        working-directory: Studio
+
+      - name: Pack Studio NuGet projects without publishing
+        run: >-
+          dotnet pack Elsa.Studio.slnx -c Release --no-build
+          -p:WarningsNotAsErrors=NU1603
+          "-p:Version=$STUDIO_PACKAGE_VERSION"
+          "-p:SourceRevisionId=$GITHUB_SHA"
+          "-p:PackageOutputPath=$RUNNER_TEMP/studio-nuget"
+        working-directory: Studio
+
+      - name: Verify complete Studio NuGet artifact
+        run: |
+          python3 tools/ci/verify_studio_nuget_packages.py --self-test
+          python3 tools/ci/verify_studio_nuget_packages.py --packages "$RUNNER_TEMP/studio-nuget" --version "$STUDIO_PACKAGE_VERSION" --report "$RUNNER_TEMP/studio-archive-verification.json"
+
+      - name: Pack matching mandatory support candidates without publishing
+        run: >-
+          python3 tools/ci/pack_studio_support.py --output "$RUNNER_TEMP/studio-modularity-nuget"
+          --version "$STUDIO_PACKAGE_VERSION" --source "$GITHUB_SHA"
+
+      - name: Publish the matching actual reference Studio
+        run: >-
+          dotnet publish Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj -c Release --no-build --no-restore
+          "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA"
+          -o "$RUNNER_TEMP/studio-reference-web"
+
+      - name: Install Chromium for package consumer qualification
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: Studio
+
+      - name: Qualify actual Studio packages and causal controls
+        run: |
+          python3 -m unittest discover -s tools/ci -p 'test_studio_native_scratch.py'
+          python3 tools/ci/qualify_studio_consumers.py --self-test
+          python3 tools/ci/qualify_studio_consumers.py \
+            --packages "$RUNNER_TEMP/studio-nuget" \
+            --modularity-packages "$RUNNER_TEMP/studio-modularity-nuget" \
+            --reference-web "$RUNNER_TEMP/studio-reference-web" \
+            --expected-producer-commit "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/studio-consumer-qualification"
+
+      - name: Retain package candidates and qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-package-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/studio-nuget/*.nupkg
+            ${{ runner.temp }}/studio-modularity-nuget/*.nupkg
+            ${{ runner.temp }}/studio-archive-verification.json
+            ${{ runner.temp }}/studio-consumer-qualification/report.json
+            ${{ runner.temp }}/studio-consumer-qualification/**/*.log
+            ${{ runner.temp }}/studio-consumer-qualification/archive-controls/*.json
+            ${{ runner.temp }}/studio-consumer-qualification/evidence/**
+
+      - name: Build standalone Studio image without publishing
+        run: docker build --file Studio/src/apps/Elsa.Studio.Web/Dockerfile --build-arg "STUDIO_VERSION=$STUDIO_PACKAGE_VERSION" --tag "elsa-studio:ci-${{ github.sha }}" .
+
+  backend-source:
+    needs: plan-scope
+    if: needs.plan-scope.outputs.backend-source == 'true'
+    name: Backend source (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, windows-2025]
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      DOTNET_GENERATE_ASPNET_CERTIFICATE: false
+      DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Select the existing .NET 10.x CI line
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Record the runner and verify empty job paths
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-PlatformSourceJourney.ps1 -PreflightOnly
+          else
+            pwsh -NoProfile -File e2e-tests/Invoke-PlatformSourceJourney.ps1 -PreflightOnly
+          fi
+
+      - name: Restore Workbench and the focused test project from committed public feeds
+        shell: bash
+        run: |
+          dotnet restore Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
+          dotnet restore Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
+
+      - name: Build Workbench with the documented command
+        shell: bash
+        run: dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+
+      - name: Verify the documented build left tracked lock files unchanged
+        shell: bash
+        run: git diff --exit-code -- ':(glob)**/packages.lock.json'
+
+      - name: Run the focused WriteLine bound-input test
+        shell: bash
+        run: dotnet test Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
+
+      - name: Test strict result verdict and run the owned backend journey
+        id: platform-journey
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Test-WorkflowFlowVerdict.ps1
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Test-SequenceWorkflowVerdict.ps1
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Test-SourceEditTrxVerdict.ps1
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-PlatformSourceJourney.ps1
+          else
+            pwsh -NoProfile -File e2e-tests/Test-WorkflowFlowVerdict.ps1
+            pwsh -NoProfile -File e2e-tests/Test-SequenceWorkflowVerdict.ps1
+            pwsh -NoProfile -File e2e-tests/Test-SourceEditTrxVerdict.ps1
+            pwsh -NoProfile -File e2e-tests/Invoke-PlatformSourceJourney.ps1
+          fi
+
+      - name: Verify dotnet run failure propagation
+        id: run-profile-negative-control
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            if control_output=$(powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-RunProfileSourceJourney.ps1 -InvalidCommandControl 2>&1); then
+              control_exit=0
+            else
+              control_exit=$?
+            fi
+          else
+            if control_output=$(pwsh -NoProfile -File e2e-tests/Invoke-RunProfileSourceJourney.ps1 -InvalidCommandControl 2>&1); then
+              control_exit=0
+            else
+              control_exit=$?
+            fi
+          fi
+          printf '%s\n' "$control_output"
+          if [ "$control_exit" -eq 0 ]; then
+            echo 'The deliberately invalid launch invocation unexpectedly returned success.' >&2
+            exit 1
+          fi
+          case "$control_output" in
+            *"RUN_PROFILE_FAILURE_PROPAGATED:$control_exit"*) ;;
+            *)
+              echo 'The wrapper did not mark the expected native command failure as propagated.' >&2
+              exit 1
+              ;;
+          esac
+          echo "Expected negative control: wrapper propagated native exit code $control_exit; the fixed port remained free."
+
+      - name: Replay the documented dotnet run profile and workflow smoke
+        id: run-profile-journey
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-RunProfileSourceJourney.ps1
+          else
+            pwsh -NoProfile -File e2e-tests/Invoke-RunProfileSourceJourney.ps1
+          fi
+
+      - name: Replay and restore the documented backend source edit
+        id: source-edit-journey
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-SourceEditExercise.ps1
+          else
+            pwsh -NoProfile -File e2e-tests/Invoke-SourceEditExercise.ps1
+          fi
+
+      - name: Upload owned-server diagnostics on failure
+        if: ${{ failure() && steps.platform-journey.outcome == 'failure' && steps.platform-journey.outputs.diagnostics_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-diagnostics-${{ matrix.runner }}
+          path: ${{ steps.platform-journey.outputs.diagnostics_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload run-profile diagnostics on failure
+        if: ${{ failure() && steps.run-profile-journey.outcome == 'failure' && steps.run-profile-journey.outputs.diagnostics_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-run-profile-diagnostics-${{ matrix.runner }}
+          path: ${{ steps.run-profile-journey.outputs.diagnostics_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload source-edit test and command evidence
+        if: ${{ always() && steps.source-edit-journey.outcome != 'skipped' && steps.source-edit-journey.outputs.diagnostics_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-edit-evidence-${{ matrix.runner }}
+          path: ${{ steps.source-edit-journey.outputs.diagnostics_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload owned Sequence server diagnostics on failure
+        if: ${{ always() && steps.source-edit-journey.outcome == 'failure' && steps.source-edit-journey.outputs.sequence_diagnostics_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-edit-server-diagnostics-${{ matrix.runner }}
+          path: ${{ steps.source-edit-journey.outputs.sequence_diagnostics_path }}
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload failure-control diagnostics on failure
+        if: ${{ failure() && steps.run-profile-negative-control.outcome == 'failure' && steps.run-profile-negative-control.outputs.diagnostics_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-run-profile-control-diagnostics-${{ matrix.runner }}
+          path: ${{ steps.run-profile-negative-control.outputs.diagnostics_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+  package-witness:
+    needs: plan-scope
+    if: needs.plan-scope.outputs.weaver == 'true'
+    name: Weaver independent package witness
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      WEAVER_VERSION: 4.0.0-weaver-ci.${{ github.run_id }}.${{ github.run_attempt }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Studio dependencies
+        uses: ./.github/actions/setup-studio
+
+      - name: Install driver browser tooling
+        working-directory: Studio
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify driver refusal controls
+        run: python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_*.py'
+
+      - name: Qualify real distributions and all native journeys
+        run: >-
+          python3 tools/studio/Weaver.Conformance.Probe/qualify.py
+          --output "$RUNNER_TEMP/weaver-conformance"
+          --version "$WEAVER_VERSION"
+
+      - name: Select safe primary failure diagnostics independently of full evidence
+        if: failure()
+        run: |
+          if test -f "$RUNNER_TEMP/weaver-conformance/report.json"; then
+            python3 tools/studio/Weaver.Conformance.Probe/export_failure_diagnostic.py \
+              --source "$RUNNER_TEMP/weaver-conformance" \
+              --destination "$RUNNER_TEMP/weaver-failure-diagnostic"
+          fi
+
+      - name: Select evidence without private authentication or runtime state
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/weaver-conformance/report.json"; then
+            python3 tools/studio/Weaver.Conformance.Probe/export_evidence.py \
+              --source "$RUNNER_TEMP/weaver-conformance" \
+              --destination "$RUNNER_TEMP/weaver-evidence"
+          fi
+
+      - name: Retain qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weaver-package-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/weaver-evidence/
+          # The exporter already selects safe references, including hidden package metadata.
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Retain safe failed diagnostics without claiming qualification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weaver-failure-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/weaver-failure-diagnostic/
+          if-no-files-found: warn
+          retention-days: 14
+
+  published-image-pair:
+    needs: plan-scope
+    if: needs.plan-scope.outputs.published-images == 'true'
+    name: Exercise pinned published images in a real browser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out the reviewed workflow and harness
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/contributor-pair-proof/package-lock.json
+
+      - name: Install the locked browser harness
+        working-directory: tools/contributor-pair-proof
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Test bounded failure diagnostics without a browser
+        run: node --test tools/contributor-pair-proof/diagnostics.test.mjs
+
+      - name: Install Chromium
+        working-directory: tools/contributor-pair-proof
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run the published image pair journey
+        id: published-pair-journey
+        run: node tools/contributor-pair-proof/run.mjs
+
+      - name: Retain bounded published pair failure diagnostics
+        if: ${{ failure() && steps.published-pair-journey.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-pair-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/published-pair-diagnostics/diagnostic.json
+            ${{ runner.temp }}/published-pair-diagnostics/viewport.png
+          retention-days: 7
+          if-no-files-found: warn
+
+  shuffled-unit-tests:
+    needs: plan-scope
+    if: needs.plan-scope.outputs.studio-order == 'true'
+    name: Workflows unit tests (three shuffled orders)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Studio dependencies
+        uses: ./.github/actions/setup-studio
+
+      - name: Unit tests (Workflows, shuffled)
+        working-directory: Studio/src/essentials/Elsa.Studio.Workflows/Client
+        env:
+          SHUFFLE_SEEDS: '1 11 29'
+        run: |
+          for seed in $SHUFFLE_SEEDS; do
+            echo "::group::Shuffle seed $seed"
+            if ! pnpm exec vitest run --sequence.shuffle --sequence.seed="$seed"; then
+              echo "::endgroup::"
+              echo "::error::Order-dependent test failure on shuffle seed $seed. Reproduce locally with: pnpm --filter @elsa-workflows/studio-workflows exec vitest run --sequence.shuffle --sequence.seed=$seed"
+              exit 1
+            fi
+            echo "::endgroup::"
+          done

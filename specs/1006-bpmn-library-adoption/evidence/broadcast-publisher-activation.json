@@ -1,0 +1,646 @@
+{
+  "schemaVersion": 1,
+  "task": "T050 schema-gated publisher activation increment; complete recovery/Studio/library delivery remains open",
+  "sourceParentCommit": "b5b32cc2a137d2a9b32f70866d5a973848c4e087",
+  "filesSha256": {
+    "Essentials/apps/Elsa.Workbench/packages.lock.json": "a2e4884d5f71b0bc3dfc8470d60c02aad6db119d22b9bce4d1bcc674d5b516ad",
+    "Essentials/src/Activities/Primitives/ActivitiesPrimitivesFeature.cs": "24666141c39654de7bb9613c304289497761f0c7eec5319f59285daae3f581d1",
+    "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj": "6cf8d5123d623d425e9e7ae650367801cc79e3b61e8762ac2df4e551eba9f320",
+    "Essentials/src/Activities/Primitives/Services/PublishStimulusExecutor.cs": "e1e4cdc86b010f797dd93ac18a00a299918c6eedfd2b1d85672f8b6f5e34e34c",
+    "Essentials/src/Activities/Primitives/Services/PublishStimulusSchemaGuard.cs": "7562fbec699ce744d5664987d856f98965f37892605645363b1a8c3ed5293962",
+    "Essentials/src/Activities/Primitives/packages.lock.json": "9cf3c58afe46ddff13fdc423836e661e3c472c0c04afcb1df3e8959e706cdaca",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitEnricher.cs": "5c3273a8b25b5bbb2db8d7ff0f528c640c52bed784d8ae0667716697f1801a29",
+    "Essentials/src/Workflows/Runtime/Core/Extensions/RuntimePostCommitIntentHandlerServiceCollectionExtensions.cs": "35b7dee1886df8ef7d8fbdd32e5d07d6b33c75e4b1c37b4e95cdc76f771b9e6c",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitIntentHandlerContribution.cs": "9e97430bd1e095c130ddd926da246b343d36884e563217aad883021a443e007b",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "f2ecb828ad525c7251f2f2f15f844144ab9cd5d4db09586ddd91904ba4c03f9b",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "75af8c7115ec329c48db24bc35d0d5d7569e1068fb7a09502c8e280c218b2b17",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs": "f44dc6ce8793046d3be87c4a4b6ecc10ebe66e3906b98217e90c909c0aed198b",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitIntentDispatcher.cs": "e6694eb23e936f0208d984cc15a417c97c39fc5dc2e23463b44fdf74494b4a02",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxItems.cs": "3cc1b72b039f3a97f08a6c063ef04dd173fedd23e93d2b67ca3b542b3c2d6fd7",
+    "Essentials/tests/Activities/Behavioral/Tests/packages.lock.json": "b288de8c624b46ed7021821b63452ffba43c7c461f5b26758063327be71cd545",
+    "Essentials/tests/Activities/Bpmn/Tests/packages.lock.json": "aae350d992d632245304ab5f662df88fb997f92de74b38400fd8d1b386413b39",
+    "Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json": "760171221b0de54886a3ac46b58e97b9a064aa1981eb77639d10a961d96cf883",
+    "Essentials/tests/Activities/Compensation/Tests/packages.lock.json": "1f480b235beeb1832fa04a0c5af4958e48179a4cbc19ac849a2cfad66c004291",
+    "Essentials/tests/Activities/ControlFlow/Tests/packages.lock.json": "645a82fedfe0d680158f5f7685875ca2ab5ce989f4106688f5cbf3f9c34865e5",
+    "Essentials/tests/Activities/Design/Tests/packages.lock.json": "76ff0191e9992ae794ac2a7a0181863b5b1604bf0cefca875c7ed4308879a79b",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/packages.lock.json": "1540080fca2d066a259babbed7e9333b4dbb6f3165d9531682404cf36c5d98b3",
+    "Essentials/tests/Activities/Flowchart/Tests/packages.lock.json": "08f949c0046151d8a8939f623ba80a3a2a0a06a1c28f60dd8f7168ea3241d337",
+    "Essentials/tests/Activities/Http/CommandCost/Tests/packages.lock.json": "573360fd4c2cf558c0981c952f6e6578215d4e7a14fc0cfe0ff49bd8565cfee4",
+    "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/packages.lock.json": "59fe8710ba5a1f397146f336260403eb6fc54b7238290ad8f1a44e378fb329a4",
+    "Essentials/tests/Activities/Http/IntegrationTests/packages.lock.json": "f6444fb1625dfce4a67cc48b85db2088a9dde024bb020382154eb3ab1a2d4afb",
+    "Essentials/tests/Activities/Http/Tests/packages.lock.json": "54b098c4bcfea4d5ecb68c36aaaabac57b30839418cb618f65695b002fa9762c",
+    "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj": "99e5360874612f05c820f9d1a6bb1e57fa24ad4e8829e58cfa39ce2b4826dd80",
+    "Essentials/tests/Activities/Runtime/Tests/PublishEventResumeRoutingTests.cs": "0a1677f9a65a8c7f426a899a76e9e15ff3942b9027d94c295a5b5901ddb01ac0",
+    "Essentials/tests/Activities/Runtime/Tests/PublishEventTests.cs": "3dc656bc9048a5a7883ea68910e74d07b2c7cae6996478f37be9faf41ae98f2d",
+    "Essentials/tests/Activities/Runtime/Tests/PublishStimulusSourcePipelineTests.cs": "e4d2b587504d0a08a05b1bd285f0df794cc8673959414be77aa62d2e54d1a4d7",
+    "Essentials/tests/Activities/Runtime/Tests/packages.lock.json": "81ef0e4b628bedd36a2f2e67add9d698e18b085541e09f91a4e2083cdbd519f4",
+    "Essentials/tests/Activities/Scheduling/Tests/packages.lock.json": "a66c88a1f72d890a84f9652ed2128de9ad24fcc9f94805d878bf5afd29577710",
+    "Essentials/tests/Activities/Scripting/Tests/packages.lock.json": "a6d07c4fed13b95cd7538a235ee12aca99fbb0264fc64fec3694513038657f66",
+    "Essentials/tests/Activities/Sequence/Tests/packages.lock.json": "b4a93061290d8115abfb54c012eade408df261a4efb13242f8618b8263816c49",
+    "Essentials/tests/Activities/Testing/packages.lock.json": "6f20f5bcda260c8d51c823e52a0a50467f6c276d1ac935a820697383b2972b98",
+    "Essentials/tests/Architecture/Tests/packages.lock.json": "809cbc263caa41146f5e50d05c8cf6a33f498646019f37b29f11e05a6a5ecf8c",
+    "Essentials/tests/Modularity/ProviderTests/packages.lock.json": "48b69b6f3d6d23240d60a2ca40605656445470850a120966245b2b8467285b33",
+    "Essentials/tests/Modularity/Tests/packages.lock.json": "03203bddbe6a522d44e133e94d139dc9c0b2acbd374c761a58c1d4d43514db49",
+    "Essentials/tests/Secrets/Workflows/Tests/packages.lock.json": "29ee77bde2d7bef9ad3488cdbfc2a3fa762af7a23cab5333fc6d6f2ccf2b7b71",
+    "Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json": "26b4e8cef74adc1ad878b0e80501b7b747074ecf87c69d000a60fac848e8f81f",
+    "Essentials/tests/Workflows/Publishing/Api/Tests/packages.lock.json": "f5308415db1fdf5e19285022a18a0a8c459cf11e5c7f469abd853ddec2e74dc0",
+    "Essentials/tests/Workflows/Publishing/Tests/packages.lock.json": "9dd1d2e69a2f6ef409f40678089c00ebc2ce899cc818734ba27ea3beb603a747",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/packages.lock.json": "a73cb3098f9be8d469d9b577dd10481324d18b206ca82a793b195b6a949f1dd8",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj": "5b52d2432e2fc8feea14d4762b98eeb4be26ee17d872e35ca000eb93a3460bed",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json": "41efdcd99ddad72e8ce1f25748f16b1d360aea02e3e4cc039ebc384fe0954037",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj": "3800be3cd032e3f388b11bd7e36120110ba25fcd9d3e682500084ef6fe3b5906",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/KeyedStartNodes.cs": "47cc45625cde1aa22d1730969d8ab78f962c5bf82ae3ede4580ae4f0961a4c8c",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/PublishStimulusStartContract.cs": "dc7038804c122325ccb71ec04d9f29820831c84f56c265fb453e2cb19c9218b6",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/packages.lock.json": "18202d814874a454fb6e1400dad554e1cac8070ca60b88bb5d386b9877b1e8c1",
+    "Essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/packages.lock.json": "921f040016831afc1a840cb242259bc47e14e85921d96983449f4b1fa94300e9",
+    "Essentials/tests/Workflows/Runtime/Reconciliation/Tests/packages.lock.json": "325841860d05f05deb5456db05882ea289ff3e39b3aa1ad22650043f83dfd02c",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitDurableSourceTests.cs": "142038c224a95955a4acf821b3144707e20df44205b0deb8428607d302278168",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitProtocolContributionTests.cs": "0463a5a9a2e225bdc410fa8690781828aafd806e9e9b7a369b856c297f93e7d4",
+    "Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/packages.lock.json": "294ffdf15fb2185e2cc43905d29e7cfda8f18fc02e558dd07ca806895c620997",
+    "Extensions/Elsa3/tests/Mapping/Tests/packages.lock.json": "2e1c68b57bcb68925d5a5283fd71843d19bee96ddc5c9f1235b0177d6ac6727b",
+    "Extensions/Etl/tests/Tests/packages.lock.json": "a2bc9d188920ec543bcd05fdff770489ad4fa486a3071d62b7bc70a6f46cc605",
+    "Extensions/Rules/tests/Tests/packages.lock.json": "e5bda8d5d42a6323e5075af596899043621ba1065ab9d9ab55ba4bd1e56ebd02",
+    "docs/reports/evidence/bpmn-extraction-baseline/activity-contract-fingerprint.json": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "e8b20fa4dbb4783d7cf161564a19cf86f7a4eebc7ce7d96764cad5404e7feb7b",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-publisher-activation-host.json": "5a8c989f91f66d3b755d287cb26557b731a5fc49f2befd51d1dc58d63062bd6f",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-publisher-activation.md": "6f5fee2e0048d543227f404937c28e0d5fa728bcdc6258cac43dbb9eb110b475",
+    "specs/1006-bpmn-library-adoption/tasks.md": "7f879976112084b4eeb00f1145ac94f645fcd50f7cb3230c0d112e221c5eadea"
+  },
+  "checks": [
+    {
+      "project": "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+      "passed": 3041,
+      "failed": 0,
+      "skipped": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore"
+      ],
+      "trxSha256": "0524671f7881459da31b4f635913a9bf9864192c46dbde9147fa037b997c033c",
+      "discovery": {
+        "listed": 3030,
+        "executed": 3041,
+        "deferredTheoryCaseExpansion": {
+          "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+          "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8,
+          "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4
+        },
+        "unmatchedExecutedCases": 0,
+        "unmatchedDiscoveredCases": 0,
+        "executedCaseNamesSha256": "f0fb3bd50ee5cbaad1b05d2655c6aaa5d6b7153ca4fbd967423390a2fd3aa909",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+          "--no-build",
+          "--list-tests"
+        ]
+      }
+    },
+    {
+      "project": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "passed": 1649,
+      "failed": 0,
+      "skipped": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "--no-restore"
+      ],
+      "trxSha256": "919387727f4bff27f7a3b240ddde25a989f8afd9ab99afe8e64cd92688b1d5af",
+      "discovery": {
+        "listed": 1649,
+        "executed": 1649,
+        "deferredTheoryCaseExpansion": {},
+        "unmatchedExecutedCases": 0,
+        "unmatchedDiscoveredCases": 0,
+        "executedCaseNamesSha256": "02cc183138b93dfbbdc37b0036594f9c8e8546a4c7fb5e03b26f67d23d9c7dac",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+          "--no-build",
+          "--list-tests"
+        ]
+      }
+    },
+    {
+      "project": "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+      "passed": 720,
+      "failed": 0,
+      "skipped": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+        "--no-restore"
+      ],
+      "trxSha256": "9f87de2f4edef67136bb1ef1ff263ded9bd331aab307fe0d42bddfb3da175953",
+      "discovery": {
+        "listed": 718,
+        "executed": 720,
+        "deferredTheoryCaseExpansion": {
+          "Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_resolver_that_throws_while_the_activation_is_live_reports_ResolverFailed_without_what_it_threw": 2,
+          "Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_context_without_one_partition_refuses_before_the_resolver_is_called": 2
+        },
+        "unmatchedExecutedCases": 0,
+        "unmatchedDiscoveredCases": 0,
+        "executedCaseNamesSha256": "5d62ad1ad9698c51b55e235a7179499aeb76057cf3097dac96a67b8ecf07c6f3",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+          "--no-build",
+          "--list-tests"
+        ]
+      }
+    }
+  ],
+  "newCases": {
+    "protocolContribution": 8,
+    "publisherPipeline": 26,
+    "intentOnlyRefusal": 2,
+    "addedTotal": 36,
+    "removedObsoleteProjection": 3,
+    "netAdded": 33,
+    "convertedExistingNativeCallbacks": 9,
+    "convertedExistingEfConvergence": 2
+  },
+  "supplementary": [
+    {
+      "check": "Public API ownership and Runtime shape/dependency guards",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "c19b8545bf56e870d1b8ab40b4bcc54af1038bb2b946a28034c0b83ead31dc18"
+    },
+    {
+      "check": "Converted actual native payload/local-event callbacks",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "0b85d7a8e5197973df9b761080fce5ce129083e8a046ef7013166e9a512530dd"
+    },
+    {
+      "check": "Converted actual SQLite source replay/stale owner controls",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "44461ef02f27678f83165c8d1de08624ad43b939e0c5e1244560614ad81bbfbe"
+    },
+    {
+      "check": "PostgreSQL actual source replay/stale owner controls",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "454d1e57b8cbfc3d84d9e7e03f6b5d033395ebde9749486b710ce2856717eba5"
+    }
+  ],
+  "postgresTrxSha256": "15045118e5848a3659b3736be893c935ec11610c4be39649248598be434a26d0",
+  "mutations": [
+    {
+      "mutation": "omit-producer-protocol-declaration",
+      "suite": "pipeline",
+      "failed": 9,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "omit-final-envelope-acceptance",
+      "suite": "pipeline",
+      "failed": 14,
+      "passed": 25,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "validate-before-later-enrichment",
+      "suite": "pipeline",
+      "failed": 4,
+      "passed": 35,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "charge-source-boundary-as-delivery-attempt",
+      "suite": "pipeline",
+      "failed": 2,
+      "passed": 37,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "accept-unsupported-or-source-free-protocol",
+      "suite": "protocol",
+      "failed": 4,
+      "passed": 26,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "drop-materialized-responsibility-under-skip",
+      "suite": "pipeline",
+      "failed": 1,
+      "passed": 38,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "overwrite-unvalidated-materialized-work",
+      "suite": "pipeline",
+      "failed": 2,
+      "passed": 37,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "acknowledge-only-declared-intent-count",
+      "suite": "pipeline",
+      "failed": 1,
+      "passed": 38,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "mutatedSourcesRestored": {
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs": true,
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxItems.cs": true,
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitIntentHandlerContribution.cs": true,
+    "Essentials/src/Activities/Primitives/Services/PublishStimulusExecutor.cs": true
+  },
+  "lockedRestore": {
+    "command": [
+      "dotnet",
+      "restore",
+      "Elsa.Server.slnx",
+      "--locked-mode"
+    ],
+    "projects": 339,
+    "passed": true,
+    "logSha256": "5cc8d9435aeb9a505e894268fefdd21aca3fb4f0f9e22e59ad12ada4b7758f63"
+  },
+  "lockfileUpdates": [
+    {
+      "path": "Essentials/apps/Elsa.Workbench/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    },
+    {
+      "path": "Essentials/src/Activities/Primitives/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Behavioral/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Compensation/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/ControlFlow/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Design/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/DispatchWorkflow/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Flowchart/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Http/CommandCost/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Http/IntegrationTests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Http/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Runtime/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.inprocess"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Scheduling/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Scripting/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Sequence/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Activities/Testing/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Architecture/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    },
+    {
+      "path": "Essentials/tests/Modularity/ProviderTests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    },
+    {
+      "path": "Essentials/tests/Modularity/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    },
+    {
+      "path": "Essentials/tests/Secrets/Workflows/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    },
+    {
+      "path": "Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core",
+          "Nuplane.Abstractions",
+          "elsa.cluster.inprocess",
+          "elsa.cluster.readability",
+          "Nuplane.Loading.Abstractions"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Workflows/Publishing/Api/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Workflows/Publishing/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core",
+          "Nuplane.Abstractions",
+          "elsa.cluster.inprocess",
+          "elsa.cluster.readability",
+          "Nuplane.Loading.Abstractions"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "Nuplane.Abstractions",
+          "elsa.cluster.inprocess",
+          "elsa.cluster.readability",
+          "Nuplane.Loading.Abstractions"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Reconciliation/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    },
+    {
+      "path": "Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    },
+    {
+      "path": "Extensions/Elsa3/tests/Mapping/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": [
+          "elsa.cluster.core"
+        ]
+      }
+    },
+    {
+      "path": "Extensions/Etl/tests/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    },
+    {
+      "path": "Extensions/Rules/tests/Tests/packages.lock.json",
+      "existingExternalRecordsUnchanged": true,
+      "newKeys": {
+        "net10.0": []
+      }
+    }
+  ],
+  "generatedMaps": "Generator -- check passed, no filter changes",
+  "publicApi": {
+    "RuntimeCore": {
+      "added": [
+        "Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitEnricher.ValidateFinalAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! commit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask",
+        "Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.RuntimePostCommitIntentHandlerContribution(string! intentKind, System.Type! handlerType, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion) -> void",
+        "Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.StimulusDeliveryProtocolVersion.get -> int?",
+        "static Elsa.Workflows.Runtime.Core.Extensions.RuntimePostCommitIntentHandlerServiceCollectionExtensions.AddRuntimePostCommitIntentHandler<THandler>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! intentKind, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!"
+      ],
+      "removed": []
+    },
+    "Runtime": "no additions/removals in this increment"
+  },
+  "frozenAuthoringSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "hostEvidenceSha256": "5a8c989f91f66d3b755d287cb26557b731a5fc49f2befd51d1dc58d63062bd6f",
+  "reviews": {
+    "correctness": "clean final component source review; boundary accounting and materialized responsibility gaps fixed",
+    "standards": "clean final component API/shared schema guard review; required lock edges preserve existing external pins",
+    "acceptance": "clean final component review; later-enricher and mixed-envelope controls close last gaps",
+    "fullPrRoundsUsed": 0,
+    "fullPrRoundBound": 6
+  },
+  "scope": {
+    "publisherEnabledBehindSharedSchemaGate": true,
+    "intentOnlyFallbackExists": false,
+    "nativeActualPayloadCallbackQualified": true,
+    "freshSqliteAndPostgresSourceConvergenceQualified": true,
+    "ownedLocalWriterExclusionObserved": true,
+    "ownedLocalZeroLegacyOwedInventoryObserved": true,
+    "candidateHostHappyPathQualified": true,
+    "candidateHostSavedCohortObserved": true,
+    "productionWideUpgradeAdmissionQualified": false,
+    "durableHostCrashRecoveryQualified": false,
+    "finalReviewedHeadOrMainHostQualified": false,
+    "currentFinalStudioQualified": false,
+    "candidateReleasedBpmnAdapterInUse": true,
+    "librarySwitchDeliveredOnMain": false,
+    "legacyWriterDeleted": false,
+    "programComplete": false
+  },
+  "limits": [
+    "Normal API candidate happy paths are source/assembly-bound uncommitted-candidate observations, not final reviewed PR/main host evidence.",
+    "Controlled clocks/fleet answers qualify provider components; normal owned-host fleet/finalization observation is separate and local.",
+    "Private whole host snapshot is retained locally and not published because it includes identity configuration. Existing portable legacy captures remain unchanged.",
+    "T051 crash/partial/ACK/restart cuts, final Studio, remaining semantics/deletion/guards/full-PR/merge/main/ADR acceptance remain open; #2898/#2907 production acceptance stays open. Orleans/task-runner follow-up deferred."
+  ]
+}

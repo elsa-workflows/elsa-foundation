@@ -1,0 +1,81 @@
+{
+  "unchangedProductionCommit": "e54ea7f57f79602182c22fcea89f4ccb3f3fc673",
+  "productionDiffEmptyBeforeBothRuns": true,
+  "executedFailures": 25,
+  "validControlsPassed": 3,
+  "runs": [
+    {
+      "name": "dispatch",
+      "counts": {
+        "total": "24",
+        "executed": "24",
+        "passed": "3",
+        "failed": "21",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trxSha256": "4f034a64d2e32fc6b4ad3d9099bee75350c30179d486b46ed2e5600296e47883",
+      "failures": [
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Web_record_member_case_shadows_cannot_erase_authored_control(member: \"Payload\")",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"duplicate-payload\", web: False)",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"missing-payload\", web: True)",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"missing-payload\", web: False)",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"missing-failure\", web: True)",
+        "Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.A_real_committed_root_control_cannot_lose_content_before_its_workflow_terminal_source(mutation: \"null-notifications\")",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"null-notifications\", web: True)",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"duplicate-failure\", web: True)",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"missing-notifications\", web: False)",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"duplicate-failure\", web: False)",
+        "Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.A_real_committed_root_control_cannot_lose_content_before_its_workflow_terminal_source(mutation: \"missing-payload\")",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"duplicate-payload\", web: True)",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"missing-notifications\", web: True)",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Web_record_member_case_shadows_cannot_erase_authored_control(member: \"AuthoredFailureCode\")",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"duplicate-notifications\", web: True)",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Web_record_member_case_shadows_cannot_erase_authored_control(member: \"Notifications\")",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"null-notifications\", web: False)",
+        "Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.A_real_committed_root_control_cannot_lose_content_before_its_workflow_terminal_source(mutation: \"missing-failure\")",
+        "Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.A_real_committed_root_control_cannot_lose_content_before_its_workflow_terminal_source(mutation: \"missing-notifications\")",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"missing-failure\", web: False)",
+        "Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: \"duplicate-notifications\", web: False)"
+      ]
+    },
+    {
+      "name": "ef",
+      "counts": {
+        "total": "4",
+        "executed": "4",
+        "passed": "0",
+        "failed": "4",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trxSha256": "2450689274c0fea5c97baa5af16eb43fe1f42412c402e4498952951acde63d4a",
+      "failures": [
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfActivityExecutionStoresTests.An_incomplete_persisted_root_control_refuses_read_and_replacement_without_changing_the_row(mutation: \"null-notifications\")",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfActivityExecutionStoresTests.An_incomplete_persisted_root_control_refuses_read_and_replacement_without_changing_the_row(mutation: \"missing-notifications\")",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfActivityExecutionStoresTests.An_incomplete_persisted_root_control_refuses_read_and_replacement_without_changing_the_row(mutation: \"missing-failure\")",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfActivityExecutionStoresTests.An_incomplete_persisted_root_control_refuses_read_and_replacement_without_changing_the_row(mutation: \"missing-payload\")"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "spec": "1201-etl-rabbitmq-source",
+  "sourceRevision": "2327e565f11a8ccc3166afc644b0de3875bd8e0a",
+  "workingTreeDirty": false,
+  "workbenchAssemblySha256": "2a696210c94faa42d96ffcb64e8c12bbf6303b4377df3619a019bafdfbaee016",
+  "hostProcessId": 201,
+  "cases": {
+    "first": {
+      "definition": "rabbitmq-first-2d8965ce",
+      "selection": "etl1:rabbitmq-first-2d8965ce:1:b95044c19efe922cb728c75d578ad56fd01fbbddb05d4f8b8299ea050154113b",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-business-error",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "businessError",
+        "sourceRecordCount": 3,
+        "acceptedRecords": 2,
+        "rejectedRecords": 1,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "runId": "etl-e0e30d239a5accf09ec7cf76f16e3158bcf78334a78d187da74f6703eb43bd58",
+      "connector": {
+        "sourceKind": "rabbitMq",
+        "mainKind": "jsonl",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 2,
+        "acceptedErrorEffects": 1,
+        "mode": "finite",
+        "completionRequestedAt": null
+      },
+      "diagnosticCode": "etl.rows-rejected",
+      "delivered": [
+        "{\"id\":1,\"name\":\"Ada\"}",
+        "{\"id\":2,\"name\":\"Bram\"}"
+      ],
+      "rejected": 1,
+      "queueAfter": {
+        "ready": 2,
+        "unacknowledged": 0
+      },
+      "hostPathOrSecretInInspection": false
+    },
+    "second": {
+      "definition": "rabbitmq-second-24f6db98",
+      "selection": "etl1:rabbitmq-second-24f6db98:1:da6d6522d542631862ff7a1c8dfada2f5f58ae9b1bc059283c7667313cf4378e",
+      "workflowStatus": "Completed",
+      "incidents": 0,
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "run": {
+        "status": "succeeded",
+        "sourceRecordCount": 2,
+        "acceptedRecords": 2,
+        "rejectedRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "runId": "etl-a0ebff691dcbc995e99195c64d943c2189bbd5e848147fb13beccb113bdbd2e0",
+      "connector": {
+        "sourceKind": "rabbitMq",
+        "mainKind": "jsonl",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 2,
+        "acceptedErrorEffects": 0,
+        "mode": "finite",
+        "completionRequestedAt": null
+      },
+      "diagnosticCode": null,
+      "delivered": [
+        "{\"id\":3,\"name\":\"Cleo\"}",
+        "{\"id\":4,\"name\":\"Dee\"}"
+      ],
+      "rejected": 0,
+      "queueAfter": {
+        "ready": 0,
+        "unacknowledged": 0
+      },
+      "hostPathOrSecretInInspection": false
+    }
+  },
+  "baseUrl": "http://127.0.0.1:55861",
+  "catalogRabbitMqBindings": [
+    [
+      "events-in",
+      "Source",
+      "rabbitMq"
+    ]
+  ],
+  "checks": {
+    "catalogListsTheRabbitMqSourceBinding": true,
+    "firstRunTookThreeMessagesAndRejectedTheInvalidOne": true,
+    "firstRunLeftTheRestQueuedAndAcknowledgedItsOwn": true,
+    "secondRunTookTheRemainingTwoThroughDone": true,
+    "queueIsEmptyWithNothingUnacknowledged": true,
+    "inspectionShowsTheRabbitMqSource": true,
+    "noAccountingLeft": true,
+    "noHostPathOrSecretInInspection": true
+  },
+  "passed": true
+}

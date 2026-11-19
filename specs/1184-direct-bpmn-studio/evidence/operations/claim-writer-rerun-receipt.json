@@ -1,0 +1,168 @@
+{
+  "productSource": "a96f774ebb1b010b8b056638576c6f004323e333",
+  "actions": [
+    {
+      "action": "Signed in through the real form",
+      "at": "2026-11-01T23:22:24.965Z"
+    },
+    {
+      "action": "Authored, saved and reopened a claim-required human wait",
+      "at": "2026-11-01T23:22:29.814Z"
+    },
+    {
+      "action": "Claimed with Tab and Enter",
+      "at": "2026-11-01T23:22:32.914Z"
+    },
+    {
+      "action": "Claimed through Studio",
+      "at": "2026-11-01T23:22:33.449Z"
+    },
+    {
+      "action": "Controller checkpoint claimed",
+      "at": "2026-11-01T23:22:34.653Z"
+    },
+    {
+      "action": "Controller restart restarted-claimed",
+      "at": "2026-11-01T23:22:39.889Z"
+    },
+    {
+      "action": "A second subject sees the owner and cannot complete",
+      "at": "2026-11-01T23:22:41.856Z"
+    },
+    {
+      "action": "Controller checkpoint completed",
+      "at": "2026-11-01T23:22:44.220Z"
+    },
+    {
+      "action": "Controller restart restarted-completed",
+      "at": "2026-11-01T23:22:49.048Z"
+    },
+    {
+      "action": "The owner completed; the completion replays after a real restart",
+      "at": "2026-11-01T23:22:49.963Z"
+    },
+    {
+      "action": "Controller checkpoint timer-claimed",
+      "at": "2026-11-01T23:22:52.819Z"
+    },
+    {
+      "action": "Controller checkpoint timer-interrupted",
+      "at": "2026-11-01T23:23:20.235Z"
+    },
+    {
+      "action": "The duration timer interrupted claimed work; the late claimed completion is refused",
+      "at": "2026-11-01T23:23:20.235Z"
+    },
+    {
+      "action": "Controller checkpoint cancel-interrupted",
+      "at": "2026-11-01T23:23:25.090Z"
+    },
+    {
+      "action": "Cancellation interrupted claimed work; a late claimed completion is refused",
+      "at": "2026-11-01T23:23:25.090Z"
+    }
+  ],
+  "probes": {
+    "claimKeyboardTabs": 14,
+    "timedPublication": {
+      "status": 200,
+      "body": {
+        "executable": {
+          "artifactId": "sha256:e2a301fbe2aa2e0602e5c7cd5c37684f034ed8255b2b028cd5778aef9bcabe97",
+          "definitionId": "bpmn-model:sha256:e2a301fbe2aa2e0602e5c7cd5c37684f034ed8255b2b028cd5778aef9bcabe97",
+          "definitionVersionId": "sha256:e2a301fbe2aa2e0602e5c7cd5c37684f034ed8255b2b028cd5778aef9bcabe97",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:e2a301fbe2aa2e0602e5c7cd5c37684f034ed8255b2b028cd5778aef9bcabe97"
+        },
+        "incarnationId": "8af464c7da9241639c028ca8dcd42e05",
+        "sourceReferenceId": "bpmn-source:f74089703f18234c5d46418409452fae3e8d853f41b735c208850bf48a4a755d",
+        "profile": "foundation-direct-claims-v1"
+      }
+    },
+    "timedStart": {
+      "status": 201,
+      "body": {
+        "executionId": "bpmn:912ab53b7cc1fb68c947444d37742a0e07e7960a91fa44a345adb7ef3d593345",
+        "inputId": "timed-start",
+        "replay": false,
+        "pending": false,
+        "result": {
+          "status": "Accepted",
+          "code": null,
+          "revision": 1,
+          "lifecycle": "Running"
+        }
+      }
+    },
+    "timerInspection": {
+      "status": "TerminalSettled",
+      "result": {
+        "status": "Completed",
+        "outcome": "Done"
+      },
+      "work": []
+    },
+    "lateClaimedCompletion": {
+      "status": 409,
+      "body": {
+        "executionId": "bpmn:912ab53b7cc1fb68c947444d37742a0e07e7960a91fa44a345adb7ef3d593345",
+        "inputId": "late-after-timer",
+        "replay": false,
+        "pending": false,
+        "result": {
+          "status": "Rejected",
+          "code": "execution-terminal",
+          "revision": 3,
+          "lifecycle": "TerminalSettled"
+        }
+      }
+    },
+    "cancelStart": {
+      "status": 201,
+      "body": {
+        "executionId": "bpmn:7a56e4a3b4ad23080fa2bcf46d749ebd6f4378b2dc8affbc7343bc84a50f31f2",
+        "inputId": "cancel-start",
+        "replay": false,
+        "pending": false,
+        "result": {
+          "status": "Accepted",
+          "code": null,
+          "revision": 1,
+          "lifecycle": "Running"
+        }
+      }
+    },
+    "cancel": {
+      "status": 200,
+      "body": {
+        "executionId": "bpmn:7a56e4a3b4ad23080fa2bcf46d749ebd6f4378b2dc8affbc7343bc84a50f31f2",
+        "inputId": "operator-cancel",
+        "replay": false,
+        "pending": false,
+        "result": {
+          "status": "Accepted",
+          "code": null,
+          "revision": 3,
+          "lifecycle": "TerminalSettled"
+        }
+      }
+    },
+    "claimedCompletionAfterCancel": {
+      "status": 409,
+      "body": {
+        "executionId": "bpmn:7a56e4a3b4ad23080fa2bcf46d749ebd6f4378b2dc8affbc7343bc84a50f31f2",
+        "inputId": "late-after-cancel",
+        "replay": false,
+        "pending": false,
+        "result": {
+          "status": "Rejected",
+          "code": "execution-terminal",
+          "revision": 3,
+          "lifecycle": "TerminalSettled"
+        }
+      }
+    }
+  },
+  "pageErrors": [],
+  "completed": true
+}

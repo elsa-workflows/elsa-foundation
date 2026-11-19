@@ -120,8 +120,9 @@ internal static class RuntimeSchedulerWorkQueueProviderSmoke
         }
     }
 
-    // Claimable backlog discovery (#2188) under the provider's own collation and SQL translation. Each scenario gets a
-    // fresh scope, because the contract expects an empty queue and the provider database is shared.
+    // Claimable backlog discovery (#2188), and a delay by identity (#3690), under the provider's own collation and SQL
+    // translation. Each scenario gets a fresh scope, because the contract expects an empty queue and the provider
+    // database is shared.
     public static async Task RunClaimableDiscoveryAsync(
         RuntimeBookmarksProviderFixture fixture,
         Func<string, RuntimeDbContext> createContext)
@@ -131,7 +132,8 @@ internal static class RuntimeSchedulerWorkQueueProviderSmoke
         [
             SchedulerWorkQueueClaimableDiscoveryContract.ListsExactlyTheExecutionsAClaimWouldServeAsync,
             SchedulerWorkQueueClaimableDiscoveryContract.PagesInOrdinalOrderAfterTheBoundAsync,
-            SchedulerWorkQueueClaimableDiscoveryContract.ReadsTheNextItemAClaimWouldTakeAsync
+            SchedulerWorkQueueClaimableDiscoveryContract.ReadsTheNextItemAClaimWouldTakeAsync,
+            SchedulerWorkQueueClaimableDiscoveryContract.DefersOneItemByIdentityBehindAnEarlierHeadAsync
         ];
         foreach (var scenario in scenarios)
         {

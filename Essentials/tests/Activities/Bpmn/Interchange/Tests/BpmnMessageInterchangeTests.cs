@@ -22,7 +22,7 @@ public sealed class BpmnMessageInterchangeTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
     private readonly BpmnDocumentExporter _exporter = new();
 
     private const string MessageDocument = """
@@ -78,7 +78,7 @@ public sealed class BpmnMessageInterchangeTests
         Assert.Equal(BpmnDocumentImporter.DefaultEventActivityVersionId, receiveChild.ActivityVersionId);
 
         // Validate-representable: the imported graph satisfies the frozen + new message rules.
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class BpmnMessageInterchangeTests
         var reimported = _importer.Import(xml).ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
         Assert.Equal("order-shipped", reimported.Elements.Single(element => element.ElementId == "throw-msg").EventDefinitions.Single().Properties[BpmnEventDefinitionProperties.Name]);
         AssertPublishSendChild(reimported, reimported.Elements.Single(element => element.ElementId == "send").ChildNodeId!, "order-shipped");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(reimported)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported)));
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public sealed class BpmnMessageInterchangeTests
         Assert.Empty(end.EventDefinitions); // degraded to a none end
         Assert.Null(end.ChildNodeId);
         Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Degraded && issue.ElementId == "e");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -173,11 +173,11 @@ public sealed class BpmnMessageInterchangeTests
         Assert.Null(structure.Elements.Single(element => element.ElementId == "receive").ChildNodeId);
         Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Info && issue.ElementId == "send");
         Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Info && issue.ElementId == "receive");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
-    public void SignalThrow_StaysDropped()
+    public void SignalThrow_IsRetainedAndBoundToPublishEvent()
     {
         const string document = """
             <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="https://example.org">
@@ -195,9 +195,14 @@ public sealed class BpmnMessageInterchangeTests
         var result = _importer.Import(document);
         var structure = result.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
 
-        Assert.DoesNotContain(structure.Elements, element => element.ElementId == "t");
-        Assert.Contains(result.Analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == "t");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        var signal = Assert.Single(structure.Elements, element => element.ElementId == "t");
+        Assert.Equal("node-t", signal.ChildNodeId);
+        var child = Assert.Single(structure.Activities);
+        Assert.Equal(BpmnDocumentImporter.DefaultPublishEventActivityVersionId, child.ActivityVersionId);
+        AssertPublishSendChild(structure, "node-t", "alarm");
+        Assert.Contains(result.Analysis.Capabilities, finding => finding.ElementId == "t" && finding.Availability == BpmnImportCapabilityAvailability.Unknown);
+        Assert.False(result.Analysis.CanExecute); // The pure conversion has not verified a host catalog.
+        Assert.NotNull(new BpmnProcessTriggerStimulusProvider().Describe(BridgeToExecutableNode(structure)));
     }
 
     [Fact]

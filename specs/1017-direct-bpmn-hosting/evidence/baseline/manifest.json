@@ -1,0 +1,962 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-pre-writer-baseline-matrix",
+  "capturedAtUtc": "2026-10-28T07:43:47.650749+00:00",
+  "frozenAuthoringFingerprint": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "executingSourceCommits": [
+    "438001406d980051584234e5d656eb8e6a67f47f",
+    "bf83b23b4b3987d6ac3b7c31df98ee9133156763",
+    "b7cfe195d6792367b3df31ff11eb291210d255c5"
+  ],
+  "productionWritersIdenticalBetweenExecutingCommits": true,
+  "noAffectedProductionWriterEditedBeforeCaptures": true,
+  "testOnlyProbeIsNotEnabledInStandardBuild": true,
+  "assets": [
+    {
+      "path": "partial-forks/capture.md",
+      "sha256": "a094d41cf016129a77ee04a641dba84cb63f52678859eedd589e9551bc27c18a",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "partial-forks/cases.json",
+      "sha256": "613d2620435f1d62546ec5df2b63128d8549323a2f36543f99db1ea4a3eede62",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "partial-forks/design.sqlite",
+      "sha256": "73984412998c1f418f52b422e279402e2e9b01cd240c50d67dcb8efd5c306d6e",
+      "role": "whole-sqlite-store",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f",
+      "databaseSha256": "73984412998c1f418f52b422e279402e2e9b01cd240c50d67dcb8efd5c306d6e"
+    },
+    {
+      "path": "partial-forks/frozen-contract.json",
+      "sha256": "1db28e45f8ff5296fd0095347c877c73eba8a9833c4410e7d79113b05aedaf06",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "partial-forks/manifest.json",
+      "sha256": "f2e699c1c3751ef52524e6e0e7ebb087b66bf1e18ad6a52d724e5691a05c5950",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "partial-forks/product-versions.json",
+      "sha256": "78db735cf5c4f874704f00941b2a49789a61358fe0dab4f64a86bd19ba2925df",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "partial-forks/runtime.sqlite",
+      "sha256": "494db0de530ad83335c7ba5c9bb65b2fd2bff9f2ae3cd2cdef6dac8baa6fa5cb",
+      "role": "whole-sqlite-store",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f",
+      "databaseSha256": "494db0de530ad83335c7ba5c9bb65b2fd2bff9f2ae3cd2cdef6dac8baa6fa5cb"
+    },
+    {
+      "path": "legacy-controls/runtime.sqlite.gz",
+      "sha256": "4ed41b1ccdc6192b1327cc5f71bcb84a703c72c18575bcffe3374d45ace01a8a",
+      "databaseSha256": "c4dcab66a693e1e28520f81df287200b3d91324290e386222c7d6ff539e307bc",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 17756160,
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/design.sqlite.gz",
+      "sha256": "76610a34315adb8ed910475353cf7878424e265552d5808705d3e63e9b317ee6",
+      "databaseSha256": "fdd2380accab14587c603a635a84df404ae0d9306bcd8f2892560e78c18e1be5",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 2334720,
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/called-control-prepare.json",
+      "sha256": "3177820ad8f68acc63452fdae4f78560f6d56d1ba1829b44326b9ae7528191d4",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/concurrent-prepare.json",
+      "sha256": "746afddf7863eea07bba6e36475755fb6701101c5d687d1dd9ac6372dee93947",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/compensation-handler-b.json",
+      "sha256": "3d125dbca327dcdad8f7163027d3bcdb23d65f90f475f09531e704fcb712a417",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/escalations-checked.json",
+      "sha256": "bdec6f5ab8e0c6de9fbd4a5508516c609c58d6bdb3339c9794230efc1b078ba9",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/escalations-controls.json",
+      "sha256": "8d1348a5c7fe73272d98f03de2730f9b98e906a8c278726a20264f42b491ed07",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/concurrent-checked.json",
+      "sha256": "0b0dbd94e5b55989b2e6cc72478b76a8ccd8c108f94f9a0a765a82121758b942",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/concurrent-controls.json",
+      "sha256": "3a2e6bf5e3cb73cf5159b49da4db36a64d9b111633d1a59a36eacef55b599079",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/compensation-checked.json",
+      "sha256": "6a09f00ea71427db3969f5cee6df6a23499ca92e697617b91ea9331fc0f1ab1d",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/compensation-controls.json",
+      "sha256": "6cf0f103f199bea29d97e783e9729d278e28568f62c86b7dfb3ec475da0ab527",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "legacy-controls/product-versions.json",
+      "sha256": "87ff5a07de7b917492a770a3d9d63b8eae00663c832fe6b7b03d368e4b67cf52",
+      "role": "matched-binary-source-binding",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "native-parents/runtime.sqlite.gz",
+      "sha256": "ebd8e9f73682d3b7dad027aac97c9ccbb7f45d4b5e06a2a2b4b2e3239ec30ffe",
+      "databaseSha256": "8a903ba228baca4c815843e23686ecdc6c789739373e7c8986a60efeadacf0e7",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 19673088,
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "native-parents/design.sqlite.gz",
+      "sha256": "76db0531fa7f79fa9a729f0d2835f82837bcb3dead651b64bc05d05003da9d4a",
+      "databaseSha256": "083a15d0b0c8b5693448ae650f1e134aec4ad66ee8d1e533367f4ce18e4f7366",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 2449408,
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "native-parents/api.json",
+      "sha256": "a08795259b28b6d179899376fd3549e3ce7deba6741dfb25825b9ee1491cce66",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "called-ack/manifest.json",
+      "sha256": "05e3f2828ecfae1ce9af6228ce5952c5f30cc16e1361800a9334481bc3ea89d7",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/notice-command.json",
+      "sha256": "27935c1616d8a607dd6b9d14ec7bef404a32bfe11b07a8aa40667b4355b346c0",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/notice-held-api.json",
+      "sha256": "f8fba8f60e05636de6150a06182837b1ffc5d237979751fc68835e182629ff47",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/notice-held-checked.json",
+      "sha256": "15b28b4cfaf6e2c8709fc31ea83d854c970bf373a929595dde756d6b5e8c0100",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/notice-held-controls.json",
+      "sha256": "8df4b7728d058f4135f01b610f5b3680faf023acca35d72720646f053c4bf1be",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/notice-marker.json",
+      "sha256": "840c69a2ec3c8e61bfd33ac8eaaaed140b411ddf16493868fdd61fd76b2dc81b",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/notice-ordinary-restart-api.json",
+      "sha256": "f8fba8f60e05636de6150a06182837b1ffc5d237979751fc68835e182629ff47",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/notice-ordinary-restart-checked.json",
+      "sha256": "4892b063a437d524a90acc46cfda10d6d5d3a73ca3a14e79073900f2463af5f8",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/prepared.json",
+      "sha256": "7ae980577f5c320e982c439e07a03af308ada2c7b1fa04465af2e55f68a8a024",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/terminal-command.json",
+      "sha256": "1434b45fda4cff3ced294ff4f20671b48535f7e10a074a2feab7753e97300451",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/terminal-held-api.json",
+      "sha256": "15136a8433096364b5a9f6dbdd9fb6a6bbb823f582ad84531170b1a776828846",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/terminal-held-checked.json",
+      "sha256": "b9650f6a43b25b437a1efd4b721827fc05ec896efb86120ee96eee1f21d0ecc3",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/terminal-held-controls.json",
+      "sha256": "7b6799d8063a9a6ba8d614d1e58e90b226ac6e0da47d7e0b9ddfb361c0c8e3f8",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/terminal-marker.json",
+      "sha256": "388900086332b769a1a4e43f297476f58c1e5d2f57624240131d52b0a0814fc4",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/terminal-ordinary-restart-api.json",
+      "sha256": "15136a8433096364b5a9f6dbdd9fb6a6bbb823f582ad84531170b1a776828846",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/notice-held.sqlite.gz",
+      "sha256": "e029f28f0a6ea83a2ac3f670483e93f14ad7b3bf0c7e86c709b7f76f1e74139b",
+      "databaseSha256": "b65fb08f0195855d245a4e49fc37cbb1d0fee8ecdf8aa5b373df6571d7ac9f23",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 3088384,
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "called-ack/terminal-held.sqlite.gz",
+      "sha256": "66c51e4c5ae8be61891d7863f63da323f572813cba1c503ffb8242eaec43f08b",
+      "databaseSha256": "1a3ef138229fd69f06c4d27eb6ecaf61157895a4faf134e6bb3171d48a37a647",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 3166208,
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "broadcast/after-cohort.json",
+      "sha256": "ae43609b929ff41cc1f9a9ab91a47e0573a12ea4cc6b5473be270494792ede8d",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "broadcast/after-cohort.sqlite.gz",
+      "sha256": "bb8882b6dbf8fdf13931a6f1242cad2fb8f70ea227a50dad1e8c021b06cdcbd2",
+      "databaseSha256": "311ba0112bdd16d5230b7db16f583c3116e9245e4b71004893610e5e5b1cb420",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 3248128,
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "broadcast/before-selection.json",
+      "sha256": "ff5cbed69fb7422269b739295a10bc51fb1557143c79f6a90575c79c708ec4b2",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "broadcast/before-selection.sqlite.gz",
+      "sha256": "8ccf63b60cebef0ebfbd14bc97c4630a787f26c56b326af68849ab177ff2aad7",
+      "databaseSha256": "4e0196ca97faa9cda136f320c7b2c6581c353593593fc78f1fccd5906c45b7ec",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 3235840,
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "broadcast/empty-cohort.json",
+      "sha256": "a571a3c58862f3d817de5b668685010a4c4aa118453c1ce4ba0315070b9d858f",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "broadcast/empty-cohort.sqlite.gz",
+      "sha256": "8e18ffcc17a299b2849c7ed7e9b474eabc65fe6c0e97e411f425a888d9fc71fb",
+      "databaseSha256": "750e5fa8db93ac6aa1c0d1f6893aa9525e16c314ee3b69ed5b69767687720b72",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 3235840,
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "broadcast/after-resume.json",
+      "sha256": "98723d3f03c10d7d5c6c25cf73c4b6639d90f82abd5f02242627f934df80ef0e",
+      "role": "actual-observation",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "broadcast/after-resume.sqlite.gz",
+      "sha256": "02cf373992c357974de342bc7968b845c8ffb242c5901fb00ac9e86f348608ae",
+      "databaseSha256": "cccc0662754866a6cd76cf805d29198306638552297a67b69cfc75dba54c5a52",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 3375104,
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "broadcast/standard-product-versions.json",
+      "sha256": "f769d17ed8eb5af5c0e80a0ea298af8fcc0296e40b5bded238ccf67bf5e8a460",
+      "role": "matched-binary-source-binding",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "broadcast/probe-product-versions.json",
+      "sha256": "58ccdca60600b629ffb43067756e36ae5b741c10b4fd732bc135b0db46672ab5",
+      "role": "matched-binary-source-binding",
+      "executingSourceCommit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+    },
+    {
+      "path": "studio/authoring-dom.txt",
+      "sha256": "8761b0b108887ed0977317e776d62c45f806b2a4b53590b45a551309b0537827",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/authoring.png",
+      "sha256": "f8d1f3ee7d7261839fbf7f815e90a40baf40376a342e4652ea2b012fd76a6ee5",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/export-layout.bpmn",
+      "sha256": "38a6e0e6445e3684085c614d3a6577d0e4af499b83864656f36f00e1bcb2888f",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/export-layout.json",
+      "sha256": "15c6c4d5e118b598416c05545e29eba7221741457e9dea70ca32c8b27741e500",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/export.bpmn",
+      "sha256": "193194cf46188fa6bcbd0c5939612bd8c0319625ec1cf7f5fa95ed7bb0ed5a61",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/export.json",
+      "sha256": "181079296cc331038b6b52cf70b0e26ebce4ef84c8eb0fcacfae435d5df13bda",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/frozen-contract.json",
+      "sha256": "2162cb183df8a773a4abbfdda08811f79fe4eaccc2e0c530e497d6e07a860463",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/layout-authoring-dom.txt",
+      "sha256": "82d6a9940e73c0aaabc45d301ffbfd425cd0d909ee623c534a919f56d88b5b53",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/layout-authoring.png",
+      "sha256": "4b6c2d32c5cd2d37ea86cb80497aa596d9fcaeb90afee644c93783143f0ada84",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/layout-frozen-contract.json",
+      "sha256": "f1125f81b86c6113b666f104c16b77487f1d749c264f34ebb207c5c3e425dbc5",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/layout-run-api.json",
+      "sha256": "d147603c56f2d8befcb089ba015ca5cda934f564229fc7b2123375ef664c757f",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/layout-run-dom.txt",
+      "sha256": "668194926389e52fe1fd701710c709fccc4741b1e675e4f15b2ea90368a2ed10",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/layout-run.png",
+      "sha256": "95e955fab8d0aced8feaa4fcf09e430562f38576484d6dad8c04b0b940ef612f",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/run-api.json",
+      "sha256": "1575a7f92117d3a24cf54bbf70ff5a3313edb1e306ec4f9d8835cf8c71144ee8",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/run-details-dom.txt",
+      "sha256": "05c7e1b0d55e75e47042b348ddb2a2ee3e13da68fb26edfdeb4b1ec040d75760",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/run-dom.txt",
+      "sha256": "094c84c1fbf0188acce55429d69f481e4b561c420ace1af80aff05e203ffa5bc",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/run.png",
+      "sha256": "dd8cf5e9608a668025861ae374afd185eb069ed0880927db3706271013641071",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/test-run-dom.txt",
+      "sha256": "f1795604b0227053854173f078b0a7a0830a5f655db791c8588f41ac95523b6c",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/runtime.sqlite.gz",
+      "sha256": "f5cc2045989ed1a7f9382586c1c661690d372e8520b69dd7c84c9a3be5de6ac2",
+      "databaseSha256": "4a46cf7dd2ba7a9a3c3a482b5afe5dc84d3c6951575849c5ed9efb913252f0b1",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 19763200,
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/design.sqlite.gz",
+      "sha256": "ef63e7c4a921fa636c1dbb9f68264c4bc77c2b29a8fefc289c7de8e29548b113",
+      "databaseSha256": "5cc4ec0511e723cb27a679e22e53945860d66d7c5b30949399f9ae289a569afd",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 2461696,
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/receipt.json",
+      "sha256": "3b90516150b66dfb26ffce15d06255304311d3f4e5869e5e64f2f5eeea085f37",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "studio/layout-receipt.json",
+      "sha256": "aa3a689f64de06711216253f49669e8ab4455d64f22f8a9e3136435055c79408",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "multi-instance-and-studio/runtime.sqlite.gz",
+      "sha256": "3fcd6e38a968d05026a2c57a188f5d5c9d6fdbc313afd9ce19c82ad3e2b21416",
+      "databaseSha256": "c62347ebb3cde510f07c2848eaf0b58c403c92ac605d23f78dfffcb167ea7540",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 21946368,
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "multi-instance-and-studio/design.sqlite.gz",
+      "sha256": "0690408195251a99edf26be0c048d91821fbe974972dd2228f070dd5b2d01043",
+      "databaseSha256": "b4dabf4f0a1c8bb03ec598023af350d59318fba4db472ab85f0dfc773aef0a0f",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 2555904,
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "multi-instance-and-studio/api.json",
+      "sha256": "8ebe243d1d6ecff3e834aef2842c8122c68171584f48617dd70e826d6b16fd73",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "multi-instance-and-studio/physical-checked.json",
+      "sha256": "0ffa466e00304e72b59ea2a0e5a49ad4ceca4d636aec965340bbc5cfd550a918",
+      "role": "actual-observation",
+      "executingSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f"
+    },
+    {
+      "path": "native-parent-pending/compensationscope-balanced-api.json",
+      "sha256": "eb1a4cff627cd46936800c5af9105bafdda310e4c820f8f7602f93ab8dff4ad5",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/compensationscope-balanced-checked.json",
+      "sha256": "b9e5cef8c9e17c4de16497533aa8b4553d7faedf2f4b45cebef7321116faaf67",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/compensationscope-balanced-marker.json",
+      "sha256": "9c89e8a21c2cacfa4019417c83794a806e0776087bbcb716b125a470c0ad2fb5",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/compensationscope-durable-api.json",
+      "sha256": "cb8a8f5d4bc11007f9e4605a6283c4e640a972c39279a45304611e8c4a2236b5",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/compensationscope-durable-checked.json",
+      "sha256": "0b7608fd73717cd6711343d488515426d3b9bd4bb9fceccf94e80cd6ded218cd",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/compensationscope-durable-marker.json",
+      "sha256": "9386fdb82fd63f38810d4bd0f0bde621349f2aff2c146744b9cbee128093bc61",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/flowchart-balanced-api.json",
+      "sha256": "3bca558885d682e66201717fd7312e9ffb37adb1f5913182d4c3f4f15dfa369f",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/flowchart-balanced-checked.json",
+      "sha256": "dcf2c4b15ab8b289bdc12d48c736705a7f82a5685ff9912f8b7bf4ded115ff6b",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/flowchart-balanced-marker.json",
+      "sha256": "98f054a22902ab7bc34e383ca95e6e30dd381af3bfcc9d29f0bdcfd26763f157",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/flowchart-durable-api.json",
+      "sha256": "58d5c37585e66fce45aad26cc2d30a7edce5cd9a2923e90a67df44b9d05a7595",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/flowchart-durable-checked.json",
+      "sha256": "741a1a67b11a6225f1418f3c485a4dd217d42502cc7749549a0f00c54abee27f",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/flowchart-durable-marker.json",
+      "sha256": "4357e7a18f6636ff4f1213bd46d0e08177c52e1f6c21034be32521846375d8ff",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/manifest.json",
+      "sha256": "940552f75334ff09669406554683a3591cb92ca0924d6973ccd9285190864fc1",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/pin-guard-control.json",
+      "sha256": "6796c4f64350db4dfde70fed4cdfc3662639e7db83e24195220e64e0988f3b8d",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/reader-controls.json",
+      "sha256": "7aa1dd6e2498fb4240034de99356cd4e25091f0b1f20439008b5c8a750cc4bcd",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/sequence-balanced-api.json",
+      "sha256": "9982e3361c2f052a7f81dcefa4ca08d730a636d566e6cbf6c9fb87b4217084a4",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/sequence-balanced-checked.json",
+      "sha256": "aa0c6671d731da2f730720afadb0ba96f023b9a5e78ee5909f2a9784e2a33a2c",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/sequence-balanced-marker.json",
+      "sha256": "2e948259263e0dcb663954e330e47decc44f7aaa1852810a1fab2658abaf77a2",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/sequence-durable-api.json",
+      "sha256": "cf88f7701a0d0a0f57d4090ea5205e33d1b8f6d0169fdc04888faf570ba251dc",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/sequence-durable-checked.json",
+      "sha256": "d911dbfb11509c62603a84f1c5b6c4cae6d84a304c9f84d20d0981b913879d2b",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/sequence-durable-marker.json",
+      "sha256": "40699cca573fc87f1cdc20fb4f361f54c7035f758e9a919c48008186de80f785",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/sequence-durable.sqlite.gz",
+      "sha256": "6eb303ee628bf754e1afd5c21fb4686449e54c12855e64cb2e16e340cfa75d04",
+      "databaseSha256": "42ba933efd4f8e8d75bec9df2bfdcf5c9e97a36fa8baa5173c45e62fffa7ea95",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 2871296,
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/flowchart-durable.sqlite.gz",
+      "sha256": "b81875daa3b96370d8e9df874dcf0305d417990cbdca3d845bf94094823386d4",
+      "databaseSha256": "c498006eb9f5a6abddbb6f56ca921f072b8847556cbd3de2f4b74a5b19704422",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 2891776,
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/compensationscope-durable.sqlite.gz",
+      "sha256": "ef5f310dfde74a850ff834bdc82cdbfdbebf4050d7ddba6929b1c016dca21882",
+      "databaseSha256": "01a653c07564b12377fb10b92f37b1a01e5081bc6ca718753fb6ebf4b8ce804e",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 2887680,
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/sequence-balanced.sqlite.gz",
+      "sha256": "a8116ebb8cd61e8d3fc221288d6c050a514b2b1218d2181340cadaef0fb5e2c5",
+      "databaseSha256": "0b6952d80b42b5e79e2f00389dd5185af09096074a913769d01b7ee00008ab3e",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 2846720,
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/flowchart-balanced.sqlite.gz",
+      "sha256": "ca4145c62ee5a371d033f9bba6b0b2435fa62ebebbd9c7b864817806f34edd86",
+      "databaseSha256": "1c32b03bf03848bfd7bd35e6c3e8e6b1c7ae237cb6e5321dd1ae1333d288c703",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 2867200,
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/compensationscope-balanced.sqlite.gz",
+      "sha256": "184819bdf2652180af09e9d79de6935f5a51a133597f8b32f9be83317fb52375",
+      "databaseSha256": "f38f7fef99755d53994805f78de33de002d65c8bf771cf7dd6472fd0f7a4c580",
+      "role": "whole-sqlite-store",
+      "encoding": "gzip",
+      "uncompressedBytes": 2867200,
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/independent-physical-checked.json",
+      "sha256": "99143d30d3bf1546a0f86483beccee479272483b61b2868a884b608a3cc4c3ae",
+      "role": "actual-observation",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    },
+    {
+      "path": "native-parent-pending/product-versions.json",
+      "sha256": "0606f1c6273a3a8c17cef0a7960719eb1f6e9cae2dc11835ec1f29a459c674b1",
+      "role": "matched-binary-source-binding",
+      "executingSourceCommit": "b7cfe195d6792367b3df31ff11eb291210d255c5"
+    }
+  ],
+  "checkedObservations": [
+    {
+      "database": "legacy-controls/runtime.sqlite.gz",
+      "api": "legacy-controls/called-control-prepare.json",
+      "mode": "called-control",
+      "phase": "escalation-parked"
+    },
+    {
+      "database": "legacy-controls/runtime.sqlite.gz",
+      "api": "legacy-controls/concurrent-prepare.json",
+      "mode": "called-control",
+      "phase": "concurrent-prepared"
+    },
+    {
+      "database": "legacy-controls/runtime.sqlite.gz",
+      "api": "legacy-controls/compensation-handler-b.json",
+      "mode": "compensation",
+      "phase": "HandlerB"
+    },
+    {
+      "database": "called-ack/notice-held.sqlite.gz",
+      "api": "called-ack/notice-held-api.json",
+      "marker": "called-ack/notice-marker.json",
+      "mode": "called-ack"
+    },
+    {
+      "database": "called-ack/terminal-held.sqlite.gz",
+      "api": "called-ack/terminal-held-api.json",
+      "marker": "called-ack/terminal-marker.json",
+      "mode": "called-ack"
+    },
+    {
+      "database": "broadcast/after-cohort.sqlite.gz",
+      "api": "broadcast/after-cohort.json",
+      "mode": "broadcast"
+    },
+    {
+      "database": "broadcast/before-selection.sqlite.gz",
+      "api": "broadcast/before-selection.json",
+      "mode": "broadcast"
+    },
+    {
+      "database": "broadcast/empty-cohort.sqlite.gz",
+      "api": "broadcast/empty-cohort.json",
+      "mode": "broadcast"
+    },
+    {
+      "database": "broadcast/after-resume.sqlite.gz",
+      "api": "broadcast/after-resume.json",
+      "mode": "broadcast"
+    },
+    {
+      "database": "native-parent-pending/sequence-durable.sqlite.gz",
+      "mode": "native-parent",
+      "api": "native-parent-pending/sequence-durable-api.json",
+      "marker": "native-parent-pending/sequence-durable-marker.json"
+    },
+    {
+      "database": "native-parent-pending/flowchart-durable.sqlite.gz",
+      "mode": "native-parent",
+      "api": "native-parent-pending/flowchart-durable-api.json",
+      "marker": "native-parent-pending/flowchart-durable-marker.json"
+    },
+    {
+      "database": "native-parent-pending/compensationscope-durable.sqlite.gz",
+      "mode": "native-parent",
+      "api": "native-parent-pending/compensationscope-durable-api.json",
+      "marker": "native-parent-pending/compensationscope-durable-marker.json"
+    },
+    {
+      "database": "native-parent-pending/sequence-balanced.sqlite.gz",
+      "mode": "native-parent",
+      "api": "native-parent-pending/sequence-balanced-api.json",
+      "marker": "native-parent-pending/sequence-balanced-marker.json"
+    },
+    {
+      "database": "native-parent-pending/flowchart-balanced.sqlite.gz",
+      "mode": "native-parent",
+      "api": "native-parent-pending/flowchart-balanced-api.json",
+      "marker": "native-parent-pending/flowchart-balanced-marker.json"
+    },
+    {
+      "database": "native-parent-pending/compensationscope-balanced.sqlite.gz",
+      "mode": "native-parent",
+      "api": "native-parent-pending/compensationscope-balanced-api.json",
+      "marker": "native-parent-pending/compensationscope-balanced-marker.json"
+    }
+  ],
+  "nativeTerminalReceipt": "native-parents/api.json",
+  "studioReceipt": "studio/layout-receipt.json",
+  "writerMap": [
+    {
+      "family": "native-checkpoint-and-material",
+      "writers": [
+        "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs",
+        "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommitFingerprint.cs",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs"
+      ],
+      "captures": [
+        "partial-forks/runtime.sqlite",
+        "partial-forks/design.sqlite",
+        "partial-forks/cases.json",
+        "studio/runtime.sqlite.gz",
+        "studio/design.sqlite.gz"
+      ],
+      "modes": [
+        "Balanced",
+        "Durable"
+      ],
+      "limit": "Existing native wire/material/markers/partial checkpoints; additive model rows do not yet exist."
+    },
+    {
+      "family": "native-lifecycle-parent-outcomes",
+      "writers": [
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Recovery/RuntimeResumptionService.cs"
+      ],
+      "captures": [
+        "native-parents/api.json",
+        "native-parents/runtime.sqlite.gz",
+        "partial-forks/cases.json",
+        "called-ack/terminal-held.sqlite.gz",
+        "native-parent-pending/sequence-durable.sqlite.gz",
+        "native-parent-pending/flowchart-durable.sqlite.gz",
+        "native-parent-pending/compensationscope-durable.sqlite.gz",
+        "native-parent-pending/sequence-balanced.sqlite.gz",
+        "native-parent-pending/flowchart-balanced.sqlite.gz",
+        "native-parent-pending/compensationscope-balanced.sqlite.gz"
+      ],
+      "modes": [
+        "Balanced",
+        "Durable"
+      ],
+      "limit": "Native composite-specific fault projection is preserved; #3242 owner decision remains open."
+    },
+    {
+      "family": "legacy-bpmn-ledger-evaluation",
+      "writers": [
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStateCodec.cs",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnWorkLedger.cs"
+      ],
+      "captures": [
+        "legacy-controls/runtime.sqlite.gz",
+        "legacy-controls/design.sqlite.gz",
+        "legacy-controls/called-control-prepare.json",
+        "legacy-controls/concurrent-prepare.json",
+        "legacy-controls/compensation-handler-b.json",
+        "partial-forks/cases.json",
+        "multi-instance-and-studio/runtime.sqlite.gz",
+        "multi-instance-and-studio/api.json",
+        "multi-instance-and-studio/physical-checked.json"
+      ],
+      "modes": [
+        "Balanced",
+        "Durable (partial forks and parent outcomes)"
+      ],
+      "limit": "Called-control/MI/compensation held fixtures use Balanced; mode-independent persisted protocol is checked separately from per-mode checkpoint boundaries."
+    },
+    {
+      "family": "stimulus-source-cohort-delivery",
+      "writers": [
+        "Essentials/src/Workflows/Runtime/Core/Models/StimulusDeliverySnapshot.cs",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs"
+      ],
+      "captures": [
+        "broadcast/before-selection.sqlite.gz",
+        "broadcast/empty-cohort.sqlite.gz",
+        "broadcast/after-cohort.sqlite.gz",
+        "broadcast/after-resume.sqlite.gz"
+      ],
+      "modes": [
+        "Balanced"
+      ],
+      "limit": "Source/cohort wire is mode-independent; first-delivery matching/rearm/pre-ACK inputs retained. Ordinary-host recovery controls are not changed-host proof."
+    },
+    {
+      "family": "called-workflow-notification-and-parent-result",
+      "writers": [
+        "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs",
+        "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationEnricher.cs",
+        "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs",
+        "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCancellationEnricher.cs"
+      ],
+      "captures": [
+        "called-ack/notice-held.sqlite.gz",
+        "called-ack/terminal-held.sqlite.gz",
+        "called-ack/notice-marker.json",
+        "called-ack/terminal-marker.json",
+        "native-parents/api.json"
+      ],
+      "modes": [
+        "Balanced"
+      ],
+      "limit": "Actual source claim, committed parent inbox and ordered notice/result; native cancellation is observed independently. New model/RunEtl bridge has no legacy writer."
+    },
+    {
+      "family": "authoring-and-layout",
+      "writers": [
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs"
+      ],
+      "captures": [
+        "studio/export.json",
+        "studio/export.bpmn",
+        "studio/design.sqlite.gz",
+        "studio/run-api.json",
+        "studio/frozen-contract.json",
+        "studio/authoring.png",
+        "studio/run.png",
+        "studio/export-layout.json",
+        "studio/export-layout.bpmn",
+        "multi-instance-and-studio/design.sqlite.gz"
+      ],
+      "modes": [
+        "Balanced"
+      ],
+      "limit": "Frozen supported authoring and actual existing Studio baseline; first-class direct-model Studio remains separate."
+    }
+  ],
+  "upgradeRecoveryProved": false,
+  "directHostAcceptanceProved": false,
+  "scopeLimits": [
+    "The original partial-fork bundle remains unchanged. New stores are whole coherent backups, optionally losslessly compressed; runtime rows were never manufactured or edited.",
+    "Absolute paths retained inside original observations identify the observed machine only. Replay uses relative asset paths from this manifest and freshly built host/reader paths.",
+    "Identity/secrets stores were isolated before new retained fixture creation, not sanitized afterward. Initial mixed-store captures and first failed secrets-table refusal remain private and are excluded.",
+    "Existing native Sequence/Flowchart/CompensationScope fault differences remain unchanged; #3242 is not decided.",
+    "Balanced/Durable boundary differences are captured with eight held partial forks and twelve native fault/cancel outcomes. Outbox protocol cuts and control ledger fixtures use Balanced.",
+    "Fresh-model hosting, new model material/state, actual upgraded-host recovery, RunBpmn and real ETL bridge/retry acceptance remain to be implemented and qualified.",
+    "Actual pending native callbacks are fault/incident outcomes under all three parents in both modes. Successful completion may fold into native progression even Durable; partial-fork/wait stores are actual earlier durable success precursors, not falsely labeled persisted completed-BPMN callbacks.",
+    "Whole-store capture completeness authorizes the planned specific writer edits. It does not prove recovery on changed binaries, new direct hosting, terminal settlement behavior or production acceptance."
+  ],
+  "gateAComplete": true,
+  "remainingCaptureFamilies": [],
+  "nativePendingReceipt": "native-parent-pending/manifest.json",
+  "nativePendingPhysicalReceipt": "native-parent-pending/independent-physical-checked.json",
+  "multiInstanceReceipt": "multi-instance-and-studio/api.json",
+  "multiInstancePhysicalReceipt": "multi-instance-and-studio/physical-checked.json",
+  "multiInstanceStore": "multi-instance-and-studio/runtime.sqlite.gz",
+  "baselineWriterSourceSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs": "b060b8205bbdd99bfd0f14648c9f23200b281a5c7e6cad2792af9f7288d24615",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommitFingerprint.cs": "cdeb955aeae38496c0fc5c4269186eba36e0a14404493fc02b8f48ad11eb00ef",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs": "a31ab06286f72ac6a487a290f55fea289c17f8774e9580110ed59543c52333a1",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "039a0f9f329b82602aa192f679543aaaaba00c6b94e9635a0985af6196954fe0",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs": "a6cc012ef3ffdb10cd48ff8a9b1c0a2c12370031c403a1f67137d10601fbb520",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "ed3650fab2a7f72748a3312c9802d9f35adb71b691a153cc4b9c5a2c633e65b7",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs": "dd90f92b64de4058305d98518af43bf2ab2541443ba5508c625771608a9f3c31",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Recovery/RuntimeResumptionService.cs": "c635e515945f26967ff2848a77c5e9b241a3c63dac6957e12a96bdfa41313a1c",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStateCodec.cs": "805dd3ae23b5917a24628ef084a7f6b004fa2067c713c02c1c089fd6e8630e9b",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnWorkLedger.cs": "beeaae7aa7aee9db0bea042c0c27697d75c7de65e5177f8c2581ef32d6df440b",
+    "Essentials/src/Workflows/Runtime/Core/Models/StimulusDeliverySnapshot.cs": "a1f3991df21d17adf1a64e56981bd7b5aa2cae7af01fcfb81bd6201f2dc0d8ba",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "4976b49110fdb49887096dd6562c7a7b16503a33404f142502c24d60260e23b5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationEnricher.cs": "304f300ffc0b4d5e44d534c836ca079e05e2287e2b4b301b39c623bb2433a4fb",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "4e88471da1a0bc40a84d228729d5e7642f0a2727080a919a191ee28e62e65cf6",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCancellationEnricher.cs": "06ceca490354b87d313151df021b0baf9325a716090ccc0cb5bbc5419c147042"
+  },
+  "productionWriterEquivalenceExcludesNewContractProjectSkeletons": true
+}

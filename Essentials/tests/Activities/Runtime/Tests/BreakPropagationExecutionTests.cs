@@ -12,6 +12,7 @@ using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -162,6 +163,66 @@ public sealed class BreakPropagationExecutionTests
         run.AssertDidNotRun("node-start");
         run.AssertOutcomes("node-for", ActivityOutcomes.Done);
         run.AssertWorkflowCompleted();
+    }
+
+    // Spec 266 (research R-3): a Break ends the Flowchart and cancels the other paths' running activities in the same
+    // commit, so a suspended sibling can no longer complete and commit its writes after the Flowchart completed.
+    [Fact]
+    public async Task Break_in_a_flowchart_cancels_a_running_sibling_path()
+    {
+        await using var harness = NewHarness(Enumerable.Range(1, 8).Select(index => $"actexec-{index}").ToArray());
+
+        var flowchart = NewFlowchartNode("node-flowchart",
+            children:
+            [
+                WorkflowExecutionHarness.NewProbeNode("node-fork"),
+                StructuralExecutionTestSupport.NewWaitingNode("node-wait"),
+                WorkflowExecutionHarness.NewProbeNode("node-break", [ActivityOutcomes.Break])
+            ],
+            connections: [NewConnection("node-fork", "node-wait"), NewConnection("node-fork", "node-break")],
+            startNodeId: "node-fork");
+
+        var run = await harness.RunAsync(StructuralExecutionTestSupport.NewExecutable(flowchart, waitingNodeIds: ["node-wait"]));
+
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes("node-flowchart", ActivityOutcomes.Break);
+        var waiting = run.State("node-wait");
+        Assert.Equal(ActivityExecutionStatus.Cancelled, waiting.Status);
+        Assert.Equal("ParentCancelled", waiting.SubStatus);
+        Assert.Equal("flowchart-break", waiting.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        Assert.Empty(await harness.Services.GetRequiredService<IBookmarkStateStore>()
+            .ListAllBookmarkStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId));
+    }
+
+    // A sibling path's next node may already be queued (scheduled but not started) when the Break completes; it must not
+    // start after the Flowchart has completed, also when the workflow goes on after the loop the Break ended.
+    [Fact]
+    public async Task Break_in_a_flowchart_stops_a_queued_sibling_node_from_starting()
+    {
+        await using var harness = NewHarness(Enumerable.Range(1, 16).Select(index => $"actexec-{index}").ToArray());
+
+        var flowchart = NewFlowchartNode("node-flowchart",
+            children:
+            [
+                WorkflowExecutionHarness.NewProbeNode("node-fork"),
+                WorkflowExecutionHarness.NewProbeNode("node-y"),
+                WorkflowExecutionHarness.NewProbeNode("node-z"),
+                WorkflowExecutionHarness.NewProbeNode("node-break", [ActivityOutcomes.Break])
+            ],
+            connections: [NewConnection("node-fork", "node-y"), NewConnection("node-y", "node-z"), NewConnection("node-fork", "node-break")],
+            startNodeId: "node-fork");
+        var root = NewSequenceNode("node-root",
+        [
+            NewForNode("node-for", start: 0, end: 3, body: flowchart),
+            WorkflowExecutionHarness.NewProbeNode("node-after")
+        ]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root), allowPendingWorkOnTerminalCompletion: true);
+
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted("node-after");
+        Assert.True(run.States("node-z").All(state => state.Status != ActivityExecutionStatus.Completed),
+            "node-z started after the Flowchart had ended on Break.");
     }
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>

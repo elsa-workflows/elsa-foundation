@@ -142,7 +142,7 @@ public sealed class EfWorkflowTestScopeCleanupStore(
                             outboxItem,
                             accessScope,
                             EfRuntimePostCommitOutboxStore.RowId(accessScope, outboxItem.OutboxItemId),
-                            revision: 1);
+                            revision: 1, RuntimePostCommitOutboxWriteVersion.For(_context, outboxItem));
                         _context.RuntimePostCommitOutbox.Add(outboxRow);
                         touched.Add(outboxRow);
                     }

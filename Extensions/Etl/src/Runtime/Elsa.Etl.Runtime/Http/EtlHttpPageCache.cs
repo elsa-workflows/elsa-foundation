@@ -34,6 +34,7 @@ internal sealed class EtlHttpPageCacheException(string code)
 internal sealed class EtlHttpPageCache
 {
     private const string BodyIdentityPrefix = "etl-http-page-body-v1:";
+    private const string PageBodyIdentityPrefix = "etl-http-page-body-v2:";
     private const int MagicLength = 8;
     private const int IdentityLength = 64;
     private const int AttemptIdLength = 32;
@@ -56,12 +57,15 @@ internal sealed class EtlHttpPageCache
     private readonly EtlConnectorLimits _limits;
     private readonly EtlHttpPolicy _policy;
     private readonly EtlHttpRequestBuilder? _requestBuilder;
+    private readonly long _pollGeneration;
+    private readonly bool _continuous;
     private readonly FileChunkStore _bodyStore = new(".json");
     private readonly FileChunkStore _manifestStore = new(".page");
 
     /// <summary>Creates a page cache from one admitted connector snapshot and the host-approved absolute root.</summary>
+    /// <param name="pollGeneration">The poll generation of the position this cache serves; above 0 only in a continuous run.</param>
     public EtlHttpPageCache(string approvedRoot, EtlConnectorRunAdmission admission, int partitionOrdinal,
-        EtlHttpRequestBuilder? requestBuilder = null)
+        EtlHttpRequestBuilder? requestBuilder = null, long pollGeneration = 0)
     {
         ArgumentNullException.ThrowIfNull(admission);
         ArgumentNullException.ThrowIfNull(admission.Invocation);
@@ -95,7 +99,8 @@ internal sealed class EtlHttpPageCache
         if (shardIds.Length == 0 || shardIds.Any(string.IsNullOrWhiteSpace) ||
             shardIds.Distinct(StringComparer.Ordinal).Count() != shardIds.Length || partitionOrdinal >= shardIds.Length)
             throw Refused("etl.http.page-admission-invalid");
-        if (http.Pagination is EtlNextLinkPagination && requestBuilder is null ||
+        // A continuous run's final page normalizes its unmoved cursor away, which needs the exact request URIs.
+        if ((http.Pagination is EtlNextLinkPagination || pipeline.Continuous is not null) && requestBuilder is null ||
             requestBuilder is not null && !requestBuilder.Matches(http, pipeline.Http, sourceBinding, shardIds))
             throw Refused("etl.http.page-admission-invalid");
 
@@ -122,6 +127,10 @@ internal sealed class EtlHttpPageCache
         _limits = pipeline.Limits;
         _policy = policy;
         _requestBuilder = requestBuilder;
+        _continuous = pipeline.Continuous is not null;
+        if (pollGeneration < 0 || pollGeneration > 0 && !_continuous)
+            throw Refused("etl.http.page-request-invalid");
+        _pollGeneration = pollGeneration;
         // Do not retain the caller-owned shard list. It is part of the admission pin used by callers
         // that may share mutable collection implementations across physical attempts.
         _admission = admission with
@@ -140,7 +149,7 @@ internal sealed class EtlHttpPageCache
             return null;
 
         var metadata = ParseManifest(manifest, identity);
-        var bodyIdentity = BodyIdentity(metadata.BodyHash);
+        var bodyIdentity = metadata.BodyIdentity;
         byte[]? body;
         try
         {
@@ -214,7 +223,8 @@ internal sealed class EtlHttpPageCache
         }
 
         var bodyHash = Convert.ToHexString(SHA256.HashData(ownedBody)).ToLowerInvariant();
-        var bodyIdentity = BodyIdentity(bodyHash);
+        // A continuous run deletes each page's body once the shard leaves it, so its body is never shared (spec 1196).
+        var bodyIdentity = _continuous ? PageBodyIdentity(identity, bodyHash) : BodyIdentity(bodyHash);
         EtlChunk bodyChunk;
         try
         {
@@ -264,6 +274,32 @@ internal sealed class EtlHttpPageCache
             decoded, provenance, ownedBody);
     }
 
+    /// <summary>
+    /// Removes a continuous page's manifest and per-page body once its shard has left it (spec 1196). A missing page is
+    /// not an error, and a legacy shared body is left in place because another page may still reference it.
+    /// </summary>
+    public async ValueTask DeleteAsync(long pageSequence, EtlHttpRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!_continuous)
+            throw Refused("etl.http.page-request-invalid");
+        var (identity, _) = RequestIdentity(pageSequence, request);
+        var manifest = await ReadManifestBytesAsync(identity, cancellationToken);
+        if (manifest is null)
+            return;
+        var metadata = ParseManifest(manifest, identity);
+        try
+        {
+            // The manifest goes first: a crash in between leaves an unreferenced body, never a manifest without one.
+            _manifestStore.Delete(_approvedRoot, identity);
+            if (StringComparer.Ordinal.Equals(metadata.BodyIdentity, PageBodyIdentity(identity, metadata.BodyHash)))
+                _bodyStore.Delete(_approvedRoot, metadata.BodyIdentity);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw WriteFailed();
+        }
+    }
+
     private async ValueTask<byte[]?> ReadManifestBytesAsync(string identity, CancellationToken cancellationToken)
     {
         try
@@ -283,14 +319,15 @@ internal sealed class EtlHttpPageCache
     private (string Identity, string RequestHash) RequestIdentity(long pageSequence, EtlHttpRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (pageSequence < 0 || pageSequence >= _policy.MaxPagesPerPartition ||
+        // A continuous shard's retained window bounds its pages instead of its page sequence (spec 1196).
+        if (pageSequence < 0 || !_continuous && pageSequence >= _policy.MaxPagesPerPartition ||
             !StringComparer.Ordinal.Equals(request.ShardId, _shardIds[_partitionOrdinal]))
             throw Refused("etl.http.page-request-invalid");
 
         try
         {
             _requestBuilder?.RequestUri(request);
-            return (EtlRuntimeIdentity.ConnectorHttpPageId(_admission, _partitionOrdinal, pageSequence, request),
+            return (EtlRuntimeIdentity.ConnectorHttpPageId(_admission, _partitionOrdinal, pageSequence, request, _pollGeneration),
                 EtlRuntimeIdentity.HttpRequestHash(request));
         }
         catch (ArgumentException)
@@ -306,6 +343,9 @@ internal sealed class EtlHttpPageCache
 
         try
         {
+            // Only a continuous run retains a caught-up page (as its final page); its unmoved cursor ends the shard.
+            if (_continuous && _requestBuilder.IsCaughtUp(request, decoded.Records.Count, decoded.Continuation))
+                return decoded with { Continuation = null };
             return decoded with { Continuation = _requestBuilder.NextContinuation(request, decoded.Continuation) };
         }
         catch (EtlHttpRequestBuilderException exception)
@@ -341,8 +381,13 @@ internal sealed class EtlHttpPageCache
             !Guid.TryParseExact(attemptIdText, "N", out var attemptId) ||
             !StringComparer.Ordinal.Equals(attemptId.ToString("N"), attemptIdText) ||
             fence <= 0 || receivedTicks < DateTimeOffset.MinValue.UtcTicks || receivedTicks > DateTimeOffset.MaxValue.UtcTicks ||
-            !IsLowerSha256(bodyHash) || bodyByteLength <= 0 || bodyByteLength > _policy.MaxPageBytes ||
-            !StringComparer.Ordinal.Equals(bodyKey, _bodyStore.KeyFor(BodyIdentity(bodyHash))))
+            !IsLowerSha256(bodyHash) || bodyByteLength <= 0 || bodyByteLength > _policy.MaxPageBytes)
+            throw Corrupt();
+        // A continuous page published before spec 1196 keeps its shared body, which is read but never deleted.
+        var bodyIdentity = _continuous && StringComparer.Ordinal.Equals(bodyKey, _bodyStore.KeyFor(PageBodyIdentity(identity, bodyHash)))
+            ? PageBodyIdentity(identity, bodyHash)
+            : BodyIdentity(bodyHash);
+        if (!StringComparer.Ordinal.Equals(bodyKey, _bodyStore.KeyFor(bodyIdentity)))
             throw Corrupt();
 
         DateTimeOffset receivedAt;
@@ -355,7 +400,7 @@ internal sealed class EtlHttpPageCache
             throw Corrupt();
         }
 
-        return new PageManifest(bodyKey, bodyHash, bodyByteLength,
+        return new PageManifest(bodyIdentity, bodyKey, bodyHash, bodyByteLength,
             new EtlHttpPageProvenance(attemptIdText, fence, receivedAt));
     }
 
@@ -413,6 +458,8 @@ internal sealed class EtlHttpPageCache
 
     private static string BodyIdentity(string hash) => BodyIdentityPrefix + hash;
 
+    private static string PageBodyIdentity(string pageIdentity, string hash) => PageBodyIdentityPrefix + pageIdentity + ":" + hash;
+
     private static bool SameBody(EtlCachedHttpPage existing, byte[] candidate) =>
         existing.RawBody.Span.SequenceEqual(candidate);
 
@@ -422,5 +469,6 @@ internal sealed class EtlHttpPageCache
     private static EtlHttpPageCacheException Conflict() => new("etl.http.page-cache-conflict");
     private static EtlHttpPageCacheException WriteFailed() => new("etl.http.page-cache-write-failed");
 
-    private sealed record PageManifest(string BodyKey, string BodyHash, long BodyByteLength, EtlHttpPageProvenance Provenance);
+    private sealed record PageManifest(string BodyIdentity, string BodyKey, string BodyHash, long BodyByteLength,
+        EtlHttpPageProvenance Provenance);
 }

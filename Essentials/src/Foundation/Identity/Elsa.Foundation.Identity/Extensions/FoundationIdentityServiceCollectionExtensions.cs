@@ -34,6 +34,8 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.TryAddScoped<IEffectiveCapabilitiesResolver, DefaultEffectiveCapabilitiesResolver>();
         EnsureReplacement<IPermissionEvaluator, ClaimsPermissionEvaluator>(services, ServiceLifetime.Scoped);
         EnsureReplacement<IPermissionAuthorizationService, PermissionAuthorizationService>(services, ServiceLifetime.Scoped);
+        EnsureReplacement<ICurrentSubjectPermissionAuthorizer, UnsupportedCurrentSubjectPermissionAuthorizer>(services, ServiceLifetime.Scoped);
+        EnsureReplacement<IUserTokenEligibility, UnsupportedUserTokenEligibility>(services, ServiceLifetime.Scoped);
         // The public handler retains obsolete source-compatible constructors. Use an explicit
         // factory so the DI container cannot select an obsolete constructor by accident. A
         // separate marker keeps repeated Foundation registration idempotent because the DI
@@ -69,6 +71,48 @@ public static class FoundationIdentityServiceCollectionExtensions
     public static IServiceCollection ReplacePermissionAuthorizationService<TService>(this IServiceCollection services)
         where TService : class, IPermissionAuthorizationService =>
         Replace<IPermissionAuthorizationService, TService>(services, ServiceLifetime.Scoped);
+
+    /// <summary>
+    /// Replaces the fail-closed current-subject authorizer with an identity provider that owns the
+    /// subject's current users, memberships and roles.
+    /// </summary>
+    public static IServiceCollection ReplaceCurrentSubjectPermissionAuthorizer<TAuthorizer>(this IServiceCollection services)
+        where TAuthorizer : class, ICurrentSubjectPermissionAuthorizer =>
+        Replace<ICurrentSubjectPermissionAuthorizer, TAuthorizer>(services, ServiceLifetime.Scoped);
+
+    /// <summary>
+    /// Lets an identity provider take over the fail-closed default. It never overwrites a host's explicit
+    /// <see cref="ReplaceCurrentSubjectPermissionAuthorizer{TAuthorizer}"/> made before or after it, and repeating
+    /// it is idempotent.
+    /// </summary>
+    public static IServiceCollection UseCurrentSubjectPermissionAuthorizerProvider<TAuthorizer>(this IServiceCollection services)
+        where TAuthorizer : class, ICurrentSubjectPermissionAuthorizer
+    {
+        var descriptors = services.Where(descriptor => descriptor.ServiceType == typeof(ICurrentSubjectPermissionAuthorizer)).ToArray();
+        if (descriptors.Length == 1 && descriptors[0].ImplementationType != typeof(UnsupportedCurrentSubjectPermissionAuthorizer))
+            return services;
+        return Replace<ICurrentSubjectPermissionAuthorizer, TAuthorizer>(services, ServiceLifetime.Scoped);
+    }
+
+    /// <summary>
+    /// Replaces the fail-closed user token eligibility with an identity provider that owns the users.
+    /// </summary>
+    public static IServiceCollection ReplaceUserTokenEligibility<TEligibility>(this IServiceCollection services)
+        where TEligibility : class, IUserTokenEligibility =>
+        Replace<IUserTokenEligibility, TEligibility>(services, ServiceLifetime.Scoped);
+
+    /// <summary>
+    /// Lets an identity provider take over the fail-closed default. It never overwrites a host's explicit
+    /// <see cref="ReplaceUserTokenEligibility{TEligibility}"/> made before or after it, and repeating it is idempotent.
+    /// </summary>
+    public static IServiceCollection UseUserTokenEligibilityProvider<TEligibility>(this IServiceCollection services)
+        where TEligibility : class, IUserTokenEligibility
+    {
+        var descriptors = services.Where(descriptor => descriptor.ServiceType == typeof(IUserTokenEligibility)).ToArray();
+        if (descriptors.Length == 1 && descriptors[0].ImplementationType != typeof(UnsupportedUserTokenEligibility))
+            return services;
+        return Replace<IUserTokenEligibility, TEligibility>(services, ServiceLifetime.Scoped);
+    }
 
     /// <summary>
     /// Registers the default for a replacement contract while preserving one explicit host

@@ -28,7 +28,7 @@ public sealed class RunJavaScriptExecutionTests
 
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<RunJavaScriptResult>>(transition);
         Assert.Equal(42, completion.Result.Value!.Value.GetProperty("answer").GetInt32());
-        Assert.Equal("Done", completion.Outcome);
+        Assert.Equal(new[] { "Done" }, completion.Selection.ResolveNames());
     }
 
     [Fact]
@@ -82,62 +82,152 @@ public sealed class RunJavaScriptExecutionTests
         Assert.Equal(42, arguments.GetProperty("order").GetProperty("total").GetInt32());
     }
 
+    // Spec 1208 (S-3), User Story 1: a script selects outcomes only by returning complete(result, outcomes).
+
+    [Fact]
+    public async Task Returning_complete_with_one_name_selects_that_outcome()
+    {
+        var completion = await RunAsync("return complete({ id: 7 }, 'Approved');", ["Approved", "Rejected", "Audit"]);
+
+        Assert.Equal(OutcomeSelection.Named("Approved"), completion.Selection);
+        Assert.Equal(7, completion.Result.Value!.Value.GetProperty("id").GetInt32());
+    }
+
+    [Fact]
+    public async Task Returning_complete_with_several_names_selects_each_once_in_order()
+    {
+        var completion = await RunAsync("return complete(1, ['Approved', 'Audit', 'Approved']);", ["Approved", "Rejected", "Audit"]);
+
+        Assert.Equal(OutcomeSelection.Named("Approved", "Audit"), completion.Selection);
+    }
+
+    [Theory]
+    [InlineData("return complete('order');")]
+    [InlineData("return complete('order', undefined);")]
+    [InlineData("return 'order';")]
+    public async Task Selecting_nothing_leaves_the_selection_unspecified(string script)
+    {
+        var completion = await RunAsync(script, ["Approved"]);
+
+        Assert.Equal(OutcomeSelection.Unspecified, completion.Selection);
+        Assert.Equal(new[] { "Done" }, completion.Selection.ResolveNames());
+        Assert.Equal("order", completion.Result.Value!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Returning_complete_with_an_empty_array_is_an_explicitly_empty_selection()
+    {
+        var completion = await RunAsync("return complete('kept', []);", ["Approved"]);
+
+        Assert.Equal(OutcomeSelection.Empty, completion.Selection);
+        Assert.Empty(completion.Selection.ResolveNames());
+        Assert.Equal("kept", completion.Result.Value!.Value.GetString());
+    }
+
+    /// <summary>US1 scenario 5 and FR-008: returned data is the result only; it never selects an outcome (#1114 is gone).</summary>
+    [Theory]
+    [InlineData("return 'Approved';")]
+    [InlineData("return 404;")]
+    [InlineData("return { result: 'x', outcomes: ['Approved'] };")]
+    public async Task A_returned_value_never_selects_an_outcome(string script)
+    {
+        var completion = await RunAsync(script, ["Approved", "404"]);
+
+        Assert.Equal(OutcomeSelection.Unspecified, completion.Selection);
+    }
+
+    [Fact]
+    public async Task A_completion_returned_from_a_nested_function_selects()
+    {
+        var completion = await RunAsync(
+            "function decide(order) { return complete(order, 'Rejected'); } return decide(args.total);",
+            ["Approved", "Rejected"]);
+
+        Assert.Equal(OutcomeSelection.Named("Rejected"), completion.Selection);
+        Assert.Equal(250, completion.Result.Value!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Calling_complete_without_returning_it_changes_nothing()
+    {
+        var completion = await RunAsync("complete('ignored', 'Approved'); complete(null, null); return 'data';", ["Approved"]);
+
+        Assert.Equal(OutcomeSelection.Unspecified, completion.Selection);
+        Assert.Equal("data", completion.Result.Value!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Outcomes_are_snapshotted_when_complete_is_called()
+    {
+        var completion = await RunAsync("const o = ['Approved']; const c = complete(1, o); o.push('Audit'); return c;", ["Approved", "Audit"]);
+
+        Assert.Equal(OutcomeSelection.Named("Approved"), completion.Selection);
+    }
+
+    /// <summary>FR-007a: a completion value counts only as the top-level returned value; nested in data it faults.</summary>
+    [Theory]
+    [InlineData("return { wrapped: complete(1, 'Approved') };")]
+    [InlineData("return [complete(1)];")]
+    [InlineData("return complete(complete(1, 'Approved'), 'Approved');")]
+    public async Task A_nested_completion_value_faults_with_VF_ACT_006(string script)
+    {
+        var fault = await FaultAsync(script, ["Approved"]);
+
+        Assert.Equal("VF-ACT-006", fault.Code);
+    }
+
+    /// <summary>FR-007b: outcomes are omitted, undefined, a name or an array of names; anything else faults.</summary>
+    [Theory]
+    [InlineData("return complete(1, null);")]
+    [InlineData("return complete(1, 7);")]
+    [InlineData("return complete(1, { name: 'Approved' });")]
+    [InlineData("return complete(1, ['Approved', 7]);")]
+    [InlineData("return complete(1, '  ');")]
+    [InlineData("return complete(1, ['']);")]
+    public async Task Invalid_outcomes_fault_with_VF_ACT_006(string script)
+    {
+        var fault = await FaultAsync(script, ["Approved"]);
+
+        Assert.Equal("VF-ACT-006", fault.Code);
+    }
+
     /// <summary>
-    /// #1114: with <c>PossibleOutcomes</c> authored, the script routes by returning. The value output is still
-    /// populated on every branch — routing does not replace the result.
+    /// FR-007b: an undefined result follows the same boundary rule as a plain <c>return undefined</c>. Spec 1216 (S-2)
+    /// has not introduced the undefined policies on this branch yet, so both read as no result today.
     /// </summary>
     [Theory]
-    [InlineData("return 'approved';", "approved")]
-    [InlineData("return 'rejected';", "rejected")]
-    [InlineData("return args.total > 100 ? 'rejected' : 'approved';", "rejected")]
-    public async Task Script_return_value_selects_a_declared_outcome(string script, string expectedOutcome)
+    [InlineData("return complete(undefined, 'Approved');")]
+    [InlineData("return complete();")]
+    public async Task An_undefined_result_is_read_like_return_undefined(string script)
     {
-        var completion = await RunAsync(script, ["approved", "rejected"]);
+        var plain = await RunAsync("return undefined;", ["Approved"]);
+        var completion = await RunAsync(script, ["Approved"]);
 
-        Assert.Equal(expectedOutcome, completion.Outcome);
-        Assert.Equal(expectedOutcome, completion.Result.Value!.Value.GetString());
+        Assert.Equal(plain.Result.Value.HasValue, completion.Result.Value.HasValue);
+        Assert.Null(completion.Result.Value);
     }
 
-    /// <summary>A return value that names no declared port takes the catch-all, exactly like an unmatched status code.</summary>
-    [Theory]
-    [InlineData("return 'something-else';")]
-    [InlineData("return null;")]
-    [InlineData("return { verdict: 'approved' };")]
-    [InlineData("return ['approved'];")]
-    [InlineData("")]
-    public async Task Unrecognized_return_value_takes_the_unmatched_outcome(string script)
-    {
-        var completion = await RunAsync(script, ["approved", "rejected"]);
-
-        Assert.Equal(RunJavaScript.UnmatchedOutcome, completion.Outcome);
-    }
-
-    /// <summary>Outcome names are identifiers: the match is ordinal, so casing is not forgiven.</summary>
+    /// <summary>US1 scenario 6 / FR-005: a fault after selecting discards the selection; nothing is completed.</summary>
     [Fact]
-    public async Task Outcome_matching_is_ordinal()
+    public async Task A_fault_after_selecting_completes_nothing()
     {
-        var completion = await RunAsync("return 'Approved';", ["approved"]);
+        await using var provider = BuildProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var activity = new RunJavaScript(scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>())
+        {
+            Script = "const c = complete(1, 'Approved'); throw new Error('boom');",
+            PossibleOutcomes = ["Approved"]
+        };
 
-        Assert.Equal(RunJavaScript.UnmatchedOutcome, completion.Outcome);
+        await Assert.ThrowsAnyAsync<Exception>(async () => await ExecuteAsync(activity));
     }
 
-    /// <summary>A numeric return names a port by its textual form, mirroring SendHttpRequest's status-code ports.</summary>
     [Fact]
-    public async Task Numeric_return_value_selects_a_numerically_named_outcome()
+    public async Task Complete_cannot_be_reassigned_by_the_script()
     {
-        var completion = await RunAsync("return 404;", ["200", "404"]);
+        var completion = await RunAsync("try { complete = () => 1; } catch { } return complete(2, 'Approved');", ["Approved"]);
 
-        Assert.Equal("404", completion.Outcome);
-    }
-
-    /// <summary>Without authored outcomes the activity keeps its single implicit Done completion.</summary>
-    [Fact]
-    public async Task Without_possible_outcomes_the_activity_always_completes_done()
-    {
-        var completion = await RunAsync("return 'approved';", possibleOutcomes: null);
-
-        Assert.Equal("Done", completion.Outcome);
-        Assert.Equal("approved", completion.Result.Value!.Value.GetString());
+        Assert.Equal(OutcomeSelection.Named("Approved"), completion.Selection);
     }
 
     private static async Task<IActivityCompletionTransition<RunJavaScriptResult>> RunAsync(
@@ -154,6 +244,19 @@ public sealed class RunJavaScriptExecutionTests
         };
 
         return Assert.IsAssignableFrom<IActivityCompletionTransition<RunJavaScriptResult>>(await ExecuteAsync(activity));
+    }
+
+    private static async Task<ActivityFault> FaultAsync(string script, ICollection<string>? possibleOutcomes)
+    {
+        await using var provider = BuildProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var activity = new RunJavaScript(scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>())
+        {
+            Script = script,
+            PossibleOutcomes = possibleOutcomes
+        };
+
+        return Assert.IsAssignableFrom<IActivityFaultTransition>(await ExecuteAsync(activity)).Fault;
     }
 
     private static async ValueTask<ActivityTransition> ExecuteAsync(RunJavaScript activity)

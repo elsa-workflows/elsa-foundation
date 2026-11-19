@@ -1,0 +1,12 @@
+{
+  "worker": "w4",
+  "series": "bpmn-series-r2",
+  "status": "failed",
+  "blob": "w4-bpmn-series-r2.tar.xz",
+  "bytes": 7796,
+  "sha256": "e7e3e8e9c11744e304f2af33d6309e2f0139bd255e339b4e4e87837629eacba0",
+  "files": 13,
+  "protectedValuesAbsent": true,
+  "upload": "passed",
+  "localArchiveAndAllFileHashesVerified": true
+}

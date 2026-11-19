@@ -1,11 +1,12 @@
 import React from "react";
+import { createStudioRegistry } from "../app/registry";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath, ShellFrame } from "../app/App";
 import { filterAccessibleNavigation, moreToolsStorageKey, type NavigationAccess } from "../app/navigation/placement";
 import { ThemeProvider } from "../app/components/ThemeProvider";
-import type { ElsaStudioModuleApi, StudioBackendManagementStatus, StudioDiagnosticsWidgetContribution, StudioDiagnosticsWidgetProps, StudioNavigationContribution } from "../sdk";
+import { createEndpointContext, createHttpClient, type StudioDashboardWidgetContribution, type ElsaStudioModuleApi, type StudioBackendManagementStatus, type StudioDiagnosticsWidgetContribution, type StudioDiagnosticsWidgetProps, type StudioNavigationContribution } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
 
 const mountedTestRoots = new Set<() => void>();
@@ -357,7 +358,7 @@ function stubApi(options: {
   backendStatus?: StudioBackendManagementStatus;
   bridgeGetJson?: (url: string) => Promise<unknown>;
   backendGetJson?: (url: string) => Promise<unknown>;
-  widgets?: Array<{ id: string; title: string; order?: number; component: React.ComponentType }>;
+  widgets?: StudioDashboardWidgetContribution[];
   diagnosticsWidgets?: StudioDiagnosticsWidgetContribution[];
   diagnostics?: Array<{ moduleId: string; status: string; reason: string }>;
 } = {}): ElsaStudioModuleApi {
@@ -365,37 +366,44 @@ function stubApi(options: {
   const hostGetJson = async (url: string) =>
     url === "/_elsa/studio/backend-management/status" ? bridgeGetJson(url) : healthyRegistry();
 
+  const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") });
   return {
+    ...api,
     host: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
       http: {
-        getJson: hostGetJson,
-        postJson: async () => ({})
+        ...createEndpointContext("https://studio.example/").http,
+        getJson: stubGetJson("https://studio.example/", hostGetJson),
+        postJson: stubPostJson("https://studio.example/")
       }
     },
     backend: {
       baseUrl: "https://foundation.example/",
       http: {
         // Must never be called by host-health anymore; a probe here fails the test loudly.
-        getJson: options.backendGetJson ?? (async () => { throw new Error("backend context must not be probed by host-health"); }),
-        postJson: async () => ({})
+        ...createEndpointContext("https://foundation.example/").http,
+        getJson: stubGetJson("https://foundation.example/", options.backendGetJson ?? (async () => { throw new Error("backend context must not be probed by host-health"); })),
+        postJson: stubPostJson("https://foundation.example/")
       }
     },
     dashboardWidgets: {
+      ...api.dashboardWidgets,
       add() {},
       list: () => options.widgets ?? []
     },
     diagnosticsWidgets: {
+      ...api.diagnosticsWidgets,
       add() {},
       list: () => options.diagnosticsWidgets ?? []
     },
     diagnostics: {
+      ...api.diagnostics,
       add() {},
       list: () => options.diagnostics ?? []
     }
-  } as ElsaStudioModuleApi;
+  };
 }
 
 function bridgeStatus(status: StudioBackendManagementStatus["status"], detail = ""): StudioBackendManagementStatus {
@@ -465,4 +473,19 @@ async function flushPromises() {
   for (let i = 0; i < 5; i++) {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
+}
+
+// Preserve the generic HTTP contract by parsing fixture JSON through the normal transport.
+function stubGetJson(baseUrl: string, read: (url: string) => Promise<unknown>) {
+  return createHttpClient(baseUrl, {
+    fetch: async input => Response.json(await read(new URL(String(input)).pathname))
+  }).getJson;
+}
+
+function stubPostJson(baseUrl: string) {
+  const http = createHttpClient(baseUrl, {
+    fetch: async () => Response.json({})
+  });
+  vi.spyOn(http, "postJson");
+  return http.postJson;
 }

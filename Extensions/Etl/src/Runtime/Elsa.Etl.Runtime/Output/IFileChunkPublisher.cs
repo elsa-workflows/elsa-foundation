@@ -5,7 +5,11 @@ internal enum EtlFileChunkFormat
 {
     Jsonl,
     Csv,
-    Index
+    Index,
+    /// <summary>A retained JSON Lines input snapshot; distinct from <see cref="Jsonl"/> output chunks.</summary>
+    JsonlSnapshot,
+    /// <summary>A published CSV output file; distinct from <see cref="Csv"/> input snapshots.</summary>
+    CsvOutput
 }
 
 /// <summary>Publishes one bounded ETL file chunk to a trusted root.</summary>
@@ -24,6 +28,14 @@ internal interface IFileChunkPublisher
         string effectIdentity,
         long maxBytes,
         Func<Stream, CancellationToken, ValueTask> write,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Describes the chunk already published under an identity, or returns null when there is none.</summary>
+    /// <remarks>
+    /// Publication is atomic, so a found chunk is complete. Its bytes are re-hashed, never trusted from a sidecar. A decorator
+    /// must forward this: a SQL source's replacement worker relies on it to reuse the published snapshot (spec 1198).
+    /// </remarks>
+    ValueTask<EtlChunk?> FindAsync(string outputRoot, string effectIdentity, long maxBytes,
         CancellationToken cancellationToken = default);
 }
 

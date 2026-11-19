@@ -6,11 +6,11 @@ A persistence mode decides when a workflow run's state is committed to the runti
 |---|---|---|
 | `Durable` | After every activity | Resumes at the last completed activity |
 | `Balanced` (default) | On suspend, fault, completion, end of burst, and every N activities | Activities since the last commit run again (at-least-once) |
-| `Ephemeral` | On suspend, fault, cancellation, an incident or an alteration, on dispatching a child workflow, on the attempt claim for an activity that is not safe to repeat, and at the end of a pass that does not complete the run, plus a completion record unless `RecordCompletion` is off | A run that completes in one pass with none of those earlier commits leaves only its completion record, or no trace with `RecordCompletion` off |
+| `Ephemeral` | On suspend, fault, cancellation, an incident or an alteration, on dispatching a child workflow, on the attempt claim for an activity that is not safe to repeat, when a continuation another worker was delivering settles, finishes during the pass, or is taken back after that worker stopped, and at the end of a pass that does not complete the run, plus a completion record unless `RecordCompletion` is off | A run that completes in one pass with none of those earlier commits leaves only its completion record, or no trace with `RecordCompletion` off |
 
 - **Durable** keeps the checkpoints an activity produces in memory while it runs and commits them together, once per activity. It costs the most database work and loses the least on a crash.
 - **Balanced** keeps the checkpoints of a burst of work in memory and commits them together: when the run suspends, faults or completes, when the runtime finishes a pass over the run's queued work (the end of a burst), and after `MaxActivitiesPerCommit` activities (50 by default). It is the default for every workflow that does not choose a mode, on every host that does not configure one.
-- **Ephemeral** commits when the run suspends, faults or is cancelled, when an incident is recorded or resolved, when the run is altered, when it dispatches a child workflow, on the attempt claim for an activity that is not safe to repeat, when a pass ends without completing the run, and once when it completes. It has no other intermediate commits, however long the pass. A run that never suspends can still be committed before it completes, by an incident, an alteration, a child dispatch or the attempt claim for an activity that is not safe to repeat.
+- **Ephemeral** commits when the run suspends, faults or is cancelled, when an incident is recorded or resolved, when the run is altered, when it dispatches a child workflow, on the attempt claim for an activity that is not safe to repeat, when a continuation another worker was delivering settles, finishes during the pass, or is taken back after that worker stopped, when a pass ends without completing the run, and once when it completes. It has no other intermediate commits, however long the pass. A run that never suspends can still be committed before it completes, by an incident, an alteration, a child dispatch or the attempt claim for an activity that is not safe to repeat.
 
 ## What every mode commits
 
@@ -45,7 +45,14 @@ How often a burst of ordinary work is committed depends on the mode.
 
 ## What "suspend" means for Ephemeral
 
-For Ephemeral, a suspension is any stop that is not completion. A run that waits on a bookmark, a timer or a child workflow, or that pauses for any other reason, is committed when the runtime finishes its pass, so its queued work can resume it later. Only a run that goes from start to completion in one pass can skip its record.
+A bookmark, timer suspension or child dispatch is committed immediately in every mode. A safe nonterminal boundary
+starts another folding segment, so work in another branch continues under the selected mode's activity cap rather
+than committing every checkpoint for the rest of the pass. External outbox work is claimed from the durable store.
+Terminal and control boundaries end the session; the end of the pass flushes remaining changes. Only an Ephemeral
+run that completes without any earlier commit can skip its record.
+
+A custom scheduler queue without targeted deletion cannot fold safely: the runtime commits its checkpoints
+immediately in every mode. The standard stores support targeted deletion.
 
 ## Choosing a mode
 

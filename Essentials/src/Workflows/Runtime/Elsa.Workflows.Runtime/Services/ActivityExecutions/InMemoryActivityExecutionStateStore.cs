@@ -1,12 +1,28 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Workflows.Runtime.Services.ActivityExecutions;
 
 public sealed class InMemoryActivityExecutionStateStore : InMemoryKeyedStateStore<InMemoryActivityExecutionStateStore.ActivityExecutionStateKey, ActivityExecutionState>, IActivityExecutionStateStore
 {
-    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    private readonly object _coordinationBinding = new();
+    private InMemoryRuntimeCheckpointStoreState? _checkpointState;
+    internal bool Coordinates(InMemoryRuntimeCheckpointStoreState state) => ReferenceEquals(_checkpointState, state);
+    internal void BindCheckpointState(InMemoryRuntimeCheckpointStoreState state)
     {
+        lock (_coordinationBinding)
+        {
+            if (_checkpointState is not null && !ReferenceEquals(_checkpointState, state))
+                throw new NotSupportedException("A native activity store cannot join two checkpoint coordination boundaries.");
+            _checkpointState = state;
+        }
+    }
+
+    internal void DeleteForWorkflowExecution(string workflowExecutionId, InMemoryRuntimeCheckpointStoreState owner)
+    {
+        if (_checkpointState is not null && !ReferenceEquals(_checkpointState, owner))
+            throw new NotSupportedException("Bulk activity cleanup requires the owning checkpoint boundary.");
         var states = SnapshotValues(state =>
             StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId));
         foreach (var state in states)
@@ -20,7 +36,13 @@ public sealed class InMemoryActivityExecutionStateStore : InMemoryKeyedStateStor
         state.EnsureSupersessionCompatible();
 
         var key = new ActivityExecutionStateKey(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId);
-        return new(Save(key, state));
+        InMemoryRuntimeCheckpointStoreState coordination;
+        lock (_coordinationBinding)
+        {
+            if (_checkpointState is null) return new(Save(key, state));
+            coordination = _checkpointState;
+        }
+        return coordination.ExecuteWriteGateAsync(_ => ValueTask.FromResult(Save(key, state)), cancellationToken);
     }
 
     public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
@@ -68,6 +90,46 @@ public sealed class InMemoryActivityExecutionStateStore : InMemoryKeyedStateStor
             SnapshotValues(state =>
                 StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, query.WorkflowExecutionId) &&
                 StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, query.ParentActivityExecutionId))));
+    }
+
+    // Spec 1229 FR-016: the same contract as the interface defaults, answered from one snapshot of the instance's rows.
+    public ValueTask<IReadOnlyList<ActivityExecutionState>> ListByCommitSequenceAsync(
+        ActivityExecutionStateCommitSequenceQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+        IReadOnlyList<ActivityExecutionState> rows = SnapshotValues(state =>
+                StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, query.WorkflowExecutionId) &&
+                state.FirstCommitSequence is not null && state.LastCommitSequence >= query.FromCommitSequence &&
+                (query.After is not { } after ||
+                 state.FirstCommitSequence > after.FirstCommitSequence ||
+                 state.FirstCommitSequence == after.FirstCommitSequence &&
+                 StringComparer.Ordinal.Compare(state.Execution.ActivityExecutionId, after.ActivityExecutionId) > 0))
+            .OrderBy(state => state.FirstCommitSequence)
+            .ThenBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
+            .Take(query.Limit)
+            .ToArray();
+        return new(rows);
+    }
+
+    public ValueTask<IReadOnlyList<ActivityExecutionState>> ListWithoutCommitSequenceAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        IReadOnlyList<ActivityExecutionState> rows = SnapshotValues(state =>
+                StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId) && state.FirstCommitSequence is null)
+            .OrderBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
+            .ToArray();
+        return new(rows);
+    }
+
+    public ValueTask<long> SumLostUpdateWarningCountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        return new(SnapshotValues(state => StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId))
+            .Sum(state => (long)(state.LostUpdateWarningCount ?? ActivityExecutionState.CountLostUpdateWarnings(state.VariableWrites) ?? 0)));
     }
 
     public readonly record struct ActivityExecutionStateKey(string WorkflowExecutionId, string ActivityExecutionId);

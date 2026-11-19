@@ -1,0 +1,37 @@
+MT               Count    Type
+0000000139042c40 11       Elsa.Persistence.EntityFramework.SchemaBackfill.EfSchemaBackfill+<RunAsync>d__17
+000000013901f4a0 11       Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaModuleGate+<RunAsync>d__40
+000000013901cec0 11       Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaModuleGate+<WaitAsync>d__41
+0000000110cd2f28 4        Microsoft.Extensions.Hosting.Internal.Host+<TryExecuteBackgroundServiceAsync>d__15
+0000000110d6ac68 1        ConsoleLogStreaming.Core.Hosting.ConsoleLogStreamingHostedService+<ExecuteAsync>d__5
+0000000110d9b888 1        System.Threading.Channels.ChannelReader<Nuplane.Hosting.ReconciliationTriggerDispatchRequest>+<ReadAllAsync>d__12
+0000000110d9bf08 1        Nuplane.Hosting.ReconciliationTriggerDispatcherHostedService+<ExecuteAsync>d__5
+0000000139717590 1        Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrain<Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryBatch, System.Boolean>+<RunAsync>d__33
+00000001111cbea8 1        Nuplane.Hosting.ReconciliationHostedService+<ExecuteAsync>d__5
+0000000111ecb298 1        Microsoft.AspNetCore.Server.Kestrel.Core.Internal.ConnectionDispatcher<Microsoft.AspNetCore.Connections.ConnectionContext>+<>c__DisplayClass10_0+<<StartAcceptingConnectionsCore>g__AcceptConnectionsAsync|0>d
+0000000111ec9ad0 1        Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketConnectionListener+<AcceptAsync>d__10
+0000000110da08a0 1        Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions+<RunAsync>d__4
+0000000110d65bb0 1        System.Threading.Channels.ChannelReader<ConsoleLogStreaming.Core.Models.ConsoleLogLine>+<ReadAllAsync>d__12
+0000000110d66860 1        ConsoleLogStreaming.Core.Capture.ConsoleCaptureService+<PublishQueuedLinesAsync>d__26
+0000000112968338 1        Nuplane.Sources.Directory.Hosting.DebouncedDirtySignal+<WaitForNextSettledSignalAsync>d__5
+0000000112968dd8 1        Nuplane.Sources.Directory.Hosting.DirectorySourceReconciliationTriggerHostedService+<ExecuteAsync>d__7
+00000001397173e0 1        Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrain<Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Stores.EfStructuredLogStore+PendingAppend, Elsa.Diagnostics.StructuredLogs.Core.Models.StructuredLogEntry>+<RunAsync>d__33
+000000013cc75a08 1        System.Threading.Channels.ChannelReader<Elsa.Events.Core.Contracts.IEventContext>+<ReadAllAsync>d__12
+000000013cc75de0 1        Elsa.Events.Channels.BackgroundEventPublisher+<ExecuteAsync>d__6
+000000013cc771d0 1        Elsa.Tasks.Services.TaskExecutor+<ExecuteInternalAsync>d__12
+000000013cc77918 1        Elsa.Tasks.Services.TaskExecutor+<ExecuteTaskAsync>d__7
+0000000111eccbf8 1        Microsoft.AspNetCore.Http.Connections.Internal.HttpConnectionManager+<ExecuteTimerLoop>d__14
+0000000111ecf800 1        Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions+<WaitForShutdownAsync>d__5
+Statistics:
+          MT Count TotalSize Class Name
+00013995fb88     1        32 System.Collections.Generic.List<Elsa.Tasks.Core.IScheduledTaskExecution>
+000139960828     2       112 Elsa.Tasks.Core.IScheduledTaskExecution[]
+00013c04db68     6       384 Elsa.Tasks.Schedules.ScheduledTaskExecution
+00013c04e0c8   304     9,728 Elsa.Tasks.Schedules.ScheduledTaskExecution+<>c__DisplayClass12_0
+00013fd2c8a0   115    12,880 System.Runtime.CompilerServices.AsyncTaskMethodBuilder<System.Threading.Tasks.VoidTaskResult>+AsyncStateMachineBox<Elsa.Tasks.Schedules.ScheduledTaskExecution+<Callback>d__12>
+Total 428 objects, 23,136 bytes
+Statistics:
+          MT Count TotalSize Class Name
+00013995f4a8     1        24 Microsoft.Extensions.Logging.Logger<Elsa.Tasks.Services.TaskStateManager>
+00013995f248     1        72 Elsa.Tasks.Services.TaskStateManager
+Total 2 objects, 96 bytes

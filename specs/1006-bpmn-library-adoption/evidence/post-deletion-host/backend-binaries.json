@@ -1,0 +1,1158 @@
+{
+  "sourceCommit": "2a67105af1e4e0c1ce55a45655a48a7cf6a3484c",
+  "containsRecoveryProbe": false,
+  "files": [
+    {
+      "name": "Acornima.dll",
+      "sha256": "cb8517fd1d2c73a3435677dd89a88eb954465fdc666ad95cebbab2c6ea9cdd6b"
+    },
+    {
+      "name": "BouncyCastle.Cryptography.dll",
+      "sha256": "e5eeaf6d263c493619982fd3638e6135077311d08c961e1fe128f9107d29ebc6"
+    },
+    {
+      "name": "Bpmn.Interchange.dll",
+      "sha256": "4199d813b9e6dad4f0ec4f189b05b9084de86fb9a7d46233a85183072d88c6d9"
+    },
+    {
+      "name": "Bpmn.Model.dll",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "name": "Bpmn.Semantics.dll",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "name": "CShells.Abstractions.dll",
+      "sha256": "dbcf0e5d572791124ac582e3a10519d80f01b9f2e4228cffadb61171f796b5a0"
+    },
+    {
+      "name": "CShells.AspNetCore.Abstractions.dll",
+      "sha256": "3b0062c2ad98dc96471a1cb18527855c4a06eb7220cda44c48e89e13cb816084"
+    },
+    {
+      "name": "CShells.AspNetCore.dll",
+      "sha256": "88d7fdcb2776870c9934b0cec9a2bd29e74599c96436f31b99d191adb23d44c6"
+    },
+    {
+      "name": "CShells.Management.Api.dll",
+      "sha256": "095f43a45de27c1fdb93e702c8f5610d467859cca76ab478671ec6b7d8f507f8"
+    },
+    {
+      "name": "CShells.Nuplane.dll",
+      "sha256": "b98848a345f139e0650a2e614ac8be6b82bcd18135cb32de858c55147b7e68a2"
+    },
+    {
+      "name": "CShells.dll",
+      "sha256": "b0afda775aa0c330f982856ebfaeb461c7ea1c5d201998351ba7ca105f69ebc0"
+    },
+    {
+      "name": "ConsoleLogStreaming.AspNetCore.dll",
+      "sha256": "ca50317359e702e6fe5ec4e4a7559c0c3a302484c517ed970ad36deda7b31040"
+    },
+    {
+      "name": "ConsoleLogStreaming.Contracts.dll",
+      "sha256": "7af0f282e5fa75c826d93458675791e53941d2ad02cbdf2d99a704293eec7acd"
+    },
+    {
+      "name": "ConsoleLogStreaming.Core.dll",
+      "sha256": "d981d3084209573bfc6c03064cd4f6da7ea9a439fc3a5b98206050fecfc94c12"
+    },
+    {
+      "name": "ConsoleLogStreaming.Endpoints.MinimalApi.dll",
+      "sha256": "5b88f405cffdb9340f4477e9ab3c3ff66dcdfa13fa2f412aef7d0c2115c2c981"
+    },
+    {
+      "name": "ConsoleLogStreaming.SignalR.dll",
+      "sha256": "60e7da371c4e3b076f116f27c561dfac232ad6ae4b25f9522c7f52b8008bca1d"
+    },
+    {
+      "name": "Cronos.dll",
+      "sha256": "e0ad7c799904f1b663ab090b32665e0e90ede27699937588900845383064ba03"
+    },
+    {
+      "name": "DistributedLock.Core.dll",
+      "sha256": "1ebaf757889a59b3c73ccfcbb80d579c94c6f1affbd3bb9d0fa2dd137780e877"
+    },
+    {
+      "name": "DistributedLock.FileSystem.dll",
+      "sha256": "4fd9cf49af1a9de77587f7fb9197ef65355b3face3552bda6a81c8072eb5c36a"
+    },
+    {
+      "name": "DistributedLock.MySql.dll",
+      "sha256": "956dbf77f159a7f66a549b2753c2017c9a7a2d3e7360b70f72525a6e78714389"
+    },
+    {
+      "name": "DistributedLock.Postgres.dll",
+      "sha256": "9139db52f459e63a51ffd38cb97ef4d432b4d88f727e968df2e1214fd7d71d91"
+    },
+    {
+      "name": "DistributedLock.SqlServer.dll",
+      "sha256": "ca5df312247b84c6fcb6ee216ce9d09b1ea6174bc23f5956c61eb8dfd0e784ce"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.Interchange.dll",
+      "sha256": "449ab49e15576445bbb6bd50b969a2af8b0c4dd2ca102fa1d9d69782cfc1f714"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.dll",
+      "sha256": "379f85e59d1c7e405739344b0d63d250701c1ccab51fb574a265993cc63a691c"
+    },
+    {
+      "name": "Elsa.Activities.Compensation.dll",
+      "sha256": "aa63b0323d809d84c350ad6d1ea3816d5e817b02760a087928b339500a7fdd1e"
+    },
+    {
+      "name": "Elsa.Activities.ControlFlow.dll",
+      "sha256": "5af0441a8a01021fa6303538c2804bff58f67443fda9714de5d88afc51017214"
+    },
+    {
+      "name": "Elsa.Activities.Design.Api.dll",
+      "sha256": "b3a84bed2f0c981c1ab7565970e64148a6ea33ba85e87ea3e13494b374eb2450"
+    },
+    {
+      "name": "Elsa.Activities.Design.Core.dll",
+      "sha256": "ab9e749b66d19e73f4a6f82fae6b8ebe14881edf6d7e2a3170ca2047daf3ff73"
+    },
+    {
+      "name": "Elsa.Activities.Design.Persistence.Core.dll",
+      "sha256": "63caf9c67c9afbec6809603a1ee18357401ec9fa0dd2e5ae14f0a3d4a85d0cc5"
+    },
+    {
+      "name": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.dll",
+      "sha256": "34752661d7f56bf00ca0be38644782b0177f88e98604834312f13b5d538cda15"
+    },
+    {
+      "name": "Elsa.Activities.Design.Reconciliation.Clr.dll",
+      "sha256": "ef055b3731870ebc8ec7dea6f75b099aa1e2aaae495f8985a32fbccf20fc72cc"
+    },
+    {
+      "name": "Elsa.Activities.Design.Reconciliation.dll",
+      "sha256": "8d664416f4c9dee42f3040c93027f5a2b96f6e5b86c847e7a119149bd5977dda"
+    },
+    {
+      "name": "Elsa.Activities.DispatchWorkflow.Design.dll",
+      "sha256": "784cbfee627c7e186d304348678473e2f8ebcc2c45a15c223920a130dbe3e1d1"
+    },
+    {
+      "name": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+      "sha256": "ba9bcee034deeed6a4513a1db01473741306e4572d64598bad7712d857ac98a3"
+    },
+    {
+      "name": "Elsa.Activities.Flowchart.dll",
+      "sha256": "175e65d0c86429cd3dc48149314f78fc8e8e32c143912bc170cd98649cdfbad7"
+    },
+    {
+      "name": "Elsa.Activities.Graph.Design.dll",
+      "sha256": "3937abdb74c2ec450874be62280567ca0bd409f48e77f610f3568548b98810ae"
+    },
+    {
+      "name": "Elsa.Activities.Graph.Runtime.dll",
+      "sha256": "ade68916b4ad9d94b684af146adf80c2ba45bd28a7bf96b7d9422204abd45344"
+    },
+    {
+      "name": "Elsa.Activities.Http.dll",
+      "sha256": "bc301d23c829bf8bb025a9115c66c507663d40cde71d1d1224a0fa21cc3881d0"
+    },
+    {
+      "name": "Elsa.Activities.Primitives.dll",
+      "sha256": "5624c5d6eb6a32c425ed18ff1d52076505dcba10073917c75f07b49ab8085084"
+    },
+    {
+      "name": "Elsa.Activities.Runtime.Core.dll",
+      "sha256": "12ae87375f08c1f3202899e4d34568e6af3bf5391a7318c260cc42df59ee3331"
+    },
+    {
+      "name": "Elsa.Activities.Runtime.dll",
+      "sha256": "59213f2eebfdd73cf60b084ec0c7de58a02daa0107b49e9cd79c228177a87846"
+    },
+    {
+      "name": "Elsa.Activities.Scheduling.dll",
+      "sha256": "a38089c42dfb39627f7228b8d598ea92ddfc450275d5aa6b81662a19f4358872"
+    },
+    {
+      "name": "Elsa.Activities.Sequence.dll",
+      "sha256": "d873fda918e974200332755c66a94eda00736ea16ecd75a5d82b299ddcb45726"
+    },
+    {
+      "name": "Elsa.Agent.Api.dll",
+      "sha256": "66eb37e82e099cff5300e331f5512efbef5aeb76989acf7512945165023ef115"
+    },
+    {
+      "name": "Elsa.Agent.Core.dll",
+      "sha256": "472e93af82fe4e3c7f6932fa2c0ddf72af2ddae1a353035ee652aa233fc8bfba"
+    },
+    {
+      "name": "Elsa.Agent.GitHubCopilot.dll",
+      "sha256": "a41648e520ce1aac668a652291fd632c04013922c1b0263b2704a1ee77515bfe"
+    },
+    {
+      "name": "Elsa.Agent.Workflows.dll",
+      "sha256": "882a2b0d275fdf1d93bedc14feb939aa2ee3859b2b1a93ae57a82b9b7aab8d5a"
+    },
+    {
+      "name": "Elsa.Api.AspNetCore.dll",
+      "sha256": "af82c1bdfb5d23c4c57e1a6e0b4111866a9a16dd0360e5c9f19f7f1b4e6450d4"
+    },
+    {
+      "name": "Elsa.Api.Capabilities.dll",
+      "sha256": "9422104bd6b6c62c7b246c370e6a77d6b9b2d2ace53b7e2223509aadefe6f410"
+    },
+    {
+      "name": "Elsa.Attention.Api.dll",
+      "sha256": "63218febcc9d38d0e01f6c4d3fdc93ee9b9e718bc8b9832b8b11cba74c9d0e1a"
+    },
+    {
+      "name": "Elsa.Attention.Core.dll",
+      "sha256": "a10ea91ca07676722b0b9a312f3411b4778094c7fee4bc5afbb936d75162a4dc"
+    },
+    {
+      "name": "Elsa.Caching.Core.dll",
+      "sha256": "5acadc62b1330f2ad2d0262c1a85e5cb1f96617d8993a31ca7a17a516afda8f1"
+    },
+    {
+      "name": "Elsa.Caching.Memory.dll",
+      "sha256": "9322d46b0908945f93be2a285dda536ce733f09da991e65b5e67e71d93b4dc05"
+    },
+    {
+      "name": "Elsa.Cluster.Core.dll",
+      "sha256": "6398a80c894118422419f402e8141d5d49af7fe075e9075d9abfdd81b7223f5c"
+    },
+    {
+      "name": "Elsa.Cluster.EntityFrameworkCore.dll",
+      "sha256": "07a0854f1e0bc1eb15059fc33c2a840f3dfd0bb6175817482c53ab58e2782b7d"
+    },
+    {
+      "name": "Elsa.Cluster.InProcess.dll",
+      "sha256": "a25260b9d2ccf8d0ec5973448c9e12920c9546f34ff4a44d9e9c274240d473d2"
+    },
+    {
+      "name": "Elsa.Cluster.Readability.dll",
+      "sha256": "093e5ff50c09a2d3f635071278a20a0ad97a8851494cf91b919bb6c4192d1602"
+    },
+    {
+      "name": "Elsa.Connections.Api.dll",
+      "sha256": "dddf934bc685506ae8fc6e8ac3be110ee520acf7118214246d05bf052b5724fa"
+    },
+    {
+      "name": "Elsa.Connections.Core.dll",
+      "sha256": "74c7d5b4613c85e1285c91538f8b359d66f9feb17b072111e973e65e04aed380"
+    },
+    {
+      "name": "Elsa.Connections.Design.dll",
+      "sha256": "4b78e186dbc18db11a32f6e29720210a0d5846e2c6450cfa4c53c2a234f2c63b"
+    },
+    {
+      "name": "Elsa.Connections.Workflows.dll",
+      "sha256": "0edc94e8fd4533d77c1caa1c10acfee33dbec3b2913bba4ce4d6b16c6bd0a0bd"
+    },
+    {
+      "name": "Elsa.Connections.dll",
+      "sha256": "91a4e3343195eda0f389fa0949dcad8e19f696d12afaa042141e69c7dab21d72"
+    },
+    {
+      "name": "Elsa.Diagnostics.ConsoleLogStreaming.dll",
+      "sha256": "c480f3f9f856eabc79c706b8265eec4241dbb343a9a386e8fb9dc10e09dc6c7d"
+    },
+    {
+      "name": "Elsa.Diagnostics.OpenTelemetry.Core.dll",
+      "sha256": "fcc6faed4be19c3e5231cceff156d30c552adab9b414475d11bc5da2a71ac3c8"
+    },
+    {
+      "name": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.dll",
+      "sha256": "af3d383261aa915c679c2f2788068772a406796c49c1bb7a07528fafc27561d3"
+    },
+    {
+      "name": "Elsa.Diagnostics.OpenTelemetry.dll",
+      "sha256": "fe50b18dc6236e79d4e9ccd3f63174a7becfdd1b563500ecbf68832a4d9a717e"
+    },
+    {
+      "name": "Elsa.Diagnostics.Persistence.dll",
+      "sha256": "9559a7ba145aaae26e0cbb751713984c74fc2250266e253ae8b5755a4078be7f"
+    },
+    {
+      "name": "Elsa.Diagnostics.StructuredLogs.Core.dll",
+      "sha256": "9147199a4c16ce9e5a0dc59c21cbb976fdfcee9012e07d1305c9defb2d28085d"
+    },
+    {
+      "name": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.dll",
+      "sha256": "81fc3fee2d2588395e9176dd50e94857a5a1a39423547a0514d1502ead3270ad"
+    },
+    {
+      "name": "Elsa.Diagnostics.StructuredLogs.dll",
+      "sha256": "e74cfa230a7ebb1867369b5a80184fa259eeee192b6210c2c2cbfda59946b705"
+    },
+    {
+      "name": "Elsa.Etl.Api.dll",
+      "sha256": "66106ee76a899bb4ea922287341bfa31536f4bedab6e88f10196b38db490b67e"
+    },
+    {
+      "name": "Elsa.Etl.Core.dll",
+      "sha256": "421230c2e1b5f94ad30e4e6d551904e51de6845f6579d60f7f574b06e6b82e2b"
+    },
+    {
+      "name": "Elsa.Etl.Design.Api.dll",
+      "sha256": "bd525617aaa9dee760196fc3ba2af3e632c17afb9df6f875bac429daebdfb720"
+    },
+    {
+      "name": "Elsa.Etl.Design.dll",
+      "sha256": "7e1a66019743d03c8a8a26f5d6d02d3421cd0073fc3b0a681e037fd2cdd6d7a3"
+    },
+    {
+      "name": "Elsa.Etl.Persistence.EntityFrameworkCore.dll",
+      "sha256": "adb5fd67caceb74f4af0f769b77c3b323bfcdb228a091b7d42ac1bf1f37b417f"
+    },
+    {
+      "name": "Elsa.Etl.Runtime.Api.dll",
+      "sha256": "0f352958da6fca5a7c383b44e67eaa5ac9bb3eae86a5f595ddc5a5824bfb8c31"
+    },
+    {
+      "name": "Elsa.Etl.Runtime.dll",
+      "sha256": "6358e4a53cfd9f6b18ffb5741c56bf581ce22e3f5ec95125dab7be795984bba3"
+    },
+    {
+      "name": "Elsa.Etl.Workflows.Design.dll",
+      "sha256": "8c1f96a038d013f43b39903e335d230169cb6095a4cdbc7134eb36fcbc85397b"
+    },
+    {
+      "name": "Elsa.Etl.Workflows.Runtime.dll",
+      "sha256": "ba00bef8707d65c1bf7683aeacb823de801f740bfdc8dc8fefca331c68439d24"
+    },
+    {
+      "name": "Elsa.Events.Core.dll",
+      "sha256": "42f7bd56c92a0074052f58b306d249ab395ceb37022b6313aa984d2a426f5755"
+    },
+    {
+      "name": "Elsa.Events.Strategies.dll",
+      "sha256": "33e62d94f5b623182631e9b664c825e5d41b64199d282944f243aeadbf15f0f2"
+    },
+    {
+      "name": "Elsa.Events.dll",
+      "sha256": "c2c920b8d6c23c1fde3fc9ce0a0167de4b5a1ea1e6c7ef7680c5af09f313884e"
+    },
+    {
+      "name": "Elsa.Expressions.Api.dll",
+      "sha256": "5f13b0bb0573e18a9aa2fd708c71797c0d1ab7685f8415d135d10f4d8b5931bf"
+    },
+    {
+      "name": "Elsa.Expressions.Core.dll",
+      "sha256": "f969f1e4b0a338abc75522be38d8111b61a8db38ab618ae6e1031df7518c98ea"
+    },
+    {
+      "name": "Elsa.Expressions.JavaScript.Core.dll",
+      "sha256": "5355c643428d6c41e0025efd7be267b4ec13942f1163bb05951cb76a9549ba35"
+    },
+    {
+      "name": "Elsa.Expressions.JavaScript.Jint.dll",
+      "sha256": "25b9f81236820581ddd7efb122bbdf3466a6108f820ef08c3f3b207d9e5ff6d6"
+    },
+    {
+      "name": "Elsa.Expressions.JavaScript.Rendering.Core.dll",
+      "sha256": "0b9aeebb78b1eb07b6b42c0be3489b9788b77889897260f1e69dd24d4fa963a2"
+    },
+    {
+      "name": "Elsa.Expressions.JavaScript.Rendering.dll",
+      "sha256": "c072a34a21b0e6b1b3ffefb1db9f09d151a85568663aa4019c06ce4141c1bba1"
+    },
+    {
+      "name": "Elsa.Expressions.JavaScript.dll",
+      "sha256": "ba6ea93314c82a89d1734b57d77f7ccd0521b5e2b6b28c919e770437fcecf34b"
+    },
+    {
+      "name": "Elsa.Expressions.Liquid.dll",
+      "sha256": "4819da9ae88e3ba50a6ed3d381f5accefb80457b09070b37a9defdbe41d206f0"
+    },
+    {
+      "name": "Elsa.Expressions.dll",
+      "sha256": "f9de97ef8e9d26c7d8c57a7b243a4c8fb283b49c141151e5c3b324b3c32c2f97"
+    },
+    {
+      "name": "Elsa.ExtensionBuilder.Api.dll",
+      "sha256": "a3ec81e0c52de5da5a58b1b85136fc8e9609132476f4d97e344da5ada715bb18"
+    },
+    {
+      "name": "Elsa.Foundation.DataProtection.EntityFrameworkCore.dll",
+      "sha256": "a570e25d3a199aae51311ca66b0b9309a029c081de3f3c42ddb7553cf4d062bc"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.Api.dll",
+      "sha256": "6b530ea8a988ec77eb4c7320004d2cf0b70cc7c3b1a49a61150f15de1ace04e5"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.dll",
+      "sha256": "204f88f12584a0723be1e95212505b6ba27383b9aa62c43087df58b46a1547f0"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.AspNetCoreIdentity.dll",
+      "sha256": "b5030f7b1fadf06c499cfac9d967211ca647f4e692a1fc52e07e074ea3e6a0dd"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.Core.dll",
+      "sha256": "c907c7c92b14e42f8b9556525c066ed10f72a72f8a401d0b2d1571ac9caae1ee"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.Oidc.dll",
+      "sha256": "8651bbf2eca5c5f129d700d3e6fca26abb3125d5aecbf423559e10c13a4827cc"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.OpenIddict.Behavior.dll",
+      "sha256": "a08853bd4ec5e03ec659054a2881a104d95945a07b41de1b9596fb31c83c4ae1"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.OpenIddict.dll",
+      "sha256": "e072ceb0f258b80f4295fa5759768f66f1bb58bdaa8e098a01dae143d3fe82ec"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.dll",
+      "sha256": "b39ee9a0ddeef9ee11f9d314150ba4899b5142e1839300ad78a4c642e01c9011"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.dll",
+      "sha256": "2dd8ae10d8b4079780ab7fee07d8c7c01e0b8192c8a89a456be37cf1aa412287"
+    },
+    {
+      "name": "Elsa.Git.dll",
+      "sha256": "78f07d8efe4e88d1cb5c210517a5c8be1670e33f920e01badc6e09de59d06d8b"
+    },
+    {
+      "name": "Elsa.Http.Core.dll",
+      "sha256": "4b499041dd63aa788e4b4718cb41b86ddf2ee11c5de494ca031c257677b709cb"
+    },
+    {
+      "name": "Elsa.Http.JavaScript.dll",
+      "sha256": "9ef8773822683e6351efe3d78731b8756f4a06e64d5ce742b97f6a08f2f6dbbf"
+    },
+    {
+      "name": "Elsa.Http.dll",
+      "sha256": "ae3c49cbbe399d6c5b3f45dc1cdcdaa6ae0281bcf59fa2ce2c73848d69d28ccc"
+    },
+    {
+      "name": "Elsa.Locking.Core.dll",
+      "sha256": "2d3d828805caf2fd7216f5d06cbe3511bbb555ad2fee25e695745df93eca291d"
+    },
+    {
+      "name": "Elsa.Locking.Database.dll",
+      "sha256": "55d7d1fab45beda8bcb2a131945b7049682af93bcb94a978cc2da244fd94fd80"
+    },
+    {
+      "name": "Elsa.Locking.FileSystem.dll",
+      "sha256": "512c73bf19519a13742fd6c4db8f949a2ba08772d86accb5f8792df37f504e87"
+    },
+    {
+      "name": "Elsa.Mediator.Core.dll",
+      "sha256": "672a8cb1eafbcd4edde188f3bcf7dcf43c680b471b04283c892cafe01bd19143"
+    },
+    {
+      "name": "Elsa.Mediator.dll",
+      "sha256": "fb69ca9b70822f2fd16997342a51bf44e14eb232225961614c15876e62e4ed98"
+    },
+    {
+      "name": "Elsa.Modularity.Api.dll",
+      "sha256": "9c24f7f2a76228975492a27c17825fc9ca119e9d8c5ef2cbadfe0542b10c3db0"
+    },
+    {
+      "name": "Elsa.Modularity.Core.dll",
+      "sha256": "ebe327fd360247b85d87ad59a9ba9e81ad96f1f5bc858e5bf05fee6841df5694"
+    },
+    {
+      "name": "Elsa.Modularity.EntityFramework.dll",
+      "sha256": "182ac160fedeb99aeacf513ddb8e5cc5f37e58cc9e6137981cc398950821429c"
+    },
+    {
+      "name": "Elsa.Modularity.Nuplane.dll",
+      "sha256": "6ae8cab2bf90b28ed3d31a8f5033a04f1b28e91cf2c09d08cef383b3e5ebde19"
+    },
+    {
+      "name": "Elsa.Persistence.EntityFramework.dll",
+      "sha256": "1681230f667349f9f130fc4b6859a0a76a567233fdfd9d5235d4a17d40fbbfe3"
+    },
+    {
+      "name": "Elsa.Persistence.Schema.dll",
+      "sha256": "4037032c5ba1d5e337c8c86d2ad4b5b5d4ad9ad801bdd1f77e35ea71da524d9f"
+    },
+    {
+      "name": "Elsa.Pipelines.Core.dll",
+      "sha256": "68c237c512ad2a4f2a6169e0f64abd7bd458b54f75c523e19d332ae561260510"
+    },
+    {
+      "name": "Elsa.Primitives.Hosting.dll",
+      "sha256": "0dc9875c0eca9c94a1fe7a2e3a8754b587e8d0f685c16ef323b28eaadcb252c7"
+    },
+    {
+      "name": "Elsa.Primitives.dll",
+      "sha256": "c3b358910e179e57b395566025c0ebf103847f61bbaf3a65ad7c0a7c4cd8a2f1"
+    },
+    {
+      "name": "Elsa.Rules.Core.dll",
+      "sha256": "39f4aa81b4d4c0c685bb49deaf31e786fbb0360bd56c4de64beced15c3cb72b3"
+    },
+    {
+      "name": "Elsa.Rules.Persistence.Core.dll",
+      "sha256": "6249c6f5e975aa7b921fab1180d547292ba873b8e891179b19196a3e412a4916"
+    },
+    {
+      "name": "Elsa.Rules.Persistence.EntityFrameworkCore.dll",
+      "sha256": "7e7e0a788103c0400e01f38e370e69142b284075bc1c3f5fc4cdae575e404173"
+    },
+    {
+      "name": "Elsa.Rules.Runtime.dll",
+      "sha256": "5349ff00a4b20be370cf0573bcc8f8da83725cb5da2e5c3ba08a68a868b27c57"
+    },
+    {
+      "name": "Elsa.Rules.Workflows.Design.dll",
+      "sha256": "43d3be48b619e3b22858f9e2929f96fa743874419cc7c0d98df6e53916108077"
+    },
+    {
+      "name": "Elsa.Rules.Workflows.Runtime.dll",
+      "sha256": "10a88c0ab2e4a365f7ec90e93eb598177832a7d77b2c5c0240e90ab6721eb74b"
+    },
+    {
+      "name": "Elsa.Secrets.Api.dll",
+      "sha256": "10ca127370b7ef5bf8af30e5f8eae5d67c51c333b057d9f8e73063a9824337b0"
+    },
+    {
+      "name": "Elsa.Secrets.Core.dll",
+      "sha256": "c3677b62026782a09655b9304798435eba25ef4af8f65e74fdac5500fd408642"
+    },
+    {
+      "name": "Elsa.Secrets.Persistence.EntityFrameworkCore.dll",
+      "sha256": "23894fd25488affa5af52e16ab63b52f3f5a804aa7381b4c6c8c69c1a352d976"
+    },
+    {
+      "name": "Elsa.Secrets.Workflows.dll",
+      "sha256": "db7d3c528a31b2b3a2dae286f4e1061417ec56235502a45fb201e635f9f2642e"
+    },
+    {
+      "name": "Elsa.Secrets.dll",
+      "sha256": "9b618afe608b0882ecc9b49fb919ab550504501b76537d551e96594465880618"
+    },
+    {
+      "name": "Elsa.Serialization.Core.dll",
+      "sha256": "67452c93b7110dc859ea3512df4066486db91850d9f90504f3ea26a8c5a24f97"
+    },
+    {
+      "name": "Elsa.Serialization.Newtonsoft.dll",
+      "sha256": "a0a769586b148384eb9b0dff641fe48e571c5547a6f4717c57e9bb01132a2266"
+    },
+    {
+      "name": "Elsa.Serialization.SystemText.dll",
+      "sha256": "5b5d569cbcd0a505df4d50697d55873a06a1d0e2c5966172453466c8e93f0b46"
+    },
+    {
+      "name": "Elsa.Specifications.PackageManifests.dll",
+      "sha256": "25d3d1f887c9c01bc4e9fb46b926682a812804ef184fe189a67fb13ec43d1a58"
+    },
+    {
+      "name": "Elsa.Studio.Preferences.Api.dll",
+      "sha256": "45d3bf84c2ff8abe990ab5110a945f90818eb77ed0ed79c9ca39396f79c7cd21"
+    },
+    {
+      "name": "Elsa.Studio.Preferences.Core.dll",
+      "sha256": "c0487340f682b840527028d7771e4e101b133ea9bca3d7b6a7b40977158a91dc"
+    },
+    {
+      "name": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.dll",
+      "sha256": "6dbabf21798e0e3d372b271f32fbe26545769fd53a5efc35ac20d2697b7a2a85"
+    },
+    {
+      "name": "Elsa.Tasks.Core.dll",
+      "sha256": "69f28edd7be340b06ece92a5264c01a98ab690b65d0672ce925cc86ab4ad88cc"
+    },
+    {
+      "name": "Elsa.Tasks.Schedules.dll",
+      "sha256": "085dd431ef1ab1d60467051e4457f1688dea6ed45dc1c58dc4f66cae92747105"
+    },
+    {
+      "name": "Elsa.Tasks.dll",
+      "sha256": "6ceb5873b8d81ed4338f36062b00a79de8c2bdb24378ff61d257ad27aacb9186"
+    },
+    {
+      "name": "Elsa.Workbench.dll",
+      "sha256": "19a3c3b841f835b90168a1a4d7f1269afe2d0012f0b40478ca75fd0486a496fe"
+    },
+    {
+      "name": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.dll",
+      "sha256": "0e5d966644503ba1869b45bda203cde6b6f5facb2951328e81cc4ccf2523727e"
+    },
+    {
+      "name": "Elsa.Workflows.Dashboard.dll",
+      "sha256": "ad1ff258838c81ed0907924ed363ae3e9ac7d5c3c0f48b87de1cb7699472a1e5"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Api.dll",
+      "sha256": "e31042374839e77ea3eb56f5eefeb6545180594213d9e42dc2fdb5dccd3c78ef"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Core.dll",
+      "sha256": "b26bb63eeb232fb7c73e55643b546dfe694c6da66128bdceb1febf72dccbd6e3"
+    },
+    {
+      "name": "Elsa.Workflows.Design.JavaScript.dll",
+      "sha256": "09e5bf13b06473d7be465d1fa9f4fe56f4408da3f38fec9a15874632879c23c8"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Persistence.Core.dll",
+      "sha256": "19f77d0f2917dfcae7197971bcc354ed0286c52faaac916183e3ccfa015fe671"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "sha256": "7266afce1a72ccf7de41f39c2ebdc65556e868fb6d3f13f0836d1f71a95f3a99"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Reconciliation.Json.dll",
+      "sha256": "1fd85d5cb6ba863e76e17ef2a22f1c26196b36eaed76c7cbd28be18cebe71a0b"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Reconciliation.dll",
+      "sha256": "893e18948d5b248fa9d5e720ed8ae28803cad4f38f091d94826e3f92795ee2e5"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Validations.Core.dll",
+      "sha256": "fde626d82881d252555e248e96d3c1756e411bc088df367140761a411bc414db"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Validations.dll",
+      "sha256": "21e38d412013dfc816cfe2fbb13c74ee3b01b0b7ddbd29b83db884754c7c7f1a"
+    },
+    {
+      "name": "Elsa.Workflows.ExecutionEvidence.dll",
+      "sha256": "3428f51133660b3c3b9922952a2d87f6ccc16c3206782e67f67347c238743e70"
+    },
+    {
+      "name": "Elsa.Workflows.Publishing.Api.dll",
+      "sha256": "9562de4c1f8fa732a27c16545d96f4c87c68321a71b6b7c7d45e0ad861388ef6"
+    },
+    {
+      "name": "Elsa.Workflows.Publishing.Core.dll",
+      "sha256": "313e801677386bd533764bdb5146d9aaad298da886f49ad7d0dabeb70e07b2ed"
+    },
+    {
+      "name": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.dll",
+      "sha256": "e22b1f41a8d68c9fe86cc8fc7a9cd12526935773175e4682e09f64d5e9089f55"
+    },
+    {
+      "name": "Elsa.Workflows.Publishing.dll",
+      "sha256": "39c80f9b485aab798543ff4d64ed0b797147868144db13f6e8e5455040870d10"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Api.dll",
+      "sha256": "5693e3f041fcaa7536867366d4fa088a9ee0919a940839ff18b7551ef617c869"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core.dll",
+      "sha256": "97dcbb689a24b610832ffbd6e1c9f7204638551f5094b4bf30886620b4e0931f"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.dll",
+      "sha256": "c5ce1ea202457c42560067ea861695c287a5f369cdc46fadd5df528d507d349d"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Distributed.dll",
+      "sha256": "ba6457d87d0738b0c66fa32bbc30e5025f1122fad6d6d65da0387862ea473f2c"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Http.dll",
+      "sha256": "199f518fdc07dd5124f0691d4162b9e7ad94bb56006eb527012e62e2b6dec6f6"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.JavaScript.dll",
+      "sha256": "ecb6e4b42d4bd8794d1a2557cf179596207fafb41b96f8e098bd5999f925400a"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "sha256": "856b907617e3593cf13bf2cc7321260be0f5a9878f22f92329ff7d89189703d9"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Reconciliation.Core.dll",
+      "sha256": "5b4f2e6737771192f132cb9842a2e58443aad1d6aa60df2090fb1115ad3dfc7e"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Reconciliation.dll",
+      "sha256": "81609b8bb9d5bc030b11d0b566ad529bf588743302fa5ff72a3610caf339382f"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.ReferenceGarbageCollection.dll",
+      "sha256": "b98b97d4a160268d73d64103570a3b407d5df59e007698b0ac581f6b7b184e71"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Resumption.dll",
+      "sha256": "8ff2c1524f91d7c1ce6f9546e174c371e2c6d90137af7a63ccabfb3f0f13bf34"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Scheduling.dll",
+      "sha256": "5424ebc1700af57ce225c2b3483ec29df77df6ef6fbe8048b7562f1548c3d0eb"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.dll",
+      "sha256": "c0a56c28d6ba6b62d6798162fbf0981f91d50dd560cd280e45765ba3c02822aa"
+    },
+    {
+      "name": "Fluid.dll",
+      "sha256": "0081cfa18a52b13890d5c07414c2270f665d8d01155a116838dc7d22f2cf21eb"
+    },
+    {
+      "name": "GitHub.Copilot.SDK.dll",
+      "sha256": "8fc167d97f7e7dd458d0733e9884940a60f49482d006315c9e0a1e3ded59ed58"
+    },
+    {
+      "name": "Google.Protobuf.dll",
+      "sha256": "e9b892ac667931162ffefa411ef8dc3eae777d634d8bfe8beddc28b1de95a612"
+    },
+    {
+      "name": "Humanizer.dll",
+      "sha256": "2769ed8265b691a5482c72506ed274dc52446fa1641997a8c12c66f5b9263d39"
+    },
+    {
+      "name": "JetBrains.Annotations.dll",
+      "sha256": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6"
+    },
+    {
+      "name": "Jint.dll",
+      "sha256": "fa249efd0fab27adfd52b392cc5a463dd17579e243d31507a1f75117df5dc20a"
+    },
+    {
+      "name": "Json.More.dll",
+      "sha256": "80b6cd50331fa2ded4fbacdbf80dcedd2b142dee679df227c30299d2a3c3840f"
+    },
+    {
+      "name": "JsonPointer.Net.dll",
+      "sha256": "ab3e8236f02d8b5110d0bca4f640b1e8550728facfe740d65e0f4bd158c59f8f"
+    },
+    {
+      "name": "JsonSchema.Net.dll",
+      "sha256": "25d0959cabaa32fef747dad9ee77932eeffa9c11f3f83eec4e44d7b686d3f14e"
+    },
+    {
+      "name": "K4os.Compression.LZ4.Streams.dll",
+      "sha256": "b146cf3c769000cd5e4458cfed5da3c0e838b7b2da6dbe6dad458cd5a0e3ce41"
+    },
+    {
+      "name": "K4os.Compression.LZ4.dll",
+      "sha256": "e282aadc2353b864fe95cd5fb525a1a093d99a30a5bf2530b7ab831d56179816"
+    },
+    {
+      "name": "K4os.Hash.xxHash.dll",
+      "sha256": "19d73fa58c1f6c12c61f30eaad91881bd06f50caf4b462b061bc1b45d0a577cd"
+    },
+    {
+      "name": "Microsoft.AspNetCore.Authentication.JwtBearer.dll",
+      "sha256": "3f761f1ee42fee554c65f6a67513a2dfa8064247b2f6eaa199df5e8f47ca3717"
+    },
+    {
+      "name": "Microsoft.AspNetCore.Authentication.OpenIdConnect.dll",
+      "sha256": "b64149e5e0bb5a70fdd96b60ed8c8cf617f83c16a1849582c73439b41766751c"
+    },
+    {
+      "name": "Microsoft.AspNetCore.OpenApi.dll",
+      "sha256": "3975ea6c1f843bd227e51775ae2c70b23e30cb031f664f5adf5560b5f7a3da48"
+    },
+    {
+      "name": "Microsoft.Bcl.Cryptography.dll",
+      "sha256": "91c6bab93638c268569a38bc87770a5e3ef9932676f5b7a6d47aef4208062925"
+    },
+    {
+      "name": "Microsoft.Build.Framework.dll",
+      "sha256": "1a7c784aefd2df26a77a4f8e8b46722da73b82578eca1e1cb6edee54e5bf6061"
+    },
+    {
+      "name": "Microsoft.CodeAnalysis.CSharp.Workspaces.dll",
+      "sha256": "bf30fb9aafcd99c4a74b9d6733774abcbf82c4a836c5a94fae6d91c45523f085"
+    },
+    {
+      "name": "Microsoft.CodeAnalysis.CSharp.dll",
+      "sha256": "36f5ac8da30a6107f53a2ca6509b61e284c08eb59aa1b22956d4e200e4514aa5"
+    },
+    {
+      "name": "Microsoft.CodeAnalysis.ExternalAccess.RazorCompiler.dll",
+      "sha256": "5092cc2cee3f241a2bf3abec35096b0669cb181720a3cf463cddf7f6a45c1a0b"
+    },
+    {
+      "name": "Microsoft.CodeAnalysis.Workspaces.MSBuild.dll",
+      "sha256": "746a9474ed7f0f6a5102b88379c3312edc41eca664a8b3b7717ba31b1cede73f"
+    },
+    {
+      "name": "Microsoft.CodeAnalysis.Workspaces.dll",
+      "sha256": "79498055635572590009a4781a6e3ee1e2e70e3085b2ea3ce161820f809b0b2b"
+    },
+    {
+      "name": "Microsoft.CodeAnalysis.dll",
+      "sha256": "10f489db67b8ac7489e58d392166c928302ba5698506dd652311da5d89f0a0f8"
+    },
+    {
+      "name": "Microsoft.Data.SqlClient.Extensions.Abstractions.dll",
+      "sha256": "83ca9271c19f983192adbcbf60678ac85f40fc7bef12de3fe5a1f51e969f96e9"
+    },
+    {
+      "name": "Microsoft.Data.SqlClient.Internal.Logging.dll",
+      "sha256": "dc6de8302cf8ac480aff894f60e75e625753c893b8be5e43b28779eb65bc521b"
+    },
+    {
+      "name": "Microsoft.Data.SqlClient.dll",
+      "sha256": "a66f0534a8d29fe93b5c0d6c30f8ba0a8982d402dc090724b66634dcfdb60964"
+    },
+    {
+      "name": "Microsoft.Data.Sqlite.dll",
+      "sha256": "1078d41c6c0f2cee48a8b706e3a54ce145705993f19f703d2b3bdf2abcc59088"
+    },
+    {
+      "name": "Microsoft.EntityFrameworkCore.Abstractions.dll",
+      "sha256": "98c8252995283ef0884b904dbab03696ca7f71a05b8dde34dace5eeb9bf4382c"
+    },
+    {
+      "name": "Microsoft.EntityFrameworkCore.Design.dll",
+      "sha256": "221225b835ba211d81cf347853e35f744195aafff7c38053586eb893a7fd9dee"
+    },
+    {
+      "name": "Microsoft.EntityFrameworkCore.InMemory.dll",
+      "sha256": "38762f63547e701db38f3359998b5e01ebaf2109f25123c3323552fedf478dbe"
+    },
+    {
+      "name": "Microsoft.EntityFrameworkCore.Relational.dll",
+      "sha256": "ac1146e68d53d56b79e9473f68c557999de99674be392bbbbb02ae93a296b93e"
+    },
+    {
+      "name": "Microsoft.EntityFrameworkCore.SqlServer.dll",
+      "sha256": "08720d3096322c50b2e79cc34a701223317bf1b249cf36444ec2ed995c5f77f1"
+    },
+    {
+      "name": "Microsoft.EntityFrameworkCore.Sqlite.dll",
+      "sha256": "b8c5027b27be2012094699cbd5260239778a1891dc5c1887797d331b67f0ef89"
+    },
+    {
+      "name": "Microsoft.EntityFrameworkCore.dll",
+      "sha256": "acb89dff050d681fab6f86d2175929471200b9bed66ac9321cbe6a17eaa26933"
+    },
+    {
+      "name": "Microsoft.Extensions.AI.Abstractions.dll",
+      "sha256": "1d9e42c94e8b4e4b4da051123dddd96ae09e99fc1f42eb5437349c96f6269592"
+    },
+    {
+      "name": "Microsoft.Extensions.AmbientMetadata.Application.dll",
+      "sha256": "5f53637a65ef3711361fd580895ef820d6f69516dc4a479d186b86c1362ca4de"
+    },
+    {
+      "name": "Microsoft.Extensions.Compliance.Abstractions.dll",
+      "sha256": "9f10c70e16dcf4b47712bc1f4aed1d344e0069aee9ab66d70a3247ac6489b312"
+    },
+    {
+      "name": "Microsoft.Extensions.DependencyInjection.AutoActivation.dll",
+      "sha256": "5b6ddd3cbfa53b4dc3fbc30dbce2e26413994b4d1604f8e42918cb50b350fccf"
+    },
+    {
+      "name": "Microsoft.Extensions.DependencyModel.dll",
+      "sha256": "2385bfbc9344e03acb2ff44f1ed21a3770fbafdf1ba4be2dbcacd42027b8c3bd"
+    },
+    {
+      "name": "Microsoft.Extensions.Diagnostics.ExceptionSummarization.dll",
+      "sha256": "d92058ee670b7d7ae75e3d7c373aa0e3cca1fa3643b0c87939179d99744c3785"
+    },
+    {
+      "name": "Microsoft.Extensions.Http.Diagnostics.dll",
+      "sha256": "6d25a1af1da17ece2fc61fe052cd97056724dc48e71c787513dae4b6a68d4c6d"
+    },
+    {
+      "name": "Microsoft.Extensions.Http.Polly.dll",
+      "sha256": "57fd79e42b59f04821aa21685fa1d9aa7e4c040eb7ece46624cc19881643f8a6"
+    },
+    {
+      "name": "Microsoft.Extensions.Http.Resilience.dll",
+      "sha256": "2fbefe2089cd78affad0392124ab25ef3ea78413b521daed6141017f97c91e39"
+    },
+    {
+      "name": "Microsoft.Extensions.Resilience.dll",
+      "sha256": "cfd35e04aeacc45a1d925e75d73243220364467e589d6eea5f431ae4d04be975"
+    },
+    {
+      "name": "Microsoft.Extensions.Telemetry.Abstractions.dll",
+      "sha256": "4db23ac3eff895e8bc644e95cff3f05932425769560440d1fc56c5fc2b61504d"
+    },
+    {
+      "name": "Microsoft.Extensions.Telemetry.dll",
+      "sha256": "effa0d6dc6e067f3773ad95f55c53fecf93834dcece964b736adf72d4ace6b56"
+    },
+    {
+      "name": "Microsoft.IdentityModel.Abstractions.dll",
+      "sha256": "84a6c307fe84453c9fc3a1af45bf2302b5d2aba4d5b9bfb7d581d6a28787461f"
+    },
+    {
+      "name": "Microsoft.IdentityModel.JsonWebTokens.dll",
+      "sha256": "4f61fd3d3f5003951a09cdd27ffdc3c4841a158d27a6d7247be3e5939e7dab32"
+    },
+    {
+      "name": "Microsoft.IdentityModel.Logging.dll",
+      "sha256": "2bc4582ae62236f066901a7dcb2a88d04a181ad1978f2db2f4314df6ae1a50c6"
+    },
+    {
+      "name": "Microsoft.IdentityModel.Protocols.OpenIdConnect.dll",
+      "sha256": "7921aef6fa1da2e563a237dda129b12407ac6c56448bb0eb7eebc59bb6c6babb"
+    },
+    {
+      "name": "Microsoft.IdentityModel.Protocols.dll",
+      "sha256": "40ada0b98384788970117cadf63863edd99bd5bd6fb8076f6da68d65f6dbda4f"
+    },
+    {
+      "name": "Microsoft.IdentityModel.Tokens.dll",
+      "sha256": "106db045348a9b767f3002d4ec3bb582c9141f6d8e9966e1e0ad58a71ba42b8b"
+    },
+    {
+      "name": "Microsoft.OpenApi.dll",
+      "sha256": "64497b0a954493014d15494bb89f09dbed059b13efe64cdf008d5f0f6bf197e5"
+    },
+    {
+      "name": "Microsoft.SqlServer.Server.dll",
+      "sha256": "a9dca1b42bc875f966b78b2c0880e62b838f0ed6567166d7f1f07ae4b76ec4bf"
+    },
+    {
+      "name": "Microsoft.VisualStudio.SolutionPersistence.dll",
+      "sha256": "a1150f4a162d9c9992b6e99b2949e2de092017182264218b7b5666ceebbc16d4"
+    },
+    {
+      "name": "Mono.TextTemplating.dll",
+      "sha256": "e9f742d672c8f567471974fcb7163f955d1e1f01060bb15d067ac220361d23cb"
+    },
+    {
+      "name": "MySql.Data.dll",
+      "sha256": "6bee001910fde1476f19672b4aa9bb7c47c69509aa2d3e3645a890ca7f5f7616"
+    },
+    {
+      "name": "MySql.EntityFrameworkCore.dll",
+      "sha256": "045ad7df78d77c3090c02e0702921ec7bcb1dd083ed1a32e4c78b8dcbdf857e2"
+    },
+    {
+      "name": "MySqlConnector.dll",
+      "sha256": "84d297e722db70c78db88ed5f8b273686cb06851ad4e1c14cc7465c4bc482302"
+    },
+    {
+      "name": "NativeEndpoints.dll",
+      "sha256": "33b9de8bc38d14d7a08ec814b5b3f6ca1c0f45feddc071228bd1c39eeb401d47"
+    },
+    {
+      "name": "Newtonsoft.Json.dll",
+      "sha256": "a28c251dfe36d881e9e2462e171441b8b0ec156fe3f452602c9149b1b9efe05b"
+    },
+    {
+      "name": "Npgsql.EntityFrameworkCore.PostgreSQL.dll",
+      "sha256": "0b8ca4484e12f1cd119fc6b4711015ba6ce2364f9890504f6f4f13036c2075bf"
+    },
+    {
+      "name": "Npgsql.dll",
+      "sha256": "e2bcafe1660fe4543fe9dfcabed972ec8d32259e5ea8009462ce1de23c7034c2"
+    },
+    {
+      "name": "NuGet.Common.dll",
+      "sha256": "4134339735c6268fa0531fc99d50912477a4e361e0b5bf585815b5c0d52f1cd9"
+    },
+    {
+      "name": "NuGet.Configuration.dll",
+      "sha256": "50e8989369403fb4e014d06369decb8be8be4e737ce374a05a135091a506ab2b"
+    },
+    {
+      "name": "NuGet.Frameworks.dll",
+      "sha256": "b85df18649cd9261dac5603a712b986c18c8d9b9f3000fea57ffae6f9d591cbe"
+    },
+    {
+      "name": "NuGet.Packaging.dll",
+      "sha256": "825f825fe271585a2cce2b1890a445e9fd27b122bc034d6febdb4231b1d89d4b"
+    },
+    {
+      "name": "NuGet.Protocol.dll",
+      "sha256": "1185a5658e886f4476a4b14eb2ac67f62783cd1e304a418794d3d3fed899e5c2"
+    },
+    {
+      "name": "NuGet.Resolver.dll",
+      "sha256": "9fca0b3617ccd63919ae9cb64d8810e45c89e04436fdcae380d36610dd577321"
+    },
+    {
+      "name": "NuGet.Versioning.dll",
+      "sha256": "83a2b7f97cb9ab52a4a75ab7948c123f6049b421c4b0f09552c83d5522cb1255"
+    },
+    {
+      "name": "Nuplane.Abstractions.dll",
+      "sha256": "bf106e06f163cf57de6ef4bd7cca117822a49064081cd4d75010a833a11361cb"
+    },
+    {
+      "name": "Nuplane.Admin.dll",
+      "sha256": "63c206782f6e71b792b30d0f812077f8281988895c4baddd829ab4ae3dff5738"
+    },
+    {
+      "name": "Nuplane.Loading.Abstractions.dll",
+      "sha256": "8449e0385ed07faf47f42fe00576e0e074462faee38f967e38cdcf0c1c51323c"
+    },
+    {
+      "name": "Nuplane.Loading.dll",
+      "sha256": "c4257fb7f727eba88664a3ca3e0fc1421d30e6fe22bedd1a7aa6c98089348b4f"
+    },
+    {
+      "name": "Nuplane.Sources.Directory.dll",
+      "sha256": "58fb81dc2a06d3c3aaa4b7b43ab37f6195da3096f65049e06b377489f25f8302"
+    },
+    {
+      "name": "Nuplane.dll",
+      "sha256": "89c53f694b0c9a289227101a60df726de81002b38ba63a6fdb3f4ec91c3afd44"
+    },
+    {
+      "name": "OpenIddict.Abstractions.dll",
+      "sha256": "943392fd6e019bf114f940794c87677ead56e25c38dd1379d776083dc57d94e6"
+    },
+    {
+      "name": "OpenIddict.Client.AspNetCore.dll",
+      "sha256": "5d8ddd9d89841eb2084594621e33020f516ad390395f5c7b9df0eabe33d320ec"
+    },
+    {
+      "name": "OpenIddict.Client.DataProtection.dll",
+      "sha256": "20fe9d1e5c97a49e436590b89edb5be4cf3d3ee74d57ae187c01ea0a6c008ebd"
+    },
+    {
+      "name": "OpenIddict.Client.SystemIntegration.dll",
+      "sha256": "ab5c3c28a8d961fd6682b31fbd42a2b71dd1425e0660ecf0ce355356e05d0a20"
+    },
+    {
+      "name": "OpenIddict.Client.SystemNetHttp.dll",
+      "sha256": "cfea8c676644ba54a5235b05b34e22387a9e5795ac5a270b14dab93ee38cb562"
+    },
+    {
+      "name": "OpenIddict.Client.WebIntegration.dll",
+      "sha256": "12d968c018070707acffc93aa4cb66cfc3028e70e5cd77a3e206392ec5fee9cb"
+    },
+    {
+      "name": "OpenIddict.Client.dll",
+      "sha256": "2720f1900bdbefc0d4c6392492ee2835a06da936833061cd5d3f5c52795e5717"
+    },
+    {
+      "name": "OpenIddict.Core.dll",
+      "sha256": "9130dc2c9d163b5f81deca2e2613fe2e0a1e48db18e2b78e61e4a722252edfd5"
+    },
+    {
+      "name": "OpenIddict.EntityFrameworkCore.Models.dll",
+      "sha256": "d67d74d1f3060cd8df716624a049ebe46a9dd78aa521c880d6cc1d7a73005197"
+    },
+    {
+      "name": "OpenIddict.EntityFrameworkCore.dll",
+      "sha256": "cd331e48d6630b53fc7ac66f15547e0796210914e4bd99d7c789a25d696ba865"
+    },
+    {
+      "name": "OpenIddict.Server.AspNetCore.dll",
+      "sha256": "be3708cf6e8e82ea9e9b39e246e5588b718e06c57e34314a142a7440e4a2e437"
+    },
+    {
+      "name": "OpenIddict.Server.DataProtection.dll",
+      "sha256": "5630657fdb3e95d2f48c43cc40ff73e5dff49024baad9bb985a8cd3f4137292d"
+    },
+    {
+      "name": "OpenIddict.Server.dll",
+      "sha256": "44e47b46632caaa3507ca54bd8f384db69946e3fcc77da9ef696b7eab0e805a7"
+    },
+    {
+      "name": "OpenIddict.Validation.AspNetCore.dll",
+      "sha256": "4bbc6bfb5ecad7b93d666d7fd66b56c9d421b30043a215243435db7ffcb557d7"
+    },
+    {
+      "name": "OpenIddict.Validation.DataProtection.dll",
+      "sha256": "8fcd7ecda0ae5e2af9ea5819e14135ef9092d9248f6b77332d3f5d65c00618f6"
+    },
+    {
+      "name": "OpenIddict.Validation.ServerIntegration.dll",
+      "sha256": "83db6fec82b2d416bc63dd8ed16bad9b80d82348a08fbf279d2dd4f359ff1523"
+    },
+    {
+      "name": "OpenIddict.Validation.SystemNetHttp.dll",
+      "sha256": "5dcb6724e96719d0933185f8891cac5c476ae4d56db6d1dcb21892367c69e6b1"
+    },
+    {
+      "name": "OpenIddict.Validation.dll",
+      "sha256": "e08796c86631f43fbbc4abd4fb6aa160e27a8d82609386f87dbc3490cde0a5b4"
+    },
+    {
+      "name": "Parlot.dll",
+      "sha256": "148e767c850931a4c9c6290301771a23383fa881dfff539826f186900965ab0e"
+    },
+    {
+      "name": "Polly.Core.dll",
+      "sha256": "7d5bf167f967457370f5d7d0a209e07673fa92a3304961b74dd9e27cd432db29"
+    },
+    {
+      "name": "Polly.Extensions.Http.dll",
+      "sha256": "d85928ecbae1a7ba8ef218bcbc38e731daa531456b5d18e160f49a5e3844025c"
+    },
+    {
+      "name": "Polly.Extensions.dll",
+      "sha256": "620afd797c79f4f0eeacb1d4954620bc18d4c5e0b3a2531b363ee4ef2d7e22a9"
+    },
+    {
+      "name": "Polly.RateLimiting.dll",
+      "sha256": "afe3042cd4062438857d42880623845f32575375f460fd1ac07f705ea0211804"
+    },
+    {
+      "name": "Polly.dll",
+      "sha256": "4fb8ff4f77b031f4ed51aadb0e494ef62c9f4f0a8382b972d34a9999707073dc"
+    },
+    {
+      "name": "SQLitePCLRaw.batteries_v2.dll",
+      "sha256": "e83aed1d42d8ae806abeb02f0233a477275b82b5db92c92aa0c243255ab6a793"
+    },
+    {
+      "name": "SQLitePCLRaw.core.dll",
+      "sha256": "1e18b89ea319bffb633ea5698d8958cdaae3de8c5ac855353c7c6ad292795403"
+    },
+    {
+      "name": "SQLitePCLRaw.provider.e_sqlite3.dll",
+      "sha256": "64f5e6797a789e6f212cf619cc42af3888e64df3d2ac2b35b81304e5d0945b9d"
+    },
+    {
+      "name": "System.CodeDom.dll",
+      "sha256": "bfb75074ac26c7632bbe9ffc1063ceca9a56aae86ac4913481d6bba88c4c4a34"
+    },
+    {
+      "name": "System.Composition.AttributedModel.dll",
+      "sha256": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128"
+    },
+    {
+      "name": "System.Composition.Convention.dll",
+      "sha256": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474"
+    },
+    {
+      "name": "System.Composition.Hosting.dll",
+      "sha256": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6"
+    },
+    {
+      "name": "System.Composition.Runtime.dll",
+      "sha256": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa"
+    },
+    {
+      "name": "System.Composition.TypedParts.dll",
+      "sha256": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071"
+    },
+    {
+      "name": "System.Configuration.ConfigurationManager.dll",
+      "sha256": "c94e388bfb199e1c4fdd97cca122dc8470c85ee46614b2f202fbd9c823f00660"
+    },
+    {
+      "name": "System.IdentityModel.Tokens.Jwt.dll",
+      "sha256": "3d55b14eabadaf18aefea2c4eb085428e0485063ae3ea91cac072e3b5f951a83"
+    },
+    {
+      "name": "System.Reflection.MetadataLoadContext.dll",
+      "sha256": "98253c0ff0e6789412aee9aef78912b1e2854c93231b96c6cd5b36bf4eeccccb"
+    },
+    {
+      "name": "System.Security.Cryptography.ProtectedData.dll",
+      "sha256": "01c53ac1be32845ca19e475171e11d02d0c30031fc502d29a2334bfbbae9af74"
+    },
+    {
+      "name": "System.Security.Permissions.dll",
+      "sha256": "4362da9b2c90a88294352cf378857a50ed3dcc0228e90b31b043619c3a3e665f"
+    },
+    {
+      "name": "System.Windows.Extensions.dll",
+      "sha256": "79cc9b3cc32a4b7056ac4ec06f7b8e2a68ed6d6531034c410f27cd081dfc10df"
+    },
+    {
+      "name": "TimeZoneConverter.dll",
+      "sha256": "d344e45cfce87c651340205b1ed8d5cb85b9d784a5eb219f43d7076d62a491ea"
+    },
+    {
+      "name": "ZstdSharp.dll",
+      "sha256": "b285bb9f59928becb8e048bf2a75e872f6555f8773d7b72386a9f77f447f425c"
+    }
+  ]
+}

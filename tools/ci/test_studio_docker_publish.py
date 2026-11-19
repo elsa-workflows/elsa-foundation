@@ -23,8 +23,8 @@ SHA = "0123456789abcdef0123456789abcdef01234567"
 def ci_run(**overrides: object) -> dict[str, object]:
     return {
         "id": 12345,
-        "name": "Studio CI",
-        "path": ".github/workflows/studio-ci.yml@refs/heads/main",
+        "name": "CI",
+        "path": ".github/workflows/ci.yml@refs/heads/main",
         "event": "push",
         "status": "completed",
         "conclusion": "success",

@@ -1,0 +1,13 @@
+{
+  "sourceSha256": "2c8e21c0f223732112d5b28b4eab98417e6d603e1b61cb1fb14ba1e725ddd71a",
+  "sourceRestored": true,
+  "compileSucceeded": true,
+  "orphanIncorrectlyAccepted": true,
+  "controlFailedAsExpected": true,
+  "buildLogSha256": "63302bac07a9ef32684e3918a88a1fdc6f1a0d8091545fcc0d1087b15a373981",
+  "controlLogSha256": "177234f348ef11b8a1a2f691027be4c14fd305301b1948c273d5032acc042989",
+  "failureMessage": "Reader control owed-orphan-hidden-behind-canonical-source returned unexpected status 0.",
+  "precedingControlsPassed": 3,
+  "laterCapabilityControlReached": false,
+  "initialSidecarMaskedMutationExcluded": true
+}

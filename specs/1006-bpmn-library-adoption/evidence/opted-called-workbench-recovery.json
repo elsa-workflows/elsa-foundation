@@ -1,0 +1,409 @@
+{
+  "schemaVersion": 1,
+  "task": "T045 actual opted-in public Workbench increment; complete T045 remains open",
+  "sourceParentCommit": "7490cd40de5c872d14c7d565a6bda5f9ed1620bd",
+  "hostBuildSourceCommit": "2a42af1bbbc112d34711db980e7ea4769689f0ad",
+  "hostProductionTreeUnchangedAtSourceParent": true,
+  "standardHostBinaryClosureExactlyEqualToPrecedingReleased050Qualification": true,
+  "releasedPackages": [
+    "Bpmn.Model/0.5.0",
+    "Bpmn.Semantics/0.5.0",
+    "Bpmn.Interchange/0.5.0"
+  ],
+  "hostRecoveryProbeAbsent": true,
+  "persistenceMode": "Balanced",
+  "publicApiCases": {
+    "codedErrorMatchMismatch": 2,
+    "escalationPolicies": 6,
+    "total": 8,
+    "actualProcessRestart": 1,
+    "checkedBeforeAndAfterRestartCases": 6,
+    "actualContinuedWarningEvents": 5,
+    "actualContinuedChildFinishEvents": 1
+  },
+  "completeRestartFactsEqual": true,
+  "restartFactsSha256": "cf8351833667a751afc0e9ab921feed3c12f23ab08089960073455513420e323",
+  "comparedFacts": [
+    "complete named workflow states including pins/status/mode/ancestry",
+    "complete actual parent/child activity states",
+    "authoritative dispatch records",
+    "complete correlated incidents",
+    "all owned immutable notification/result/cancellation source projections",
+    "physical bookmark records including scope and generation"
+  ],
+  "comparisonFieldExclusions": [],
+  "sourceRootAnchors": "Nonterminal notification exact source-commit anchor; terminal root anchor explicitly cleared by production contract. Root batch agrees with immutable source.",
+  "positiveSyntheticStateOrTransportInstalled": false,
+  "wholeModuleSnapshots": 5,
+  "identityAndTokensExcluded": true,
+  "ownedProcessesExited": true,
+  "filesSha256": {
+    "e2e-tests/bpmn/Test-BpmnCalledControlHost.ps1": "9084d3bd55e0841745cb29815882fb20f80e9db23bfbfe97871ac88e01fb52f5",
+    "e2e-tests/bpmn/test_opted_called_snapshot_reader.py": "4e132351847a33c32bef148cee75674c0d509be8b92eac8802f7d699538146be",
+    "e2e-tests/bpmn/test_called_snapshot_reader.py": "f267cdacd1fde40460daf8ca69e1e8b703f3982b30d79f90a2f0b9f31d7a131c",
+    "e2e-tests/bpmn/run_owned_broadcast_probe.py": "916716d10446ec7650b99ec926dcb08024fc8619fc21402c862e6d47e163b5de",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "e2e-tests/_ServerLifecycle.ps1": "2b09790145f93c0e30ff1c08ff7066a172755236de51d0b7af258ac61060e93d",
+    "e2e-tests/stimuli/_StimuliCommon.ps1": "7afd5ef449e274237db35bc27c787af8d5e4f5e3e236b5a8e7acad9987ec21b7",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "cd561dde6dd7ad9562a33ad16085b65b87d42eeced265d9d33b8633d3cd89735",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.cs": "19009b66b84d31dd67ca5d6bfb1680390fac7c56fa21a48ef5c79ba69e2fbacd",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Escalation.cs": "f7133978eec14279d9d26635ba5f05ccc38d191bd1f1361aae57d2538bc45711",
+    "tools/bpmn/DeliveryRecoveryRead/CalledSnapshotReader.cs": "2c8e21c0f223732112d5b28b4eab98417e6d603e1b61cb1fb14ba1e725ddd71a",
+    "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj": "2e7e1246eddc92f28703065038aaa9dd74aec19ec51e1b96d69fbb1632691e99",
+    "tools/bpmn/DeliveryRecoveryRead/packages.lock.json": "eac338b10044cfaecaaf7d9d5af7fb34edd76d7c1d9fca7f3227a02b80225182",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "Directory.Build.props": "97f65f6d3a30a68ae97f27dfa09449bd3ae92096d59f0049b368fac27db36b90",
+    "global.json": "a647fbc942871cef23ce38ef75c362bd02269b0bb634aa348a4537cadc926c3f",
+    "specs/1006-bpmn-library-adoption/tasks.md": "2a08375a1a9a80a55894030f46727cafdabd89fca083a3827b9ad0fc200c7a9a",
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench-recovery.md": "f3983162e9eda962267f488185af8b470599de57cfad374cfac9ad61cb7e3266",
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/README.md": "68b5a111faabccadeb8c6a58fb833161ec77e7f3b6e8453389e71f4648221ee0",
+    "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj": "bb47eb0a6b9424742045a20059fcb0a09bb40b44e77b6d36928a21e9201616ef",
+    "Essentials/apps/Elsa.Workbench/Program.cs": "935ff425bce142597d82d59c763fca41ac386564c67f42dcad49b3f56891c568",
+    "Essentials/apps/Elsa.Workbench/appsettings.json": "20ab11c707acf9b8c2c3305a972e1493da6747da45a1c5532bd65d63b54495b0",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnControlProtocol.cs": "955e3c3161e34345dcdf63aca43d9addc5e588cc657c79ce7084ba50c10bc60d",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundary.cs": "3abc10cb37854b3016ba9eae13c18aa9525fd71944f3827fba33853b00a126d4",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlTransport.cs": "2342a7d9ff3aa55821884ca45fa3b6f92f732a6b54a4815e1df9f9868e457d66",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "4976b49110fdb49887096dd6562c7a7b16503a33404f142502c24d60260e23b5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationEnricher.cs": "304f300ffc0b4d5e44d534c836ca079e05e2287e2b4b301b39c623bb2433a4fb",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationExecutor.cs": "bdcbfce6f2692d083a1c19e0def64fc544e835902f0ff7b8fddaa4c385fd0d80",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "4e88471da1a0bc40a84d228729d5e7642f0a2727080a919a191ee28e62e65cf6",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ParentResumeExecutor.cs": "2141d1a62ad804fa83f10739a47d474011b1834e3a81fa1c49f46c0ed93e73c3",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ChildCancelExecutor.cs": "099324a417801eaa57badd3a7897a7ea4576ca3f6f6c61b7c50963da70be0fb3",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCancelIntentFactory.cs": "100c7344d3f33988b163eef3c3f8dd323d5d2b6ed33a7ec6296992b6637d823e",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControl.cs": "f94b5634281f4a4995313fd5b92105fdcc4e4d5007b4d8f423343fddca6bf586",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlInbox.cs": "47aef1e9f8c740999704659682bad26b86983e54a68566ba9d5ed333bd75c771",
+    "Essentials/src/Workflows/Runtime/Core/Models/ActivityExecutionState.cs": "209497c223fc2cf3ed1b491e776acaba535e7a4de1c560baefccb3466602ae96",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs": "3dc8474a8342f58f6f781803d3ec75f3265ae7b4c8a42faa31bf874f4096aa75",
+    "Essentials/src/Workflows/Runtime/Core/Constants/RuntimeMetadataKeys.cs": "b93fcd5387e333000261804ee8e9507d0cbfacd998641a59372ae70a1e550b94",
+    "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs": "f99988de7f05486c1a07ec5fa6768331f4b25232c12cb1862f962a40e663a5f3",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimePortableExpressionEvaluator.cs": "62315f089834167ec4e3fa97780365796ef06132ffb4e4fc4c1951282292accd",
+    "Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs": "7e19747b75b8daf2ee5f79720820936902aba72ff8c77a2d80ea2b39db853572",
+    "Essentials/src/Activities/Primitives/Activities/Event.cs": "3efe57fdf22dbb7395d302c7e9c56c97a4ef57b6fa168d253561e17d0258ee3c",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "d224a89077fcaae97177bdc7bdf0989e3c0df4ac51fb040b9c33e16c63435d67",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowDispatchStore.cs": "431b73abf580af6303dc556b4c6e68d7006ae00c422d021e24c671200122b94e",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs": "8871951b099053d008a51c036d651baf3858ba5df4e79a08b493f8c3f6af8819",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs": "cfc9d0007bef3d9a7cc1bc14dfab64d0ada5172c374311954ab5b6aee91afe7b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs": "ad8ae1307ac345820a65664dcb8ddd87608fa12165b6c6b691798e23b8e6cc20",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfIncidentStateStore.cs": "762a1a1e9f3dd2092bc35790f2c6549bd85ec11eb643849f57507a0d3085299b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "039a0f9f329b82602aa192f679543aaaaba00c6b94e9635a0985af6196954fe0"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/README.md": {
+      "sha256": "68b5a111faabccadeb8c6a58fb833161ec77e7f3b6e8453389e71f4648221ee0",
+      "bytes": 5594
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/coded-api.json": {
+      "sha256": "c6f7610856bb3bb9fe8f46a4b46d1a8879c5f0ce5e7710048238bb283ef57178",
+      "bytes": 28716
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/coded-checked.json": {
+      "sha256": "b9e80d34ff0d5518df32c59bbbedafae4590b093dd1119ecba7c694f40167c27",
+      "bytes": 78232
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/coded-runtime.json": {
+      "sha256": "b56377c3b597262dfcc273615e46a4a7fe4f615ef61f4c4d6f6612f129f46527",
+      "bytes": 385
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/coded-runtime.sqlite.gz": {
+      "sha256": "01a1f61c6970bdbb9cffe25deaf1451b99ae053b0f3d2d8d61a4e993003a7626",
+      "bytes": 199206
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/controls-coded.json": {
+      "sha256": "bf2c12cd54e63cf0a05cfec6418a535641185e9fb1783754d88587ea82f9420a",
+      "bytes": 1849
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/controls-finished.json": {
+      "sha256": "64084d24b7f0002123005504c8ca08b8fa7b4f800b452bb91f9dbf6e76a755eb",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/controls-parked.json": {
+      "sha256": "123a5a53fd8fb593fc2b3daaaa52197e159573064bd36a2e5dfabfee26a59b53",
+      "bytes": 1861
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/controls-recovered.json": {
+      "sha256": "5872f4ddfe6e1dbe7cd623ea05d2232a71fdb78b716bcbb67a08e625307c7e7b",
+      "bytes": 1864
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/design.json": {
+      "sha256": "d0d467f34570a0f17cf1ea238f24fc8d9933bc59fe888c2adb95a1618bbd7c42",
+      "bytes": 385
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/design.sqlite.gz": {
+      "sha256": "b4ca2421b3fcbfddafcc2ef4679945ee19f09c7766310bac4da75e7cab93e454",
+      "bytes": 138303
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/finished-api.json": {
+      "sha256": "c2b9620cec14770dc90fbcbfd6663e8d5294590f6456934a97326b06b3848e62",
+      "bytes": 175898
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/finished-checked.json": {
+      "sha256": "dcc657963bc38073ee5571f7a9636be625558da44483f1ea4567319688762e56",
+      "bytes": 277004
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/finished-runtime.json": {
+      "sha256": "435aa8deee2137329b01bdd242687b0947ed2725b1d213178a3c414729d4cf91",
+      "bytes": 385
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/finished-runtime.sqlite.gz": {
+      "sha256": "ef0cdf0a0b289630bc0d578977c946925451d59989b657892eb3ac5551cd55c6",
+      "bytes": 551246
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/host-binaries.json": {
+      "sha256": "4f4553457462c21a30543556c0d6dd57a953508787b362921d4e0e484a4d7bf5",
+      "bytes": 34596
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/parked-checked.json": {
+      "sha256": "10d21c4a48b282a7adaa9eb33eda5b8b9d6c3057eacd766371566013b9fb85cc",
+      "bytes": 275094
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/parked-runtime.json": {
+      "sha256": "ecec8f6a320491691aabfec04dd2fb50b0f85c4cf6242312ef00845c827e1252",
+      "bytes": 385
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/parked-runtime.sqlite.gz": {
+      "sha256": "0f2f733c9e482a218544918b352fb65b32a37f6a3dff4492b73949a417f3927b",
+      "bytes": 529369
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/prepare-api.json": {
+      "sha256": "9dc0f6a80f830e32aabc636d59c359cf74bf873e77be1f65750bb925c1a7439a",
+      "bytes": 97664
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/process-restart.json": {
+      "sha256": "0859ed84b808de98584ebfe33f7f913fdc307c4773a4d2ba0909fc052ae957ce",
+      "bytes": 507
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/reader-binaries.json": {
+      "sha256": "6cb33a274ccf87026f9784b172f88f35e8f4c6ef18a7e916e08b459c181749d9",
+      "bytes": 6306
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/reader-mutation.json": {
+      "sha256": "bf1f66bc745fb1ccd21947f080e7c8bf9f76c57b799720dc32068aba1e6b14e2",
+      "bytes": 464
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/recovered-api.json": {
+      "sha256": "f77ba40430c459693cc1cfae65450ff7b68a30682169a543689d7cc3e89969af",
+      "bytes": 171585
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/recovered-checked.json": {
+      "sha256": "2d5d8ce47f21c8b0f9bc401b301cd9ccac3a72187611d1b8234c8bd19b675c6c",
+      "bytes": 275094
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/recovered-runtime.json": {
+      "sha256": "c0c00b158aecd92abb917c3360976aeddcf6a9fd24cd15a7a6e02dba499748dd",
+      "bytes": 385
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/recovered-runtime.sqlite.gz": {
+      "sha256": "8116c2433f7e97ca3ead5c6b71429dc6dd5a862b293320fb15f92e3b56dc0b6d",
+      "bytes": 529471
+    }
+  },
+  "readerControls": {
+    "phases": 4,
+    "perPhase": 6,
+    "total": 24,
+    "postMutationRestoredPhasePassed": true,
+    "existingLegacyControls": {
+      "passed": true,
+      "controls": [
+        {
+          "name": "actual-frozen-capture",
+          "exitCode": 0,
+          "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4",
+          "outputSha256": "1f5564329cc98fcdacf081ad604e91dabb5d66f9317460f3185bd6b2e3152e5d",
+          "unchanged": true
+        },
+        {
+          "name": "wrong-snapshot-hash",
+          "exitCode": 2,
+          "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4",
+          "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+          "unchanged": true
+        },
+        {
+          "name": "foreign-captured-pin",
+          "exitCode": 2,
+          "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4",
+          "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+          "unchanged": true
+        },
+        {
+          "name": "owed-orphan-hidden-behind-canonical-source",
+          "exitCode": 2,
+          "databaseSha256": "4cff4bf8c2961d11c7983b23f15d2d4ce8a9e8cd0a93033aebe3ec3a07e6f27f",
+          "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+          "unchanged": true
+        },
+        {
+          "name": "legacy-dispatch-acquires-control-declaration",
+          "exitCode": 2,
+          "databaseSha256": "ff268eeab41d78e0423a284c8dcb7977719fe97a7991c56bd8651e665aa2e176",
+          "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+          "unchanged": true
+        }
+      ],
+      "originalCaptureUnchanged": true,
+      "scope": "default"
+    }
+  },
+  "readerMutation": {
+    "name": "remove-exact-consumer-declaration-reader-guard",
+    "sourceSha256": "19009b66b84d31dd67ca5d6bfb1680390fac7c56fa21a48ef5c79ba69e2fbacd",
+    "sourceRestored": true,
+    "compileSucceeded": true,
+    "missingCapabilityIncorrectlyAccepted": true,
+    "controlFailedAsExpected": true,
+    "buildLogSha256": "ea373aa85313b82df98ed60a9c51c5ece91946079d1e24d16b569f6d27a6e6db",
+    "controlLogSha256": "294e839eccf15a78bff4a14f801392e8670da6488509a93ef9a876cc02c20fd8"
+  },
+  "excludedAttempts": [
+    "Wrong initial Event catalog type key; no cases created.",
+    "Initial reader incorrectly assumed nonterminal notifications populate ordinary ChildControl and NotifyControl intent uses parent source workflow address.",
+    "Later reader incorrectly required terminal source-commit anchor although WorkflowControlProducerEnricher explicitly clears it; failed observations/private raw debug outputs excluded.",
+    "Review found incomplete artifact-version comparison and missing explicit coded mode/transport-parent pin checks; corrected before final passing observations."
+  ],
+  "inheritedEvidence": "Prior EF1710/class32, Studio/architecture/package and actual legacy recovery remain tied to their original source receipts; not restamped as current-head whole-suite/Studio proof.",
+  "historicalDatabaseCapturesUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/legacy/deferred-fault.sqlite.gz": {
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/listener-rearm-outcome.sqlite.gz": {
+      "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+      "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/listener-rearm.sqlite.gz": {
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/parallel-mi-outcome.sqlite.gz": {
+      "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+      "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/parallel-mi.sqlite.gz": {
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/queued-late-fault.sqlite.gz": {
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/queued-loser.sqlite.gz": {
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/resolved-race.sqlite.gz": {
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/design.sqlite.gz": {
+      "compressedSha256": "101c56c6730d43fb75609fc2ddd8b8933e053ad8d8df9e7ef61f2387ba984ba2",
+      "databaseSha256": "32bab40972d5a8f686db0f099d1a2c5f625f9dfa419af479cf5a38776a33fe7a"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/old-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "324434f3b08bfbf5ed4140b3d3036cb17c43e6b5e5fb7e11182610a5ed39a46b",
+      "databaseSha256": "d507c063aabd7b38c57f3e8d62c0b9c9b02c807ee0614b48df67aa6314c8d469"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/portability-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "dc9c0ba1cbbbc607f713cded981075640865672de00493e73060b70e7e7ab462",
+      "databaseSha256": "9564bddf9b83c8ccf78cbc0f5ce2e42fb3a239671a7eb233e087b4d83ae2e354"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/runtime.sqlite.gz": {
+      "compressedSha256": "bcf934af937cf21823624e0a94c7bc634b7a227f8e30940953e1d4c06c1d5843",
+      "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/upgraded-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "d89330ade54f818bb19ea65c26371381404fc71efd47820014bff786acb3c050",
+      "databaseSha256": "f8d863e2a90c8a90d78e149d265346e25157dfc42b870d37b7222ba7be5aa087"
+    }
+  },
+  "historicalReceiptsUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/legacy-called-workbench-recovery.md": {
+      "sha256": "dfc08a32731afccd6244ea4f9c17ed4f1bb7f1c0355314f7688bd128afa281bc"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-called-workbench-recovery.json": {
+      "sha256": "976a2e88c7b5aa8a0774a9ce531c5b50a98c9509f7c9eb9e8aaaa0624ac5936f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-claims-ef-recovery.md": {
+      "sha256": "3da63c23e32031ee4eca95ec68d4a5c7e783540e8978f77047b8880ea4b0f39c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-claims-ef-recovery.json": {
+      "sha256": "c431833915876e87f14e870d9c3a36e5f48116a809e13ca4d89a8217e5fb5c89"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-sibling-isolation-ef-recovery.md": {
+      "sha256": "68de3ac215f0bec96d8a0805c428afe305afc2384e45b3823664a4417c9c9dee"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-sibling-isolation-ef-recovery.json": {
+      "sha256": "ff1048018893b9ad23cd6de935237cbeda5ccbb544f7ba04ead0717fdd6083fa"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-control-ordering-ef-recovery.md": {
+      "sha256": "2be96b85cc6ac52f8cef669aaeabb9ab00a133375c013c847377cdb231e51f24"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-control-ordering-ef-recovery.json": {
+      "sha256": "9806f2cd428502d3a598f5243e5e9d04df37d5bf0a4fdb92309d1c6d3f374228"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-escalation-ef-recovery.md": {
+      "sha256": "1fa9853a54fa900cb385f88220df397f88574cfece31b989e62efc036696879b"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-escalation-ef-recovery.json": {
+      "sha256": "2ee096ba168651be34199ebbd36ead1e0ff00f542d78304c8e9ce2e68a563219"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-coded-error-ef-recovery.md": {
+      "sha256": "44f9ca29cec8a993923047c78267c8414e969d3e61c9a8e419fca7ec101b9998"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-coded-error-ef-recovery.json": {
+      "sha256": "23bdc27c52eb1112b50a5e2fe9537fca90ce9a57e8120116c6f382ef345f212e"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/native-parent-ef-qualification.md": {
+      "sha256": "b92f48d2834db3710e1d577d825cadcbc01d36a5a9a733a0dedcdc46f5bf5a47"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/native-parent-ef-qualification.json": {
+      "sha256": "8b6338efdb1fd0df5249bd084fb2225b11bfa2df65aa309db64374dcd33511d4"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.md": {
+      "sha256": "957d261394ee1bc9fed0cfb6bd999ef186ed1ff023bbd4abad28784c68ead1ff"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.json": {
+      "sha256": "aea0a590025f4d65c9b563d44b0b4774c4992103b77a822da5fed01bd0ce6c15"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.md": {
+      "sha256": "ba62cb1f2422815b2ad451384bd8e2dfa06fe7e9ee2d508d0a7c8af3c9cd7976"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.json": {
+      "sha256": "9b98cfcc71a21a537e4577537dac3bbb41b2511c563bcc3a7ff8aa8458a88f56"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.md": {
+      "sha256": "bcfba4adabb8d223484d861e10f023dd6abd879e15c50e65cf1b6572eac4896c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.json": {
+      "sha256": "7d45e6d512a09779ae38a88bc977370b307620d5811c860e0497c07eb0030e0c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.md": {
+      "sha256": "716f2384c1d7a771155a8fe4f78b7d683252276e1eb0a4dba14e8325af4682c5"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.json": {
+      "sha256": "8c2494c50096b654b70050be62d9e39322572eb237156fbb5cd42d1e9072e081"
+    }
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "duplicateSemanticWriterDeleted": false,
+  "reviews": {
+    "type": "three independent bounded source/artifact audits; not full PR",
+    "remainingActionable": []
+  },
+  "fullPrRounds": 0,
+  "scopeLimits": [
+    "Eight actual public Workbench authored cases and one normal process restart in Balanced mode.",
+    "Persisted checked facts do not count control-adapter callback entries or prove crash before source acknowledgment.",
+    "No concurrent same-binding public-host or final real Studio qualification in this receipt.",
+    "No distributed-provider/cluster/production acceptance or running-binary rollback claim."
+  ],
+  "remainingGates": [
+    "T045 concurrent same-binding public host and actual acknowledgment-loss delivery; complete bridge evidence reconciliation",
+    "T029 ordinary bound-task compensation and final current Studio",
+    "T032 deletion after remaining actual-host/Studio proof; T033/T034/T035 guards/audits",
+    "T036/T037/T038 final qualification/full-PR/green required exact-head checks/protected delivery/resulting-main; separate ADR0063",
+    "Independent #2898/#2907/program production acceptance; Orleans/task-runner deferred"
+  ]
+}

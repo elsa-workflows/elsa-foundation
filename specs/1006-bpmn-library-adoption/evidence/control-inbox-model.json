@@ -1,0 +1,34 @@
+{
+  "preIncrementSourceRevision": "1f26b0d1656d90f3bbb320b785ed41b7f2d0d2c5",
+  "sourceSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Models/ActivityExecutionState.cs": "209497c223fc2cf3ed1b491e776acaba535e7a4de1c560baefccb3466602ae96",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlInbox.cs": "422ffa1b2ef490e1519a51b5dddaf1452b2ece264128008376288aa97aebfd01",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlTarget.cs": "d7d5cadf0f3f0c266f1064a4bab8f8354d6ad568c1f0554fc3d1892c8bbcc682",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "0796e889d168413201c3681fe2d33388273025b1d9608a7de6bf4cbd800687f8",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/ChildControlContractTests.cs": "3dc6d009950f03dea31c90510a03656bf67bd10f0b18c7530bba1b0f7157e08d",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeChildControlInboxContractTests.cs": "cdfe4d9db065e51e5874b6c00210a4632fbb5a0edc47428fd3232908056df4cb"
+  },
+  "tests": {
+    "inboxShape": 19,
+    "legacyModelContracts": 19,
+    "workflowsRuntimeWhole": 2644,
+    "failed": 0,
+    "skipped": 0
+  },
+  "mutation": {
+    "allowTruncatedFieldsToDefault": {
+      "failed": 3,
+      "passed": 0
+    },
+    "restoredByteIdentically": true,
+    "restoredInboxShapePassed": 19
+  },
+  "trackedCoreDeclarationsAdded": 11,
+  "limits": [
+    "Stored shape and legacy defaults only",
+    "No acceptance algorithm, deduplication or callback execution qualification",
+    "No source authorization follows from MatchesAddress",
+    "No host or provider restart/acknowledgement/cleanup qualification",
+    "T043 remains open"
+  ]
+}

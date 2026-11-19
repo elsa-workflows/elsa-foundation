@@ -1,0 +1,9 @@
+# Physical provider model-receipt contract
+
+Executing source: `937dacc691604893de7ac9be5101d9f1a3524c26`, after adopting main's PR #3460 Studio test-resource cleanup. The [manifest](manifest.json), raw TRX/logs and generated assembly metadata retain three passing tests with zero failures/skips, using private Testcontainers PostgreSQL, SQL Server and MySQL instances. External connection-string overrides were removed; `ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS=1` makes unavailable container evidence fail.
+
+Each `RuntimeModelReceipt*SmokeTests` case exercises both Running and TerminalSettled fixtures. It uses the actual EF material writer, liveness lease and atomic checkpoint store, then commits an obsolete input receipt against the unchanged model revision. Model JSON/revision remain unchanged, and a new physical context reads the retained lifecycle and Rejected receipt. These are synthetic persistence-contract fixtures with an explicit test clock, not actual BPMN user executions or upgrade inputs.
+
+The schema is installed with `EnsureCreatedAsync`. This evidence does not prove physical migration upgrades, the complete atomicity/fence matrix on each engine, non-SQLite production host recovery, or final upgraded-host/Studio compatibility. Those gates remain open. The actual SQLite [retention and rollback journeys](../../retention/runtime-only-rollback/README.md) keep their own source and stronger host evidence.
+
+The commands and strict counters are in `results.json`. Reproduce with the Runtime EF ProviderTests project and a filter for each `RuntimeModelReceipt{PostgreSql,SqlServer,MySql}SmokeTests` class, using test-owned containers and a fresh results directory. Each collection's own fixture disposes its container; no shared user database is used. All raw files named by the manifest are committed.

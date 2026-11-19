@@ -1,6 +1,8 @@
+import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
-import { isStudioThemeLayout, studioThemeLayouts, type ElsaStudioModuleApi } from "../../sdk";
+import { isStudioThemeLayout, studioNavigationRequestedEvent, studioThemeLayouts, type ElsaStudioModuleApi, type StudioNavigationRequest } from "../../sdk";
+import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   allThemeModes,
@@ -70,17 +72,30 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [mode, setMode] = useState<ThemeMode>("light");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingWrites, setPendingWrites] = useState(0);
   const assetInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
+  // Load until a store has arrived. A background workspace tab mounts its effects again when it returns:
+  // a loaded store is kept, a load still in flight is not repeated, and a load that failed is retried.
+  const storeRef = useRef(store);
+  storeRef.current = store;
+  const loadingRef = useRef(false);
   useEffect(() => {
+    if (storeRef.current || loadingRef.current) return;
     void loadStore();
   }, []);
 
+  // Seed the draft only when the store or the selection changes, not when a returning tab mounts its
+  // effects again, which would discard unsaved edits.
+  const seededRef = useRef<{ store: ThemeStoreResponse; themeId: string } | null>(null);
   useEffect(() => {
     if (!store) return;
     const selected = store.themes.find(theme => theme.id === selectedThemeId) ?? store.themes[0] ?? null;
-    setSelectedThemeId(selected?.id ?? "");
+    const themeId = selected?.id ?? "";
+    if (seededRef.current?.store === store && seededRef.current.themeId === themeId) return;
+    seededRef.current = { store, themeId };
+    setSelectedThemeId(themeId);
     setDraft(selected ? cloneThemeDefinition(selected) : null);
   }, [store, selectedThemeId]);
 
@@ -88,14 +103,34 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const validation = useMemo(() => draft ? validateThemeDefinition(draft) : { valid: false, issues: [] }, [draft]);
   const isReadOnly = draft?.source === "built-in";
   const hasChanges = JSON.stringify(selectedTheme) !== JSON.stringify(draft);
+  const unsavedDraft = hasChanges && Boolean(draft) && !isReadOnly;
+
+  // Report an unsaved theme or a Theme Store write in progress to workspace probes and closes, so a
+  // background tab holding one is kept mounted and is not closed without notice. Ordinary navigation keeps
+  // its existing behaviour.
+  const pendingWork = unsavedDraft || pendingWrites > 0;
+  useEffect(() => {
+    if (!pendingWork) return;
+    const guard = (event: Event) => {
+      const intent = (event as CustomEvent<StudioNavigationRequest>).detail?.intent;
+      if (intent === "probe" || intent === "close") event.preventDefault();
+    };
+    window.addEventListener(studioNavigationRequestedEvent, guard);
+    return () => window.removeEventListener(studioNavigationRequestedEvent, guard);
+  }, [pendingWork]);
   const optionalMode = mode === "dim" || mode === "high-contrast" ? mode : null;
 
   async function loadStore() {
-    await run(async () => {
-      const nextStore = await fetchThemeStore(api.host);
-      setStore(nextStore);
-      setSelectedThemeId(current => current || nextStore.defaultThemeId || nextStore.themes[0]?.id || "");
-    }, "Theme Store refreshed.");
+    loadingRef.current = true;
+    try {
+      await run(async () => {
+        const nextStore = await fetchThemeStore(api.host);
+        setStore(nextStore);
+        setSelectedThemeId(current => current || nextStore.defaultThemeId || nextStore.themes[0]?.id || "");
+      }, "Theme Store refreshed.", "load");
+    } finally {
+      loadingRef.current = false;
+    }
   }
 
   async function persistDraft(nextDraft = draft) {
@@ -227,14 +262,17 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }, "Theme pack imported.");
   }
 
-  async function run(operation: () => Promise<void>, success: string) {
+  async function run(operation: () => Promise<void>, success: string, kind: "load" | "write" = "write") {
     setError(null);
     setStatus(null);
+    if (kind === "write") setPendingWrites(count => count + 1);
     try {
       await operation();
       setStatus(success);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (kind === "write") setPendingWrites(count => count - 1);
     }
   }
 
@@ -262,36 +300,32 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   if (!store || !draft) {
     return (
-      <section className="theme-builder-page">
-        <div className="section-header">
-          <div>
-            <h2>Theme Builder</h2>
-            <p>Loading Theme Store definitions.</p>
-          </div>
-        </div>
-        <SkeletonRows rows={6} label="Loading themes" />
+      <section className="studio-page theme-builder-page">
+        <StudioPageHeader headingLevel={2} title={<>Theme Builder</>} description={<>Loading Theme Store definitions.</>} />
+        {!store && error ? (
+          <StudioAlert tone="danger">
+            {error}{" "}
+            <StudioButton type="button" className="studio-button" onClick={() => void loadStore()}>
+              <RefreshCcw size={15} /> Retry
+            </StudioButton>
+          </StudioAlert>
+        ) : <SkeletonRows rows={6} label="Loading themes" />}
       </section>
     );
   }
 
   return (
-    <section className="theme-builder-page">
-      <div className="section-header">
-        <div>
-          <h2>Theme Builder</h2>
-          <p>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId || "not set"}</p>
-        </div>
-        <StudioToolbar>
+    <section className="studio-page theme-builder-page">
+      <StudioPageHeader headingLevel={2} title={<>Theme Builder</>} description={<>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId || "not set"}</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-button" onClick={() => void loadStore()}>
+            <StudioButton type="button" className="studio-button" onClick={() => void loadStore()}>
               <RefreshCcw size={15} /> Refresh
-            </button>
-            <button type="button" className="studio-button" onClick={() => importInputRef.current?.click()}>
+            </StudioButton>
+            <StudioButton type="button" className="studio-button" onClick={() => importInputRef.current?.click()}>
               <FileUp size={15} /> Import
-            </button>
+            </StudioButton>
           </StudioToolbarGroup>
-        </StudioToolbar>
-      </div>
+        </StudioToolbar></>} />
 
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
       {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
@@ -349,6 +383,14 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           {tab === "tokens" ? (
             <div className="theme-token-editor">
               <div className="theme-token-grid">
+                <label className="theme-token-field">
+                  <span>Default workspace treatment</span>
+                  <select value={draft.workspaceStyle ?? ""} disabled={isReadOnly} onChange={event => patchDraft({ workspaceStyle: isWorkspaceStyle(event.target.value) ? event.target.value : undefined })}>
+                    <option value="">Original theme treatment</option>
+                    {workspaceStyles.map(style => <option key={style.id} value={style.id}>{style.name}</option>)}
+                  </select>
+                  <small>Shared surfaces and controls. Your theme's layout, fonts and radii below remain its defaults; a user's workspace choice can override them.</small>
+                </label>
                 <label className="theme-token-field">
                   <span>Layout</span>
                   <select

@@ -1,0 +1,127 @@
+{
+  "id": "script-computed-outcome-unlisted-v1",
+  "definitionId": "script-computed-outcome-unlisted",
+  "name": "script-computed-outcome-unlisted",
+  "description": "Test-owned regular workflow (spec 1208 US5): a RunJavaScript that calls setOutcome with a variable and lists no possible outcomes, which the conversion refuses.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    {
+      "id": "decision",
+      "name": "decision",
+      "typeName": "String",
+      "value": "Approved"
+    }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "script-computed-outcome-unlisted-root",
+    "nodeId": "script-computed-outcome-unlisted-root",
+    "name": "script-computed-outcome-unlisted-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "script",
+        "nodeId": "script",
+        "name": "script",
+        "type": "Elsa.RunJavaScript",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "script": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "setOutcome(variables.decision);"
+          }
+        }
+      },
+      {
+        "id": "after",
+        "nodeId": "after",
+        "name": "after",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "after"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "script",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "after",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

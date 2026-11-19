@@ -1,0 +1,36 @@
+{
+  "processes": {
+    "currentInitial": {
+      "controllerProcessId": 35979,
+      "processId": 35981,
+      "startEpochSeconds": 1793140922,
+      "childAndControllerExited": true
+    },
+    "currentRestarted": {
+      "controllerProcessId": 36329,
+      "processId": 36330,
+      "startEpochSeconds": 1793141045,
+      "childAndControllerExited": true
+    },
+    "legacySeed": {
+      "controllerProcessId": 36672,
+      "processId": 36673,
+      "startEpochSeconds": 1793141141,
+      "childAndControllerExited": true
+    },
+    "legacyControl": {
+      "controllerProcessId": 36896,
+      "processId": 36899,
+      "startEpochSeconds": 1793141222,
+      "childAndControllerExited": true
+    },
+    "legacyUpgraded": {
+      "controllerProcessId": 36897,
+      "processId": 36898,
+      "startEpochSeconds": 1793141222,
+      "childAndControllerExited": true
+    }
+  },
+  "distinctQualifiedProcesses": 5,
+  "noRuntimeStateOrClockEdits": true
+}

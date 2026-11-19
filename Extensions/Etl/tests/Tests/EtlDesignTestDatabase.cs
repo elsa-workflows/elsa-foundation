@@ -1,10 +1,11 @@
 using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa.Etl.Tests;
 
-internal sealed class EtlDesignTestDatabase(string directory) : IAsyncDisposable
+internal sealed class EtlDesignTestDatabase(string directory) : IEtlDesignTestDatabase
 {
     private readonly string _connectionString = $"Data Source={Path.Combine(directory, "etl.db")};Pooling=False";
 
@@ -20,15 +21,18 @@ internal sealed class EtlDesignTestDatabase(string directory) : IAsyncDisposable
         return database;
     }
 
-    public EtlDesignSqliteDbContext CreateContext()
+    public EtlDesignSqliteDbContext CreateContext(params IInterceptor[] interceptors)
     {
         var options = new DbContextOptionsBuilder<EtlDesignSqliteDbContext>()
             .UseSqlite(_connectionString, sqlite => sqlite
                 .MigrationsAssembly(typeof(EtlDesignSqliteDbContext).Assembly.GetName().Name)
                 .MigrationsHistoryTable(EtlDesignEfModule.HistoryTableName))
+            .AddInterceptors(interceptors)
             .Options;
         return new EtlDesignSqliteDbContext(options);
     }
+
+    EtlDesignDbContext IEtlDesignTestDatabase.CreateContext(params IInterceptor[] interceptors) => CreateContext(interceptors);
 
     public ValueTask DisposeAsync()
     {

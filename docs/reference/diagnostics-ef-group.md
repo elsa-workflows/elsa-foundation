@@ -1,18 +1,18 @@
 # Diagnostics EF feature group
 
-`diagnostics-ef@1` is a Foundation-reviewed **selection group** in catalog version 2. It selects exactly four server diagnostic feature IDs:
+`diagnostics-ef@2` is a Foundation-reviewed **selection group** in catalog version 4. It selects `ApiCapabilities` and these four server diagnostic feature IDs:
 
 | Base feature | EF persistence consumer |
 |---|---|
 | `DiagnosticsOpenTelemetry` | `DiagnosticsOpenTelemetryEntityFrameworkCore` |
 | `DiagnosticsStructuredLogs` | `DiagnosticsStructuredLogsEntityFrameworkCore` |
 
-Each EF consumer requires its base feature. The authored composition pins the group, catalog digest, and accepted exact feature set. Existing compositions pinned to catalog version 1 continue to use that bundled snapshot; a later catalog does not change their selection. You can still add or remove individual features. Removing either required base feature leaves it absent and gives an unresolved dependency finding.
+Each EF consumer requires its base feature, and both base features require `ApiCapabilities`. The authored composition pins the group, catalog digest, and accepted exact feature set. Group version 1 remains unchanged in bundled catalog snapshots 2 and 3; existing pins retain their original selection. Version 2 explicitly includes capability aggregation so host activation does not expand outside the reviewed set. You can still add or remove individual features. Removing a required base feature or capability aggregation leaves it absent and gives an unresolved dependency finding.
 
 To add the group to the Embedded starting profile and inspect the result:
 
 ```bash
-dotnet elsa composition init --profile embedded-runtime@1 --group diagnostics-ef@1 --output composition.json
+dotnet elsa composition init --profile embedded-runtime@1 --group diagnostics-ef@2 --output composition.json
 dotnet elsa composition plan --composition composition.json --format json
 ```
 

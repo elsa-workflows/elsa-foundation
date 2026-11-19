@@ -4,4 +4,12 @@
 .wf-attached-test-run > span { overflow-wrap: anywhere; }
 
 .wf-attached-inspector-views { position: sticky; top: 0; z-index: 2; background: var(--studio-surface); }
-.wf-snapshot-properties { min-width: 0; margin: 0; padding: 0; border: 0; }
+.wf-snapshot-properties {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

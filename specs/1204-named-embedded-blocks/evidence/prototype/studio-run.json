@@ -1,0 +1,49 @@
+{
+  "source": "b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+  "view": {
+    "workflowExecutionId": "01a1a36c7d527e34a274ac20f3c0be8c",
+    "artifactId": "artifact-e3b546730f13",
+    "status": "Completed",
+    "persistenceMode": "Balanced",
+    "activities": [
+      {
+        "id": "01a1a36c7d627f249b18cb095d1b1440",
+        "node": "writeline-da38894e",
+        "type": "Elsa.Activities.Primitives.Activities.WriteLine",
+        "status": "Completed",
+        "parent": "01a1a36c7d5c74008c53d5575c3c1684",
+        "branch": null,
+        "iteration": null
+      },
+      {
+        "id": "01a1a36c7d5f7a10ba3fa2810cbb97f9",
+        "node": "writeline-4ae0822f",
+        "type": "Elsa.Activities.Primitives.Activities.WriteLine",
+        "status": "Completed",
+        "parent": "01a1a36c7d5c74008c53d5575c3c1684",
+        "branch": null,
+        "iteration": null
+      },
+      {
+        "id": "01a1a36c7d567bef95e9e690f644551a",
+        "node": "sequence-8bcd320c",
+        "type": "Elsa.Activities.Sequence.Activities.Sequence",
+        "status": "Completed",
+        "parent": null,
+        "branch": null,
+        "iteration": null
+      },
+      {
+        "id": "01a1a36c7d5c74008c53d5575c3c1684",
+        "node": "sequence-21ba4144",
+        "type": "Elsa.Activities.Sequence.Activities.Sequence",
+        "status": "Completed",
+        "parent": "01a1a36c7d567bef95e9e690f644551a",
+        "branch": null,
+        "iteration": null
+      }
+    ],
+    "outputs": {},
+    "incidents": []
+  }
+}

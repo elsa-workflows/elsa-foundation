@@ -5,9 +5,10 @@ import { capabilityDocument, definition, renderRegisteredRoute, response } from 
 
 export { definition, response };
 
-export function pagedDefinitionCapabilities({ folders = false }: { folders?: boolean } = {}) {
+export function pagedDefinitionCapabilities({ folders = false, queryOptions = false }: { folders?: boolean; queryOptions?: boolean } = {}) {
   const capabilities = capabilityDocument();
   capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+  if (queryOptions) capabilities.capabilities[0].links.push({ rel: "workflow-definitions-query", href: "design/workflows/definition-pages" });
   if (folders) capabilities.capabilities[0].links.push({ rel: "workflow-folders", href: "design/workflows/folders" });
   return capabilities;
 }

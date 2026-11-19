@@ -1,0 +1,129 @@
+#nullable enable
+const Elsa.Studio.Core.Models.StudioModuleDiagnosticStatuses.Available = "available" -> string!
+const Elsa.Studio.Core.Models.StudioModuleDiagnosticStatuses.Disabled = "disabled" -> string!
+const Elsa.Studio.Core.Models.StudioModuleDiagnosticStatuses.Failed = "failed" -> string!
+const Elsa.Studio.Core.Models.StudioModuleDiagnosticStatuses.Incompatible = "incompatible" -> string!
+const Elsa.Studio.Core.Models.StudioModuleDiagnosticStatuses.Loaded = "loaded" -> string!
+Elsa.Studio.Core.Attributes.StudioModuleAttribute
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.Capabilities.get -> string![]!
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.DisplayName.get -> string!
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.HasStyles.get -> bool
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.HasStyles.set -> void
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.RequiredHostVersion.get -> string!
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.RequiredHostVersion.set -> void
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.RequiredSdkVersion.get -> string!
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.RequiredSdkVersion.set -> void
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.Slug.get -> string!
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.StudioModuleAttribute(string! slug, string! displayName, params string![]! capabilities) -> void
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.Version.get -> string?
+Elsa.Studio.Core.Attributes.StudioModuleAttribute.Version.set -> void
+Elsa.Studio.Core.Contracts.IStudioBackendAuthorityAccessor
+Elsa.Studio.Core.Contracts.IStudioBackendAuthorityAccessor.Value.get -> Elsa.Studio.Core.Models.StudioBackendAuthority!
+Elsa.Studio.Core.Contracts.IStudioBackendAuthoritySource
+Elsa.Studio.Core.Contracts.IStudioBackendAuthoritySource.Resolve(Elsa.Studio.Core.Models.StudioBackendAuthorityContext! context) -> Elsa.Studio.Core.Models.StudioBackendAuthority!
+Elsa.Studio.Core.Contracts.IStudioRuntimeConfigurationSource
+Elsa.Studio.Core.Contracts.IStudioRuntimeConfigurationSource.GetConfiguration(string! studioPathBase) -> System.Collections.Generic.IEnumerable<Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry!>!
+Elsa.Studio.Core.Events.IStudioEvent
+Elsa.Studio.Core.Events.IStudioEventHandler<TEvent>
+Elsa.Studio.Core.Events.IStudioEventHandler<TEvent>.Handle(TEvent event, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Studio.Core.Events.OnStudioModuleManifestsCollecting
+Elsa.Studio.Core.Events.OnStudioModuleManifestsCollecting.Manifests.get -> System.Collections.Generic.ICollection<Elsa.Studio.Core.Models.StudioModuleManifest!>!
+Elsa.Studio.Core.Events.OnStudioModuleManifestsCollecting.OnStudioModuleManifestsCollecting() -> void
+Elsa.Studio.Core.Events.OnStudioRuntimeConfigurationCollecting
+Elsa.Studio.Core.Events.OnStudioRuntimeConfigurationCollecting.Configuration.get -> System.Collections.Generic.ICollection<Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry!>!
+Elsa.Studio.Core.Events.OnStudioRuntimeConfigurationCollecting.OnStudioRuntimeConfigurationCollecting(string! studioPathBase) -> void
+Elsa.Studio.Core.Events.OnStudioRuntimeConfigurationCollecting.StudioPathBase.get -> string!
+Elsa.Studio.Core.Models.StudioBackendAuthority
+Elsa.Studio.Core.Models.StudioBackendAuthority.<Clone>$() -> Elsa.Studio.Core.Models.StudioBackendAuthority!
+Elsa.Studio.Core.Models.StudioBackendAuthority.BrowserBaseUrl.get -> string?
+Elsa.Studio.Core.Models.StudioBackendAuthority.BrowserBaseUrl.init -> void
+Elsa.Studio.Core.Models.StudioBackendAuthority.Deconstruct(out string? BrowserBaseUrl, out string? ServerBaseUrl) -> void
+Elsa.Studio.Core.Models.StudioBackendAuthority.Equals(Elsa.Studio.Core.Models.StudioBackendAuthority? other) -> bool
+Elsa.Studio.Core.Models.StudioBackendAuthority.ServerBaseUrl.get -> string?
+Elsa.Studio.Core.Models.StudioBackendAuthority.ServerBaseUrl.init -> void
+Elsa.Studio.Core.Models.StudioBackendAuthority.StudioBackendAuthority(string? BrowserBaseUrl, string? ServerBaseUrl) -> void
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext.<Clone>$() -> Elsa.Studio.Core.Models.StudioBackendAuthorityContext!
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext.Configured.get -> Elsa.Studio.Core.Models.StudioBackendAuthority!
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext.Configured.init -> void
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext.Deconstruct(out Elsa.Studio.Core.Models.StudioBackendAuthority! Configured, out System.Collections.Generic.IReadOnlyCollection<string!>! EnabledFeatures, out System.Collections.Generic.IReadOnlyCollection<string!>! DisabledFeatures) -> void
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext.DisabledFeatures.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext.DisabledFeatures.init -> void
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext.EnabledFeatures.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext.EnabledFeatures.init -> void
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext.Equals(Elsa.Studio.Core.Models.StudioBackendAuthorityContext? other) -> bool
+Elsa.Studio.Core.Models.StudioBackendAuthorityContext.StudioBackendAuthorityContext(Elsa.Studio.Core.Models.StudioBackendAuthority! Configured, System.Collections.Generic.IReadOnlyCollection<string!>! EnabledFeatures, System.Collections.Generic.IReadOnlyCollection<string!>! DisabledFeatures) -> void
+Elsa.Studio.Core.Models.StudioModuleDiagnostic
+Elsa.Studio.Core.Models.StudioModuleDiagnostic.<Clone>$() -> Elsa.Studio.Core.Models.StudioModuleDiagnostic!
+Elsa.Studio.Core.Models.StudioModuleDiagnostic.Deconstruct(out string! ModuleId, out string! Status, out string! Reason) -> void
+Elsa.Studio.Core.Models.StudioModuleDiagnostic.Equals(Elsa.Studio.Core.Models.StudioModuleDiagnostic? other) -> bool
+Elsa.Studio.Core.Models.StudioModuleDiagnostic.ModuleId.get -> string!
+Elsa.Studio.Core.Models.StudioModuleDiagnostic.ModuleId.init -> void
+Elsa.Studio.Core.Models.StudioModuleDiagnostic.Reason.get -> string!
+Elsa.Studio.Core.Models.StudioModuleDiagnostic.Reason.init -> void
+Elsa.Studio.Core.Models.StudioModuleDiagnostic.Status.get -> string!
+Elsa.Studio.Core.Models.StudioModuleDiagnostic.Status.init -> void
+Elsa.Studio.Core.Models.StudioModuleDiagnostic.StudioModuleDiagnostic(string! ModuleId, string! Status, string! Reason) -> void
+Elsa.Studio.Core.Models.StudioModuleDiagnosticStatuses
+Elsa.Studio.Core.Models.StudioModuleManifest
+Elsa.Studio.Core.Models.StudioModuleManifest.<Clone>$() -> Elsa.Studio.Core.Models.StudioModuleManifest!
+Elsa.Studio.Core.Models.StudioModuleManifest.Capabilities.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Studio.Core.Models.StudioModuleManifest.Capabilities.init -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.Deconstruct(out string! Id, out string! DisplayName, out string! Version, out string! Entry, out System.Collections.Generic.IReadOnlyCollection<string!>! Styles, out string! RequiredHostVersion, out string! RequiredSdkVersion, out System.Collections.Generic.IReadOnlyCollection<string!>! Capabilities, out string? ShellFeatureName) -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.DisplayName.get -> string!
+Elsa.Studio.Core.Models.StudioModuleManifest.DisplayName.init -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.Entry.get -> string!
+Elsa.Studio.Core.Models.StudioModuleManifest.Entry.init -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.Equals(Elsa.Studio.Core.Models.StudioModuleManifest? other) -> bool
+Elsa.Studio.Core.Models.StudioModuleManifest.Id.get -> string!
+Elsa.Studio.Core.Models.StudioModuleManifest.Id.init -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.RequiredHostVersion.get -> string!
+Elsa.Studio.Core.Models.StudioModuleManifest.RequiredHostVersion.init -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.RequiredSdkVersion.get -> string!
+Elsa.Studio.Core.Models.StudioModuleManifest.RequiredSdkVersion.init -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.ShellFeatureName.get -> string?
+Elsa.Studio.Core.Models.StudioModuleManifest.ShellFeatureName.init -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.StudioModuleManifest(string! id, string! displayName, string! version, string! entry, System.Collections.Generic.IReadOnlyCollection<string!>! styles, string! requiredHostVersion, string! requiredSdkVersion, System.Collections.Generic.IReadOnlyCollection<string!>! capabilities) -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.StudioModuleManifest(string! Id, string! DisplayName, string! Version, string! Entry, System.Collections.Generic.IReadOnlyCollection<string!>! Styles, string! RequiredHostVersion, string! RequiredSdkVersion, System.Collections.Generic.IReadOnlyCollection<string!>! Capabilities, string? ShellFeatureName = null) -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.Styles.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Studio.Core.Models.StudioModuleManifest.Styles.init -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.StylesHaveContentHashes.get -> bool
+Elsa.Studio.Core.Models.StudioModuleManifest.StylesHaveContentHashes.init -> void
+Elsa.Studio.Core.Models.StudioModuleManifest.Version.get -> string!
+Elsa.Studio.Core.Models.StudioModuleManifest.Version.init -> void
+Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry
+Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.<Clone>$() -> Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry!
+Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.Deconstruct(out string! Namespace, out object? Value) -> void
+Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.Equals(Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry? other) -> bool
+Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.Namespace.get -> string!
+Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.Namespace.init -> void
+Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.StudioRuntimeConfigurationEntry(string! Namespace, object? Value) -> void
+Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.Value.get -> object?
+Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.Value.init -> void
+Elsa.Studio.Core.Services.StudioEventServiceCollectionExtensions
+override Elsa.Studio.Core.Models.StudioBackendAuthority.Equals(object? obj) -> bool
+override Elsa.Studio.Core.Models.StudioBackendAuthority.GetHashCode() -> int
+override Elsa.Studio.Core.Models.StudioBackendAuthority.ToString() -> string!
+override Elsa.Studio.Core.Models.StudioBackendAuthorityContext.Equals(object? obj) -> bool
+override Elsa.Studio.Core.Models.StudioBackendAuthorityContext.GetHashCode() -> int
+override Elsa.Studio.Core.Models.StudioBackendAuthorityContext.ToString() -> string!
+override Elsa.Studio.Core.Models.StudioModuleDiagnostic.Equals(object? obj) -> bool
+override Elsa.Studio.Core.Models.StudioModuleDiagnostic.GetHashCode() -> int
+override Elsa.Studio.Core.Models.StudioModuleDiagnostic.ToString() -> string!
+override Elsa.Studio.Core.Models.StudioModuleManifest.Equals(object? obj) -> bool
+override Elsa.Studio.Core.Models.StudioModuleManifest.GetHashCode() -> int
+override Elsa.Studio.Core.Models.StudioModuleManifest.ToString() -> string!
+override Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.Equals(object? obj) -> bool
+override Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.GetHashCode() -> int
+override Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.ToString() -> string!
+static Elsa.Studio.Core.Models.StudioBackendAuthority.operator !=(Elsa.Studio.Core.Models.StudioBackendAuthority? left, Elsa.Studio.Core.Models.StudioBackendAuthority? right) -> bool
+static Elsa.Studio.Core.Models.StudioBackendAuthority.operator ==(Elsa.Studio.Core.Models.StudioBackendAuthority? left, Elsa.Studio.Core.Models.StudioBackendAuthority? right) -> bool
+static Elsa.Studio.Core.Models.StudioBackendAuthorityContext.operator !=(Elsa.Studio.Core.Models.StudioBackendAuthorityContext? left, Elsa.Studio.Core.Models.StudioBackendAuthorityContext? right) -> bool
+static Elsa.Studio.Core.Models.StudioBackendAuthorityContext.operator ==(Elsa.Studio.Core.Models.StudioBackendAuthorityContext? left, Elsa.Studio.Core.Models.StudioBackendAuthorityContext? right) -> bool
+static Elsa.Studio.Core.Models.StudioModuleDiagnostic.operator !=(Elsa.Studio.Core.Models.StudioModuleDiagnostic? left, Elsa.Studio.Core.Models.StudioModuleDiagnostic? right) -> bool
+static Elsa.Studio.Core.Models.StudioModuleDiagnostic.operator ==(Elsa.Studio.Core.Models.StudioModuleDiagnostic? left, Elsa.Studio.Core.Models.StudioModuleDiagnostic? right) -> bool
+static Elsa.Studio.Core.Models.StudioModuleManifest.operator !=(Elsa.Studio.Core.Models.StudioModuleManifest? left, Elsa.Studio.Core.Models.StudioModuleManifest? right) -> bool
+static Elsa.Studio.Core.Models.StudioModuleManifest.operator ==(Elsa.Studio.Core.Models.StudioModuleManifest? left, Elsa.Studio.Core.Models.StudioModuleManifest? right) -> bool
+static Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.operator !=(Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry? left, Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry? right) -> bool
+static Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry.operator ==(Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry? left, Elsa.Studio.Core.Models.StudioRuntimeConfigurationEntry? right) -> bool
+static Elsa.Studio.Core.Services.StudioEventServiceCollectionExtensions.AddStudioEventHandler<TEvent, THandler>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

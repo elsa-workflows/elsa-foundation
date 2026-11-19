@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "purpose": "FR-015 actual-store legacy inventory only",
+  "sourceRevision": "b2fc515ffc213e7ba96f4040769269f43b4c00d8",
+  "status": "NoLegacyPublishResponsibilityOwed",
+  "limitations": [
+    "Only supplied stores are inventoried; no production-wide or mixed-writer quiescence claim.",
+    "Attempt zero is not evidence that no recipient effect occurred.",
+    "This does not qualify cohort dispatch or upgraded-host recovery."
+  ],
+  "stores": [
+    {
+      "sourceName": "elsa.db",
+      "observationStartedAtUtc": "2026-10-26T00:05:07.382281+00:00",
+      "observationCompletedAtUtc": "2026-10-26T00:05:07.788190+00:00",
+      "sourceKind": "sqlite-backup-including-wal",
+      "databaseSha256": "9d544827111fd7d54bb40c697113b396dd51b1a26c218afa5906fc861c2c80d5",
+      "compressedSha256": null,
+      "readerAssembliesSha256": {
+        "DeliveryPreflight.dll": "41645c3b05756a62d91f9cfc56e97c0dbe5367508e9daa21867613418d03844e",
+        "Elsa.Workflows.Runtime.Core.dll": "db0ae12f9db204b7d03d4c38da6ff9c0eb74c4e6b0f0db858d795703e9393ce9",
+        "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "3f75a3140726813377a5f098e609b39907179aa1e8a8017ca9d84cd680f6e5f2",
+        "Elsa.Persistence.EntityFramework.dll": "388ee10a8bdab7ffa44281a01d7f50e5d8f516e62877d13dc453602e54c26427"
+      },
+      "outboxRows": 10,
+      "publishRows": 1,
+      "identityDigestEncoding": "UTF-16LE code units",
+      "classifications": {
+        "LegacyDelivered": 1
+      },
+      "status": "NoLegacyPublishResponsibilityOwed",
+      "providerChecked": true,
+      "publishes": [
+        {
+          "sourceIdentitySha256": "d203e5712391082abb23d2fed08ddefeaea660600e9d8d8e09945edd4b7fa79b",
+          "scopeIdentitySha256": "595a39eaad0b6c5b8dbf1daf571d325bab110d15e7d8033919e0f1e5ee4bc907",
+          "familyVersion": "1.0.0",
+          "status": "Delivered",
+          "deliveryAttemptCount": 1,
+          "deliveryFencingToken": 1,
+          "firstAttemptRecorded": true,
+          "classification": "LegacyDelivered"
+        }
+      ]
+    }
+  ]
+}

@@ -11,3 +11,6 @@ export function useAuthContext() {
 
   return value;
 }
+
+/** Optional shell/embedding access using the same public SDK context as AuthProvider. */
+export function useOptionalAuthContext() { return useContext(AuthContext); }

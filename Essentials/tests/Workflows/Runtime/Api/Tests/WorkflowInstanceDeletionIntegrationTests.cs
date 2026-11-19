@@ -103,6 +103,18 @@ public sealed class WorkflowInstanceDeletionIntegrationTests
     }
 
     [Fact]
+    public async Task Linked_control_dependency_returns_conflict_without_retrying_or_deleting_history()
+    {
+        await using var host = await DeletionHost.StartAsync();
+        host.Store.Result = WorkflowExecutionDeletionResult.DependencyRetained;
+        using var response = await host.DeleteAsync();
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.NotNull(host.Store.Candidate);
+        Assert.Null(host.Store.DeletedToken);
+        Assert.Equal(0, host.Actor.Calls);
+    }
+
+    [Fact]
     public async Task Durably_forwarded_cancellation_waits_for_the_terminal_snapshot()
     {
         await using var host = await DeletionHost.StartAsync(status: WorkflowExecutionStatus.Running);

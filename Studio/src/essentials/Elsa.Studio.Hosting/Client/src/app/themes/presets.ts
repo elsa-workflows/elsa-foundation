@@ -1,5 +1,6 @@
 import type { StudioThemeLayout } from "../../sdk";
 import { foundationThemeDefinitions } from "./foundationThemes";
+import type { WorkspaceStyle } from "./workspaceStyles";
 
 export type StudioThemeSource = "built-in" | "custom";
 
@@ -116,6 +117,8 @@ export interface StudioThemeDefinition {
   shape?: ThemeShape;
   /** Structural arrangement of the shell and authoring surfaces; `classic` when absent. */
   layout?: StudioThemeLayout;
+  /** Default shared visual treatment. An explicit user workspace choice overrides it. */
+  workspaceStyle?: WorkspaceStyle;
   material?: {
     textureAssets?: Record<string, string>;
     cssVariables?: Record<string, string>;
@@ -224,6 +227,7 @@ export function cloneThemeDefinition(theme: StudioThemeDefinition): StudioThemeD
     typography: theme.typography,
     shape: theme.shape,
     layout: theme.layout,
+    workspaceStyle: theme.workspaceStyle,
     material: theme.material
   })) as StudioThemeDefinition;
 }

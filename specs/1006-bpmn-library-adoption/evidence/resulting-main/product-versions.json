@@ -1,0 +1,31 @@
+{
+  "sourceCommit": "438001406d980051584234e5d656eb8e6a67f47f",
+  "metadataOnly": true,
+  "actualProductVersions": [
+    {
+      "name": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "d52e6ff05b5dd82ea701e0f16fe59e393f864a30f4e272fe79684d16e18f5961"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "31aa3921531011039189ba7f5e9c754ab0bfa6b79cd036440a598bd7f77100c5"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.Interchange.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "0ede67c84f4bc0cccb8e151a6f240cf00075a9f1aa60a9ea604592988bffcc7a"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "275c49c79b8a70b3156fe560c4b84f1637a71076abf10203cd2632da7eca3416"
+    },
+    {
+      "name": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+      "productVersion": "1.0.0+438001406d980051584234e5d656eb8e6a67f47f",
+      "sha256": "74a48d6a23466fe4d8b48ffc4c3c219746f79144a9b6b3cc150059acd119168d"
+    }
+  ]
+}

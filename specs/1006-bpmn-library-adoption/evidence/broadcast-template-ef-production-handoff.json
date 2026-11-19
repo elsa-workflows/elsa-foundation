@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 production EF draft/source publication handoff to strict qualified Runtime unit; draft-test/native/default and old-writer gates remain open",
+  "sourceParentCommit": "05b0efd4b093da8bf4f7aa85b89d803d41aa5385",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityPublicationRuntimeCommit.cs": "e2b4a04af12c038695c0041696a8137310d29bb4c0d8708491717886a4e8743e",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.Maintenance.cs": "6afd8294cc7c9d77c2bf4cb10b1fc1de34409daabc67a9d3307d44fb0a40a26e",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.cs": "b856f34bbc7096fa2b269381aa2065d6d93515b674cda73d8eeef8813e5a4cbb",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs": "6dc6045ecdfb73d1a4cdeeab6d9d218f21b2b8133c98f9095057b62764c75819",
+    "Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Services/EfActivityPublicationCommand.cs": "83be39702fc88faee41222fca26dd9ebf4e00438f20158e55ff9916185376da0",
+    "Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Services/EfSourceActivityPublicationCommand.cs": "5d5278732f6591ace5ce3de7506bade703647ce7b4a715fd6eac43ee80e4b552",
+    "Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/EfActivityPublicationCommandTests.cs": "033b69190a956e170a54ff5b21575bc9d373cd01a3a48d8c4f5d43ba1ab47e22",
+    "Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/EfActivityPublicationCommandTests.LiveRuntimeHandoff.cs": "d1c095d456724ae1f6412a1db09adb9f8ab511bf14d59ee938ce73b611484237",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.TemplateAtomicPublication.cs": "37d9d56f84b1eb5f43f2fe3ac9a606a3fc92aa30edd8d711a74a20171f7d72fe",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "677e95331586a5a59e623f114c3a083327b7dd55d0429c0caaf0c9fb46c2d58b",
+    "specs/1006-bpmn-library-adoption/tasks.md": "9d1d3c3ab21e4b2a6957a6014e47409b8136998ab8dcf3ba1995750d5c3cd3d3",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/ReusableActivityRuntimeStores.cs": "dee8c090fae0720703e750453b58e80464dfa5db2f5af2a7ba43bfe86caa1365",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs": "27c2cc257c257afd4303f725296a9f2a5ef8b166e81a03a3e38737a08b2dc716",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "2fe5ff544aaa64721e69e90bf2c05a80e69bcb215472c18ee9ed2a7d5b4ca968"
+  },
+  "checks": [
+    {
+      "project": "Runtime EF",
+      "passed": 1450,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 2
+    },
+    {
+      "project": "Publishing EF",
+      "passed": 171,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 10
+    },
+    {
+      "project": "Publishing API",
+      "passed": 863,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    },
+    {
+      "project": "Publishing",
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    }
+  ],
+  "newActualProductionCommandSqliteCases": 10,
+  "newSelectedProviderClockSqliteCases": 2,
+  "discovery": {
+    "ef": {
+      "listed": 1450,
+      "uniqueDisplayNames": 1448,
+      "executed": 1450,
+      "deferredTheories": {},
+      "unmapped": []
+    },
+    "publishing-ef": {
+      "listed": 171,
+      "uniqueDisplayNames": 169,
+      "executed": 171,
+      "deferredTheories": {},
+      "unmapped": []
+    },
+    "publishing-api": {
+      "listed": 843,
+      "uniqueDisplayNames": 843,
+      "executed": 863,
+      "deferredTheories": {
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code": 10,
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011": 3
+      },
+      "unmapped": []
+    },
+    "publishing": {
+      "listed": 61,
+      "uniqueDisplayNames": 61,
+      "executed": 61,
+      "deferredTheories": {},
+      "unmapped": []
+    }
+  },
+  "mutations": [
+    {
+      "mutation": "production-strict-mode-disabled",
+      "runs": [
+        {
+          "project": "RuntimeEF",
+          "exitCode": 1,
+          "failed": 1,
+          "passed": 1,
+          "skipped": 0
+        },
+        {
+          "project": "PublishingEF",
+          "exitCode": 1,
+          "failed": 6,
+          "passed": 4,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "production-provider-clock-replaced-with-wall-clock",
+      "runs": [
+        {
+          "project": "RuntimeEF",
+          "exitCode": 1,
+          "failed": 1,
+          "passed": 1,
+          "skipped": 0
+        },
+        {
+          "project": "PublishingEF",
+          "exitCode": 0,
+          "failed": 0,
+          "passed": 10,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "production-caller-boundary-removed",
+      "runs": [
+        {
+          "project": "RuntimeEF",
+          "exitCode": 0,
+          "failed": 0,
+          "passed": 2,
+          "skipped": 0
+        },
+        {
+          "project": "PublishingEF",
+          "exitCode": 1,
+          "failed": 4,
+          "passed": 6,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "coreApiAdditions": 0,
+  "coreApiRemovals": 0,
+  "schemaChanges": false,
+  "generatedMapsCheck": "passed",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "unchanged": true,
+  "reviewFixes": [
+    "Add claim-specific public phase-one selected-provider clock negative/valid controls. Actual material read advances only injected clock; a system-live/provider-expired source refuses before SaveChanges while valid twin commits once. Actual command wall-time tests alone did not detect replacing selected clock with System."
+  ],
+  "reviews": {
+    "correctness": "final source and source-bound receipt clean",
+    "standards": "final source/catalog/domain boundaries and source-bound receipt clean",
+    "acceptance": "final source/control scope and source-bound receipt clean; selected-provider-clock claim gap closed",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Both actual production EF publication commands already share the Runtime phase-one unit; its public boolean method now selects strict admission with the template provider clock and applies the shared clean/owned-context check before tracker cleanup. No parallel transaction protocol added.",
+    "Ten actual multi-context SQLite cases cover both production command paths, nonlive/changed-root refusal before Design/receipt effects and preservation of caller dirty/local-transaction Runtime state. Two actual SQLite public-unit clock cases distinguish injected clock from wall time with refusal/no-Save and valid/one-Save outcomes.",
+    "No process kill, upgraded-host, Studio, broadcast-host or production recovery qualification. Existing whole project positives and interrupted publication/retry scenarios remain provider/command evidence.",
+    "ActivityDraftTestRunService split template/source-reference handoff, native bindings/default cohort GC and old-writer/quiescence gates keep T049 open; saved publication stays disabled.",
+    "T050 exact bookmark/immutable input/schema activation, T051 actual host/fresh-provider recovery, other stories, duplicate-semantics deletion/guards, final current host/Studio, full-PR review/exact-head checks/resulting-main and ADR0063 remain open. #2898/#2907/program production acceptance stays open; Orleans/task-runner deferred."
+  ],
+  "remoteParentChecks": {
+    "head": "05b0efd4b093da8bf4f7aa85b89d803d41aa5385",
+    "run": 40399138717,
+    "status": "in progress at receipt preparation; refresh before checkpoint",
+    "fullTier": "draft skip is not qualification",
+    "gitGuardianIncident": "38996611 unresolved older public source-digest finding; no bypass",
+    "boundary": "Last pushed parent only; new source needs exact-head checks."
+  }
+}

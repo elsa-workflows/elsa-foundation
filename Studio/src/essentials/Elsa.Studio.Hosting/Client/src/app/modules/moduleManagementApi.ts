@@ -3,11 +3,12 @@ import {
   type ElsaStudioModuleApi,
   type StudioBackendManagementRegistryEnvelope,
   type StudioBackendManagementStatusKind,
-  type StudioEndpointContext
+  type StudioEndpointContext,
+  type StudioHostId
 } from "../../sdk";
 import { isPermissionDenied } from "../hostControlPermissions";
 
-export type HostId = "studio" | "server";
+export type HostId = StudioHostId;
 export type RegistryState = "loading" | "ready" | "failed";
 
 export interface HostModel {
@@ -125,7 +126,6 @@ export interface ModuleManagementFeed {
   name: string;
   serviceIndex?: string | null;
   directoryPath?: string | null;
-  credentials?: string | null;
   includeAll: boolean;
   includePatterns: string[];
   directory: {
@@ -602,7 +602,6 @@ function normalizeFeed(feed: Partial<ModuleManagementFeed>): ModuleManagementFee
     name: feed.name ?? "unnamed-feed",
     serviceIndex: feed.serviceIndex ?? null,
     directoryPath: feed.directoryPath ?? null,
-    credentials: feed.credentials ?? null,
     includeAll: feed.includeAll ?? false,
     includePatterns: asArray(feed.includePatterns),
     directory: {

@@ -1,0 +1,51 @@
+{
+  "scenario": "queued-loser",
+  "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "runtimeBaselineRevision": "fbe694d2f3d126e324c3e46578bc1a560b0217f1",
+  "modelPackage": "0.1.1-preview.19",
+  "interchangePackage": "0.1.1-preview.19",
+  "stateAlias": "Elsa.Bpmn.ExecutionState",
+  "stateVersion": 1,
+  "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6",
+  "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+  "oldHostControl": "fresh provider over a separate exact database copy passed",
+  "facts": {
+    "parentId": "legacy-activity-0",
+    "pendingFault": null,
+    "canceledLoser": true,
+    "queuedLoser": true,
+    "queuedBeforeCancellation": true,
+    "loserQueuedObservation": 13,
+    "firstCancellationObservation": 15,
+    "activeWork": [
+      {
+        "nodeId": "node-final",
+        "elementId": "catch-final",
+        "tokenId": "token:24",
+        "schedulingCause": "element:intermediateCatchEvent",
+        "iterationId": null
+      }
+    ],
+    "children": [
+      {
+        "invocationId": "legacy-activity-1",
+        "node": "node-winner",
+        "status": 4,
+        "iterationId": null,
+        "token": "token:7"
+      },
+      {
+        "invocationId": "legacy-activity-2",
+        "node": "node-loser",
+        "status": 4,
+        "iterationId": null,
+        "token": "token:9"
+      }
+    ],
+    "bookmarkCount": 0,
+    "queuedIds": [
+      "8535a6fe0b56198a:parent:legacy-activity-0:child:legacy-activity-1",
+      "4cd41ccc9fa61357:parent:legacy-activity-0:child:legacy-activity-2"
+    ]
+  }
+}

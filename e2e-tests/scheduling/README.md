@@ -5,6 +5,7 @@ Backend tests for the three `Elsa.Activities.Scheduling` activities, driven thro
 | Script | What it exercises |
 |--------|-------------------|
 | `Test-Delay.ps1` | `Delay` - a **mid-flow** activity that durably suspends the instance for a `Duration`, then auto-resumes when the hosted durable-timer pump fires (no external stimulus). Asserts suspend, then resume-to-completion. |
+| `Test-DelayDeadline.ps1` | Starts its own fresh-SQLite host and checks a five-second local deadline, persisted restart recovery, and all three scheduling scripts. Retains optional JSON evidence with activity timestamps. Build Workbench first; no external server is stopped. |
 | `Test-Timer.ps1` | `Timer` - a recurring **start trigger**; the recurring-trigger pump starts a new instance every `Interval`. Asserts an instance is auto-started and completes. |
 | `Test-Cron.ps1` | `Cron` - a recurring **start trigger** on a cron schedule (UTC); same pump. Asserts an instance is auto-started and completes. |
 | `_SchedulingCommon.ps1` | shared helpers (node builders, pump-driven instance waiters). |
@@ -23,8 +24,10 @@ never fire. The `Essentials/apps/Elsa.Workbench/shells.json` default shell must 
 
 `ActivitiesScheduling` depends on both runtime features; the runtime features register the `IDurableTimerStore` /
 `IDurableTimerScheduler` + `DurableTimerPumpTask` and the recurring schedule store + `RecurringTriggerPumpTask`
-respectively. Both pumps sweep roughly every 10s, so a fire lands within `duration|interval|occurrence` **+ up to
-~10s** of sweep jitter (the tests budget for this).
+respectively. The durable timer pump wakes at known eligible deadlines and retains roughly ten-second recovery
+sweeps for missed/other-host notifications. Timer/Cron retain their roughly ten-second recurring sweep cadence;
+their fires can land within `interval|occurrence` **+ up to ~10s** of sweep jitter. Host load, retries and claims
+can delay execution further; these are durable scheduling semantics, not real-time guarantees.
 
 ## Input value formats
 

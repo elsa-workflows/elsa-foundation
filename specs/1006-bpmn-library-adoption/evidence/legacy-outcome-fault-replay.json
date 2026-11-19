@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "task": "T017 reconciled and complete within actual-provider completion/fault/replay/pruning/identity scope",
+  "sourceParentCommit": "dc7ce6454f99ef192000236ad1d12aaaf3272a16",
+  "filesSha256": {
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnUpgradeRecoveryEfTests.cs": "ccc4042040ef682eee1b66589cd1dc7bbfd92259eec4345f9ec41fcb73550afe",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnUpgradeRecoveryEfTests.ContinuedReplay.cs": "b381aac7d53799a73d131c686123cfda07e1cba3f568fa25b9d1d32e58188461",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnUpgradeRecoveryEfTests.OutcomeReplay.cs": "48a46c1d16b570fd607bba8372f4bca15790528e4ffbc9ab93941887ca5a1ba7",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyCheckpointOutcomeWaitActivity.cs": "a807eee27da680898601ae5585a41a6a8527539a979378213d18004217e10f89",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnWorkLedger.cs": "beeaae7aa7aee9db0bea042c0c27697d75c7de65e5177f8c2581ef32d6df440b",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs": "e5b927efaf48caee929132475b7b0062ff30bba973746a43df4f9e5e6d9105ae",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "specs/1006-bpmn-library-adoption/tasks.md": "56e5d94d356d4381b020e4780240b5cbfc872849de7d1753496fb52f4dadbdd5",
+    "specs/1006-bpmn-library-adoption/evidence/reader-matrix.md": "d608158b69650025c5c96e650987de78e20972a4cf22c8d573514e341b145903",
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.md": "bcfba4adabb8d223484d861e10f023dd6abd879e15c50e65cf1b6572eac4896c",
+    "specs/1006-bpmn-library-adoption/evidence/legacy/README.md": "1698e22a0dc98800fa65db89728ef6ebae9b11fcf9d14bf2c353168bc407fc00",
+    "specs/1006-bpmn-library-adoption/evidence/legacy/outcome-wait-capture.patch": "fdcfc6365c407bad175eaa0473ea047ae4f6af02e2a24bfd0ed4e0bb45d2b17f",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Recovery/RuntimeResumptionService.cs": "c635e515945f26967ff2848a77c5e9b241a3c63dac6957e12a96bdfa41313a1c"
+  },
+  "binariesSha256": {
+    "Bpmn.Model.dll": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776",
+    "Bpmn.Semantics.dll": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923",
+    "Elsa.Activities.Bpmn.dll": "e6e96a8e6018e9f396bc1d6efb6d96898a96894d6ba3429f5832c3107c30718f",
+    "Elsa.Activities.Runtime.dll": "824c3cf72e157f62a7a5f8fdd137f242f84ea71e8fc4de41ffc386f03e92cdf1",
+    "Elsa.Workflows.Runtime.dll": "d6d3fcc5c012ba7367f4fedc3ea44b4379b079befd3dbd66dc23b27163f68262",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "1af71512efa7fc19cffcd6e5444ad4f5a1827a0add95685ffa168d2d9d5287b9",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll": "7043a0ed79bb70b4ddb4bac6ceb8188e92cc007aba5e185feedaadd5fd0b55ef"
+  },
+  "releasedPackages": [
+    "Bpmn.Model/0.5.0",
+    "Bpmn.Semantics/0.5.0"
+  ],
+  "oldCaptureSourceVerification": {
+    "base": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+    "trackedFilesVerified": 12312,
+    "onlyChangedExistingFile": [
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyBpmnCheckpointEfTests.cs"
+    ],
+    "testOnlyAddedFile": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyCheckpointOutcomeWaitActivity.cs",
+    "patchSha256": "fdcfc6365c407bad175eaa0473ea047ae4f6af02e2a24bfd0ed4e0bb45d2b17f",
+    "allOldProductionAndPinsUnchanged": true,
+    "patchReverseCheck": true,
+    "packagePins": {
+      "Bpmn.Model": "0.1.1-preview.19",
+      "Bpmn.Interchange": "0.1.1-preview.19"
+    },
+    "pinScope": "unchanged central pins; old core uses its duplicated local model/semantics, not an external runtime Model dependency",
+    "binariesSha256": {
+      "Elsa.Activities.Bpmn.dll": "9c95905326d5d130b37ba553dd713606acd240dcae776e1ee498513e2d8b5260",
+      "Elsa.Activities.Runtime.dll": "b46d53610e527d31ef40e71567bad44c9a2ad5bf86a590e1d63a98ff8d4adc71",
+      "Elsa.Workflows.Runtime.dll": "27b514b735b0cefb0afb8666b80d5ed51ea37f2ffcd2621a456a9b40e3827c41",
+      "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll": "69bb310a0b32080c1a8aaecc6bbce5ac2bfba3e11a1d7881995b85be2de94a29"
+    }
+  },
+  "portabilityVerification": {
+    "standalonePatchReconstruction": true,
+    "oldAndCurrentLeafIdentical": true,
+    "artifacts": {
+      "parallel-mi-outcome": {
+        "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1",
+        "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+        "sqliteIntegrity": "ok"
+      },
+      "listener-rearm-outcome": {
+        "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
+        "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+        "sqliteIntegrity": "ok"
+      }
+    }
+  },
+  "actualLegacyCheckpoints": {
+    "resolved-race": {
+      "receiptSha256": "9ebbfc0c3fbb3d8ce573ffcad810b815d547234d491c5b4d80e8dd8a61850d79",
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f",
+      "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+      "stateVersion": 1
+    },
+    "queued-loser": {
+      "receiptSha256": "0bbc348c2306da431780d6fe03bb060f195b6bfdac9d2972ed5acf7baa6e728b",
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6",
+      "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+      "stateVersion": 1
+    },
+    "parallel-mi": {
+      "receiptSha256": "91738281dd197a5c8e62794914c18d158638e32a9daa26b36369be8ef01ccb25",
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734",
+      "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+      "stateVersion": 1
+    },
+    "listener-rearm": {
+      "receiptSha256": "ed4c3c8577655ee70b53ab8c9c59098460390ef34ae1f3db196459faefae5e73",
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d",
+      "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+      "stateVersion": 1
+    },
+    "deferred-fault": {
+      "receiptSha256": "f1829d951f4d48104800d77a291e12f33f228a91f1079185de8c0d84af4ca111",
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51",
+      "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+      "stateVersion": 1
+    },
+    "queued-late-fault": {
+      "receiptSha256": "c6aa235d7649d6733ca0f6a352bd6ec3af0867dc9ea8b280a5c1084fe77332d5",
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235",
+      "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+      "stateVersion": 1
+    },
+    "parallel-mi-outcome": {
+      "receiptSha256": "1056c29067953c365127bd71a500604d50f0e6305535977d83059fef1ddb8c68",
+      "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+      "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1",
+      "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+      "stateVersion": 1
+    },
+    "listener-rearm-outcome": {
+      "receiptSha256": "276a402ca42780be010162a9cc0fd39b739dc1f170f44bda0a6bb591d1cec7c6",
+      "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+      "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
+      "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+      "stateVersion": 1
+    }
+  },
+  "historicalReceiptsUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/late-fault-upgrade.md": {
+      "sourceRevision": "dc7ce6454f99ef192000236ad1d12aaaf3272a16",
+      "sha256": "51437d89e30707d0d8f3107ba7d09cf3f71ec4aa363d6c34beb01d2deb95454f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/queued-loser-replay.md": {
+      "sourceRevision": "dc7ce6454f99ef192000236ad1d12aaaf3272a16",
+      "sha256": "a576e316feeab605da29168f76844e3617ea6ccc2cab16581d769f6da8088c0a"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/continued-legacy-callback-replay.md": {
+      "sourceRevision": "dc7ce6454f99ef192000236ad1d12aaaf3272a16",
+      "sha256": "f60742244b93249b52b3451d090a94d79512395847a63c158ac706b6c7af6366"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/continued-legacy-callback-replay.json": {
+      "sourceRevision": "dc7ce6454f99ef192000236ad1d12aaaf3272a16",
+      "sha256": "5e727eb3f474add1a7f5889c9e77253282f16872b7049df2f7e0eda63e105bc9"
+    }
+  },
+  "checks": [
+    {
+      "name": "actual old capture export/fresh old provider fault controls",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "701db306c00d1723c09c5fe5e3a2ebf4589408f8641c2d490d0a649e77cc4d35"
+    },
+    {
+      "name": "actual upgraded typed fault/terminal replay focused",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "7141974aecd0d4121dd34ce94b668625883929629ec7975239a7122d97dc1565"
+    },
+    {
+      "name": "whole Runtime EF",
+      "passed": 1653,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "8c27011544add035f05b3571932c0f8a434efba59879063743ddff66a27edc80"
+    }
+  ],
+  "initialUnqualifiedFailures": [
+    {
+      "failed": 1,
+      "qualified": false,
+      "reason": "Discarded native Sequence waits on its faulted child and stays Running; it does not propagate a direct MI fault.",
+      "logSha256": "b4a69d05afad6b649eedf536f12f4dc83d5b48eea45366e1dadc6fa322d113ec"
+    },
+    {
+      "failed": 2,
+      "qualified": false,
+      "reason": "Test typed outcome field needed explicit JSON property mapping; no exports.",
+      "logSha256": "349292b2eb302d1b6db9e277b86e859ac2f3c3223c19a875eec20a2b2c64aa97"
+    },
+    {
+      "failed": 4,
+      "qualified": false,
+      "reason": "Self-cancel emitted no parent completion callback; propagated faults have no ordinary completion receipt. Cases narrowed to real typed faults and terminal purge.",
+      "logSha256": "bffe359caabd4fd20aecd41a1e362b3e9e9ffbb8753aaa4a2041b1943c0eb58a"
+    },
+    {
+      "failed": 2,
+      "qualified": false,
+      "reason": "Released parent verdict is bpmn.work.faulted, not old bpmn.child.faulted. Original child code preserved.",
+      "logSha256": "c874ebee55f241b38f6b1f2103ba5667599e2f18828cb670f97757e1821d34bb"
+    }
+  ],
+  "qualification": {
+    "actualOldWriterExecutedBeforeDeletion": true,
+    "allOldProductionAndPinsUnchanged": true,
+    "newLeafSourceIdenticalAcrossOldAndUpgradedTests": true,
+    "normalTypedFaultResumeAndActualCallbackObserved": true,
+    "exactSelectedWorkAndBookmarkRetired": true,
+    "otherOriginalActivitiesAndPhysicalBookmarkGenerationScopeUnchanged": true,
+    "originalChildFaultAndBlockingIncidentPreserved": true,
+    "continuedV1ParsesWithOriginalProductionReader": true,
+    "faultReplayQueuedThenTerminalPurgedBeforeHandler": true,
+    "faultPathOrdinaryProcessedCompletionReceiptAbsent": true,
+    "allActivityBookmarkIncidentFactsUnchangedOnTerminalReplay": true
+  },
+  "parentVerdictCodes": {
+    "old": "bpmn.child.faulted",
+    "released": "bpmn.work.faulted",
+    "originalChild": "LEGACY-OUTCOME-FAULT"
+  },
+  "reviews": {
+    "type": "three independent bounded source/artifact/task reconciliations; not full PR",
+    "remainingActionable": []
+  },
+  "reviewFindingsFixed": [
+    "Capture predicates now positively assert exact current/prior identities and parent/token/node/iteration/bookmark relationships.",
+    "Require selected physical bookmark absence, faulted child empty bookmark IDs and exact count decrement."
+  ],
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "selfCancelParentCallbackQualified": false,
+  "fullPrRounds": 0,
+  "notQualified": [
+    "Fault terminal purge is not live-parent processed receipt guard; those prior separate witnesses remain source-bound.",
+    "No full-process Workbench restart, final current Studio, running old-binary rollback or production acceptance."
+  ],
+  "remainingGates": [
+    "T021/T022/T024/T025/T029/T045 native/combined/called-control qualification",
+    "Final actual Workbench/current Studio, T032 deletion and T033/T034/T035 guards/audits",
+    "T036/T037/T038 final qualification/full PR/required green checks/protected merge/resulting-main; separate ADR0063",
+    "Independent production #2898/#2907/program acceptance; Orleans/task-runner deferred"
+  ]
+}

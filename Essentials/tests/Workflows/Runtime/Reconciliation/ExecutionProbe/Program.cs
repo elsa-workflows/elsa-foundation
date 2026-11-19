@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.Testing;
+using Elsa.Events;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -90,6 +91,7 @@ internal static class Program
 
     private static WorkflowExecutionHarness BuildRuntimeOnlyEngine(string mount) =>
         WorkflowExecutionHarness.Create()
+            .WithFeature(services => new EventsFeature().ConfigureServices(services))
             .WithFeature(services => new WorkflowsRuntimeTriggersFeature().ConfigureServices(services))
             .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
             .WithFeature(services => new DispatchWorkflowRuntimeFeature().ConfigureServices(services))

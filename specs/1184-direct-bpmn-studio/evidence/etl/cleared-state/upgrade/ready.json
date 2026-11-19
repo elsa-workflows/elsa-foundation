@@ -1,0 +1,9 @@
+{
+  "family": "direct-etl",
+  "sourceRevision": "0c7656afffcbdebcb60b444e357c7c52749d7eab",
+  "harnessSourceRevision": "5c5ebbbe1b1cadd5e0249467e35301a000da1aac",
+  "legacySourceRevision": "41f1828cb5797c167701e14f5c366cf152dda75b",
+  "backendUrl": "http://127.0.0.1:55912",
+  "studioUrl": "http://127.0.0.1:55913",
+  "privateRoot": "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-etl-upgrade-qw9imp7v"
+}

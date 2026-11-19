@@ -30,13 +30,14 @@ export function usePinnedEditorDocument({ document, context, definitionId, catal
       window.removeEventListener(authSessionStartedEvent, start);
     };
   }, []);
-  const { loadDraft, replaceDraftByBatch, editDraft, editDraftAndSelect } = document;
+  const { loadDraft, replaceDraftByBatch, compareAndReplaceDraftByBatch, editDraft, editDraftAndSelect } = document;
   const actions = useMemo(() => ({
     loadDraft: (...args: Parameters<WorkflowDocumentApi["loadDraft"]>) => { if (!pinned && currentKey.current === key && !readOnly.current) loadDraft(...args); },
+    compareAndReplaceDraftByBatch: (...args: Parameters<WorkflowDocumentApi["compareAndReplaceDraftByBatch"]>) => { if (!pinned && currentKey.current === key && !readOnly.current) compareAndReplaceDraftByBatch(...args); },
     replaceDraftByBatch: (...args: Parameters<WorkflowDocumentApi["replaceDraftByBatch"]>) => { if (!pinned && currentKey.current === key && !readOnly.current) replaceDraftByBatch(...args); },
     editDraft: (...args: Parameters<WorkflowDocumentApi["editDraft"]>) => { if (!pinned && currentKey.current === key && !readOnly.current) editDraft(...args); },
     editDraftAndSelect: (...args: Parameters<WorkflowDocumentApi["editDraftAndSelect"]>) => { if (!pinned && currentKey.current === key && !readOnly.current) editDraftAndSelect(...args); }
-  }), [editDraft, editDraftAndSelect, key, loadDraft, pinned, replaceDraftByBatch]);
+  }), [compareAndReplaceDraftByBatch, editDraft, editDraftAndSelect, key, loadDraft, pinned, replaceDraftByBatch]);
   const { navigateToScope: navigateEditable, select: selectEditable } = document;
   const navigateToScope: WorkflowDocumentApi["navigateToScope"] = useCallback((frames, selectedNodeId = null) => {
     if (pinned) setPresentation(value => value?.key === key ? { ...value, frames, selectedNodeId } : value);

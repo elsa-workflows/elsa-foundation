@@ -1,7 +1,7 @@
 # Extension points — API endpoint layer
 
 The endpoint-class bases, the module-local mapper, the request binder, and the module-owned failure
-pipeline ship in the [NativeEndpoints](https://www.nuget.org/packages/NativeEndpoints) package.
+pipeline ship in the [ValenceWorks.MinimalEndpoints](https://www.nuget.org/packages/ValenceWorks.MinimalEndpoints) package.
 `Elsa.Api.AspNetCore` carries what stays Elsa's: endpoint ownership, security disposition, authoring
 model, and host-credential enforcement, plus the operation convention that attaches them (see
 `ElsaEndpointConventions`). Everything below is attached by the owning module through standard DI or
@@ -17,7 +17,7 @@ module's own wire shapes; the unkeyed registration remains the single-module fal
 
 | Contract | Kind and registration | Selection semantics | Known implementations |
 |---|---|---|---|
-| `IEndpointFaultRenderer` | Enumerable; register keyed by owner id (unkeyed = fallback). | Consulted before translation; the first renderer returning `true` owns the response end to end. Scope shapes with endpoint metadata read via `HttpContext.GetEndpoint()`. | `WorkflowPublishingFaultRenderer` (Publishing), `ActivitiesDesignFaultRenderer` (Activities Design) |
+| `IEndpointFaultRenderer` | Enumerable; register keyed by owner id (unkeyed = fallback). | Consulted before translation; the first renderer returning `true` owns the response end to end. Scope shapes with endpoint metadata read via `HttpContext.GetEndpoint()`. | `WorkflowPublishingFaultRenderer` (Publishing), `WorkflowDesignFaultRenderer` (Workflows Design: the authorization-unavailable 503 with `errorCode`), `ActivitiesDesignFaultRenderer` (Activities Design), `BpmnHostingFaultRenderer` (BPMN API, cross-domain), `BpmnInterchangeFaultRenderer` and `BpmnDirectPublishingFaultRenderer` (BPMN Interchange, cross-domain; see [its README](../Activities/Bpmn/Interchange/README.md#cross-domain-contributions)) |
 | `IEndpointExceptionTranslator` | Enumerable; register keyed by owner id (unkeyed = fallback). | Consulted in registration order after renderers decline; the first non-null `EndpointProblem` wins. Exception-to-status mapping is domain knowledge and stays with the module that defines the exceptions. | `WorkflowDesignExceptionTranslator` (Workflows Design), `WorkflowPublishingExceptionTranslator` (Publishing) |
 | `IEndpointProblemWriter` | Single per owner; register keyed by owner id (unkeyed = fallback). | Writes every `EndpointProblem` — binder failures included — in the owner's established error shape, which is part of its published contract. | `WorkflowDesignProblemWriter`, `WorkflowPublishingProblemWriter`, `ActivitiesDesignProblemWriter` |
 

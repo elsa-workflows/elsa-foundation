@@ -14,10 +14,43 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class CanonicalRuntimeInputBindingResolverTests
+public sealed partial class CanonicalRuntimeInputBindingResolverTests
 {
     private static readonly ValueTypeDescriptor StringType = new("String");
     private readonly RuntimeInputBindingResolver _resolver = new();
+
+    [Theory]
+    [InlineData("customer.id", "{\"customer.id\":\"literal\",\"customer\":{\"id\":\"nested\"}}", "literal")]
+    [InlineData("customer.id", "{\"customer\":{\"id\":\"nested\"}}", "nested")]
+    [InlineData("$", "\"whole-result\"", "whole-result")]
+    public void Direct_result_reads_preserve_the_completion_projection_path(string path, string json, string expected)
+    {
+        var producer = CompletedProducer(ValueEnvelope.Inline(StringType, JsonDocument.Parse(json).RootElement, ValueProtectionPolicy.InstanceInline));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding("customer-id", StringType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.ActivityResult,
+            activityResult: new("producer", "customer-id", "scope:root"));
+        var resolved = _resolver.Resolve(binding, NewContext(consumer: consumer, runtimeView: [producer, consumer], executable: NewProducerExecutable(projectionPath: path)));
+        Assert.Equal(expected, resolved.Envelope!.InlineValue!.Value.GetString());
+    }
+
+    [Theory]
+    [InlineData("customer.id", "{\"customer.id\":\"literal\",\"customer\":{\"id\":\"nested\"}}", "literal")]
+    [InlineData("customer.id", "{\"customer\":{\"id\":\"nested\"}}", "nested")]
+    [InlineData("$", "\"whole-result\"", "whole-result")]
+    public async Task Expression_result_reads_preserve_the_completion_projection_path(string path, string json, string expected)
+    {
+        var producer = CompletedProducer(ValueEnvelope.Inline(StringType, JsonDocument.Parse(json).RootElement, ValueProtectionPolicy.InstanceInline));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding("customer-id", StringType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Expression,
+            expression: new("Test", "value", parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["value"] = new ActivityResultExpressionParameterBinding("producer", "customer-id")
+            }));
+        var materializer = new RuntimeActivityInputMaterializer(_resolver, new TestTypeRegistry(), new EchoParameterPortableExpressionEvaluator("value"));
+        var snapshot = await materializer.MaterializeSnapshotAsync(NewConsumerNode(binding), consumer.InvocationId,
+            NewContext(consumer: consumer, runtimeView: [producer, consumer], executable: NewProducerExecutable(projectionPath: path)), DateTimeOffset.UnixEpoch);
+        Assert.Equal(expected, snapshot.Values["customer-id"].InlineValue!.Value.GetString());
+    }
 
     [Fact]
     public void Resolve_reads_a_pinned_workflow_request_member()
@@ -377,18 +410,19 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     }
 
     [Fact]
-    public async Task Materialization_refuses_an_expression_that_reads_a_withheld_ambient_variable()
+    public async Task Materialization_refuses_a_pinned_read_of_a_withheld_variable()
     {
+        // Spec 1222 FR-020: a literal read is pinned at publish; its withheld value is not provided.
         var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
-            MaterializeJavaScriptAsync("variables.token", WithheldTokenInScope).AsTask());
+            MaterializeJavaScriptAsync("variables.token", pinned: "token").AsTask());
 
         Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("token").Message, exception.Message);
     }
 
     [Fact]
-    public async Task Materialization_evaluates_an_expression_that_names_only_other_variables_beside_a_withheld_one()
+    public async Task Materialization_evaluates_a_pinned_read_beside_a_withheld_variable()
     {
-        var snapshot = await MaterializeJavaScriptAsync("variables.region", WithheldTokenInScope);
+        var snapshot = await MaterializeJavaScriptAsync("variables.region", pinned: "region");
 
         Assert.Equal("evaluated", snapshot.Values["customer-id"].InlineValue!.Value.GetString());
     }
@@ -396,11 +430,27 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     [Theory]
     [InlineData("variables[name]")]
     [InlineData("getVariable(name)")]
-    public async Task Materialization_refuses_a_computed_variable_access_while_a_withheld_variable_is_in_scope(string script)
+    public async Task A_computed_read_is_not_blocked_by_a_withheld_variable_it_never_reads(string script)
     {
-        // The computed access never names the withheld variable, but could read it, so it is refused (fail closed).
+        // Spec 1222 R-4 (b) rejected: the actual read is checked, not every variable the script could read.
+        var recorder = new RuntimeVariableReadRecorder();
+        var snapshot = await MaterializeJavaScriptAsync(script, computedReads: ["region"], recorder: recorder);
+
+        Assert.Equal("evaluated", snapshot.Values["customer-id"].InlineValue!.Value.GetString());
+        var read = Assert.Single(recorder.ComputedReads);
+        Assert.Equal(("region", "region"), (read.Name, read.Variable!.VariableKey));
+        Assert.Same(RegionEnvelope, Assert.Single(recorder.Reads));
+    }
+
+    [Theory]
+    [InlineData("variables[name]")]
+    [InlineData("getVariable(name)")]
+    public async Task A_computed_read_of_a_withheld_variable_faults_even_when_the_script_catches_it(string script)
+    {
+        // Spec 1222 FR-017a, FR-020: the evaluator below ignores the refusal, as a script that catches the error would;
+        // the host recorded it and faults the step.
         var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
-            MaterializeJavaScriptAsync(script, WithheldTokenInScope).AsTask());
+            MaterializeJavaScriptAsync(script, computedReads: ["token"]).AsTask());
 
         Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("token").Message, exception.Message);
     }
@@ -643,28 +693,51 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     private static readonly IReadOnlyDictionary<string, ValueEnvelope> WithheldCustomerRequest =
         new Dictionary<string, ValueEnvelope> { ["customer"] = WithheldToken };
 
-    private static readonly IReadOnlyDictionary<string, ValueEnvelope> WithheldTokenInScope = new Dictionary<string, ValueEnvelope>
-    {
-        ["token"] = WithheldToken,
-        ["region"] = ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement("eu"), ValueProtectionPolicy.InstanceInline)
-    };
+    private static readonly ValueEnvelope RegionEnvelope =
+        ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement("eu"), ValueProtectionPolicy.InstanceInline);
 
-    private ValueTask<ActivityInputSnapshot> MaterializeJavaScriptAsync(string script, IReadOnlyDictionary<string, ValueEnvelope> visibleVariables)
+    private static readonly IReadOnlyList<RuntimeReadableVariable> WithheldTokenInScope =
+    [
+        new("token", "scope:root", "token", WithheldToken),
+        new("region", "scope:root", "region", RegionEnvelope)
+    ];
+
+    /// <summary>
+    /// Materializes one JavaScript input whose script reads <paramref name="pinned"/> literally (a pinned
+    /// <c>variables.</c> parameter) or, with <paramref name="computedReads"/>, by a computed name through the run-time
+    /// lookup. A withheld <c>token</c> and a readable <c>region</c> are in scope.
+    /// </summary>
+    private ValueTask<ActivityInputSnapshot> MaterializeJavaScriptAsync(
+        string script,
+        string? pinned = null,
+        IReadOnlyList<string>? computedReads = null,
+        RuntimeVariableReadRecorder? recorder = null)
     {
+        var parameters = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal);
+        if (pinned is not null)
+            parameters[ExpressionParameterSurfaces.VariablesKey(pinned)] = new VariableExpressionParameterBinding("scope:root", pinned, ExpressionParameterSurfaces.Variables);
+        var fallback = computedReads is null
+            ? null
+            : new VariableReadFallback(WithheldTokenInScope.Select(variable => new VariableReadCandidate(variable.Name, variable.ScopeId, variable.VariableKey)).ToArray());
         var binding = new RuntimeInputBinding(
             "customer-id",
             StringType,
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding("JavaScript", script));
+            expression: new RuntimeExpressionBinding("JavaScript", script, parameters: parameters, variableReadFallback: fallback));
         var materializer = new RuntimeActivityInputMaterializer(
             _resolver,
             new TestTypeRegistry(),
-            new ConstantPortableExpressionEvaluator("evaluated"));
+            new ReadingPortableExpressionEvaluator("evaluated", computedReads ?? []));
         return materializer.MaterializeSnapshotAsync(
             NewConsumerNode(binding),
             "consumer",
-            new RuntimeInputBindingResolutionContext("workflow-1", "consumer", visibleVariablesByName: visibleVariables),
+            new RuntimeInputBindingResolutionContext(
+                "workflow-1",
+                "consumer",
+                variableEnvelopes: WithheldTokenInScope.ToDictionary(variable => new RuntimeVariableValueAddress(variable.ScopeId, variable.VariableKey), variable => variable.Envelope),
+                visibleVariables: WithheldTokenInScope,
+                variableReadRecorder: recorder ?? new RuntimeVariableReadRecorder()),
             DateTimeOffset.UnixEpoch);
     }
 
@@ -796,7 +869,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
                     new ValueTypeDescriptor("test/result"),
                     JsonSerializer.SerializeToElement(new { customerId = "customer-7" }),
                     ValueProtectionPolicy.InstanceInline),
-                "Done",
+                Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named("Done"),
                 completedAt,
                 "contract"),
             CompletedAt = completedAt
@@ -850,6 +923,17 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     {
         public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
             ValueTask.FromResult(JsonSerializer.SerializeToElement(value));
+    }
+
+    /// <summary>Reads each name through the request's variable lookup, ignoring a refusal as a catching script would, then returns a constant.</summary>
+    private sealed class ReadingPortableExpressionEvaluator(string value, IReadOnlyList<string> names) : IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
+        {
+            foreach (var name in names)
+                _ = request.VariableReader!.Read(name);
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement(value));
+        }
     }
 
     private sealed class EchoParameterPortableExpressionEvaluator(string parameterName) : IPortableExpressionEvaluator

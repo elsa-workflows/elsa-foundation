@@ -1,5 +1,5 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { browseActivityExecutions, getActivityExecutionInspection, getActivityExecutionLayout } from "../api/runtime";
+import { browseActivityExecutions, getActivityExecutionInspection, getActivityExecutionLayout, type ActivityExecutionBrowsePage } from "../api/runtime";
 import { findExecutableNodeFacts, type ExecutableActivityGraph } from "../executableGraph";
 import type { ActivityExecutionInspection, ActivityExecutionLayout, ActivityExecutionStateSummary } from "../workflowTypes";
 
@@ -67,6 +67,8 @@ export async function loadExecutionScope(context: StudioEndpointContext, workflo
   }
   const scopes: ExecutionScopeEntry[] = [];
   const activities: ActivityExecutionStateSummary[] = [];
+  const inspections: ActivityExecutionInspection[] = [];
+  const pages = new Map<string, ActivityExecutionBrowsePage>();
   let layout: ActivityExecutionLayout | null = null;
   let id: string | null | undefined = execution.activityExecutionId;
   const visited = new Set<string>();
@@ -77,6 +79,7 @@ export async function loadExecutionScope(context: StudioEndpointContext, workflo
     const inspection = await getActivityExecutionInspection(context, workflowExecutionId, id, signal);
     check();
     if (inspection.activityExecutionId !== id || inspection.workflowExecutionId !== workflowExecutionId) throw new Error("Execution context identity did not match.");
+    inspections.push(inspection);
     if (!layout && inspection.boundary?.layoutAvailable) {
       layout = await getActivityExecutionLayout(context, workflowExecutionId, id, signal);
       check();
@@ -91,6 +94,7 @@ export async function loadExecutionScope(context: StudioEndpointContext, workflo
       const siblings = await browseActivityExecutions(context, workflowExecutionId, { executableNodeId: item.executableNodeId,
         parentActivityExecutionId: item.parentActivityExecutionId ?? undefined, anchorActivityExecutionId: item.activityExecutionId, limit: 1 }, signal);
       check();
+      pages.set(item.activityExecutionId, siblings);
       const entry = siblings.items.find(value => value.execution.activityExecutionId === item.activityExecutionId
         && value.execution.workflowExecutionId === workflowExecutionId && value.execution.executableNodeId === item.executableNodeId);
       if (entry?.iterationPosition) label += ` · Iteration ${entry.iterationPosition}`;
@@ -100,5 +104,5 @@ export async function loadExecutionScope(context: StudioEndpointContext, workflo
   }
   check();
   if (!findExecutableNodeFacts(graph, execution) && !layout) throw new Error("Pinned boundary structure is unavailable.");
-  return { scopes, activities, layout };
+  return { scopes, activities, inspections, pages, layout };
 }

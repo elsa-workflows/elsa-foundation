@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { supportsActivityExecutionBrowsing } from "../api/runtime";
 import type { ExecutableActivityGraph } from "../executableGraph";
-import type { ActivityExecutionStateSummary } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary } from "../workflowTypes";
 import type { ExecutionScopeEntry } from "./executionScope";
 import { runtimeValueContextId } from "./RuntimeValueEvidence";
+import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
 
 interface SelectionState {
   key: string;
@@ -13,11 +14,15 @@ interface SelectionState {
   scopes: ExecutionScopeEntry[];
   loading: boolean;
   error: string;
+  prepared?: PreparedAttachedExecution;
 }
 
 /** Exact selection survives inspector tabs; obsolete or unauthorized evidence never does. */
-export function useAttachedExecutionSelection({ context, attachmentId, workflowExecutionId, enabled, nodeId }: {
+export function useAttachedExecutionSelection({ context, attachmentId, workflowExecutionId, enabled, nodeId, canvasOwnerId, visibleNodeIds, activityCatalog, observationRevision = 0 }: {
   context: StudioEndpointContext; attachmentId: string; workflowExecutionId: string; enabled: boolean; nodeId: string | null;
+  canvasOwnerId?: string; visibleNodeIds?: readonly string[];
+  activityCatalog?: readonly ActivityCatalogItem[];
+  observationRevision?: number;
 }) {
   const key = `${runtimeValueContextId(context)}:${workflowExecutionId}:${attachmentId}`;
   const [state, setState] = useState<SelectionState | null>(null);
@@ -27,12 +32,15 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
     labelFor(execution: ActivityExecutionStateSummary): string;
   } | null>(null);
   const request = useRef<AbortController | null>(null);
+  const retrySelection = useRef<(() => Promise<boolean>) | null>(null);
+  const visibleNodeKey = JSON.stringify(visibleNodeIds);
+  const latestObservationRevision = useRef(observationRevision); latestObservationRevision.current = observationRevision;
   const currentKey = useRef(key); currentKey.current = key;
   const currentNode = useRef(nodeId); currentNode.current = nodeId;
   const active = useRef(enabled && authorized); active.current = enabled && authorized;
   useEffect(() => {
-    const revoke = () => { request.current?.abort(); request.current = null; setAuthorized(false); setPending(null); setState(null); };
-    const restore = () => { request.current?.abort(); request.current = null; setAuthorized(true); setPending(null); setState(null); };
+    const revoke = () => { request.current?.abort(); request.current = null; retrySelection.current = null; setAuthorized(false); setPending(null); setState(null); };
+    const restore = () => { request.current?.abort(); request.current = null; retrySelection.current = null; setAuthorized(true); setPending(null); setState(null); };
     window.addEventListener(authSessionEndedEvent, revoke);
     window.addEventListener(authSessionStartedEvent, restore);
     return () => {
@@ -42,18 +50,23 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
   }, []);
   useEffect(() => {
     request.current?.abort();
-    setState(value => value?.loading ? { ...value, loading: false, execution: null, error: "" } : value);
+    retrySelection.current = null;
+    setState(value => value?.loading ? { ...value, loading: false, error: "" } : value);
     return () => request.current?.abort();
   }, [enabled, key, nodeId]);
 
   const choose = useCallback(async (execution: ActivityExecutionStateSummary, graph: ExecutableActivityGraph,
     labelFor: (execution: ActivityExecutionStateSummary) => string, includeSelf = false, label?: string) => {
     if (!active.current || execution.workflowExecutionId !== workflowExecutionId) return false;
+    const preparedRevision = latestObservationRevision.current;
     setPending(null);
     request.current?.abort();
     const controller = new AbortController(); request.current = controller;
     const isCurrent = () => active.current && currentKey.current === key && currentNode.current === nodeId && request.current === controller;
-    setState(value => ({ key, nodeId, execution: null, scopes: value?.key === key ? value.scopes : [], loading: true, error: "" }));
+    retrySelection.current = () => choose(execution, graph, labelFor, includeSelf, label);
+    setState(value => value?.key === key && value.nodeId === nodeId
+      ? { ...value, loading: true, error: "" }
+      : { key, nodeId, execution: null, scopes: [], loading: true, error: "" });
     try {
       if (!await supportsActivityExecutionBrowsing(context)) throw new Error("Execution browsing is unavailable on this host.");
       if (!isCurrent() || controller.signal.aborted) return false;
@@ -63,15 +76,23 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
         graph, includeSelf, label, labelFor, signal: controller.signal, isCurrent
       });
       if (!isCurrent() || controller.signal.aborted) return false;
-      setState({ key, nodeId, execution, scopes: result.scopes, loading: false, error: "" });
+      const { prepareAttachedExecution } = await import("./prepareAttachedExecution");
+      const prepared = await prepareAttachedExecution(context, workflowExecutionId, execution, result, graph, nodeId, controller.signal,
+        canvasOwnerId, JSON.parse(visibleNodeKey ?? "null") ?? undefined, activityCatalog);
+      if (!isCurrent() || controller.signal.aborted) return false;
+      retrySelection.current = null;
+      setState({ key, nodeId, execution, scopes: result.scopes, prepared: { ...prepared, observationRevision: preparedRevision }, loading: false, error: "" });
       return true;
     } catch (error) {
       if (!isCurrent() || controller.signal.aborted) return false;
-      setState({ key, nodeId, execution: null, scopes: [], loading: false,
-        error: error instanceof Error ? error.message : "Execution context could not be resolved. Retry the selection." });
+      const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+      const denied = status === 401 || status === 403 || status === 404;
+      if (denied) retrySelection.current = null;
+      setState(value => ({ ...(value?.key === key && value.nodeId === nodeId && !denied ? value : { key, nodeId, execution: null, scopes: [] }), loading: false,
+        error: error instanceof Error ? error.message : "Execution context could not be resolved. Retry the selection." }));
       return false;
     }
-  }, [context, key, nodeId, workflowExecutionId]);
+  }, [activityCatalog, canvasOwnerId, context, key, nodeId, visibleNodeKey, workflowExecutionId]);
   useEffect(() => {
     if (!pending) return;
     setPending(null);
@@ -81,22 +102,25 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
   const current = enabled && authorized && state?.key === key ? state : null;
   return {
     execution: current?.nodeId === nodeId ? current?.execution ?? null : null,
-    scopes: current && !current.loading && !current.error ? current.scopes : [],
+    scopes: current?.scopes ?? [],
+    prepared: current?.nodeId === nodeId ? current.prepared : undefined,
     loading: current?.loading ?? false,
     error: current?.error ?? "",
     choose,
+    retry: () => retrySelection.current?.(),
+    canRetry: Boolean(current?.error && retrySelection.current),
     queue: (execution: ActivityExecutionStateSummary, graph: ExecutableActivityGraph,
       labelFor: (execution: ActivityExecutionStateSummary) => string, targetNodeId: string) => {
       if (!active.current || execution.workflowExecutionId !== workflowExecutionId) return false;
-      request.current?.abort(); request.current = null; setState(null);
+      request.current?.abort(); request.current = null; retrySelection.current = null; setState(null);
       setPending({ key, nodeId: targetNodeId, execution, graph, labelFor });
       return true;
     },
     unavailable: () => {
-      request.current?.abort(); request.current = null; setPending(null);
+      request.current?.abort(); request.current = null; retrySelection.current = null; setPending(null);
       setState({ key, nodeId, execution: null, scopes: [], loading: false, error: "This execution scope is unavailable in the current context." });
     },
-    clear: () => { request.current?.abort(); request.current = null; setPending(null); setState(null); }
+    clear: () => { request.current?.abort(); request.current = null; retrySelection.current = null; setPending(null); setState(null); }
   };
 }
 

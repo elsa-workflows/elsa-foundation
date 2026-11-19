@@ -54,7 +54,7 @@ Phase 2 (structure & DX) — **COMPLETE 2026-07-04**; all six units merged to ma
 1. W15 Test hardening (TS-1, TS-9, IN-4) — **done** ([#441](https://github.com/elsa-workflows/elsa-foundation/pull/441); `TaskExecutor` non-blocking lock acquisition with skip+log, decorator/ordering/identity assertions preserved through downgrades, 12 cancellation contract tests).
 2. W10 Mediator consolidation (AR-2, AR-5) — **done** ([#442](https://github.com/elsa-workflows/elsa-foundation/pull/442); unified `PipelineBuilder<TContext>`/`PipelineDelegate<TContext>`, closed-generic handler dispatch via `HandlerInvokerMiddleware` + `CompiledHandlerInvoker`, `TryAddEnumerable` registrations; Events builder migrated).
 3. W11 Hot-path fixes (IN-2, IN-5, IN-10) — **done** ([#443](https://github.com/elsa-workflows/elsa-foundation/pull/443); background publisher on host lifetime with wired `StopAsync`, Jint engine-options caching, Events dispatch caching).
-4. W13 DRY sweep (PS-7/8/9, DS-3/4/7, MS-7, TS-3) — **done** ([#449](https://github.com/elsa-workflows/elsa-foundation/pull/449); 8 duplication families collapsed one-per-commit, net −1369 LoC: generic `ValidateStateIdMatches<TState>`, shared `ExecutableStructureReader`, `GroundworkDocumentStore` base proven by golden fixtures, `SqliteShellFeatureDefaults`, `AgentProposalAuthorization`, canonical in-memory document-store fake in `Elsa.Persistence.Groundwork.Testing`, dead `ExpressionDescriptor` deleted, `ActivityArgumentValue`/`ActivityArgumentState` renames).
+4. W13 DRY sweep (PS-7/8/9, DS-3/4/7, MS-7, TS-3) — **done** ([#449](https://github.com/elsa-workflows/elsa-foundation/pull/449); 8 duplication families collapsed one-per-commit, net −1369 LoC: generic `ValidateStateIdMatches<TState>`, shared `ExecutableStructureReader`, `GroundworkDocumentStore` base proven by golden fixtures, `SqliteShellFeatureDefaults`, `WeaverProposalAuthorization`, canonical in-memory document-store fake in `Elsa.Persistence.Groundwork.Testing`, dead `ExpressionDescriptor` deleted, `ActivityArgumentValue`/`ActivityArgumentState` renames).
 5. W12 Runtime structure (RT-4/6/7/8/11) — **done** ([#450](https://github.com/elsa-workflows/elsa-foundation/pull/450); `AddWorkflowRuntimeCore` host-agnostic composition root, ADR-0029 Move 2 finished across all handlers with ordered commit-list Checkpoint slot, both ambient service locators deleted, required-dependency single constructors, `ConditionalWeakTable` payload memo; continuation spec `specs/084`).
 6. W14 Naming pass (NM findings, R1–R8) — **done** ([#457](https://github.com/elsa-workflows/elsa-foundation/pull/457); rename families A/B/D/E/C type-only with all persisted wire identifiers preserved verbatim, constitution §E6 type-naming rules v3.2.0, glossary entries for renamed terms + codenames, `ISecretManager` deferred to W18 — see follow-ups).
 
@@ -81,7 +81,7 @@ then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows
 
 - **W18 Identity & secrets hardening** — **done** ([#461](https://github.com/elsa-workflows/elsa-foundation/pull/461)): the 5 Tier-0
   security issues [#374](https://github.com/elsa-workflows/elsa-foundation/issues/374)
-  (AgentEndpointActor fail-closed), [#375](https://github.com/elsa-workflows/elsa-foundation/issues/375)
+  (WeaverEndpointActor fail-closed), [#375](https://github.com/elsa-workflows/elsa-foundation/issues/375)
   (getConfiguration case/hierarchy bypass), [#376](https://github.com/elsa-workflows/elsa-foundation/issues/376)
   (OpenTelemetryRedactor never redacted Traces), [#377](https://github.com/elsa-workflows/elsa-foundation/issues/377)
   (shared constant-time management API-key auth helper), and
@@ -237,7 +237,7 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
     #384 PageArgs contract (new `Elsa.Primitives.Tests` suite), #387 dead exception filter,
     #391 agent-proposal logging + cancellation propagation, #392 TenantAgnostic threading,
     #411 async store trio + subscribe-before-replay SSE with sequence de-dup, #414 items 1+5
-    (`AgentSessionAuthorization`, `ElsaEndpointPermissions.Compose`).
+    (`WeaverSessionAuthorization`, `ElsaEndpointPermissions.Compose`).
   - **W22 runtime/flowchart** — **done** ([#479](https://github.com/elsa-workflows/elsa-foundation/pull/479)):
     #381 Do/While body validation, #383 output-argument contravariant rebinding, #386 outbox
     validation un-wrapped, #399 ActivityExecutions StateId validation, #382 flowchart state
@@ -337,8 +337,8 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
     that makes the merged-#500 footgun unrepresentable *at the gate* (compile-pin bite). `ParallelProcessingStrategy`
     deleted (zero callers + `List` data race). 19 call sites migrated 1:1 (15 inline, 4 deferred).
   - **W31 DRY batch (#506–#512):** #422 Expressions (#506 — JS library-resource static cache + Liquid
-    cache-key prefix); #414 Agent (#507 — parameterized `AgentLogRedaction.Redact(msg,secrets,fallback)`
-    preserving the Anthropic-1 vs Copilot-3-secrets difference, `AgentConfigurationBinding`, duplicate-tool-name
+    cache-key prefix); #414 Agent (#507 — parameterized `WeaverLogRedaction.Redact(msg,secrets,fallback)`
+    preserving the Anthropic-1 vs Copilot-3-secrets difference, `WeaverConfigurationBinding`, duplicate-tool-name
     fail-fast); #413 Flowchart (#508 — `MatchingOutboundFlowchartPolicyBase` keeping all 8 public policy
     types [W13 precedent], ForEach O(n²)→O(n), dead-code); #412 Scheduler (#509 — `SchedulerWorkHandlerHelpers`
     public-ized, `NewEnqueueSchedulerWorkIntent`/`DeserializePayload`/`ResolveExecutableNode` dedup, §E6 intent

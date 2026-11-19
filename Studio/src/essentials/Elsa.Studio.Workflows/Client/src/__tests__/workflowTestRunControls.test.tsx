@@ -48,6 +48,24 @@ afterEach(() => {
 });
 
 describe("Workflow Test Run controls", () => {
+  it.each(["Completed", "Faulted", "Cancelled"])("hides empty waiting controls after confirmed %s execution", async status => {
+    publishingMocks.getInstance.mockResolvedValue({ instance: { workflowExecutionId: "execution-1", status } });
+    const container = render({ stimulusEditors: [] });
+    await vi.waitFor(() => expect(container.querySelector(".wf-test-run-execution-state")?.textContent).toContain(status));
+    expect(container.querySelector(".wf-test-run-waits")).toBeNull();
+    expect(container.textContent).not.toContain("Stop Test Run");
+  });
+
+  it("keeps waiting-trigger loading and failure feedback visible before terminal confirmation", async () => {
+    let fail!: (error: Error) => void;
+    publishingMocks.getWaits.mockImplementation(() => new Promise((_, reject) => { fail = reject; }));
+    const container = render({ stimulusEditors: [] });
+    await vi.waitFor(() => expect(container.textContent).toContain("Loading waiting triggers"));
+    fail(new Error("Waiting trigger read failed"));
+    await vi.waitFor(() => expect(container.textContent).toContain("Waiting trigger read failed"));
+    expect(container.querySelector(".wf-test-run-waits")).not.toBeNull();
+  });
+
   it("reuses a custom stimulus editor for supported waits and retries uncertain delivery with the same UUID", async () => {
     publishingMocks.deliver
       .mockRejectedValueOnce(new Error("connection dropped"))

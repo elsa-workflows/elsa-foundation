@@ -5,6 +5,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Events.Services;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Events;
 
@@ -20,16 +21,15 @@ public class EventsFeature : IShellFeature
 {
     public virtual void ConfigureServices(IServiceCollection services)
     {
-        services
-            .AddSingleton<IEventChannel, EventChannel>()
-            .AddSingleton<IEventPipeline, EventPipeline>()
-            .AddScoped<IEventPublisher, EventPublisher>()
-            // Intent-revealing delivery faces over the strategy-selecting IEventPublisher: inline
-            // awaits handler effects (the read-back sites); deferred is fire-and-forget (notifications).
-            .AddScoped<IInlineEventPublisher, InlineEventPublisher>()
-            .AddScoped<IDeferredEventPublisher, DeferredEventPublisher>();
+        services.TryAddSingleton<IEventChannel, EventChannel>();
+        services.TryAddSingleton<IEventPipeline, EventPipeline>();
+        services.TryAddScoped<IEventPublisher, EventPublisher>();
+        // Activity runtime also composes this canonical path for library hosts. Repeated feature composition
+        // preserves the selected publisher/pipeline and any configured middleware.
+        services.TryAddScoped<IInlineEventPublisher, InlineEventPublisher>();
+        services.TryAddScoped<IDeferredEventPublisher, DeferredEventPublisher>();
 
         // Background dispatcher for events published via EventPublishingStrategy.Background.
-        services.AddSingleton<IBackgroundTask, BackgroundEventPublisher>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IBackgroundTask, BackgroundEventPublisher>());
     }
 }

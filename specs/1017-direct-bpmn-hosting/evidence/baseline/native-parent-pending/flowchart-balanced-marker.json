@@ -1,0 +1,73 @@
+{
+  "caseId": "flowchart-balanced",
+  "phase": "native-parent-completion-before-consumption",
+  "providerEvent": "EF.TransactionCommitted",
+  "workflowExecutionId": "14icNOw3yva",
+  "childNodeId": "legacy-bpmn",
+  "sourceOutboxItemId": "commit:896c58b3a4400ede:parent:14icNPzQt9E:child:14icNQsFf9m:incident-recorded:incident:886809cbaf65887f:0a8b571d28c3a3b4:ActivityReturnedFault:896c58b3a4400ede:parent:14icNPzQt9E:child:14icNQsFf9m:post-commit:886809cbaf65887f:child-fault-parent:14icNPNBGid:child:14icNPzQt9E",
+  "scope": "default",
+  "work": {
+    "WorkItemId": "886809cbaf65887f:child-fault-parent:14icNPNBGid:child:14icNPzQt9E",
+    "WorkflowExecutionId": "14icNOw3yva",
+    "CommandId": "8766ece468c675ab:child-fault-parent:14icNPNBGid:child:14icNPzQt9E",
+    "CommandKind": 8,
+    "EnvelopeId": "14icNTHYawW",
+    "IdempotencyKey": "d3c81c369816e1d6:child-fault-parent:14icNPNBGid:child:14icNPzQt9E",
+    "EnqueuedAt": "2026-10-28T07:53:56.303979\u002B00:00",
+    "RecordedAt": "2026-10-28T07:53:56.303979\u002B00:00",
+    "Sequence": null,
+    "Payload": {
+      "PinnedExecutable": {
+        "ArtifactId": "artifact-3902bd0e0c7b",
+        "DefinitionId": "14icNNE7FsZ",
+        "DefinitionVersionId": "14icNNEo40K",
+        "ArtifactVersion": "1.0.0",
+        "ArtifactHash": "sha256:3902bd0e0c7bf31443b96fdc69bbe30b04898888dfea66fc710eb7bbabebf7b9"
+      },
+      "ExecutableNodeId": "native-parent",
+      "ActivityExecutionId": "14icNPNBGid",
+      "ParentActivityExecutionId": null,
+      "BranchId": null,
+      "OutcomeNames": [],
+      "Reason": "ParentCompletionEvaluation",
+      "CompletionKind": 1,
+      "CompletedChildActivityExecutionId": "14icNPzQt9E"
+    },
+    "CommandMetadata": {
+      "runtime.correlationId": "14icNOw3yva",
+      "runtime.dispatcher": "BookmarkResumeDispatcher",
+      "runtime.bookmarkId": "14icNQsFf9m:attempt:1:trigger:1",
+      "runtime.activityExecutionId": "14icNQsFf9m",
+      "runtime.executableNodeId": "node-held",
+      "runtime.resumeTargetId": "node-held:resume-target:event",
+      "runtime.stimulusType": "Event",
+      "runtime.stimulusHash": "sha256:4ce22ddc782756ad8c77c32ba2d500b09538d18199e4d5a531b09cb8b5e4e935",
+      "runtime.artifactId": "artifact-3902bd0e0c7b",
+      "runtime.artifactVersion": "1.0.0",
+      "runtime.artifactHash": "sha256:3902bd0e0c7bf31443b96fdc69bbe30b04898888dfea66fc710eb7bbabebf7b9",
+      "bpmn.targetNodeId": "node-held",
+      "bpmn.elementId": "held",
+      "flowchart.targetNodeId": "legacy-bpmn",
+      "runtime.childFaulted": "True",
+      "runtime.incidentId": "incident:886809cbaf65887f:0a8b571d28c3a3b4:ActivityReturnedFault",
+      "runtime.parentActivityExecutionId": "14icNPNBGid",
+      "runtime.completedChildActivityExecutionId": "14icNPzQt9E"
+    },
+    "EnvelopeMetadata": {
+      "runtime.correlationId": "14icNOw3yva",
+      "runtime.dispatcher": "BookmarkResumeDispatcher",
+      "runtime.bookmarkId": "14icNQsFf9m:attempt:1:trigger:1",
+      "runtime.activityExecutionId": "14icNQsFf9m",
+      "runtime.executableNodeId": "node-held",
+      "runtime.resumeTargetId": "node-held:resume-target:event",
+      "runtime.stimulusType": "Event",
+      "runtime.stimulusHash": "sha256:4ce22ddc782756ad8c77c32ba2d500b09538d18199e4d5a531b09cb8b5e4e935",
+      "runtime.artifactId": "artifact-3902bd0e0c7b",
+      "runtime.artifactVersion": "1.0.0",
+      "runtime.artifactHash": "sha256:3902bd0e0c7bf31443b96fdc69bbe30b04898888dfea66fc710eb7bbabebf7b9"
+    },
+    "ExecutionScopeId": null,
+    "Attempt": null
+  },
+  "capturedAtUtc": "2026-10-28T07:53:56.330916+00:00"
+}

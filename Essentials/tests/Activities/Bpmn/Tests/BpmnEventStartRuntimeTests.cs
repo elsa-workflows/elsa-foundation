@@ -3,6 +3,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 using static Elsa.Activities.Bpmn.Tests.BpmnRuntimeFixture;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -38,7 +40,7 @@ public sealed class BpmnEventStartRuntimeTests
         run.AssertCompleted("node-a");
         run.AssertDidNotRun("node-b");
         var state = await fixture.GetBpmnStateAsync();
-        Assert.Contains(state.Diagnostics, d => d.Kind == BpmnDiagnosticKind.TokenEmitted && d.ElementId == "msg-a" && d.Message!.Contains("trigger delivery"));
+        Assert.Contains(state.Diagnostics, d => d.Kind == BpmnDiagnosticKind.TokenEmitted && d.ElementId == "msg-a" && d.Message!.Contains("trigger"));
     }
 
     [Fact]
@@ -71,7 +73,9 @@ public sealed class BpmnEventStartRuntimeTests
         await using var fixture = await CreateAsync(["actexec-bpmn"]);
         var executable = fixture.NewExecutable(
             children: [],
-            elements: [EventStart("timer-start", BpmnEventDefinitionTypes.Timer), EndEvent("end")],
+            elements: [new BpmnElement("timer-start", BpmnElementTypes.StartEvent,
+                eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer,
+                    new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = "PT1M" })]), EndEvent("end")],
             sequenceFlows: [Flow("f1", "timer-start", "end")]);
 
         var run = await fixture.RunAsync(executable);

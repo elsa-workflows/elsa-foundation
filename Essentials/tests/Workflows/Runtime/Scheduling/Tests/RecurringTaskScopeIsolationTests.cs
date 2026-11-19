@@ -12,6 +12,31 @@ namespace Elsa.Workflows.Runtime.Scheduling.Tests;
 public sealed class RecurringTaskScopeIsolationTests
 {
     [Fact]
+    public async Task Durable_timer_discovery_chooses_the_earliest_deadline_across_partitions()
+    {
+        var services = Services();
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        services.AddSingleton<TimeProvider>(clock);
+        services.AddSingleton<IPersistenceScopeSource>(new TestPersistenceScopeSource("tenant-a", "tenant-b"));
+        new WorkflowsRuntimeSchedulingFeature().ConfigureServices(services);
+        var now = clock.GetUtcNow();
+        var stores = new Dictionary<string, Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryDurableTimerStore>();
+        foreach (var (scope, seconds) in new[] { ("tenant-a", 8), ("tenant-b", 2) })
+        {
+            var store = new Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryDurableTimerStore();
+            await store.SaveAsync(new("timer", "workflow", "Delay", "timer", now.AddSeconds(seconds), now));
+            stores.Add(scope, store);
+        }
+        services.RemoveAll<IDurableTimerStore>();
+        services.AddScoped<IDurableTimerStore>(sp => stores[CurrentScope(sp)]);
+        services.AddScoped<IBookmarkResumeDispatcher>(_ => new BookmarkDispatcherProbe(new ScopeObservations()));
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var pump = Assert.Single(provider.GetServices<IRecurringTask>().OfType<DurableTimerPumpTask>());
+        await pump.ExecuteAsync(CancellationToken.None);
+        Assert.Equal(now.AddSeconds(2), provider.GetRequiredService<DurableTimerWakeup>().Snapshot.Deadline);
+    }
+
+    [Fact]
     public async Task DurableTimerPumpUsesAndDisposesAFreshWorkerScopePerTick()
     {
         var observations = new ScopeObservations();

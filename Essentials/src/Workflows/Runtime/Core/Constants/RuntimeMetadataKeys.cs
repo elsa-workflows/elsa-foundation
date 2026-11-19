@@ -2,6 +2,11 @@ namespace Elsa.Workflows.Runtime.Core.Constants;
 
 public static class RuntimeMetadataKeys
 {
+    /// <summary>Explicit authored-control protocol declared by a structural consumer and admitted for one waited dispatch.</summary>
+    public const string ChildControlConsumerKey = "runtime.childControlConsumerKey";
+    public const string ChildControlConsumerVersion = "runtime.childControlConsumerVersion";
+    /// <summary>Lookup hint only; a called root must still validate the complete committed dispatch boundary.</summary>
+    public const string ChildControlDispatchId = "runtime.childControlDispatchId";
     public const string WorkflowExecutionOrigin = "runtime.workflowExecutionOrigin";
     public const string WorkflowStartedAt = "runtime.workflowStartedAt";
     /// <summary>Monotonic workflow marker indicating that native background work was admitted for this execution.</summary>
@@ -62,6 +67,47 @@ public static class RuntimeMetadataKeys
     public const string StructuralFaultHandling = "runtime.structuralFaultHandling";
     public const string StructuralFaultHandlingChild = "child";
     public const string StructuralFaultHandlingDescendant = "descendant";
+    /// <summary>
+    /// The node's lost-update mode (spec 1221 FR-012), pinned by the publish compiler from the activity type's
+    /// declaration or the node's own setting: <see cref="LostUpdateModeFault"/> for strict read-modify-write. Absent
+    /// for the default mode (last write wins with a lost-update warning).
+    /// </summary>
+    public const string LostUpdateMode = "runtime.lostUpdateMode";
+    public const string LostUpdateModeFault = "fault";
+    /// <summary>
+    /// A node's may-write set (spec 1231 FR-019, FR-024), pinned by the publish compiler: the variables its step body can
+    /// change, as a JSON array of <c>{ "scopeId", "variableKey", "name" }</c>. Absent when the body writes no variable.
+    /// </summary>
+    public const string MayWriteVariables = "runtime.mayWriteVariables";
+    /// <summary>
+    /// <c>true</c> when a node may write every visible variable (spec 1231 FR-020a, FR-028): its activity type is marked
+    /// <c>[AccessesUndeclaredVariables]</c>, or its script writes by a computed or opaque name. Absent otherwise.
+    /// </summary>
+    public const string MayWriteEveryVisibleVariable = "runtime.mayWriteEveryVisibleVariable";
+    /// <summary>
+    /// Whether a background node's inputs are refreshed at admission when a variable they read changed since Start
+    /// (spec 1221 FR-018, FR-019), pinned by the publish compiler from the node's setting: <see cref="BackgroundInputRefreshOff"/>
+    /// turns the refresh off, so a stale base meets the commit rule instead. Absent means on.
+    /// </summary>
+    public const string BackgroundInputRefresh = "runtime.backgroundInputRefresh";
+    public const string BackgroundInputRefreshOff = "off";
+    /// <summary>
+    /// The script body read plan of a script activity node (spec 1222 FR-004, FR-033): the variables its script names
+    /// literally, pinned at publish, and its fallback marker, as <see cref="Models.ScriptBodyReadPlan"/> JSON. Kept apart
+    /// from the input snapshot: body reads go through the body's variable session, never into the snapshot. Absent when
+    /// the body reads no variable.
+    /// </summary>
+    public const string ScriptBodyReadPlan = "runtime.scriptBodyReadPlan";
+    /// <summary>On a variable-write value snapshot (spec 1221 FR-025): the scope id and the version the write produced.</summary>
+    public const string VariableWriteScopeId = "runtime.variableWrite.scopeId";
+    /// <summary>
+    /// On a closed scope's variable row (spec 1221 T003, ADR 0048 D-9): the variable's version, value digest and writer,
+    /// the same per-variable version a frame keeps, so a row follows the same commit rule.
+    /// </summary>
+    public const string RowVariableVersion = "runtime.variable.version";
+    public const string RowVariableDigest = "runtime.variable.digest";
+    public const string RowVariableWriter = "runtime.variable.writer";
+    public const string VariableWriteNewVersion = "runtime.variableWrite.newVersion";
     /// <summary>
     /// Executable-node capability compiled from the node's activity type when it implements
     /// <c>IRuntimeAcceptsRescheduledFaultedChild</c>; value <c>true</c>, absent for every other node (#3135).
@@ -301,6 +347,8 @@ public static class RuntimeMetadataKeys
     public const string NotifyParentSchedulerWorkItemId = "runtime.notifyParentSchedulerWorkItemId";
     public const string NotifyingChildActivityExecutionId = "runtime.notifyingChildActivityExecutionId";
     public const string ParentNotificationCode = "runtime.parentNotificationCode";
+    /// <summary>On an incident a child-control consumer raised: the calling child whose control batches it was evaluating.</summary>
+    public const string ChildControlActivityExecutionId = "runtime.childControlActivityExecutionId";
     public const string PinnedArtifactId = "runtime.pinnedArtifactId";
     public const string PinnedArtifactVersion = "runtime.pinnedArtifactVersion";
     public const string PinnedArtifactHash = "runtime.pinnedArtifactHash";
@@ -342,6 +390,12 @@ public static class RuntimeMetadataKeys
     public const string SupersedesActivityExecutionId = "runtime.supersedesActivityExecutionId";
     /// <summary>Set on the successor a <c>RetryFaultedActivity</c> alteration scheduled for a faulted source.</summary>
     public const string RetryOfActivityExecutionId = "runtime.retryOfActivityExecutionId";
+    /// <summary>
+    /// On a retry successor that runs on the input snapshot it carried over from its source (spec 1221 FR-014): the
+    /// source's activity execution id. A background admission does not refresh such a snapshot. Absent on every row that
+    /// read its inputs at its own Start.
+    /// </summary>
+    public const string InputSnapshotCarriedFrom = "runtime.inputSnapshotCarriedFrom";
     /// <summary>Activity execution id of the structural parent that kept a child fault's incident blocking for intervention.</summary>
     public const string InterventionRequestedBy = "runtime.interventionRequestedBy";
     /// <summary>Author-supplied reason a structural parent kept a child fault's incident blocking for intervention.</summary>

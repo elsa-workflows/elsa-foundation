@@ -21,29 +21,26 @@ public static class ActivityOperationKeyResolver
     public static string ResolveOperationKey(ActivityExecutionState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return ReadAssigned(state, RuntimeMetadataKeys.OperationKey)
-               ?? NonBlank((state.Attempt ?? state.Provenance.Attempt)?.FirstAttemptActivityExecutionId)
-               ?? state.InvocationId;
+        return state.OperationKey;
     }
 
     /// <summary>Resolves the target operation key, which exists only when a structural parent assigned one.</summary>
     public static string? ResolveTargetOperationKey(ActivityExecutionState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return ReadAssigned(state, RuntimeMetadataKeys.TargetOperationKey);
+        return state.TargetOperationKey;
     }
 
-    /// <summary>Returns <paramref name="context"/> carrying the keys resolved from <paramref name="state"/>.</summary>
+    /// <summary>
+    /// Returns <paramref name="context"/> carrying the keys resolved from <paramref name="state"/> and its logical
+    /// invocation identity (spec 1221, ADR 0092 decision 8 as amended).
+    /// </summary>
     public static ActivityExecutionContext WithResolvedOperationKeys(this ActivityExecutionContext context, ActivityExecutionState? state)
     {
         ArgumentNullException.ThrowIfNull(context);
         return state is null
             ? context
-            : context.WithOperationKeys(ResolveOperationKey(state), ResolveTargetOperationKey(state));
+            : context.WithOperationKeys(ResolveOperationKey(state), ResolveTargetOperationKey(state), state.LogicalInvocationId);
     }
 
-    private static string? ReadAssigned(ActivityExecutionState state, string key) =>
-        NonBlank(state.Provenance.Metadata.GetValueOrDefault(key)) ?? NonBlank(state.Metadata.GetValueOrDefault(key));
-
-    private static string? NonBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 }

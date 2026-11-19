@@ -1,0 +1,466 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Elsa.Workflows.Runtime.Core.Models;
+
+/// <summary>Trusted publisher scope captured with a recipient set; it grants no independent authority.</summary>
+[JsonConverter(typeof(StimulusDeliveryScopeJsonConverter))]
+public sealed class StimulusDeliveryScope
+{
+    public StimulusDeliveryScope(PersistenceScope persistenceScope, string? tenantId, WorkflowExecutionPartition? partition,
+        WorkflowRunKind runKind, WorkflowTestScope? testScope)
+    {
+        ArgumentNullException.ThrowIfNull(persistenceScope);
+        if (tenantId is not null) ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        if (!Enum.IsDefined(runKind)) throw new ArgumentOutOfRangeException(nameof(runKind));
+        if (testScope is not null && (tenantId is not null && !StringComparer.Ordinal.Equals(testScope.TenantId, tenantId) ||
+                                     partition is not null && testScope.Partition != partition))
+            throw new ArgumentException("The saved test scope differs from its publisher scope.", nameof(testScope));
+        PersistenceScope = persistenceScope;
+        TenantId = tenantId;
+        Partition = partition;
+        RunKind = runKind;
+        TestScope = testScope;
+    }
+
+    public PersistenceScope PersistenceScope { get; }
+    public string? TenantId { get; }
+    /// <summary>Null preserves the explicit legacy partition state; it never grants global access.</summary>
+    public WorkflowExecutionPartition? Partition { get; }
+    public WorkflowRunKind RunKind { get; }
+    public WorkflowTestScope? TestScope { get; }
+
+    public static StimulusDeliveryScope From(WorkflowExecutionState source, PersistenceScope persistenceScope)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return new(persistenceScope, source.TenantId, source.Partition, source.RunKind, source.TestScope);
+    }
+
+    /// <summary>Compare the saved facts to the provider's authoritative publisher; do not infer legacy defaults.</summary>
+    public bool Matches(WorkflowExecutionState source, PersistenceScope persistenceScope)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return PersistenceScope == persistenceScope && TenantId == source.TenantId && Partition == source.Partition &&
+               RunKind == source.RunKind && TestScope == source.TestScope;
+    }
+}
+
+/// <summary>One complete selected binding, including entries sharing an artifact-scoped start key.</summary>
+[JsonConverter(typeof(StimulusStartRecipientJsonConverter))]
+public sealed class StimulusStartRecipient
+{
+    public StimulusStartRecipient(WorkflowTriggerBinding binding, WorkflowExecutableIdentity executable)
+        : this(binding, executable, false, null) { }
+
+    /// <summary>Capture the ordinary start's exact source attribution; null explicitly captures reference-less legacy.</summary>
+    /// <remarks>The caller must resolve the ordinary authoritative source. This constructor validates shape and
+    /// selected activation/slot consistency; it grants no start authority or proof of reference-less eligibility.</remarks>
+    public StimulusStartRecipient(WorkflowTriggerBinding binding, WorkflowExecutableIdentity executable,
+        WorkflowExecutableSourceProvenance? sourceProvenance)
+        : this(binding, executable, true, sourceProvenance) { }
+
+    private StimulusStartRecipient(WorkflowTriggerBinding binding, WorkflowExecutableIdentity executable,
+        bool sourceProvenanceCaptured, WorkflowExecutableSourceProvenance? sourceProvenance)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentNullException.ThrowIfNull(binding.Metadata);
+        WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
+        foreach (var identity in new[] { binding.ArtifactId, binding.DefinitionId, binding.ArtifactVersion, binding.ArtifactHash,
+                     binding.ExecutableNodeId, binding.StimulusType, binding.StimulusHash, executable.ArtifactId,
+                     executable.DefinitionId, executable.DefinitionVersionId, executable.ArtifactVersion, executable.ArtifactHash })
+            ArgumentException.ThrowIfNullOrWhiteSpace(identity);
+        if (!binding.IsActive || !Enum.IsDefined(binding.Cardinality) ||
+            binding.ArtifactId != executable.ArtifactId || binding.DefinitionId != executable.DefinitionId ||
+            binding.ArtifactVersion != executable.ArtifactVersion || binding.ArtifactHash != executable.ArtifactHash)
+            throw new ArgumentException("A selected binding must be active and match its complete executable pin.", nameof(binding));
+        if (binding.CreatedAt == default || binding.CreatedAt == DateTimeOffset.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(binding));
+        if (sourceProvenanceCaptured)
+        {
+            if (sourceProvenance is null && (binding.ActivationId is not null || binding.SlotId is not null))
+                throw new ArgumentException("An explicitly selected publication cannot have reference-less provenance.", nameof(sourceProvenance));
+            if (sourceProvenance is not null)
+            {
+                foreach (var identity in new[] { sourceProvenance.SourceReferenceId, sourceProvenance.SourceKind,
+                             sourceProvenance.SourceId, sourceProvenance.DefinitionId, sourceProvenance.DefinitionVersionId,
+                             sourceProvenance.ArtifactVersion }) ArgumentException.ThrowIfNullOrWhiteSpace(identity);
+                foreach (var optional in new[] { sourceProvenance.SourceVersion, sourceProvenance.PublicationId, sourceProvenance.SlotId })
+                    if (optional is not null) ArgumentException.ThrowIfNullOrWhiteSpace(optional);
+                if (binding.ActivationId is not null && binding.ActivationId != sourceProvenance.PublicationId ||
+                    binding.SlotId is not null && binding.SlotId != sourceProvenance.SlotId)
+                    throw new ArgumentException("Captured provenance differs from the selected activation or slot.", nameof(sourceProvenance));
+            }
+        }
+        Binding = binding with { Metadata = RuntimeModelMetadata.Snapshot(binding.Metadata) };
+        Executable = executable;
+        SourceProvenanceCaptured = sourceProvenanceCaptured;
+        SourceProvenance = sourceProvenance;
+    }
+
+    public WorkflowTriggerBinding Binding { get; }
+    public WorkflowExecutableIdentity Executable { get; }
+    /// <summary>False for the original constructor/uncaptured wire; such data cannot authorize a saved start.</summary>
+    public bool SourceProvenanceCaptured { get; }
+    public WorkflowExecutableSourceProvenance? SourceProvenance { get; }
+}
+
+/// <summary>Exact selected wait identity without copying its retained payload.</summary>
+[JsonConverter(typeof(StimulusResumeRecipientJsonConverter))]
+public sealed class StimulusResumeRecipient
+{
+    public StimulusResumeRecipient(string workflowExecutionId, string bookmarkId, string activityExecutionId,
+        string executableNodeId, string resumeTargetId, string stimulusType, string stimulusHash,
+        DateTimeOffset createdAt, DateTimeOffset? expiresAt)
+        : this(workflowExecutionId, bookmarkId, activityExecutionId, executableNodeId, resumeTargetId, stimulusType, stimulusHash, createdAt, expiresAt, null) { }
+
+    /// <summary>Capture exact provider generation and immutable recipient facts; this data alone grants no admission.</summary>
+    public StimulusResumeRecipient(string workflowExecutionId, string bookmarkId, string activityExecutionId,
+        string executableNodeId, string resumeTargetId, string stimulusType, string stimulusHash,
+        DateTimeOffset createdAt, DateTimeOffset? expiresAt, StimulusResumeCapture? registrationCapture)
+    {
+        foreach (var identity in new[] { workflowExecutionId, bookmarkId, activityExecutionId, executableNodeId,
+                     resumeTargetId, stimulusType, stimulusHash })
+            ArgumentException.ThrowIfNullOrWhiteSpace(identity);
+        if (createdAt == default || createdAt == DateTimeOffset.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(createdAt));
+        if (expiresAt <= createdAt) throw new ArgumentOutOfRangeException(nameof(expiresAt));
+        WorkflowExecutionId = workflowExecutionId;
+        BookmarkId = bookmarkId;
+        ActivityExecutionId = activityExecutionId;
+        ExecutableNodeId = executableNodeId;
+        ResumeTargetId = resumeTargetId;
+        StimulusType = stimulusType;
+        StimulusHash = stimulusHash;
+        CreatedAt = createdAt;
+        ExpiresAt = expiresAt;
+        RegistrationCapture = registrationCapture;
+    }
+
+    /// <summary>Null for the original wire; uncaptured entries cannot authorize exact resume admission.</summary>
+    public StimulusResumeCapture? RegistrationCapture { get; }
+
+    public string WorkflowExecutionId { get; }
+    public string BookmarkId { get; }
+    public string ActivityExecutionId { get; }
+    public string ExecutableNodeId { get; }
+    public string ResumeTargetId { get; }
+    public string StimulusType { get; }
+    public string StimulusHash { get; }
+    public DateTimeOffset CreatedAt { get; }
+    public DateTimeOffset? ExpiresAt { get; }
+
+    public static StimulusResumeRecipient From(BookmarkState bookmark)
+    {
+        ArgumentNullException.ThrowIfNull(bookmark);
+        return new(bookmark.WorkflowExecutionId, bookmark.BookmarkId, bookmark.ActivityExecutionId,
+            bookmark.ExecutableNodeId, bookmark.ResumeTargetId, bookmark.StimulusType, bookmark.StimulusHash,
+            bookmark.CreatedAt, bookmark.ExpiresAt);
+    }
+
+    /// <summary>Freeze an observed physical wait without copying its retained payload.</summary>
+    public static StimulusResumeRecipient From(BookmarkStateObservation observation, WorkflowExecutionState execution, PersistenceScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(observation); ArgumentNullException.ThrowIfNull(execution); ArgumentNullException.ThrowIfNull(scope);
+        var bookmark = observation.State;
+        if (observation.Scope is { } observedScope && observedScope != scope)
+            throw new ArgumentException("The observation belongs to another physical scope.", nameof(scope));
+        if (bookmark.WorkflowExecutionId != execution.WorkflowExecutionId)
+            throw new ArgumentException("The observed bookmark belongs to another execution.", nameof(execution));
+        return new(bookmark.WorkflowExecutionId, bookmark.BookmarkId, bookmark.ActivityExecutionId, bookmark.ExecutableNodeId,
+            bookmark.ResumeTargetId, bookmark.StimulusType, bookmark.StimulusHash, bookmark.CreatedAt, bookmark.ExpiresAt,
+            new(observation.Generation, execution.PinnedExecutable, StimulusDeliveryScope.From(execution, scope), execution.PinnedSource,
+                bookmark.Metadata, StimulusResumeCapture.Fingerprint(bookmark)));
+    }
+
+    /// <summary>Compare captured pin, source and scope; this is a condition, not independent authority.</summary>
+    public bool MatchesExecution(WorkflowExecutionState execution, PersistenceScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(execution); ArgumentNullException.ThrowIfNull(scope);
+        return WorkflowExecutionId == execution.WorkflowExecutionId && RegistrationCapture is { } capture && capture.Matches(execution, scope);
+    }
+
+    /// <summary>Pure exact wait/owner eligibility predicate; providers must apply it atomically and use their trusted clock.</summary>
+    public bool MatchesAdmission(BookmarkStateObservation? observation, WorkflowExecutionState? execution,
+        ActivityExecutionState? activity, PersistenceScope scope, DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return RegistrationCapture is { } capture && observation is not null && observation.Generation == capture.Generation &&
+            (observation.Scope is null || observation.Scope == scope) && Matches(observation.State) &&
+            execution is not null && !execution.Status.IsTerminal() && MatchesExecution(execution, scope) &&
+            activity is { Status: ActivityExecutionStatus.Suspended, SupersededByActivityExecutionId: null, SupersededAt: null } &&
+            activity.Execution.WorkflowExecutionId == WorkflowExecutionId && activity.Execution.ActivityExecutionId == ActivityExecutionId &&
+            activity.Execution.ExecutableNodeId == ExecutableNodeId && activity.BookmarkIds.Contains(BookmarkId, StringComparer.Ordinal) &&
+            (ExpiresAt is null || ExpiresAt > observedAt) && (capture.Scope.TestScope is null || !capture.Scope.TestScope.IsExpired(observedAt));
+    }
+
+    /// <summary>Exact saved registration identity; expiration and authorization remain dispatcher decisions.</summary>
+    public bool Matches(BookmarkState bookmark)
+    {
+        ArgumentNullException.ThrowIfNull(bookmark);
+        return WorkflowExecutionId == bookmark.WorkflowExecutionId && BookmarkId == bookmark.BookmarkId &&
+               ActivityExecutionId == bookmark.ActivityExecutionId && ExecutableNodeId == bookmark.ExecutableNodeId &&
+               ResumeTargetId == bookmark.ResumeTargetId && StimulusType == bookmark.StimulusType &&
+               StimulusHash == bookmark.StimulusHash && CreatedAt == bookmark.CreatedAt && ExpiresAt == bookmark.ExpiresAt &&
+               (RegistrationCapture is null || RegistrationCapture.Matches(bookmark));
+    }
+}
+
+/// <summary>
+/// One immutable first-delivery recipient set on its existing source outbox row. Absence is uninitialized;
+/// a present snapshot with empty lists is authoritative. Provider source/CAS authorization is separate.
+/// </summary>
+[JsonConverter(typeof(StimulusDeliverySnapshotJsonConverter))]
+public sealed class StimulusDeliverySnapshot
+{
+    public const int CurrentVersion = 1;
+    public const int CurrentRetentionAcceptanceVersion = 1;
+
+    public StimulusDeliverySnapshot(int version, string sourceOutboxItemId, string intentFingerprint,
+        StimulusDeliveryScope scope, DateTimeOffset selectedAt, string stimulusType, string stimulusHash,
+        IReadOnlyList<StimulusStartRecipient> starts, IReadOnlyList<StimulusResumeRecipient> resumes)
+        : this(version, sourceOutboxItemId, intentFingerprint, scope, selectedAt, stimulusType, stimulusHash, starts, resumes, null) { }
+
+    /// <summary>Carry a provider's versioned acceptance witness; construction alone grants no authority.</summary>
+    /// <remarks>Only actual fenced provider installation may persist the witness. Older data-only winners cannot be restamped.</remarks>
+    public StimulusDeliverySnapshot(int version, string sourceOutboxItemId, string intentFingerprint,
+        StimulusDeliveryScope scope, DateTimeOffset selectedAt, string stimulusType, string stimulusHash,
+        IReadOnlyList<StimulusStartRecipient> starts, IReadOnlyList<StimulusResumeRecipient> resumes, int? retentionAcceptanceVersion)
+    {
+        if (version != CurrentVersion) throw new ArgumentOutOfRangeException(nameof(version));
+        if (retentionAcceptanceVersion is not null and not CurrentRetentionAcceptanceVersion)
+            throw new ArgumentOutOfRangeException(nameof(retentionAcceptanceVersion));
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceOutboxItemId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentFingerprint);
+        if (intentFingerprint.Length != 64 || intentFingerprint.Any(character => character is not (>= '0' and <= '9' or >= 'a' and <= 'f')))
+            throw new ArgumentException("A saved intent identity requires its complete canonical SHA256.", nameof(intentFingerprint));
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+        if (selectedAt == default || selectedAt == DateTimeOffset.MaxValue) throw new ArgumentOutOfRangeException(nameof(selectedAt));
+        ArgumentNullException.ThrowIfNull(starts);
+        ArgumentNullException.ThrowIfNull(resumes);
+        var savedStarts = starts.ToArray();
+        var savedResumes = resumes.ToArray();
+        if (savedStarts.Any(item => item is null) || savedResumes.Any(item => item is null))
+            throw new ArgumentException("A complete recipient set cannot contain null entries.");
+        if (savedStarts.Select(item => item.Binding.TriggerBindingId).Distinct(StringComparer.Ordinal).Count() != savedStarts.Length ||
+            savedResumes.Select(item => (item.WorkflowExecutionId, item.BookmarkId)).Distinct().Count() != savedResumes.Length)
+            throw new ArgumentException("A complete recipient set cannot contain duplicate identities.");
+        if (savedStarts.Any(item => item.Binding.StimulusType != stimulusType || item.Binding.StimulusHash != stimulusHash) ||
+            savedResumes.Any(item => item.StimulusType != stimulusType || item.StimulusHash != stimulusHash))
+            throw new ArgumentException("Saved recipients must match the cohort's exact stimulus identity.");
+        for (var index = 1; index < savedStarts.Length; index++)
+        {
+            var previous = savedStarts[index - 1].Binding;
+            var current = savedStarts[index].Binding;
+            var artifactOrder = StringComparer.Ordinal.Compare(previous.ArtifactId, current.ArtifactId);
+            if (artifactOrder > 0 || artifactOrder == 0 && StringComparer.Ordinal.Compare(previous.TriggerBindingId, current.TriggerBindingId) > 0)
+                throw new ArgumentException("Saved start bindings must preserve the router's artifact/binding order.", nameof(starts));
+        }
+
+        Version = version;
+        RetentionAcceptanceVersion = retentionAcceptanceVersion;
+        SourceOutboxItemId = sourceOutboxItemId;
+        IntentFingerprint = intentFingerprint;
+        Scope = scope;
+        SelectedAt = selectedAt;
+        StimulusType = stimulusType;
+        StimulusHash = stimulusHash;
+        Starts = Array.AsReadOnly(savedStarts);
+        Resumes = Array.AsReadOnly(savedResumes);
+    }
+
+    public int Version { get; }
+    /// <summary>Null for older data-only cohorts; these can retain material but cannot authorize saved starts.</summary>
+    public int? RetentionAcceptanceVersion { get; }
+    public string SourceOutboxItemId { get; }
+    public string IntentFingerprint { get; }
+    public StimulusDeliveryScope Scope { get; }
+    public DateTimeOffset SelectedAt { get; }
+    public string StimulusType { get; }
+    public string StimulusHash { get; }
+    public IReadOnlyList<StimulusStartRecipient> Starts { get; }
+    public IReadOnlyList<StimulusResumeRecipient> Resumes { get; }
+
+    /// <summary>Exact structural equality, including the saved order and explicit empty set.</summary>
+    public bool IsEquivalentTo(StimulusDeliverySnapshot? other) => other is not null &&
+        Version == other.Version && RetentionAcceptanceVersion == other.RetentionAcceptanceVersion && SourceOutboxItemId == other.SourceOutboxItemId &&
+        IntentFingerprint == other.IntentFingerprint && SelectedAt == other.SelectedAt &&
+        StimulusType == other.StimulusType && StimulusHash == other.StimulusHash &&
+        Scope.PersistenceScope == other.Scope.PersistenceScope && Scope.TenantId == other.Scope.TenantId &&
+        Scope.Partition == other.Scope.Partition && Scope.RunKind == other.Scope.RunKind && Scope.TestScope == other.Scope.TestScope &&
+        Starts.Count == other.Starts.Count && Resumes.Count == other.Resumes.Count &&
+        Starts.Zip(other.Starts).All(pair => pair.First.Executable == pair.Second.Executable &&
+            pair.First.SourceProvenanceCaptured == pair.Second.SourceProvenanceCaptured &&
+            pair.First.SourceProvenance == pair.Second.SourceProvenance &&
+            pair.First.Binding with { Metadata = pair.Second.Binding.Metadata } == pair.Second.Binding &&
+            RuntimeModelMetadata.AreEqual(pair.First.Binding.Metadata, pair.Second.Binding.Metadata)) &&
+        Resumes.Zip(other.Resumes).All(pair => pair.First.WorkflowExecutionId == pair.Second.WorkflowExecutionId &&
+            pair.First.BookmarkId == pair.Second.BookmarkId && pair.First.ActivityExecutionId == pair.Second.ActivityExecutionId &&
+            pair.First.ExecutableNodeId == pair.Second.ExecutableNodeId && pair.First.ResumeTargetId == pair.Second.ResumeTargetId &&
+            pair.First.StimulusType == pair.Second.StimulusType && pair.First.StimulusHash == pair.Second.StimulusHash &&
+            pair.First.CreatedAt == pair.Second.CreatedAt && pair.First.ExpiresAt == pair.Second.ExpiresAt &&
+            (pair.First.RegistrationCapture is null ? pair.Second.RegistrationCapture is null :
+                pair.First.RegistrationCapture.IsEquivalentTo(pair.Second.RegistrationCapture)));
+
+    /// <summary>Exact publisher and recipient execution/dedup dependencies under the original source's per-artifact key.</summary>
+    public IReadOnlyList<string> GetExecutionDependencies(RuntimePostCommitIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        if (IntentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeIntent(intent))
+            throw new ArgumentException("The intent differs from the saved cohort source.", nameof(intent));
+        var ids = new SortedSet<string>(StringComparer.Ordinal) { intent.WorkflowExecutionId };
+        foreach (var resume in Resumes) ids.Add(resume.WorkflowExecutionId);
+        foreach (var start in Starts)
+        {
+            var key = intent.IdempotencyKey ?? throw new InvalidDataException("A saved start cohort has no deterministic source key.");
+            ids.Add(KeyedWorkflowStartIdentity.For(key, start.Executable.ArtifactId).WorkflowExecutionId);
+        }
+        return Array.AsReadOnly(ids.ToArray());
+    }
+
+    /// <summary>Structural source binding only. The provider must still verify the persisted row and live claim.</summary>
+    public bool MatchesSource(PostCommitDeliveryContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return SourceOutboxItemId == context.SourceOutboxItemId && IntentFingerprint == context.IntentFingerprint &&
+               Scope.PersistenceScope == context.Scope;
+    }
+}
+
+internal sealed class StimulusDeliverySnapshotJsonConverter : JsonConverter<StimulusDeliverySnapshot>
+{
+    public StimulusDeliverySnapshotJsonConverter() { }
+    public override StimulusDeliverySnapshot Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var wire = JsonSerializer.Deserialize<Wire>(ref reader, options) ?? throw new JsonException("A recipient snapshot must be an object.");
+        try { return new(wire.Version, wire.SourceOutboxItemId, wire.IntentFingerprint, wire.Scope,
+            wire.SelectedAt, wire.StimulusType, wire.StimulusHash, wire.Starts, wire.Resumes, wire.RetentionAcceptance?.Version); }
+        catch (ArgumentException exception) { throw new JsonException("The persisted recipient snapshot is invalid.", exception); }
+    }
+
+    public override void Write(Utf8JsonWriter writer, StimulusDeliverySnapshot value, JsonSerializerOptions options) =>
+        JsonSerializer.Serialize(writer, new Wire(value.Version, value.SourceOutboxItemId, value.IntentFingerprint, value.Scope,
+            value.SelectedAt, value.StimulusType, value.StimulusHash, value.Starts, value.Resumes,
+            value.RetentionAcceptanceVersion is { } version ? new(version) : null), options);
+
+    private sealed record Wire([property: JsonRequired] int Version, [property: JsonRequired] string SourceOutboxItemId,
+        [property: JsonRequired] string IntentFingerprint, [property: JsonRequired] StimulusDeliveryScope Scope,
+        [property: JsonRequired] DateTimeOffset SelectedAt, [property: JsonRequired] string StimulusType,
+        [property: JsonRequired] string StimulusHash, [property: JsonRequired] IReadOnlyList<StimulusStartRecipient> Starts,
+        [property: JsonRequired] IReadOnlyList<StimulusResumeRecipient> Resumes,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RetentionAcceptanceWire? RetentionAcceptance = null);
+    private sealed record RetentionAcceptanceWire([property: JsonRequired] int Version);
+}
+
+/// <summary>New cohort wire requires complete binding provenance without changing legacy binding readers.</summary>
+internal sealed class StimulusStartRecipientJsonConverter : JsonConverter<StimulusStartRecipient>
+{
+    public StimulusStartRecipientJsonConverter() { }
+    public override StimulusStartRecipient Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var wire = JsonSerializer.Deserialize<Wire>(ref reader, options) ?? throw new JsonException("A start recipient must be an object.");
+        if (wire.Binding is null) throw new JsonException("A start recipient requires its saved binding.");
+        if (wire.SourceCapture is { Version: not 1 }) throw new JsonException("The source capture version is unsupported.");
+        try
+        {
+            return wire.SourceCapture is null ? new(wire.Binding.ToBinding(), wire.Executable) :
+                new(wire.Binding.ToBinding(), wire.Executable, wire.SourceCapture.Provenance?.ToProvenance());
+        }
+        catch (ArgumentException exception) { throw new JsonException("The saved start recipient is invalid.", exception); }
+    }
+
+    public override void Write(Utf8JsonWriter writer, StimulusStartRecipient value, JsonSerializerOptions options) =>
+        JsonSerializer.Serialize(writer, new Wire(BindingWire.From(value.Binding), value.Executable,
+            value.SourceProvenanceCaptured ? new(1, value.SourceProvenance is null ? null : ProvenanceWire.From(value.SourceProvenance)) : null), options);
+
+    private sealed record Wire([property: JsonRequired] BindingWire Binding,
+        [property: JsonRequired] WorkflowExecutableIdentity Executable,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SourceCaptureWire? SourceCapture = null);
+
+    private sealed record SourceCaptureWire([property: JsonRequired] int Version,
+        [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] ProvenanceWire? Provenance);
+
+    internal sealed record ProvenanceWire([property: JsonRequired] string SourceReferenceId,
+        [property: JsonRequired] string SourceKind, [property: JsonRequired] string SourceId,
+        [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SourceVersion, [property: JsonRequired] string DefinitionId,
+        [property: JsonRequired] string DefinitionVersionId, [property: JsonRequired] string ArtifactVersion,
+        [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? PublicationId,
+        [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SlotId)
+    {
+        internal WorkflowExecutableSourceProvenance ToProvenance() => new(SourceReferenceId, SourceKind, SourceId,
+            SourceVersion, DefinitionId, DefinitionVersionId, ArtifactVersion, PublicationId, SlotId);
+        internal static ProvenanceWire From(WorkflowExecutableSourceProvenance source) => new(source.SourceReferenceId,
+            source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionId, source.DefinitionVersionId,
+            source.ArtifactVersion, source.PublicationId, source.SlotId);
+    }
+
+    private sealed record BindingWire([property: JsonRequired] string TriggerBindingId,
+        [property: JsonRequired] string ArtifactId, [property: JsonRequired] string DefinitionId,
+        [property: JsonRequired] string ArtifactVersion, [property: JsonRequired] string ArtifactHash,
+        [property: JsonRequired] string ExecutableNodeId, [property: JsonRequired] string StimulusType,
+        [property: JsonRequired] string StimulusHash, [property: JsonRequired] string? CorrelationScope,
+        [property: JsonRequired] IReadOnlyDictionary<string, string> Metadata, [property: JsonRequired] DateTimeOffset CreatedAt,
+        [property: JsonRequired] string? ActivationId, [property: JsonRequired] string? SlotId,
+        [property: JsonRequired] TriggerCardinality Cardinality, [property: JsonRequired] bool IsActive)
+    {
+        internal WorkflowTriggerBinding ToBinding() => new(TriggerBindingId, ArtifactId, DefinitionId, ArtifactVersion,
+            ArtifactHash, ExecutableNodeId, StimulusType, StimulusHash, CorrelationScope, Metadata, CreatedAt,
+            ActivationId, SlotId, Cardinality, IsActive);
+
+        internal static BindingWire From(WorkflowTriggerBinding binding) => new(binding.TriggerBindingId, binding.ArtifactId,
+            binding.DefinitionId, binding.ArtifactVersion, binding.ArtifactHash, binding.ExecutableNodeId,
+            binding.StimulusType, binding.StimulusHash, binding.CorrelationScope, binding.Metadata, binding.CreatedAt,
+            binding.ActivationId, binding.SlotId, binding.Cardinality, binding.IsActive);
+    }
+}
+
+internal sealed class StimulusDeliveryScopeJsonConverter : JsonConverter<StimulusDeliveryScope>
+{
+    public StimulusDeliveryScopeJsonConverter() { }
+
+    public override StimulusDeliveryScope Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var wire = JsonSerializer.Deserialize<Wire>(ref reader, options) ?? throw new JsonException("A delivery scope must be an object.");
+        try { return new(wire.PersistenceScope, wire.TenantId, wire.Partition, wire.RunKind, wire.TestScope); }
+        catch (ArgumentException exception) { throw new JsonException("The saved delivery scope is invalid.", exception); }
+    }
+
+    public override void Write(Utf8JsonWriter writer, StimulusDeliveryScope value, JsonSerializerOptions options) =>
+        JsonSerializer.Serialize(writer, new Wire(value.PersistenceScope, value.TenantId, value.Partition, value.RunKind, value.TestScope), options);
+
+    private sealed record Wire([property: JsonRequired] PersistenceScope PersistenceScope,
+        [property: JsonRequired] string? TenantId, [property: JsonRequired] WorkflowExecutionPartition? Partition,
+        [property: JsonRequired] WorkflowRunKind RunKind, [property: JsonRequired] WorkflowTestScope? TestScope);
+}
+
+internal sealed class StimulusResumeRecipientJsonConverter : JsonConverter<StimulusResumeRecipient>
+{
+    public StimulusResumeRecipientJsonConverter() { }
+
+    public override StimulusResumeRecipient Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        if (document.RootElement.ValueKind != JsonValueKind.Object) throw new JsonException("A resume recipient must be an object.");
+        var captures = document.RootElement.EnumerateObject().Where(property => property.Name.Equals("registrationCapture", StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (captures.Length > 1 || captures.Any(property => property.Value.ValueKind == JsonValueKind.Null))
+            throw new JsonException("A present registration capture cannot be null or duplicated.");
+        var wire = document.RootElement.Deserialize<Wire>(options) ?? throw new JsonException("A resume recipient must be an object.");
+        try { return new(wire.WorkflowExecutionId, wire.BookmarkId, wire.ActivityExecutionId, wire.ExecutableNodeId,
+            wire.ResumeTargetId, wire.StimulusType, wire.StimulusHash, wire.CreatedAt, wire.ExpiresAt, wire.RegistrationCapture); }
+        catch (ArgumentException exception) { throw new JsonException("The saved resume recipient is invalid.", exception); }
+    }
+
+    public override void Write(Utf8JsonWriter writer, StimulusResumeRecipient value, JsonSerializerOptions options) =>
+        JsonSerializer.Serialize(writer, new Wire(value.WorkflowExecutionId, value.BookmarkId, value.ActivityExecutionId,
+            value.ExecutableNodeId, value.ResumeTargetId, value.StimulusType, value.StimulusHash, value.CreatedAt, value.ExpiresAt,
+            value.RegistrationCapture), options);
+
+    private sealed record Wire([property: JsonRequired] string WorkflowExecutionId, [property: JsonRequired] string BookmarkId,
+        [property: JsonRequired] string ActivityExecutionId, [property: JsonRequired] string ExecutableNodeId,
+        [property: JsonRequired] string ResumeTargetId, [property: JsonRequired] string StimulusType,
+        [property: JsonRequired] string StimulusHash, [property: JsonRequired] DateTimeOffset CreatedAt,
+        [property: JsonRequired] DateTimeOffset? ExpiresAt,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StimulusResumeCapture? RegistrationCapture = null);
+}

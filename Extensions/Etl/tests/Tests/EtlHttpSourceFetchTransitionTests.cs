@@ -287,6 +287,44 @@ public sealed class EtlHttpSourceFetchTransitionTests
         Assert.Equal(EtlConnectorHttpSourceFetchFailure.DeadlineExceeded, failed.Fetch.Failure);
     }
 
+    [Fact]
+    public void A_caught_up_response_is_accepted_only_from_the_live_latest_attempt_within_its_window()
+    {
+        var (fetch, attempt) = Begin();
+        var received = Start.AddSeconds(1);
+
+        Assert.Equal(EtlStoreStatus.Applied, CaughtUp(fetch, attempt, received, attempt.Fence, received));
+        Assert.Equal(EtlStoreStatus.Conflict, CaughtUp(fetch, attempt, received, attempt.Fence + 1, received));
+        Assert.Equal(EtlStoreStatus.Conflict, CaughtUp(fetch, attempt with { RequestId = RequestId(2) }, received, attempt.Fence, received));
+        Assert.Equal(EtlStoreStatus.Invalid, CaughtUp(fetch, attempt, Start.AddSeconds(-1), attempt.Fence, received));
+        Assert.Equal(EtlStoreStatus.Invalid, CaughtUp(fetch, attempt, attempt.ExpiresAt, attempt.Fence, attempt.ExpiresAt));
+        Assert.Equal(EtlStoreStatus.Invalid, CaughtUp(fetch, attempt, received.AddSeconds(1), attempt.Fence, received));
+    }
+
+    [Theory]
+    [InlineData("waiting")]
+    [InlineData("failed")]
+    [InlineData("captured")]
+    [InlineData("uncertain")]
+    public void A_caught_up_response_never_clears_a_closed_journal(string phase)
+    {
+        var (fetch, attempt) = Begin();
+        var now = Start.AddSeconds(1);
+        var closed = phase switch
+        {
+            "waiting" => Complete(fetch, attempt, new(503, null, false), now).Fetch!,
+            "failed" => Complete(fetch, attempt, new(400, null, false), now).Fetch!,
+            "captured" => EtlHttpSourceFetchTransitions.Capture(fetch, attempt, Page(), now, now, Policy()).Fetch!,
+            _ => Complete(fetch, attempt, new(null, null, false), now).Fetch!
+        };
+
+        Assert.Equal(EtlStoreStatus.Conflict, CaughtUp(closed, attempt, now, attempt.Fence, now));
+    }
+
+    private static EtlStoreStatus CaughtUp(EtlConnectorHttpSourceFetch fetch, EtlHttpSourceFetchAttempt attempt,
+        DateTimeOffset received, long fence, DateTimeOffset now) =>
+        EtlHttpSourceFetchTransitions.CaughtUp(fetch, attempt, received, fence, now, Policy());
+
     private static (EtlConnectorHttpSourceFetch Fetch, EtlHttpSourceFetchAttempt Permit) Begin(EtlHttpPolicy? policy = null,
         long pageSequence = 0)
     {

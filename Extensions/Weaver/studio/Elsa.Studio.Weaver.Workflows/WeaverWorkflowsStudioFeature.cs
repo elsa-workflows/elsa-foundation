@@ -9,11 +9,13 @@ namespace Elsa.Studio.Weaver.Workflows;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("AI")]
 [ManifestFeatureCategory("Workflows")]
-[StudioModule("weaver-workflows", "Weaver workflows", "ai-context-providers", "ai-prompt-actions", "ai-proposal-renderers", "ai-tools", "weaver-workflows", HasStyles = false)]
+// The module contributes prompt actions and result renderers only: the workflow context provider and the working-state tool
+// contracts belong to Elsa.Studio.Workflows (spec 1193 FR-030), so this manifest declares no context or tool capability.
+[StudioModule("weaver-workflows", "Weaver workflows", "ai-prompt-actions", "ai-proposal-renderers", "weaver-workflows", HasStyles = false)]
 [ShellFeature(
     name: "WeaverWorkflowsStudio",
     DisplayName = "Weaver workflows Studio module",
-    Description = "Contributes workflow-aware Weaver context, prompt actions, tools, and proposal review surfaces."
+    Description = "Contributes workflow-aware Weaver prompt actions and the review card for workflow changes."
 )]
 public sealed class WeaverWorkflowsStudioFeature : IShellFeature
 {

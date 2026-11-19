@@ -1,5 +1,6 @@
-import { lazy } from "react";
+import { createElement, lazy } from "react";
 import {
+  evaluateBackendRequirements,
   hasHomeRunDetailOpened,
   homeWidgetIds,
   registerHomeWidget,
@@ -18,6 +19,7 @@ const TasksWidget = lazy(() => import("./HomeListWidget").then(module => ({ defa
 export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
   registerHomeWidget(api, {
     id: homeWidgetIds.getStarted,
+    requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"},{id:"elsa.api.runtime",contractVersion:"1"}],
     moduleId: "Elsa.Studio.Dashboard",
     title: "Get started",
     description: "Create a workflow, run it, and see what happened.",
@@ -35,6 +37,7 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
 
   registerHomeWidget(api, {
     id: homeWidgetIds.quickActions,
+    requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}],
     moduleId: "Elsa.Studio.Dashboard",
     title: "Quick actions",
     description: "Create a workflow or open the designer.",
@@ -43,11 +46,12 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
     defaultVisible: true,
     defaultSize: "M",
     supportedSizes: ["S", "M", "wide"],
-    component: QuickActionsWidget
+    component: () => createElement(QuickActionsWidget,{runtimeAvailable:evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.runtime",contractVersion:"1"}]).state === "available"})
   });
 
   registerHomeWidget(api, {
     id: homeWidgetIds.recentWorkflows,
+    requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}],
     moduleId: "Elsa.Studio.Dashboard",
     title: "Recent workflows",
     description: "The latest workflow definitions.",
@@ -63,6 +67,7 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
 
   registerHomeWidget(api, {
     id: homeWidgetIds.recentRuns,
+    requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}],
     moduleId: "Elsa.Studio.Dashboard",
     title: "Recent runs",
     description: "The latest workflow executions and their status.",
@@ -78,6 +83,7 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
 
   registerHomeWidget(api, {
     id: homeWidgetIds.needsAttention,
+    requiresBackend: [{id:"elsa.api.attention",contractVersion:"1"}],
     moduleId: "Elsa.Studio.Dashboard",
     title: "Needs attention",
     description: "Runs with active incidents that need your attention.",

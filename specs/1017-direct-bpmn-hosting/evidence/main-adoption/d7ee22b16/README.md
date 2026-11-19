@@ -1,0 +1,27 @@
+# Affected main adoption qualification atd7ee22b16
+
+Actual products at **d7ee22b164bc04098bedde19e5b4722ed6f2b871** adopt main **c986f9ddfdec2c641b2f1c1f5d8f82f8dd19e529** (PR3462/3469/3448/3474). The expanded hosting suite passes **32/32**, Architecture **594/594**, with zero skips. Generated solution filters and123-project tier/shard checks pass. [Discovery reconciliation](gates/discovery-reconciliation.json) accounts for every listed/executed case, including the two runtime-expanded Architecture theories. Commands, raw output and losslessly compressed TRX retain their source and original hashes.
+
+[Qualification](qualification.json) consolidates these actual receipts:
+
+| Journey | Result and retained physical evidence |
+|---|---|
+| Six actual legacy upgrade families | All seven legacy tests pass within the whole suite. Partial forks, native terminal/pending parents, called acknowledgement, broadcast, called controls/compensation and multi-instance recovery retain33 whole stores. All22 original whole-store inputs are accounted for. [Family results](legacy/results.json). |
+| Same immutable partial fork directly and embedded | Four native parent pairs complete eight models after accepted left progress, SIGKILL, surviving right work and one logical join/after-join wait. Twenty-four whole stores retain exact identities, pins, receipts and settlement. [Verifier result](hosting/parallel-verification.json). |
+| Both actual saved Studio families | Initial JSON/XML and saved five-node layout remain exact. Only gateway labels change. Versions3.0.0/4.0.0 publish through Studio; two Published Runs and two Test Runs complete. Twelve coupled whole stores preserve all original views,84/92 native material payloads/incarnations and new full views/pins after restart. [Verifier result](studio-support/verification.json). |
+
+The actual legacy manifests live under [legacy](legacy/results.json); the current paired-fork and Studio manifests are [parallel](parallel/manifest.json) and [studio](studio/manifest.json). Portable controls over these **new** bundles pass13/13 each, zero skips. The Studio count is the thirteen relevant final-bundle controls, not the historical23-case combined initial/final control suites. All104 frozen baseline assets and the authoring fingerprint remain unchanged. [Sixty-three listed owned hosts](children-stopped.json) are absent:41 legacy,12 partial-fork, six primary Studio journey hosts and four additional read-only Studio inspection hosts.
+
+## Refusals and corrections
+
+The earlier [expanded-suite refusal](../../delivery-gates/c34c1f4e1/README.md) and [closed called-ack diagnosis](../../delivery-gates/called-ack-observer/README.md) remain separate. The recipient had completed while its real terminal source was still Delivering. The fixture now waits for durable source acknowledgement before stopping the sender; its checked guard and runtime implementation are unchanged. The fixed fixture passes once plus three bounded repeats atd7ee22b16, then passes in the full32-case suite. Raw repeated-test receipts are under `ack-fixed/`.
+
+[A source-mismatch attempt](diagnostics/source-mismatch/explanation.json) is not qualification: a documentation commit landed while the build was preparing, and the exact-source guard refused the different reader commit. The later fixed-head receipts replace that attempt. The scoped Studio host build itself has zero warnings/errors. A broad build-isolation guard observed a mutable Nuplane cache file changing while owned hosts ran; [the retained comparison](studio-support/product-isolation.json) proves compiled Workbench/reader products stayed unchanged and does not attribute the cache writer to the Studio build.
+
+The initial Studio UI assertion correctly refused a Timeline capture that omitted explicit Run Kind. [Its retained refusal/correction](diagnostics/ui-inspection/correction.json) is not a changed product contract. The same private stores were reopened for read-only Details inspection; both screenshots/DOM now show **Published Run**, exact execution ID, completed status and published pin. Those four additional owned processes are recorded separately in `studio-support/`; all original/new API views remained identical. The verifier was kept unchanged. No capture, stored execution, queue, receipt, claim or clock was edited to obtain a pass.
+
+## Scope and remaining delivery gates
+
+This is actual EF SQLite/built-in single-node hosting and existing embedded Studio compatibility. The [common provider/storage matrix](../../providers/model-storage/README.md) retains its separate executing source and native-engine limits. This receipt does not establish non-SQLite upgraded-host recovery, distributed placement or first-class direct-model Studio acceptance under #2907. Existing Test Run draft layout-sidecar behavior and initial authentication return to the Workbench root remain explicit observed limits; publication layout and exact supported exports pass.
+
+T041's affected repeat and T043's runtime qualification are supported by these receipts and the [FR/SC index](../../qualification.md). T042's public-API preview magnitude decision, independent complete-PR review, required exact-head checks, the owner-deferred GitGuardian finding/scan gate and post-merge main verification remain open. No merge or broader program completion is claimed. Later affected runtime/version/composition changes require their own qualification.

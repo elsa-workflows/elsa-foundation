@@ -45,6 +45,11 @@ public sealed class StudioRuntimeScriptTests : IAsyncLifetime
                 ["Studio:BackendBaseUrl"] = "https://backend.example/",
                 ["Studio:BackendServerBaseUrl"] = "http://elsa-server:8080",
                 ["Studio:HostId"] = "studio-primary",
+                ["Studio:Branding:ProductName"] = "Northstar",
+                ["Studio:Branding:LogoUrl"] = "/brand.svg",
+                ["Studio:Branding:PrivateKey"] = "must-not-serialize",
+                ["Studio:Appearance:WorkspaceStyle"] = "linen",
+                ["Studio:Appearance:PaletteId"] = "drift",
                 ["Studio:Dashboard:DefaultRefreshIntervalMinutes"] = "15",
                 ["Studio:Dashboard:WidgetTimeoutSeconds"] = "12",
                 ["Studio:Dashboard:PinnedWidgetIds:0"] = "attention.queue",
@@ -97,5 +102,16 @@ public sealed class StudioRuntimeScriptTests : IAsyncLifetime
         Assert.Contains("\"defaultRefreshIntervalMs\":300000", script);
         Assert.Contains("\"widgetTimeoutMs\":10000", script);
         Assert.Contains("\"pinnedWidgetIds\":[]", script);
+    }
+
+    [Fact]
+    public void RuntimeScriptAllowListsPublicBrandAndDefaultSettings()
+    {
+        Assert.Contains("\"productName\":\"Northstar\"", _script);
+        Assert.Contains("\"logoUrl\":\"/brand.svg\"", _script);
+        Assert.Contains("\"workspaceStyle\":\"linen\"", _script);
+        Assert.Contains("\"paletteId\":\"drift\"", _script);
+        Assert.DoesNotContain("must-not-serialize", _script);
+        Assert.DoesNotContain("privateKey", _script);
     }
 }

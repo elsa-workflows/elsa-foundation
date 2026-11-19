@@ -1,0 +1,298 @@
+[
+  {
+    "artifact": {
+      "id": 12790632547,
+      "name": "test-outcomes-workbench-rest"
+    },
+    "contents": {
+      "test-outcomes.json": {
+        "schema": 1,
+        "shard": "workbench-rest",
+        "headSha": "438001406d980051584234e5d656eb8e6a67f47f",
+        "failedTwice": [],
+        "passedOnRetry": [],
+        "quarantinedFailed": [
+          {
+            "test": "Elsa.Workbench.Tests.WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says",
+            "issue": 3261
+          }
+        ],
+        "slow": [],
+        "aborted": null
+      }
+    }
+  },
+  {
+    "artifact": {
+      "id": 12790521654,
+      "name": "test-outcomes-core-only"
+    },
+    "contents": {
+      "test-outcomes.json": {
+        "schema": 1,
+        "shard": "core-only",
+        "headSha": "438001406d980051584234e5d656eb8e6a67f47f",
+        "failedTwice": [],
+        "passedOnRetry": [],
+        "quarantinedFailed": [],
+        "slow": [
+          {
+            "test": "Elsa.Tasks.Tests.TaskManagerConcurrencyTests.GetOrInitializeTaskStateManager_ConcurrentFirstCallers_AllObserveTheSameInstance",
+            "seconds": 10.5
+          }
+        ],
+        "aborted": null
+      }
+    }
+  },
+  {
+    "artifact": {
+      "id": 12790513214,
+      "name": "test-outcomes-workbench-native-hosting"
+    },
+    "contents": {
+      "test-outcomes.json": {
+        "schema": 1,
+        "shard": "workbench-native-hosting",
+        "headSha": "438001406d980051584234e5d656eb8e6a67f47f",
+        "failedTwice": [],
+        "passedOnRetry": [],
+        "quarantinedFailed": [],
+        "slow": [],
+        "aborted": null
+      }
+    }
+  },
+  {
+    "artifact": {
+      "id": 12790419070,
+      "name": "test-outcomes-cluster-foundation-host"
+    },
+    "contents": {
+      "test-outcomes.json": {
+        "schema": 1,
+        "shard": "cluster-foundation-host",
+        "headSha": "438001406d980051584234e5d656eb8e6a67f47f",
+        "failedTwice": [],
+        "passedOnRetry": [],
+        "quarantinedFailed": [],
+        "slow": [],
+        "aborted": null
+      }
+    }
+  },
+  {
+    "artifact": {
+      "id": 12790387546,
+      "name": "test-outcomes-integration-other"
+    },
+    "contents": {
+      "test-outcomes.json": {
+        "schema": 1,
+        "shard": "integration-other",
+        "headSha": "438001406d980051584234e5d656eb8e6a67f47f",
+        "failedTwice": [],
+        "passedOnRetry": [],
+        "quarantinedFailed": [],
+        "slow": [],
+        "aborted": null
+      }
+    }
+  },
+  {
+    "artifact": {
+      "id": 12790283340,
+      "name": "test-outcomes-pr-2"
+    },
+    "contents": {
+      "test-outcomes.json": {
+        "schema": 1,
+        "shard": "pr-2",
+        "headSha": "438001406d980051584234e5d656eb8e6a67f47f",
+        "failedTwice": [],
+        "passedOnRetry": [],
+        "quarantinedFailed": [],
+        "slow": [
+          {
+            "test": "Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.SqliteEfSecretRepositoryTests.Search_refuses_an_oversized_scoped_catalog",
+            "seconds": 11.7
+          },
+          {
+            "test": "Elsa.Workflows.Publishing.Api.Tests.ActivityTemplatePlacementTests.Deep_dependency_traversal_is_iterative_and_observes_cancellation",
+            "seconds": 11.8
+          },
+          {
+            "test": "Elsa3.Activities.Design.Import.Integration.Tests.DispatchWorkflowCallTests.An_imported_workflow_starts_another_imported_workflow_by_its_Elsa_3_definition_id",
+            "seconds": 30.3
+          },
+          {
+            "test": "Elsa3.Activities.Design.Import.Integration.Tests.NullMemberPublishTests.A_RunJavaScript_with_null_possible_outcomes_and_result_publishes",
+            "seconds": 25.9
+          },
+          {
+            "test": "Elsa3.Activities.Design.Import.Integration.Tests.PublishEventResumeTests.An_imported_Publish_Event_resumes_an_imported_Event_wait",
+            "seconds": 43.9
+          },
+          {
+            "test": "Elsa3.Activities.Design.Import.Integration.Tests.PublishEventResumeTests.One_Publish_Event_starts_a_workflow_and_resumes_a_wait_with_the_same_payload",
+            "seconds": 20.2
+          },
+          {
+            "test": "Elsa3.Activities.Design.Import.Integration.Tests.PublisherBridgeTests.The_feature_registers_exactly_one_publish_port",
+            "seconds": 21.1
+          },
+          {
+            "test": "Elsa3.Activities.Design.Import.Integration.Tests.ReusableBodyWaitTests.A_reusable_body_that_waits_for_an_event_resumes_when_the_event_arrives",
+            "seconds": 18.2
+          },
+          {
+            "test": "Elsa3.Activities.Design.Import.Integration.Tests.ReusableBodyWaitTests.A_reusable_body_that_waits_resumes_and_completes",
+            "seconds": 12.6
+          },
+          {
+            "test": "Elsa3.Activities.Design.Import.Integration.Tests.WorkflowVariablePublishTests.A_list_variable_receives_a_captured_array",
+            "seconds": 17.5
+          },
+          {
+            "test": "Elsa3.Activities.Design.Import.Integration.Tests.WorkflowVariablePublishTests.A_workflow_variable_without_a_value_publishes_and_receives_a_captured_Event_payload",
+            "seconds": 19.4
+          },
+          {
+            "test": "Elsa.Activities.Compensation.Tests.CompensationBackoffJourneyTests.BK1_a_stop_after_the_retry_was_queued_runs_it_once_after_restart",
+            "seconds": 13.2
+          },
+          {
+            "test": "Elsa.Activities.Compensation.Tests.CompensationProviderSubsetTests.The_provider_subset_passes_on_SQLite",
+            "seconds": 53.6
+          }
+        ],
+        "aborted": null
+      }
+    }
+  },
+  {
+    "artifact": {
+      "id": 12789889635,
+      "name": "test-outcomes-pr-1"
+    },
+    "contents": {
+      "test-outcomes.json": {
+        "schema": 1,
+        "shard": "pr-1",
+        "headSha": "438001406d980051584234e5d656eb8e6a67f47f",
+        "failedTwice": [],
+        "passedOnRetry": [],
+        "quarantinedFailed": [],
+        "slow": [
+          {
+            "test": "Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Placed_composite_returns_ETL_completion_to_its_outer_sequence",
+            "seconds": 18.7
+          },
+          {
+            "test": "Elsa.Etl.Tests.EtlPublishedWorkflowJourneyTests.Published_parent_keeps_its_ETL_version_after_edit_and_runs_without_design_services",
+            "seconds": 10.6
+          },
+          {
+            "test": "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_honor_source_retry_after_before_capturing_the_page",
+            "seconds": 12.3
+          },
+          {
+            "test": "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_recover_each_durable_boundary",
+            "seconds": 10.2
+          },
+          {
+            "test": "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_retry_error_route_after_main_ack_without_early_dispatch_or_double_accounting",
+            "seconds": 13.3
+          },
+          {
+            "test": "Elsa.Rules.Tests.RulesPersistedCompiledSequenceTests.Published_sequence_waits_for_full_terminal_delivery_before_running_following_activity_once",
+            "seconds": 12.5
+          },
+          {
+            "test": "Elsa.Rules.Tests.RulesPersistedNativeFlowchartTests.Consumed_completion_is_reclaimed_and_acknowledged_without_redispatch_while_sibling_waits",
+            "seconds": 13.0
+          }
+        ],
+        "aborted": null
+      }
+    }
+  },
+  {
+    "artifact": {
+      "id": 12789624113,
+      "name": "test-outcomes-architecture-guards"
+    },
+    "contents": {
+      "test-outcomes.json": {
+        "schema": 1,
+        "shard": "architecture-guards",
+        "headSha": "438001406d980051584234e5d656eb8e6a67f47f",
+        "failedTwice": [],
+        "passedOnRetry": [],
+        "quarantinedFailed": [],
+        "slow": [
+          {
+            "test": "Elsa.Architecture.Tests.FeatureCompositionTests.Every_feature_composes_and_each_service_it_registers_resolves",
+            "seconds": 33.5
+          },
+          {
+            "test": "Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.Every_reviewed_permission_claim_reader_still_reads_permission_claims",
+            "seconds": 49.7
+          },
+          {
+            "test": "Elsa.Architecture.Tests.PinnedTransitivePackTests.Pack_writes_exactly_the_pinned_transitive_packages_restore_lists_and_the_lock_file_adds_only_the_privately_reached",
+            "seconds": 10.0
+          }
+        ],
+        "aborted": null
+      }
+    }
+  },
+  {
+    "artifact": {
+      "id": 12789534601,
+      "name": "test-outcomes-pr-3"
+    },
+    "contents": {
+      "test-outcomes.json": {
+        "schema": 1,
+        "shard": "pr-3",
+        "headSha": "438001406d980051584234e5d656eb8e6a67f47f",
+        "failedTwice": [],
+        "passedOnRetry": [],
+        "quarantinedFailed": [],
+        "slow": [
+          {
+            "test": "Elsa.Activities.Behavioral.GraphBoundaryCompleteDurableCancellationTests.TheCancelledSiblingsBookmarkCannotBeResumed",
+            "seconds": 13.5
+          },
+          {
+            "test": "Elsa.Activities.Scheduling.Tests.DurableTimerRestartCrashTests.TimerFire_IsIdempotent_UnderAtLeastOnceDuplicateDelivery",
+            "seconds": 11.4
+          },
+          {
+            "test": "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaFinalizationTests.Every_sqlite_module_keeps_its_own_finalization_record_in_one_shared_database",
+            "seconds": 82.5
+          },
+          {
+            "test": "Elsa.Tasks.Tests.TaskManagerConcurrencyTests.GetOrInitializeTaskStateManager_ConcurrentFirstCallers_AllObserveTheSameInstance",
+            "seconds": 10.3
+          },
+          {
+            "test": "Elsa.Activities.Compensation.Tests.CompensationOperatorActionJourneyTests.J1_the_journal_follows_the_run_through_waiting_and_abandoned",
+            "seconds": 13.4
+          },
+          {
+            "test": "Elsa.Activities.Compensation.Tests.CompensationRetentionJourneyTests.R3_a_pending_delayed_retry_keeps_its_executable_from_the_collector",
+            "seconds": 13.9
+          },
+          {
+            "test": "Elsa.Activities.Compensation.Tests.CompensationScopeRestartTests.A_crash_after_an_operator_retry_finishes_the_recovery_once",
+            "seconds": 14.9
+          }
+        ],
+        "aborted": null
+      }
+    }
+  }
+]

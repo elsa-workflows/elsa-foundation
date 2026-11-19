@@ -14,8 +14,9 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// activity cap of Durable or Balanced, or the end-of-drain quiescence flush).
 /// The one boundary that may be dropped instead is the completion of an Ephemeral run that has no record, on a host
 /// that turned completion records off (see <see cref="RuntimeCoalescingSession.CanDiscardCompletion"/>). A durable attempt
-/// boundary and a cap-hit fold-and-flush each start another coalesced segment in the same drain; when no session is
-/// active (outside a drain, or once a boundary ended the session), Deferred decisions are normalized to Immediate
+/// boundary, cap-hit fold-and-flush, nonterminal native suspension, bookmark creation or child dispatch can start
+/// another segment in the same drain after its immediate durable commit. Terminal, admission and control boundaries
+/// end the session. When no session is active (outside a drain, or once a boundary ended the session), Deferred decisions are normalized to Immediate
 /// because there is no working set to flush later; any other decision is forwarded unchanged.
 /// </summary>
 /// <remarks>
@@ -24,27 +25,85 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// this store has already been fenced by the committer for the same workflow execution. The durable scheduler queue is
 /// advanced only after the folded commit lands (condition B), so a crash mid-segment replays from the last flushed state.
 /// </remarks>
-public sealed class CoalescingRuntimeCheckpointCommitStore(
-    CoalescingInner<IRuntimeCheckpointCommitStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor,
-    IRuntimeExecutionOwnershipService? ownershipService = null) : IRuntimeCheckpointCommitStore
+public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore
 {
+    private readonly IRuntimeCoalescingSessionAccessor sessionAccessor;
+    private readonly IRuntimeExecutionOwnershipService? ownershipService;
+
+    public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService = null)
+        : this(inner, sessionAccessor, ownershipService, []) { }
+
+    public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        ArgumentNullException.ThrowIfNull(sessionAccessor);
+        ArgumentNullException.ThrowIfNull(contributions);
+        _inner = inner.Value;
+        this.sessionAccessor = sessionAccessor;
+        this.ownershipService = ownershipService;
+        // Preserve contribution validation; no already-persisted outbox item is restaged by a later fold.
+        _ = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
+    }
+
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate, "Coalesced segment flush.");
 
     private static readonly RuntimeCheckpointPersistenceDecision NoActiveSessionDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate, "No matching active coalescing session.");
 
-    private readonly IRuntimeCheckpointCommitStore _inner = inner.Value;
+    private readonly IRuntimeCheckpointCommitStore _inner;
+
+    public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
+    bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => _inner.SupportsModelParentAdmission;
+    bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => _inner.SupportsModelCheckpoint;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelState(IRuntimeModelExecutionReader reader) => _inner.CanCommitModelState(reader);
+    bool IRuntimeCheckpointCommitStore.SupportsModelAdmission => _inner.SupportsModelAdmission;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelAdmission(IRuntimeModelExecutionReader reader, IWorkflowExecutionStateStore executions,
+        IActivityExecutionStateStore activities, IRuntimePostCommitOutboxStore outbox) => _inner.CanCommitModelAdmission(reader, executions, activities, outbox);
+    public bool CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks, IWorkflowExecutionStateStore physicalExecutions,
+        IActivityExecutionStateStore activities) => _inner.CanCommitExactBookmarkResume(bookmarks, physicalExecutions, activities);
+
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
 
+        if (commit.ExpectedModelParentWait is not null)
+        {
+            if (!_inner.SupportsModelParentAdmission)
+                throw new NotSupportedException("The physical writer cannot compare a model child's live native parent wait.");
+            commit.EnsureModelParentAdmissionShape();
+        }
+
+        if (commit.ExpectedModelExecution is not null)
+        {
+            if (!_inner.SupportsModelAdmission || decision.Mode != RuntimeCheckpointPersistenceMode.Immediate ||
+                sessionAccessor.Current is { HasBufferedChanges: true } admissionSession && admissionSession.AppliesTo(commit.WorkflowExecutionId))
+                throw new NotSupportedException("Initial model-owned native worker admission requires its own immediate physical checkpoint.");
+            commit.EnsureModelAdmissionShape();
+        }
+
+        if (commit.ModelState is not null)
+        {
+            if (!_inner.SupportsModelCheckpoint || sessionAccessor.Current?.AppliesTo(commit.WorkflowExecutionId) == true)
+                throw new NotSupportedException("Model decisions require a qualified physical writer outside a native coalescing session.");
+            if (decision.Mode != RuntimeCheckpointPersistenceMode.Immediate)
+                throw new NotSupportedException("Model decisions cannot be deferred or skipped.");
+            commit.EnsureModelStateShape();
+            return await _inner.CommitAsync(commit, decision, cancellationToken);
+        }
+
+        if (commit.ExpectedBookmarkResume is not null && !SupportsExactBookmarkResume)
+            throw new NotSupportedException("The physical checkpoint store cannot enforce exact bookmark resume admission.");
+
         // Capture the ambient owner before the await so a concurrent context change cannot redirect this write lease to
         // another session. Even a non-matching commit fences the current owner's raw-page memo conservatively.
         var session = sessionAccessor.Current;
+        session?.EnsurePreparedFlushAllows(commit);
         if (session is null || !session.AppliesTo(commit.WorkflowExecutionId))
         {
             // Deferred has meaning only inside this matching working set. In particular, a legacy queue's disabled
@@ -92,8 +151,8 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         var capFold = deferrable && capReached;
 
         // Flush boundary (or cap): fold the buffered segment with this commit into one atomic durable write, then
-        // advance the durable queue. A pre-activation attempt boundary starts a fresh segment so later replayable work
-        // in the same drain can still coalesce without crossing the before-user-code durability guarantee.
+        // advance the durable queue. Qualified nonterminal boundaries start a fresh segment so later replayable work
+        // in the same drain can coalesce while every suspension, dispatch and before-user-code boundary stays durable.
         var remainingPendingOutbox = session.RemainingPendingOutboxChanges();
 
         // The one completion that is not committed: an Ephemeral run, on a host that opted out of completion records,
@@ -119,7 +178,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             return OwnOutbox(commit);
         }
 
-        var continueAfterBoundary = capFold || CanContinueAfterBoundary(commit, remainingPendingOutbox.Count);
+        var continueAfterBoundary = capFold || CanContinueAfterBoundary(commit);
         if (session.HasBufferedChanges)
         {
             var foldedState = session.FoldBufferedStateChangesWith(commit.StateChanges);
@@ -140,24 +199,22 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             await CommitInnerAsync(session, foldedCommit, ImmediateDecision, cancellationToken);
             try
             {
-                if (capFold)
+                if (continueAfterBoundary)
                 {
-                    // The trailing commit's outbox items stay overlay-delivered for the next segment; the flush persisted
-                    // them durably as the crash-redrive guarantee, so track them for reconciliation at the next flush.
+                    // Scheduler continuations stay overlay-delivered with a durable crash backstop. External intents
+                    // use durable claims immediately; remember all persisted IDs so later folds cannot restage them.
                     session.RecordCapFlushState(commit.StateChanges);
                     session.MarkOutboxDurablyPersisted(outbox);
                 }
-                else if (continueAfterBoundary)
-                    session.RecordDurableBoundaryState(commit.StateChanges);
                 await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
                 // A deactivating boundary — and a cap fold, whose trailing commit rode the in-flight dispatch — already
                 // carries the in-flight item's effect in this flush, so the item must be consumed here instead of
                 // surviving as a durable duplicate (see AdvanceInnerQueueAsync). A retaining checkpoint or
                 // pre-activation attempt boundary keeps it for redrive.
                 await session.AdvanceInnerQueueAsync(
-                    consumeInFlightClaims: !commit.RetainSchedulerWork && (capFold || !continueAfterBoundary),
+                    consumeInFlightClaims: !commit.RetainSchedulerWork && (!continueAfterBoundary || !IsAttemptClaim(commit)),
                     cancellationToken,
-                    preserveActiveFusedScheduleAnchors: capFold);
+                    preserveActiveFusedScheduleAnchors: continueAfterBoundary);
             }
             catch
             {
@@ -179,12 +236,15 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         try
         {
             if (continueAfterBoundary)
-                session.RecordDurableBoundaryState(commit.StateChanges);
+            {
+                session.RecordCapFlushState(commit.StateChanges);
+                session.MarkOutboxDurablyPersisted(commit.StateChanges.PostCommitOutbox);
+            }
             await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
             await session.AdvanceInnerQueueAsync(
-                consumeInFlightClaims: !commit.RetainSchedulerWork && !continueAfterBoundary,
+                consumeInFlightClaims: !commit.RetainSchedulerWork && (!continueAfterBoundary || !IsAttemptClaim(commit)),
                 cancellationToken,
-                preserveActiveFusedScheduleAnchors: false);
+                preserveActiveFusedScheduleAnchors: continueAfterBoundary);
         }
         catch
         {
@@ -214,6 +274,10 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         RuntimeCheckpointPersistenceDecision decision,
         CancellationToken cancellationToken)
     {
+        // Recorded before the write, so a commit whose outcome is uncertain still counts as possibly durable.
+        if (session is not null && StringComparer.Ordinal.Equals(session.WorkflowExecutionId, commit.WorkflowExecutionId))
+            session.RecordPossibleDurableWrites(commit.StateChanges);
+
         RuntimeCheckpointCommitStoreResult result;
         if (session?.DurableValuePageMemo is not { } memo)
         {
@@ -226,6 +290,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             write.Succeed();
         }
 
+        session?.RecordCommittedPumpedEffect(commit);
         // From here the run has a durable record, so its completion is always committed.
         if (session is not null && StringComparer.Ordinal.Equals(session.WorkflowExecutionId, commit.WorkflowExecutionId))
             session.MarkDurableRecord();
@@ -241,8 +306,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         RuntimeCoalescingSession session,
         IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> remaining) =>
         remaining
-            .Where(change => change.State.Status != RuntimePostCommitOutboxStatus.FailedRetryable ||
-                             !session.IsOutboxDurablyPersisted(change.StateId))
+            .Where(change => !session.IsOutboxDurablyPersisted(change.StateId))
             .Select(change => change.State.Status == RuntimePostCommitOutboxStatus.FailedRetryable
                 ? change with { State = AsPending(change.State) }
                 : change)
@@ -257,9 +321,16 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             item.AvailableAt,
             item.RetryPolicy,
             item.DeliveryAttemptCount,
+            deliveringOwnerId: null,
+            deliveryStartedAt: null,
+            deliveredAt: null,
             lastFailureMessage: item.LastFailureMessage,
             metadata: item.Metadata,
-            deliveryFencingToken: item.DeliveryFencingToken);
+            deliveryFencingToken: item.DeliveryFencingToken,
+            deliveryVisibleAfter: null,
+            stimulusDeliveryProtocolVersion: item.StimulusDeliveryProtocolVersion,
+            stimulusDeliverySourceScope: item.StimulusDeliverySourceScope,
+            recipientSnapshot: item.RecipientSnapshot);
 
     // A claim is taken just before the claimed work runs, and the work item that runs it can exist only in the session's
     // memory: a parent re-claimed to evaluate its finished child runs from such an item. A cap fold at the claim would
@@ -268,16 +339,28 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
     private static bool IsAttemptClaim(RuntimeCheckpointCommit commit) =>
         StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed);
 
-    private static bool CanContinueAfterBoundary(
-        RuntimeCheckpointCommit commit,
-        int pendingSegmentOutboxCount) =>
-        pendingSegmentOutboxCount == 0 &&
-        commit.StateChanges.PostCommitOutbox.Count == 0 &&
-        StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed);
+    private static bool CanContinueAfterBoundary(RuntimeCheckpointCommit commit)
+    {
+        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null ||
+            commit.ExpectedModelParentWait is not null || commit.ExpectedBookmarkResume is not null ||
+            commit.StateChanges.WorkflowExecution is { Operation: RuntimeStateChangeOperation.Delete } ||
+            commit.StateChanges.WorkflowExecution?.State.Status.IsTerminal() == true ||
+            commit.Checkpoint.Name is RuntimeCheckpointNames.WorkflowCompleted or RuntimeCheckpointNames.WorkflowFaulted or RuntimeCheckpointNames.WorkflowCancelled ||
+            commit.StateChanges.Operational.Count > 0 || commit.StateChanges.Incidents.Count > 0 ||
+            !commit.StateChanges.BackgroundActivityWork.IsEmpty || commit.StateChanges.AlterationJobTerminalChange is not null ||
+            commit.StateChanges.WorkflowDispatchCancellations.Count > 0)
+            return false;
+
+        return commit.Checkpoint.Name is RuntimeCheckpointNames.ActivityAttemptClaimed or RuntimeCheckpointNames.ActivitySuspended or
+                   RuntimeCheckpointNames.BookmarkCreated or RuntimeCheckpointNames.WorkflowSuspended ||
+               commit.StateChanges.WorkflowDispatches.Count > 0;
+    }
 
     // Operational (lease/heartbeat/ownership — condition E), incident, and bookmark writes must never be buffered:
     // they are durability-critical and are flushed immediately even if they ride on a deferrable checkpoint name.
     private static bool HasBoundaryState(RuntimeCheckpointCommit commit) =>
+        commit.ExpectedModelExecution is not null ||
+        commit.ExpectedBookmarkResume is not null ||
         commit.StateChanges.Operational.Count > 0 ||
         commit.StateChanges.Incidents.Count > 0 ||
         commit.StateChanges.Bookmarks.Count > 0 ||

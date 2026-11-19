@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 initial multi-root lease capability only; task remains open",
+  "sourceParentCommit": "1979b2fa052a0413b399f7f3f7de3147ee5521f7",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableRootWriteLeaseManager.cs": "d12cffc0e92757a6ba032a39715b1b33428621796ce02103de8abd13d7d7e059",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "a5838ea45dec7e3f827cf0143e21a3146f2787d4002ce77325fbca88b4c2b13b",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "d69a27b28acb31f9b764cd634c4b24486f0e7ec4eea3e797280118f9d5cf1148",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs": "90b3aae9c73139a65cbc2730115257a577ea7e9a09a80c744da4a5f3f12a7130",
+    "Essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableRootWriteLeaseManagerTests.cs": "33a5aeebbc542ebad86635bb47a3897fd4a197a4fc4eafa83589a39e3d315df5"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2793,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "leaseCasesIncludedInWholeRun": 29,
+      "newLeaseCases": 23
+    },
+    {
+      "coreApiAdditions": 1,
+      "coreApiRemovals": 0,
+      "oldOverloadBehaviorPreserved": true
+    },
+    {
+      "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+      "unchanged": true
+    }
+  ],
+  "mutations": [
+    {
+      "name": "omit-multi-root-union",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 48 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-prewrite-renewal-refusal",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     3, Skipped:     0, Total:     4, Duration: 61 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "legacy-root-set-fallback",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 20 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-complete-pin-metadata",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 41 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "disable-active-deadline-guard",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     4, Skipped:     0, Total:     6, Duration: 43 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-provider-outage-cancellation",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 10 s - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-completion-deadline-sample",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 35 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "uncontained-timer-cancellation-registration",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     1, Skipped:     0, Total:     3, Duration: 36 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "hide-unrequested-provider-cancellation",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 35 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "discard-independent-guard-causes",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     2, Skipped:     0, Total:     3, Duration: 41 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "reuse-mutable-root-array",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 30 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    }
+  ],
+  "reviews": {
+    "correctness": "clean; final source hashes, mutation logs and restored whole/focused results independently verified",
+    "standards": "clean; contract, API, source and final receipt verified",
+    "acceptance": "clean for finite lease capability; task integration remains open",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "No IStimulusDeliveryStore installer, retained-start dispatcher authority, executable GC root or execution/source/dedup retention integration is added by this increment.",
+    "This is generic lease-manager evidence using the actual in-memory artifact lease/guard store, not actual host/fresh-EF delivery or restart evidence.",
+    "Original single-artifact/identity overload behavior is preserved; strengthened atomic-set preflight applies to the new collection overload.",
+    "The lease coordinator cannot roll back callback effects after commit acknowledgement loss or renewal failure. Cohort install must preserve its exact persisted winner.",
+    "T049 remains open; publisher enablement, T050-T051/T045 and remaining acceptance gates are unchanged.",
+    "Collection callbacks must honor cancellation and fence actual durable acceptance. The independent deadline timer requests cancellation but cannot roll back already committed or uncooperative effects."
+  ]
+}

@@ -1151,7 +1151,10 @@ public sealed class ResponseReplaySafetyProcessTests
 
     /// <summary>
     /// Reviewed allowance for spec 256 (#3050): the frozen baseline predates WriteHttpResponse.Body becoming a JSON value.
-    /// Only its <c>String</c> Body type is upgraded to the current contract; any other difference still fails.
+    /// Its <c>String</c> Body type is upgraded to the current contract. Spec 1169 (#3477) also corrects
+    /// the documented optional Body result projection. Issue #3476 corrects the optional ContentType result projection.
+    /// Issue #3167 infers the JSON Body projection as <c>StructuredValue</c>. The allowances never rewrite closure bytes;
+    /// until the first stable release a closure is only regenerated in place when publish output changes. Every other difference still fails.
     /// </summary>
     private static void ApplyStructuredBodyContractChange(JsonObject artifact)
     {
@@ -1165,9 +1168,14 @@ public sealed class ResponseReplaySafetyProcessTests
         Upgrade(writeResponse["inputBindings"]?["Body"]?["expression"]?["resultType"], "id");
         Upgrade(writeResponse["activityContract"]?["inputs"]?["Body"]?["type"], "alias");
         Upgrade(writeResponse["activityContract"]?["result"]?["projections"]?["Body"]?["type"], "alias");
-        if (writeResponse["activityContract"]?["result"]?["projections"]?["Body"] is JsonObject projection &&
-            projection["sourceRepresentation"]?.GetValue<string>() == "TextValue")
-            projection["sourceRepresentation"] = "TypedValue";
+        if (writeResponse["activityContract"]?["result"]?["projections"]?["Body"] is JsonObject projection)
+        {
+            projection["isRequired"] = false;
+            if (projection["sourceRepresentation"]?.GetValue<string>() == "TextValue")
+                projection["sourceRepresentation"] = "StructuredValue";
+        }
+        if (writeResponse["activityContract"]?["result"]?["projections"]?["ContentType"] is JsonObject contentTypeProjection)
+            contentTypeProjection["isRequired"] = false;
 
         void Upgrade(JsonNode? holder, string property)
         {

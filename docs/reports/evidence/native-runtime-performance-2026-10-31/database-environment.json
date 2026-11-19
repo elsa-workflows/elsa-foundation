@@ -1,0 +1,36 @@
+{
+  "postgres": {
+    "version": "PostgreSQL 16.15 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "fsync": "on",
+    "synchronous_commit": "on",
+    "full_page_writes": "on",
+    "shared_buffers": "128MB",
+    "max_connections": "100"
+  },
+  "container": {
+    "id": "4edd75bec122951e7e6893cac623bca0ca7175cfb881c9b544556c1480c1871d",
+    "image": "sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36",
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "e388339516b423d35bdc562e7b16f93d62dbbd7e047efc9f2d296c34c51ef0fd",
+        "Source": "/var/lib/docker/volumes/e388339516b423d35bdc562e7b16f93d62dbbd7e047efc9f2d296c34c51ef0fd/_data",
+        "Destination": "/var/lib/postgresql/data",
+        "Driver": "local",
+        "Mode": "",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "memoryLimit": 0,
+    "nanoCpus": 0
+  },
+  "dockerInfo": {
+    "NCPU": 15,
+    "MemTotal": 16818184192,
+    "OperatingSystem": "OrbStack",
+    "Architecture": "aarch64",
+    "ServerVersion": "29.8.2",
+    "Driver": "overlayfs"
+  }
+}

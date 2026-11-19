@@ -1,0 +1,11 @@
+{
+  "name": "observation-selector-returns-first-semantic-token",
+  "sourceSha256": "156604e161140da36d67f9697cca3419398ab0200ef1b6fae1d2c892f3c4b46c",
+  "sourceRestored": true,
+  "scope": "Read-only observation-tool mutation; no positive host or production adapter receives the wrong selection.",
+  "compileSucceeded": true,
+  "firstSemanticSelectionReturned": true,
+  "independentSecondTokenControlFailedAsExpected": true,
+  "buildLogSha256": "6a968685dea902be0b85ee205637a83e811243ef096018745abb86f380db1e5d",
+  "controlLogSha256": "52c0fdf9b73973d1585a7e180a3ac5985bca75af42543ab2c907659814704286"
+}

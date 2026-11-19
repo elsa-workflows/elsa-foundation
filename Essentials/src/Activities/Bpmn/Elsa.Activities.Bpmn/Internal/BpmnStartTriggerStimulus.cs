@@ -8,7 +8,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// <summary>
 /// Well-known trigger-binding metadata keys the BPMN start-trigger surface stamps. The extractor
 /// carries <see cref="TriggerStimulusDescriptor.Metadata"/> verbatim onto <c>WorkflowTriggerBinding.Metadata</c>,
-/// which the stimulus router forwards through the start path so <c>BpmnExecutionEngine.StartAsync</c> can
+/// which the stimulus router forwards through the start path so <c>BpmnProcessRuntime.StartAsync</c> can
 /// resolve which event-defined start element a trigger delivery targeted.
 /// </summary>
 public static class BpmnStartTrigger

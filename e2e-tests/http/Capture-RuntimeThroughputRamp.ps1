@@ -216,11 +216,23 @@ function Get-PostgresSample {
     $waitSql = "select coalesce(wait_event_type,'CPU/none') || ':' || coalesce(wait_event,'-') || ':' || coalesce(state,'-') as k, count(*) from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid() group by 1 order by 2 desc"
     $lockSql = "select count(*) from pg_locks where not granted"
     try {
-        $waits = @(& $psql.Source $PostgresConnectionString -At -F '|' -c $waitSql 2>$null | Where-Object { $_ } | ForEach-Object {
+        $waits = @(& $psql.Source $PostgresConnectionString -X -At -F '|' -c $waitSql 2>$null | Where-Object { $_ } | ForEach-Object {
             $kv = $_.Split('|'); [pscustomobject]@{ key = $kv[0]; count = [int]$kv[1] }
         })
-        $ungranted = [int](& $psql.Source $PostgresConnectionString -At -c $lockSql 2>$null | Select-Object -First 1)
+        if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL wait sampling unavailable.' }
+        $lockRows = @(& $psql.Source $PostgresConnectionString -X -At -c $lockSql 2>$null | Where-Object { $_ })
+        if ($LASTEXITCODE -ne 0 -or $lockRows.Count -ne 1) { throw 'PostgreSQL lock sampling unavailable.' }
+        $ungranted = [int]$lockRows[0]
         return [pscustomobject]@{ waits = $waits; ungrantedLocks = $ungranted }
+    } catch { return [pscustomobject]@{ error = $_.Exception.GetType().Name } }
+}
+
+function Get-PostgresWalSnapshot {
+    if ([string]::IsNullOrWhiteSpace($PostgresConnectionString) -or $null -eq $psql) { return $null }
+    try {
+        $raw = & $psql.Source $PostgresConnectionString -X -At -c "select row_to_json(w)::text from pg_stat_wal w" 2>$null
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($raw -join ''))) { throw 'WAL snapshot unavailable.' }
+        return ($raw -join '') | ConvertFrom-Json
     } catch { return [pscustomobject]@{ error = $_.Exception.GetType().Name } }
 }
 
@@ -290,7 +302,9 @@ foreach ($level in $Levels) {
                 '--counters', 'System.Runtime,Microsoft.AspNetCore.Hosting,Npgsql,Elsa.Workflows.Runtime.Admission')
         }
         $busyBefore = Get-HostLogBusyCount
+        $walBefore = Get-PostgresWalSnapshot
         $cpuBefore = Get-HostCpuSeconds
+        $measurementStartedAtUtc = [DateTime]::UtcNow.ToString('o')
         $samples = [System.Collections.Generic.List[object]]::new()
         $measured = [ElsaRuntimeThroughput2534.Driver]::RunAsync($client, "workflows/http/$route", $Payload, $ExpectedText, $level, $WindowSeconds)
         $sampleClock = [Diagnostics.Stopwatch]::StartNew()
@@ -304,9 +318,17 @@ foreach ($level in $Levels) {
             $null = $measured.Wait([TimeSpan]::FromSeconds($SampleIntervalSeconds))
         }
         $attempts = $measured.GetAwaiter().GetResult()
+        $sampleClock.Stop() # Observer shutdown and settlement must not dilute measured host CPU utilization.
+        $measurementEndedAtUtc = [DateTime]::UtcNow.ToString('o')
         $cpuAfter = Get-HostCpuSeconds
+        $walAfter = Get-PostgresWalSnapshot
         $busyAfter = Get-HostLogBusyCount
-        if ($null -ne $counterProcess) { $null = $counterProcess.WaitForExit(15000) }
+        $counterCompleted = $null
+        $counterExitCode = $null
+        if ($null -ne $counterProcess) {
+            $counterCompleted = $counterProcess.WaitForExit(15000)
+            if ($counterCompleted) { $counterExitCode = $counterProcess.ExitCode }
+        }
     } finally {
         $client.Dispose()
     }
@@ -328,6 +350,11 @@ foreach ($level in $Levels) {
 
     $step = [pscustomobject]@{
         clients = $level
+        measurementStartedAtUtc = $measurementStartedAtUtc
+        measurementEndedAtUtc = $measurementEndedAtUtc
+        measuredDriverElapsedSeconds = $sampleClock.Elapsed.TotalSeconds
+        postgresWalBefore = $walBefore
+        postgresWalAfter = $walAfter
         warmupAttempts = $warmup.Count
         measuredAttempts = $attempts.Count
         completedInWindow = $inWindow.Count
@@ -344,6 +371,8 @@ foreach ($level in $Levels) {
         hostCpuUtilizationOfAllCores = $hostCpuUtilization
         sqliteBusyOrConcurrencyLogLinesAdded = if ($null -ne $busyBefore -and $null -ne $busyAfter) { $busyAfter - $busyBefore } else { $null }
         dotnetCountersFile = if ($counterFile) { Split-Path -Leaf $counterFile } else { $null }
+        dotnetCountersCompleted = $counterCompleted
+        dotnetCountersExitCode = $counterExitCode
         samples = $samples.ToArray()
         settlement = $settlement
         validForSuccessfulThroughput = ($failedAll.Count -eq 0 -and $settlement.settled -and $settlement.notCompletedCount -eq 0 -and $settlement.incidentInstanceCount -eq 0)

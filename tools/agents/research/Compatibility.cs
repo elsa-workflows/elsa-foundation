@@ -1,0 +1,46 @@
+using System.Text.Json;
+using CShells;
+using CShells.Configuration;
+using CShells.DependencyInjection;
+using CShells.Lifecycle;
+using Elsa.Weaver.Anthropic;
+using Elsa.Weaver.Anthropic.Services;
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.GitHubCopilot;
+using Elsa.Events;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+var observations = new List<string>();
+foreach (var leaf in new[] { typeof(WeaverAnthropicFeature), typeof(WeaverGitHubCopilotFeature) })
+{
+    var services = new ServiceCollection();
+    services.AddLogging();
+    services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+    services.AddCShells(builder => builder.WithAssemblies(leaf.Assembly, typeof(EventsFeature).Assembly)
+        .AddShell("compatibility", shell => shell.WithFeature(leaf)));
+    await using var root = services.BuildServiceProvider();
+    var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync("compatibility");
+    await using var scope = shell.BeginScope();
+    var provider = scope.ServiceProvider.GetRequiredService<IWeaverProviderRegistry>().Active;
+    if (provider is null) throw new InvalidOperationException("Provider not composed: " + leaf.Name);
+    scope.ServiceProvider.GetRequiredService<IWeaverStreamingService>();
+    scope.ServiceProvider.GetRequiredService<IWeaverSessionService>();
+    observations.Add(leaf.Name + " activated and resolves current Agent contracts");
+    if (leaf == typeof(WeaverAnthropicFeature))
+    {
+        using var unusedClient = scope.ServiceProvider.GetRequiredService<IAnthropicChatClientFactory>().Create("fixture-unused", "fixture-model");
+        observations.Add("Current Anthropic SDK factory constructs IChatClient under resolved abstractions without network calls");
+    }
+}
+Console.WriteLine(JsonSerializer.Serialize(new
+{
+    observations,
+    maf = typeof(ChatClientAgent).Assembly.GetName().Version?.ToString(),
+    abstractions = typeof(IChatClient).Assembly.GetName().Version?.ToString(),
+    sourceProjectComposition = true,
+    packagedHost = false,
+    providerRequests = false
+}, new JsonSerializerOptions { WriteIndented = true }));

@@ -22,4 +22,7 @@
     <ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+  </ItemGroup>
 </Project>

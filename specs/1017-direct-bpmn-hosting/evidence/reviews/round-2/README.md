@@ -1,0 +1,14 @@
+# Complete PR author review round2 of6
+
+Reviewed head `bbb21b25b1a2fa40c900d4374c2a979ff21377f4`; merge base `931123c7ed45aa896539d857c6227a267d08b28f`. Three independent correctness/standards/acceptance lenses read the full PR and issue/PR discussion without seeing each other's outputs. Their reports and private diagnostics remain source-qualified. The author retained six findings:
+
+1. P2: Running-only model-parent admission rejects a supported first-decision completion, leaving native RunBpmn waiting while the same direct model completes. Keep the live-parent condition and support the first terminal decision/result atomically.
+2. P2: retiring a publication makes an identical retained direct-start replay return404. Replay exact caller/source/payload/pin identity before requiring a live publication for fresh admission; retain conflict and foreign-scope refusal.
+3. P2: three model-reader EF queries expose provider exceptions. Normalize at that boundary with operation/scope/execution/input context and original cause, preserving cancellation.
+4. P2: human-work inspection bypasses the owned Document read wrapper, exposing persisted JSON failure as a malformed-request error. Reuse the contextual owned-state reader.
+5. P2: unsupported profile refusal loses the process/element/type required by FR019. Retain the offending element in the closed-profile check.
+6. P3: three new CLR type names exceed E6's five-component hard cap. Shorten the redundant components, retain Checkpoint and every persisted/wire value; the public extension container is unpublished. No source-text test is required for renaming.
+
+No concrete identity-alias or in-scope downgrade finding survived. The correctness diagnostics execute Release4f46 products and unchanged older testing helpers; exact source equivalence to reviewedbbb is retained. Standards probes compile the exact implicated reviewed source with declared prebuilt dependencies. The acceptance diagnostic executes the older byte-identical driver. None is relabelled current-head HTTP-host or CI qualification. Original probe project paths are historical provenance; portable regressions added for the fixes must use normal repository builds and fresh private fixtures. Raw console/command logs are compressed byte-exact.
+
+Acceptance independently runs397 portable checks, zero skips; verifies104 frozen assets/22 baseline stores/16 writer hashes,39 repair assets including six final stores, and92 current Studio assets. These positive receipts do not cover the newly reproduced failures. Fixes, meaningful red-to-green regressions, affected qualification and complete-PR round3 remain due. Spec returns to In progress. Existing magnitude owner card/needs:decision, deferred GitGuardian39189012/scan, required exact-head checks and protected/post-merge delivery remain open. No broader program completion is inferred; #3242/Orleans/task-runner deferrals unchanged.

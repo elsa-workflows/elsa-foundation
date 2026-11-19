@@ -1,0 +1,19 @@
+{
+  "fixture": "runtime-efficiency-i67",
+  "completedAtUtc": "2026-11-01T20:51Z",
+  "precondition": "All capacity, monitor and timer archives downloaded and verified file-by-file before any removal.",
+  "runner": {
+    "vm": "elsa-p2382-98e7664aa3 (existing)",
+    "shareServerPid8625": "command line verified, stopped",
+    "guestFirewall": "owned INPUT jump and ELSA_EFF_I67_HTTP chain removed; INPUT not flushed; no DOCKER-USER rule had been added",
+    "container": "elsa-efficiency-i67-final-pg removed (name and task label matched); zero task-labelled containers remain; unrelated containers untouched",
+    "removed": ["/run/elsa-efficiency-i67-counters", "/mnt/elsa-runtime-efficiency-20261101-i67", "BASE/final-share", "FINAL/postgres-data", "FINAL/transfer-private", "FINAL/qualification-connection.json", "14 protected files by name under BASE"],
+    "retained": "Non-secret binaries and already-collected evidence under BASE (9.3 GB) on the deallocated disk; sibling elsa-program2382 untouched",
+    "listeners18080And15432": 0,
+    "finalPowerState": "PowerState/deallocated (initial state restored)"
+  },
+  "nsg": "Rule RuntimeEfficiencyI67PrivateFixture deleted; remaining rules semantically equal to the recorded original (AllowSshFromOperatorIpv4, DenyAllOtherInbound)",
+  "taskResourceGroup": "rg-elsa-efficiency-i67 (tag codex.task=runtime-efficiency-i67, 13 resources: four D2s_v6 workers, NICs, OS disks, evidence storage account) deleted; az group exists = false",
+  "subscriptionCheck": "No task-tagged resources and no running VMs remain in the subscription",
+  "local": "Task SSH key pair and evidence SAS file deleted; no private key or SAS token remains in the temporary evidence root"
+}

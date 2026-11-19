@@ -167,6 +167,34 @@ public sealed class RoleOwnedInputBindingContractTests
         Assert.NotEqual(hasher.ComputeHash(first), hasher.ComputeHash(changedTarget));
     }
 
+    /// <summary>
+    /// A result binding the server returned declares no scope and compiles to a reference without one. A scope an
+    /// existing document declares is kept, and one that is declared but unusable is still refused.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"producerNodeId":"node-fetch","projectionKey":"$result"}""", null)]
+    [InlineData("""{"producerNodeId":"node-fetch","projectionKey":"$result","producerScopeId":null}""", null)]
+    [InlineData("""{"producerNodeId":"node-fetch","projectionKey":"$result","producerScopeId":"scope:root"}""", "scope:root")]
+    [InlineData("""{"producerNodeId":"node-fetch","projectionKey":"$result","producerScopeId":" "}""", "refused")]
+    [InlineData("""{"producerNodeId":"node-fetch","projectionKey":"$result","producerScopeId":7}""", "refused")]
+    public void Compiler_ReadsTheActivityResultScopeAsOptional(string payload, string? expectedScope)
+    {
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = new InputDefinition("message", "Text", new TypeReference("String"), null, "Text", null, IsNullable: false);
+        using var json = JsonDocument.Parse(payload);
+        var value = new ArgumentValue(json.RootElement.Clone(), "ActivityResult");
+
+        if (expectedScope == "refused")
+        {
+            Assert.Contains("producerScopeId", Assert.Throws<ArgumentException>(() => compiler.Compile("node-write", input, value)).Message);
+            return;
+        }
+
+        var reference = compiler.Compile("node-write", input, value).ActivityResult!;
+        Assert.Equal("node-fetch", reference.ProducerExecutableNodeId);
+        Assert.Equal(expectedScope, reference.ProducerScopeId);
+    }
+
     [Fact]
     public void Compiler_EmitsAliasTypedCanonicalLiteralWithoutClrTypeMetadata()
     {

@@ -1,0 +1,70 @@
+{
+  "passed": true,
+  "phase": "finished",
+  "controls": [
+    {
+      "name": "actual-parent-commit-source-state",
+      "exitCode": 0,
+      "databaseSha256": "fb9a71efdd421321f18a0d393cc7531210351d6429752e8b44261a25d61c1c4e",
+      "outputSha256": "d4762efdb125a772b485f701f274d5d88c9d0490d7d4dfb52d6e50c6a22e74d6",
+      "unchanged": true
+    },
+    {
+      "name": "wrong-snapshot-hash",
+      "exitCode": 2,
+      "databaseSha256": "fb9a71efdd421321f18a0d393cc7531210351d6429752e8b44261a25d61c1c4e",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-complete-api-pin",
+      "exitCode": 2,
+      "databaseSha256": "fb9a71efdd421321f18a0d393cc7531210351d6429752e8b44261a25d61c1c4e",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-marker-sourceCommitId",
+      "exitCode": 2,
+      "databaseSha256": "fb9a71efdd421321f18a0d393cc7531210351d6429752e8b44261a25d61c1c4e",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-marker-fencingToken",
+      "exitCode": 2,
+      "databaseSha256": "fb9a71efdd421321f18a0d393cc7531210351d6429752e8b44261a25d61c1c4e",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-marker-scope",
+      "exitCode": 2,
+      "databaseSha256": "fb9a71efdd421321f18a0d393cc7531210351d6429752e8b44261a25d61c1c4e",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "owed-physical-orphan-hidden-behind-canonical-source",
+      "exitCode": 2,
+      "databaseSha256": "7a5c191b63e6aa448daea2bbf5ea3385af6e9055915648265088cd5e89ce4aee",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "actual-calling-dispatch-loses-declaration",
+      "exitCode": 2,
+      "databaseSha256": "1ffed918927c51bf9bec1a83ed012cc02e3f55593b8b23969e507c46b0da7fc5",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "actual-caller-loses-committed-inbox",
+      "exitCode": 2,
+      "databaseSha256": "eda91dd4a11a62c72525bfbfc247aa77ec507665c2bd9fd768d2fe1eee73fa6a",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    }
+  ],
+  "originalSnapshotUnchanged": true
+}

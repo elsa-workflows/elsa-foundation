@@ -3,8 +3,9 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>
 /// A durable record of a scheduler work handler crash. When a handler throws, the drainer no longer drops the
 /// already-dequeued work item silently: it records the fault here (honoring <see cref="Contracts.IRuntimeDomainRetryPolicy"/>)
-/// so an operator or a recovery pump can inspect poisoned work and, when the policy asks to retry, the item is
-/// re-enqueued instead of lost.
+/// so an operator or a recovery pump can inspect poisoned work. A retry the queue holds is
+/// <see cref="RuntimeSchedulerPoisonDisposition.RetryScheduled"/>; everything else is
+/// <see cref="RuntimeSchedulerPoisonDisposition.Poisoned"/>. <c>docs/runtime-fault-behavior.md</c> maps each case.
 /// </summary>
 public sealed record RuntimeSchedulerPoisonRecord
 {
@@ -77,9 +78,19 @@ public sealed record RuntimeSchedulerPoisonRecord
 
 public enum RuntimeSchedulerPoisonDisposition
 {
-    /// <summary>The retry policy declined to retry; the work item is parked for inspection/intervention.</summary>
+    /// <summary>
+    /// No retry is held: the policy declined, threw, or asked for a <c>RetryAfter</c> that was not released. The work
+    /// item is parked for inspection/intervention.
+    /// </summary>
     Poisoned,
 
-    /// <summary>The retry policy asked to retry; the work item was (or will be) re-driven at <c>NextRetryAt</c>.</summary>
+    /// <summary>
+    /// The retry policy asked to retry and the queue holds the retry. <c>RetryNow</c> re-enqueued the work item.
+    /// <c>RetryAfter</c> released it until <c>NextRetryAt</c>, after which the resumption sweep re-drives it; until then
+    /// it holds back the execution's later queued work, because the queue serves each execution in order. Any
+    /// <c>RetryAfter</c> that was not released is recorded as <see cref="Poisoned"/> instead, for example when the queue
+    /// cannot delay it, no resumption sweep is composed, or the queue refuses the release; a policy that throws is
+    /// <see cref="Poisoned"/> too. <c>docs/runtime-fault-behavior.md</c> lists every case.
+    /// </summary>
     RetryScheduled
 }

@@ -19,7 +19,7 @@ namespace Elsa.Studio.Tests.ExtensionBuilder;
 /// gates, and the fail-closed zero-outbound guarantees are asserted against the wire, not mocked internals. The
 /// theories parameterize over the operation table itself, so a new table row is covered the moment it is added.
 /// </summary>
-public sealed class StudioExtensionBuilderBridgeTests : IAsyncDisposable
+public sealed class StudioExtensionBuilderBridgeTests : IAsyncLifetime
 {
     private const string ManagementKey = BridgeTestHost.ManagementKey;
     private const string BrowserBearer = "browser-bearer-never-for-the-backend";
@@ -497,7 +497,9 @@ public sealed class StudioExtensionBuilderBridgeTests : IAsyncDisposable
         return _app.GetTestClient();
     }
 
-    public async ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         if (_app is not null)
             await _app.DisposeAsync();

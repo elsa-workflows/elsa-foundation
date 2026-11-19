@@ -15,11 +15,9 @@
     B. Error boundary: publishes a CHILD that faults (Fault activity), then a BPMN parent whose
        callActivity carries an error boundaryEvent
        [startEvent -> callActivity -> end-ok; b-error(attached) -> task(recover) -> end-error].
-       Once #1031 is fixed, a faulted child completes the DispatchWorkflow node with outcome 'Faulted'
-       (never a fault of the parent), the engine's spec-133 D3 translation routes the error boundary,
-       and the parent completes via the recover path with no incidents. Until then, the script accepts
-       only the documented poison-paused state: child Running with a system-authored
-       WaitForIntervention/PoisonedSchedulerWork outcome and parent Running.
+       The faulted child completes the DispatchWorkflow node with outcome 'Faulted'. The released
+       interpreter routes the catch-all error boundary, while the child keeps its original blocking
+       fault incident. A Running/poison-paused child is a failure, never an accepted result.
 
     Requires the DispatchWorkflow + Bpmn features composed in the server (default Elsa.Workbench shells.json
     has 'ActivitiesBpmn' + 'ActivitiesDispatchWorkflowRuntime'/'ActivitiesDispatchWorkflowDesign').
@@ -30,7 +28,9 @@
 param(
     [string] $BaseUrl  = "http://localhost:5095",
     [string] $Username = "admin",
-    [string] $Password = "Password123!"
+    [string] $Password = "Password123!",
+    [string] $EvidencePath,
+    [string] $SourceRevision = "unspecified"
 )
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 
@@ -74,13 +74,15 @@ function New-DispatchNode {
 
 # Find the (single) child instance dispatched for an artifact, then wait for its terminal status.
 function Wait-ChildInstance {
-    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)][string] $ArtifactId)
+    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)][string] $ArtifactId, [Parameter(Mandatory)][string] $ParentId)
     $child = $null
     for ($i = 0; $i -lt 60 -and -not $child; $i++) {
         Start-Sleep -Milliseconds 500
         $list = Invoke-RestMethod "$($Ctx.BaseUrl)/runtime/workflows/instances?artifactId=$ArtifactId" -WebSession $Ctx.Session
         $items = if ($list.items) { $list.items } elseif ($list -is [array]) { $list } else { $list }
-        $child = $items | Where-Object { $_.artifactId -eq $ArtifactId } | Select-Object -First 1
+        $matches = @($items | Where-Object { $_.artifactId -ceq $ArtifactId -and $_.parentWorkflowExecutionId -ceq $ParentId })
+        if ($matches.Count -gt 1) { throw 'More than one actual child matches this exact dispatch parent and pin.' }
+        $child = if ($matches.Count -eq 1) { $matches[0] } else { $null }
     }
     if (-not $child) { throw "No dispatched child instance surfaced for artifact $ArtifactId." }
     Wait-WorkflowInstance -Ctx $Ctx -ExecutionId $child.workflowExecutionId
@@ -92,6 +94,10 @@ function Get-NodeOutcomes {
     (@($Instance.activities | Where-Object { $_.executableNodeId -eq $NodeId }).outcomeNames) -join ','
 }
 
+$receipt = @{ schemaVersion = 1; sourceRevision = $SourceRevision; passed = $false; cases = @(); failures = @() }
+$parentInst = $null; $childInst = $null; $parentInstB = $null; $childInstB = $null
+$failures = @()
+try {
 Write-Host "== BPMN callActivity -> real dispatched child (spec 133) ==  -> $BaseUrl" -ForegroundColor Cyan
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 $writeLine   = Invoke-Step "resolve WriteLine"        { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.WriteLine' }
@@ -100,7 +106,6 @@ $dispatch    = Invoke-Step "resolve DispatchWorkflow" { Get-ActivityVersionId -C
 $bpmnProcess = Invoke-Step "resolve BpmnProcess"      { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Bpmn.Activities.BpmnProcess' }
 $token = Get-Random
 $failures = @()
-$scenarioBKnownIssue = $false
 
 # ============================================================================================
 # Scenario A - happy path: waited callActivity completes through the child's real completion
@@ -144,21 +149,24 @@ Write-Host "[observe] parent A instance:"
 Show-WorkflowInstance -Instance $parentInst
 
 Write-Host "[observe] child A instance:"
-$childInst = Invoke-Step "await child A instance" { Wait-ChildInstance -Ctx $ctx -ArtifactId $childPub.artifactId }
+$childInst = Invoke-Step "await child A instance" { Wait-ChildInstance -Ctx $ctx -ArtifactId $childPub.artifactId -ParentId $run.workflowExecutionId }
 Show-WorkflowInstance -Instance $childInst
 
 $callOutcome = Get-NodeOutcomes -Instance $parentInst -NodeId "node-call"
 if ($childInst.instance.status -ne 'Completed')            { $failures += "A: child instance status '$($childInst.instance.status)' (expected Completed)" }
-if ($callOutcome -notmatch 'Completed')                    { $failures += "A: dispatch node outcome '$callOutcome' (expected Completed)" }
-if ((Get-NodeRunCount -Instance $parentInst -NodeId "node-after") -lt 1) { $failures += "A: post-call task 'node-after' never ran" }
+if ($callOutcome -cne 'Completed')                    { $failures += "A: dispatch node outcome '$callOutcome' (expected Completed)" }
+if ((Get-NodeRunCount -Instance $parentInst -NodeId "node-after") -ne 1) { $failures += "A: post-call task 'node-after' did not run exactly once" }
 if ($parentInst.instance.status -ne 'Completed')           { $failures += "A: parent status '$($parentInst.instance.status)' (expected Completed)" }
+if (@($parentInst.activities | Where-Object executableNodeId -CEQ 'node-call').Count -ne 1 -or
+    $childInst.instance.parentWorkflowExecutionId -cne $run.workflowExecutionId -or $childInst.instance.artifactHash -cne $childPub.artifactHash -or
+    @($parentInst.incidents).Count -ne 0 -or @($childInst.incidents).Count -ne 0) { $failures += 'A: exact call identity, child pin or incident-free completion changed.' }
 if ($failures.Count -eq 0) { Write-Host "Scenario A OK - parent waited on the real child and completed via 'Completed'." -ForegroundColor Green }
 
 # ============================================================================================
-# Scenario B - #1031 ratchet: poison-paused today; error-boundary routing once fixed
+# Scenario B - strict ordinary-fault identity and error-boundary routing
 # ============================================================================================
 Write-Host ""
-Write-Host "-- Scenario B: child fault -> #1031 poison ratchet or error-boundary routing --" -ForegroundColor Cyan
+Write-Host "-- Scenario B: child fault -> truthful error-boundary routing --" -ForegroundColor Cyan
 
 $faultRoot = New-ActivityNode -NodeId "child-fault" -VersionId $faultAct -Inputs @(
     (New-LiteralInput -ReferenceKey "message" -Value "CHILD faulted deliberately. token=$token")
@@ -198,28 +206,25 @@ $childExecutionIdB = $null
 $childInstB = $null
 $parentInstB = $null
 $childIncidentsB = @()
-$poisonIncidentB = $null
 $observationDeadlineB = (Get-Date).AddSeconds(15)
 do {
     Start-Sleep -Milliseconds 500
     if (-not $childExecutionIdB) {
         $children = Invoke-RestMethod "$($ctx.BaseUrl)/runtime/workflows/instances?artifactId=$($faultPub.artifactId)" -WebSession $ctx.Session
         $childItems = if ($children.items) { $children.items } elseif ($children -is [array]) { $children } else { $children }
-        $childExecutionIdB = ($childItems | Where-Object { $_.artifactId -eq $faultPub.artifactId } | Select-Object -First 1).workflowExecutionId
+        $matches = @($childItems | Where-Object { $_.artifactId -ceq $faultPub.artifactId -and $_.parentWorkflowExecutionId -ceq $runB.workflowExecutionId })
+        if ($matches.Count -gt 1) { throw 'The ordinary-fault dispatch matched more than one exact child.' }
+        if ($matches.Count -eq 1) { $childExecutionIdB = $matches[0].workflowExecutionId }
     }
 
     if ($childExecutionIdB) {
         $childInstB = Get-WorkflowInstance -Ctx $ctx -ExecutionId $childExecutionIdB
         $parentInstB = Get-WorkflowInstance -Ctx $ctx -ExecutionId $runB.workflowExecutionId
         $childIncidentsB = @($childInstB.incidents)
-        $poisonIncidentB = @($childIncidentsB | Where-Object {
-            $_.status -eq 'Blocking' -and
-            $_.resolutionOutcome.actionKind -eq 'WaitForIntervention' -and
-            $_.resolutionOutcome.systemSource -eq 'PoisonedSchedulerWork'
-        }) | Select-Object -First 1
+
     }
 } while ((-not $childInstB -or
-          ($childInstB.instance.status -ne 'Faulted' -and -not $poisonIncidentB)) -and
+          $childInstB.instance.status -cne 'Faulted') -and
          (Get-Date) -lt $observationDeadlineB)
 
 if (-not $childInstB -or -not $parentInstB) {
@@ -233,34 +238,41 @@ if (-not $childInstB -or -not $parentInstB) {
     if ($childInstB.instance.status -eq 'Faulted') {
         $parentInstB = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $runB.workflowExecutionId -TimeoutSeconds 120
         $callOutcomeB = Get-NodeOutcomes -Instance $parentInstB -NodeId "node-call"
-        if ($callOutcomeB -notmatch 'Faulted')                      { $failures += "B: dispatch node outcome '$callOutcomeB' (expected Faulted)" }
-        if ((Get-NodeRunCount -Instance $parentInstB -NodeId "node-recover") -lt 1) { $failures += "B: boundary path task 'node-recover' never ran" }
+        if ($callOutcomeB -cne 'Faulted')                      { $failures += "B: dispatch node outcome '$callOutcomeB' (expected Faulted)" }
+        if ((Get-NodeRunCount -Instance $parentInstB -NodeId "node-recover") -ne 1) { $failures += "B: boundary path task 'node-recover' did not run exactly once" }
         if ($parentInstB.instance.status -ne 'Completed')           { $failures += "B: parent status '$($parentInstB.instance.status)' (expected Completed via the boundary path)" }
         if ($parentInstB.instance.incidentCount -gt 0)              { $failures += "B: parent surfaced $($parentInstB.instance.incidentCount) incident(s) (expected none - outcome translation, no seam B)" }
-        if (-not ($failures -match '^B:')) { Write-Host "Scenario B OK - #1031 is fixed: faulted child routed the error boundary; parent completed incident-free." -ForegroundColor Green }
-    } elseif ($childInstB.instance.status -eq 'Running' -and $childIncidentsB.Count -eq 1 -and $poisonIncidentB) {
-        $scenarioBKnownIssue = $true
-        $callOutcomeB = Get-NodeOutcomes -Instance $parentInstB -NodeId "node-call"
-        if ($parentInstB.instance.status -ne 'Running') { $failures += "B: parent status '$($parentInstB.instance.status)' (expected Running while #1031 is poison-paused)" }
-        if ($callOutcomeB) { $failures += "B: dispatch node produced outcome '$callOutcomeB' while #1031 is poison-paused (expected none)" }
-        if ((Get-NodeRunCount -Instance $parentInstB -NodeId "node-recover") -ne 0) { $failures += "B: boundary path ran while #1031 is poison-paused" }
-        if ($parentInstB.instance.incidentCount -ne 0) { $failures += "B: parent surfaced $($parentInstB.instance.incidentCount) incident(s) while #1031 is poison-paused (expected none)" }
-        Write-Host "KNOWN ISSUE #1031 - child is Running with a PoisonedSchedulerWork/WaitForIntervention outcome; parent remains Running. Error-boundary routing will ratchet to strict assertions when the child reaches Faulted." -ForegroundColor Yellow
+        $faultNode = @($childInstB.activities | Where-Object { $_.executableNodeId -ceq 'child-fault' -and $_.status -ceq 'Faulted' })
+        $faultActivityId = if ($faultNode.Count -eq 1) { $faultNode[0].activityExecutionId } else { $null }
+        $original = @($childInstB.incidents | Where-Object { $faultActivityId -and $_.workflowExecutionId -ceq $childExecutionIdB -and
+            $_.activityExecutionId -ceq $faultActivityId -and $_.message -ceq "CHILD faulted deliberately. token=$token" -and
+            $_.resolutionOutcome.actionKind -ceq 'FaultWorkflow' })
+        if ($faultNode.Count -ne 1 -or $original.Count -ne 1 -or $childInstB.instance.artifactHash -cne $faultPub.artifactHash -or
+            $childInstB.instance.parentWorkflowExecutionId -cne $runB.workflowExecutionId -or
+            @($parentInstB.activities | Where-Object executableNodeId -CEQ 'node-call').Count -ne 1 -or
+            @($childInstB.incidents | Where-Object { $_.resolutionOutcome.systemSource -ceq 'PoisonedSchedulerWork' }).Count -ne 0) {
+            $failures += 'B: original child fault/incident, exact dispatch identity or completed call truth changed.'
+        }
+        if (-not ($failures -match '^B:')) { Write-Host "Scenario B OK - the exact faulted child retained its incident; its call routed the boundary once and parent completed incident-free." -ForegroundColor Green }
     } else {
-        $failures += "B: unexpected child status '$($childInstB.instance.status)' with $($childIncidentsB.Count) incident(s) and parent status '$($parentInstB.instance.status)' (expected Faulted, or Running with exactly one PoisonedSchedulerWork/WaitForIntervention incident)"
+        $failures += "B: child status '$($childInstB.instance.status)' (expected Faulted; poison-paused or Running is a failure)"
     }
 }
 
 # ============================================================================================
 Write-Host ""
 if ($failures.Count -eq 0) {
-    if ($scenarioBKnownIssue) {
-        Write-Host "SUCCESS - BPMN callActivity completed the happy path and observed the accepted #1031 poison-paused state for the faulting child." -ForegroundColor Yellow
-    } else {
-        Write-Host "SUCCESS - BPMN callActivity ran a REAL dispatched child end-to-end: waited completion routed the normal flow; a faulted child routed the error boundary." -ForegroundColor Green
-    }
+    $receipt.passed = $true
+    Write-Host "SUCCESS - waited call completion and strict ordinary-fault boundary routing passed." -ForegroundColor Green
 } else {
     Write-Host "FAILED assertions:" -ForegroundColor Red
     $failures | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
-    exit 1
+    throw "BPMN callActivity actual-host assertions failed."
+}
+
+} finally {
+    $receipt.cases = @(@{ kind = 'ordinary-success'; parent = $parentInst; child = $childInst },
+        @{ kind = 'ordinary-fault'; parent = $parentInstB; child = $childInstB })
+    $receipt.failures = @($failures)
+    if ($EvidencePath) { $receipt | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $EvidencePath }
 }

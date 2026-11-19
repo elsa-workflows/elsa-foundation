@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "task": "T044",
+  "sourceParentCommit": "c2bb63305f4713651e36dbe19fc886cfbc688950",
+  "sourceFilesSha256": {
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Activities/BpmnProcess.cs": "56bf19a9a18381212eb55cb2d6bbe2b97149372559fce83eb8a6bcb397a387d0",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Contracts/IBpmnProcessRuntime.cs": "6577c7b44b7cb21829cde7e4c360ddf887926e2cb8f5a1c92bcc068230157f5c",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnControlProtocol.cs": "955e3c3161e34345dcdf63aca43d9addc5e588cc657c79ce7084ba50c10bc60d",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationEnricher.cs": "304f300ffc0b4d5e44d534c836ca079e05e2287e2b4b301b39c623bb2433a4fb",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "4976b49110fdb49887096dd6562c7a7b16503a33404f142502c24d60260e23b5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "4e88471da1a0bc40a84d228729d5e7642f0a2727080a919a191ee28e62e65cf6",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundary.cs": "3abc10cb37854b3016ba9eae13c18aa9525fd71944f3827fba33853b00a126d4",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityAttemptActivationClaimer.cs": "1ff1e4d57f32718b3cc92f4ffdaa74a954a770abe552704c35650211671de31c",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/StructuralCallbackEvaluation.cs": "46f814ea871e7c21310fa308509b8262909c382a61fdc89537aeeeef9c18978b",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs": "2338356223bc08484d8774c29e3b999394a36d049af0381c404d4f72e4ec006b",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs": "e5b927efaf48caee929132475b7b0062ff30bba973746a43df4f9e5e6d9105ae",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/RuntimeSchedulerWorkUnavailableException.cs": "9f6c0014b3d9d784ebf96a2d9e114f58e067fe293169cd139d5dd0aac5e46ceb",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs": "50f7b7dc8ecd9ce71b96d1ba995f4628679232caabfd1643403ebfae926d90cd",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingWorkflowSchedulerWorkQueue.cs": "9ed0c9b10ffa91d52e27748a012f63d8666f812a54bdb1e560dcf8f4d31c0edf",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "fb5bc4bae1e8803466b0c6cd8c265d0de5304592fcb0ba6b79f9ae871162fd28",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/RuntimeUnavailableWork.cs": "4e874579396c811de78bc4548e09e51f4312e7b25751eb71721235b01cf6c616",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs": "dd90f92b64de4058305d98518af43bf2ab2541443ba5508c625771608a9f3c31",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnCalledControlAdapterTests.cs": "21dc20e3abee0f260c70b06240c2262b45672957ff1847259a0ef1eb61e36189",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnRuntimeFixture.cs": "e359704394ca16a5dc38d9f273c4e777c355f8b040227b36f23a0f663a44fd4b",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlEnrichmentAvailabilityTests.cs": "c6d50292631104578dc62971a192f9b6bcd17755762239df7e1619291c22c8db",
+    "Essentials/tests/Workflows/Runtime/Tests/CoalescingResumeDurableClaimBoundaryTests.cs": "67158df15fd589705aac5c1f36e552e919053f74ff529275692f2ba47f06a72b",
+    "Essentials/tests/Workflows/Runtime/Tests/CoalescingSchedulerVisibilityTests.cs": "4232b2eeea6235040c89ed6ed9b05f60e0fa607396014ef9d05a80607c2914cc",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs": "74acdc749b49c5ef7452f62749cdccc4211d626fb58ca749908d4f5e06e6befc"
+  },
+  "checks": [
+    {
+      "name": "Bpmn",
+      "command": "dotnet test Essentials/tests/Activities/Bpmn/Tests --no-restore",
+      "passed": 297,
+      "failed": 0
+    },
+    {
+      "name": "DispatchWorkflow",
+      "command": "dotnet test Essentials/tests/Activities/DispatchWorkflow/Tests --no-restore",
+      "passed": 339,
+      "failed": 0
+    },
+    {
+      "name": "ActivitiesRuntime",
+      "command": "dotnet test Essentials/tests/Activities/Runtime/Tests --no-restore",
+      "passed": 664,
+      "failed": 0
+    },
+    {
+      "name": "WorkflowRuntime",
+      "command": "dotnet test Essentials/tests/Workflows/Runtime/Tests --no-restore",
+      "passed": 2661,
+      "failed": 0
+    },
+    {
+      "name": "RuntimeEF",
+      "command": "dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests --no-restore",
+      "passed": 1022,
+      "failed": 0
+    },
+    {
+      "name": "BpmnInterchange",
+      "command": "dotnet test Essentials/tests/Activities/Bpmn/Interchange/Tests --no-restore",
+      "passed": 130,
+      "failed": 0
+    }
+  ],
+  "mutations": [
+    {
+      "name": "retirement",
+      "exitCode": 1,
+      "summary": [
+        "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 539 ms - Elsa.Activities.Bpmn.Tests.dll (net10.0)"
+      ]
+    },
+    {
+      "name": "premature-fold",
+      "exitCode": 1,
+      "summary": [
+        "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 494 ms - Elsa.Activities.Bpmn.Tests.dll (net10.0)"
+      ]
+    },
+    {
+      "name": "claim-consumed",
+      "exitCode": 1,
+      "summary": [
+        "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 455 ms - Elsa.Activities.Bpmn.Tests.dll (net10.0)"
+      ]
+    },
+    {
+      "name": "accepted-cleanup",
+      "exitCode": 1,
+      "summary": [
+        "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 27 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)"
+      ]
+    },
+    {
+      "name": "terminal-source",
+      "exitCode": 1,
+      "summary": [
+        "Failed!  - Failed:     1, Passed:     3, Skipped:     0, Total:     4, Duration: 616 ms - Elsa.Activities.DispatchWorkflow.Tests.dll (net10.0)"
+      ]
+    }
+  ],
+  "unsupportedOverlayNegativeControl": {
+    "failedBeforeCapabilityGuard": 6,
+    "passedAfter": 6,
+    "scope": "In-process orchestrator and reopened provider; not fresh-EF called-workflow transport proof."
+  },
+  "authoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "componentReview": {
+    "correctness": "clean",
+    "standards": "clean",
+    "acceptance": "clean",
+    "fullPrRounds": 0
+  },
+  "openGates": [
+    "T045 actual admitted host and fresh-EF recovery/concurrent claims",
+    "T024 local combined outcomes",
+    "T029 ordinary compensation",
+    "FR-015 durable broadcast cohort plan/tasks/implementation",
+    "duplicate semantics deletion and API guards",
+    "final current host and Studio verification",
+    "full PR review, exact-head required checks and resulting-main verification",
+    "ADR0063 acceptance after delivery",
+    "production #2898 and #2907"
+  ]
+}

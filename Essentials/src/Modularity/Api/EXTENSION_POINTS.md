@@ -19,7 +19,7 @@ still return 200 for a shell with skipped feature requests; use the catalog flag
 | Contract | Default impl | Override when |
 |---|---|---|
 | `IShellFeatureConfigurationStore` | `JsonShellFeatureConfigurationStore` (`Elsa.Modularity.Api`) | The host stores shell configuration somewhere other than `shells.json`. |
-| `IShellReloader` | `ShellReloader` (`Elsa.Modularity.Api`) | The host needs custom reload semantics or shell inference. |
+| `IShellReloader` | `ShellReloader` (`Elsa.Modularity.Api`); a failed reload returns 0 and is logged at Error with its cause (the previous generation keeps serving); only CShells' "Configuration changed … Retry activation or reload." refusal, raised when the file watcher's reload lands during composition, is retried, at most three attempts in all, each after a 300 ms pause | The host needs custom reload semantics or shell inference. |
 | `IRuntimeFeatureCatalogAccessor` | `RuntimeFeatureCatalogAccessor` (`Elsa.Modularity.Nuplane`) | The host uses another runtime catalog source instead of CShells feature assembly providers. |
 | `IRuntimeFeatureCatalogRefresher` | `RuntimeFeatureCatalogRefresher` (`Elsa.Modularity.Nuplane`) | The host needs custom refresh/reload reporting semantics. |
 

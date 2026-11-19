@@ -14,7 +14,7 @@ namespace Elsa.Persistence.EntityFramework.BindingDriftTests;
 /// project references all four engines at the versions <c>Directory.Packages.props</c> pins and binds against them,
 /// so such an upgrade fails CI instead.
 /// </summary>
-public sealed class EfRelationalProviderBindingDriftTests
+public sealed partial class EfRelationalProviderBindingDriftTests
 {
     private const string HistoryTable = "__EFMigrationsHistory_Drift";
     private const string MigrationsAssembly = "Elsa.Drift.Migrations";

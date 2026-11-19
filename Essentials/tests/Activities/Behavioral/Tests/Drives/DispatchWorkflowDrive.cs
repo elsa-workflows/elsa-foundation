@@ -6,6 +6,7 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Events;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resumption;
 using DispatchWorkflowActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
@@ -150,6 +151,7 @@ public sealed class DispatchWorkflowDrive : IActivityDrive
 
     private static WorkflowExecutionHarness NewHarness(string caseId, int childStartMaxDeliveryAttempts = 4) =>
         WorkflowExecutionHarness.Create()
+            .WithFeature(services => new EventsFeature().ConfigureServices(services))
             .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
             .WithFeature(services => new DispatchWorkflowRuntimeFeature
             {

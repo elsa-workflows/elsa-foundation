@@ -1,7 +1,7 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StudioAiContributionApi } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import {
   describeWorkflowError,
   normalizeWorkflowError
@@ -418,7 +418,7 @@ describe("accepted test runs with incidents", () => {
     expect(onOpenRun).toHaveBeenCalledWith("run-legacy", "issues");
   });
 
-  it("keeps the Run ID link on the default timeline destination", () => {
+  it("keeps Open run on the default timeline destination", () => {
     const onOpenRun = vi.fn();
     const testRun: WorkflowTestRunView = {
       testRunId: "test-run-generic",
@@ -431,7 +431,7 @@ describe("accepted test runs with incidents", () => {
     flushSync(() => root.render(<WorkflowRuntimePanel testRun={testRun} onOpenRun={onOpenRun} />));
 
     const runLink = [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find(button => button.textContent === "run-generic");
+      .find(button => button.textContent === "Open run");
     flushSync(() => runLink?.click());
 
     expect(onOpenRun).toHaveBeenCalledWith("run-generic");
@@ -522,14 +522,14 @@ describe("useAiProviderAvailability", () => {
     };
   }
 
-  function Probe({ ai }: { ai: StudioAiContributionApi }) {
+  function Probe({ ai }: { ai: StudioWeaverRegistry }) {
     const available = useAiProviderAvailability(ai);
     return <span data-testid="value">{available ? "available" : "unavailable"}</span>;
   }
 
   it("reflects the current value and reacts to provider availability changes", () => {
     const providerAvailability = createAvailabilityStub(false);
-    const ai = { providerAvailability } as unknown as StudioAiContributionApi;
+    const ai = { providerAvailability } as unknown as StudioWeaverRegistry;
 
     flushSync(() => root.render(<Probe ai={ai} />));
     expect(container.querySelector("[data-testid='value']")?.textContent).toBe("unavailable");

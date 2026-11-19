@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Data.Common;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -19,6 +22,155 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfWorkflowExecutionDeletionStoreTests
 {
+    [Fact]
+    public async Task Direct_running_delete_captures_ownership_before_final_control_dependency_read()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var probe = new AdvanceOwnershipAfterCapture();
+        var services = Compose(database.ConnectionString);
+        services.AddScoped<RuntimeDbContext>(_ => new RuntimeSqliteDbContext(
+            new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(database.ConnectionString)
+                .AddInterceptors(probe).Options));
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+        await context.Database.EnsureCreatedAsync();
+        var executions = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
+        await executions.SaveAsync(Execution("running-delete-fence", WorkflowExecutionStatus.Running));
+        await scope.ServiceProvider.GetRequiredService<IExecutionLivenessStateStore>().SaveAsync(new ExecutionLivenessState(
+            RuntimeExecutionOwnershipStateId.For("running-delete-fence"), "running-delete-fence", null, null, null, null));
+        probe.Enabled = true;
+        Assert.False(await executions.DeleteAsync("running-delete-fence"));
+        probe.Enabled = false;
+        Assert.Equal(3, probe.Advances);
+        Assert.NotNull(await executions.FindAsync("running-delete-fence"));
+        Assert.False(await executions.IsDeletionTombstonedAsync("running-delete-fence"));
+        await context.SaveChangesAsync();
+        Assert.False(await executions.IsDeletionTombstonedAsync("running-delete-fence"));
+    }
+
+    // Mechanism control: advance the persisted provider revision after the deletion stages its snapshot,
+    // without changing the workflow row. This is not a concurrent-host/recovery qualification.
+    private sealed class AdvanceOwnershipAfterCapture : DbCommandInterceptor
+    {
+        public bool Enabled { get; set; }
+        public int Advances { get; private set; }
+        private bool _ownershipRead;
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (!Enabled || !command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)) return result;
+            if (command.CommandText.Contains(RuntimeOperationalStateEfModule.ExecutionLivenessTableName, StringComparison.Ordinal)) _ownershipRead = true;
+            if (!_ownershipRead || !command.CommandText.Contains(RuntimeWorkflowDispatchEfModule.TableName, StringComparison.Ordinal)) return result;
+            _ownershipRead = false;
+            await using var advance = command.Connection!.CreateCommand();
+            advance.Transaction = command.Transaction;
+            advance.CommandText = $"UPDATE {RuntimeOperationalStateEfModule.ExecutionLivenessTableName} SET Revision = Revision + 1";
+            Assert.Equal(1, await advance.ExecuteNonQueryAsync(cancellationToken));
+            Advances++;
+            return result;
+        }
+    }
+
+    [Fact]
+    public async Task Deletion_tombstone_provider_read_failure_retains_context_and_original_cause()
+    {
+        var cause = new SqliteException("Injected tombstone read failure.", 1);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
+            .UseSqlite("Data Source=:memory:").AddInterceptors(new TombstoneReadFailure(cause)).Options);
+        var store = new EfWorkflowExecutionStateStore(context, new FixedAccessor("scope-a"), new NoopContinuationCodec());
+        var failure = await Assert.ThrowsAsync<WorkflowExecutionStateEntityFrameworkPersistenceException>(async () =>
+            await store.IsDeletionTombstonedAsync("control-parent"));
+        Assert.Same(cause, failure.InnerException);
+        Assert.Contains("reading deletion tombstone for", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("control-parent", failure.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class TombstoneReadFailure(Exception cause) : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<InterceptionResult<DbDataReader>>(cause);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Control_dependencies_retain_both_histories_until_successful_delivery_and_caller_first_deletion(bool finalFailure)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var provider = Compose(database.ConnectionString).BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        await services.GetRequiredService<RuntimeDbContext>().Database.EnsureCreatedAsync();
+        var executions = services.GetRequiredService<IWorkflowExecutionStateStore>();
+        var deletion = services.GetRequiredService<IWorkflowExecutionDeletionStore>();
+        var dispatches = services.GetRequiredService<IWorkflowDispatchStore>();
+        var outbox = services.GetRequiredService<EfRuntimePostCommitOutboxStore>();
+        var delivery = (IRuntimePostCommitOutboxStore)outbox;
+        var link = ControlLink("control-parent");
+        await executions.SaveAsync(Execution("control-parent", WorkflowExecutionStatus.Completed));
+        var child = Execution(link.ChildWorkflowExecutionId, WorkflowExecutionStatus.Running) with
+        {
+            ParentWorkflowExecutionId = "control-parent",
+            SystemMetadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlDispatchId] = link.DispatchId }
+        };
+        await executions.SaveAsync(child);
+        // A child hint without its dispatch authority must retain the caller too.
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained,
+            await deletion.TryDeleteTerminalAsync((await deletion.ReadAsync("control-parent"))!));
+        await dispatches.SaveAsync(link);
+        link = link.TransitionTo(WorkflowDispatchStatus.Started, Now);
+        await dispatches.SaveAsync(link);
+        var inconsistent = child with { SystemMetadata = new Dictionary<string, string>
+            { [RuntimeMetadataKeys.ChildControlDispatchId] = "foreign-dispatch" } };
+        await executions.SaveAsync(inconsistent);
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained,
+            await deletion.TryDeleteTerminalAsync((await deletion.ReadAsync("control-parent"))!));
+        await executions.SaveAsync(child);
+        var caller = (await deletion.ReadAsync("control-parent"))!;
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained, await deletion.TryDeleteTerminalAsync(caller));
+        child = child with { Status = WorkflowExecutionStatus.Completed, CompletedAt = Now };
+        await executions.SaveAsync(child);
+        await dispatches.SaveAsync(link.TransitionTo(WorkflowDispatchStatus.Completed, Now));
+        var called = (await deletion.ReadAsync(link.ChildWorkflowExecutionId))!;
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained, await deletion.TryDeleteTerminalAsync(called));
+        Assert.False(await executions.DeleteAsync(link.ChildWorkflowExecutionId));
+        var intent = new RuntimePostCommitIntent("control-source", link.ChildWorkflowExecutionId, "test.control", Now,
+            "root", "control-delivery", null, new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchId] = link.DispatchId });
+        await outbox.SavePendingAsync(new RuntimePostCommitOutboxItem("control-source-row", intent,
+            RuntimePostCommitOutboxStatus.Pending, Now, Now));
+        if (finalFailure)
+            await delivery.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult("control-source-row",
+                RuntimePostCommitOutboxStatus.FailedFinal, Now, failureMessage: "Unresolved delivery."));
+        Assert.Equal(WorkflowExecutionDeletionResult.DependencyRetained, await deletion.TryDeleteTerminalAsync(caller));
+        await services.GetRequiredService<RuntimeDbContext>().SaveChangesAsync();
+        Assert.NotNull(await executions.FindAsync("control-parent"));
+        Assert.NotNull(await executions.FindAsync(link.ChildWorkflowExecutionId));
+        Assert.False(await executions.IsDeletionTombstonedAsync("control-parent"));
+        if (finalFailure) return; // A terminal failure is not a successful acknowledgement.
+        await delivery.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult("control-source-row",
+            RuntimePostCommitOutboxStatus.Delivered, Now));
+        Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await deletion.TryDeleteTerminalAsync(caller));
+        Assert.True(await executions.IsDeletionTombstonedAsync("control-parent"));
+        Assert.False(await executions.IsDeletionTombstonedAsync("unknown-parent"));
+        Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await deletion.TryDeleteTerminalAsync(called));
+    }
+
+    private static WorkflowDispatchRecord ControlLink(string parent)
+    {
+        var identity = new WorkflowDispatchIdentity(parent, "call");
+        return new WorkflowDispatchRecord(identity.DispatchId, parent, "call", identity.ChildWorkflowExecutionId,
+            new WorkflowExecutableIdentity("artifact-child", "definition-child", "version-child", "1", "hash-child"),
+            new WorkflowExecutableSourceProvenance("source", "WorkflowDefinitionVersion", "version-child", "1",
+                "definition-child", "version-child", "1", "publication", "slot"),
+            WorkflowDispatchMode.WaitForCompletion, WorkflowDispatchStatus.Pending, null, null,
+            new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue), WorkflowRunKind.PublishedRun,
+            new WorkflowExecutionAuthoritySnapshot(parent, "test"), [], Now, Now,
+            new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlConsumerKey] = "test.control",
+                [RuntimeMetadataKeys.ChildControlConsumerVersion] = "1" });
+    }
+
     private static readonly DateTimeOffset Now = new(2034, 5, 6, 7, 8, 9, TimeSpan.Zero);
 
     [Fact]

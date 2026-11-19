@@ -1,0 +1,18 @@
+{
+  "definitionId": "14iBsLEuiJS",
+  "artifactId": "artifact-cfadffc29096",
+  "runId": "14iZvo3Gbql",
+  "runKind": "TestRun",
+  "publicationObservedInBrowser": "2.0.0 default, no structural changes",
+  "testRunIsPublishedExecution": false,
+  "studioSourceCommit": "3815806acb51475903f3ee3b44cf263ac572db26",
+  "studioAssemblySha256": "acfb65d613226544a9f3fdcb0fc25bac72d7895167c6b803c151491f88950159",
+  "hostSourceCommit": "438001406d980051584234e5d656eb8e6a67f47f",
+  "frozenContractReceipt": "studio/frozen-contract.json",
+  "runReceipt": "studio/run-api.json",
+  "exportReceipt": "studio/export.json",
+  "designStore": "studio/design.sqlite.gz",
+  "browserObservationAtUtc": "2026-10-28T07:25:20.475237+00:00",
+  "screenshotsVisuallyInspected": true,
+  "scopeLimit": "Pre-writer existing embedded BPMN/Studio baseline only. No new direct Studio or upgraded-host acceptance."
+}

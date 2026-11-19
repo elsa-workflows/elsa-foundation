@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfRuntimeArtifactRegistrationTests
+public sealed partial class EfRuntimeArtifactRegistrationTests
 {
     private const string SigningKey = "ef-runtime-registration-signing-key-32-bytes";
 

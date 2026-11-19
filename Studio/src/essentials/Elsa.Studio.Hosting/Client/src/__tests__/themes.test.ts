@@ -46,7 +46,7 @@ describe("theme presets", () => {
     expect(getSelectableThemes(store)).toEqual([]);
     expect(store.defaultThemeId).toBe("");
     // Rendering still has a safe palette if the configured directory is empty or has no published theme.
-    expect(findSelectableTheme(store, "managed-theme").id).toBe("classic");
+    expect(findSelectableTheme(store, "managed-theme").id).toBe("linen");
     expect(store.themes.some(theme => theme.id === custom.id)).toBe(true);
   });
 
@@ -109,16 +109,16 @@ describe("theme presets", () => {
   });
 
   it.each(retiredThemeIds)("lands a user whose stored theme is the retired %s on the default theme", themeId => {
-    expect(findSelectableTheme(normalizeThemeStore(), themeId).id).toBe("classic");
+    expect(findSelectableTheme(normalizeThemeStore(), themeId).id).toBe("linen");
     expect(findSelectableTheme(normalizeThemeStore({ defaultThemeId: "atelier" }), themeId).id).toBe("atelier");
   });
 
   it.each(retiredThemeIds)("falls back to the first built-in when the store default is the retired %s", themeId => {
     const store = normalizeThemeStore({ defaultThemeId: themeId });
 
-    expect(store.defaultThemeId).toBe("classic");
+    expect(store.defaultThemeId).toBe("linen");
     expect(store.themes.some(theme => theme.id === themeId)).toBe(false);
-    expect(findSelectableTheme(store, null).id).toBe("classic");
+    expect(findSelectableTheme(store, null).id).toBe("linen");
   });
 
   it("keeps a custom copy of a retired material theme valid, textures and all", () => {

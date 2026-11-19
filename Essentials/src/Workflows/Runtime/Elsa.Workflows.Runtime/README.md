@@ -4,6 +4,32 @@
 checkpointing, durable runtime state, scheduling, recovery, and runtime alterations. It does not load Design
 definitions at execution time.
 
+Direct model hosting (spec1017) is in progress. Model state and accepted-input receipts participate in the
+existing fenced checkpoint transaction through the Runtime EF provider; native commits without a model
+participant retain their wire and fingerprint. The EF artifact provider also stores native/model material with
+actual incarnations, model content hashes, full dependency leases, fenced sources and retention roots.
+The explicit `ActivitiesBpmnHosting` feature supplies the released-library driver and authenticated model commands.
+Its [declared profiles](../../../Activities/Bpmn/Elsa.Activities.Bpmn/README.md) cover human parallel work,
+one closed native service worker with typed outcomes and bounded incident retry, interrupting duration boundaries,
+and named native Event catches. Native `RunBpmn` uses that same model lifecycle and retains its exact parent result
+until consumption and settlement are proven. New model admission defaults off.
+Model input uses a protected queue format that predecessor readers reject. The drainer refuses unselected
+model/unknown work before claiming it. EF validates the exact head on its existing claim read; coalescing
+forwards that validation. Accepted first inputs retain their material before the first model checkpoint. Native
+and model dispatch share lease/heartbeat/release mechanics while preserving native lifecycle and fault policies.
+See the [model reader and checkpoint boundary](EXTENSION_POINTS.md) and
+[current delivery objective](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6480176858).
+
+Actual owned-host journeys use EF SQLite and the built-in single-node actor. The
+[runtime-only/admission-off receipt](../../../../../specs/1017-direct-bpmn-hosting/evidence/retention/runtime-only-rollback/README.md)
+recovers accepted native workers with Design unavailable and new admission disabled; retained dependency pins
+survive source retirement and collection. The separate
+[provider/storage matrix](../../../../../specs/1017-direct-bpmn-hosting/evidence/providers/model-storage/README.md)
+qualifies common persistence contracts and migrations on all four engines. Actual legacy/Studio compatibility
+retains [its own executing sources](../../../../../specs/1017-direct-bpmn-hosting/evidence/final-compatibility/README.md).
+These receipts do not establish non-SQLite upgraded-host recovery, clustered placement or first-class direct-model
+Studio acceptance under #2907. Final integration review and required CI remain delivery gates.
+
 ## Activation channels
 
 An activation slot belongs to one `(definitionId, slotName)` pair. A declared channel gives the same slot name
@@ -43,15 +69,25 @@ mandatory Runtime checkpoint, or stores one failed outcome and skips all non-app
 at-least-once; deterministic checkpoint IDs reconcile a lost acknowledgement without replaying an applied change.
 
 The built-in descriptors are `CancelWorkflow/1`, `ModifyVariable/1`, `ScheduleActivity/1`,
-`RescheduleActivity/1`, `RetryFaultedActivity/1`, `DecideIntervention/1`, and `Migrate/1`. `CancelWorkflow` must be
+`RescheduleActivity/1`, `RetryFaultedActivity/1`, `ReExecuteFaultedActivity/1`, `AcceptRecordedCompletion/1`, `DecideIntervention/1`, and `Migrate/1`. `CancelWorkflow` must be
 the sole envelope. Scheduling requires an activity-owned compiled scheduling capability; migration is limited to a
 quiescent suspended execution and an exact compatible executable artifact. Alterations never recover a workflow or
-resolve an incident implicitly. Two explicit exceptions resolve an incident that waits for intervention in a running
-run, and they are the only two outcomes the incident rule lets replace a committed `WaitForIntervention`:
+resolve an incident implicitly. Four explicit operator actions resolve an incident that waits for intervention in a running
+run, and they are the only outcomes the incident rule lets replace a committed `WaitForIntervention`:
 
 - `RetryFaultedActivity/1` retries the faulted activity, resolving the incident with an `OperatorRetry` outcome and
   scheduling a successor that keeps the source's inputs, parent, scheduling cause, provenance metadata and operation
-  keys. It refuses a source whose parent is no longer running (`SourceParentNotRunning`).
+  keys. It refuses a source whose parent is no longer running (`SourceParentNotRunning`). The successor continues
+  the same logical invocation (spec 1221, ADR 0092 decision 8 as amended).
+- `ReExecuteFaultedActivity/1` (spec 1221) resolves the incident the same way, but re-executes: the successor is a new
+  logical invocation whose inputs are materialized again from current committed state, so a variable corrected with
+  `ModifyVariable` reaches it. `RescheduleActivity/1` is a re-execution too.
+- `AcceptRecordedCompletion/1` (spec 1221 FR-017) applies the completion a `Fault` lost update refused, without running
+  the body again: the successor is the same logical invocation, completed with the recorded result and outcome
+  selection, and each recorded variable write applies as an override that keeps the value it overwrote. It revalidates
+  the pinned contract and each target variable's declaration (type and protection) first, and refuses a step without a recorded completion
+  (`NoRecordedCompletion`): a faulted body, or a completion that also produced durable outputs, a workflow dispatch,
+  a published stimulus or a parent or ancestor notification.
 - `DecideIntervention/1` (spec 260) applies one of the decisions the waiting structural parent offered, with a
   required reason: it resolves the incident with an `OperatorDecision` outcome from `OperatorDecisionAlteration` and
   enqueues the decision for the parent, which applies it in its own evaluation

@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Workflows.Runtime.Services.Bookmarks;
 
@@ -8,15 +9,61 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
 {
     private readonly object _syncRoot = new();
     private readonly Dictionary<BookmarkStateKey, BookmarkState> _states = new();
+    private readonly Dictionary<BookmarkStateKey, long> _generations = new();
+    // Shared only as a generation allocator: independently owned stores still hold independent bookmark data.
+    // Replacing a store instance in this process cannot recycle another instance's captured generation.
+    private static long _nextGeneration;
+    private InMemoryRuntimeCheckpointStoreState? _checkpointState;
 
-    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    internal bool Coordinates(InMemoryRuntimeCheckpointStoreState state) => ReferenceEquals(_checkpointState, state);
+    internal void BindCheckpointState(InMemoryRuntimeCheckpointStoreState state)
     {
         lock (_syncRoot)
         {
+            if (_checkpointState is not null && !ReferenceEquals(_checkpointState, state))
+                throw new NotSupportedException("A native bookmark store cannot join two checkpoint coordination boundaries.");
+            _checkpointState = state;
+        }
+    }
+
+    private async ValueTask<T> MutateAsync<T>(Func<T> mutation, CancellationToken cancellationToken)
+    {
+        InMemoryRuntimeCheckpointStoreState coordination;
+        lock (_syncRoot)
+        {
+            if (_checkpointState is null) return mutation();
+            coordination = _checkpointState;
+        }
+        return await coordination.ExecuteWriteGateAsync(_ =>
+        {
+            lock (_syncRoot) return ValueTask.FromResult(mutation());
+        }, cancellationToken);
+    }
+
+    public ValueTask<BookmarkStateObservation?> ObserveAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId); ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            var key = new BookmarkStateKey(workflowExecutionId, bookmarkId);
+            return ValueTask.FromResult(_states.TryGetValue(key, out var state) ? new BookmarkStateObservation(state, _generations[key]) : null);
+        }
+    }
+
+
+    internal void DeleteForWorkflowExecution(string workflowExecutionId, InMemoryRuntimeCheckpointStoreState owner)
+    {
+        lock (_syncRoot)
+        {
+            if (_checkpointState is not null && !ReferenceEquals(_checkpointState, owner))
+                throw new NotSupportedException("Bulk bookmark cleanup requires the owning checkpoint boundary.");
             foreach (var key in _states.Keys
                          .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
                          .ToArray())
-                _states.Remove(key);
+            {
+                _states.Remove(key); _generations.Remove(key);
+            }
         }
     }
 
@@ -27,12 +74,15 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
         ArgumentException.ThrowIfNullOrWhiteSpace(state.BookmarkId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        return MutateAsync(() =>
         {
+            var generation = Interlocked.Increment(ref _nextGeneration);
+            if (generation <= 0) throw new InvalidOperationException("Native bookmark generations are exhausted.");
+            var stored = new BookmarkStateObservation(state, generation).State;
             var key = new BookmarkStateKey(state.WorkflowExecutionId, state.BookmarkId);
-            _states[key] = state;
-            return new ValueTask<BookmarkState>(state);
-        }
+            _states[key] = stored; _generations[key] = generation;
+            return stored;
+        }, cancellationToken);
     }
 
     public ValueTask<bool> DeleteAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default)
@@ -41,10 +91,11 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
         ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        return MutateAsync(() =>
         {
-            return new ValueTask<bool>(_states.Remove(new BookmarkStateKey(workflowExecutionId, bookmarkId)));
-        }
+            var key = new BookmarkStateKey(workflowExecutionId, bookmarkId); _generations.Remove(key);
+            return _states.Remove(key);
+        }, cancellationToken);
     }
 
     public ValueTask<BookmarkState?> FindAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default)

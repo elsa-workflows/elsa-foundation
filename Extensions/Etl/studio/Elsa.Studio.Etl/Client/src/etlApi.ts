@@ -19,6 +19,7 @@ import type {
   EtlPublicationView,
   EtlPublishDefinitionRequest,
   EtlRunCancellationView,
+  EtlRunCompletionView,
   EtlRunDetailView,
   EtlRunConnectorPartitionView,
   EtlRunPageRequest,
@@ -262,6 +263,12 @@ export async function listEtlRunConnectorPartitions(
 ) {
   const url = await pageUrl(context, "runtime", "etl-run-connector-partitions", request, { id: runId });
   return getJson<EtlPage<EtlRunConnectorPartitionView>>(context, url, signal);
+}
+
+/** Completion of a continuous run is bodyless too; only hosts that report a continuous run advertise it. */
+export async function completeEtlRun(context: StudioEndpointContext, runId: string, signal?: AbortSignal) {
+  const url = await resourceUrl(context, "runtime", "etl-run-complete", { id: runId });
+  return requestJson<EtlRunCompletionView>(context, url, { method: "POST", signal });
 }
 
 /** Cancellation is intentionally bodyless; the API resolves the trusted persisted invocation itself. */

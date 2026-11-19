@@ -29,7 +29,9 @@ public delegate ValueTask<TClaim?> FencedClaimRenewal<TClaim>(
 /// <see cref="RunAsync{TResult}"/> renews before the side effect only. <see cref="RunRenewingAsync{TResult}"/> also
 /// renews every third of the visibility timeout while the side effect runs, and a renewal that fails cancels the side
 /// effect. Use the renewing entry point only when the side effect does not share the renewing store's unit of work: a
-/// renewal running beside a side effect on the same <c>DbContext</c> would collide with it.
+/// renewal running beside a side effect on the same <c>DbContext</c> would collide with it. Body completion stops
+/// future renewals and waits for an in-flight renewal's acknowledgement before settling its latest claim. Only caller
+/// shutdown cancels that provider I/O; an unrequested provider cancellation loses the claim rather than settling it.
 /// </para>
 /// <para>
 /// Completing or releasing the row stays with the caller, which presents <see cref="FencedClaimRun{TClaim,TResult}.Claim"/>
@@ -111,7 +113,7 @@ public sealed class FencedClaimLease<TClaim> where TClaim : class
         var holding = new Holding(renewed!);
         using var stopRenewing = new CancellationTokenSource();
         using var sideEffectCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var renewing = KeepRenewingAsync(holding, stopRenewing.Token, sideEffectCancellation);
+        var renewing = KeepRenewingAsync(holding, stopRenewing.Token, cancellationToken, sideEffectCancellation);
         TResult? result = default;
         Exception? failure = null;
         try
@@ -128,9 +130,10 @@ public sealed class FencedClaimLease<TClaim> where TClaim : class
             await renewing;
         }
 
-        // The caller's own cancellation is shutdown, not an outcome of this row, so it wins over everything. Any other
-        // cancellation the lease did not cause propagates as it would without a lease.
-        if (failure is OperationCanceledException && (cancellationToken.IsCancellationRequested || !holding.Lost))
+        // Shutdown still wins if it arrived after the body completed, while awaiting an in-flight renewal.
+        cancellationToken.ThrowIfCancellationRequested();
+        // Any other body cancellation the lease did not cause propagates as it would without a lease.
+        if (failure is OperationCanceledException && !holding.Lost)
             ExceptionDispatchInfo.Capture(failure).Throw();
 
         // A lost claim outranks the side effect's own outcome, success included: the row now belongs to the next
@@ -170,25 +173,33 @@ public sealed class FencedClaimLease<TClaim> where TClaim : class
     private async Task KeepRenewingAsync(
         Holding holding,
         CancellationToken stopToken,
+        CancellationToken callerCancellationToken,
         CancellationTokenSource sideEffectCancellation)
     {
         try
         {
             while (true)
             {
-                await Task.Delay(_renewalCadence, _timeProvider, stopToken);
-                var renewed = await _renew(holding.Claim, _timeProvider.GetUtcNow(), _visibilityTimeout, stopToken);
+                try
+                {
+                    await Task.Delay(_renewalCadence, _timeProvider, stopToken);
+                }
+                catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+                {
+                    return; // The body finished before another renewal began.
+                }
+                if (stopToken.IsCancellationRequested)
+                    return;
+                // Finishing the body stops future renewals, but must not cancel an in-flight provider write:
+                // it may already have committed a new revision whose acknowledgement we still need for settlement.
+                // Caller shutdown can still cancel I/O; that path propagates instead of settling the old claim.
+                var renewed = await _renew(holding.Claim, _timeProvider.GetUtcNow(), _visibilityTimeout, callerCancellationToken);
                 if (renewed is null)
                     break;
                 holding.Claim = renewed;
             }
 
             holding.Lose(exception: null);
-        }
-        catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
-        {
-            // The side effect finished before the next renewal was due.
-            return;
         }
         catch (Exception exception)
         {

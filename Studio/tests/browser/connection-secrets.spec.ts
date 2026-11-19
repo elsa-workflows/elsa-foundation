@@ -7,7 +7,7 @@ async function openCreate(page: import("@playwright/test").Page, scenario = "def
   await page.goto(`/connection-secrets.html?${query}`);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
   await expect(page.locator("html")).toHaveAttribute("data-theme-mode", mode);
-  const opener = page.locator(".connections-header").getByRole("button", { name: "Create connection", exact: true });
+  const opener = page.locator(".studio-page-header").getByRole("button", { name: "Create connection", exact: true });
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
   await expect(dialog).toBeVisible();

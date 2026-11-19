@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -15,6 +16,13 @@ internal sealed class CoalescingPostCommitOutboxLookupStore(
     public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
         FindAsync(sessionAccessor, inner.Value, outboxItemId, cancellationToken);
 
+    public ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
+        inner.Value.FindDurableAsync(outboxItemId, cancellationToken);
+
+    public ValueTask<RuntimePostCommitOutboxItem?> FindUndeliveredDurableAsync(string workflowExecutionId, IReadOnlyCollection<string> excludedIntentKinds,
+        CancellationToken cancellationToken = default) =>
+        inner.Value.FindUndeliveredDurableAsync(workflowExecutionId, excludedIntentKinds, cancellationToken);
+
     /// <summary>The session's item when it holds one, otherwise <paramref name="lookup"/>'s answer.</summary>
     internal static ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
         IRuntimeCoalescingSessionAccessor sessionAccessor,
@@ -25,7 +33,9 @@ internal sealed class CoalescingPostCommitOutboxLookupStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (sessionAccessor.Current is { IsActive: true } session && session.TryFindOutboxItem(outboxItemId, out var overlayItem))
+        if (sessionAccessor.Current is { IsActive: true } session && session.TryFindOutboxItem(outboxItemId, out var overlayItem) &&
+            (!session.IsOutboxDurablyPersisted(outboxItemId) ||
+             overlayItem!.Intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork && overlayItem.StimulusDeliverySourceScope is null))
             return new ValueTask<RuntimePostCommitOutboxItem?>(overlayItem);
 
         return (lookup ?? throw new InvalidOperationException(

@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 actual SQLite Design/material/source/receipt Test Run preparation/retry; old-writer and qualified default cohort gates remain open",
+  "sourceParentCommit": "ee475bfafaebfb87aec134a69b0de46ab673dc40",
+  "filesSha256": {
+    "Essentials/src/Workflows/Publishing/Api/EXTENSION_POINTS.md": "cbaab6d4de183913177fe17306c9d6b0f58d8411943543d63eb0ed85f18b080a",
+    "specs/1006-bpmn-library-adoption/tasks.md": "569f604bb43fb982d951234fb8b27a7054962a9fe13066a4e18c08688f9b229f",
+    "Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/EfActivityDraftTestRunServiceTests.cs": "f5bede10a7375a020fd903305cc54150bb1e5a4e0315b3dd90ad4b6f02702268",
+    "Essentials/src/Workflows/Publishing/Api/Services/ActivityDraftTestRunService.cs": "7322c7a36ee10f635fe6af4a64080d8499512784347571f53c96eea0cb7adee1",
+    "Essentials/src/Workflows/Publishing/Core/Models/ActivityDraftTestRunStorageException.cs": "7be6a1057d4c93fb6c44af58d92818e52b1af4a72dc02523f49535dbf58ae0d9",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/ReusableActivityRuntimeStores.cs": "a3c88d982e5e014f18ab3d963dac38305707bd16bc16be7a94a467ead506cb8c",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs": "d52cfebc2cdcc64e5dca6272ae85b01d9bf228dcdd72ad96c8b7f727c6720bb8",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.RootWrites.cs": "d8458479a7675cbe4f99fb6f53d4569d7e592212b4910c658bd4c5adccd46b6f",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "039a0f9f329b82602aa192f679543aaaaba00c6b94e9635a0985af6196954fe0",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.cs": "b856f34bbc7096fa2b269381aa2065d6d93515b674cda73d8eeef8813e5a4cbb",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.Maintenance.cs": "6afd8294cc7c9d77c2bf4cb10b1fc1de34409daabc67a9d3307d44fb0a40a26e",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.ReferenceFences.cs": "defc28a57d010bb3ad40297fccc863c972030187d24ff942da07af251b491fc4",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs": "a6cc012ef3ffdb10cd48ff8a9b1c0a2c12370031c403a1f67137d10601fbb520",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs": "8c58da46ff1e9911c88566cae3b81b8fe76c30cfdc09715f15706c681cbc9a9b",
+    "Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Stores/EfActivityDraftTestRunStore.cs": "d5e188f95c12b4060082b2d8bb0f7872bc3f738c66bddee31485532ffc73a8ac",
+    "Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/ActivityPublicationTestMaterial.cs": "1e1f4f9519137d6e1d2d61b55069157edbd87e234f9f27de572ba0d320517e2b",
+    "Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/PublishingLedgerTestSupport.cs": "95a28d3d31f6fc9933dd696d0a875fe923967dbf41dd98b767cd21ab90f6b615",
+    "Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/ActivityPublicationScope.cs": "c0336e064de100cd04e8c925173f392c5ef6e56edc2bc1683bdd51bd9a5c02f7",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs": "27c2cc257c257afd4303f725296a9f2a5ef8b166e81a03a3e38737a08b2dc716",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Shipped.txt": "3c3b422dddb1efeb0fc5b228608fd8682452b2a9507d4031894bce3c4dedadbd",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "d1bdefd722d4fafdecb264b79acaeb19bddb5a2ad989278862282022017fd98e",
+    "Essentials/src/Workflows/Publishing/Core/PublicAPI.Shipped.txt": "3c3b422dddb1efeb0fc5b228608fd8682452b2a9507d4031894bce3c4dedadbd",
+    "Essentials/src/Workflows/Publishing/Core/PublicAPI.Unshipped.txt": "d713ee3a8f01df4417e5a2b025f9df7795784d0bd9a4a0ec189920dc09976759",
+    "Essentials/src/Workflows/Publishing/Api/PublicAPI.Shipped.txt": "3c3b422dddb1efeb0fc5b228608fd8682452b2a9507d4031894bce3c4dedadbd",
+    "Essentials/src/Workflows/Publishing/Api/PublicAPI.Unshipped.txt": "73879d2fad5907a9c6de29c22d65b58bbe6d7c27f3dd0b76c3f758745b54ed68"
+  },
+  "checks": [
+    {
+      "project": "Publishing EF",
+      "passed": 176,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 5
+    }
+  ],
+  "focused": {
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0
+  },
+  "discovery": {
+    "listed": 176,
+    "uniqueDisplayNames": 174,
+    "executed": 176,
+    "deferredTheories": {},
+    "unmapped": []
+  },
+  "mutations": [
+    {
+      "mutation": "service-wrapper-source-reverts-to-unfenced-save",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 3,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "source-expiry-not-rechecked-after-actual-SQL",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 4,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "source-adoption-rewrites-winning-payload",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 4,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "apiChanges": false,
+  "schemaChanges": false,
+  "generatedMapsCheck": "passed",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "unchanged": true,
+  "reviews": {
+    "correctness": "final restored source/catalog and portable receipt clean;25 hashes and all checks reconciled",
+    "standards": "final source/catalog and portable receipt clean; unchanged production/API/schema and finite fixtures verified",
+    "acceptance": "final actual three-database service/ordinary GC controls and portable receipt clean; host/default limits preserved",
+    "fullPrRounds": 0
+  },
+  "evidenceBoundary": {
+    "durableDatabases": [
+      "SQLite Design",
+      "SQLite Runtime artifacts/sources/leases",
+      "SQLite Publishing receipts"
+    ],
+    "freshContexts": true,
+    "compiler": "fixed valid template fixture, not production compiler qualification",
+    "dispatcher": "recording acknowledgement failure; no workflow execution",
+    "inMemoryPorts": [
+      "workflow test scope",
+      "workflow execution state",
+      "activity execution state"
+    ],
+    "ordinaryCollector": "actual zero-grace collector, SupportsStimulusDeliveryRetention=false",
+    "actualTransactionCommittedSourceAckLoss": true,
+    "otherRelationalProviders": false,
+    "upgradedHost": false,
+    "studio": false
+  },
+  "controls": [
+    "Before actual source SaveChanges failure rolls back its owned native fence transaction; no wrapper source and Preparing receipt; real ordinary GC collects orphan wrapper before fresh retry recreates it.",
+    "Actual source TransactionCommitted acknowledgement loss leaves source persisted and receipt Preparing; fresh reads and zero-grace ordinary GC retain accepted wrapper/template; fresh retry keeps exact source ContentJson/incarnation and receipt expiry.",
+    "Fresh second run after older run expiry has actual current template metadata/descriptor and distinct wrapper, without renewing older source.",
+    "Peer retirement after actual source commit/ACK loss remains retired on retry; no dispatch or restore.",
+    "Source expiry after actual SaveChanges before commit rolls back; no source remains and same receipt retry cannot renew its fixed expired deadline."
+  ],
+  "limits": [
+    "Five executed cases: two cut variants include collector assertions, then later-run, retirement and expiry controls. New source-kind target uses the provider UTF-16 decoder; the initial plain-string target did not fire and is not counted as recovery evidence.",
+    "Actual service uses Design/Runtime/receipt stores across three databases and new contexts each attempt; constant compiler and in-memory execution/test-scope plus recording dispatch limit this to preparation/handoff recovery. No workflow-start effect, process-kill, complete Runtime state or host/Studio recovery is claimed.",
+    "Collector is ordinary Test Run-root collection, not installation or qualified default stimulus cohort retention. Old-writer/quiescence and qualified default cohort GC keep T049 open; saved broadcast publication stays disabled.",
+    "No production code or API/schema changes in this increment. Other suite results on earlier candidate commits remain historical; only Publishing EF was rerun here.",
+    "T050/T051, other story gates, duplicate-semantics deletion/guards, final current host/Studio, full-PR reviews/exact-head gates/resulting-main and ADR0063 remain open. #2898/#2907/program production acceptance stays open; Orleans/task-runner deferred. No legacy execution-checkpoint writer deleted."
+  ]
+}

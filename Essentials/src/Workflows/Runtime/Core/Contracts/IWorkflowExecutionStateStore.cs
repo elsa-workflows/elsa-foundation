@@ -7,6 +7,11 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowExecutionStateStore
 {
+    /// <summary>True only for a provider-authenticated sticky deletion tombstone in the current persistence scope.</summary>
+    /// <remarks>Absence is not proof. Legacy providers return false and retain uncertain delivery responsibilities.</remarks>
+    ValueTask<bool> IsDeletionTombstonedAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(false);
+
     /// <summary>
     /// Inserts or replaces state for the concrete workflow execution key.
     /// </summary>

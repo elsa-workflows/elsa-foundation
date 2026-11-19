@@ -695,6 +695,28 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         Assert.Equal(_keyed.StartKey, envelope.IdempotencyKey);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Saved_stimulus_authority_without_admission_refuses_before_even_a_keyed_duplicate(bool alreadyStarted)
+    {
+        var states = new InMemoryWorkflowExecutionStateStore();
+        if (alreadyStarted) await states.SaveAsync(ExistingState(_keyed.WorkflowExecutionId, "artifact-1"));
+        var scope = new PersistenceScope("tenant");
+        var item = new RuntimePostCommitOutboxItem("commit:send", new("send", "publisher", "publish", _now, null, "delivery-1", null),
+            RuntimePostCommitOutboxStatus.Pending, _now, _now, null, 0, null, null, null, null, null, 0, null, 1, scope, null);
+        var source = new PostCommitDeliveryContext(RuntimePostCommitOutboxClaimTransitions.Claim(item,
+            new("owner", _now, TimeSpan.FromMinutes(1), 1)), scope);
+        var authority = WorkflowExecutableStartAuthority.FromStimulusDelivery(source, "binding");
+        var request = new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test", _keyed.WorkflowExecutionId,
+            _keyed.StartKey, null, null, null, null, "start", WorkflowRunKind.PublishedRun, null,
+            WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy, null, null, null, null, null, authority);
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableStartRejectedException>(() => NewDispatcher(states).DispatchAsync(request).AsTask());
+        Assert.Equal(WorkflowExecutableStartRejectionCategory.Authority, exception.Category);
+        Assert.Equal("stimulus-delivery-source-unavailable", exception.ReasonCode);
+        Assert.Empty(_agentProvider.ActivationRequests); Assert.Empty(_agentProvider.Agent.Envelopes);
+    }
+
     [Fact]
     public async Task DispatchAsync_KeyedStartThatAlreadyRan_IsADuplicateAndEnqueuesNothing()
     {

@@ -18,7 +18,8 @@ import zipfile
 
 
 REPO = Path(__file__).resolve().parents[3]
-IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api")
+SUPPORT_PROJECTS = {item["id"]: item["project"] for item in json.loads((REPO / "tools/ci/studio-package-identities.json").read_text())["support_projects"] if item.get("hosting_required")}
+IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api") + tuple(SUPPORT_PROJECTS)
 
 
 def identity(path):
@@ -118,7 +119,7 @@ def qualify(args):
         else:
             version = args.version
             for package_id in IDS:
-                project = REPO / "Studio/src/essentials" / package_id / (package_id + ".csproj")
+                project = REPO / SUPPORT_PROJECTS.get(package_id, "Studio/src/essentials/" + package_id + "/" + package_id + ".csproj")
                 run("pack-" + package_id, ["dotnet", "pack", str(project), "-c", "Release", "-p:Version=" + version, "-o", str(feed)], REPO)
 
         packages = {identity(path)[0]: path for path in feed.glob("*.nupkg")}

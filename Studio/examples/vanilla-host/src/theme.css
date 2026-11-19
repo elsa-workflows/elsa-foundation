@@ -8,13 +8,9 @@
  * is exactly that: a minimal, self-contained light theme a consuming app supplies so the
  * primitives (and the `--studio-*` aliases layered on top) resolve to real colours.
  *
- * NOTE: the published `tokens.css` will be self-contained for the semantic layer, but it
- * intentionally still aliases onto these host-provided primitives — a host must define
- * them. This file demonstrates the consumer's half of that contract.
- *
- * The full layer-1 primitive set a host must supply, the `--studio-*` semantic tokens the
- * widgets style against, and the theming rules are documented in the token contract:
- * `docs/design-tokens.md` (see "What a host must supply") — this file is that set, minimal.
+ * Published styles already provide a light fallback. These values demonstrate consumer
+ * overrides, loaded afterward. The media query below supplies a complete dark surface
+ * palette without importing a private host stylesheet.
  */
 :root {
   --font-sans: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -48,4 +44,20 @@
   --muted-foreground: oklch(0.45 0.012 250);
   --border: oklch(0.89 0.006 250);
   --ring: oklch(0.685 0.156 237);
+}
+
+body { background: var(--background); color: var(--foreground); }
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --background: oklch(0.19 0.01 250);
+    --foreground: oklch(0.92 0.01 250);
+    --card: oklch(0.23 0.01 250);
+    --muted: oklch(0.28 0.01 250);
+    --muted-foreground: oklch(0.72 0.02 250);
+    --border: oklch(0.39 0.02 250);
+    --studio-success-fg: oklch(0.8 0.14 150);
+    --studio-warning-fg: oklch(0.84 0.14 70);
+    --studio-danger-fg: oklch(0.8 0.13 25);
+  }
 }

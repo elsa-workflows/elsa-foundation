@@ -5,7 +5,9 @@ using Elsa.Connections.Http;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Core.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Connections.Services;
 
@@ -74,6 +76,7 @@ internal sealed class DefaultConnectionManager(
     IAuthenticationSchemeRegistry schemes,
     IConnectionResolver resolver,
     ISecretManager secretManager,
+    IOptions<WritableSecretStoreOptions> writableSecretStore,
     IConnectionPermissionGate permissionGate,
     TimeProvider timeProvider,
     ILogger<DefaultConnectionManager> logger) : IConnectionManager
@@ -104,7 +107,7 @@ internal sealed class DefaultConnectionManager(
             throw new ArgumentException($"Connection type '{type.Descriptor.Name}' does not support scheme '{request.AuthScheme}'.", nameof(request));
         var scheme = schemes.Find(request.AuthScheme)
             ?? throw new ArgumentException($"Unknown authentication scheme '{request.AuthScheme}'.", nameof(request));
-        ValidateSettings(type, request.Settings);
+        ValidateSettings(type, scheme, request.Settings);
         ValidateCredentialSources(request.SecretFields);
         await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
         await scheme.ValidateAsync(tenantId, cancellationToken);
@@ -116,6 +119,7 @@ internal sealed class DefaultConnectionManager(
         {
             Definition = new ConnectionDefinition
             {
+                IncarnationId = Guid.NewGuid().ToString("N"),
                 TenantId = tenantId,
                 Name = name,
                 DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? name : request.DisplayName.Trim(),
@@ -274,7 +278,7 @@ internal sealed class DefaultConnectionManager(
         var scheme = schemes.Find(document.Definition.AuthScheme)
             ?? throw new ArgumentException($"Unknown authentication scheme '{document.Definition.AuthScheme}'.", nameof(request));
         if (request.Settings is not null)
-            ValidateSettings(type, request.Settings);
+            ValidateSettings(type, scheme, request.Settings);
         if (request.SecretFields is not null)
             ValidateCredentialSources(request.SecretFields);
 
@@ -739,7 +743,7 @@ internal sealed class DefaultConnectionManager(
             Name = secretName,
             DisplayName = $"{connectionName} {fieldName}",
             TypeName = SecretTypeNames.Text,
-            StoreName = SecretStoreNames.Encrypted,
+            StoreName = DefaultWritableSecretStore.ResolveName(writableSecretStore.Value.DefaultWritableStoreName),
             Value = value,
             Tags = ["owned-by-connection", connectionName]
         }, cancellationToken);
@@ -872,8 +876,37 @@ internal sealed class DefaultConnectionManager(
         await secretManager.DeleteAsync(tenantId, field.SecretName, cancellationToken);
     }
 
-    private static void ValidateSettings(IConnectionTypeProvider type, IDictionary<string, string> settings)
+    /// <summary>
+    /// Settings hold non-secret configuration only (#3138). Every key must be declared, either as a setting of the
+    /// connection type or as a non-sensitive field of the authentication scheme, so a credential cannot hide under a
+    /// made-up key, and no URL-valued setting may carry user info (<c>https://user:pass@host</c>). Settings are returned
+    /// unredacted to every <c>workflows/design:read</c> holder, so secrets belong in secret fields.
+    /// </summary>
+    private static void ValidateSettings(IConnectionTypeProvider type, IAuthenticationSchemeProvider scheme, IDictionary<string, string> settings)
     {
+        var declared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        declared.UnionWith(type.Descriptor.Settings.Select(field => field.Name));
+        declared.UnionWith(scheme.Descriptor.Fields.Where(field => !field.Sensitive).Select(field => field.Name));
+
+        foreach (var (key, value) in settings)
+        {
+            if (string.IsNullOrWhiteSpace(key) || !declared.Contains(key))
+            {
+                throw new ArgumentException(
+                    $"Setting '{key}' is not declared by connection type '{type.Descriptor.Name}' with scheme '{scheme.Descriptor.Name}'. " +
+                    $"Declared settings: {string.Join(", ", declared.OrderBy(name => name, StringComparer.OrdinalIgnoreCase))}. " +
+                    "Credentials belong in secret fields, not in settings.",
+                    nameof(settings));
+            }
+
+            if (CarriesUrlCredentials(value))
+            {
+                throw new ArgumentException(
+                    $"Setting '{key}' is a URL with embedded credentials (user info). Remove the credentials from the URL and put them in a secret field.",
+                    nameof(settings));
+            }
+        }
+
         if (!string.Equals(type.Descriptor.Name, ConnectionTypeNames.Http, StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -886,6 +919,17 @@ internal sealed class DefaultConnectionManager(
                 nameof(settings));
         }
     }
+
+    /// <summary>
+    /// True when the value is an absolute URL whose authority carries user info. A value that is not a URL (a host
+    /// list, a flag, a header name) never matches.
+    /// </summary>
+    private static bool CarriesUrlCredentials(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Contains('@')
+        && value.Contains("://", StringComparison.Ordinal)
+        && Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)
+        && !string.IsNullOrEmpty(uri.UserInfo);
 
     private static void ValidateOwner(string owner)
     {

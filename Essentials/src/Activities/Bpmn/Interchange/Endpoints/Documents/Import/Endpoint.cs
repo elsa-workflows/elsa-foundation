@@ -2,7 +2,7 @@ using Elsa.Activities.Bpmn.Interchange.Contracts;
 using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints.Documents.Import;
 
@@ -18,9 +18,10 @@ public sealed class Endpoint(IBpmnDocumentImporter importer) : ApiEndpoint<Impor
     }
 
     public override Task<BpmnImportResult> HandleAsync(ImportBpmnDocumentRequest request, CancellationToken cancellationToken) =>
-        Task.FromResult(importer.Import(request.Xml, new BpmnImportOptions
+        importer.ImportAsync(request.Xml, new BpmnImportOptions
         {
             ProcessId = request.ProcessId,
-            NodeIdPrefix = request.NodeIdPrefix
-        }));
+            NodeIdPrefix = request.NodeIdPrefix,
+            ConfirmedBindings = request.ConfirmedBindings ?? []
+        }, cancellationToken);
 }

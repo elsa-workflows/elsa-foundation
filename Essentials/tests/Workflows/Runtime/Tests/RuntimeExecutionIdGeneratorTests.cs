@@ -17,7 +17,7 @@ public sealed class RuntimeExecutionIdGeneratorTests
     }
 
     [Fact]
-    public void RuntimeIdsUseShortUnprefixedIdentityFormat()
+    public void ExplicitCompactGeneratorRetainsItsUnprefixedIdentityFormat()
     {
         var ids = new[]
         {
@@ -36,12 +36,23 @@ public sealed class RuntimeExecutionIdGeneratorTests
     }
 
     [Fact]
-    public void AddWorkflowRuntimeRegistersShortRuntimeExecutionIdGenerator()
+    public void AddWorkflowRuntimeRegistersHighEntropyRuntimeExecutionIdGenerator()
     {
         using var provider = new ServiceCollection().AddWorkflowRuntime().BuildServiceProvider();
 
-        var generator = Assert.IsType<ShortRuntimeExecutionIdGenerator>(provider.GetRequiredService<IRuntimeExecutionIdGenerator>());
-        AssertShortId(generator.NewWorkflowExecutionId());
+        var generator = Assert.IsType<RuntimeExecutionIdGenerator>(provider.GetRequiredService<IRuntimeExecutionIdGenerator>());
+        var id = generator.NewWorkflowExecutionId();
+        Assert.True(Guid.TryParseExact(id, "N", out _));
+        Assert.Equal('7', id[12]);
+    }
+
+    [Fact]
+    public void An_explicit_runtime_identity_generator_is_preserved()
+    {
+        var chosen = new ShortRuntimeExecutionIdGenerator(_timeProvider);
+        using var provider = new ServiceCollection().AddSingleton<IRuntimeExecutionIdGenerator>(chosen).AddWorkflowRuntime().BuildServiceProvider();
+        Assert.Same(chosen, provider.GetRequiredService<IRuntimeExecutionIdGenerator>());
+        AssertShortId(chosen.NewWorkflowExecutionId());
     }
 
     private static void AssertShortId(string id)

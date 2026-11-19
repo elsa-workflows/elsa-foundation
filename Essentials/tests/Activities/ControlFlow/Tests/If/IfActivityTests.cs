@@ -50,7 +50,7 @@ public sealed class IfActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.True, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.True }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class IfActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.False, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.False }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class IfActivityTests : IDisposable
             new ActivityChildCompletedContext(context, "actexec-then", "node-then", [ActivityOutcomes.Done]));
 
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.True, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.True }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class IfActivityTests : IDisposable
             new ActivityChildCompletedContext(context, "actexec-else", "node-else", [ActivityOutcomes.Done]));
 
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.False, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.False }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class IfActivityTests : IDisposable
             new ActivityChildCompletedContext(context, "actexec-then", "node-then", [ActivityOutcomes.Break]));
 
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Break, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Break }, continuation.OutcomeNames);
     }
 
     [Fact]

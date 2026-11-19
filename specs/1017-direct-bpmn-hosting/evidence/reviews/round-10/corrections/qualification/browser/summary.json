@@ -1,0 +1,21 @@
+{
+  "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+  "stats": {
+    "startTime": "2026-10-31T19:31:15.274Z",
+    "duration": 151450.062,
+    "expected": 69,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "errors": [],
+  "projects": [
+    {
+      "name": "chromium",
+      "testMatch": [
+        "/(?:minimal-studio|user-menu|workflow-definition-browse-context|switch-conditions)\\.spec\\.ts/"
+      ],
+      "retries": 0
+    }
+  ]
+}

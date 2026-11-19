@@ -1,0 +1,30 @@
+{
+  "captures": [
+    {
+      "file": "notice-held.sqlite",
+      "sha256": "b65fb08f0195855d245a4e49fc37cbb1d0fee8ecdf8aa5b373df6571d7ac9f23",
+      "byteLength": 3088384,
+      "wholeStore": true,
+      "storedExecutionRowsEdited": false,
+      "identityTablesAbsent": true,
+      "snapshotSha256": "b65fb08f0195855d245a4e49fc37cbb1d0fee8ecdf8aa5b373df6571d7ac9f23",
+      "name": "notice",
+      "expectedStage": "NoticeAccepted"
+    },
+    {
+      "file": "terminal-held.sqlite",
+      "sha256": "1a3ef138229fd69f06c4d27eb6ecaf61157895a4faf134e6bb3171d48a37a647",
+      "byteLength": 3166208,
+      "wholeStore": true,
+      "storedExecutionRowsEdited": false,
+      "identityTablesAbsent": true,
+      "snapshotSha256": "1a3ef138229fd69f06c4d27eb6ecaf61157895a4faf134e6bb3171d48a37a647",
+      "name": "terminal",
+      "expectedStage": "TerminalAccepted"
+    }
+  ],
+  "upgradedHostRecoveryProved": false,
+  "passed": true,
+  "failures": [],
+  "sourceRevision": "bf83b23b4b3987d6ac3b7c31df98ee9133156763"
+}

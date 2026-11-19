@@ -32,6 +32,7 @@ Known host-owned Slot IDs:
 - `workflow.activity.property-editors`
 - `workflow.expression-editors`
 - `workflow.run-input.editors`
+- `workflow.run.related-links`
 - `workflow.designer.node-renderers`
 - `workflow.designer.toolbox-items`
 - `workflow.designer.panels`
@@ -40,16 +41,23 @@ Known host-owned Slot IDs:
 - `studio.diagnostics.widgets`
 - `studio.weaver.context-providers`
 - `studio.weaver.prompt-starters`
+- `studio.weaver.prompt-actions`
 - `studio.weaver.capabilities`
 - `studio.weaver.actions`
 - `studio.weaver.tool-slots`
 - `studio.weaver.tool-contracts`
 - `studio.weaver.result-renderers`
-- `studio.ai.context-providers`
-- `studio.ai.prompt-actions`
-- `studio.ai.tools`
-- `studio.ai.proposal-renderers`
-- `studio.ai.surfaces`
+- `studio.weaver.result-controls`
+
+A result renderer may present another module's results: set `resourceModuleIds` to the resource modules it presents,
+and the host matches the result's resource module against them instead of the renderer's own `moduleId` (unset keeps the
+previous match). A result control (`api.weaver.resultControls`) is the resource-owning module's interactive control for
+a result type, such as a designer-history Undo of a change it applied; the host renders every matching control after
+the renderer, so a renderer from another package never needs the owning module's internals.
+
+## Related run links
+
+Hosts may expose the optional `api.workflowRunRelatedLinks` registry. A `StudioWorkflowRunRelatedLinkContribution` names its native activity types and exact public state-view kind/version, then synchronously returns related Studio routes from that authorized projection. A provider-owned family of user-defined activities, whose type keys are not known in advance, sets `anyActivityType: true` instead; the host then reads the state view of every selected activity, and the view kind alone decides. The native inspector owns the read and scope retirement; the host rejects foreign destinations/backends and the target route authorizes its own reads. Contributions never receive private activity frames. Hosts without this Slot retain ordinary native inspection.
 
 ## Activity icons
 
@@ -110,6 +118,46 @@ api.navigation.add({
 
 Both forms keep icon code and assets in the contributing module; neither needs a Studio
 source change. Use `currentColor` and accept the `size` prop on navigation components too.
+
+## Workspace tabs
+
+Every routed screen renders inside a host-owned workspace tab. Most routes need nothing: the host
+derives the tab title and icon from navigation and route metadata. While a tab is in the background
+React keeps the screen's state but tears down its effects (polling, subscriptions, `popstate` and
+navigation-guard listeners), and mounts them again when the tab returns with its own address.
+
+```ts
+api.routes.add({
+  id: "acme-order",
+  path: "/acme/orders",
+  label: "Orders",
+  component: OrdersPage,
+  // Lists return nothing; an editor names the resource so two tabs never edit it at once.
+  workspace: { resourceKey: location => location.searchParams.get("order") ? `acme-order:${location.searchParams.get("order")}` : null }
+});
+
+function OrderEditor({ order }: { order: Order }) {
+  useStudioWorkspaceTitle(order.name, "Draft"); // tab reads "Order 42 · Draft"
+  const location = useStudioRouteLocation();   // read this, not window.location, while rendering
+  // …
+}
+```
+
+- `openStudioWorkspaceTab(path)` opens an in-app path in a tab (or focuses the tab that shows it) and
+  returns false on hosts without workspace tabs. `isStudioWorkspaceTabClick(event)` is the Alt-click
+  gesture; leave Ctrl/Cmd, Shift and middle clicks to the browser.
+- Navigation guards receive `StudioNavigationRequest.intent`: `navigate`, `close`, or `probe`. Cancel
+  a `probe` when the screen holds unsaved or pending work, but never prompt or change UI for it; the
+  host uses it to mark background tabs.
+- Effects mount again when a tab returns. An effect that loads data and seeds editable state (a draft,
+  undo history, a form) must do so once per resource, not on every mount, or returning to the tab
+  replaces unsaved edits with the server copy. Refetching read-only data on return is fine.
+- React Flow canvases render `RetainFlowViewport` (Workflows) so the viewport survives the return;
+  React Flow otherwise rebuilds its pan-zoom from `defaultViewport`.
+- Write history from user actions or effects. Navigation that follows async work (a create that opens
+  what it created) goes through `useStudioWorkspaceWhenActive()`: it runs at once while the tab is
+  active and otherwise waits until the tab returns, so a background tab never writes the active tab's
+  address.
 
 ## Expression editor Contributions
 
@@ -192,9 +240,12 @@ keeps retry IDs stable when a delivery response is uncertain.
 
 ## Weaver Contributions
 
-Studio modules can enrich Weaver through `api.agent` without calling an external
-agent provider from the browser. Weaver is the visible assistant name; `agent`
-is retained for provider-neutral profiles and contribution registries. Provider
+Studio modules can enrich Weaver through `api.weaver` without calling an external
+AI provider from the browser. Weaver is the visible assistant name and the
+name of the SDK surface (`api.weaver`, `StudioWeaver*`, `createWeaverRegistry`,
+`studioSlots.weaver*`) and of the wire names (`weaverScopes`,
+`workflows.weaver.*` ids). The prompt request's `agent` property is the one
+place that says agent: it asks for a named agent other than Weaver. Provider
 access, policy, redaction, approvals, execution, and audit stay in the
 Elsa.Server backend.
 
@@ -209,9 +260,56 @@ Register only declarative, scoped contributions:
 - `toolContracts` declare input, target, result, risk, permissions,
   availability, invocation modes, and renderer expectations.
 - `resultRenderers` render module-specific tool results inside the host-owned
-  Review Shell, with structured fallback when no renderer matches.
+  Review Shell, with structured fallback when no renderer matches. A renderer may present another module's
+  results through `resourceModuleIds`.
+- `resultControls` (optional; hosts that predate it omit it, so guard its use) add the resource-owning module's
+  interactive control for a result type, rendered after whichever renderer presents it.
 
 Use stable IDs, set `moduleId` when the contribution belongs to a module, scope
 `surfaces` narrowly, and include `requiredPermissions` for anything not available
 to every authenticated user. Mutating capabilities should use `review-required`,
 `destructive`, or `admin` risk and must be executed through backend proposals.
+
+## Weaver module participation (candidate)
+
+Register context, prompt actions, capabilities, tool contracts, result renderers and, where the host offers them,
+result controls through `api.weaver`. A renderer contributed by one package for another module's results declares that
+module in `resourceModuleIds`; a control that only the resource-owning module can perform, such as a designer-history
+Undo of a change it applied, is that module's result control, so neither package needs the other's internals. `api.ai` remains a prompt-dispatch compatibility alias; its old contribution
+registries and `studio.ai.*` Slots have been removed. The SDK package re-exports the canonical
+host barrel, so package consumers receive these same declarations. This candidate is still
+subject to the independent #3438 package witness before signature freeze.
+
+Context providers return attachments with owner/schema/provenance and typed availability
+diagnostics. Caller attachments, request source, delivery mode and correlation survive prompt
+dispatch; installed backend sources admit and redact them. Client origin never grants authority.
+The existing array return form is accepted as an attachment collection without diagnostics.
+
+A backend-prepared client invocation carries frozen arguments, target/revision, approval digest,
+expiry and originating `{clientId,generationId}`. A module may provide `executeClient` on its
+existing tool-contract contribution. The generic runner calls it only after explicit review and
+backend pending acceptance. Resolve with an observed resource outcome, never merely after enqueueing
+an editor action. Matching duplicate delivery coalesces within this in-memory lifetime; post-dispatch
+loss yields uncertainty rather than replay. Backend acknowledgement validates the module result.
+
+Preview (#3441): a module may also provide `clientTargetAvailability` on the same contribution. The runner
+asks it before dispatch whether the invocation's exact unsaved target (its editor, working generation or other
+module-private state) still exists in this page. Anything other than `available`, or a failure to answer, refuses
+the operation with zero effect and the module's reason. The runner never reconstructs vanished unsaved state, and
+a missing adapter is reported as such. An operation already dispatched without a receipt stays uncertain; after a
+reload or a lost page its owner can resolve it explicitly, and that statement is never a receipt.
+
+Modules own live bindings, revision interpretation, validation, presentation and native undo.
+Resource targets now require `moduleId` and nullable `resourceId`/`revision`; mutations enforce the
+exact applicable identity and revision. Typed `{typeId,schemaVersion,data}` results pass through
+providers opaquely. Renderer selection predicates and components run inside presentation boundaries;
+structured evidence and common review controls remain usable after a contribution fails or its version
+is unsupported. Workflow snapshots/window events are no longer a host/SDK transport contract.
+Local working-state receipts do not mean save/publish; the native module holds automatic persistence
+until the reviewed changes are explicitly saved, published or undone. An older or queued save cannot
+release a newer hold: the successful explicit save must cover the current held snapshot and generation.
+A failed covering save preserves the hold/undo and stops publication before preflight or mutations.
+
+## User Task form renderers
+
+The additive `user-task.form-renderers` slot exposes `api.userTaskForms`. Contribute a unique `id`, the server form `provider` ID and a component accepting `StudioUserTaskFormProps` (`form`, `value`, `readOnly`, `errors`, `onChange`). Treat form values/error keys as opaque case-sensitive data and read only own properties. Respect read-only state and preserve entered values on validation/conflict. Exactly one renderer must match a task's pinned provider; missing/duplicate matches disable completion. Server-side `IUserTaskFormProvider` validation remains authoritative. The optional UserTasksStudio module contributes the basic renderer and owns inbox/forms/editor flows; the SDK defines only the contribution contract.

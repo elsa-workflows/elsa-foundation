@@ -146,10 +146,10 @@ public sealed class InMemoryWorkflowExecutionDeletionStore : IWorkflowExecutionD
         // dispatch records, test scopes and independent execution evidence deliberately remain outside this boundary.
         // The owner has already passed cancellation before acquiring the mutation gates. Keep this phase synchronous
         // so cancellation cannot leave a partially purged execution behind.
-        _activityExecutionStateStore!.DeleteForWorkflowExecution(workflowExecutionId);
+        _activityExecutionStateStore!.DeleteForWorkflowExecution(workflowExecutionId, _checkpointState);
         _activityExecutionInspectionStore!.DeleteForWorkflowExecution(workflowExecutionId);
         _activityExecutionHierarchyStore!.DeleteForWorkflowExecution(workflowExecutionId);
-        _bookmarkStateStore!.DeleteForWorkflowExecution(workflowExecutionId);
+        _bookmarkStateStore!.DeleteForWorkflowExecution(workflowExecutionId, _checkpointState);
         _durableValueStateStore!.DeleteForWorkflowExecution(workflowExecutionId);
         _schedulerStateStore!.DeleteForWorkflowExecution(workflowExecutionId);
         _durableTimerStore!.DeleteForWorkflowExecution(workflowExecutionId);

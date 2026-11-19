@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "task": "T051 bounded actual competing prepared-proposal rejection; empty competing/renew/partial-start and overall qualification remain open",
+  "sourceParentCommit": "44acc05163fe2ac7cbdeb687b2488d6c8c099350",
+  "filesSha256": {
+    "e2e-tests/README.md": "5ee34fae2e9c999bd85676ec8bc926f5a4e8bb2a98786ee812afa6efdc287f6b",
+    "e2e-tests/bpmn/RecoveryProbe/README.md": "84f5b10e4b14088b8f28b275be9d73ee25fb6530258ccbe1b6870d337879bbf9",
+    "e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs": "d2307c8b2b21ac233d05ae7cf4ffa99ab8940cb03015045df2949e1e70cd0642",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "4a663ca9cb344168e7199032a47623c832fdbd721e559b5f764780127687c695",
+    "e2e-tests/bpmn/Test-BpmnRecoveryCleanupControls.ps1": "5d6e6d00ecd304cd072bbe747fddefa4f9c9408720a6c3bcbad4b483c045fbc4",
+    "e2e-tests/bpmn/inspect_broadcast_recovery.py": "0269a534a96cb2792d9193f073954ae31f9d3c47c4c935181b2626d35c730c63",
+    "e2e-tests/bpmn/test_inspect_broadcast_recovery.py": "0e6ca3c6d2ae10fb1b7f5465496486038e781fbb4a8decaf3a5744454a530562",
+    "e2e-tests/bpmn/pause_owned_broadcast_host.py": "c7d4ae9155727ca61d5c2a81162b7de457cbd986f1dfd27dbc462e63a91d9d60",
+    "e2e-tests/bpmn/test_pause_owned_broadcast_host.py": "e3c3aa21b23481d96c2fbcd97f3da9705f6b6e9be349aa79da89867eab60d156",
+    "e2e-tests/bpmn/run_owned_broadcast_probe.py": "916716d10446ec7650b99ec926dcb08024fc8619fc21402c862e6d47e163b5de",
+    "e2e-tests/bpmn/test_run_owned_broadcast_probe.py": "c4f9e2d3985e900b2cd50b695b16a6485f73cd51c58d45129edfdb82fd43e77a",
+    "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj": "2e7e1246eddc92f28703065038aaa9dd74aec19ec51e1b96d69fbb1632691e99",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "b4f40a4136ab34c018281ad782aa8dfed9be7e0669fa7f59d289fce1716c373d",
+    "tools/bpmn/DeliveryRecoveryRead/packages.lock.json": "eac338b10044cfaecaaf7d9d5af7fb34edd76d7c1d9fca7f3227a02b80225182"
+  },
+  "hostReceiptsSha256": {
+    "broadcast-competing-proposal-host.json": "385307d6f264621d910f308f18cf2cebfdd04b5978ddf0200409683e1d89f989",
+    "broadcast-competing-proposal-empty-cohort.json": "7735cf041ba1ef9b12abfd565ca4f31846f06dbb8e6d86bcf138936fd9fcc77f",
+    "broadcast-competing-proposal-before-selection.json": "10ae7736dcd43f8eec19b3303e70f594438259015bc3436a9e967c4945c0b264",
+    "broadcast-competing-proposal-after-cohort.json": "a8168159c37af6b3313c9f756e8130145327aa4edbf5c04c71a8a5dcd1c62704",
+    "broadcast-competing-proposal-after-resume.json": "c87f5cdd0e1ad11bf69c369cf696b865c587a7f2650eed08f90f7fae1d3f1fe3"
+  },
+  "sourceBindingsCheckedPerCase": 1376,
+  "checks": [
+    {
+      "name": "actual competing prepared stale proposal",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual empty/delayed/post-cohort/partial-rearm regressions",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "checked source/membership reader controls",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "owned process/pause/broker controls",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual cleanup failure controls (prior finally red)",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "whole architecture project",
+      "passed": 590,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Server locked restore and generated maps",
+      "passed": 2,
+      "failed": 0
+    }
+  ],
+  "competition": {
+    "preparedStarts": 1,
+    "preparedResumes": 2,
+    "winningStarts": 2,
+    "winningResumes": 4,
+    "actualSharedMembership": true,
+    "oldNaturallyExpiredPeerLive": true,
+    "distinctIncarnations": true,
+    "sourceFenceBefore": 1,
+    "sourceFenceAfter": 2,
+    "providerInstallAttempted": true,
+    "cancellationRequested": false,
+    "actualException": "RuntimePostCommitOutboxStaleClaimException",
+    "sourceWorkflowsInventoryUnchangedAfterOldAttempt": true
+  },
+  "verificationIterations": [
+    "shared-lock startup guard refused initial cluster fixture; configured one shared lock directory",
+    "direct .NET stopped-child parent stalled; owned Python broker kept controller progress independent",
+    "earlier shared-controller batch carried temporary membership configuration; final cases use separate PowerShell processes",
+    "independent standards review found cleanup short-circuit; actual prior finally fails injected control, fixed three failure controls pass before final host runs"
+  ],
+  "productionSourceChanged": false,
+  "externalPackageRecordsChanged": false,
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "reviews": {
+    "type": "three independent component source/actual/portable audits; not full PR",
+    "remainingActionable": []
+  },
+  "remainingGates": [
+    "empty competing winner, real renewed claims, partial starts, ACK loss/redrive and remaining T051 scope/retention/GC/republish cases",
+    "remaining T045 semantics/native-composite, actual historical upgraded-host recovery and final current Studio",
+    "legacy writer/duplicate semantics deletion and guards, full-PR review, green exact-head checks/protected merge and resulting-main verification",
+    "separate ADR0063 acceptance and independent production #2898/#2907/program acceptance; Orleans/task-runner deferred"
+  ],
+  "fullPrRounds": 0
+}

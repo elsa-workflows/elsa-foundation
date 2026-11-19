@@ -1,0 +1,25 @@
+# Studio qualification after the latest main integration
+
+Product source `b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8` integrates main `3e93e06d9`, including its theme/UI changes. Both actual saved Studio families qualify on rebuilt products carrying that exact revision. Four new completed runs retain their Published Run/Test Run kinds and full pins across two real backend restarts. Twelve whole coupled stores, nine original-run observations, unchanged authoring/layout/XML and 84/92 original material incarnations pass the unchanged strict verifier. All 13 unchanged strict controls pass, with no failures/errors/skips. This proves existing embedded BPMN Studio compatibility; first-class direct-model Studio remains open.
+
+| Gate | Source and result |
+|---|---|
+| Whole affected Workflows frontend | `4d62b2f30`: 2812 assertions pass, no failed/pending/todo cases. |
+| Whole frontend | `b7e23ab098`: 4,092 assertions pass across 22 package scripts; no pending/todo Vitest cases. Script-only packages remain separate. |
+| Typecheck/lint/frontend build | `b7e23ab098`: pass. Both actual .NET host products rebuild successfully. |
+| Whole Studio .NET | `b7e23ab098`: 675 pass, zero failed/skipped. |
+| Affected theme/authoring/run browser surfaces | `4d62b2f30`: 165 pass, zero failed/skipped. |
+| Affected list/canvas browser surfaces | Scoped list CSS correction `4d62b2f30`: 76 pass, zero failed/skipped; typecheck/lint pass. |
+| Maps and tier guard | `b7e23ab098`: pass. |
+| Frozen baseline | All 104 original assets and manifest fingerprint unchanged. |
+| Existing backend and public API gates | Backend, host tests and BPMN tools are unchanged from `8e9b31360`; its whole 43/43 hosting result and preceding source-bound backend/API evidence remain in force at their original sources. |
+
+[Commands/results](gates/gate-results.json), [frontend package results](frontend/results.json), [browser reconciliation](gates/collection-assertion-reconciliation-results.json), [actual Studio bundle](studio/manifest.json), [full-view comparison](canonical-full-view-comparison.json) and [all hashes](manifest.json) make these outcomes portable. Machine-local paths in command/process records are provenance; reproduction substitutes a fresh checkout/output directory and uses the original whole baseline stores. Neither a historical path nor a copied DLL is a portable prerequisite.
+
+The initial list/canvas run records 66 passes and 10 failures on a Studio tree identical to adopted main. Two viewport assertions included the new description in the name container. Eight compact-row assertions measured 49px against the existing 48px limit. The initial separator hypothesis was wrong: changing only the measurement to clientHeight still records 68 passes and eight failures. That change was reverted, and the original geometry guard is retained. Actual rendered inspection found that the general `.wf-grid-row small` display rule overrode the intended default description hiding. The narrowly qualified `.wf-definitions-list .wf-definition-description` rule restores that hiding while retaining Minimal's existing explicit description override. The name assertion targets the existing strong name element. The affected 76-case and 165-case repeats, typecheck, lint and frontend build pass at `4d62b2f30`. The strict recovery verifier is unchanged. These list-only selector changes do not match any of the saved editor/run evidence surfaces; their actual product evidence retains source `b7e23ab098`.
+
+The earlier private root-server configuration failure ran no tests; correcting its working directory restored the inherited config's resolution. The initial default 822-case selection was deliberately cancelled as broader than this bounded increment; it is not a passing gate. All those outcomes, including the failed separator hypothesis, remain distinct in the ledger.
+
+Both supported sign-in flows complete with the configured owned return origin and awaited provider navigation, one owned pair at a time. The earlier authentication loop did not recur; its single cause remains unconfirmed. No additional Identity product change or protection reduction was needed. The [authorized diagnostic receipt](../auth-pass-1/README.md) keeps the earlier source `82f6202a5` pass, local 594/594 architecture correction and 43/43 hosting result, while the [preceding checkpoint](../c4cfa0736/README.md) retains its original failures.
+
+Seven full PR review rounds have completed, none clean; 16 total are authorized. Round 8 has not started in this source receipt. T041/T043 are evidenced at these recorded sources; T044 prepares Implemented for the implementation merge. Clean exact-head review, green required checks, protected merge and resulting-main verification remain open. Broader ETL/Studio/agent/program acceptance and existing Orleans/task-runner/alteration deferrals remain open. Required CI on old remote `82f6202a5` is red until superseded by a verified repaired candidate; local qualification does not turn it green.

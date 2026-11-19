@@ -26,6 +26,7 @@ public sealed class RuntimeResumptionPumpTaskTests
             BacklogBatchSize = 12,
             RecoveryScanBatchSize = 13,
             MaxExecutionsPerSweep = 14,
+            MaxConcurrentDispatches = 3,
             LeaseTimeout = TimeSpan.FromMinutes(7),
             HeartbeatTimeout = TimeSpan.FromMinutes(8)
         });
@@ -37,6 +38,7 @@ public sealed class RuntimeResumptionPumpTaskTests
         Assert.Equal(12, request.BacklogBatchSize);
         Assert.Equal(13, request.RecoveryScanBatchSize);
         Assert.Equal(14, request.MaxExecutionsPerSweep);
+        Assert.Equal(3, request.MaxConcurrentDispatches);
         Assert.Equal(TimeSpan.FromMinutes(7), request.LeaseTimeout);
         Assert.Equal(TimeSpan.FromMinutes(8), request.HeartbeatTimeout);
         Assert.Empty(request.ExcludedWorkflowExecutionIds);

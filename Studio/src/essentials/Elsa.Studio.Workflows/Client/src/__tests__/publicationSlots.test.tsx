@@ -51,6 +51,8 @@ describe("publication channel UX", () => {
     expect(text(container)).toContain("Version 2.0.0");
     expect(container.querySelector(".wf-publication-change-summary")?.textContent).toBe("Changes: 1 activity · 1 trigger");
     expect(container.querySelector("#publication-review-status")?.getAttribute("data-visible")).toBe("false");
+    expect(button(container, "Cancel").getAttribute("data-variant")).toBe("default");
+    expect(button(container, "Publish").getAttribute("data-variant")).toBe("primary");
     expect(button(container, "Publish").disabled).toBe(false);
     expect(text(container)).not.toContain("captured editor state");
   });
@@ -494,8 +496,8 @@ describe("publication channel UX", () => {
 
     expect(text(container)).toContain("Published");
     expect(text(container)).toContain("Version 2.1.0 is active");
-    expect(button(container, "Close").classList.contains("wf-primary-action")).toBe(true);
-    expect(button(container, "View published workflow").classList.contains("wf-primary-action")).toBe(false);
+    expect(button(container, "Close").getAttribute("data-variant")).toBe("default");
+    expect(button(container, "View published workflow").getAttribute("data-variant")).toBe("primary");
     expect(document.activeElement).toBe(container.querySelector("#publication-success-title"));
     flushSync(() => button(container, "View published workflow").click());
     expect(onOpen).toHaveBeenCalledOnce();
@@ -527,6 +529,8 @@ describe("publication channel UX", () => {
     expect(form.children[0].classList.contains("wf-publication-header")).toBe(true);
     expect(form.children[1].classList.contains("wf-publication-body")).toBe(true);
     expect(form.children[2].classList.contains("wf-publication-footer")).toBe(true);
+    expect(form.children[2].classList.contains("studio-dialog-footer")).toBe(true);
+    expect(form.children[2].classList.contains("wf-dialog-actions")).toBe(true);
     expect(button(container, "Close")).toBeDefined();
   });
 });

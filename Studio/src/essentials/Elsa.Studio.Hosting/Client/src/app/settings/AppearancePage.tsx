@@ -1,3 +1,4 @@
+import { StudioPageHeader } from "../ui";
 import React from "react";
 import { StudioButton } from "../ui/forms/Button";
 import { useTheme } from "../components/ThemeProvider";
@@ -9,6 +10,9 @@ import {
 } from "../themes/appearance";
 import { getSupportedThemeModes, getThemeModeDefinition, isThemeMode } from "../themes/presets";
 import { isNavModePreference, navModePreferenceLabels, navModePreferences } from "../themes/navMode";
+import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
+import { minimalStudioPresets, type MinimalStudioPresetId } from "../themes/minimalPresets";
+import { isSidebarColorPreference, sidebarColorPreferenceLabels, sidebarColorPreferences } from "../themes/sidebarColor";
 
 /** The radio-group arrow keys wrap around; Home/End jump to the ends. Undefined for any other key. */
 function keyTarget(key: string, index: number, count: number): number | undefined {
@@ -32,26 +36,71 @@ export function AppearancePage({
 }) {
   const {
     currentTheme,
+    currentColorScheme,
+    workspaceStyle,
+    setWorkspaceStyle,
+    setColorScheme,
     availableThemes,
     store,
     modePreference,
     setModePreference,
     setTheme,
+    applyPreset,
+    mode,
     resetAppearance,
     supportedModes,
+    navMode,
     navModePreference,
-    setNavModePreference
+    setNavModePreference,
+    sidebarColorPreference,
+    setSidebarColorPreference
   } = useTheme();
   const defaultThemeId = store.defaultThemeId || availableThemes[0]?.id;
+  const sidebarColorTitle = navMode === "top" ? "Navigation bar color" : "Sidebar color";
   const modeOptions = appearanceModePreferences.filter(option => option === "system" || supportedModes.includes(option));
 
   return (
-    <section className="settings-page" aria-labelledby="settings-appearance-title">
-      <header className="settings-page-header">
-        <h2 id="settings-appearance-title">Appearance</h2>
-        <p>Theme, colour mode and navigation for this browser.</p>
-        <span className="settings-scope">This browser</span>
-      </header>
+    <section className="studio-page settings-page" aria-labelledby="settings-appearance-title">
+      <StudioPageHeader headingLevel={2} title={<>Appearance</>} titleId="settings-appearance-title" description={<>Choose your workspace, colors and mode independently.</>} actions={<><span className="settings-scope">This browser</span></>} />
+
+      <AppearanceCard title="Studio presets" description="Start with a complete look, then adjust each choice below.">
+        <RadioCardGroup
+          ariaLabel="Studio preset"
+          value={workspaceStyle === "minimal" && currentColorScheme.id === currentTheme.id && minimalStudioPresets.some(preset => preset.id === currentTheme.id && preset.mode === mode) ? currentTheme.id : ""}
+          options={minimalStudioPresets.flatMap(preset => {
+            const theme = availableThemes.find(candidate => candidate.id === preset.id);
+            const colors = theme && getThemeModeDefinition(theme, preset.mode);
+            return colors ? [{ value: preset.id, label: preset.name, description: preset.description, preview: colors }] : [];
+          })}
+          onChange={value => applyPreset(value as MinimalStudioPresetId)}
+        />
+      </AppearanceCard>
+
+      <AppearanceCard title="Workspace style" description="Arrange your tools without changing your color scheme.">
+        <RadioCardGroup
+          ariaLabel="Workspace style"
+          workspacePreviews
+          value={workspaceStyle ?? "theme"}
+          options={[
+            ...workspaceStyles.map(style => ({ value: style.id, label: style.name, description: style.description })),
+            { value: "theme", label: "Theme default", description: `Keep ${currentTheme.name}'s original arrangement.`, defaultValue: false }
+          ]}
+          onChange={value => setWorkspaceStyle(isWorkspaceStyle(value) ? value : null)}
+        />
+      </AppearanceCard>
+
+      <AppearanceCard title="Color scheme" description="A coordinated palette for surfaces, text and accents. Your workspace stays put.">
+        {availableThemes.length === 0 ? <p>No themes are available for selection.</p> : <RadioCardGroup
+          ariaLabel="Color scheme"
+          value={currentColorScheme.id}
+          options={availableThemes.map(theme => ({
+            value: theme.id,
+            label: theme.name,
+            swatches: getSupportedThemeModes(theme).map(mode => getThemeModeDefinition(theme, mode)?.primary).filter((color): color is string => Boolean(color))
+          }))}
+          onChange={setColorScheme}
+        />}
+      </AppearanceCard>
 
       <AppearanceCard
         title="Mode"
@@ -69,26 +118,29 @@ export function AppearancePage({
         />
       </AppearanceCard>
 
-      <AppearanceCard
-        title="Theme"
-        description="Choose a theme for this browser from the options available in Studio."
-      >
-        {availableThemes.length === 0 ? <p>No themes are available for selection.</p> : <RadioCardGroup
-          ariaLabel="Theme"
-          value={currentTheme.id}
-          options={availableThemes.map(theme => ({
-            value: theme.id,
-            label: theme.name,
-            defaultValue: theme.id === defaultThemeId,
-            swatches: getSupportedThemeModes(theme).map(mode => getThemeModeDefinition(theme, mode)?.primary).filter((color): color is string => Boolean(color))
-          }))}
-          onChange={setTheme}
-        />}
-      </AppearanceCard>
+      <details className="settings-theme-presets">
+        <summary>Theme presets</summary>
+        <AppearanceCard
+          title="Theme preset"
+          description="Apply an original theme's complete combination, clearing workspace and color overrides."
+        >
+          {availableThemes.length === 0 ? <p>No themes are available for selection.</p> : <RadioCardGroup
+            ariaLabel="Theme"
+            value={currentTheme.id}
+            options={availableThemes.map(theme => ({
+              value: theme.id,
+              label: theme.name,
+              defaultValue: theme.id === defaultThemeId,
+              swatches: getSupportedThemeModes(theme).map(mode => getThemeModeDefinition(theme, mode)?.primary).filter((color): color is string => Boolean(color))
+            }))}
+            onChange={setTheme}
+          />}
+        </AppearanceCard>
+      </details>
 
       <AppearanceCard
         title="Navigation"
-        description="Follow the theme, or pin the sidebar to the left or the top."
+        description="Follow the workspace, or pin navigation to the left or top."
       >
         <RadioCardGroup
           ariaLabel="Navigation"
@@ -99,6 +151,23 @@ export function AppearancePage({
             defaultValue: preference === defaultAppearancePreferences.navigation
           }))}
           onChange={value => isNavModePreference(value) && setNavModePreference(value)}
+        />
+      </AppearanceCard>
+
+      <AppearanceCard
+        title={sidebarColorTitle}
+        description="Keep the navigation dark or light in every mode, or follow the workspace. High contrast keeps its own navigation."
+      >
+        <RadioCardGroup
+          ariaLabel={sidebarColorTitle}
+          value={sidebarColorPreference}
+          options={sidebarColorPreferences.map(preference => ({
+            value: preference,
+            label: sidebarColorPreferenceLabels[preference],
+            defaultValue: preference === defaultAppearancePreferences.sidebarColor,
+            disabled: mode === "high-contrast"
+          }))}
+          onChange={value => isSidebarColorPreference(value) && setSidebarColorPreference(value)}
         />
       </AppearanceCard>
 
@@ -145,13 +214,15 @@ function AppearanceCard({
 
 function RadioCardGroup({
   ariaLabel,
+  workspacePreviews = false,
   value,
   options,
   onChange
 }: {
   ariaLabel: string;
+  workspacePreviews?: boolean;
   value: string;
-  options: Array<{ value: string; label: string; defaultValue?: boolean; swatches?: string[]; disabled?: boolean }>;
+  options: Array<{ value: string; label: string; description?: string; defaultValue?: boolean; swatches?: string[]; disabled?: boolean; preview?: ReturnType<typeof getThemeModeDefinition> }>;
   onChange: (value: string) => void;
 }) {
   const optionRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
@@ -182,6 +253,14 @@ function RadioCardGroup({
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
         >
+          {option.preview ? <span className="settings-preset-preview" aria-hidden="true" style={{
+            "--preview-background": option.preview.background, "--preview-sidebar": option.preview.sidebar,
+            "--preview-card": option.preview.card, "--preview-muted": option.preview.muted,
+            "--preview-ink": option.preview.mutedForeground, "--preview-accent": option.preview.ring
+          } as React.CSSProperties}><i className="settings-preset-nav"><b /><b /><b /></i><i className="settings-preset-content"><b /><b /><b /><b /></i></span> : null}
+          {workspacePreviews && option.value !== "theme" ? (
+            <span className="workspace-style-preview" data-style={option.value} aria-hidden="true"><i /><i /><i /></span>
+          ) : null}
           {option.swatches && option.swatches.length > 0 ? (
             <span className="settings-swatches" aria-hidden="true">
               {option.swatches.map((color, index) => (
@@ -193,6 +272,7 @@ function RadioCardGroup({
             {option.label}
             {option.defaultValue ? <span className="settings-default-badge">Default</span> : null}
           </span>
+          {option.description ? <small className="settings-radio-description">{option.description}</small> : null}
         </button>
       ))}
     </div>

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const graphStyles = readFileSync(new URL("../workflow-editor/graphCanvas.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const nodePresentationStyles = readFileSync(new URL("../workflow-editor/workflowNodePresentation.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const token = (name: string) => {
   const match = styles.match(new RegExp(`${name}\\s*:([^;]+);`));
@@ -24,9 +25,9 @@ describe("activity icon host override", () => {
 
   it("colours data-tone palette and node rules through those host-overridable aliases", () => {
     expect(styles).toMatch(/\.wf-activity-icon\[data-tone="terminal"\][\s\S]*?color:\s*var\(--wf-activity-terminal\)/);
-    expect(styles).toMatch(/\.wf-node\[data-tone="terminal"\] \.wf-node-icon[\s\S]*?color:\s*var\(--wf-activity-terminal\)/);
+    expect(graphStyles).toMatch(/\.wf-node\[data-tone="terminal"\] \.wf-node-icon[\s\S]*?color:\s*var\(--wf-activity-terminal\)/);
     expect(styles).toMatch(/\.wf-activity-icon\[data-tone="composite"\][\s\S]*?color:\s*var\(--wf-activity-composite\)/);
-    expect(styles).toMatch(/\.wf-node\[data-tone="trigger"\] \.wf-node-icon[\s\S]*?color:\s*var\(--wf-activity-trigger\)/);
+    expect(graphStyles).toMatch(/\.wf-node\[data-tone="trigger"\] \.wf-node-icon[\s\S]*?color:\s*var\(--wf-activity-trigger\)/);
   });
 
   it("soft-fills node and palette icons outside material themes and gives node actions a token-backed focus ring", () => {

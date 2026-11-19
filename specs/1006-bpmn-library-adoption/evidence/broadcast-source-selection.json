@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 shared ordinary source selection only; task remains open",
+  "sourceParentCommit": "0ca0ddfa3d499655789d1b04951e08bd8b2efc48",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs": "15f7b0d4c3143e791bb05954862cd156b6fadc5c55f3116908f87253c16001fa",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowExecutableStartSourceResolver.cs": "13e1cffcb508eddb1867f230c8b296e219d8bef6b741bf1dfa3ca3284f608c9c",
+    "Essentials/tests/Workflows/Runtime/Tests/StimulusStartSourceCaptureTests.cs": "90c02f883812259a18eb6a511193fda4915a8181c3b8847b016eec46e079e769"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2851,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "focusedSourceAndExistingStartCases": 66,
+      "newCaptureCases": 9,
+      "failed": 0
+    },
+    {
+      "publicApiAdditions": 0,
+      "publicApiRemovals": 0
+    },
+    {
+      "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+      "unchanged": true
+    }
+  ],
+  "mutations": [
+    {
+      "name": "capture-through-uncaptured-constructor",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     3, Passed:     6, Skipped:     0, Total:     9, Duration: 22 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-source-liveness",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     3, Passed:     6, Skipped:     0, Total:     9, Duration: 20 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-required-reference-scope",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     4, Skipped:     0, Total:     5, Duration: 19 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "invent-reference-less-choice-for-existing-references",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 14 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "truncate-source-reference-traversal",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 17 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    }
+  ],
+  "reviews": {
+    "correctness": "clean; final receipt/source hashes and limits verified",
+    "standards": "clean; final receipt/source hashes and limits verified",
+    "acceptance": "clean; final receipt/source hashes and limits verified",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "No saved start is admitted; existing pre-duplicate refusal remains.",
+    "Capture proves ordinary source selection only, not cohort acceptance, executable/reference retention, policy admission or host recovery.",
+    "T049 retention/admission, T050 activation, T051 actual host/fresh-provider recovery and final Studio remain open."
+  ]
+}

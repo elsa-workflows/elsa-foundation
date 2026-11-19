@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "438001406d980051584234e5d656eb8e6a67f47f",
+  "arguments": [
+    "dotnet",
+    "build",
+    "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+    "-c",
+    "Release",
+    "--artifacts-path",
+    "/tmp/elsa-2735-review/adoption-main-standard-build",
+    "-p:RestoreLockedMode=true",
+    "-p:SourceRevisionId=438001406d980051584234e5d656eb8e6a67f47f",
+    "-m:2",
+    "-nodeReuse:false",
+    "-p:UseSharedCompilation=false"
+  ],
+  "profile": "standard resulting-main host"
+}

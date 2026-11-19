@@ -1,4 +1,5 @@
 using Elsa.Workflows.Testing;
+using Elsa.Workflows.Runtime.Core.Attributes;
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Workflows.Publishing.Handlers;
@@ -29,6 +30,7 @@ using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
@@ -60,8 +62,53 @@ using WorkflowExecutableHasher = Elsa.Workflows.Publishing.Services.WorkflowExec
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-public sealed class WorkflowExecutableCompilerTests
+public sealed partial class WorkflowExecutableCompilerTests
 {
+    [Fact]
+    public async Task Source_authority_revision_changes_with_the_actual_transient_candidate_under_the_same_source_ids()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        var versions = new FakeActivityVersionStore([_writeLineActivity]);
+        var authority = new ObservingDataAuthority(TestCompiler.SourceAuthority(versions, _activityStructureService));
+        var compiler = TestCompiler.Create(new FakeVersionStore(version), versions, _activityStructureService,
+            TestWellKnownTypeRegistry.Create(), dataSelectionAnalyzer: authority);
+        var request = NewRequest(DateTimeOffset.UtcNow);
+        var first = new WorkflowExecutableCompileSource("definition-1", "version-1", "1.0.0", version.State!,
+            "WorkflowDraftSnapshot", "same-snapshot", "1.0.0");
+        await compiler.CompileAsync(request with { Source = first });
+        var changed = first with { State = WorkflowVersion(Node("consumer", Text("second"))).State! };
+        await compiler.CompileAsync(request with { Source = changed });
+        Assert.Equal(2, authority.Revisions.Count);
+        Assert.NotEqual(authority.Revisions[0], authority.Revisions[1]);
+    }
+
+    [Fact]
+    public async Task A_source_authority_response_for_another_candidate_is_refused_before_metadata_enrichment()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        var versions = new FakeActivityVersionStore([_writeLineActivity]);
+        var authority = new ObservingDataAuthority(TestCompiler.SourceAuthority(versions, _activityStructureService)) { ReplaceRevision = true };
+        var compiler = TestCompiler.Create(new FakeVersionStore(version), versions, _activityStructureService,
+            TestWellKnownTypeRegistry.Create(), dataSelectionAnalyzer: authority);
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Contains("actual workflow candidate", exception.Message);
+    }
+
+    private sealed class ObservingDataAuthority(IActivityDataSelectionAnalyzer inner) : IActivityDataSelectionAnalyzer
+    {
+        internal List<string> Revisions { get; } = [];
+        internal bool ReplaceRevision { get; init; }
+        public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document,
+            ActivityDataSelectionTarget? target = null, ActivityDataSelectionQuery? query = null,
+            CancellationToken cancellationToken = default)
+        {
+            Revisions.Add(document.ContractRevision);
+            var result = await inner.AnalyzeAsync(document, target, query, cancellationToken);
+            return ReplaceRevision ? result with { ContractRevision = "another-candidate" } : result;
+        }
+    }
+
     [Fact]
     public void Compiler_preserves_the_current_main_pre_metadata_enricher_constructor()
     {
@@ -382,6 +429,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var refusal = await AssertBackgroundRefusedAsync(BackgroundCompiler(
             typeof(BackgroundSafeOutcomeConsumer), "outcome-consumer", ActivityExecutionPlacement.Background));
+        Assert.Contains("VF-BG-001 (C1):", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("structural activities and nodes with children", refusal.Message, StringComparison.Ordinal);
     }
 
@@ -398,6 +446,7 @@ public sealed class WorkflowExecutableCompilerTests
             _activityStructureService,
             TestWellKnownTypeRegistry.Create());
         var structural = await AssertBackgroundRefusedAsync(structuralCompiler);
+        Assert.Contains("VF-BG-001 (C1):", structural.Message, StringComparison.Ordinal);
         Assert.Contains("structural activities and nodes with children", structural.Message, StringComparison.Ordinal);
 
         var intrinsicCompiler = TestCompiler.Create(
@@ -412,18 +461,20 @@ public sealed class WorkflowExecutableCompilerTests
             _activityStructureService,
             TestWellKnownTypeRegistry.Create());
         var intrinsic = await AssertBackgroundRefusedAsync(intrinsicCompiler);
-        Assert.Contains("engine intrinsics cannot run as background activities", intrinsic.Message, StringComparison.Ordinal);
+        Assert.Contains("VF-BG-001 (C1): Background execution is not eligible for activity node 'intrinsic': engine intrinsics cannot run as background activities", intrinsic.Message, StringComparison.Ordinal);
 
         var untyped = await AssertBackgroundRefusedAsync(BackgroundCompiler(
             typeof(BackgroundSafeObjectActivity),
             "activity-background-object",
             ActivityExecutionPlacement.Background));
+        Assert.Contains("VF-BG-001 (C3):", untyped.Message, StringComparison.Ordinal);
         Assert.Contains("untyped object results are not supported", untyped.Message, StringComparison.Ordinal);
 
         var transient = await AssertBackgroundRefusedAsync(BackgroundCompiler(
             typeof(BackgroundSafeStreamActivity),
             "activity-background-stream",
             ActivityExecutionPlacement.Background));
+        Assert.Contains("VF-BG-001 (C4):", transient.Message, StringComparison.Ordinal);
         Assert.Contains("transient result values are not supported", transient.Message, StringComparison.Ordinal);
 
         var sensitive = await AssertBackgroundRefusedAsync(BackgroundCompiler(
@@ -441,6 +492,7 @@ public sealed class WorkflowExecutableCompilerTests
                     IsSensitive: true)
             ],
             variables: [new("result-value", "Result Value", new TypeReference("String"), null, null)]));
+        Assert.Contains("VF-BG-001 (C5):", sensitive.Message, StringComparison.Ordinal);
         Assert.Contains("sensitive or encryption-required result values are not supported", sensitive.Message, StringComparison.Ordinal);
     }
 
@@ -839,6 +891,7 @@ public sealed class WorkflowExecutableCompilerTests
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
 
         Assert.Contains("VF-BG-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("VF-BG-001 (C1):", exception.Message, StringComparison.Ordinal);
         Assert.Contains("reusable activity boundaries are not supported", exception.Message, StringComparison.Ordinal);
     }
 
@@ -997,6 +1050,7 @@ public sealed class WorkflowExecutableCompilerTests
         ActivityExecutionPlacement executionPlacement = ActivityExecutionPlacement.Inline,
         bool primaryInputIsRequired = true,
         bool primaryInputIsNullable = false,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null,
         params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
     {
         var primaryInputKey = authoredInput?.ReferenceKey ?? "value";
@@ -1083,7 +1137,8 @@ public sealed class WorkflowExecutableCompilerTests
             new SinglePublicationStore(publication),
             new ReusableTemplateReader(template),
             new ReusableSourceReader(sourceReference),
-            new WorkflowExecutablePlacementSidecarContext());
+            new WorkflowExecutablePlacementSidecarContext(),
+            scriptVariableReadResolver: readResolver);
     }
 
     [Fact]
@@ -2273,6 +2328,197 @@ public sealed class WorkflowExecutableCompilerTests
             ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }
 
+    public static TheoryData<Type, LostUpdateMode, string?> LostUpdateModeCases => new()
+    {
+        { typeof(LegacyTriggerActivity), LostUpdateMode.Default, null },
+        { typeof(LegacyTriggerActivity), LostUpdateMode.Fault, RuntimeMetadataKeys.LostUpdateModeFault },
+        { typeof(StrictLostUpdateProbe), LostUpdateMode.Default, RuntimeMetadataKeys.LostUpdateModeFault },
+        { typeof(StrictLostUpdateProbe), LostUpdateMode.Fault, RuntimeMetadataKeys.LostUpdateModeFault }
+    };
+
+    // Spec 1221 FR-012 (T022): strict read-modify-write is pinned when the activity type declares it or the node's setting
+    // (set through the design API) asks for it; a node setting never downgrades a type's declaration, and the default
+    // mode leaves no key.
+    [Theory]
+    [MemberData(nameof(LostUpdateModeCases))]
+    public async Task The_node_pins_the_Fault_lost_update_mode_from_its_type_or_its_own_setting(Type activityType, LostUpdateMode nodeMode, string? expected)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []) { LostUpdateMode = nodeMode })),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(expected, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.LostUpdateMode));
+    }
+
+    // Spec 1221 FR-019 (T030): the node's opt-out of the background admission refresh is pinned on the node; refresh on
+    // (the default) leaves no key.
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, RuntimeMetadataKeys.BackgroundInputRefreshOff)]
+    public async Task The_node_pins_its_background_input_refresh_opt_out(bool disable, string? expected)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(typeof(LegacyTriggerActivity));
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(LegacyTriggerActivity), TypeAliasConvention.CanonicalAlias(typeof(LegacyTriggerActivity)));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []) { DisableBackgroundInputRefresh = disable })),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(expected, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BackgroundInputRefresh));
+    }
+
+    [ActivityLostUpdateMode(LostUpdateMode.Fault)]
+    private sealed class StrictLostUpdateProbe : IActivityResult<ActivityUnit>;
+
+    // Spec 1231 FR-022, FR-024, FR-026 (T017, T019, T020): a VariableReference<T> input pins the variable it names, never a
+    // value; the node's may-write set and the free-name marker are pinned on the published node and its contract.
+    [Fact]
+    public async Task A_bound_variable_reference_pins_its_target_and_the_may_write_set()
+    {
+        var compiler = VariableReferenceCompiler(typeof(VariableWriterProbe), bound: true);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var node = executable.RootActivity;
+        var binding = node.InputBindings["Balance"];
+        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
+        Assert.Equal(VariableReferenceTypes.Alias, binding.TargetType.Alias);
+        Assert.Equal("workflow", binding.LiteralValue!.Value.GetProperty("scopeId").GetString());
+        Assert.Equal("balance", binding.LiteralValue.Value.GetProperty("variableKey").GetString());
+        var input = node.ActivityContract!.Inputs["Balance"];
+        Assert.Equal(ActivityVariableAccess.ReadWrite, input.VariableReference!.Access);
+        Assert.Equal("Decimal", input.VariableReference.ValueType.Alias);
+        Assert.Contains("\"variableKey\":\"balance\"", node.Metadata[RuntimeMetadataKeys.MayWriteVariables], StringComparison.Ordinal);
+        Assert.False(node.Metadata.ContainsKey(RuntimeMetadataKeys.MayWriteEveryVisibleVariable));
+        Assert.False(node.ActivityContract.AccessesUndeclaredVariables);
+    }
+
+    [Fact]
+    public async Task An_unbound_variable_reference_is_refused_at_publish()
+    {
+        var compiler = VariableReferenceCompiler(typeof(VariableWriterProbe), bound: false);
+
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-VAR-001", failure.ToString(), StringComparison.Ordinal);
+        Assert.Contains("'Balance'", failure.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_marked_activity_pins_the_marker_on_its_contract_and_node()
+    {
+        var compiler = VariableReferenceCompiler(typeof(MarkedVariableWriterProbe), bound: true);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.True(executable.RootActivity.ActivityContract!.AccessesUndeclaredVariables);
+        Assert.Equal("true", executable.RootActivity.Metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable]);
+    }
+
+    private Elsa.Workflows.Publishing.Services.WorkflowExecutableCompiler VariableReferenceCompiler(Type activityType, bool bound)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        activityVersion.Inputs =
+        [
+            new InputDefinition("Balance", "Balance", new TypeReference("Decimal"), null, "Balance", null, IsNullable: false,
+                IsRequired: true, UiHint: InputVariableAccess.UiHint, DefaultSyntax: InputVariableAccess.ExpressionType,
+                VariableAccess: InputVariableAccess.ReadWrite)
+        ];
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        ArgumentState[] inputs = bound
+            ?
+            [
+                new ArgumentState("Balance",
+                    new Elsa.Expressions.Core.Models.ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "balance", declaringScopeId = "workflow" }), "Variable"),
+                    null, null, null, null)
+            ]
+            : [];
+        return TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(
+                new ActivityNode("node", activityVersion.Id, inputs, []),
+                variables: [new Elsa.Expressions.Core.Models.VariableDefinition("balance", "balance", new TypeReference("Decimal"), null, null)])),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+    }
+
+    private sealed class VariableWriterProbe : IActivityResult<ActivityUnit>;
+
+    [AccessesUndeclaredVariables]
+    private sealed class MarkedVariableWriterProbe : IActivityResult<ActivityUnit>;
+
+    // An engine script activity resolves names itself, so it is pinned exactly as the marker is.
+    [Fact]
+    public async Task An_engine_consumer_activity_is_pinned_as_writing_every_visible_variable()
+    {
+        var compiler = VariableReferenceCompiler(typeof(EngineConsumerProbe), bound: true);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.True(executable.RootActivity.ActivityContract!.AccessesUndeclaredVariables);
+        Assert.Equal("true", executable.RootActivity.Metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable]);
+    }
+
+    private sealed class EngineConsumerProbe : IActivityResult<ActivityUnit>, Elsa.Activities.Runtime.Core.Contracts.IStepVariableSessionConsumer;
+
+    [Theory]
+    [InlineData(typeof(ChildControlProbe), true)]
+    [InlineData(typeof(ChildFaultHandlingProbe), false)]
+    public async Task Child_control_protocol_is_compiled_only_from_an_explicit_structural_declaration(Type activityType, bool declared)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]), _activityStructureService, registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(declared ? "test.control" : null, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ChildControlConsumerKey));
+        Assert.Equal(declared ? "1" : null, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ChildControlConsumerVersion));
+    }
+
+    [Fact]
+    public async Task A_control_declaration_without_the_structural_consumer_marker_cannot_be_published()
+    {
+        var activityType = typeof(InvalidChildControlProbe);
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []))),
+            new FakeActivityVersionStore([activityVersion]), _activityStructureService, registry);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(async () =>
+            await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)));
+        Assert.Contains("control", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [ActivityChildControlConsumer("test.control", 1)]
+    private sealed class ChildControlProbe : IActivityResult<ActivityUnit>, IRuntimeStructuralActivity, IRuntimeActivityChildControlConsumer
+    {
+        public ChildControlProbe() => throw new InvalidOperationException("Publishing must not activate the declared consumer.");
+        public ValueTask<RuntimeStructuralContinuation> OnChildControlAsync(RuntimeChildControlContext context) => throw new NotSupportedException();
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context) =>
+            throw new NotSupportedException();
+    }
+
+    [ActivityChildControlConsumer("test.control", 1)]
+    private sealed class InvalidChildControlProbe : IActivityResult<ActivityUnit>;
+
     private sealed class ChildFaultHandlingProbe : IActivityResult<ActivityUnit>, IRuntimeActivityChildFaultHandler
     {
         public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context) =>
@@ -2350,7 +2596,8 @@ public sealed class WorkflowExecutableCompilerTests
         // key + declaring scope), so the runtime VariableExpressionHandler resolves it at execution time.
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
         var reference = JsonSerializer.SerializeToElement(new { referenceKey = "var-counter", declaringScopeId = "node-sequence" });
-        var compiler = Compiler(WorkflowVersion(Node("write-var", VariableText(reference))));
+        var declaration = new Elsa.Expressions.Core.Models.VariableDefinition("var-counter", "Counter", new("String"), null, null);
+        var compiler = Compiler(WorkflowVersion(SequenceNode("node-sequence", [Node("write-var", VariableText(reference))], [declaration])));
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
@@ -2360,7 +2607,7 @@ public sealed class WorkflowExecutableCompilerTests
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-"));
 
-        var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
+        var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.NodesById["write-var"].InputBindings);
         Assert.Equal(RuntimeInputBindingSource.VariableRead, binding.Source);
         Assert.Null(binding.LiteralValue);
         Assert.Equal("var-counter", binding.Variable?.VariableKey);
@@ -2372,7 +2619,8 @@ public sealed class WorkflowExecutableCompilerTests
     {
         // A Variable input may carry just a bare reference key string (workflow-scope reference).
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
-        var compiler = Compiler(WorkflowVersion(Node("write-var", VariableText(JsonSerializer.SerializeToElement("var-counter")))));
+        var declaration = new Elsa.Expressions.Core.Models.VariableDefinition("var-counter", "Counter", new("String"), null, null);
+        var compiler = Compiler(WorkflowVersion(Node("write-var", VariableText(JsonSerializer.SerializeToElement("var-counter"))), variables: [declaration]));
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
@@ -2639,6 +2887,29 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Intrinsic_value_metadata_matches_actual_null_and_missing_input_admission()
+    {
+        var variable = new Elsa.Expressions.Core.Models.VariableDefinition("message", "Message", new("String"), null, null);
+        var set = SetIntrinsicNode("set", "message");
+        var version = WorkflowVersion(set, variables: [variable]);
+        var authority = TestCompiler.SourceAuthority(new FakeActivityVersionStore([]), _activityStructureService);
+        var analysis = await authority.AnalyzeAsync(new("WorkflowDefinition", "draft", "revision", set, [], [variable], []), new("set", "value"));
+        Assert.NotNull(analysis.Target);
+        Assert.True(analysis.Target.IsRequired);
+        Assert.False(analysis.Target.IsNullable);
+        Assert.Equal("String", analysis.Target.Type.Alias);
+        Assert.Equal(WorkflowIntrinsicKind.Set, (await Compiler(version).CompileAsync(NewRequest(DateTimeOffset.UtcNow))).RootActivity.IntrinsicKind);
+
+        var nullValue = set with { Inputs = [new WorkflowArgumentState("value", new ArgumentValue(null, "Literal"), null, null, null, null)] };
+        var nullFailure = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Compiler(WorkflowVersion(nullValue, variables: [variable])).CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+        Assert.Contains("does not accept null", nullFailure.Message, StringComparison.Ordinal);
+        var missingFailure = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Compiler(WorkflowVersion(set with { Inputs = [] }, variables: [variable])).CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+        Assert.Contains("requires exactly these inputs", missingFailure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Set_intrinsic_targeting_an_invisible_variable_fails_publication()
     {
         // #972 publish backstop (PR #971 two-guard pattern): a Set whose target is declared in no
@@ -2652,6 +2923,19 @@ public sealed class WorkflowExecutableCompilerTests
 
         Assert.Contains("var-missing", exception.Message, StringComparison.Ordinal);
         Assert.Contains("not visible", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Json_storage_variables_compile_as_inline_workflow_state_including_defaults()
+    {
+        var variable = new Elsa.Expressions.Core.Models.VariableDefinition("message", "Message", new TypeReference("String"), "elsa.json", new ArgumentValue("hello", "Literal"));
+        var executable = await Compiler(WorkflowVersion(Node("write-one", Text("hello")), variables: [variable]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var declaration = Assert.Single(executable.WorkflowVariables);
+        Assert.Equal(DurableValueStorage.Inline, declaration.Policy.Storage);
+        Assert.Equal(DurableValueStorage.Inline, declaration.InitialBinding!.EffectivePolicy.Storage);
+        Assert.Equal("hello", declaration.InitialBinding.Literal!.InlineValue!.Value.GetString());
     }
 
     [Fact]
@@ -3171,9 +3455,11 @@ public sealed class WorkflowExecutableCompilerTests
             IReadOnlyCollection<DurableValueState> persistedValues,
             DateTimeOffset capturedAt,
             CancellationToken cancellationToken = default)
+            // Spec 1208: the checkpoint completion carries the same unspecified selection as the structural
+            // continuation above (as GraphActivity does); a named Done would not match it.
             => ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
                 [],
-                ActivityTransition.Complete(outputValue, ActivityOutcomes.Done)));
+                ActivityTransition.Complete(outputValue)));
     }
 
     private sealed class OpaqueOutput(string value)
@@ -3262,6 +3548,9 @@ public sealed class WorkflowExecutableCompilerTests
         var outputCompiler = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry(
             [new JsonRuntimeDurableValueStorageDriver()]));
         return new WorkflowExecutableCompiler(
+            TestCompiler.SourceAuthority(
+                new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
+                _activityStructureService),
             new FakeVersionStore(workflow),
             new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
             publications,

@@ -1,0 +1,93 @@
+{
+  "sourceRevision": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+  "first": 66775,
+  "second": 66852,
+  "firstExit": 137,
+  "secondExit": 137,
+  "completedStore": {
+    "file": "completed-runtime.sqlite.gz",
+    "databaseSha256": "c7e6dad05d588c28fc2649232913e1e0fbeed3f4f1f36672d25b7cd31eb5cc85",
+    "gzipSha256": "bd55e3e41739664898f7a16edc581ba275012106c1a71aa2079ffaf4d020c7f5"
+  },
+  "retainedStore": {
+    "file": "retained-runtime.sqlite.gz",
+    "databaseSha256": "c7e6dad05d588c28fc2649232913e1e0fbeed3f4f1f36672d25b7cd31eb5cc85",
+    "gzipSha256": "bd55e3e41739664898f7a16edc581ba275012106c1a71aa2079ffaf4d020c7f5"
+  },
+  "observedAt": "2026-10-31T19:41:49.629553+00:00",
+  "completedAt": "2026-10-31T19:41:50.611098+00:00",
+  "retryDue": "2026-10-31T20:16:07.364203+00:00",
+  "obsoleteRetryStillFutureAtSettlement": true,
+  "retrySource": "commit:36908e8057ac9536:child-fault-parent:delayed-compensation-1:child:delayed-compensation-4:activity-inspection-captured:delayed-compensation-1:36908e8057ac9536:child-fault-parent:delayed-compensation-1:child:delayed-compensation-4:post-commit:6525673f73f2eb57:schedule-child:handler:delayed-compensation-5",
+  "resultSource": "commit:bpmn-native-cancel:00c750a211e3a1a08c6f8a70fccd45990dae34b74caa2d2331e2989e80db4684:cancel:bpmn-native-result:a365ef9b2e2a6e137fd4872bdf5962acc15c68fdb5515f97a5e6d9800bcece9e",
+  "binaries": [
+    {
+      "file": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "5cec9a712609e8052612efa57834d5907eb6b6da459d967fbc64ccb16ee2c6e3"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "cb053cfeacd4821fff677bb4b31b63c91123971d77ac8f9c9f2ea61a43280a61"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "a880009e240a6dc1c5c09f02c9a81149096736335b7743e339d4269147ea5609"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "356009b044e8995ce0c837ea25b6c01fdf9acc738dcde60d53243465f496c6a6"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Core.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "25b30421581d00d54d3f8e9e1325f829ee96cd9d017aaab049fb2d21186de35a"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "42d7058bdefdf3696b6d70c2c3533eac1e43a749150b0f08f912d8f1b92d3142"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Api.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "d2750e0d7c96e8626ba329b89117a040ee49aba0bf5c32a39c6ad39aa46aed51"
+    },
+    {
+      "file": "Bpmn.Model.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "file": "Bpmn.Semantics.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Core.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "1aeb55a4d252b5b20fc01210e0e884353b3eca496e05ad8bccc633facf41d9fa"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Api.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "961059c0beb0ea42f4a38faa212a98ad9afa8d9b02b2ee0ce159691b0c707cc4"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "87fb9dcd0d01896f4272fb5f840cd2c229d5dbf9316db7927de3f15a9091c387"
+    },
+    {
+      "file": "Elsa.Persistence.EntityFramework.dll",
+      "productVersion": "1.0.0\u002B6bd8ac3e86d1701603b1c975534514d3fe62933b",
+      "sha256": "5eeec7ffe9f8196a2dfdbf6361a7d0c3b95227b4e6898b80440b195b63d7cd4b"
+    }
+  ],
+  "fixtureSha256": "7a8e20c7af428ca1da4dde42a220bc50f860e5e1c3b1f3e049425b3df2773b62",
+  "runtimeOnly": true,
+  "scopeLimit": "Standard SQLite runtime-only host recovers authentic old SDK queued result; no new Studio, ETL or other-provider acceptance."
+}

@@ -1,0 +1,3 @@
+# Red regression run
+
+The five new behavioral cases fail against the reviewed production implementation before fixes: human retry then completion/cancel (two), pending independent native cancellation (one), malformed owned material/input JSON (two). The test source is BpmnDirectExecutionTests.ReviewRegressions.cs in the containing repair commit; no production fix was present in this red run. The actual captured native-cancel store is linked from the existing immutable evidence, not seeded. A sixth external Core event observer test was added with the public event repair. Preliminary local green6/6 and Core/API build succeeded, but changed-source whole-project and actual host/recovery gates remain required. Those later receipts retain their own source labels.

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.Logging;
 
@@ -12,14 +11,16 @@ internal sealed class ScheduledTaskExecution : IScheduledTaskExecution, IDisposa
     private readonly Func<Task> _action;
     private readonly Timer _timer;
     private readonly ILogger? _logger;
+    private readonly TimeProvider _timeProvider;
     private long _armedAt;
     private TimeSpan _wait;
 
-    public ScheduledTaskExecution(Func<Task> action, Func<TimeSpan> interval, ILogger? logger = null)
+    public ScheduledTaskExecution(Func<Task> action, Func<TimeSpan> interval, ILogger? logger = null, TimeProvider? timeProvider = null)
     {
         _action = action;
         Interval = interval;
         _logger = logger;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _timer = new Timer(Callback, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         ScheduleNextRun();
     }
@@ -45,15 +46,20 @@ internal sealed class ScheduledTaskExecution : IScheduledTaskExecution, IDisposa
 
     private void ScheduleNextRun()
     {
-        _armedAt = Stopwatch.GetTimestamp();
+        _armedAt = _timeProvider.GetTimestamp();
         _wait = Interval();
         _timer.Change(NextArm(_wait) ?? TimeSpan.Zero, Timeout.InfiniteTimeSpan);
     }
 
     private async void Callback(object? state)
     {
-        var remaining = _wait == Timeout.InfiniteTimeSpan ? _wait : _wait - Stopwatch.GetElapsedTime(_armedAt);
-        if (NextArm(remaining) is { } rest)
+        if (_wait == Timeout.InfiniteTimeSpan)
+            return;
+
+        var remaining = _wait - _timeProvider.GetElapsedTime(_armedAt);
+        // A finite tick exactly 1ms late also equals the infinite-wait sentinel. Only a
+        // positive remainder can re-arm a finite wait; overdue ticks must run the action.
+        if (remaining > TimeSpan.Zero && NextArm(remaining) is { } rest)
         {
             // The timer fired on one part of a wait longer than it can hold: arm the rest without running.
             Rearm(() => _timer.Change(rest, Timeout.InfiniteTimeSpan));

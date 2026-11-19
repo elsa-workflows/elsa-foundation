@@ -1,0 +1,11 @@
+{
+  "name": "observation-reader-omits-committed-inbox",
+  "sourceSha256": "b2409701254ac5707b96478e31c90938f499792f3ff23f18e092bf6cfb2fb0b5",
+  "scope": "Private observation-tool mutation; never applied to positive runtime/host.",
+  "sourceRestored": true,
+  "compileSucceeded": true,
+  "missingCommittedInboxIncorrectlyAccepted": true,
+  "controlFailedAsExpected": true,
+  "buildLogSha256": "b4d08771bb3a727b302918478fbaba2a9a592e99511f449fe24c4feefbf9f3a1",
+  "controlLogSha256": "78137078407c32597bc07f97dab1e88c97c3752276245c4b78ad25cf81ed50e0"
+}

@@ -1,0 +1,57 @@
+{
+  "preIncrementSourceRevision": "f7cb6f181056fd5e823ac5c96378d6975070fe29",
+  "sourceSha256": {
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs": "4400fcdf3e587668c176ce7bbcd61b25a2674abc1c1ba1043f4a404265fa2795",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs": "3aaf644126663278470f7f17517b373c57c8e022e31ebe0734d4babd002be8dd",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md": "1cb2d215b82443534f09485645099c67a963db22848766fbb71ac7b245bbc0b8",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Models/DispatchWorkflowActivityResult.cs": "60cc6bcfbe0ac1a089898e74a1637b2f176521269120450ddfc2b61c043eec10",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationEnricher.cs": "3f8def41e487f3957fd41861d3e4feb8c020349fd3f74c8fd4a25b1780036ffa",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "d7c76e050649f8d9348b26d27703252616ec308f8fdde2e91a1b4f938b50d62e",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlTransport.cs": "f777ceff8161c5894c261f808781a1476daefc3b1cab2ac200224fdcd2f9a4ac",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "284cd81784af8d836114d2b29d7461001a74c63367e2053e52721f3dcebe9b55",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundaryInitializer.cs": "75b7da03034f1efe399dbe3e77acb7153181c61705c6e036fddaf0303c0e59b3",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs": "59057aac5829fc824bcaca266cf61a6396456c1e2c24764afba23eb240bacd88",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeChildControlAuthorizer.cs": "ffffdf3000a0c3bfb753e7e9ad9c423addd1f625188376ab526fa96ab2bd9479",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeChildControlCompletion.cs": "3dc516a0df1cfcf41b82bdcf2102b6a43b3602880d62877cfbe5e6d9bc58958b",
+    "Essentials/src/Workflows/Runtime/Core/Models/ActivityExecutionState.cs": "a8ea290d0fba91828f7e8667db90ef71682fa90c28e311b0146c32992dc7ecf8",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeStructuralStateProjector.cs": "a5033e0d9695a06a74daa32865b99de8f6a460683cc87ec9fcfef584590df92b",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "5682430aef6d2f334bb0c7fa72c3d2cd23debac189f6672a111596fef4629dda",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/ChildControlContractTests.cs": "acaa1f0a93acedc2e3453bf38af222dc317fc3f19f6882e286bc6754e783595e",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/DispatchWorkflowRuntimeTestFixture.cs": "e6cbba8680efa7f52950da3825d6bf85f6676abbaf6eb53ce902b57657bfb76b",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlTransportTests.cs": "94879bca2aaa36f461a57671c7bc11186c9f4114f334902dff437a32a1fc2d3d",
+    "Essentials/tests/Activities/Runtime/Tests/TypedTriggerResumeDeliveryTests.cs": "2952d2fc0e82209548375eb80868f7705dcb827574d67f8635a9ef6da2a966f3",
+    "Essentials/tests/Activities/Runtime/Tests/WorkflowResumeBookmarkSchedulerWorkHandlerTests.cs": "fa52093247c5fe9e8809dc6d4c590b6a646e405d814ef10b17ee7027a66b1918",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeStructuralControlProjectionTests.cs": "c7556f52b8e9d28bb2bca2316109e6e336130a2b50193d0daa4e507f11dd5694"
+  },
+  "tests": {
+    "controlTransport": 31,
+    "legacyModelContracts": 19,
+    "dispatchWorkflowWhole": 316,
+    "activitiesRuntimeWhole": 664,
+    "workflowsRuntimeWhole": 2625,
+    "failed": 0,
+    "skipped": 0
+  },
+  "mutations": {
+    "omitImmutableNotificationPayloadValidation": {
+      "failed": 3,
+      "passed": 4
+    },
+    "omitAnchorCarryForwardGate": {
+      "failed": 2,
+      "passed": 0
+    },
+    "readCompletionGetterOutsideResumeFaultBoundary": {
+      "failed": 1,
+      "passed": 0
+    },
+    "allRestored": true
+  },
+  "trackedCoreDeclarationsAdded": 6,
+  "limits": [
+    "Nonterminal source staging only; witness leaves row pending and does not attempt notification delivery",
+    "Terminal normal leaf completion/projection qualified",
+    "No inbox/callback, BPMN consumer or upgraded-host/EF control recovery qualification yet",
+    "Not final complete-PR review"
+  ]
+}

@@ -1,5 +1,20 @@
 import type { Edge, Node } from "@xyflow/react";
+import type { KeyboardEvent } from "react";
 import type { WorkflowNodeData } from "../workflowAdapter";
+
+/** Activate the domain selection as well as React Flow's focusable wrapper selection. */
+export function activateWorkflowCanvasNode(event: KeyboardEvent<HTMLElement>, activate: (nodeId: string) => void) {
+  if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+    || event.key !== "Enter" && event.key !== " ") return;
+  const target = event.target;
+  // Buttons, inputs and slot controls inside a node keep their own keyboard behavior.
+  if (!(target instanceof HTMLElement) || !target.classList.contains("react-flow__node")) return;
+  const nodeId = target.getAttribute("data-id");
+  if (!nodeId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  activate(nodeId);
+}
 
 export const workflowCanvasAriaLabelConfig = {
   "node.a11yDescription.default": "Press Enter or Space to select and inspect this activity. Press Tab to move between canvas items. Arrow keys move a selected activity. Press Delete to remove it and Escape to cancel.",

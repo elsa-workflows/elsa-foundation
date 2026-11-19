@@ -43,6 +43,7 @@ test.describe("settings shell", () => {
     await expect(page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Appearance" })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("heading", { name: "Appearance" })).toBeVisible();
     await expect(page.getByRole("radiogroup", { name: "Colour mode" }).getByRole("radio", { name: /System/ })).toBeVisible();
+    await page.getByText("Theme presets", { exact: true }).click();
     await expect(page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: /Classic/ })).toBeVisible();
     await expect(page.getByRole("link", { name: "Open Theme Builder" })).toBeVisible();
     await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Modules" }).click();

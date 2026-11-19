@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Runtime.JavaScript.Authorization;
@@ -77,10 +77,11 @@ public static class JavaScriptExecutionApi
             var evaluator = context.RequestServices.GetRequiredService<IJavaScriptScriptEvaluator>();
             using var argumentsDocument = JsonDocument.Parse("{}");
             var arguments = argumentsDocument.RootElement.Clone();
-            var result = await evaluator.EvaluateAsync(
+            // The endpoint returns the script's result only; a returned complete(result, outcomes) selects nothing here.
+            var evaluation = await evaluator.EvaluateAsync(
                 new JavaScriptScriptEvaluationRequest(request.Script, arguments, context.RequestAborted));
             await Results.Json(
-                    new JavaScriptExecutionSuccessResponse(true, result),
+                    new JavaScriptExecutionSuccessResponse(true, evaluation.Value),
                     JavaScriptExecutionJsonContext.Default.JavaScriptExecutionSuccessResponse,
                     contentType: "application/json")
                 .ExecuteAsync(context);

@@ -104,6 +104,17 @@ public sealed class CausalActivityResultResolver
 
             foreach (var predecessorId in GetPredecessorIds(state))
                 pending.Push(predecessorId);
+
+            // A completed composite is causally after the direct child whose completion finished it.
+            // The parent records that edge in the same checkpoint. Validate both committed occurrences:
+            // an old fault marker, unrelated child or still-running parent is not a completion dependency.
+            if (IsCommittedCompletion(state) &&
+                state.Metadata.TryGetValue(RuntimeMetadataKeys.CompletedChildActivityExecutionId, out var childId) &&
+                !string.IsNullOrWhiteSpace(childId) &&
+                statesByInvocationId.TryGetValue(childId, out var child) &&
+                IsCommittedCompletion(child) &&
+                StringComparer.Ordinal.Equals(child.ParentActivityExecutionId, state.InvocationId))
+                pending.Push(childId);
         }
 
         return lineage;

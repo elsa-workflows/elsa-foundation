@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "task": "T051 bounded actual-host crash after cohort commit and before dispatch; remaining T051, legacy upgrade, Studio and delivery gates open",
+  "sourceParentCommit": "b9e98f985ed5e5ee4f046c39b45ad19d10bac269",
+  "filesSha256": {
+    "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj": "bb47eb0a6b9424742045a20059fcb0a09bb40b44e77b6d36928a21e9201616ef",
+    "e2e-tests/README.md": "fa89a54e7f225c4b49eebce6088d98953d8a157e173bb8eb5e963e6162515382",
+    "e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs": "00b98ac561edaa999f0cf0766fed890e04e3d305070f145a869fb7c59e550521",
+    "e2e-tests/bpmn/RecoveryProbe/README.md": "da51774f3d11a60fe8db7cdb55ed7510a46f2fb6ba4c40aee3739038cc1797e2",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "5ea911a6d182ed50126a8ba8150aeeeb34c56e9f5aef24c08dbb574b1f29dd1a",
+    "e2e-tests/bpmn/inspect_broadcast_recovery.py": "283aebc4a97c68b74d7885531ca11ea7028ba8239561794c0fa41b876b31fad2",
+    "e2e-tests/bpmn/test_inspect_broadcast_recovery.py": "f54ca2f2614cc1f0f4beced6f7a078e0401d0dac5784368a8f638481e2389e7c",
+    "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj": "dcfce4047fd8b6c5f0b47988e9aa99ea7237991646046686da4f7beb750a2f4a",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "51abfe4c3274634b82ce1e2892109505e4bd3f937fdcad3b5b047d22070bd00f",
+    "tools/bpmn/DeliveryRecoveryRead/packages.lock.json": "1643841117e49662ffa4a9fb240b216e6e52d2e415706583851e44eb400a0264"
+  },
+  "hostReceipt": "broadcast-after-cohort-host.json",
+  "hostReceiptSha256": "0d819f73572a60f0762a8031eb4d424b0c4bfe78cf34b8ccea4b3e53c487f94a",
+  "sourceBindingsChecked": 1371,
+  "hostBuildFiles": {
+    "probe": 290,
+    "standard": 290,
+    "reader": 49
+  },
+  "releasedPackages": [
+    "Bpmn.Interchange/0.5.0",
+    "Bpmn.Model/0.5.0",
+    "Bpmn.Semantics/0.5.0"
+  ],
+  "checks": [
+    {
+      "name": "actual owned Workbench post-cohort crash to standard-host recovery",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "explicit actual-fixture checked observer and pinned WAL snapshot controls",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "probe and standard Workbench isolated locked Release builds",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "name": "checked reader locked build",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "name": "PowerShell parser, Python compile, diff whitespace and frozen fingerprint",
+      "passed": true
+    }
+  ],
+  "physicalSource": {
+    "initialFence": 1,
+    "successorFence": 2,
+    "distinctOwner": true,
+    "stoppedPersistedVisibleAfter": "2026-10-27T05:48:48.880297+00:00",
+    "successorVisibleAfter": "2026-10-27T05:49:49.218654+00:00",
+    "deliveredAt": "2026-10-27T05:48:49.942323+00:00",
+    "savedStarts": 1,
+    "savedExactWaits": 2,
+    "snapshotUnchanged": true
+  },
+  "observed": [
+    "source committed before any selected start or wait effect",
+    "unmodified standard host reclaims expired source under distinct owner/fence",
+    "both exact selected activities Completed and selected bookmarks retired",
+    "one original deterministic keyed start reaches its exact suspended physical park registration",
+    "later start binding never starts; later wait IDs, generations, activity status and attempts unchanged",
+    "normal APIs report zero incidents for original waiter, publisher, selected start and later listener",
+    "no production source, provider, clocks, claims, bookmarks or delivery data patched by the harness"
+  ],
+  "observerControls": [
+    "actual source/selection read leaves private snapshot unchanged",
+    "wrong expected hash refused",
+    "live sidecar refused",
+    "missing exact source refused",
+    "divergent source projection refused",
+    "changed cohort fingerprint refused",
+    "missing publisher refused",
+    "pinned read transaction keeps prior WAL view while another writer commits"
+  ],
+  "reviews": {
+    "type": "three independent component reviews; not full PR review",
+    "findingsFixed": [
+      "nonsealed feature and virtual ConfigureServices",
+      "asynchronous API admission is not delivery completion",
+      "exact saved keyed ID and completed selected child activities",
+      "later exact wait/generation/activity equality and zero incidents",
+      "actual parked child/physical bookmark instead of composite parent Suspended assumption",
+      "full source and host/reader dependency manifests, probe metadata and before/after checks",
+      "missing contextlib.closing import in explicit observer controls"
+    ],
+    "remainingActionable": []
+  },
+  "harnessIterations": [
+    "initial synchronous-admission assumption refused HTTP200 before waiting for cut; corrected to allow actual queued API admission",
+    "initial composite parent Suspended assertion refused the correctly Running parent parked on a child; corrected to require exact suspended child/bookmark",
+    "three subsequent actual recovery cases passed; this receipt binds the final case after corrected controls"
+  ],
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "inheritedProductionTests": {
+    "sourceCommit": "b9e98f985ed5e5ee4f046c39b45ad19d10bac269",
+    "wholePassed": 5410,
+    "rerunThisIncrement": false,
+    "reason": "Runtime/provider/Activities production source unchanged; this increment adds a default-off test feature, host runner and readonly observer"
+  },
+  "remainingGates": [
+    "delayed first-delivery inclusion",
+    "partial starts/resumes and actual same-listener rearm exclusion",
+    "competing/empty cohorts, renewed/lost claims, ACK loss/redrive, GC/retention and republish races",
+    "remaining T045 semantics and native-composite stories",
+    "actual legacy upgraded-host checkpoints and final current Studio",
+    "duplicate semantics/writer deletion with guards",
+    "full PR review, green exact-head required checks, protected merge and resulting main verification",
+    "separate ADR0063 acceptance PR and production #2898/#2907/program evidence"
+  ],
+  "fullPrRounds": 0
+}

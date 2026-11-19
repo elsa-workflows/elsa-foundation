@@ -116,7 +116,8 @@ internal static class SchedulerWorkItems
         string parentActivityExecutionId,
         IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
         IReadOnlyDictionary<string, string>? commandMetadata = null,
-        string? childExecutionScopeId = null)
+        string? childExecutionScopeId = null,
+        IReadOnlyCollection<string>? causedBy = null)
     {
         var inheritedMetadata = commandMetadata ?? sourceWorkItem.CommandMetadata;
         var requests = scheduleRequests.ToArray();
@@ -125,13 +126,7 @@ internal static class SchedulerWorkItems
             var request = requests[index];
             var now = timeProvider.GetUtcNow();
             var childActivityExecutionId = idGenerator.NewActivityExecutionId();
-            var payload = new RuntimeScheduleActivityCommandPayload(
-                pinnedExecutable,
-                request.ExecutableNodeId,
-                childActivityExecutionId,
-                RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
-                request.SchedulingActivityExecutionId ?? parentActivityExecutionId,
-                parentActivityExecutionId,
+            var provenance =
                 request.SchedulingProvenance == ActivitySchedulingProvenance.Empty
                     ? ActivitySchedulingProvenance.From(
                         sourceWorkItem.WorkflowExecutionId,
@@ -150,7 +145,17 @@ internal static class SchedulerWorkItems
                         // hierarchy scope while local scope metadata remains available to the composite.
                         ExecutionScopeId = childExecutionScopeId ?? request.SchedulingProvenance.ExecutionScopeId,
                         Metadata = WithAssignedOperationKeys(request.SchedulingProvenance.Metadata, request.Metadata)
-                    },
+                    };
+            // Spec 1229 FR-007: the completions that caused this scheduling, unless the scheduler named its own (a join).
+            provenance = provenance.WithCausedBy(causedBy);
+            var payload = new RuntimeScheduleActivityCommandPayload(
+                pinnedExecutable,
+                request.ExecutableNodeId,
+                childActivityExecutionId,
+                RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
+                request.SchedulingActivityExecutionId ?? parentActivityExecutionId,
+                parentActivityExecutionId,
+                provenance,
                 request.IterationFrame);
 
             var childCommandMetadata = inheritedMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);

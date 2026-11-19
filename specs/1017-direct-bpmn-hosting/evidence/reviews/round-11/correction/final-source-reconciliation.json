@@ -1,0 +1,14 @@
+{
+  "repositorySource": "7e51b512287bdc46adea639c29b9c9c5c048dcda",
+  "runtimeActualSource": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+  "adoptedMain": "2a835125c754d75f5a13ec1d5b427417f8aed453",
+  "runtimeModelNativeEtlImplementationUnchanged": true,
+  "deltaOutsideFeatureEvidence": [
+    "four upstream Studio Executables files",
+    "portable pending-ETL controller"
+  ],
+  "frozenBaselineAssetsVerified": 104,
+  "baselineManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+  "actualWorkbenchBpmnRuntimeEtlProductsRehashed": 18,
+  "scope": "Runtime/BPMN/ETL products still match the actually executed6bd binaries after current7e Studio build. Fresh affected frontend/browser/production-bundle/Studio-host gates execute7e; saved actual Studio6bd receipt retains that source, with changed CSS scoped to Executables. Exact reviewed-head required CI and resulting-main proof are separate."
+}

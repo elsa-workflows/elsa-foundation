@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
+using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
@@ -20,6 +21,8 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Activities;
     ActivityOutcome(DispatchWorkflowOutcomes.Cancelled),
     ActivityOutcome(DispatchWorkflowOutcomes.DispatchFailed)
 ]
+// Every completion selects Dispatched or the child's terminal outcome, so the set needs no Done (spec 1208 FR-002b).
+[SelectsOutcomeOnEveryCompletion]
 [RefusesSecretBinding(nameof(WorkflowDefinitionId), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(Inputs), SecretBindingRefusalReason.PersistedByActivity)]
 [RefusesSecretBinding(nameof(CorrelationId), SecretBindingRefusalReason.PersistedByActivity)]
@@ -158,6 +161,13 @@ public sealed class DispatchWorkflow(
             dispatchMetadata,
             dispatchMode,
             CancelChildOnParentCancellation);
+        var control = await WorkflowDispatchControlPolicy.AdmitAsync(activityState, parentExecutable,
+            activityExecutionStateStore, WaitForCompletion, context.CancellationToken);
+        if (control is not null)
+        {
+            dispatchMetadata[RuntimeMetadataKeys.ChildControlConsumerKey] = control.Key;
+            dispatchMetadata[RuntimeMetadataKeys.ChildControlConsumerVersion] = control.Version.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
         var record = new WorkflowDispatchRecord(
             dispatchId: identity.DispatchId,
             parentWorkflowExecutionId: context.WorkflowExecutionId,

@@ -12,6 +12,7 @@ public sealed class CandidateInspectionTests
 {
     private static readonly string[] ExpectedSelection =
     [
+        CandidateInspectionFixture.ApiCapabilitiesFeatureId,
         CandidateInspectionFixture.OpenTelemetryFeatureId,
         CandidateInspectionFixture.StructuredLogsFeatureId,
         CandidateInspectionFixture.StructuredLogsEfFeatureId,
@@ -43,7 +44,7 @@ public sealed class CandidateInspectionTests
         var inspection = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
             "json", profile is null ? null : [profile], settingReviewPath: settingReviewPath));
 
-        Assert.Equal(ToolExitCode.Success, inspection.ExitCode);
+        Assert.True(inspection.ExitCode == ToolExitCode.Success, inspection.Error);
         using var document = JsonDocument.Parse(inspection.Output);
         var root = document.RootElement;
         Assert.Equal(new[] { "plan", "configurationResolution" }, root.EnumerateObject().Select(property => property.Name));
@@ -145,6 +146,36 @@ public sealed class CandidateInspectionTests
         Assert.Equal(string.Empty, refusal.Output);
         Assert.Contains("candidate-trust-required", refusal.Error, StringComparison.Ordinal);
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, refusal.Text, StringComparison.Ordinal);
+        fixture.AssertSourcesUnchanged();
+        fixture.AssertInputsUnchanged();
+    }
+
+    [Fact]
+    public async Task Inspection_refuses_capability_aggregation_outside_the_accepted_selection()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        await PrepareAcceptedEditAsync(fixture, workspace: false);
+        var authoredPath = fixture.InputPath("authored.json");
+        var authored = JsonNode.Parse(File.ReadAllText(authoredPath))!;
+        authored["remove"]!.AsArray().Add(CandidateInspectionFixture.ApiCapabilitiesFeatureId);
+        File.WriteAllText(authoredPath, authored.ToJsonString());
+        var acceptedPath = fixture.InputPath("accepted-without-capabilities.json");
+        var accepted = await PseudoTerminalCli.RunElsaAsync("Type accept to write the accepted composition: ", "accept",
+            ["composition", "accept", "--composition", authoredPath, "--output", acceptedPath]);
+        Assert.Equal(ToolExitCode.Success, accepted.ExitCode);
+        fixture.TrackAcceptedInput(acceptedPath);
+
+        var refusal = DotnetElsa.Run(fixture.SentinelEnvironment,
+            fixture.InspectionArguments("json", compositionPath: acceptedPath));
+
+        Assert.Equal(ToolExitCode.Refusal, refusal.ExitCode);
+        Assert.Empty(refusal.Output);
+        Assert.Contains("candidate-selection-conflict", refusal.Error, StringComparison.Ordinal);
+        Assert.Contains(CandidateInspectionFixture.ApiCapabilitiesFeatureId, refusal.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, refusal.Text, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.CandidateOutputDirectory));
         fixture.AssertSourcesUnchanged();
         fixture.AssertInputsUnchanged();
     }
@@ -698,6 +729,7 @@ public sealed class CandidateInspectionTests
         Assert.Equal(
             new[]
             {
+                CandidateInspectionFixture.ApiCapabilitiesFeatureId,
                 CandidateInspectionFixture.WorkbenchModularityApiFeatureId,
                 CandidateInspectionFixture.WorkbenchRuntimeFaultStackTraceFeatureId,
                 CandidateInspectionFixture.StructuredLogsFeatureId,

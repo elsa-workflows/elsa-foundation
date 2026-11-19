@@ -33,6 +33,28 @@ public sealed class ConnectionsApiTests
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
+    [Theory]
+    [InlineData("Backend API")]
+    [InlineData("api/key")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Create_InvalidName_ReturnsFieldError_AndAllowsCorrection(string name)
+    {
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+        using var rejected = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody(name, "invalid-name-secret-sentinel")));
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        var payload = await rejected.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("error").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("errors").GetProperty("name")[0].GetString()));
+        Assert.DoesNotContain("invalid-name-secret-sentinel", await rejected.Content.ReadAsStringAsync());
+
+        using var corrected = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("  Backend.API-1_test  ")));
+        Assert.Equal(HttpStatusCode.Created, corrected.StatusCode);
+        var metadata = await corrected.Content.ReadFromJsonAsync<ConnectionMetadata>(Json);
+        Assert.Equal("backend.api-1_test", metadata!.Name);
+    }
+
     [Fact]
     public async Task Create_MapsUnknownOwnerTo400_AndDuplicateNameTo409()
     {
@@ -335,6 +357,53 @@ public sealed class ConnectionsApiTests
 
         using var bound = await client.SendAsync(Authed(HttpMethod.Post, "/connections", body, "connections:manage,connections:bind-secret"));
         Assert.Equal(HttpStatusCode.Created, bound.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateAndUpdate_RejectCredentialsInSettingsWith400ThatNeverEchoesTheValue()
+    {
+        // #3138: settings are listed unredacted to design readers, so an undeclared key and a URL with user info are both 400s.
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+
+        using var undeclared = await client.SendAsync(Authed(HttpMethod.Post, "/connections", new
+        {
+            name = "undeclared-key",
+            typeName = "http",
+            authScheme = "bearer",
+            settings = new { allowedHosts = "api.example", token = "api-undeclared-secret-sentinel" },
+            secretFields = new { token = new { value = "tok" } }
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, undeclared.StatusCode);
+        var undeclaredBody = await undeclared.Content.ReadAsStringAsync();
+        Assert.Contains("'token'", JsonDocument.Parse(undeclaredBody).RootElement.GetProperty("error").GetString());
+        Assert.DoesNotContain("api-undeclared-secret-sentinel", undeclaredBody);
+
+        using var userInfo = await client.SendAsync(Authed(HttpMethod.Post, "/connections", new
+        {
+            name = "url-credentials",
+            typeName = "http",
+            authScheme = "bearer",
+            settings = new { baseUrl = "https://alice:api-url-secret-sentinel@api.example/" },
+            secretFields = new { token = new { value = "tok" } }
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, userInfo.StatusCode);
+        var userInfoBody = await userInfo.Content.ReadAsStringAsync();
+        Assert.Contains("'baseUrl'", JsonDocument.Parse(userInfoBody).RootElement.GetProperty("error").GetString());
+        Assert.DoesNotContain("api-url-secret-sentinel", userInfoBody);
+
+        using var created = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("declared-only")));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var update = await client.SendAsync(Authed(HttpMethod.Put, "/connections/declared-only", new
+        {
+            settings = new { allowedHosts = "api.example", password = "api-update-secret-sentinel" }
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, update.StatusCode);
+        Assert.DoesNotContain("api-update-secret-sentinel", await update.Content.ReadAsStringAsync());
+
+        using var fetched = await client.SendAsync(Authed(HttpMethod.Get, "/connections/declared-only"));
+        var metadata = await fetched.Content.ReadFromJsonAsync<ConnectionMetadata>(Json);
+        Assert.False(metadata!.Settings.ContainsKey("password"));
     }
 
     private static object BearerBody(string name, string token = "tok") => new

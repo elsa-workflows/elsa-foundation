@@ -65,6 +65,23 @@ services.AddIdentityGenerator(IdentityGeneratorKind.Snowflake, options =>
 
 `UuidV7`, `Short`, and `Guid` are stateless and registered **scoped** (matching the existing defaults and the scoped `ISystemClock`). `Snowflake` keeps monotonic state (last timestamp + sequence) in a **singleton** `SnowflakeIdentitySequence`, while the generator itself stays scoped and supplies the clock per call — so there is no captive-dependency on the scoped clock.
 
+## Runtime execution ids
+
+Workflow execution, command, envelope and activity execution ids come from a separate seam,
+`IRuntimeExecutionIdGenerator`, not from `IIdentityGenerator`. Since #3601 its default is a 32-character UUIDv7 hex
+id. Earlier preview builds used 11-character Base62 ids, which `ShortRuntimeExecutionIdGenerator` still produces
+when selected explicitly. Ownership lease and heartbeat ids, and the folded drain's checkpoint and commit ids, were also Base62 before #3601;
+they are now UUIDv7 whichever generator is selected. Most other commit and checkpoint ids are deterministic strings
+derived from the work they record, such as `commit:<work item id>:cancel`. Already persisted ids are kept as they are, so rows written by
+earlier preview builds keep their Base62 ids.
+
+The two formats do not share an ordinal order: a UUIDv7 id and an older Base62 id do not sort by creation time
+against each other. The runtime uses id order only as a stable paging key or a tie-breaker, never as creation order,
+so correctness is unaffected. The workflow execution list sorts by timestamp and uses the id only to break ties. A
+page that walks rows by id, such as one execution's activity executions, returns rows from before and after the
+upgrade in id order rather than creation order. If your own queries or tools sort runtime rows by id to mean
+"newest", sort by their timestamps instead.
+
 ## Adding your own
 
 Implement `IIdentityGenerator`, then register it last so it wins:

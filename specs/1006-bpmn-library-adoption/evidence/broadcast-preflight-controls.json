@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "task": "T046 preflight increment only",
+  "sourceParentCommit": "061d3331a2d56f3fc12eca5a7999000efaf5dc7f",
+  "filesSha256": {
+    "e2e-tests/bpmn/inspect_broadcast_delivery.py": "3085c4854bb57402d871496661a4c5bf115da78548f96ced7d48692fcbe2a209",
+    "e2e-tests/bpmn/test_inspect_broadcast_delivery.py": "58cf3028a1dc1dd269385b3b8d1f33e40fa229da2b89288242155cdfc208c7d8",
+    "e2e-tests/bpmn/Test-BpmnLibraryAdoption.ps1": "11ed70cf5f130515218e3e880270444de917530ff87ecff3ee0ef780d387ca0c",
+    "tools/bpmn/DeliveryPreflight/Program.cs": "d9286b41d47e6d43f476d49f349efe4685cf5ceff0caf5013efd9e2e2df27fb7",
+    "tools/bpmn/DeliveryPreflight/DeliveryPreflight.csproj": "d50c9f0f9497071646f5f0fe2981f5345817da5ca8b270229f48043433da924f",
+    "tools/bpmn/DeliveryPreflight/packages.lock.json": "1643841117e49662ffa4a9fb240b216e6e52d2e415706583851e44eb400a0264",
+    "Elsa.Server.slnx": "63aeecab730a1bf4f8a3683dbb3f4231af0447e94662febafd9a35015d889fdb"
+  },
+  "checks": [
+    {
+      "command": "dotnet build tools/bpmn/DeliveryPreflight/DeliveryPreflight.csproj --no-restore --nologo",
+      "result": "passed"
+    },
+    {
+      "command": "python3 -m unittest discover -s e2e-tests/bpmn -p test_inspect_broadcast_delivery.py -v",
+      "passed": 14,
+      "failed": 0
+    },
+    {
+      "check": "PowerShell parse and parameter sets",
+      "result": "Host requires BaseUrl; BroadcastPreflight requires only database paths; preflight returns before HTTP authentication."
+    },
+    {
+      "check": "Actual captured stores through the normal PowerShell preflight entrypoint",
+      "stores": 6,
+      "providerCheckedOutboxRows": 33,
+      "publishRows": 0
+    },
+    {
+      "check": "Owned historical development host through coherent read-only backup and checked runtime provider",
+      "providerCheckedOutboxRows": 10,
+      "publishRows": 1,
+      "classification": "LegacyDelivered"
+    },
+    {
+      "command": "dotnet run --project tools/maps/Elsa.Maps.Generator -- check",
+      "result": "Generated solution filters still describe the project graph."
+    }
+  ],
+  "mutations": [
+    {
+      "name": "omit-empty-rows",
+      "exitCode": 1,
+      "summary": "FAILED (failures=2)"
+    },
+    {
+      "name": "omit-settlement-guard",
+      "exitCode": 1,
+      "summary": "FAILED (failures=1)"
+    },
+    {
+      "name": "omit-enumerated-source",
+      "exitCode": 1,
+      "summary": "FAILED (failures=1)"
+    },
+    {
+      "name": "ignore-wal",
+      "exitCode": 1,
+      "summary": "FAILED (failures=1)"
+    }
+  ],
+  "review": {
+    "correctness": "clean",
+    "standards": "clean",
+    "acceptance": "clean"
+  },
+  "scope": "Read-only legacy inventory only. T046 strict cohort/source-context contracts remain open; no rollout/quiescence, broadcast delivery or host-recovery acceptance."
+}

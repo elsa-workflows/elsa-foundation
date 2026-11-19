@@ -61,6 +61,10 @@ public sealed class BookmarkResumeDispatchRequest
         TestRunDelivery = testRunDelivery;
     }
 
+    /// <summary>Optional captured physical wait condition, enforced atomically on initial consumption.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusResumeRecipient? ExpectedRecipient { get; init; }
+
     public string WorkflowExecutionId { get; }
     public string StimulusType { get; }
     public string StimulusHash { get; }
@@ -181,6 +185,10 @@ public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayloa
         TriggerDelivery = triggerDelivery;
         TestRunDelivery = testRunDelivery;
     }
+
+    /// <summary>Optional captured physical wait condition; only initial trigger admission consumes it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusResumeRecipient? ExpectedBookmarkResume { get; init; }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
     public string BookmarkId { get; }

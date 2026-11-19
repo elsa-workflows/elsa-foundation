@@ -18,6 +18,7 @@
     <!-- Every shipped activity module: this project drives all of them through one real workflow engine, and the
          coverage assertions are only meaningful if the whole shipped library is in scope. -->
     <ProjectReference Include="..\..\..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="../../../../src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Compensation\Elsa.Activities.Compensation.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
@@ -32,6 +33,7 @@
     <ProjectReference Include="..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
 
     <ProjectReference Include="..\..\..\..\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\src\Http\Elsa.Http\Elsa.Http.csproj" />
     <ProjectReference Include="..\..\..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
@@ -40,8 +42,12 @@
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <!-- Real RunBpmn model admission observes the loaded schema-reader capabilities. -->
+    <ProjectReference Include="..\..\..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
     <!-- EF Sqlite runtime stores: the graph exit durable-cancellation test (spec 237, SC-002) runs on both store kinds. -->
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <!-- The real publication compiler and data selection analysis: member reads are published, then run. -->
+    <ProjectReference Include="..\..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
 
     <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />

@@ -93,6 +93,29 @@ public sealed class EtlArtifactV2JsonTests
         Assert.Equal("key", restored.Lookup.LookupKeyField);
     }
 
+    [Fact]
+    public void Jsonl_source_round_trips_with_its_discriminator_and_rejects_null_fields()
+    {
+        var pipeline = EtlV2TestPipelines.Create() with
+        {
+            Source = new EtlJsonlSource("orders-file", [new EtlJsonField("id", "/order/id", EtlColumnType.Int64, Required: true)]),
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id")]
+        };
+
+        var document = EtlArtifactV2Json.Write(pipeline);
+        var source = document.GetProperty("source");
+        var restored = Assert.IsType<EtlJsonlSource>(EtlArtifactV2Json.Read(document).Source);
+
+        Assert.Equal("jsonl", source.GetProperty("kind").GetString());
+        Assert.False(source.TryGetProperty("recordsPointer", out _));
+        Assert.Equal("/order/id", Assert.Single(restored.Fields).Pointer);
+        Assert.Equal(document.GetRawText(), EtlArtifactV2Json.Write(EtlArtifactV2Json.Read(document)).GetRawText());
+        var withNull = JsonNode.Parse(document.GetRawText())!;
+        withNull["source"]!["fields"]!.AsArray().Add(null);
+        using var invalid = JsonDocument.Parse(withNull.ToJsonString());
+        Assert.Throws<JsonException>(() => EtlArtifactV2Json.Read(invalid.RootElement));
+    }
+
     [Theory]
     [InlineData("singlePage")]
     [InlineData("nextLink")]

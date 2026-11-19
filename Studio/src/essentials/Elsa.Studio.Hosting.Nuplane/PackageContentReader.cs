@@ -2,11 +2,13 @@ using global::Nuplane;
 using global::Nuplane.Abstractions;
 using global::Nuplane.Abstractions.PackageStoreProtection;
 using global::Nuplane.Admin;
+using global::Nuplane.Loading;
 
 namespace Elsa.Studio.Hosting.Nuplane;
 
 /// <summary>HTTP content policy over Nuplane's admitted guarded reader; published extracted installs are immutable.</summary>
-internal sealed class PackageContentReader(INuplaneAdminOperations admin, IPackageStoreAdmission admission, ILogger<PackageContentReader> logger) : IDisposable
+internal sealed class PackageContentReader(INuplaneAdminOperations admin, IPackageStoreAdmission admission,
+    IPackageAssemblyCatalog assemblies, ILogger<PackageContentReader> logger) : IDisposable
 {
     public const int MaximumAssetBytes = 16 * 1024 * 1024;
     public const int MaximumMetadataBytes = 1024 * 1024;
@@ -40,19 +42,43 @@ internal sealed class PackageContentReader(INuplaneAdminOperations admin, IPacka
         catch { _requests.Release(); throw; }
     }
 
-    public async Task<PackageReadScope?> OpenAsync(string packageId, CancellationToken cancellationToken)
+    public async Task<PackageReadScope?> OpenAssetAsync(string packageOrAssembly, CancellationToken cancellationToken)
     {
         await _reads.WaitAsync(cancellationToken);
         try
         {
-            // Lookup precedes admission; a second catalog call under root ownership would refuse the busy root.
+            // RCL URLs name an assembly, which need not have its owning NuGet package's ID.
+            // Both catalog queries precede admission: another query under root ownership would refuse the busy root.
+            var owners = await AssemblyOwnersAsync(packageOrAssembly, cancellationToken);
             var packages = await admin.GetPackagesAsync(cancellationToken);
-            var package = packages.Packages.FirstOrDefault(package => string.Equals(package.PackageId, packageId, StringComparison.OrdinalIgnoreCase));
-            if (package is null) { _reads.Release(); return null; }
-            return await AdmitAsync(package, cancellationToken);
+            if (owners.Any(owner => !packages.Packages.Any(package => SameOwner(package, owner))))
+            {
+                _reads.Release();
+                return null;
+            }
+            var candidates = packages.Packages.Where(package =>
+                string.Equals(package.PackageId, packageOrAssembly, StringComparison.OrdinalIgnoreCase) ||
+                owners.Any(owner => SameOwner(package, owner))).ToArray();
+            // Direct package IDs and loaded assembly aliases have equal authority. A collision must not
+            // choose another package's bytes, including when its ID happens to equal this assembly's name.
+            if (candidates.Length != 1) { _reads.Release(); return null; }
+            return await AdmitAsync(candidates[0], cancellationToken);
         }
         catch { _reads.Release(); throw; }
     }
+
+    private async Task<(string PackageId, string Version)[]> AssemblyOwnersAsync(string name, CancellationToken cancellationToken)
+    {
+        // Leave all reflection references in this short-lived query; never retain assemblies across generations.
+        var loaded = await assemblies.GetPackagedAssembliesAsync(cancellationToken);
+        return loaded.Where(package => package.Assemblies.Any(assembly =>
+                string.Equals(assembly.GetName().Name, name, StringComparison.OrdinalIgnoreCase)))
+            .Select(package => (package.PackageId, package.Version)).ToArray();
+    }
+
+    private static bool SameOwner(ActivePackage package, (string PackageId, string Version) owner) =>
+        string.Equals(package.PackageId, owner.PackageId, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(package.Version, owner.Version, StringComparison.OrdinalIgnoreCase);
 
     public async Task<PackageReadScope> OpenAsync(ActivePackage package, CancellationToken cancellationToken)
     {

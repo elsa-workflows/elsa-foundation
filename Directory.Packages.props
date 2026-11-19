@@ -13,8 +13,9 @@
 
   <ItemGroup>
     <PackageVersion Include="Acornima" Version="1.6.1" />
-    <PackageVersion Include="Bpmn.Interchange" Version="0.1.1-preview.19" />
-    <PackageVersion Include="Bpmn.Model" Version="0.1.1-preview.19" />
+    <PackageVersion Include="Bpmn.Interchange" Version="0.5.0" />
+    <PackageVersion Include="Bpmn.Model" Version="0.5.0" />
+    <PackageVersion Include="Bpmn.Semantics" Version="0.5.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0" />
     <PackageVersion Include="Cronos" Version="0.13.0" />
@@ -35,8 +36,12 @@
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />
     <PackageVersion Include="GitHub.Copilot.SDK" Version="1.0.4" />
     <PackageVersion Include="Anthropic" Version="12.32.0" />
+    <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageVersion Include="OpenAI" Version="2.14.0" />
     <PackageVersion Include="JsonSchema.Net" Version="9.2.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.5.1" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.27.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.1" />
     <PackageVersion Include="Jint" Version="4.9.1" />
     <!--
       The Microsoft.AspNetCore.* pins below at 2.3.x are NOT stale, and must not be "bumped" to match
@@ -68,21 +73,21 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.12" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
     <!--
       Test-only. Supplies Microsoft.Extensions.Time.Testing.FakeTimeProvider, the TimeProvider double every
@@ -113,12 +118,13 @@
       three ids version together: Elsa.Api.AspNetCore consumes the core, and the OpenApi and
       Testing companions are only meaningful against the same build of it.
     -->
-    <PackageVersion Include="NativeEndpoints" Version="1.0.0-preview.6" />
-    <PackageVersion Include="NativeEndpoints.OpenApi" Version="1.0.0-preview.6" />
-    <PackageVersion Include="NativeEndpoints.Testing" Version="1.0.0-preview.6" />
+    <PackageVersion Include="ValenceWorks.MinimalEndpoints" Version="1.0.0" />
+    <PackageVersion Include="ValenceWorks.MinimalEndpoints.OpenApi" Version="1.0.0" />
+    <PackageVersion Include="ValenceWorks.MinimalEndpoints.Testing" Version="1.0.0" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.0" />
     <PackageVersion Include="Nuplane" Version="0.0.12" />
     <PackageVersion Include="Nuplane.Admin" Version="0.0.12" />
     <PackageVersion Include="Nuplane.Loading" Version="0.0.12" />
@@ -138,9 +144,17 @@
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="System.CommandLine" Version="2.0.8" />
     <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="10.0.8" />
+    <!--
+      Transitive pin (see Microsoft.OpenApi above): no project references System.Security.Cryptography.Pkcs
+      directly; Microsoft.Data.SqlClient pulls in 9.0.13, which carries CVE-2026-84008 (GHSA-846f-f764-76mx,
+      a .NET denial of service). 9.0.21 is the first patched 9.0.x build (#3707). Deleting this pin lets the
+      graph resolve the vulnerable build again.
+    -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.MySql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.RabbitMq" Version="4.15.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />

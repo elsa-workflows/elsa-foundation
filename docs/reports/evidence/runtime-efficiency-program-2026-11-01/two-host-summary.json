@@ -1,0 +1,743 @@
+{
+ "shake-r1": {
+  "cases": 6,
+  "outcomes": {
+   "reclaim:pass": 6
+  },
+  "failures": []
+ },
+ "failure-r1": {
+  "cases": 62,
+  "outcomes": {
+   "crash:pass": 40,
+   "takeover:pass": 10,
+   "reclaim:fail": 6,
+   "interrupt:fail": 6
+  },
+  "failures": [
+   {
+    "kind": "reclaim",
+    "case": "Durable-suspend",
+    "error": "RuntimeError: psql failed: ERROR:  database \"i68_reclaim_durable_suspend_after_body\" already exists\n",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "reclaim",
+    "case": "Durable-child",
+    "error": "RuntimeError: psql failed: ERROR:  database \"i68_reclaim_durable_child_after_body\" already exists\n",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "reclaim",
+    "case": "Balanced-suspend",
+    "error": "RuntimeError: psql failed: ERROR:  database \"i68_reclaim_balanced_suspend_after_body\" already exists\n",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "reclaim",
+    "case": "Balanced-child",
+    "error": "RuntimeError: psql failed: ERROR:  database \"i68_reclaim_balanced_child_after_body\" already exists\n",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "reclaim",
+    "case": "Ephemeral-suspend",
+    "error": "RuntimeError: psql failed: ERROR:  database \"i68_reclaim_ephemeral_suspend_after_body\" already exists\n",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "reclaim",
+    "case": "Ephemeral-child",
+    "error": "RuntimeError: psql failed: ERROR:  database \"i68_reclaim_ephemeral_child_after_body\" already exists\n",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt",
+    "case": "Durable-suspend",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt",
+    "case": "Durable-child",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt",
+    "case": "Balanced-suspend",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt",
+    "case": "Balanced-child",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt",
+    "case": "Ephemeral-suspend",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt",
+    "case": "Ephemeral-child",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": null
+   }
+  ]
+ },
+ "failure-r2": {
+  "cases": 18,
+  "outcomes": {
+   "reclaim:fail": 6,
+   "interrupt:fail": 6,
+   "interrupt-retry:fail": 6
+  },
+  "failures": [
+   {
+    "kind": "reclaim",
+    "case": "Durable-suspend",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "reclaim",
+    "case": "Durable-child",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "reclaim",
+    "case": "Balanced-suspend",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "reclaim",
+    "case": "Balanced-child",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "reclaim",
+    "case": "Ephemeral-suspend",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "reclaim",
+    "case": "Ephemeral-child",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt",
+    "case": "Durable-suspend",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt-retry",
+    "case": "Durable-suspend",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": 0
+   },
+   {
+    "kind": "interrupt",
+    "case": "Durable-child",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt-retry",
+    "case": "Durable-child",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": 0
+   },
+   {
+    "kind": "interrupt",
+    "case": "Balanced-suspend",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt-retry",
+    "case": "Balanced-suspend",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": 0
+   },
+   {
+    "kind": "interrupt",
+    "case": "Balanced-child",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt-retry",
+    "case": "Balanced-child",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": 0
+   },
+   {
+    "kind": "interrupt",
+    "case": "Ephemeral-suspend",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt-retry",
+    "case": "Ephemeral-suspend",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": 0
+   },
+   {
+    "kind": "interrupt",
+    "case": "Ephemeral-child",
+    "error": "AssertionError: initialize failed",
+    "recoveryExit": null,
+    "correct": null,
+    "incidentsAfterRecovery": null
+   },
+   {
+    "kind": "interrupt-retry",
+    "case": "Ephemeral-child",
+    "error": null,
+    "recoveryExit": 2,
+    "correct": false,
+    "incidentsAfterRecovery": 0
+   }
+  ]
+ },
+ "f3": {
+  "cases": 18,
+  "outcomes": {
+   "reclaim:pass": 6,
+   "interrupt:pass": 6,
+   "interrupt-retrynow:pass": 6
+  },
+  "failures": []
+ },
+ "f4": {
+  "cases": 68,
+  "outcomes": {
+   "crash:pass": 40,
+   "takeover:pass": 10,
+   "reclaim:pass": 6,
+   "interrupt:pass": 6,
+   "interrupt-retrynow:pass": 6
+  },
+  "failures": []
+ },
+ "loopab-branch": [
+  {
+   "workbench": "workbench",
+   "index": 0,
+   "dispatch": "AcceptedButFaulted",
+   "activityRows": [
+    2647,
+    2647
+   ],
+   "poisonIncidents": 1,
+   "firstChanceConflicts": 0,
+   "conflictEntities": []
+  },
+  {
+   "workbench": "workbench",
+   "index": 1,
+   "dispatch": "AcceptedButFaulted",
+   "activityRows": [
+    2598,
+    2598
+   ],
+   "poisonIncidents": 1,
+   "firstChanceConflicts": 0,
+   "conflictEntities": []
+  },
+  {
+   "workbench": "workbench",
+   "index": 2,
+   "dispatch": null,
+   "activityRows": [
+    4951,
+    5196
+   ],
+   "poisonIncidents": 0,
+   "firstChanceConflicts": 0,
+   "conflictEntities": []
+  }
+ ],
+ "loopab-main": [
+  {
+   "workbench": "workbench-main",
+   "index": 0,
+   "dispatch": null,
+   "activityRows": [
+    688,
+    737
+   ],
+   "poisonIncidents": 0,
+   "firstChanceConflicts": 0,
+   "conflictEntities": []
+  },
+  {
+   "workbench": "workbench-main",
+   "index": 1,
+   "dispatch": null,
+   "activityRows": [
+    688,
+    737
+   ],
+   "poisonIncidents": 0,
+   "firstChanceConflicts": 0,
+   "conflictEntities": []
+  },
+  {
+   "workbench": "workbench-main",
+   "index": 2,
+   "dispatch": null,
+   "activityRows": [
+    688,
+    737
+   ],
+   "poisonIncidents": 0,
+   "firstChanceConflicts": 0,
+   "conflictEntities": []
+  }
+ ],
+ "loopdiag-branch": [
+  {
+   "workbench": "workbench",
+   "index": 0,
+   "dispatch": null,
+   "activityRows": [
+    4901,
+    4901
+   ],
+   "poisonIncidents": 1,
+   "firstChanceConflicts": 5,
+   "conflictEntities": [
+    "ExecutionLivenessStateEntity"
+   ]
+  },
+  {
+   "workbench": "workbench",
+   "index": 1,
+   "dispatch": null,
+   "activityRows": [
+    4950,
+    4950
+   ],
+   "poisonIncidents": 1,
+   "firstChanceConflicts": 5,
+   "conflictEntities": [
+    "ExecutionLivenessStateEntity"
+   ]
+  },
+  {
+   "workbench": "workbench",
+   "index": 2,
+   "dispatch": null,
+   "activityRows": [
+    5539,
+    5784
+   ],
+   "poisonIncidents": 0,
+   "firstChanceConflicts": 0,
+   "conflictEntities": []
+  }
+ ],
+ "loopfix-branch": [
+  {
+   "workbench": "workbench-r6",
+   "index": 0,
+   "dispatch": null,
+   "activityRows": [
+    5098,
+    5343
+   ],
+   "poisonIncidents": 0,
+   "firstChanceConflicts": 0,
+   "conflictEntities": []
+  },
+  {
+   "workbench": "workbench-r6",
+   "index": 1,
+   "dispatch": null,
+   "activityRows": [
+    5147,
+    5343
+   ],
+   "poisonIncidents": 0,
+   "firstChanceConflicts": 0,
+   "conflictEntities": []
+  },
+  {
+   "workbench": "workbench-r6",
+   "index": 2,
+   "dispatch": null,
+   "activityRows": [
+    4961,
+    5153
+   ],
+   "poisonIncidents": 0,
+   "firstChanceConflicts": 5,
+   "conflictEntities": [
+    "ExecutionLivenessStateEntity"
+   ]
+  },
+  {
+   "workbench": "workbench-r6",
+   "index": 3,
+   "dispatch": null,
+   "activityRows": [
+    5000,
+    5196
+   ],
+   "poisonIncidents": 0,
+   "firstChanceConflicts": 5,
+   "conflictEntities": [
+    "ExecutionLivenessStateEntity"
+   ]
+  }
+ ],
+ "c1": [
+  {
+   "shape": "delay",
+   "passed": false,
+   "error": "KeyError: 'status'",
+   "stateBeforeCancel": null,
+   "stateAfter": null,
+   "ownerApiView": null,
+   "receiptStatuses": null,
+   "activityRowsProgressingBefore": null,
+   "activityRowsAfterCancel": null,
+   "incidents": null,
+   "sender": null,
+   "senderMessage": null
+  },
+  {
+   "shape": "loop",
+   "passed": false,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 1,
+   "ownerApiView": {
+    "status": "Running",
+    "incidentCount": 1
+   },
+   "receiptStatuses": [],
+   "activityRowsProgressingBefore": [
+    1618,
+    1618
+   ],
+   "activityRowsAfterCancel": [
+    1618,
+    1618
+   ],
+   "incidents": 1,
+   "sender": null,
+   "senderMessage": null
+  }
+ ],
+ "c2": [
+  {
+   "shape": "delay",
+   "passed": false,
+   "error": "AssertionError: ",
+   "stateBeforeCancel": null,
+   "stateAfter": null,
+   "ownerApiView": null,
+   "receiptStatuses": null,
+   "activityRowsProgressingBefore": null,
+   "activityRowsAfterCancel": null,
+   "incidents": null,
+   "sender": null,
+   "senderMessage": null
+  },
+  {
+   "shape": "loop",
+   "passed": false,
+   "error": "AssertionError: ",
+   "stateBeforeCancel": null,
+   "stateAfter": null,
+   "ownerApiView": null,
+   "receiptStatuses": null,
+   "activityRowsProgressingBefore": null,
+   "activityRowsAfterCancel": null,
+   "incidents": null,
+   "sender": null,
+   "senderMessage": null
+  }
+ ],
+ "c3": [
+  {
+   "shape": "delay",
+   "passed": true,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 5,
+   "ownerApiView": {
+    "status": "Cancelled",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [
+    4,
+    4
+   ],
+   "activityRowsProgressingBefore": null,
+   "activityRowsAfterCancel": [
+    3,
+    3
+   ],
+   "incidents": 0,
+   "sender": "passed",
+   "senderMessage": null
+  },
+  {
+   "shape": "loop",
+   "passed": false,
+   "error": "IndexError: list index out of range",
+   "stateBeforeCancel": null,
+   "stateAfter": null,
+   "ownerApiView": null,
+   "receiptStatuses": null,
+   "activityRowsProgressingBefore": null,
+   "activityRowsAfterCancel": null,
+   "incidents": null,
+   "sender": null,
+   "senderMessage": null
+  }
+ ],
+ "c4": [
+  {
+   "shape": "loop",
+   "passed": false,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 1,
+   "ownerApiView": {
+    "status": "Running",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [],
+   "activityRowsProgressingBefore": [
+    3236,
+    3432
+   ],
+   "activityRowsAfterCancel": [
+    11713,
+    11909
+   ],
+   "incidents": 0,
+   "sender": null,
+   "senderMessage": null
+  }
+ ],
+ "c5": [
+  {
+   "shape": "delay",
+   "passed": true,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 5,
+   "ownerApiView": {
+    "status": "Cancelled",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [
+    4,
+    4
+   ],
+   "activityRowsProgressingBefore": null,
+   "activityRowsAfterCancel": [
+    3,
+    3
+   ],
+   "incidents": 0,
+   "sender": "passed",
+   "senderMessage": null
+  },
+  {
+   "shape": "loop",
+   "passed": false,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 1,
+   "ownerApiView": {
+    "status": "Running",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [],
+   "activityRowsProgressingBefore": [
+    2893,
+    3087
+   ],
+   "activityRowsAfterCancel": [
+    3135,
+    3566
+   ],
+   "incidents": 0,
+   "sender": "failed",
+   "senderMessage": null
+  }
+ ],
+ "c6": [
+  {
+   "shape": "loop",
+   "passed": false,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 1,
+   "ownerApiView": {
+    "status": "Running",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [],
+   "activityRowsProgressingBefore": [
+    2697,
+    2891
+   ],
+   "activityRowsAfterCancel": [
+    2987,
+    3418
+   ],
+   "incidents": 0,
+   "sender": "failed",
+   "senderMessage": "The actual live execution pin/placement must match the owned request."
+  }
+ ],
+ "c7": [
+  {
+   "shape": "loop",
+   "passed": false,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 1,
+   "ownerApiView": {
+    "status": "Running",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [],
+   "activityRowsProgressingBefore": [
+    3285,
+    3481
+   ],
+   "activityRowsAfterCancel": [
+    12497,
+    12742
+   ],
+   "incidents": 0,
+   "sender": null,
+   "senderMessage": null
+  }
+ ],
+ "p-main": [
+  {
+   "shape": "loop",
+   "passed": false,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 1,
+   "ownerApiView": {
+    "status": "Running",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [],
+   "activityRowsProgressingBefore": [
+    492,
+    492
+   ],
+   "activityRowsAfterCancel": [
+    1374,
+    1423
+   ],
+   "incidents": 0,
+   "sender": null,
+   "senderMessage": null
+  }
+ ],
+ "p-branch": [
+  {
+   "shape": "loop",
+   "passed": false,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 1,
+   "ownerApiView": {
+    "status": "Running",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [],
+   "activityRowsProgressingBefore": [
+    3236,
+    3432
+   ],
+   "activityRowsAfterCancel": [
+    12350,
+    12546
+   ],
+   "incidents": 0,
+   "sender": null,
+   "senderMessage": null
+  }
+ ]
+}

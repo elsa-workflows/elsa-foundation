@@ -1,0 +1,12 @@
+using CShells.Features;
+using Elsa.Studio.Core.Attributes;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Acme.Home.Studio;
+
+[ShellFeature("AcmeHomeStudio", DisplayName = "Acme status card")]
+[StudioModule("acme-home", "Acme status card", "navigation", "routes", "dashboard-widgets", RequiredSdkVersion = "__REQUIRED_SDK_VERSION__")]
+public class AcmeHomeStudioFeature : IShellFeature
+{
+    public virtual void ConfigureServices(IServiceCollection services) { }
+}

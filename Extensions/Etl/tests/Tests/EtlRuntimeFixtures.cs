@@ -36,6 +36,7 @@ internal static class EtlRuntimeFixtures
         {
             EtlCsvSource csv => ConnectorBinding(EtlConnectorKind.Csv, csv.Binding, EtlRuntimeFixtures.Hash),
             EtlHttpJsonSource http => ConnectorBinding(EtlConnectorKind.Http, http.Binding),
+            EtlJsonlSource jsonl => ConnectorBinding(EtlConnectorKind.Jsonl, jsonl.Binding, EtlRuntimeFixtures.Hash),
             _ => throw new ArgumentOutOfRangeException(nameof(pipeline))
         };
         var lookup = pipeline.Lookup is { } declaredLookup
@@ -57,6 +58,8 @@ internal static class EtlRuntimeFixtures
     {
         EtlHttpDestination http => ConnectorBinding(EtlConnectorKind.Http, http.Binding, revision: "destination-revision-1"),
         EtlJsonlDestination jsonl => ConnectorBinding(EtlConnectorKind.Jsonl, jsonl.Binding, revision: "destination-revision-1"),
+        EtlCsvDestination csv => ConnectorBinding(EtlConnectorKind.Csv, csv.Binding, revision: "destination-revision-1"),
+        EtlRabbitMqDestination rabbitMq => ConnectorBinding(EtlConnectorKind.RabbitMq, rabbitMq.Binding, revision: "destination-revision-1"),
         _ => throw new ArgumentOutOfRangeException(nameof(destination))
     };
 

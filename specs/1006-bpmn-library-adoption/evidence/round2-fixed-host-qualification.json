@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "exactBackendBuildCommit": "9190df9647078994726e3089b48d8e723daacc00",
+  "actualStandardHost": true,
+  "actualCodedErrorCases": 2,
+  "actualEscalationCases": 6,
+  "wholeCheckedObservationEqualAcrossColdRestart": true,
+  "readerControls": 24,
+  "wholeModuleBackups": 6,
+  "studioPublishedRun": "14iE6SpNZyi",
+  "studioRecoveredCallerInspection": "14iDzYWOz4n",
+  "retainedAuthoredStateAndExportExactlyEqual": true,
+  "fullPrRoundsCompleted": 2,
+  "fullPrRoundBound": 6,
+  "newExactHeadFullReviewRequired": true,
+  "filesSha256": {
+    "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj": "bb47eb0a6b9424742045a20059fcb0a09bb40b44e77b6d36928a21e9201616ef",
+    "Essentials/apps/Elsa.Workbench/shells.json": "000b0c2a42db5a0acade48094be4bcb17d2f437f33ad1476336521877037e96a",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "4976b49110fdb49887096dd6562c7a7b16503a33404f142502c24d60260e23b5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "4e88471da1a0bc40a84d228729d5e7642f0a2727080a919a191ee28e62e65cf6",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControl.cs": "8d50313e1392d48effd23e9db697a28bd77af0ea1df0a2d0adb643da8d7e5111",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs": "cfc9d0007bef3d9a7cc1bc14dfab64d0ada5172c374311954ab5b6aee91afe7b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimeArtifactJson.cs": "f40344dd01b87e31ec3cdcb6ee948496ac019f1ef26807bfc15a0abdf23ab455",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/ChildControlContractTests.PersistedWire.cs": "1d4bdd1f204488fd1bc1f309b9bea0b176aae29d91f4392ef77ad4e70d21c47f",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/ChildControlContractTests.cs": "5fd3d24f627179dc4d3d92919fa6758da397d1e1b22d3e3a675805cb1516825f",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlProducerTests.PersistedWire.cs": "34fac47a21d7f2c8d489f4e288738918cb3b20be4cf5cb10490792b3cd2a2fa6",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlProducerTests.cs": "48c0fb3f8951e69a36289b3ba9becbd6452e558744c0fb985ee26b09831b033e",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfActivityExecutionStoresTests.ChildControlWire.cs": "28c5844fbf9406be9de2a2763e3578ecfeea21d76622d40dc21a3e66828663d1",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfActivityExecutionStoresTests.cs": "bab78f09fb6dfe5e2731836572b81d37eeada5540f9f534c63a8ba328f2d87f3",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "e2e-tests/bpmn/Test-BpmnCalledControlHost.ps1": "353494c9a929b48950ce5df489b9278da40e71697c8c39bb829bdcf376656324",
+    "e2e-tests/bpmn/_CalledControlCommon.ps1": "9f13b5cbcb2a6a41ea0a97722428f793bc2888412ceef6a992fb86dcde8e27a5",
+    "e2e-tests/bpmn/run_owned_broadcast_probe.py": "916716d10446ec7650b99ec926dcb08024fc8619fc21402c862e6d47e163b5de",
+    "e2e-tests/bpmn/test_called_snapshot_reader.py": "b24d72b97511d91d57a423b74bf174034ad8a7b12f8cc4d1a778050a88233a5a",
+    "e2e-tests/bpmn/test_opted_called_snapshot_reader.py": "b4f7181cffa60875828a0ac1af0f27f293b60d0379f7aab8a4274e2d973c440f",
+    "e2e-tests/bpmn/verify_published_contracts.py": "27dd5b278c2abcd1382a067299c406e03215ede5a301241e92ab7ed2864be0c7",
+    "specs/1006-bpmn-library-adoption/contracts/called-workflow-control.md": "7bd2f217e44c7fcb7422638b877407c667bb165694716b652d6daa3af7671170",
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire-fix.md": "79f731acd1481e270de6deaf884159b9c5bfd63bc27ceb302ebaf03508460a9f",
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host-qualification.md": "9b8ee91410e2ac77833eabf67faf2c4b1aa3b3743dd091c0f8d9bab64b2c2a9e",
+    "specs/1006-bpmn-library-adoption/tasks.md": "f098507fd3be9f06257991cd89b20a57504f5e9505d5160d89ff05009ec239b9",
+    "tools/bpmn/DeliveryRecoveryRead/CalledSnapshotReader.cs": "2c8e21c0f223732112d5b28b4eab98417e6d603e1b61cb1fb14ba1e725ddd71a",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Acknowledgment.cs": "b2409701254ac5707b96478e31c90938f499792f3ff23f18e092bf6cfb2fb0b5",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Compensation.cs": "03894ef0b9049f853993bcd4fca0935f08596ff1fa6724b726487d7fa5164369",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Concurrent.cs": "156604e161140da36d67f9697cca3419398ab0200ef1b6fae1d2c892f3c4b46c",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Escalation.cs": "f7133978eec14279d9d26635ba5f05ccc38d191bd1f1361aae57d2538bc45711",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.cs": "7db5bdb5fd4fdf3a2d2d573c0ee12c6d77d4605b818232b9b431826cd3a82e75",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "cc92c01900be96385a011ab0b2fdcf7b9fc192f3d0f978b59a221e0e1fdaeb0e"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/called-run-list.dom.txt": {
+      "sha256": "1e7a22c35e7b8614411ae1590e1dd1f53bb34d7ffb58b5c203646fd86d1129d9",
+      "bytes": 42630
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/coded-api.json": {
+      "sha256": "06eabbba22372d8a09fce6814cfe2069e2386592b2963aaade4a97aee684e166",
+      "bytes": 28705
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/coded-checked.json": {
+      "sha256": "584f7ca157f38dc3d8e8f8f03804711aebdfd87fc9aa324120c3c2cd6710c0fc",
+      "bytes": 78218
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/coded-controls.json": {
+      "sha256": "637702492f2db39606b3b51289d56c6a5b62ffa4322dad5f7b6fd9b9bb4fec29",
+      "bytes": 1849
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/coded-runtime.json": {
+      "sha256": "07f7957f7edad77051371e85091389cd93b4cc29621fb50dbee64abc07252d92",
+      "bytes": 348
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/coded-runtime.sqlite.gz": {
+      "sha256": "422baf3403a7e58358d160be4ec8904732b328943d9797078ed15cefeb815fd5",
+      "bytes": 594731
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/coded.log.gz": {
+      "sha256": "54c908c0e473e13bc2fc49c371779262df2a7018cf2ba45e9bc26988d26e03be",
+      "bytes": 80
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-finished-api.json": {
+      "sha256": "e8213df7618d7a51fbc4be3c3f59c9e7c2e7e5f651559fe39f7896c199a584f2",
+      "bytes": 175877
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-finished-checked.json": {
+      "sha256": "6bfdcd30b7a2feef3288439d45b94d6d236f9cb60a74624ba76eff95ff5468f5",
+      "bytes": 276994
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-finished-controls.json": {
+      "sha256": "ae37ebd625e3c41abfb4c494fce0abcd1e4cd17077a36eb3a76b71347e6c9fb2",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-finished-runtime.json": {
+      "sha256": "21632d82dc3729d32ac59d4e38671677b0a6bca96924d1844b8a012a2fbb27f0",
+      "bytes": 348
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-finished-runtime.sqlite.gz": {
+      "sha256": "2034d5ee8a4542c65f5607a5e5be01002f29bbe330feafcb8dcde520110310b8",
+      "bytes": 961240
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-finished.log.gz": {
+      "sha256": "54c908c0e473e13bc2fc49c371779262df2a7018cf2ba45e9bc26988d26e03be",
+      "bytes": 80
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-parked-api.json": {
+      "sha256": "56bf0b6c3c4d497043fe4b067a7bfba519dbde343a39c1f83d50a516f6b3cc29",
+      "bytes": 97606
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-parked-checked.json": {
+      "sha256": "d7c482020c22e68b826bb5133c0b5778f2a2989d1478fc6b8e3c856e03fbb63e",
+      "bytes": 275083
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-parked-controls.json": {
+      "sha256": "ece1dc58574db424427b4ed7cc3fc949cc4fe85f8dcd4015c68f80444895a0cb",
+      "bytes": 1861
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-parked-runtime.json": {
+      "sha256": "f75853d500db346b89445ba0ca3a2892aa023a3317e5bdde9859954be8f22dfa",
+      "bytes": 348
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-parked-runtime.sqlite.gz": {
+      "sha256": "b4c60f46a9cb85b70fb74734b2264231aea6f82aa2bb9bf32620616460e7039b",
+      "bytes": 932120
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-parked.log.gz": {
+      "sha256": "54c908c0e473e13bc2fc49c371779262df2a7018cf2ba45e9bc26988d26e03be",
+      "bytes": 80
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-recovered-api.json": {
+      "sha256": "7788051e079702c77d13238b7691ea5bda8d17fa40318c46dcae991fde03ea74",
+      "bytes": 171568
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-recovered-checked.json": {
+      "sha256": "ee1af664ba171f9fff132372c2ad8ba027d1f3c24a838c2147971d038e63b627",
+      "bytes": 275083
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-recovered-controls.json": {
+      "sha256": "c6463f5e8b7caab4f24c62e5c226cc81487e12df965eb5e0ef0332baf9699c91",
+      "bytes": 1864
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-recovered-runtime.json": {
+      "sha256": "1e83df9dd406978ea7731fe9805c0606479829ab140700cc4b77f89c0e66a683",
+      "bytes": 348
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-recovered-runtime.sqlite.gz": {
+      "sha256": "49fee656b0a4e12bc4c4144965aab1692e4481651e8945962be1223328d16994",
+      "bytes": 932115
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/escalation-recovered.log.gz": {
+      "sha256": "54c908c0e473e13bc2fc49c371779262df2a7018cf2ba45e9bc26988d26e03be",
+      "bytes": 80
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/export-confirmation.dom.txt": {
+      "sha256": "1bac0cda4b9fcf29718f4543153e7987fe8cc92c02566a01655d0a3e198c0573",
+      "bytes": 12532
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/exported-default-flow.bpmn": {
+      "sha256": "193194cf46188fa6bcbd0c5939612bd8c0319625ec1cf7f5fa95ed7bb0ed5a61",
+      "bytes": 3263
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/identities.json": {
+      "sha256": "3fa96212abcb6d9493f463491f2ad5a3dbab123e57928f49cdd414f3da75cb3b",
+      "bytes": 597
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/owned-processes.json": {
+      "sha256": "dc86e9149f535950b6028e5f7d86fad5f6d05fef6d081c1f290dc1554e735501",
+      "bytes": 735
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/persisted-authored-v1.json": {
+      "sha256": "a824a5c04ef05615b46089cb2bf716e59da41bbef39703c8910ee78e5b76d5bf",
+      "bytes": 5363
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/product-versions.json": {
+      "sha256": "3853c8b17c88d4d0d279620fcc24afaa4ccc6ea98e8d12a69f164fbdf3a8a0f0",
+      "bytes": 1215
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/public-types.json": {
+      "sha256": "7178e11609f61032307b9e8ae71b6dec4b442a8d0d276c29a671ab6077b43bb2",
+      "bytes": 4799
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/published-contracts.json": {
+      "sha256": "f367b2046fe20c1928f197ff1b328f7b45392215c0ba2810d41b719bd5e40d73",
+      "bytes": 3492
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/published-run-api.json": {
+      "sha256": "cc6e6993ac4902b72e7f6da10235abfe0dbd6bd78858526fbb1da2c29926e0b2",
+      "bytes": 4209
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/published-run.dom.txt": {
+      "sha256": "142ccddecb4ec847da66d77fb440231f5dab8b34b1d3f810f66b46d1d3255fe0",
+      "bytes": 4489
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/published-run.png": {
+      "sha256": "4f9797f9f37c5f02a731b9be2ca77f577124e6fb604f902f1add0b9811edb492",
+      "bytes": 68017
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/reader-binaries.json": {
+      "sha256": "b01b9d3e4ab942125d4c0280e83debd67466fee69b7a20cf2dee10e804cec4fd",
+      "bytes": 7405
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/reader-build.log.gz": {
+      "sha256": "8b8806a9b9bd61361d673ac585a643d19b4224f504ac6a4a70742b728dc326e8",
+      "bytes": 6841
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/recovered-call-inspection.dom.txt": {
+      "sha256": "70ee79523bcfb3229d5c7f485ac4e94ef86498a93981dba283c88b7a1e0aa062",
+      "bytes": 7976
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/recovered-call-inspection.png": {
+      "sha256": "8cab9df498ee6b318c915e4765a324f824b921af24c2de096b8f6a2ac40a16b2",
+      "bytes": 91234
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/recovered-caller.dom.txt": {
+      "sha256": "47a1b60054545d93d4e30c1547b5db267265e035901a7556c8338724c0025501",
+      "bytes": 5059
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/released-libraries.json": {
+      "sha256": "f2499d4662e7028d2d6f2f57569c31779492b0a077d7471df775b9334475f7e6",
+      "bytes": 532
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/reloaded-authoring.dom.txt": {
+      "sha256": "b7150225dd2120bc73ec01fee810adda0710e8a1dc2908190135be4d8596d032",
+      "bytes": 12468
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/restart-comparison.json": {
+      "sha256": "ff4df8fb2ffd810b0f02fc9f74fcb4461fa20e72f7b2df1300b238ae133e8d5b",
+      "bytes": 1342
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/retained-publication.dom.txt": {
+      "sha256": "92cda8f26502f99ef98f244648093282cd7169c5e31df28a70f20bff09214395",
+      "bytes": 12569
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/served-workflows-entry.json": {
+      "sha256": "90e94220b1d3269b04cdaa75e0e5cd1a51b343a373b5714ae00a20837c1ea7a8",
+      "bytes": 860
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/standard-build-command.json": {
+      "sha256": "cb1c74e2dc9ae71244df6f5f338e77e70cf125857b9c27d49b362c48dc8d8ecb",
+      "bytes": 519
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/standard-build-manifest.json": {
+      "sha256": "e9fd42dd05c0389478a27a579820ab09e2f261a47c25c7c8af1cc74b2411d42c",
+      "bytes": 34596
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/standard-build.log.gz": {
+      "sha256": "85cc291693aa27db85c28e5d830cc79e6b3fcb2e676dcf2903691253c9072c6e",
+      "bytes": 17805
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/studio-binaries.json": {
+      "sha256": "e38040fa145e7f990977b2f309f4abfac01a21bd3392a3def9cf2ffe358cefba",
+      "bytes": 9240
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/studio-final-design.json": {
+      "sha256": "c3e3ba86fb01087e802b9c6d0daa5f2e6679814c2a7e2b70ff637ebf51220941",
+      "bytes": 348
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/studio-final-design.sqlite.gz": {
+      "sha256": "764522da7aaf0fcf6b2f0c26b98c5eff5d541a2088bf0134e986274291f3645e",
+      "bytes": 193248
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/studio-final-runtime.json": {
+      "sha256": "4085ad7072ad557c706dc73bf2f09a39bb4e1e9e9e0a035eeea2cea4fe6557df",
+      "bytes": 348
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-fixed-host/studio-final-runtime.sqlite.gz": {
+      "sha256": "c9408759e194cb319f9e398f359db4ee9393ec244226caad52596575e31a86b2",
+      "bytes": 963018
+    }
+  },
+  "frozenAuthoringSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "remaining": [
+    "Full-PR round3 and exact-head required checks",
+    "Protected delivery and resulting-main verification",
+    "Separate ADR0063 acceptance PR",
+    "Independent 2898/2907/program production acceptance"
+  ],
+  "deferred": [
+    "Orleans",
+    "task-runner follow-up"
+  ]
+}

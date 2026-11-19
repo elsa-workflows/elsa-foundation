@@ -67,6 +67,38 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         .HasDefaultValue(0L)
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("PollGeneration")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CompactedPageCount")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CompactedBatchCount")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CompactedAcceptedRecords")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CompactedRejectedRecords")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CompactedFilteredRecords")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CompactedMainEffects")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CompactedErrorEffects")
+                        .HasDefaultValue(0L)
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("RetainedOutputBytes")
                         .HasDefaultValue(0L)
                         .HasColumnType("INTEGER");
@@ -119,6 +151,14 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
 
                     b.ToTable("elsa_etl_connector_partitions", t =>
                         {
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_PollGeneration", "PollGeneration >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedPageCount", "CompactedPageCount >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedBatchCount", "CompactedBatchCount >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedAcceptedRecords", "CompactedAcceptedRecords >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedRejectedRecords", "CompactedRejectedRecords >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedFilteredRecords", "CompactedFilteredRecords >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedMainEffects", "CompactedMainEffects >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CompactedErrorEffects", "CompactedErrorEffects >= 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CurrentRequestPointer", "(CurrentRequestSequence IS NULL AND CurrentRequestHash IS NULL) OR (CurrentRequestSequence IS NOT NULL AND CurrentRequestHash IS NOT NULL)");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeCounters", "PageCount >= 0 AND PageBytes >= 0 AND MetadataBytes >= 0 AND BatchMetadataBytes >= 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_SourceInputReservedBytes", "SourceInputReservedBytes >= 0");
@@ -395,7 +435,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_NonNegativeMetadataBytes", "MetadataBytes >= 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SourceFetchMetadata", "FetchMetadataBytes >= 0 AND SourceMetadataReserveBytes >= 0 AND InputReservationBytes >= 0 AND ((FetchJson IS NULL AND FetchDigest IS NULL AND FetchMetadataBytes = 0 AND SourceMetadataReserveBytes = 0 AND InputReservationBytes = 0) OR (FetchJson IS NOT NULL AND FetchDigest IS NOT NULL AND length(FetchDigest) = 64))");
-                            t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SequencePredecessor", "(PageSequence = 0 AND PreviousPageSequence IS NULL AND PreviousHasContinuation IS NULL) OR (PageSequence > 0 AND PreviousPageSequence IS NOT NULL AND PreviousHasContinuation IS NOT NULL AND PreviousPageSequence = PageSequence - 1 AND PreviousHasContinuation = 1)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_http_requests_SequencePredecessor", "(PreviousPageSequence IS NULL AND PreviousHasContinuation IS NULL) OR (PageSequence > 0 AND PreviousPageSequence IS NOT NULL AND PreviousHasContinuation IS NOT NULL AND PreviousPageSequence = PageSequence - 1 AND PreviousHasContinuation = 1)");
                         });
                 });
 
@@ -412,6 +452,9 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.Property<string>("BindingsJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<long?>("CompletionRequestedAtUtcTicks")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("PreparedJson")
                         .HasColumnType("TEXT");
@@ -447,8 +490,42 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_runs_RetainedByteCounts", "RetainedInputBytes >= 0 AND RetainedMetadataBytes >= 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_runs_SourceInputReservedBytes", "SourceInputReservedBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_runs_CompletionRequestedAtUtcTicks", "CompletionRequestedAtUtcTicks IS NULL OR CompletionRequestedAtUtcTicks > 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_runs_RetainedOutputBytes", "RetainedOutputBytes >= 0");
                         });
+                });
+
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorSourceWatermarkRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CheckpointKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunKey")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Watermark")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ScopeKey", "CheckpointKey");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_etl_connector_source_watermarks", (string)null);
                 });
 
             modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlRuntimeManifestRecord", b =>

@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "task": "T051 bounded actual delayed first selection and start-created matching wait exclusion; remaining gates open",
+  "sourceParentCommit": "3299556ab5e4341c9676e281c0a3264fcfec8e31",
+  "filesSha256": {
+    "e2e-tests/README.md": "afc0312f4cc58963cdbc1c3716811b52d5028a5a3d2cdb6699e40ddad6ff1b48",
+    "e2e-tests/bpmn/RecoveryProbe/README.md": "54b580cdec1fc2c4bcfa579b09db01b55e151043f3f18c84f31620a07aba7158",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "b6a0a3db209a448163772b167d19d3abd0c4542ade1ddfd14ffbf63ef4f41f7b",
+    "e2e-tests/bpmn/test_inspect_broadcast_recovery.py": "0b7d81ce0087e1d1d5cae7aa8dd0dbac6fc5d1f6086bd72cbb2c73a6fb9de72e",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "c7456066304b281f22be147b4dc2eac3d20e227b9129fa88fc9390a381d4a7f3"
+  },
+  "hostReceiptsSha256": {
+    "broadcast-delayed-selection-host.json": "237777e9eda7ffec43301560e2ae44091808853d7d256d7cd970b18c2d4dfdfe",
+    "broadcast-delayed-selection-after-cohort.json": "25380f47f8ef678b306826943599cd0b8889b7295cc21dc520440d96495435b4",
+    "broadcast-delayed-selection-after-resume.json": "df45c3bdf8f70f61cbdd2a75991d75796777cd549a335f6a2df892833d3f6f64"
+  },
+  "sourceBindingsCheckedPerCase": 1371,
+  "checks": [
+    {
+      "name": "actual delayed first selection and start-created wait exclusion",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual post-cohort crash regression",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual partial callback/rearm crash regression",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "explicit checked-observer controls on four-resume/two-start fixture",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "separate locked probe/standard Release builds and checked reader build",
+      "passed": 3,
+      "failed": 0
+    }
+  ],
+  "causalOrdering": [
+    "actual canonical committed-source read completes before before-selection marker; cohort absent",
+    "runner observes marker then creates later listener and binding through normal APIs",
+    "stopped checked source still has no cohort and neither start artifact has an execution",
+    "standard new owner performs first selection; complete saved cohort contains all four exact prior wait identities/generations and both bindings",
+    "source record/recipient/binding timestamps supplement ordering; two waits and one binding are also later than marker time",
+    "selected starts then create matching waits that remain armed and outside their own source cohort"
+  ],
+  "effects": {
+    "initialCohortAbsent": true,
+    "laterThanMarkerWaits": 2,
+    "laterThanMarkerBindings": 1,
+    "savedExactResumes": 4,
+    "savedStarts": 2,
+    "sameStimulusStartCreatedWaitsExcluded": 2,
+    "allFourSavedCallbacksCompleted": true,
+    "bothWaiterJoinsCompleted": true,
+    "eachKeyedStartCreatedExactlyOnce": true,
+    "eachStartCreatedWaitSuspendedAtAttempt": 1,
+    "sourceFenceBefore": 1,
+    "sourceFenceAfter": 2,
+    "distinctOwner": true,
+    "firstSelectedSnapshotUnchangedThroughSettlement": true,
+    "allWorkflowApiIncidents": 0
+  },
+  "reviews": {
+    "type": "three independent component source/actual-evidence/portable-receipt audits; not full PR",
+    "remainingActionable": []
+  },
+  "productionSourceChanged": false,
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "parentCi": {
+    "head": "3299556ab5e4341c9676e281c0a3264fcfec8e31",
+    "BuildAndTest": "success",
+    "ArchitectureGuards": "success",
+    "PriorFailingPrShards2And3": "success",
+    "GeneratedMapsFresh": "success",
+    "GitGuardian": "same three public-source-digest incidents; legitimate resolution required"
+  },
+  "remainingGates": [
+    "complete/empty competing snapshots and real renewed/lost claims",
+    "partial starts, ACK loss/redrive, same-artifact shedding and republish/retention/GC races; remaining scope controls",
+    "remaining T045 semantics/native-composite and actual historical upgraded-host recovery",
+    "final current Studio; legacy writer/duplicate semantics deletion and guards",
+    "full-PR review, green exact-head required checks, protected merge/resulting-main verification, separate ADR0063 acceptance",
+    "production #2898/#2907/program evidence; Orleans/task-runner deferred"
+  ],
+  "fullPrRounds": 0
+}

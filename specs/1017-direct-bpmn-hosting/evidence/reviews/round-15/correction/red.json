@@ -1,0 +1,23 @@
+{
+  "baseSource": "40b4ec233c27656693370cd7b630f14e42eb11de",
+  "testSourceSha256": "40981c42ff7a0c92d6e3f6aa958d84375e685ad332a46d3d330db87833a13b30",
+  "productionUnchanged": true,
+  "arguments": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+    "-c",
+    "Release",
+    "-m:1",
+    "-p:BuildInParallel=false",
+    "-p:UseSharedCompilation=false",
+    "-p:RestoreLockedMode=true",
+    "--filter",
+    "FullyQualifiedName~Material_io_and_unrequested_cancellation_retain_context|FullyQualifiedName~Material_provider_failures_remain_contextual|FullyQualifiedName~Material_save_failure_discards_staging_and_allows_the_same_material_to_retry",
+    "--logger",
+    "trx;LogFileName=round15-material-red.trx",
+    "--nologo"
+  ],
+  "exitCode": 1,
+  "seconds": 76.71
+}

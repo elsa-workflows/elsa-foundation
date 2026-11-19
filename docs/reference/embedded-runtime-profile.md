@@ -9,7 +9,7 @@ dotnet elsa composition init --profile embedded-runtime@1 --output embedded-comp
 dotnet elsa composition plan --composition embedded-composition.json --format json
 ```
 
-The plan shows profile provenance, reviewed dependency edges and any supplied host inventory or persistence evidence. Without that evidence, package, provider, schema and migration readiness remain **unverified**. An explicit removal wins over profile membership. If it removes a known required member, generation refuses; CShells may otherwise auto-add that dependency during activation. A [reviewed diagnostics group](diagnostics-ef-group.md) can be added with `--group diagnostics-ef@1` when creating a new composition.
+The plan shows profile provenance, reviewed dependency edges and any supplied host inventory or persistence evidence. Without that evidence, package, provider, schema and migration readiness remain **unverified**. An explicit removal wins over profile membership. If it removes a known required member, generation refuses; CShells may otherwise auto-add that dependency during activation. A [reviewed diagnostics group](diagnostics-ef-group.md) can be added with `--group diagnostics-ef@2` when creating a new composition.
 
 After editing the profile/group selection or individual additions/removals, inspect the plan and accept its exact expansion to a fresh file:
 

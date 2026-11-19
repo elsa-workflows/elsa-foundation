@@ -12,6 +12,8 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 | `IPermissionCatalog` | `CompositePermissionCatalog` (`Elsa.Foundation.Identity`) | The application replaces the whole catalog surface with `ReplacePermissionCatalog<T>()`. To *add* permissions, contribute an `IPermissionContributor` (below); the composite aggregates the active provider's contributions into one immutable snapshot. |
 | `IPermissionEvaluator` | `ClaimsPermissionEvaluator` (`Elsa.Foundation.Identity`) | Permissions are evaluated server-side from stores/caches instead of, or in addition to, normalized claims. Replace it with `ReplacePermissionEvaluator<T>()`; the shared handler still owns single/any/all and resource precedence. |
 | `IPermissionAuthorizationService` | `PermissionAuthorizationService` (`Elsa.Foundation.Identity`) | A first-party service, request context, or feature API needs one canonical asynchronous decision outside endpoint middleware. It validates the trusted normalized principal, preserves tenant/resource context, applies resource-handler precedence, and delegates to the replaceable evaluator. |
+| `ICurrentSubjectPermissionAuthorizer` | `UnsupportedCurrentSubjectPermissionAuthorizer` (`Elsa.Foundation.Identity`); ASP.NET Core Identity supplies `AspNetCoreIdentitySubjectAuthorizer` | Deferred work with no incoming principal needs a fresh decision for one persisted subject. The default fails closed as `Unsupported`, and no saved grant is reused. A provider that owns current users, memberships and roles takes over the default through `UseCurrentSubjectPermissionAuthorizerProvider<T>()`. A host's own `ReplaceCurrentSubjectPermissionAuthorizer<T>()` always wins. Store read failures propagate so callers keep their work owed. |
+| `IUserTokenEligibility` | `UnsupportedUserTokenEligibility` (`Elsa.Foundation.Identity`); ASP.NET Core Identity supplies `AspNetCoreIdentityUserTokenEligibility` | Token refresh re-checks the Elsa user a refresh token names before issuing anything, so a disabled or deleted user gets no new access token and loses every outstanding token. The default refuses every user, so a host that issues user tokens fails closed until the provider that owns the users takes over through `UseUserTokenEligibilityProvider<T>()`. A host's own `ReplaceUserTokenEligibility<T>()` always wins. Store read failures propagate and fail the refresh. |
 | `IPermissionPolicyNameFormatter` | `PermissionPolicyNameFormatter` (`Elsa.Foundation.Identity`) | A compatibility host needs to parse an additional single-permission policy identity. Replace it with `ReplacePermissionPolicyNameFormatter<T>()`; new Elsa metadata always emits the canonical v1 grammar. |
 | `IAuthSessionService` | `ClaimsAuthSessionService` (`Elsa.Foundation.Identity.Api`) | The host needs to enrich the provider-agnostic Studio session from server-side state beyond normalized claims. |
 | `IClaimsNormalizer` | `DefaultClaimsNormalizer` (`Elsa.Foundation.Identity`) | A provider needs custom claim projection while still emitting normalized Elsa role/permission claims. |
@@ -42,14 +44,14 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 - **Kind:** Contributor (feature-owned permission contribution to the shared catalog).
 - **Register:** `services.AddPermissionContributor<MyContributor>()` (or `services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, MyContributor>())`).
 - **Consumed by:** `CompositePermissionCatalog`, which canonicalizes keys for lookup while retaining declared spelling and provenance. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; keys that are not one concrete `{resource}:{verb}` permission, canonical duplicates, padded keys, and wildcard definitions fail during catalog construction with both ownership sources in the diagnostic. The catalog carries no implications; see [Elsa 3.9 to Elsa 4 permission mapping](../../../../../docs/reference/elsa3-permission-mapping.md) for the matching rules.
-- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.ExtensionBuilder.Api`, optional) — the two host-control features that own the `module-management` / `extension-builder` permissions per ADR 0037 *(cross-domain)*.
+- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.ExtensionBuilder.Api`, optional) — the two host-control features that own the `module-management` / `extension-builder` permissions per ADR 0037 *(cross-domain)*; `HumanReviewPermissionContributor` (`Elsa.Agent.Review.Api`) for `agent-reviews:read` / `agent-reviews:decide` *(cross-domain)*; `DecisionsPermissionContributor` (`Elsa.Decisions.Api`) for the independent Decisions read/manage/publish/evaluate/test/history/source/sensitive-values grants *(cross-domain)*.
 
 ### `IPermissionResourceHandler`
 
 - **Kind:** Contributor (resource-specific authorization decision hook).
 - **Register:** `services.AddScoped<IPermissionResourceHandler, MyResourceHandler>()`.
 - **Consumed by:** the shared single/any/all permission handler before falling back to `IPermissionEvaluator`. For one member, every resource source runs in registration order: any denial vetoes grants; otherwise any grant succeeds; the evaluator runs only after unanimous abstention. Exceptions, timeouts, and request cancellation propagate and stop later sources. The protected resource is preserved, while the active HTTP request's `RequestAborted` token is supplied through both evaluator APIs.
-- **Known implementations:** none yet in this PR. Feature modules can contribute resource-specific checks while preserving backend source-of-truth enforcement *(cross-domain)*.
+- **Known implementations:** `DecisionWorkflowResourceHandler` (`Elsa.Decisions.Workflows.Api`) contributes deny-only checks for the exact retained decision dependencies in workflow values/evidence and executable exports *(cross-domain)*. It never grants the underlying workflow permission.
 
 ## Endpoint permission metadata and trusted principals
 
@@ -67,7 +69,7 @@ authenticated callers are challenged; a trusted normalized caller with no grant 
 Foundation wraps one pre-existing `IAuthorizationMiddlewareResultHandler` (or the ASP.NET Core
 default) and delegates every unrelated outcome. Register a host result handler before Foundation;
 multiple prior handlers fail immediately and a handler added afterward fails startup validation.
-The evaluator, authorization service, formatter, and catalog are single replacement contracts: use their `Replace*`
+The evaluator, authorization service, current-subject authorizer, formatter, and catalog are single replacement contracts: use their `Replace*`
 methods before or after Foundation registration. Direct competing registrations are rejected rather
 than selected by registration order. `IPermissionContributor` and `IPermissionResourceHandler`
 remain additive fan-in seams.
@@ -128,3 +130,16 @@ D4); the async contexts are the only request authorization contexts.
 ## Opt-in external bearer normalization
 
 `Elsa.Foundation.Identity.Oidc` consumes `IClaimMappingStore` and `IClaimsNormalizer` for its default-false fixed-host bearer bridge. The store is explicitly supplied through the existing replacement-contract registration; opt-in activation requires exactly one normalizer descriptor. It filters internal input claims before matching and validates the single output identity, without changing shared normalizer semantics. It does not invoke `IPrincipalFactory` or mutate user/link stores. See the [owning OIDC README](../Oidc/README.md) and [canonical bearer contract](../../../../../specs/190-worker-oidc-normalization/contracts/bearer-normalization.md) for supported callbacks, ordinary persistence-scope agreement and trust enrollment.
+
+## ASP.NET Core Identity login presentation
+
+The optional `LoginPageOptions.Renderer` callback is a single presentation replacement owned by
+`Elsa.Foundation.Identity.AspNetCoreIdentity` (Layer 3), not a provider-neutral authentication contract.
+Its default is `LoginPage.Render`, configured through `Identity:Login`. `Artwork` selects one of the
+bundled images; `unfolding-map` is the default and unknown-name fallback. A valid `ImageUrl` overrides
+the selection. See the [artwork choices and configuration examples](../../../../../Studio/docs/branding.md#configure-the-actual-credential-page).
+Register once with
+`PostConfigure<LoginPageOptions>`; it receives a `LoginPageContext` after return URL sanitization and
+antiforgery issuance. Keeping `FormHtml` retains the standard POST fields. The login endpoint consumes
+the callback; credential/CSRF/return-url validation remains endpoint-owned. No event or contributor is
+registered. See the [branding guide](../../../../../Studio/docs/branding.md#replace-login-presentation).

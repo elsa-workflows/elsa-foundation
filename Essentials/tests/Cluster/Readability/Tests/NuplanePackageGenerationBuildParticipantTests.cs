@@ -9,6 +9,7 @@ using Elsa.Cluster.Core.Options;
 using Elsa.Cluster.InProcess;
 using Elsa.Persistence.Schema;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Primitives;
 using Nuplane.Loading;
 using static Elsa.Cluster.Readability.Tests.UpgradedPackage;
@@ -18,6 +19,126 @@ namespace Elsa.Cluster.Readability.Tests;
 public sealed class NuplanePackageGenerationBuildParticipantTests
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+
+    [Fact]
+    public async Task Background_catalog_reads_consult_host_readiness_before_starting()
+    {
+        using var package = new UpgradedPackage();
+        package.Catalog.Active = [package.Current];
+        using var lifetime = new ControlledHostLifetime();
+        var observed = new ObservedPackageCatalog(package.Catalog, lifetime);
+        await using var host = BuildHost(package, new StockRuntimeCatalog(FeatureOf(package.Current)), observed, lifetime);
+
+        _ = host.GetServices<IShellLifecycleSubscriber>().ToArray();
+
+        // Both outcomes have a positive fence. Before the fix the detached catalog read arrives first;
+        // consulting the public host-start token must precede any background read, without a timed absence check.
+        var first = await Task.WhenAny(lifetime.ReadinessConsulted.Task, observed.FirstRead.Task).WaitAsync(Patience);
+        Assert.Same(lifetime.ReadinessConsulted.Task, first);
+        Assert.Equal(0, observed.ReadCount);
+
+        lifetime.SignalStarted();
+        await Membership(host).WaitForReadabilityAsync(package.Family, Both, 1);
+        Assert.Equal(0, observed.ReadsBeforeStarted);
+    }
+
+    [Fact]
+    public async Task Early_commits_and_build_requests_keep_pins_and_coalesce_until_host_start()
+    {
+        using var package = new UpgradedPackage();
+        package.Catalog.Active = [package.Current];
+        using var lifetime = new ControlledHostLifetime();
+        var observed = new ObservedPackageCatalog(package.Catalog, lifetime);
+        var catalog = new StockRuntimeCatalog(FeatureOf(package.Current));
+        await using var host = BuildHost(package, catalog, observed, lifetime);
+        _ = host.GetServices<IShellLifecycleSubscriber>().ToArray();
+        await lifetime.ReadinessConsulted.Task.WaitAsync(Patience);
+        Assert.Equal(1, catalog.SubscriberCount);
+
+        var source = host.GetRequiredService<ISupersededAssemblySource>();
+        var lease = await host.GetRequiredService<IShellGenerationBuildParticipant>().BeginAsync(Context("before-host-start", 1));
+        try
+        {
+            // These explicit reads complete before host start. The unresolved build is already pinned.
+            Assert.DoesNotContain(package.Previous, await source.GetRetiredAsync().AsTask().WaitAsync(Patience));
+            await lease.OnSnapshotSelectedAsync(await catalog.GetSnapshotAsync());
+            Assert.Contains(package.Previous, await source.GetReplacedAsync().AsTask().WaitAsync(Patience));
+            catalog.Commit(FeatureOf(package.Previous));
+            catalog.Commit(FeatureOf(package.Current));
+            catalog.Commit(FeatureOf(package.Current));
+
+            lifetime.SignalStarted();
+            await Membership(host).WaitForReadabilityAsync(package.Family, Both, 1);
+
+            Assert.Equal(2, observed.ReadsBeforeStarted); // Only the two explicit reads above.
+            Assert.Equal(4, observed.ReadCount); // One coalesced evaluation, then its report's explicit read.
+            Assert.Equal(1, Membership(host).PublishCount);
+        }
+        finally
+        {
+            await lease.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Explicit_replacement_and_retirement_reads_remain_available_before_host_start()
+    {
+        using var package = new UpgradedPackage();
+        package.Catalog.Active = [package.Current];
+        using var lifetime = new ControlledHostLifetime();
+        var observed = new ObservedPackageCatalog(package.Catalog, lifetime);
+        await using var host = BuildHost(package, new StockRuntimeCatalog(FeatureOf(package.Current)), observed, lifetime);
+        _ = host.GetServices<IShellLifecycleSubscriber>().ToArray();
+        var source = host.GetRequiredService<ISupersededAssemblySource>();
+
+        Assert.Contains(package.Previous, await source.GetReplacedAsync().AsTask().WaitAsync(Patience));
+        Assert.Contains(package.Previous, await source.GetRetiredAsync().AsTask().WaitAsync(Patience));
+        Assert.Equal(2, observed.ReadsBeforeStarted);
+        Assert.Equal(0, Membership(host).PublishCount);
+
+        lifetime.SignalStarted();
+        await Membership(host).WaitForReadabilityAsync(package.Family, Both, 1);
+    }
+
+    [Fact]
+    public async Task Binding_after_host_start_evaluates_the_fresh_catalog_immediately()
+    {
+        using var package = new UpgradedPackage();
+        package.Catalog.Active = [package.Current];
+        using var lifetime = new ControlledHostLifetime();
+        lifetime.SignalStarted();
+        var observed = new ObservedPackageCatalog(package.Catalog, lifetime);
+        await using var host = BuildHost(package, new StockRuntimeCatalog(FeatureOf(package.Current)), observed, lifetime);
+        _ = host.GetServices<IShellLifecycleSubscriber>().ToArray();
+
+        await Membership(host).WaitForReadabilityAsync(package.Family, Both, 1);
+        Assert.Equal(0, observed.ReadsBeforeStarted);
+        Assert.Equal(2, observed.ReadCount);
+    }
+
+    [Fact]
+    public async Task Root_disposal_before_start_discards_pending_work_and_detaches_subscription()
+    {
+        using var package = new UpgradedPackage();
+        package.Catalog.Active = [package.Current];
+        using var lifetime = new ControlledHostLifetime();
+        var observed = new ObservedPackageCatalog(package.Catalog, lifetime);
+        var catalog = new StockRuntimeCatalog(FeatureOf(package.Current));
+        var host = BuildHost(package, catalog, observed, lifetime);
+        var participant = host.GetRequiredService<IShellGenerationBuildParticipant>();
+        _ = host.GetServices<IShellLifecycleSubscriber>().ToArray();
+        await lifetime.ReadinessConsulted.Task.WaitAsync(Patience);
+        var lease = await participant.BeginAsync(Context("disposed-before-host-start", 1));
+        await lease.DisposeAsync();
+        await host.DisposeAsync();
+
+        Assert.Equal(0, catalog.SubscriberCount);
+        // Cancellation invokes remaining lifetime callbacks synchronously; the disposed participant cannot queue work.
+        lifetime.SignalStarted();
+        Assert.True(lifetime.HasStarted);
+        Assert.Equal(0, observed.ReadCount);
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await participant.BeginAsync(Context("after-disposal", 2)));
+    }
 
     [Fact]
     public async Task AddEfSchemaReadability_composes_one_canonical_participant_and_source_when_repeated()
@@ -260,7 +381,8 @@ public sealed class NuplanePackageGenerationBuildParticipantTests
         Assert.DoesNotContain(package.Previous, await host.GetRequiredService<ISupersededAssemblySource>().GetRetiredAsync());
     }
 
-    private static ServiceProvider BuildHost(UpgradedPackage package, IRuntimeFeatureCatalog catalog, IPackageAssemblyCatalog? packageCatalog = null)
+    private static ServiceProvider BuildHost(UpgradedPackage package, IRuntimeFeatureCatalog catalog, IPackageAssemblyCatalog? packageCatalog = null,
+        IHostApplicationLifetime? lifetime = null)
     {
         var services = new ServiceCollection()
             .Configure<ClusterMembershipOptions>(options => options.HostId = $"generation-{Guid.NewGuid():N}")
@@ -271,6 +393,9 @@ public sealed class NuplanePackageGenerationBuildParticipantTests
             .AddEfSchemaReadability()
             .AddEfSchemaReadability();
 
+        if (lifetime is not null)
+            services.AddSingleton(lifetime);
+
         return services.BuildServiceProvider();
     }
 
@@ -279,6 +404,45 @@ public sealed class NuplanePackageGenerationBuildParticipantTests
 
     private static ShellGenerationBuildContext Context(string name, int generation) =>
         new(ShellDescriptor.Create(name, generation), new ShellId(name));
+
+    private sealed class ControlledHostLifetime : IHostApplicationLifetime, IDisposable
+    {
+        private readonly CancellationTokenSource _started = new();
+        private readonly CancellationTokenSource _stopping = new();
+        private readonly CancellationTokenSource _stopped = new();
+        public TaskCompletionSource ReadinessConsulted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool HasStarted => _started.IsCancellationRequested;
+        public CancellationToken ApplicationStarted
+        {
+            get { ReadinessConsulted.TrySetResult(); return _started.Token; }
+        }
+        public CancellationToken ApplicationStopping => _stopping.Token;
+        public CancellationToken ApplicationStopped => _stopped.Token;
+        public void SignalStarted() => _started.Cancel();
+        public void StopApplication() => _stopping.Cancel();
+        public void Dispose() { _started.Dispose(); _stopping.Dispose(); _stopped.Dispose(); }
+    }
+
+    private sealed class ObservedPackageCatalog(IPackageAssemblyCatalog inner, ControlledHostLifetime lifetime) : IPackageAssemblyCatalog
+    {
+        private int _reads;
+        private int _readsBeforeStarted;
+        public int ReadCount => Volatile.Read(ref _reads);
+        public int ReadsBeforeStarted => Volatile.Read(ref _readsBeforeStarted);
+        public TaskCompletionSource FirstRead { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<IReadOnlyList<PackageAssemblies>> GetPackagedAssembliesAsync(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _reads);
+            if (!lifetime.HasStarted)
+                Interlocked.Increment(ref _readsBeforeStarted);
+            FirstRead.TrySetResult();
+            return inner.GetPackagedAssembliesAsync(cancellationToken);
+        }
+
+        public Task<PackageAssemblies?> GetPackagedAssembliesAsync(string packageId, CancellationToken cancellationToken) =>
+            inner.GetPackagedAssembliesAsync(packageId, cancellationToken);
+    }
 
     private sealed class EmptySupersededAssemblySource : ISupersededAssemblySource
     {

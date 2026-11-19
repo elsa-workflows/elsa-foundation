@@ -9,7 +9,7 @@ public static class SecretsEfModule
     public const string FilteredListIndex = "IX_elsa_secrets_tenantId_status_normalizedName";
 
     /// <summary>The persisted-schema version every secret row is stamped with, and checked against when read.</summary>
-    public const string SchemaVersion = "1.0.0";
+    public const string SchemaVersion = "2.0.0";
 
     /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
     public const string SchemaFamily = "Secrets";

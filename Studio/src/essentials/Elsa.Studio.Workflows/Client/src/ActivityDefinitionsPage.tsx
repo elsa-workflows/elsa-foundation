@@ -1,5 +1,6 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Database, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Database, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
   StudioActivityDefinitionImplementationEditorContribution,
@@ -10,8 +11,8 @@ import type {
   StudioWorkflowDesignerPanelContribution,
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
-import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { authSessionEndedEvent, authSessionStartedEvent, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
+import { CopyableIdentifier, StudioButton, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows } from "@elsa-workflows/studio-ui";
 import {
   type ActivityDefinitionCollectionRequest,
   type ActivityDefinitionManagementView
@@ -20,9 +21,10 @@ import { formatActivityDefinitionDate, formatActivityVersion, resolveActivityDef
 import { activityDesignKeys, classifyActivityDefinitionReadFailure, isInvalidActivityDefinitionCursor, redactActivityDefinitionManagementCache, useActivityDefinitions } from "./api/activityDesign";
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
-import { WorkflowListIdentity } from "./workflow-editor/WorkflowListIdentity";
+import { WorkflowListIdentifiers } from "./workflow-editor/WorkflowListIdentifiers";
 import "./activityDefinitions.css";
 import "./activityDefinitionCollection.css";
+import "./workflow-editor/cleanListTables.css";
 
 const ActivityDefinitionWorkbench = lazy(() => import("./ActivityDefinitionWorkbench").then(module => ({ default: module.ActivityDefinitionWorkbench })));
 const ActivityDefinitionCreateDialog = lazy(() => import("./ActivityDefinitionCreateDialog").then(module => ({ default: module.ActivityDefinitionCreateDialog })));
@@ -71,7 +73,7 @@ export function ActivityDefinitionsPage({
   graphExtensions = () => ({ properties: [], expressions: [], panels: [] }),
   inputEditors = () => [],
   runtime = {},
-  navigateToStudioPath = defaultStudioPathNavigation
+  navigateToStudioPath: navigateToStudioPathNow = defaultStudioPathNavigation
 }: {
   context: StudioEndpointContext;
   activityEditors?: () => StudioActivityDefinitionImplementationEditorContribution[];
@@ -85,6 +87,10 @@ export function ActivityDefinitionsPage({
   navigateToStudioPath?(path: string): void;
 }) {
   const [route, setRoute] = useState(readRouteState);
+  // A create or upgrade can complete while this screen's workspace tab is in the background; its
+  // navigation then waits for the tab to return instead of taking over the active tab's address.
+  const whenActive = useStudioWorkspaceWhenActive();
+  const navigateToStudioPath = (path: string) => whenActive(() => navigateToStudioPathNow(path));
   const routeRef = useRef(route);
   const navigationBlockedRef = useRef(false);
   const routeCollectionContextRef = useRef(readActivityHistoryMetadata()?.collection ?? null);
@@ -162,12 +168,12 @@ export function ActivityDefinitionsPage({
     observeActivityDefinitions({ event: "route-view", surface: route.definitionId ? "workbench" : "collection" });
   }, [route.definitionId]);
 
-  const navigate = (next: RouteState, force = false) => {
+  const navigate = (next: RouteState, force = false) => whenActive(() => {
     if (navigationBlockedRef.current && !force) return;
     navigationBlockedRef.current = false;
     writeRouteState(next, "push", routeCollectionContextRef.current);
     window.dispatchEvent(new PopStateEvent("popstate"));
-  };
+  });
 
   if (route.definitionId) {
     if (route.section === "editor" && route.draftId) {
@@ -210,7 +216,7 @@ function writeRouteState(route: RouteState, mode: "push" | "replace", collection
   const metadata = readActivityHistoryMetadata(state) ?? {};
   if (collection === null) delete metadata.collection;
   else if (collection) metadata.collection = collection;
-  window.history[mode === "push" ? "pushState" : "replaceState"]({ ...state, [activityHistoryStateKey]: metadata }, "", `/workflows/activity-definitions${query ? `?${query}` : ""}`);
+  window.history[mode === "push" ? "pushState" : "replaceState"]({ ...state, [activityHistoryStateKey]: metadata }, "", qualifyStudioBackendPath(`/workflows/activity-definitions${query ? `?${query}` : ""}`));
 }
 
 function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, authorizationInvalidating, activityEditors, onHistoryContextChange, onImport, onPlanUpgrade, onOpen, onCreated }: { context: StudioEndpointContext; baseUrl: string; authorityRevision: number; authorizationInvalidating: boolean; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onHistoryContextChange(context: ActivityCollectionHistoryContext): void; onImport(): void; onPlanUpgrade(): void; onOpen(definitionId: string): void; onCreated(definitionId: string, draftId: string): void }) {
@@ -351,15 +357,12 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   };
 
   return (
-    <main className="ad-page ad-designed-collection" aria-labelledby="activity-definitions-title">
-      <header className="ad-page-header">
-        <div><span className="ad-kicker">Workflows</span><h1 id="activity-definitions-title">Activity Definitions</h1><p>Design reusable activities here. Drafts stay editable, while published versions remain in history.</p></div>
-        <div className="ad-header-actions"><StudioButton variant="primary" size="md" onClick={() => setCreateOpen(true)}>Create activity</StudioButton><StudioButton variant="default" size="md" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</StudioButton><details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={onPlanUpgrade}>Plan broad upgrade</button></div></details></div>
-      </header>
+    <main className="studio-page ad-page ad-designed-collection" aria-labelledby="activity-definitions-title">
+      <StudioPageHeader title="Activity definitions" titleId="activity-definitions-title" description="Design reusable activities here. Drafts stay editable, while published versions remain in history." actions={<div className="studio-page-actions"><StudioButton variant="primary" size="md" onClick={() => setCreateOpen(true)}>Create activity</StudioButton><StudioButton variant="default" size="md" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</StudioButton><details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={onPlanUpgrade}>Plan broad upgrade</button></div></details></div>} />
 
-      <section className="ad-filters ad-collection-filters" aria-label="Activity Definition filters">
-        <label className="ad-search-field"><span>Search</span><span className="ad-input-shell"><Search size={16} aria-hidden /><input value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Name, type key, or category" /></span></label>
-        <div className="ad-collection-view" role="group" aria-label="Activity definition collection">
+      <section className="studio-collection-toolbar ad-collection-filters" aria-label="Activity Definition filters">
+        <StudioSearchInput aria-label="Search" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Name, type key, or category" />
+        <div className="studio-filter-group" role="group" aria-label="Activity definition collection">
           <button type="button" aria-pressed={authority === "Design"} onClick={() => setAuthority("Design")}>Designed</button>
           <button type="button" aria-pressed={authority === "ProviderSource"} onClick={() => setAuthority("ProviderSource")}>Built-in</button>
           <button type="button" aria-pressed={authority === ""} onClick={() => setAuthority("")}>All</button>
@@ -379,10 +382,15 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
       {query.isError && data && failure !== "expired" && !invalidCursor ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained data</strong><span>Last confirmed {formatTimestamp(lastConfirmedAt)}. Retry to request a new snapshot.</span></div><button type="button" onClick={refresh}>Retry</button></div> : null}
       {!data && !authorizationInvalidating && (query.isPending || query.isFetching) && !failure ? <ActivityDefinitionSkeleton /> : null}
       {!data && !authorizationInvalidating && failure ? <ActivityDefinitionFailure kind={failure} cursorInvalid={invalidCursor} onRetry={failure === "expired" || invalidCursor ? restartPaging : refresh} /> : null}
-      {data && data.items.length === 0 ? <section className="ad-empty ad-collection-empty" role="status"><Database size={24} aria-hidden /><h2>{defaultDesignedView ? "No designed activities yet" : filtersActive ? "No Activity Definitions match" : "No Activity Definitions available"}</h2><p>{defaultDesignedView ? "Create a reusable activity definition, or browse built-in activities to see source-owned entries." : filtersActive ? "Clear or change the server-side filters to search the authorized collection again." : "No authorized Activity Definitions are available in this scope."}</p>{defaultDesignedView ? <div><button type="button" className="ad-primary-action" onClick={() => setCreateOpen(true)}>Create activity</button><button type="button" onClick={() => setAuthority("ProviderSource")}>Browse built-in activities</button></div> : filtersActive ? <button type="button" onClick={() => { setSearchInput(""); setProviderInput(""); setAuthority("Design"); }}>Clear filters</button> : null}</section> : null}
+      {data && data.items.length === 0 ? <div className="studio-table-container"><StudioResultState
+        icon={<Database size={24} aria-hidden />}
+        title={defaultDesignedView ? "No designed activities yet" : filtersActive ? "No Activity Definitions match" : "No Activity Definitions available"}
+        description={defaultDesignedView ? "Create a reusable activity definition, or browse built-in activities to see source-owned entries." : filtersActive ? "Clear or change the server-side filters to search the authorized collection again." : "No authorized Activity Definitions are available in this scope."}
+        actions={defaultDesignedView ? <><StudioButton variant="primary" onClick={() => setCreateOpen(true)}>Create activity</StudioButton><StudioButton onClick={() => setAuthority("ProviderSource")}>Browse built-in activities</StudioButton></> : filtersActive ? <StudioButton onClick={() => { setSearchInput(""); setProviderInput(""); setAuthority("Design"); }}>Clear filters</StudioButton> : null}
+      /></div> : null}
       {data && data.items.length > 0 ? <>
-        <div className="ad-collection" role="table" aria-label="Activity Definitions" aria-rowcount={data.totalCount}>
-          <div className="ad-collection-head" role="row"><span role="columnheader">Activity</span><span role="columnheader">State</span><span role="columnheader">Updated</span></div>
+        <div className="studio-table-container studio-collection-table ad-collection" role="table" aria-label="Activity Definitions" aria-rowcount={data.totalCount}>
+          <div className="ad-collection-head" role="row"><span role="columnheader">Activity</span><span role="columnheader">Definition ID</span><span role="columnheader">Identifiers</span><span role="columnheader">State</span><span role="columnheader">Updated</span></div>
           {data.items.map(definition => {
             const title = resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey);
             const recommendation = definition.lifecycle.recommendation;
@@ -400,7 +408,12 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
               { label: "Recommended Version ID", value: definition.definition.recommendedVersionId ?? definition.lifecycle.recommendation?.versionId ?? "" }
             ].filter(identifier => identifier.value);
             return <div key={definition.definition.definitionId} className="ad-collection-row" role="row" tabIndex={0} aria-label={`Open Activity Definition ${title}`} title={rowDetails} onClick={event => { if ((event.target as HTMLElement).closest("button, input, label, a")) return; openDefinition(definition); }} onKeyDown={event => { if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); openDefinition(definition); }}>
-            <span role="cell" data-label="Activity" className="ad-collection-activity"><strong>{title}</strong>{definition.definition.description ? <small className="ad-collection-description">{definition.definition.description}</small> : null}<small className="ad-collection-category">{definition.definition.category}</small><WorkflowListIdentity primaryLabel="Definition ID" primaryValue={definition.definition.definitionId} secondaryIdentifiers={additionalIdentifiers} primaryClassName="ad-primary-identifier" secondaryClassName="ad-row-identifiers" detailsClassName="ad-row-identifiers-list" detailsAriaLabel={`Activity Definition identifiers for ${title}`} /></span>
+            <span role="cell" data-label="Activity" className="ad-collection-activity"><strong title={title}>{title}</strong></span>
+            <span role="cell" data-label="Definition ID" className="wf-list-primary-id ad-primary-identifier"><CopyableIdentifier label="Definition ID" value={definition.definition.definitionId} /></span>
+            <span role="cell" data-label="Identifiers"><WorkflowListIdentifiers kind="Activity Definition" name={title} identifiers={additionalIdentifiers} description={definition.definition.description}>
+              <p>Category: {definition.definition.category || "Uncategorized"}</p>
+              <p>{providerKey ? `Provider: ${providerKey} · ` : ""}Authority: {authorityKind}</p>
+            </WorkflowListIdentifiers></span>
             <span role="cell" data-label="State" className="ad-collection-state">
               {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount > 0 ? <span className="ad-status-chip is-draft">Draft</span> : null}
               {definition.lifecycle.versionCount > 0 ? <span className="ad-status-chip is-published">Published</span> : null}
@@ -411,7 +424,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
           </div>;
           })}
         </div>
-        <footer className="ad-pager" aria-label="Activity Definition pagination"><span>Page {cursorIndex + 1} · {data.count} of {data.totalCount} authorized definitions</span><div><button type="button" onClick={() => setCursorIndex(current => Math.max(0, current - 1))} disabled={cursorIndex === 0}><ChevronLeft size={15} aria-hidden /> Previous</button><button type="button" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={15} aria-hidden /></button></div></footer>
+        <footer className="studio-collection-footer" aria-label="Activity Definition pagination"><span>Page {cursorIndex + 1} · {data.count} of {data.totalCount} authorized definitions</span><div><StudioButton size="sm" onClick={() => setCursorIndex(current => Math.max(0, current - 1))} disabled={cursorIndex === 0}><ChevronLeft size={15} aria-hidden /> Previous</StudioButton><StudioButton size="sm" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={15} aria-hidden /></StudioButton></div></footer>
       </> : null}
       {createOpen ? <WorkflowLazyBoundary label="create activity definition"><ActivityDefinitionCreateDialog context={context} activityEditors={activityEditors} onClose={() => setCreateOpen(false)} onCreated={response => { setCreateOpen(false); onCreated(response.definition.definitionId, response.draft.draftId); }} /></WorkflowLazyBoundary> : null}
     </main>
@@ -419,11 +432,11 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
 }
 
 function ActivityDefinitionSkeleton() {
-  return <div className="ad-skeleton" role="status" aria-live="polite" aria-busy="true"><span>Loading Activity Definitions…</span>{Array.from({ length: 5 }, (_, index) => <div key={index} />)}</div>;
+  return <><span>Loading Activity Definitions…</span><SkeletonRows label="Loading Activity Definitions" /></>;
 }
 
 function ActivityDefinitionFailure({ kind, cursorInvalid, onRetry }: { kind: ReturnType<typeof classifyActivityDefinitionReadFailure>; cursorInvalid: boolean; onRetry(): void }) {
-  if (cursorInvalid) return <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h2>Collection continuation is no longer valid</h2><p>Restart paging to request a fresh authorized snapshot while keeping your filters and page size.</p><button type="button" onClick={onRetry}>Restart paging</button></section>;
+  if (cursorInvalid) return <StudioResultState tone="danger" icon={<AlertTriangle size={22} aria-hidden />} title="Collection continuation is no longer valid" description="Restart paging to request a fresh authorized snapshot while keeping your filters and page size." actions={<StudioButton onClick={onRetry}>Restart paging</StudioButton>} />;
   const copy = {
     unavailable: ["Unavailable contribution", "This backend does not advertise the Activity Definition management capability supported by Studio. No legacy activity fallback is used."],
     forbidden: ["Activity Definitions unavailable", "This account cannot open the Activity Definitions collection. No identities or counts were loaded."],
@@ -431,7 +444,7 @@ function ActivityDefinitionFailure({ kind, cursorInvalid, onRetry }: { kind: Ret
     expired: ["Collection snapshot expired", "Restart paging to request a fresh authorized snapshot."],
     failed: ["Couldn't load Activity Definitions", "Studio could not confirm the authorized collection. No unconfirmed data is shown."]
   }[kind];
-  return <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h2>{copy[0]}</h2><p>{copy[1]}</p><button type="button" onClick={onRetry}>{kind === "expired" ? "Restart paging" : "Try again"}</button></section>;
+  return <StudioResultState tone="danger" icon={<AlertTriangle size={22} aria-hidden />} title={copy[0]} description={copy[1]} actions={<StudioButton onClick={onRetry}>{kind === "expired" ? "Restart paging" : "Try again"}</StudioButton>} />;
 }
 
 function useDebouncedValue(value: string, delay: number, initialValue = value.trim()) {

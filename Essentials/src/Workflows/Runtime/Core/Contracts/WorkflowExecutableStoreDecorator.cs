@@ -4,8 +4,9 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Pass-through base for <see cref="IWorkflowExecutableStore"/> decorators: every member forwards to the
-/// wrapped store, so a decorator overrides only the operations it actually intercepts.
+/// Pass-through base for <see cref="IWorkflowExecutableStore"/> data and lease operations, so a decorator
+/// overrides only the operations it actually intercepts. Physical coordination remains opaque by default;
+/// a cooperating decorator explicitly implements <see cref="IWorkflowExecutableStore.GetMaterialStore"/>.
 /// </summary>
 public abstract class WorkflowExecutableStoreDecorator : IWorkflowExecutableStore
 {

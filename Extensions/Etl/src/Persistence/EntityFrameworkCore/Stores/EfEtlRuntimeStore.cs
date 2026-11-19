@@ -49,7 +49,7 @@ internal sealed partial class EfEtlRuntimeStore(
         }
 
         var now = NowTicks();
-        var created = EtlRuntimeRecordCodec.RunRecord(invocation, fingerprint, bindingsJson, now);
+        var created = EtlRuntimeRecordCodec.RunRecord(invocation, key.RunKey, fingerprint, bindingsJson, now);
         db.Runs.Add(created);
         await db.SaveChangesAsync(cancellationToken);
         var view = await ReadViewAsync(created, cancellationToken);
@@ -232,7 +232,7 @@ internal sealed partial class EfEtlRuntimeStore(
                                  select new { Run = run, Partition = partition };
                 if (runId is not null)
                 {
-                    var runKey = EtlRuntimeRecordCodec.EncodeIdentity(runId, "run id");
+                    var runKey = db.RunKeyOf(runId);
                     candidates = candidates.Where(x => x.Run.RunKey == runKey);
                 }
                 var candidate = await candidates.OrderBy(x => x.Run.CreatedAtUtcTicks).ThenBy(x => x.Run.RunKey)
@@ -713,7 +713,7 @@ internal sealed partial class EfEtlRuntimeStore(
         if (afterRunId is not null)
         {
             EtlRuntimeRecordCodec.ValidateIdentity(afterRunId, "run id");
-            var after = EtlRuntimeRecordCodec.EncodeIdentity(afterRunId, "run id");
+            var after = db.RunKeyOf(afterRunId);
             query = query.Where(x => x.Run.RunKey.CompareTo(after) > 0);
         }
         var rows = await query.OrderBy(x => x.Run.RunKey).Take(take + 1).ToListAsync(cancellationToken);
@@ -819,7 +819,7 @@ internal sealed partial class EfEtlRuntimeStore(
         {
             if (outcome is not (EtlTerminalOutcome.Cancelled or EtlTerminalOutcome.BusinessError))
                 return new(EtlStoreStatus.NotFound, null);
-            run = EtlRuntimeRecordCodec.RunRecord(invocation, fingerprint, null, now);
+            run = EtlRuntimeRecordCodec.RunRecord(invocation, key.RunKey, fingerprint, null, now);
             db.Runs.Add(run);
             await db.SaveChangesAsync(cancellationToken);
         }
@@ -1109,12 +1109,12 @@ internal sealed partial class EfEtlRuntimeStore(
         return new(invocation, bindings);
     }
 
-    private static (string ScopeKey, string RunKey) RunKey(EtlScope scope, string runId)
+    private (string ScopeKey, string RunKey) RunKey(EtlScope scope, string runId)
     {
         ArgumentNullException.ThrowIfNull(scope);
         EtlRuntimeRecordCodec.ValidateIdentity(runId, "run id");
         var identity = EtlRuntimeRecordCodec.Scope(scope);
-        return (identity.Key, EtlRuntimeRecordCodec.EncodeIdentity(runId, "run id"));
+        return (identity.Key, db.RunKeyOf(runId));
     }
 
     private void ValidatePage(EtlScope scope, int take)
@@ -1123,10 +1123,20 @@ internal sealed partial class EfEtlRuntimeStore(
         if (take <= 0 || take > options.MaximumPageSize) throw new ArgumentOutOfRangeException(nameof(take));
     }
 
-    private static void ValidateRun(EtlRuntimeRunRecord row, EtlScope scope, string runId)
+    private void ValidateRun(EtlRuntimeRunRecord row, EtlScope scope, string runId)
     {
         EtlRuntimeRecordCodec.EnsureScopeResidual(row, scope);
-        if (!StringComparer.Ordinal.Equals(EtlRuntimeRecordCodec.DecodeIdentity(row.RunKey, "run id"), runId) ||
+        try
+        {
+            EtlRuntimeRecordCodec.ValidateIdentity(runId, "run id");
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidDataException("The ETL runtime row has an invalid run identity.", exception);
+        }
+        // The key is the run id's key on this engine (its encoding, or its hash on a server engine), so a row whose key
+        // and id disagree, a hash collision included, is refused rather than read as another run.
+        if (!StringComparer.Ordinal.Equals(row.RunKey, db.RunKeyOf(runId)) ||
             !StringComparer.Ordinal.Equals(EtlRuntimeRecordCodec.DecodeIdentity(row.RunId, "run id"), runId))
             throw new InvalidDataException("The ETL runtime row does not match its run identity.");
         EnsureSchema(row.SchemaVersion);

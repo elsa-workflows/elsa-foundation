@@ -1,0 +1,269 @@
+{
+  "sourceParentCommit": "b5b32cc2a137d2a9b32f70866d5a973848c4e087",
+  "candidateSourceRevision": "b5b32cc2a+uncommitted-activation-candidate",
+  "productionSourceSha256": {
+    "Essentials/src/Activities/Primitives/ActivitiesPrimitivesFeature.cs": "24666141c39654de7bb9613c304289497761f0c7eec5319f59285daae3f581d1",
+    "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj": "6cf8d5123d623d425e9e7ae650367801cc79e3b61e8762ac2df4e551eba9f320",
+    "Essentials/src/Activities/Primitives/Services/PublishStimulusExecutor.cs": "e1e4cdc86b010f797dd93ac18a00a299918c6eedfd2b1d85672f8b6f5e34e34c",
+    "Essentials/src/Activities/Primitives/Services/PublishStimulusSchemaGuard.cs": "7562fbec699ce744d5664987d856f98965f37892605645363b1a8c3ed5293962",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitEnricher.cs": "5c3273a8b25b5bbb2db8d7ff0f528c640c52bed784d8ae0667716697f1801a29",
+    "Essentials/src/Workflows/Runtime/Core/Extensions/RuntimePostCommitIntentHandlerServiceCollectionExtensions.cs": "35b7dee1886df8ef7d8fbdd32e5d07d6b33c75e4b1c37b4e95cdc76f771b9e6c",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitIntentHandlerContribution.cs": "9e97430bd1e095c130ddd926da246b343d36884e563217aad883021a443e007b",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs": "f44dc6ce8793046d3be87c4a4b6ecc10ebe66e3906b98217e90c909c0aed198b",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitIntentDispatcher.cs": "e6694eb23e936f0208d984cc15a417c97c39fc5dc2e23463b44fdf74494b4a02",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxItems.cs": "3cc1b72b039f3a97f08a6c063ef04dd173fedd23e93d2b67ca3b542b3c2d6fd7"
+  },
+  "releaseAssembliesSha256": {
+    "Elsa.Workbench": "ac973d4b20162b3efe5a415ea06595a43194e66e051082b2b4d095045911621f",
+    "Elsa.Activities.Primitives": "be73e7a0b553b48904d1bf3cc52889ff4c4fa80948b40fc46cfee39d0374535a",
+    "Elsa.Workflows.Runtime.Core": "7e2340d6e1020bc09fa2b23a056a6a44e9021b6786caf93ff03974e9d9fa10d0",
+    "Elsa.Workflows.Runtime": "43de7bd3e04bc97a1c76fd383552af15fd433e0bf628c77aa5d0e3f30b79b1b4",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "c0e10f8768c56f171138345d158240e9ee5bb135d8817c4630b667cb88bad835",
+    "Elsa.Cluster.Core": "ca7bb37ced95f95830c8f0bb2bccc97c87cf06dbd43fcb6417cf3288bc1e27ac",
+    "Elsa.Cluster.Readability": "27b0912784148acdb4a0716fc8712281f2de276baa6dd754a39671ad8c08d63c"
+  },
+  "capturedAtUtc": "2026-10-27T04:36:28.8049090+00:00",
+  "passed": true,
+  "scenarios": [
+    {
+      "artifactId": "artifact-940babc6164f",
+      "processVersionId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+      "incidents": [],
+      "observedSuspended": false,
+      "status": "Completed",
+      "activities": [
+        {
+          "executableNodeId": "node-simple",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        }
+      ],
+      "scenario": "none-start",
+      "workflowExecutionId": "14gjL0M62mD"
+    },
+    {
+      "artifactId": "artifact-e8e1be68e913",
+      "processVersionId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+      "incidents": [],
+      "observedSuspended": true,
+      "status": "Completed",
+      "activities": [
+        {
+          "executableNodeId": "node-timer",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        },
+        {
+          "executableNodeId": "node-wait",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        }
+      ],
+      "scenario": "timer-duration",
+      "workflowExecutionId": "14gjL4wJj81"
+    },
+    {
+      "artifactId": "artifact-1be0e275c803",
+      "processVersionId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+      "incidents": [],
+      "observedSuspended": false,
+      "status": "Completed",
+      "activities": [
+        {
+          "executableNodeId": "node-send",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        },
+        {
+          "executableNodeId": "node-publisher",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        }
+      ],
+      "scenario": "signal-publisher",
+      "workflowExecutionId": "14gjLrm7ADD"
+    },
+    {
+      "workflowExecutionId": "14gjLqVsub2",
+      "suspendedBeforePublish": 2,
+      "scenario": "signal-broadcast-two-catches",
+      "status": "Completed",
+      "activities": [
+        {
+          "executableNodeId": "node-wait-b",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        },
+        {
+          "executableNodeId": "node-wait-a",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        },
+        {
+          "executableNodeId": "node-broadcast",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        }
+      ],
+      "incidents": [],
+      "completedCatches": 2
+    }
+  ],
+  "normalGateFinalizedVersion": "2.0.0",
+  "checkedPostInventory": {
+    "schemaVersion": 1,
+    "purpose": "FR-015 actual-store legacy inventory only",
+    "sourceRevision": "b5b32cc2a+uncommitted-activation-candidate",
+    "status": "NoLegacyPublishResponsibilityOwed",
+    "limitations": [
+      "Only supplied stores are inventoried; no production-wide or mixed-writer quiescence claim.",
+      "Attempt zero is not evidence that no recipient effect occurred.",
+      "This does not qualify cohort dispatch or upgraded-host recovery."
+    ],
+    "stores": [
+      {
+        "sourceName": "elsa.db",
+        "observationStartedAtUtc": "2026-10-27T04:41:03.975886+00:00",
+        "observationCompletedAtUtc": "2026-10-27T04:41:04.777309+00:00",
+        "sourceKind": "sqlite-backup-including-wal",
+        "databaseSha256": "38c1225510f25814267b5c220e3b65bb03702886a2dac6c0449302d6000301cf",
+        "compressedSha256": null,
+        "readerAssembliesSha256": {
+          "DeliveryPreflight.dll": "4460f33ca5e02fc1003f3b282255766ecf2b50d74b719e8b5fffa9a6f7f7ae13",
+          "Elsa.Workflows.Runtime.Core.dll": "446c873543d83dd6373549cb67051ea0fc119ef369940911005859c2e1cd447a",
+          "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "82e49ecb55b9e374142379661329a650dd06ea01dda8093cf2835f48dce9db26",
+          "Elsa.Persistence.EntityFramework.dll": "c318324e5208cdcef6c81ca379325e1311177ef78c3a7ad9c5b3d7c523e3ddce"
+        },
+        "outboxRows": 15,
+        "publishRows": 2,
+        "identityDigestEncoding": "UTF-16LE code units",
+        "classifications": {
+          "ProtocolDelivered": 1,
+          "LegacyDelivered": 1
+        },
+        "status": "NoLegacyPublishResponsibilityOwed",
+        "providerChecked": true,
+        "deliveryActivationQualified": false,
+        "publishes": [
+          {
+            "sourceIdentitySha256": "b3b85201d99c917fab5fa760885572b113b57dcb949ec15b8c3bea64310a199d",
+            "scopeIdentitySha256": "595a39eaad0b6c5b8dbf1daf571d325bab110d15e7d8033919e0f1e5ee4bc907",
+            "familyVersion": "2.0.0",
+            "status": "Delivered",
+            "deliveryAttemptCount": 1,
+            "deliveryFencingToken": 1,
+            "firstAttemptRecorded": true,
+            "classification": "ProtocolDelivered"
+          },
+          {
+            "sourceIdentitySha256": "d203e5712391082abb23d2fed08ddefeaea660600e9d8d8e09945edd4b7fa79b",
+            "scopeIdentitySha256": "595a39eaad0b6c5b8dbf1daf571d325bab110d15e7d8033919e0f1e5ee4bc907",
+            "familyVersion": "2.0.0",
+            "status": "Delivered",
+            "deliveryAttemptCount": 1,
+            "deliveryFencingToken": 1,
+            "firstAttemptRecorded": true,
+            "classification": "LegacyDelivered"
+          }
+        ]
+      }
+    ]
+  },
+  "actualSavedSourceObservations": [
+    {
+      "sourceIdentitySha256": "b3b85201d99c917fab5fa760885572b113b57dcb949ec15b8c3bea64310a199d",
+      "sourceJsonSha256": "961fa5f4174929f257b6bb64f0aa2deb510c886eecefb03d7d3832a68ad98c64",
+      "classificationByCheckedProvider": "ProtocolDelivered",
+      "protocolVersion": 1,
+      "retentionAcceptance": {
+        "version": 1
+      },
+      "starts": 0,
+      "resumes": 2,
+      "resumeCapturesPresent": 2
+    }
+  ],
+  "limitations": [
+    "Candidate host uses uncommitted activation code with exact source/assembly hashes; not final reviewed PR/main acceptance.",
+    "These normal API happy-path scenarios and persisted cohort observations do not establish crash cuts, restart/replay recovery or final Studio acceptance.",
+    "The candidate uses the released BPMN adapter; delivered-main switch verification, legacy writer deletion and program production acceptance remain open."
+  ],
+  "localAdmission": {
+    "legacyWriterSourceRevision": "b2fc515ffc213e7ba96f4040769269f43b4c00d8",
+    "ownedBackendStopVerified": true,
+    "owningControllerStopVerified": true,
+    "noDatabaseHandlesObserved": true,
+    "snapshotCompletedAtUtc": "2026-10-27T03:59:00.902739+00:00",
+    "privateWholeDatabaseSnapshotSha256": "3b060f469c542c6387fbd05a8e110c416322712ff647ea3b77c6ce280abd235f",
+    "privateSnapshotBytes": 4370432,
+    "checkedPreInventory": {
+      "schemaVersion": 1,
+      "purpose": "FR-015 actual-store legacy inventory only",
+      "sourceRevision": "b5b32cc2a",
+      "status": "NoLegacyPublishResponsibilityOwed",
+      "limitations": [
+        "Only supplied stores are inventoried; no production-wide or mixed-writer quiescence claim.",
+        "Attempt zero is not evidence that no recipient effect occurred.",
+        "This does not qualify cohort dispatch or upgraded-host recovery."
+      ],
+      "stores": [
+        {
+          "sourceName": "quiescent-b2fc-host.sqlite",
+          "observationStartedAtUtc": "2026-10-27T03:59:08.276357+00:00",
+          "observationCompletedAtUtc": "2026-10-27T03:59:08.769135+00:00",
+          "sourceKind": "sqlite-backup-including-wal",
+          "databaseSha256": "3b060f469c542c6387fbd05a8e110c416322712ff647ea3b77c6ce280abd235f",
+          "compressedSha256": null,
+          "readerAssembliesSha256": {
+            "DeliveryPreflight.dll": "8cdeb27dff38379bdf13ad3a6d23059ba70b9e247b05955d4d96abc7b68a02a0",
+            "Elsa.Workflows.Runtime.Core.dll": "75634e6ee13c492a0ed028e8100bf22dd5995d0ee6aebe51ab18dd306003bdd4",
+            "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "0018ae7faf5728e9bda0ebfb3ae17d7832dd087189c4337147f1ee10cb4c60e3",
+            "Elsa.Persistence.EntityFramework.dll": "c318324e5208cdcef6c81ca379325e1311177ef78c3a7ad9c5b3d7c523e3ddce"
+          },
+          "outboxRows": 10,
+          "publishRows": 1,
+          "identityDigestEncoding": "UTF-16LE code units",
+          "classifications": {
+            "LegacyDelivered": 1
+          },
+          "status": "NoLegacyPublishResponsibilityOwed",
+          "providerChecked": true,
+          "deliveryActivationQualified": false,
+          "publishes": [
+            {
+              "sourceIdentitySha256": "d203e5712391082abb23d2fed08ddefeaea660600e9d8d8e09945edd4b7fa79b",
+              "scopeIdentitySha256": "595a39eaad0b6c5b8dbf1daf571d325bab110d15e7d8033919e0f1e5ee4bc907",
+              "familyVersion": "1.0.0",
+              "status": "Delivered",
+              "deliveryAttemptCount": 1,
+              "deliveryFencingToken": 1,
+              "firstAttemptRecorded": true,
+              "classification": "LegacyDelivered"
+            }
+          ]
+        }
+      ]
+    },
+    "settledLegacyResponsibilityPreservedAfterNormalGateAdvance": true,
+    "productionWideQuiescenceQualified": false,
+    "privateWholeDatabasePublished": false
+  },
+  "candidateReleasedBpmnAdapterInUse": true,
+  "librarySwitchDeliveredOnMain": false
+}

@@ -1,0 +1,162 @@
+{
+  "scope": "Derived codec regression view of an actual old-writer checkpoint; whole-store host recovery evidence remains in the source module backup.",
+  "sourceDatabase": "specs/1006-bpmn-library-adoption/evidence/ordinary-compensation-workbench/legacy-seed-runtime.sqlite.gz",
+  "sourceDatabaseSha256": "ed7a7f81235b9d01e54714b4d4337a61e8bfde9bd1ac4bc2e27c905e151427d9",
+  "sourceCompressedSha256": "322a06c7dc92a227c82f8a58449303a581c9b70774e9a0b2f322968815a1674a",
+  "stateVersion": 1,
+  "payload": {
+    "tokens": [
+      {
+        "tokenId": "token:22",
+        "atElementId": "replay",
+        "flowId": "compensate",
+        "parentTokenId": "token:13",
+        "status": 1,
+        "producingActivityExecutionId": "14hzCiomFxD",
+        "iterationKey": null,
+        "kind": null
+      },
+      {
+        "tokenId": "token:29",
+        "atElementId": "handler-b",
+        "flowId": null,
+        "parentTokenId": "token:22",
+        "status": 1,
+        "producingActivityExecutionId": "14hzChOaZEp",
+        "iterationKey": null,
+        "kind": null
+      }
+    ],
+    "activeChildren": [
+      {
+        "nodeId": "node-handler-b",
+        "elementId": "handler-b",
+        "tokenId": "token:29",
+        "schedulingCause": "compensation",
+        "iterationId": null
+      }
+    ],
+    "diagnostics": [
+      {
+        "diagnosticId": "diag:2",
+        "kind": 0,
+        "message": "BPMN start event 'start' emitted the initial token.",
+        "elementId": "start",
+        "flowId": null,
+        "tokenId": "token:1",
+        "details": {}
+      },
+      {
+        "diagnosticId": "diag:5",
+        "kind": 0,
+        "message": "BPMN token 'token:4' arrived at element 'host-a' via flow 'begin'.",
+        "elementId": "host-a",
+        "flowId": "begin",
+        "tokenId": "token:4",
+        "details": {}
+      },
+      {
+        "diagnosticId": "diag:8",
+        "kind": 1,
+        "message": "BPMN element 'host-a' scheduled child activity 'node-host-a'.",
+        "elementId": "host-a",
+        "flowId": null,
+        "tokenId": "token:4",
+        "details": {}
+      },
+      {
+        "diagnosticId": "diag:11",
+        "kind": 10,
+        "message": "BPMN host 'host-a' completed and registered compensable 'comp:10' (handler 'handler-a').",
+        "elementId": "host-a",
+        "flowId": null,
+        "tokenId": "token:4",
+        "details": {}
+      },
+      {
+        "diagnosticId": "diag:14",
+        "kind": 0,
+        "message": "BPMN token 'token:13' arrived at element 'host-b' via flow 'second'.",
+        "elementId": "host-b",
+        "flowId": "second",
+        "tokenId": "token:13",
+        "details": {}
+      },
+      {
+        "diagnosticId": "diag:17",
+        "kind": 1,
+        "message": "BPMN element 'host-b' scheduled child activity 'node-host-b'.",
+        "elementId": "host-b",
+        "flowId": null,
+        "tokenId": "token:13",
+        "details": {}
+      },
+      {
+        "diagnosticId": "diag:20",
+        "kind": 10,
+        "message": "BPMN host 'host-b' completed and registered compensable 'comp:19' (handler 'handler-b').",
+        "elementId": "host-b",
+        "flowId": null,
+        "tokenId": "token:13",
+        "details": {}
+      },
+      {
+        "diagnosticId": "diag:23",
+        "kind": 0,
+        "message": "BPMN token 'token:22' arrived at element 'replay' via flow 'compensate'.",
+        "elementId": "replay",
+        "flowId": "compensate",
+        "tokenId": "token:22",
+        "details": {}
+      },
+      {
+        "diagnosticId": "diag:28",
+        "kind": 11,
+        "message": "BPMN compensate event 'replay' opened run 'comprun:27' claiming 2 compensable(s) (reverse registration order).",
+        "elementId": "replay",
+        "flowId": null,
+        "tokenId": "token:22",
+        "details": {}
+      },
+      {
+        "diagnosticId": "diag:31",
+        "kind": 1,
+        "message": "BPMN compensation run 'comprun:27' scheduled handler 'handler-b' (child 'node-handler-b') for compensable 'comp:19'.",
+        "elementId": "handler-b",
+        "flowId": null,
+        "tokenId": "token:29",
+        "details": {}
+      }
+    ],
+    "sequence": 31,
+    "races": [],
+    "loops": [],
+    "compensables": [
+      {
+        "compensableId": "comp:10",
+        "hostElementId": "host-a",
+        "handlerElementId": "handler-a",
+        "status": 1
+      },
+      {
+        "compensableId": "comp:19",
+        "hostElementId": "host-b",
+        "handlerElementId": "handler-b",
+        "status": 1
+      }
+    ],
+    "compensationRuns": [
+      {
+        "runId": "comprun:27",
+        "throwTokenId": "token:22",
+        "pendingCompensableIds": [
+          "comp:19",
+          "comp:10"
+        ]
+      }
+    ],
+    "terminated": false,
+    "cancelling": false,
+    "pendingFault": null
+  }
+}

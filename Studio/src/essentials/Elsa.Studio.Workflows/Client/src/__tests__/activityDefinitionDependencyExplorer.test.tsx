@@ -169,6 +169,34 @@ describe("Activity Definition dependency explorer", () => {
     await wrongDefinition.unmount();
   });
 
+  it("explains unavailable usage without implying zero results and retries after recovery", async () => {
+    let available = false;
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return versionPage();
+      if (url.includes("/dependencies?")) {
+        if (!available) throw new StudioHttpError(503, "private-backend-detail", null, {
+          errorCode: "activity.dependency.unavailable", detail: "private-backend-detail"
+        });
+        return dependencyPage("recovered-usage", null);
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderExplorer(getJson);
+    await selectRoot(rendered.container);
+    await waitForText(rendered.container, "Try again");
+    expect(rendered.container.textContent).toContain("Usage information is unavailable.");
+    expect(rendered.container.textContent).toContain("Ask an administrator to restart the server");
+    expect(rendered.container.textContent).not.toContain("No evidence matches");
+    expect(rendered.container.textContent).not.toContain("private-backend-detail");
+    expect(rendered.container.querySelector("table")).toBeNull();
+    available = true;
+    click(buttonByText(rendered.container, "Try again"));
+    await waitForText(rendered.container, "recovered-usage");
+    expect(rendered.container.textContent).not.toContain("Usage information is unavailable.");
+    await rendered.unmount();
+  });
+
   it("keeps traversal and evidence filters in accessible advanced options", async () => {
     const dependencyRequests: string[] = [];
     const getJson = vi.fn(async (url: string) => {

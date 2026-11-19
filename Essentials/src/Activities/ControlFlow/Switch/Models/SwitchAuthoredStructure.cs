@@ -4,19 +4,21 @@ using Elsa.Workflows.Design.Core.Models;
 namespace Elsa.Activities.Switch.Models;
 
 /// <summary>
-/// Authored design-time structure for a <c>Switch</c> node: the ordered set of cases (each a match value
-/// plus an optional single branch activity) and an optional default branch activity. Every branch is a
-/// single child placed in its own named slot.
+/// Authored design-time structure for a <c>Switch</c> node: ordered case labels, optional Boolean
+/// condition arguments and branch activities, plus an optional default branch. Each branch occupies
+/// one named child slot. Cases without a condition retain legacy Value matching.
 /// </summary>
 public sealed class SwitchAuthoredStructure
 {
     [JsonConstructor]
     public SwitchAuthoredStructure(
         IReadOnlyCollection<SwitchAuthoredCase>? cases = null,
-        ActivityNode? @default = null)
+        ActivityNode? @default = null,
+        string? mode = null)
     {
         Cases = cases ?? [];
         Default = @default;
+        Mode = string.IsNullOrWhiteSpace(mode) || mode == SwitchModes.MatchFirst ? null : mode;
     }
 
     [JsonPropertyName("cases")]
@@ -24,11 +26,21 @@ public sealed class SwitchAuthoredStructure
 
     [JsonPropertyName("default")]
     public ActivityNode? Default { get; }
+
+    /// <summary>
+    /// <see cref="SwitchModes.MatchAny"/> selects every matching case (spec 1208 FR-031); <see langword="null"/> is the
+    /// default <see cref="SwitchModes.MatchFirst"/>, omitted so existing structures stay byte-identical.
+    /// </summary>
+    [JsonPropertyName("mode")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Mode { get; }
+
+    [JsonIgnore]
+    public bool MatchesAny => Mode == SwitchModes.MatchAny;
 }
 
 /// <summary>
-/// A single authored case: the value the switch expression is matched against and the optional branch
-/// activity to run when it matches.
+/// One authored case: its human label (also the legacy comparison value), optional predicate and branch.
 /// </summary>
 public sealed class SwitchAuthoredCase
 {
@@ -44,4 +56,13 @@ public sealed class SwitchAuthoredCase
 
     [JsonPropertyName("activity")]
     public ActivityNode? Activity { get; }
+
+    [JsonPropertyName("caseId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CaseId { get; init; }
+
+    /// <summary>A present argument container is a predicate even when its value is unbound.</summary>
+    [JsonPropertyName("condition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArgumentState? Condition { get; init; }
 }

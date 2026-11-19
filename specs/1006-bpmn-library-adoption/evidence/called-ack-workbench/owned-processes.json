@@ -1,0 +1,35 @@
+{
+  "processes": {
+    "noticeProbe": {
+      "controllerProcessId": 28178,
+      "processId": 28179,
+      "startEpochSeconds": 1793138924,
+      "childAndControllerExited": true,
+      "containsRecoveryProbe": true
+    },
+    "noticeStandard": {
+      "controllerProcessId": 28637,
+      "processId": 28640,
+      "startEpochSeconds": 1793139091,
+      "childAndControllerExited": true,
+      "containsRecoveryProbe": false
+    },
+    "terminalProbe": {
+      "controllerProcessId": 29141,
+      "processId": 29144,
+      "startEpochSeconds": 1793139281,
+      "childAndControllerExited": true,
+      "containsRecoveryProbe": true
+    },
+    "terminalStandard": {
+      "controllerProcessId": 29443,
+      "processId": 29452,
+      "startEpochSeconds": 1793139369,
+      "childAndControllerExited": true,
+      "containsRecoveryProbe": false
+    }
+  },
+  "sameOriginalRuntimeAndDesignStores": true,
+  "configuredBasePort": 51398,
+  "noRuntimeStateOrClaimTimestampEdits": true
+}

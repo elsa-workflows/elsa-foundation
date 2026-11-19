@@ -27,6 +27,10 @@ public interface IActivityStructureHandler
     /// </summary>
     Type? AuthoredPayloadType => null;
 
+    /// <summary>
+    /// Projects child slots and any structure-owned invocation outcome declarations. Generic publishing
+    /// consumes the outcome projections without inspecting this handler's authored payload.
+    /// </summary>
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     /// <summary>
@@ -34,6 +38,9 @@ public interface IActivityStructureHandler
     /// Flowchart outcome ports. Values and expressions must never be included.
     /// </summary>
     IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];
+
+    /// <summary>Projects typed inputs consumed conditionally by this structure before activity activation.</summary>
+    ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => ActivityStructureInputProjection.Empty;
 
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
 
@@ -43,6 +50,37 @@ public interface IActivityStructureHandler
     /// their results to that child. <see langword="null"/> (the default) promises no order, so nothing is offered.
     /// </summary>
     IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) => null;
+
+    /// <summary>
+    /// Assesses one direct child's result at another direct child using this structure's execution semantics.
+    /// The default adapts <see cref="ChildrenCompletedBefore"/>: a declared prior result is definite, while
+    /// omission or an undeclared order remains unknown. Nullable facts mean the structure has not supplied them.
+    /// </summary>
+    ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(producerChildNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumerChildNodeId);
+        return ActivityChildResultFacts.FromCompletedBefore(ChildrenCompletedBefore(activity, consumerChildNodeId), producerChildNodeId);
+    }
+
+    /// <summary>
+    /// How two direct children of <paramref name="activity"/> relate in time within one run of this structure: one
+    /// always before the other, their order not defined, mutually exclusive, or not said (the default). The two ids
+    /// may be the same child; see <see cref="ActivityChildTimeRelation"/>. The default adapts
+    /// <see cref="ChildrenCompletedBefore"/>: a child declared completed before another runs before it; anything else is
+    /// not said. The unordered-write warning (spec 266)
+    /// takes all of its ordering knowledge from this declaration.
+    /// </summary>
+    ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        ActivityChildTimeRelationDefaults.FromCompletedBefore(this.ChildrenCompletedBefore, activity, firstChildNodeId, secondChildNodeId);
+
+    /// <summary>
+    /// Whether this structure completes only after every child run it started has ended, or was cancelled before it
+    /// could commit a write. <see langword="false"/> when it can complete while a child still runs (an early-release
+    /// join); <see langword="null"/> (the default) when it does not say, which is treated as <see langword="false"/>.
+    /// </summary>
+    bool? CompletesAfterItsChildren(ActivityNode activity) => null;
 
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
 
@@ -73,4 +111,13 @@ public interface IActivityStructureHandler
     /// visible to their descendant activities. Non-container activities declare none.
     /// </summary>
     IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
+
+    /// <summary>
+    /// Projects the loop iteration values this activity node gives each pass of its body (ADR 0028, spec 1222
+    /// FR-004a): ForEach's <c>currentItem</c> and <c>currentIndex</c>, For's <c>index</c>. A script in the body reads
+    /// them as variables declared by this node, in the innermost scope. They are kept apart from
+    /// <see cref="ProjectScopedVariables"/>: they are not container variables, and the runtime builds no container frame
+    /// for them. Activities without iteration values declare none.
+    /// </summary>
+    IReadOnlyCollection<VariableDefinition> ProjectIterationVariables(ActivityNode activity) => [];
 }

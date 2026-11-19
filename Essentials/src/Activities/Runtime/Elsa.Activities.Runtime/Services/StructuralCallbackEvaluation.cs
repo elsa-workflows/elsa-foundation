@@ -60,6 +60,9 @@ internal static class StructuralCallbackEvaluation
         /// <summary>Builds the fault-incident request when the evaluation faults the target.</summary>
         public required Func<RuntimeCheckpointCommitter, ActivityExecutionState, Exception, string, IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>, ActivityFaultIncidentRecordRequest> NewFaultIncidentRecordRequest { get; init; }
 
+        /// <summary>One accepted exact-call inbox contribution, committed only with a returned consumer decision.</summary>
+        public StructuralChildControlContribution? ChildControlContribution { get; init; }
+
         /// <summary>Stamps the target state the callback's outcome commits, such as a processed marker; identity by default.</summary>
         public Func<ActivityExecutionState, ActivityExecutionState> MarkProcessed { get; init; } = static state => state;
     }
@@ -260,9 +263,9 @@ internal static class StructuralCallbackEvaluation
                         timeProvider.GetUtcNow(),
                         cancellationToken);
                     var completionTransition = (IActivityCompletionTransition)completionCheckpointPreparation.Transition;
-                    if (!StringComparer.Ordinal.Equals(completionTransition.Outcome, continuation.OutcomeName))
+                    if (!completionTransition.Selection.Equals(continuation.Selection))
                         throw new InvalidOperationException(
-                            $"Checkpoint participant completion outcome '{completionTransition.Outcome}' does not match structural continuation outcome '{continuation.OutcomeName}'.");
+                            $"Checkpoint participant completion outcome '{completionTransition.Selection}' does not match structural continuation outcome '{continuation.Selection}'.");
                 }
             }
         }
@@ -276,6 +279,9 @@ internal static class StructuralCallbackEvaluation
         {
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
+            // Validation before semantic effects may defer its still-owed structural source. A real disposal
+            // failure retains the ordinary fault path and both causes instead of silently retrying cleanup.
+            if (exception is RuntimeSchedulerWorkUnavailableException && disposalException is null) throw;
             var fault = disposalException is null ? exception : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? definition.FaultSubStatus : "ActivityDisposalFailed";
             await RecordParentFaultAsync(
@@ -298,7 +304,8 @@ internal static class StructuralCallbackEvaluation
         {
             await StructuralParentEvaluationSupport.CommitDeferredParentActivityAsync(
                 checkpointCommitter, inspectionAccumulator, idGenerator, timeProvider, definition.NewCommitSource(definition.DeferredCheckpointReason),
-                callbackBypassParentState, [], [], [], subtreeCancellationPlans, valueSnapshots, cancellationToken);
+                callbackBypassParentState, [], [], [], subtreeCancellationPlans, valueSnapshots, cancellationToken,
+                childControlContribution: definition.ChildControlContribution);
             return;
         }
 
@@ -318,7 +325,8 @@ internal static class StructuralCallbackEvaluation
                 Fault = fault.ToNormalized()
             };
             var exception = new ActivityTransitionFaultException(fault);
-            var request = definition.NewFaultIncidentRecordRequest(checkpointCommitter, faultedParentState, exception, "ActivityReturnedFault", valueSnapshots);
+            var request = definition.NewFaultIncidentRecordRequest(checkpointCommitter, faultedParentState, exception, "ActivityReturnedFault", valueSnapshots)
+                with { ChildControlContribution = definition.ChildControlContribution };
             var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, "ActivityReturnedFault");
             var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
                 activityExecutionStateStore,
@@ -342,7 +350,8 @@ internal static class StructuralCallbackEvaluation
         {
             await ActivityCancellationCheckpointService.CommitAsync(
                 checkpointCommitter, inspectionAccumulator, timeProvider, workItem,
-                currentParentState, resolvedContinuation.CancellationReason!, valueSnapshots, cancellationToken: cancellationToken);
+                currentParentState, resolvedContinuation.CancellationReason!, valueSnapshots, cancellationToken: cancellationToken,
+                childControlContribution: definition.ChildControlContribution);
             return;
         }
 
@@ -353,7 +362,8 @@ internal static class StructuralCallbackEvaluation
                 currentParentState, Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend, timeProvider.GetUtcNow());
             await StructuralParentEvaluationSupport.CommitDeferredParentActivityAsync(
                 checkpointCommitter, inspectionAccumulator, idGenerator, timeProvider, definition.NewCommitSource(definition.DeferredCheckpointReason),
-                currentParentState, [], childScheduleRequests, parentNotificationWorkItems, subtreeCancellationPlans, valueSnapshots, cancellationToken);
+                currentParentState, [], childScheduleRequests, parentNotificationWorkItems, subtreeCancellationPlans, valueSnapshots, cancellationToken,
+                childControlContribution: definition.ChildControlContribution);
             return;
         }
 
@@ -361,6 +371,8 @@ internal static class StructuralCallbackEvaluation
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> containerVariableSnapshots;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> completionDurableValueChanges;
         RuntimeStateChange<WorkflowExecutionState>? completionWorkflowVariableWriteBack = null;
+        IReadOnlyList<VariableWriteRecord>? writesBeforeCapture = null;
+        var captureRecordsAdded = false;
         try
         {
             var completedAt = timeProvider.GetUtcNow();
@@ -369,14 +381,18 @@ internal static class StructuralCallbackEvaluation
             var openAttempt = currentParentState.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)
                 ?? throw new InvalidOperationException($"VF-ACT-009: Running structural activity invocation '{currentParentState.InvocationId}' has no open committed attempt.");
             var completionTransition = completionCheckpointPreparation?.Transition
-                                       ?? ActivityTransition.Complete(ActivityUnit.Value, resolvedContinuation.OutcomeName!);
+                                       ?? ActivityTransition.Complete(ActivityUnit.Value, resolvedContinuation.Selection!);
             var completionProjection = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, openAttempt, contract, completionTransition, completedAt, cancellationToken);
             var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode,
                 (IActivityCompletionTransition)completionTransition, completionProjection, completedAt, cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken));
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken),
+                invocation: currentParentState, durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>());
+            // Spec 1221 T003: a refused closed-scope row write refuses the completion, as a refused frame write does.
+            if (captureProjection.LostUpdateFault is { } rowLostUpdate)
+                throw new VariableLostUpdateException(rowLostUpdate);
             completionDurableValueChanges = (completionCheckpointPreparation?.DurableValueChanges ?? [])
                 .Concat(captureProjection.DurableValues)
                 .GroupBy(change => change.StateId, StringComparer.Ordinal)
@@ -384,17 +400,27 @@ internal static class StructuralCallbackEvaluation
                 .ToArray();
             // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
             // completion (#972), mirroring how the Set intrinsic commits its changed frame.
-            completionWorkflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+            // Judged under the spec 1221 commit rule against the composite's input read set; the history rides along.
+            var captureCommit = await RuntimeWorkflowVariableCaptureWriteBack.CommitCapturesAsync(
                 serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
                 workItem.WorkflowExecutionId,
-                parentExecutableNode.ExecutableNodeId,
+                parentExecutableNode,
+                currentParentState,
                 captureProjection.WorkflowVariableWrites,
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                     [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
                 },
+                VariableWriteSource.Capture,
+                completedAt,
                 cancellationToken);
+            if (captureCommit.LostUpdateFault is { } lostUpdate)
+                throw new VariableLostUpdateException(lostUpdate);
+            completionWorkflowVariableWriteBack = captureCommit.Change;
+            writesBeforeCapture = currentParentState.VariableWrites;
+            captureRecordsAdded = true;
+            currentParentState = currentParentState.WithVariableWrites([.. captureProjection.VariableWrites, .. captureCommit.Records]);
             var completedAttempt = new ActivityAttempt(
                 openAttempt.AttemptId, openAttempt.InvocationId, openAttempt.Ordinal, openAttempt.Reason,
                 openAttempt.StartedAt, completedAt, openAttempt.TriggerDeliveryId,
@@ -421,7 +447,7 @@ internal static class StructuralCallbackEvaluation
             containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
                 payloadCapturePolicy, scopeService, parentExecutableNode, currentParentState,
                 workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, timeProvider.GetUtcNow());
-            completedParentState = StructuralParentEvaluationSupport.CompleteParentActivity(workItem, payload, currentParentState, [completionProjection.Completion.OutcomeKey], completedAt);
+            completedParentState = StructuralParentEvaluationSupport.CompleteParentActivity(workItem, payload, currentParentState, completionProjection.Completion.Selection, completedAt);
 
             if (completedParentState.VariableFrame is not null || completedParentState.IterationVariableFrame is not null)
                 completedParentState = RuntimeContainerScopeService.CloseOwnedFrames(completedParentState);
@@ -432,9 +458,16 @@ internal static class StructuralCallbackEvaluation
         }
         catch (Exception exception)
         {
+            // A Fault-mode lost update on a composite's capture keeps its own sub-status and its refused write (spec 1221).
+            var lostUpdate = exception as VariableLostUpdateException;
             await RecordParentFaultAsync(
                 activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, timeProvider,
-                workItem, payload, definition, currentParentState, exception, definition.FaultSubStatus, valueSnapshots, cancellationToken);
+                workItem, payload, definition,
+                lostUpdate is not null
+                    ? currentParentState.WithVariableWrites([lostUpdate.Record])
+                    // A later failure drops the capture write-back, so the records of captures that never applied go too.
+                    : captureRecordsAdded ? currentParentState with { VariableWrites = writesBeforeCapture } : currentParentState,
+                exception, lostUpdate is null ? definition.FaultSubStatus : VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }
 
@@ -443,7 +476,7 @@ internal static class StructuralCallbackEvaluation
             checkpointCommitter, inspectionAccumulator, timeProvider, definition.NewCommitSource(payload.Reason), completedParentState,
             SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedParentState, skippedSubStatus: null), subtreeCancellationPlans, parentNotificationWorkItems,
             completedValueSnapshots, completionDurableValueChanges, completionWorkflowVariableWriteBack, cancellationToken,
-            ancestorNotifications: ancestorNotificationWorkItems);
+            ancestorNotifications: ancestorNotificationWorkItems, childControlContribution: definition.ChildControlContribution);
     }
 
     private static async ValueTask RecordParentFaultAsync(
@@ -463,6 +496,12 @@ internal static class StructuralCallbackEvaluation
     {
         var latestFaultedParentState = await activityExecutionStateStore.FindAsync(
             workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken) ?? fallbackState;
+        // A refused write (spec 1221 Fault lost update) stays with the faulted parent: the reloaded state never had it.
+        if (exception is VariableLostUpdateException refusal && latestFaultedParentState.VariableWrites?.Any(record =>
+                record.Outcome == refusal.Record.Outcome && record.ScopeId == refusal.Record.ScopeId &&
+                record.VariableKey == refusal.Record.VariableKey && record.NewVersion == refusal.Record.NewVersion &&
+                record.OccurredAt == refusal.Record.OccurredAt && record.Writer.InvocationId == refusal.Record.Writer.InvocationId) != true)
+            latestFaultedParentState = latestFaultedParentState.WithVariableWrites([refusal.Record]);
         // Every arm that records a thrown exception records through here, so this is where a value resolved for the
         // parent leaves that exception's text. The returned-fault arm masks its fault once and builds its request from
         // that masked fault directly, without coming through here.

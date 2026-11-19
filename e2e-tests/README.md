@@ -49,7 +49,7 @@ see [the issue](https://github.com/elsa-workflows/elsa-foundation/issues/1761) a
 
 ## Hosted Windows and Linux source journey
 
-`.github/workflows/backend-source-platform.yml` is a narrowly path-triggered and manually dispatchable
+The `backend-source` suite in `.github/workflows/ci.yml` is a narrowly path-selected and manually dispatchable
 check on `ubuntu-24.04` and `windows-2025`. It records the exact source revision, runner image, selected
 .NET 10.x SDK and PowerShell. Each job starts with empty job-scoped NuGet package, HTTP-cache and CLI-home
 paths, restores Workbench and the focused `WriteLineBoundInputExecutionTests` project in locked mode, then
@@ -89,7 +89,8 @@ for the interactive contributor route.
 >   server runs from its own temporary content root with its own SQLite files. To reuse a port, stop your
 >   server yourself.
 > - **The platform source harness also owns its server** and uses the same lifecycle helper and free-port rules.
-> - **`http/Test-HttpResponseFlowchart.ps1` owns an isolated server** and takes no `-BaseUrl` argument.
+> - **`http/Test-HttpResponseFlowchart.ps1` and `templates/Test-WorkflowTemplates.ps1` own isolated servers** and takes no `-BaseUrl` argument.
+> - **`http/Test-JsonActivityBindings.ps1` owns an isolated server** and checks JSON output capture, defaults and typed-variable bindings with exact response bodies.
 > - **`variables/Test-SetVariableLoop.ps1` owns an isolated server** and checks the exact counter output; it takes no `-BaseUrl` argument.
 > - **Every other server-dependent script only sends HTTP requests** to `-BaseUrl` (default `http://localhost:5095`).
 > - **Do not add `Stop-Process`, `kill`, or a port lookup that feeds one, to a script.** Use
@@ -126,7 +127,7 @@ take no server argument and can run while yours is up:
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
               'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
-              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1', 'Test-SetVariableLoop.ps1', 'Test-SetVariableRetainedArtifact.ps1'
+              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1', 'Test-WorkflowTemplates.ps1', 'Test-SetVariableLoop.ps1', 'Test-SetVariableRetainedArtifact.ps1'
 # Package-backed Rules is qualified separately with an immutable feed and deployment receipt.
 $packageQualified = 'Test-DurableRules.ps1', 'Test-NativeRulesInstallation.ps1', 'Test-RulesAdmissionRecovery.ps1'
 $failed = @()
@@ -217,6 +218,7 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `http/Test-RuntimeConcurrencyCorrectness.ps1` | the #2392 reference HTTP workflow under concurrent clients (default 16 × 4, `-PersistenceMode Durable`/`Balanced`): every request ends in HTTP 200 `Alice Smith`, one Completed instance per request, zero incidents. A 429 is admission backpressure: it is retried per `Retry-After` (`-MaxShedRetries`, default 30) and reported, and fails only if still shed after the last retry (#2548). Correctness only; no timings (#2532) |
 | `http/Test-SendHttpRequestStatusOutcomes.ps1` | the per-status outcome ports the compiler pins from `SendHttpRequest.ExpectedStatusCodes` are connectable on the PUBLISHED node and route correctly, including the `Unmatched status code` catch-all (#1119) |
 | `bpmn/Test-BpmnCallActivity.ps1` | BPMN `callActivity` bound to a REAL waited `DispatchWorkflow` child (spec 133): child completes -> parent resumes via `Completed`; child faults -> the error boundary routes (no parent incident) |
+| `bpmn/Test-BpmnBroadcastRecovery.ps1` | owns isolated actual Workbenches: crash before selection, after populated/empty cohort commit or after one completed/rearmed callback; Unix competing-proposal mode resumes an expired old owner after a standard peer saves its different winner and requires actual provider stale-write rejection. Checks actual membership identities, source claims, exact catches/join, keyed starts, rearm/attempt preservation and later-wait exclusions. Requires separate probe/standard builds; see [recovery probe](bpmn/RecoveryProbe/README.md). These candidate cuts do not close all FR-015, historical upgrade or Studio acceptance. |
 | `correlate/Test-Correlate.ps1` | `SetCorrelationId` intrinsic sets the instance correlation id; found by `?correlationId=` |
 | `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
 | `logging/Test-ValueCapture.ps1` | per-activity value snapshot: a WriteLine's `Text` input is captured (`DiagnosticSnapshot`) and its payload retrieved via the value-evidence endpoint |

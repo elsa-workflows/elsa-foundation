@@ -1,0 +1,280 @@
+{
+  "schemaVersion": 1,
+  "sourceParentCommit": "2a67105af1e4e0c1ce55a45655a48a7cf6a3484c",
+  "backendExactBuildCommit": "2a67105af1e4e0c1ce55a45655a48a7cf6a3484c",
+  "studioBuildCommit": "3815806acb51475903f3ee3b44cf263ac572db26",
+  "actualStandardHost": true,
+  "actualLegacyInitialWholeObservationEqualsFrozenOldCapture": true,
+  "originalHandlersAndHoldContinue": true,
+  "legacyIntermediateVersion": 1,
+  "legacyReaderControls": 28,
+  "publicCallSmokeCases": 2,
+  "registeredImportBroadcastSmokeCases": 4,
+  "actualStudioPublishedRun": "14i4yC1LLwy",
+  "actualStudioDefinition": "14i4oyBdd53",
+  "actualStudioArtifact": "artifact-e3218705fe5d",
+  "normalUiJourneyPassed": true,
+  "wholeModuleBackups": 7,
+  "frozenPublishedContractsMatchesPerHost": 2,
+  "legacyInitialModuleCopiesSha256": {
+    "runtime.db": "ed7a7f81235b9d01e54714b4d4337a61e8bfde9bd1ac4bc2e27c905e151427d9",
+    "design.db": "85ca336fb1c2be1ad6ebfa2cb76164d4bb7f85a4ec99c47b8c4870f9275741d9"
+  },
+  "ownedLegacyProcessAndControllerExited": true,
+  "userLocalhostHostsUntouched": true,
+  "filesSha256": {
+    "e2e-tests/bpmn/Test-BpmnCallActivity.ps1": "19cee83ac6df20467f814583c8fcddc4b1fbcfe8fadd72e030c7023ac524aff4",
+    "e2e-tests/bpmn/Test-BpmnLibraryAdoption.ps1": "11ed70cf5f130515218e3e880270444de917530ff87ecff3ee0ef780d387ca0c",
+    "e2e-tests/bpmn/Test-BpmnCompensationHost.ps1": "6311725bd052dd7468d257c17527bd278987edb66f5405765c697c5349cf0dcf",
+    "e2e-tests/bpmn/run_owned_broadcast_probe.py": "916716d10446ec7650b99ec926dcb08024fc8619fc21402c862e6d47e163b5de",
+    "e2e-tests/bpmn/test_compensation_snapshot_reader.py": "67a3dfc122ff29902ff2c671c8e1743225f111cbd6af229acd2c64618e8a08db",
+    "e2e-tests/bpmn/verify_published_contracts.py": "27dd5b278c2abcd1382a067299c406e03215ede5a301241e92ab7ed2864be0c7",
+    "e2e-tests/bpmn/fixtures/studio-default-flow.bpmn": "ba26744f4535eaa902ab6187597bea04a1dbf07d671985890f3622f58c27e5e5",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj": "bb47eb0a6b9424742045a20059fcb0a09bb40b44e77b6d36928a21e9201616ef",
+    "Essentials/apps/Elsa.Workbench/shells.json": "000b0c2a42db5a0acade48094be4bcb17d2f437f33ad1476336521877037e96a",
+    "specs/1006-bpmn-library-adoption/evidence/semantic-deletion.json": "8ad0145fa0c05274860f513d1db731db66aa0aa67be30b5e97d9d34016a97fff",
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host-qualification.md": "364512085ba55fa5b26f1b5e52677968e4d48c0e5296bd610ecba3c20f882d0f",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Acknowledgment.cs": "b2409701254ac5707b96478e31c90938f499792f3ff23f18e092bf6cfb2fb0b5",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.cs": "7db5bdb5fd4fdf3a2d2d573c0ee12c6d77d4605b818232b9b431826cd3a82e75",
+    "tools/bpmn/DeliveryRecoveryRead/CalledSnapshotReader.cs": "2c8e21c0f223732112d5b28b4eab98417e6d603e1b61cb1fb14ba1e725ddd71a",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Compensation.cs": "03894ef0b9049f853993bcd4fca0935f08596ff1fa6724b726487d7fa5164369",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Concurrent.cs": "156604e161140da36d67f9697cca3419398ab0200ef1b6fae1d2c892f3c4b46c",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Escalation.cs": "f7133978eec14279d9d26635ba5f05ccc38d191bd1f1361aae57d2538bc45711",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "cc92c01900be96385a011ab0b2fdcf7b9fc192f3d0f978b59a221e0e1fdaeb0e",
+    "specs/1006-bpmn-library-adoption/spec.md": "a31a7c6efd4cf6b09fe1043af09b091f2ca326c2de2b3fbc96a5f1897ae88e26",
+    "specs/1006-bpmn-library-adoption/tasks.md": "8690fc9050ed4bbd8d32b0066dd080371e043ce76cffbbebc077c0ef9829ec6b",
+    "Essentials/src/Activities/Bpmn/Interchange/README.md": "5fea22f642ae2887a6696c74ce6c0fa56ecb59ad5e053716977813925c313f8f",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/README.md": "dda68119e694abb3cb2735dba09c86fb21af3beaf0470ffd0845545d8d1f75fc"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/01-imported-dom.txt": {
+      "sha256": "ae25ba0c4046d56f432238af376dc534f1cf116932b5fba542c33845c3afd854",
+      "bytes": 12455
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/02-edited-dom.txt": {
+      "sha256": "50955e78fbe63f9b152f26ff8b243e611cb034b03bd3a9b13c5d192d9c45e07e",
+      "bytes": 12478
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/03-publication-dom.txt": {
+      "sha256": "d9a76c6af0f4aa30c7635aadb46e1e3a93f9c718c70de9b5065e61713a255682",
+      "bytes": 12993
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/04-published-run-dom.txt": {
+      "sha256": "7a77bdfdea389f8c0f495d85e278fb049234234ecf785a44769c0c1c58715307",
+      "bytes": 4489
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/05-reloaded-dom.txt": {
+      "sha256": "bc29e9645e026ba2e62139077c1b8deb8a78a178ecd1ec3d8a78763c5d1aad0f",
+      "bytes": 12468
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/backend-binaries.json": {
+      "sha256": "cf38b0bb067078ea30a6834bf87287f56c5f75f1d864d9668f7c02a16c2d12f2",
+      "bytes": 41925
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/build-product-versions.json": {
+      "sha256": "9d844be8068770ff9fa27fe1319147a78b2108215deb0f0b87ff51f405472f0b",
+      "bytes": 764
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/default-flow-edited.png": {
+      "sha256": "32e46a77d8ac13cbca64448e53f0850aaa4163233c41dab14ac0e775c6ca14d3",
+      "bytes": 94989
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/exact-build-command.json": {
+      "sha256": "994ea05352003a67685501d4b04b35469389437f62958a675e282c67a7c2007b",
+      "bytes": 593
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/exact-build.log.gz": {
+      "sha256": "5c31f3bd2d67e972856a4a8e56c8265eea41d316e16a3b41cd64e58e92846ca1",
+      "bytes": 18846
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/exported-default-flow.bpmn": {
+      "sha256": "b3dbe1a8282d8a9e319fda79511233c17997775feccd6532ce12967e9435c657",
+      "bytes": 3263
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/identities.json": {
+      "sha256": "18381aa31acd959adc3f6b408b98158bcecfa1c9f12843373d426e122cc8b4ba",
+      "bytes": 386
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-design.json": {
+      "sha256": "0a93ce879f4328b9e8d0535493931dd0e06d49a0dd3d1c0395e417810c5ee7ed",
+      "bytes": 377
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-design.sqlite.gz": {
+      "sha256": "d81c0e3aa89f50c68611e7dd78aeee470335748b4c421f75b286b7069f1ea9c2",
+      "bytes": 106339
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-finished-api.json": {
+      "sha256": "711473b5be6a95bd170c08b6005b7ce040bb8e9948f881f8dcb5062f3dd3fb2f",
+      "bytes": 25309
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-finished-checked.json": {
+      "sha256": "e8ee5b6eaf4d9daa9ae3a817ecb1175ca096344d87f9cf7172a7794e080a374a",
+      "bytes": 50384
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-finished-controls.json": {
+      "sha256": "dcf2af07e143daf79ede6779e1a259823be796d122bd8c775e42e57acbcf2311",
+      "bytes": 1844
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-finished-runtime.json": {
+      "sha256": "34fa3ad4e0f8df652f5e81ac3c34adb54c80782f7c4a6717e5ef128ce5c96f88",
+      "bytes": 377
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-finished-runtime.sqlite.gz": {
+      "sha256": "0582f155c81b19015e9719475041fa7e102c831ea849a1e269fb51b52d3d9642",
+      "bytes": 157868
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-handler-a-api.json": {
+      "sha256": "5a22b744a7dce6b13344b3208ca04b747b205ff1a4371751598084d435ee3eb1",
+      "bytes": 23799
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-handler-a-checked.json": {
+      "sha256": "77267606c0be96ef0d8c24ff8c4d19dad7cecec6eb6ea629d0fbd15fe874c1f4",
+      "bytes": 41280
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-handler-a-controls.json": {
+      "sha256": "958fcab534383162eb7a3071274054100d36b19165f210da39f310b7a7646371",
+      "bytes": 2137
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-handler-a-runtime.json": {
+      "sha256": "d3c891aa45a88ac1082c3581f68175c728d33e4141ff5abd84a31afed33f07e0",
+      "bytes": 377
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-handler-a-runtime.sqlite.gz": {
+      "sha256": "b19f0106d56eaf93248d5406e473c9d60143c426f7507ef7ab080cd5b789ef1e",
+      "bytes": 145286
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-published-contracts.json": {
+      "sha256": "5d9420551dc0134c081cdab7403c2439f7a9858f5ee9d11cc270c983e31ddd62",
+      "bytes": 3492
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-reopened-api.json": {
+      "sha256": "63faadf8d583bdc21830caa7effcf3cc89cadff3b2390a80313330e82e1e4e44",
+      "bytes": 22008
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-reopened-checked.json": {
+      "sha256": "0919c2259b634fda594083a3be66b556a7988d452bf2db74f4271a6cc6e76297",
+      "bytes": 28839
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-reopened-controls.json": {
+      "sha256": "65b5239a1329b4b897c8113bf909dc98a0ecc6382cda12a287115af724e2d091",
+      "bytes": 2431
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-reopened-runtime.json": {
+      "sha256": "7e2ba290b7cf11a3d1369877d955fc1a3311a8e0f58e6bb425650aff41447f3c",
+      "bytes": 377
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-reopened-runtime.sqlite.gz": {
+      "sha256": "85317a1c1d2992db423fbc21afcad3b871eda72bfb9608d0862821ab629de659",
+      "bytes": 137423
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-settled-api.json": {
+      "sha256": "fc641815d07149b034c4191bce92c09e11edfe34c58ab5fe443e4ef21baf8037",
+      "bytes": 25265
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-settled-checked.json": {
+      "sha256": "252917adab352abd07e7af1e6e7e0938cea9fa3c9802f32d6da105b60745ad36",
+      "bytes": 53398
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-settled-controls.json": {
+      "sha256": "9400ec075da17bf43c149a0ee95100fa471bda3d8a47c9136f272dcd4cd1241f",
+      "bytes": 2136
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-settled-runtime.json": {
+      "sha256": "91841a42e93dab2ef9f6194c93b699962578ded33231a997ecd288662ca3aa64",
+      "bytes": 377
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/legacy-settled-runtime.sqlite.gz": {
+      "sha256": "9d68591164d3d258131058a292435da8f8068490b031b512b1f2880081aebb07",
+      "bytes": 154077
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/owned-processes.json": {
+      "sha256": "eba70216cb7eef31edd24302ce001492916608111386150612ca2a2769792c0c",
+      "bytes": 682
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/persisted-authored-v1.json": {
+      "sha256": "057c1c6c7895c499fdc491aa2d99c88e03f3b58390c89c8085979d8ddd8758d8",
+      "bytes": 5363
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/public-type-surface.json": {
+      "sha256": "c032d0f59f2983bd82aa22eff3cf81f8862827b7af083865e76597c3a2add8c3",
+      "bytes": 10510
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/publication-ready.png": {
+      "sha256": "a5e3fbe0d126eafee61d83d49092d52a4eb24d66a92d100238059275d7f98145",
+      "bytes": 70852
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/published-contracts.json": {
+      "sha256": "0573e0e1d6e595e7b51e91383dc4c2384a9331f5cf5180d7cb7ad0a788a45f65",
+      "bytes": 3492
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/published-run-api.json": {
+      "sha256": "799c05acf000e333e826d3f81f3b601d5b72423323143da964e476212d03f79e",
+      "bytes": 4209
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/published-run-completed.png": {
+      "sha256": "15386632d3de73a11f008aa824446afb150e049cc18c3b6600ae676b52884bf9",
+      "bytes": 68014
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/reader-binaries.json": {
+      "sha256": "8940efd7eee87394b8d80986279a4d1e6a48f3911d09ef8ca3b458ebcb338bbb",
+      "bytes": 7340
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/registered-import-broadcast.json": {
+      "sha256": "6511434afce9b190b85e78166e244c2099a9237d4fc73cd812cc7e81fc62db93",
+      "bytes": 8290
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/registered-import-broadcast.log.gz": {
+      "sha256": "7825de73d4d9f99d742a3827707219b9bce808b307a77295acd56b4cc18c5be3",
+      "bytes": 273
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/reloaded-default-flow.png": {
+      "sha256": "020259a1a08ea47dad72597d08978d8488dbed5848f988154ea276aaaf3f2768",
+      "bytes": 90268
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/served-workflows-entry.json": {
+      "sha256": "7cc9b0dae93474b95e5817bc59208132008c40429db8931e4448d95288bc9aa5",
+      "bytes": 860
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/strict-call.json": {
+      "sha256": "52e7ecceead95525a6971e833e2201a32db946fb3cd0ed3281d28e9dfa590598",
+      "bytes": 22294
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/strict-call.log.gz": {
+      "sha256": "f094392ee6da683b9aad3e62767d145d169f292f6b6de8e127884cf3bb71d0c4",
+      "bytes": 1167
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/studio-binaries.json": {
+      "sha256": "e38040fa145e7f990977b2f309f4abfac01a21bd3392a3def9cf2ffe358cefba",
+      "bytes": 9240
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/studio-design.json": {
+      "sha256": "cef2f4a79ee700d5b4f8dd89eaa2a081afa85f1de38575251df369f0f856d95b",
+      "bytes": 377
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/studio-design.sqlite.gz": {
+      "sha256": "2aa5e720716520c3533916457bea740e5d88993c9a2cd6df440340f99269c26e",
+      "bytes": 127821
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/studio-runtime.json": {
+      "sha256": "1551160c5f55fd63a8bde79e6df6f90a86b8399e4e835303fe447db62ab4c53b",
+      "bytes": 377
+    },
+    "specs/1006-bpmn-library-adoption/evidence/post-deletion-host/studio-runtime.sqlite.gz": {
+      "sha256": "46530383c02185daf7e5af583db3d187edf013cbe3d7bff6c143578a78f0ddbf",
+      "bytes": 318263
+    }
+  },
+  "frozenAuthoringSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "fullPrRounds": 0,
+  "fullPrRoundBound": 6,
+  "remaining": [
+    "T037completePRreview/requiredexactheadchecks/T038protectedmerge/resultingmain",
+    "SeparateADR0063PR;independent2898/2907/programproductionacceptance"
+  ],
+  "deferred": [
+    "Orleans",
+    "task-runnerfollow-up"
+  ]
+}

@@ -1,0 +1,58 @@
+Name:        System.Threading.CancellationTokenSource
+MethodTable: 000000010c0efc08
+Size:        48(0x30) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010c0efb58 04000c69       20         System.Int32  Yes instance                0 _state
+000000010a15a098 04000c6a       24       System.Boolean  Yes instance                0 _disposed
+000000010cd72458 04000c6b        8 ....Threading.ITimer   No instance 0000000000000000 _timer
+0000000110179f08 04000c6c       10 ....ManualResetEvent   No instance 0000000000000000 _kernelEvent
+000000010c7271d0 04000c6d       18 ...rce+Registrations   No instance 0000007f2a9d5340 _registrations
+000000010c0efc08 04000c66        8 ...lationTokenSource   No   static 0000007f6abba220 s_canceledSource
+000000010c0efc08 04000c67       10 ...lationTokenSource   No   static 0000007f6abba250 s_neverCanceledSource
+000000011003d950 04000c68       18 ...ing.TimerCallback   No   static 0000007f6abba280 s_timerCallback
+Name:        Microsoft.Extensions.Logging.Logger`1[[Elsa.Workflows.Runtime.Distributed.Services.ExecutionPlacementPumpTask, Elsa.Workflows.Runtime.Distributed]]
+MethodTable: 000000013cc82a20
+Size:        24(0x18) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010c8d5270 0400001a        8 ...s.Logging.ILogger   No instance 000000802aaa8a78 _logger
+Name:        Microsoft.Extensions.Logging.Logger`1[[Elsa.Workflows.Runtime.Services.Alterations.WorkflowAlterationOrchestrationPumpTask, Elsa.Workflows.Runtime]]
+MethodTable: 000000013cc74f40
+Size:        24(0x18) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010c8d5270 0400001a        8 ...s.Logging.ILogger   No instance 000000802aa9d288 _logger
+Name:        Microsoft.Extensions.Logging.Logger`1[[Elsa.Workflows.Runtime.Resumption.RuntimeResumptionPumpTask, Elsa.Workflows.Runtime.Resumption]]
+MethodTable: 000000013cc78230
+Size:        24(0x18) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010c8d5270 0400001a        8 ...s.Logging.ILogger   No instance 000000802aa9f0d0 _logger
+Name:        Microsoft.Extensions.Logging.Logger`1[[Elsa.Workflows.Runtime.Http.Tasks.HttpEndpointRouteTableConvergencePumpTask, Elsa.Workflows.Runtime.Http]]
+MethodTable: 000000013cc75fd0
+Size:        24(0x18) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010c8d5270 0400001a        8 ...s.Logging.ILogger   No instance 000000802aa9fc50 _logger
+Name:        Microsoft.Extensions.Logging.Logger`1[[Elsa.Workflows.Runtime.Scheduling.DurableTimerPumpTask, Elsa.Workflows.Runtime.Scheduling]]
+MethodTable: 000000013cc7ac58
+Size:        24(0x18) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010c8d5270 0400001a        8 ...s.Logging.ILogger   No instance 000000802aaa15f8 _logger
+Name:        Microsoft.Extensions.Logging.Logger`1[[Elsa.Workflows.Runtime.Scheduling.RecurringTriggerPumpTask, Elsa.Workflows.Runtime.Scheduling]]
+MethodTable: 000000013cc7d5e0
+Size:        24(0x18) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010c8d5270 0400001a        8 ...s.Logging.ILogger   No instance 000000802aaa33f0 _logger
+Name:        System.TimeSpan
+MethodTable: 000000010bdf3558
+Size:        24(0x18) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000010b2e4460 04000678        0         System.Int64  Yes instance         10000000 _ticks
+000000010bdf3558 04000675        0      System.TimeSpan  Yes   static 000000819a8070f0 Zero
+000000010bdf3558 04000676        8      System.TimeSpan  Yes   static 000000819a8070f8 MaxValue
+000000010bdf3558 04000677       10      System.TimeSpan  Yes   static 000000819a807100 MinValue

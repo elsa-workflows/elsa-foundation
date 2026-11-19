@@ -11,6 +11,7 @@ namespace Elsa.Cli.Tests;
 internal sealed class CandidateInspectionFixture : IDisposable
 {
     public const string ResourceProbeFeatureId = "ResourceProbe";
+    public const string ApiCapabilitiesFeatureId = "ApiCapabilities";
     public const string ResourceProbeModuleId = "Acme.ResourceProbe";
     public const string StructuredLogsFeatureId = "DiagnosticsStructuredLogs";
     public const string StructuredLogsEfFeatureId = "DiagnosticsStructuredLogsEntityFrameworkCore";
@@ -110,6 +111,7 @@ internal sealed class CandidateInspectionFixture : IDisposable
     {
         var shells = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "shells.json")))!;
         var features = shells["CShells"]!["Shells"]![ShellId]!["Features"]!.AsObject();
+        features[ApiCapabilitiesFeatureId] = new JsonObject();
         features[OpenTelemetryFeatureId] = new JsonObject();
         if (includeOpenTelemetryEf)
             features[OpenTelemetryEfFeatureId] = new JsonObject();
@@ -147,6 +149,7 @@ internal sealed class CandidateInspectionFixture : IDisposable
         var shell = shells["CShells"]!["Shells"]![ShellId]!.AsObject();
         shell["Features"] = new JsonObject
         {
+            [ApiCapabilitiesFeatureId] = new JsonObject(),
             [WorkbenchModularityApiFeatureId] = new JsonObject(),
             [WorkbenchRuntimeFaultStackTraceFeatureId] = new JsonObject(),
             [StructuredLogsFeatureId] = new JsonObject(),
@@ -232,7 +235,7 @@ internal sealed class CandidateInspectionFixture : IDisposable
     public string WriteWorkspaceStart()
     {
         var (path, definition) = WriteWorkspaceProfile("profile.json", "candidate-local", "1",
-            [OpenTelemetryFeatureId, OpenTelemetryEfFeatureId, ResourceProbeFeatureId],
+            [ApiCapabilitiesFeatureId, OpenTelemetryFeatureId, OpenTelemetryEfFeatureId, ResourceProbeFeatureId],
             "Reviewed workspace starting selection");
         var catalog = FoundationSelectionCatalog.Load();
         var authored = new AuthoredComposition("1", new CatalogPin(catalog.Id, catalog.Version, catalog.Digest),

@@ -21,11 +21,12 @@ using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.Time.Testing;
 using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
+using Microsoft.Extensions.DependencyInjection;
 using WorkflowExecutableHasher = Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-public sealed class ActivityDraftTestRunServiceTests
+public sealed partial class ActivityDraftTestRunServiceTests
 {
     [Fact]
     public async Task Placement_failure_is_persisted_as_safe_pre_dispatch_validation_rejection()
@@ -149,10 +150,14 @@ public sealed class ActivityDraftTestRunServiceTests
     private static async Task<TestRunFixture> CreateFixture(
         Func<InMemoryExecutableActivityTemplateStore, IExecutableActivityTemplateStore>? wrapTemplates = null,
         IActivityDraftTestRunStore? receipts = null,
-        ExecutableActivityTemplate? childTemplate = null)
+        ExecutableActivityTemplate? childTemplate = null,
+        IServiceProvider? runtimeServices = null,
+        Func<IWorkflowExecutableRootWriteLeaseManager, IWorkflowExecutableRootWriteLeaseManager>? wrapRootWrites = null,
+        Func<IExecutableActivityTemplateStore, IWorkflowExecutableSourceReferenceStore,
+            (IExecutableActivityTemplateStore Templates, IWorkflowExecutableSourceReferenceStore References)>? selectRootPorts = null)
     {
         var now = new DateTimeOffset(2026, 10, 17, 9, 0, 0, TimeSpan.Zero);
-        var clock = new FakeTimeProvider(now);
+        var clock = runtimeServices is null ? new FakeTimeProvider(now) : (FakeTimeProvider)runtimeServices.GetRequiredService<TimeProvider>();
         childTemplate ??= RequiredInputTemplate();
         var rootTemplate = GraphTemplate(childTemplate);
         var childPublication = Publication("child-definition", "child-version", "child-type", childTemplate);
@@ -168,10 +173,14 @@ public sealed class ActivityDraftTestRunServiceTests
             now,
             now,
             WorkflowExecutableReferenceScope.Published);
-        var innerTemplates = new InMemoryExecutableActivityTemplateStore();
+        var artifacts = runtimeServices?.GetRequiredService<IWorkflowExecutableStore>() ?? new InMemoryWorkflowExecutableStore();
+        var sourceReferences = runtimeServices?.GetRequiredService<IWorkflowExecutableSourceReferenceStore>() ?? new InMemoryWorkflowExecutableSourceReferenceStore(artifacts, clock);
+        var innerTemplates = runtimeServices is null
+            ? InMemoryExecutableActivityTemplateStore.CreateForMaintenance(artifacts, sourceReferences, clock)
+            : (InMemoryExecutableActivityTemplateStore)runtimeServices.GetRequiredService<IExecutableActivityTemplateStore>();
         await innerTemplates.SaveAsync(childTemplate);
         var templates = wrapTemplates?.Invoke(innerTemplates) ?? innerTemplates;
-        var sourceReferences = new InMemoryWorkflowExecutableSourceReferenceStore();
+        if (selectRootPorts is not null) (templates, sourceReferences) = selectRootPorts(templates, sourceReferences);
         await sourceReferences.SaveAsync(childReference);
         var draftContract = new Elsa.Activities.Design.Core.Models.ActivityContract("1", [], [], []);
         var draft = new ActivityDefinitionDraft
@@ -209,7 +218,7 @@ public sealed class ActivityDraftTestRunServiceTests
                 new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
                 new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]))),
             new WorkflowExecutableHasher(),
-            new InMemoryWorkflowExecutableStore(),
+            artifacts,
             dispatcher,
             new InMemoryWorkflowTestScopeStore(),
             new FixedPartitionAccessor(),
@@ -219,8 +228,13 @@ public sealed class ActivityDraftTestRunServiceTests
             new DefaultActivityDraftTestRunCancellationPolicy(),
             null!,
             null!,
-            clock);
-        return new(service, draft, new(draft.Id, draft.Revision, "placement-fails"), receipts, dispatcher);
+            clock,
+            wrapRootWrites?.Invoke(new WorkflowExecutableRootWriteLeaseManager(artifacts,
+                Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Core.Configuration.WorkflowExecutableGarbageCollectionOptions()), clock))
+            ?? runtimeServices?.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>()
+            ?? new WorkflowExecutableRootWriteLeaseManager(artifacts,
+                Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Core.Configuration.WorkflowExecutableGarbageCollectionOptions()), clock));
+        return new(service, draft, new(draft.Id, draft.Revision, "placement-fails"), receipts, dispatcher, templates, sourceReferences, artifacts, clock, rootTemplate);
     }
 
     private static ExecutableActivityTemplate RequiredInputTemplate() => ChildTemplate(includeRequiredInput: true);
@@ -333,13 +347,23 @@ public sealed class ActivityDraftTestRunServiceTests
         ActivityDefinitionDraft Draft,
         StartActivityDraftTestRun Request,
         IActivityDraftTestRunStore Receipts,
-        RejectIfDispatched Dispatcher);
+        RejectIfDispatched Dispatcher,
+        IExecutableActivityTemplateStore Templates,
+        IWorkflowExecutableSourceReferenceStore References,
+        IWorkflowExecutableStore Artifacts,
+        FakeTimeProvider Clock,
+        ExecutableActivityTemplate RootTemplate);
 
     private sealed class CancelOnDependencyReadTemplateStore(
         IExecutableActivityTemplateStore inner,
         CancellationTokenSource cancellation,
         string dependencyTemplateId) : IExecutableActivityTemplateStore
     {
+        public bool CanMaintainReferences(IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references) =>
+            inner.CanMaintainReferences(executables, references);
+        public ValueTask<WorkflowExecutableSourceReference> SaveWithReferenceAsync(ExecutableActivityTemplate template,
+            WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default) =>
+            inner.SaveWithReferenceAsync(template, reference, cancellationToken);
         public ValueTask SaveAsync(ExecutableActivityTemplate template, CancellationToken cancellationToken = default) =>
             inner.SaveAsync(template, cancellationToken);
 

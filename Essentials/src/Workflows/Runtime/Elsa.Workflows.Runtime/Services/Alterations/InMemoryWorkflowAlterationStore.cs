@@ -293,6 +293,19 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         return ValueTask.CompletedTask;
     }
 
+    public ValueTask<IReadOnlyList<WorkflowAlterationJobState>> ListVariableWriteJobsAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+            return ValueTask.FromResult<IReadOnlyList<WorkflowAlterationJobState>>(_state.Jobs.Values
+                .Where(job => StringComparer.Ordinal.Equals(job.WorkflowExecutionId, workflowExecutionId) &&
+                              job.Outcomes.Any(outcome => outcome.VariableWrites is { Count: > 0 }))
+                .OrderBy(job => job.CompletedAt)
+                .ThenBy(job => job.JobId, StringComparer.Ordinal)
+                .ToArray());
+    }
+
     public ValueTask<WorkflowAlterationJobState?> FindJobAsync(string jobId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(jobId);

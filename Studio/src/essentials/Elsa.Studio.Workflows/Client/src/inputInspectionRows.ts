@@ -5,6 +5,22 @@ import type {
   WorkflowExecutableInputBinding
 } from "./workflowTypes";
 import { runtimeValueTypeLabel } from "./runtimeValueFormatting";
+import { isMaskedInput } from "./maskedInput";
+
+export function readDeclaredActivityInputs(inputs: unknown[] | undefined): StudioActivityInputDescriptor[] {
+  return (inputs ?? []).filter((input): input is StudioActivityInputDescriptor => {
+    if (!input || typeof input !== "object") return false;
+    const record = input as Record<string, unknown>;
+    return typeof record.name === "string" && typeof record.typeName === "string";
+  });
+}
+
+/** Rendering and background preparation must enforce the same effective sensitivity. */
+export function inputRuntimeSnapshot(row: InputInspectionRow) {
+  const latest = row.latestEvaluation;
+  const sensitive = row.declaration && isMaskedInput(row.declaration) || row.authoredSource?.isSensitive || row.compiledBinding?.isSensitive;
+  return latest && sensitive && !latest.isSensitive ? { ...latest, isSensitive: true } : latest;
+}
 
 export type InputInspectionState =
   | "missingDeclaration"

@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import axe from "axe-core";
+import type { StudioBrandingConfig } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/runtime";
 
 const provider = "aspnetcore-identity";
 const loginPage = "<!doctype html><title>Sign in</title><h1>Backend sign-in page</h1>";
@@ -51,11 +52,15 @@ type UserMenuOptions = {
   account?: boolean;
   authEnabled?: boolean;
   backend?: "long";
+  branding?: StudioBrandingConfig;
 };
 
 async function openShell(page: Page, options: UserMenuOptions = {}) {
   const theme = options.theme ?? "light";
   const state = await mockIdentity(page, options);
+  if (options.branding) await page.addInitScript(branding => {
+    window.__ELSA_STUDIO_RUNTIME__ = { branding };
+  }, options.branding);
   const query = new URLSearchParams({
     mode: "user-menu",
     theme,
@@ -116,13 +121,13 @@ async function readShellGeometry(page: Page) {
       actions: dimensions(actions),
       content: dimensions(content),
       controls: {
-        weaver: describe(".topbar-actions .agent-launcher"),
+        weaver: describe(".topbar-actions .weaver-launcher"),
         github: describe('.topbar-actions a[aria-label="GitHub"]'),
-        designer: describe('.topbar-actions a[aria-label="Designer source"]'),
+        documentation: describe('.topbar-actions a[aria-label="Documentation"]'),
         appearance: describe(".topbar-actions .theme-selector-button"),
         account: describe(".topbar-actions .user-menu-button")
       },
-      weaverBadges: describeAll(".topbar-actions .agent-session-indicator > span")
+      weaverBadges: describeAll(".topbar-actions .weaver-session-indicator > span")
     };
   });
 }
@@ -207,12 +212,12 @@ test.describe("shell user menu", () => {
       const before = await readShellGeometry(page);
       const beforeScreenshot = await page.screenshot();
       const accountBounds = await account(page, displayName).boundingBox();
-      const launcherBounds = await page.locator(".agent-launcher").boundingBox();
+      const launcherBounds = await page.locator(".weaver-launcher").boundingBox();
       expect(accountBounds).not.toBeNull();
       expect(launcherBounds).not.toBeNull();
-      const launcher = page.locator(".agent-launcher");
+      const launcher = page.locator(".weaver-launcher");
       await expect(launcher).toBeVisible();
-      await expect(page.locator(".agent-session-indicator")).toContainText("1 waiting");
+      await expect(page.locator(".weaver-session-indicator")).toContainText("1 waiting");
       await page.mouse.click(launcherBounds!.x + launcherBounds!.width / 2, launcherBounds!.y + launcherBounds!.height / 2);
       await expect(launcher).toHaveAttribute("aria-expanded", "true");
       await page.mouse.click(launcherBounds!.x + launcherBounds!.width / 2, launcherBounds!.y + launcherBounds!.height / 2);
@@ -271,7 +276,7 @@ test.describe("shell user menu", () => {
       await page.keyboard.press("Tab");
       await expect(page.getByRole("link", { name: "GitHub" })).toBeFocused();
       await page.keyboard.press("Tab");
-      await expect(page.getByRole("link", { name: "Designer source" })).toBeFocused();
+      await expect(page.getByRole("link", { name: "Documentation" })).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(page.getByRole("button", { name: "Select theme" })).toBeFocused();
       await page.keyboard.press("Tab");
@@ -281,24 +286,30 @@ test.describe("shell user menu", () => {
       await themeTrigger.focus();
       await page.keyboard.press("Enter");
       const themeMenu = page.locator(".theme-dropdown");
+      // Light and Dark also name Sidebar color options, so modes are read from the Appearance group.
+      const appearanceGroup = themeMenu.getByRole("group", { name: "Appearance", exact: true });
+      const navigationGroup = themeMenu.getByRole("group", { name: "Navigation", exact: true });
       await expect(themeMenu).toBeVisible();
       for (const mode of ["Light", "Dark", "Dim", "High contrast"]) {
-        await expect(themeMenu.getByRole("menuitemradio", { name: mode })).toBeVisible();
+        await expect(appearanceGroup.getByRole("menuitemradio", { name: mode, exact: true })).toBeVisible();
       }
       const themeBounds = await themeMenu.boundingBox();
       expect(themeBounds).not.toBeNull();
       expect(themeBounds!.x).toBeGreaterThanOrEqual(0);
       expect(themeBounds!.x + themeBounds!.width).toBeLessThanOrEqual(width);
       for (const navigation of ["Theme default", "Left", "Top"]) {
-        await expect(themeMenu.getByRole("menuitemradio", { name: navigation })).toBeVisible();
+        await expect(navigationGroup.getByRole("menuitemradio", { name: navigation })).toBeVisible();
       }
-      await expect(themeMenu.getByRole("menuitemradio", { name: "Light" })).toHaveAttribute("aria-checked", "true");
-      await themeMenu.getByRole("menuitemradio", { name: "Dark" }).click();
+      for (const sidebarColor of ["Theme default", "Light", "Dark"]) {
+        await expect(themeMenu.getByRole("group", { name: "Sidebar color", exact: true }).getByRole("menuitemradio", { name: sidebarColor, exact: true })).toBeVisible();
+      }
+      await expect(appearanceGroup.getByRole("menuitemradio", { name: "Light", exact: true })).toHaveAttribute("aria-checked", "true");
+      await appearanceGroup.getByRole("menuitemradio", { name: "Dark", exact: true }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "dark");
-      await expect(themeMenu.getByRole("menuitemradio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
+      await expect(appearanceGroup.getByRole("menuitemradio", { name: "Dark", exact: true })).toHaveAttribute("aria-checked", "true");
       for (const navigation of ["Top", "Theme default", "Left"]) {
-        await themeMenu.getByRole("menuitemradio", { name: navigation }).click();
-        await expect(themeMenu.getByRole("menuitemradio", { name: navigation })).toHaveAttribute("aria-checked", "true");
+        await navigationGroup.getByRole("menuitemradio", { name: navigation }).click();
+        await expect(navigationGroup.getByRole("menuitemradio", { name: navigation })).toHaveAttribute("aria-checked", "true");
         await expect(page.locator("html")).toHaveAttribute("data-nav-mode", navigation === "Top" ? "top" : "left");
         await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
         const afterNavigation = await readShellGeometry(page);
@@ -306,9 +317,9 @@ test.describe("shell user menu", () => {
         expect(afterNavigation.frame.scrollLeft).toBe(before.frame.scrollLeft);
         expect(afterNavigation.content.left).toBe(before.content.left);
       }
-      await themeMenu.getByRole("menuitemradio", { name: "High contrast" }).click();
+      await appearanceGroup.getByRole("menuitemradio", { name: "High contrast", exact: true }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "high-contrast");
-      await expect(themeMenu.getByRole("menuitemradio", { name: "High contrast" })).toHaveAttribute("aria-checked", "true");
+      await expect(appearanceGroup.getByRole("menuitemradio", { name: "High contrast", exact: true })).toHaveAttribute("aria-checked", "true");
       await page.keyboard.press("Escape");
       await expect(page.getByRole("menu")).toHaveCount(0);
       await expect(themeTrigger).toBeFocused();
@@ -342,19 +353,34 @@ test.describe("shell user menu", () => {
     await themeTrigger.focus();
     await page.keyboard.press("Enter");
     const themeMenu = page.locator(".theme-dropdown");
-    await expect(themeMenu.getByRole("menuitemradio", { name: "Light", exact: true })).toBeFocused();
+    const workspaceGroup = themeMenu.getByRole("group", { name: "Workspace style", exact: true });
+    // Light and Dark also name Sidebar color options, so modes are read from the Appearance group.
+    const appearanceGroup = themeMenu.getByRole("group", { name: "Appearance", exact: true });
+    const groupOf = (name: string) => ["Light", "Dark", "Dim", "High contrast"].includes(name) ? appearanceGroup : workspaceGroup;
+    const navigationGroup = themeMenu.getByRole("group", { name: "Navigation", exact: true });
+    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Linen", exact: true })).toBeFocused();
+    for (const name of ["Minimal", "Quiet Studio", "Focus Canvas", "Open Studio", "Theme default", "Light"]) {
+      await page.keyboard.press("ArrowDown");
+      await expect(groupOf(name).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
+    }
     await page.keyboard.press("ArrowDown");
-    await expect(themeMenu.getByRole("menuitemradio", { name: "Dark", exact: true })).toBeFocused();
+    await expect(appearanceGroup.getByRole("menuitemradio", { name: "Dark", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "dark");
 
     await page.keyboard.press("Home");
-    await expect(themeMenu.getByRole("menuitemradio", { name: "Light", exact: true })).toBeFocused();
-    for (const name of ["Dark", "Dim", "High contrast", "Theme default", "Left", "Top"]) {
+    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Linen", exact: true })).toBeFocused();
+    for (const name of ["Minimal", "Quiet Studio", "Focus Canvas", "Open Studio", "Theme default", "Light", "Dark", "Dim", "High contrast"]) {
       await page.keyboard.press("ArrowDown");
-      await expect(themeMenu.getByRole("menuitemradio", { name, exact: true })).toBeFocused();
+      await expect(groupOf(name).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
     }
-    const top = themeMenu.getByRole("menuitemradio", { name: "Top", exact: true });
+    await page.keyboard.press("ArrowDown");
+    await expect(themeMenu.getByRole("menuitem", { name: "Follow system appearance", exact: true })).toBeFocused();
+    for (const name of ["Theme default", "Left", "Top"]) {
+      await page.keyboard.press("ArrowDown");
+      await expect(navigationGroup.getByRole("menuitemradio", { name, exact: true })).toBeFocused();
+    }
+    const top = navigationGroup.getByRole("menuitemradio", { name: "Top", exact: true });
     await expect(top).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(top).toHaveAttribute("aria-checked", "true");
@@ -362,17 +388,20 @@ test.describe("shell user menu", () => {
     expectHeaderToFit(await readShellGeometry(page), 320);
 
     await page.keyboard.press("m");
-    await expect(themeMenu.getByRole("menuitem", { name: "Meridian", exact: true })).toBeFocused();
+    await expect(themeMenu.getByRole("menuitemradio", { name: "Meridian", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "meridian");
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "meridian");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+    await page.keyboard.press("Escape");
     await expect(themeMenu).toBeHidden();
     await expect(themeTrigger).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(themeMenu.getByRole("menuitemradio", { name: "Light", exact: true })).toBeFocused();
+    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Linen", exact: true })).toBeFocused();
     await page.keyboard.press("c");
-    await expect(themeMenu.getByRole("menuitem", { name: "Classic", exact: true })).toBeFocused();
+    await expect(themeMenu.getByRole("menuitemradio", { name: "Classic", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "classic");
+    await page.keyboard.press("Escape");
     await expect(themeTrigger).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(account(page)).toBeFocused();
@@ -409,7 +438,7 @@ test.describe("shell user menu", () => {
     await openShell(page, { displayName: "Administrator", weaver: "dense" });
     const geometry = await readShellGeometry(page);
     await attachShellGeometry("dense-weaver-320", geometry, await page.screenshot());
-    const indicator = page.locator(".agent-session-indicator");
+    const indicator = page.locator(".weaver-session-indicator");
     await expect(indicator).toHaveAttribute("aria-label", "1 active or background Weaver sessions, 2 waiting, 1 blocked, 1 failed, 3 pending proposals, 2 pending artifacts, 1 pending prompts, 1 child sessions");
     expect(geometry.controls.weaver).not.toBeNull();
     expectHeaderToFit(geometry, 320);
@@ -427,8 +456,8 @@ test.describe("shell user menu", () => {
     await openShell(page, { account: false, appearance: false, weaver: true });
     await expect(page.locator(".user-menu-button")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Select theme" })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "GitHub" })).toHaveAttribute("href", "https://github.com/elsa-workflows/elsa-foundation-studio");
-    await expect(page.getByRole("link", { name: "Designer source" })).toHaveAttribute("href", "https://github.com/elsa-workflows/elsa-foundation-designer");
+    await expect(page.getByRole("link", { name: "GitHub" })).toHaveAttribute("href", "https://github.com/elsa-workflows/elsa-foundation");
+    await expect(page.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", "https://docs.elsaworkflows.io");
     expectHeaderToFit(await readShellGeometry(page), 320);
   });
 
@@ -489,4 +518,31 @@ test.describe("shell user menu", () => {
       }
     });
   }
+});
+
+
+test.describe("host branding resource links", () => {
+  test("uses configured help/privacy destinations and visible product name", async ({ page }) => {
+    await openShell(page, { branding: { productName: "Northstar Studio", subtitle: "Private workspace", helpUrl: "https://support.northstar.example/help", privacyUrl: "/privacy" } });
+    await expect(page.locator(".brand strong")).toHaveText("Northstar Studio");
+    await expect(page.getByRole("link", { name: "Help", exact: true })).toHaveAttribute("href", "https://support.northstar.example/help");
+    await expect(page.getByRole("link", { name: "Privacy", exact: true })).toHaveAttribute("href", "/privacy");
+    await expect(page.getByRole("link", { name: "GitHub", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Documentation", exact: true })).toHaveCount(0);
+  });
+
+  test("hides empty configured links while preserving keyboard access", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await openShell(page, { weaver: true, branding: { helpUrl: "", privacyUrl: "" } });
+    await expect(page.locator(".topbar-actions > a")).toHaveCount(0);
+    await page.locator(".weaver-launcher").focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Select theme", exact: true })).toBeFocused();
+    expectHeaderToFit(await readShellGeometry(page), 320);
+  });
+
+  test("hides rejected configured links instead of restoring product links", async ({ page }) => {
+    await openShell(page, { branding: { helpUrl: "javascript:alert(1)", privacyUrl: "//untrusted.example/privacy" } });
+    await expect(page.locator(".topbar-actions > a")).toHaveCount(0);
+  });
 });

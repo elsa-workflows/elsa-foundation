@@ -102,6 +102,49 @@ public sealed class StimulusRouterTests
     }
 
     [Fact]
+    public async Task Broadcast_targets_each_exact_wait_in_one_execution_with_the_compatible_parent_key()
+    {
+        var bookmarks = new InMemoryBookmarkStateStore();
+        await bookmarks.SaveAsync(Bookmark("wait-a", "same-execution"));
+        await bookmarks.SaveAsync(Bookmark("wait-b", "same-execution"));
+        var resumes = new RecordingResumeDispatcher();
+        var router = Router(new InMemoryWorkflowTriggerBindingStore(), bookmarks, new RecordingStartDispatcher(), resumes);
+        var request = new StimulusDispatchRequest(StimulusType, StimulusHash, mode: StimulusRoutingMode.ResumeOnly,
+            idempotencyKey: "publication") { ResumeAllMatchingBookmarks = true };
+        var result = await router.RouteAsync(request);
+        await router.RouteAsync(request);
+        Assert.Equal(2, result.ResumedCount);
+        Assert.Equal(new[] { "wait-a", "wait-b", "wait-a", "wait-b" }, resumes.Requests.Select(value => value.BookmarkId));
+        Assert.Equal("publication:resume:same-execution", Assert.Single(resumes.Requests.Select(value => value.IdempotencyKey).Distinct()));
+        Assert.Equal(resumes.Requests.Take(2).Select(value => value.IdempotencyKey), resumes.Requests.Skip(2).Select(value => value.IdempotencyKey));
+        await bookmarks.DeleteAsync("same-execution", "wait-a");
+        await router.RouteAsync(request);
+        Assert.Equal(resumes.Requests[1].IdempotencyKey, resumes.Requests[4].IdempotencyKey);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Broadcast_opt_in_keeps_correlation_and_local_target_filters(bool broadcast)
+    {
+        var bookmarks = new InMemoryBookmarkStateStore();
+        await bookmarks.SaveAsync(Bookmark("a", "local", "order"));
+        await bookmarks.SaveAsync(Bookmark("b", "local", "order"));
+        await bookmarks.SaveAsync(Bookmark("wrong-correlation", "local", "another"));
+        await bookmarks.SaveAsync(Bookmark("other-execution", "other", "order"));
+        var resumes = new RecordingResumeDispatcher();
+        var router = Router(new InMemoryWorkflowTriggerBindingStore(), bookmarks, new RecordingStartDispatcher(), resumes);
+        await router.RouteAsync(new StimulusDispatchRequest(StimulusType, StimulusHash,
+            correlationId: "order", mode: StimulusRoutingMode.ResumeOnly, targetWorkflowExecutionId: "local")
+            { ResumeAllMatchingBookmarks = broadcast });
+        Assert.All(resumes.Requests, request => Assert.Equal("local", request.WorkflowExecutionId));
+        if (broadcast)
+            Assert.Equal(new[] { "a", "b" }, resumes.Requests.Select(request => request.BookmarkId));
+        else
+            Assert.Null(Assert.Single(resumes.Requests).BookmarkId); // Existing instance route retains ambiguity handling.
+    }
+
+    [Fact]
     public async Task Route_StartAndResume_DoesBoth()
     {
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();

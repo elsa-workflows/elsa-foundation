@@ -1,0 +1,19 @@
+diff --git a/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeActivityInputSnapshotMaterializer.cs b/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeActivityInputSnapshotMaterializer.cs
+index 691f6852e..2fde717ab 100644
+--- a/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeActivityInputSnapshotMaterializer.cs
++++ b/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeActivityInputSnapshotMaterializer.cs
+@@ -27,6 +27,14 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
+     {
+         var inputMaterializer = serviceProvider.GetService<IRuntimeActivityInputMaterializer>()
+             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an input snapshot materializer.");
++        // PRIVATE PERFORMANCE EXPERIMENT ONLY: measured separately, then reverted.
++        if (inputMaterializer is RuntimeActivityInputMaterializer && executableNode.ActivityContract?.Inputs.Count == 0 && executableNode.InputBindings.Count == 0)
++            return await inputMaterializer.MaterializeSnapshotAsync(
++                executableNode,
++                state.InvocationId,
++                new RuntimeInputBindingResolutionContext(state.Execution.WorkflowExecutionId, state.InvocationId, state, executable: executable),
++                materializedAt,
++                cancellationToken);
+         var resolvedDurableValueStateStore = durableValueStateStore
+             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a durable value state store.");
+         var durableValues = await resolvedDurableValueStateStore.ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);

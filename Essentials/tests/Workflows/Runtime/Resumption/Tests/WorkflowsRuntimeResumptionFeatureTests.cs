@@ -85,6 +85,7 @@ public sealed class WorkflowsRuntimeResumptionFeatureTests
             OutboxBatchSize = 11,
             BacklogBatchSize = 12,
             RecoveryScanBatchSize = 13,
+            MaxConcurrentDispatches = 3,
             MaxExecutionsPerSweep = 14,
             LeaseTimeoutMinutes = 7,
             HeartbeatTimeoutMinutes = 8
@@ -98,6 +99,7 @@ public sealed class WorkflowsRuntimeResumptionFeatureTests
         Assert.Equal(12, options.BacklogBatchSize);
         Assert.Equal(13, options.RecoveryScanBatchSize);
         Assert.Equal(14, options.MaxExecutionsPerSweep);
+        Assert.Equal(3, options.MaxConcurrentDispatches);
         Assert.Equal(TimeSpan.FromMinutes(7), options.LeaseTimeout);
         Assert.Equal(TimeSpan.FromMinutes(8), options.HeartbeatTimeout);
     }

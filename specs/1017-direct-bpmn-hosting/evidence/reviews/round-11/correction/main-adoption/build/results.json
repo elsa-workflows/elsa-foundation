@@ -1,0 +1,25 @@
+[
+  {
+    "name": "browser-bundles",
+    "source": "7e51b512287bdc46adea639c29b9c9c5c048dcda",
+    "arguments": [
+      "pnpm",
+      "build"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 25.225986875011586
+  },
+  {
+    "name": "studio-host",
+    "source": "7e51b512287bdc46adea639c29b9c9c5c048dcda",
+    "arguments": [
+      "dotnet",
+      "build",
+      "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+      "-c",
+      "Release"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 6.934174333931878
+  }
+]

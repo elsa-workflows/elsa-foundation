@@ -43,7 +43,8 @@ export async function createBlankDraft(
       outputs: [],
       outcomes: choice.capability.requiredOutcomes.map(outcome => ({ ...outcome, description: outcome.description ?? null }))
     },
-    layout: implementation.layout
+    layout: implementation.layout,
+    ...(implementation.activityPresentation ? { activityPresentation: implementation.activityPresentation } : {})
   });
 }
 

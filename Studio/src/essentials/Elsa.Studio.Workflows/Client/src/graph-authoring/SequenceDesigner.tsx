@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
-import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Copy, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Copy, Plus, Power, Trash2 } from "lucide-react";
 import { renderActivityIcon } from "../activityIconView";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { activityDragDataType } from "../workflow-editor/constants";
@@ -10,6 +10,8 @@ import { ExecutionActivityPulse, ExecutionSequencePulse } from "../workflow-edit
 import { resolveNodeActivityVisual } from "../workflow-editor/workflowNodeVisual";
 import type { ChildSlot, WorkflowNodeData } from "../workflowAdapter";
 import "./sequenceDesigner.css";
+import { NodeCollectionActions } from "../workflow-editor/NodeSlotBadges";
+import type { CollectionSlotAction } from "../workflow-editor/contexts";
 
 export const sequenceNodeDragDataType = "application/x-elsa-sequence-node";
 
@@ -19,6 +21,7 @@ interface SequenceDesignerBaseProps {
   canvasRef: RefObject<HTMLDivElement | null>;
   onSelect(id: string | null): void;
   onOpenSlot?(ownerNodeId: string, ownerLabel: string, slot: ChildSlot): void;
+  onAddCollectionItem?: CollectionSlotAction;
   availabilityLookup?: WorkflowNodeAvailabilityLookup;
   children?: ReactNode;
 }
@@ -30,6 +33,7 @@ export interface ReadOnlySequenceDesignerProps extends SequenceDesignerBaseProps
   onMove?: never;
   onDelete?: never;
   onDuplicate?: never;
+  onSetWorkflowStart?: never;
 }
 
 interface SequenceDesignerEditProps {
@@ -38,6 +42,7 @@ interface SequenceDesignerEditProps {
   onMove(nodeId: string, boundaryIndex: number): void;
   onDelete(nodeId: string): void;
   onDuplicate?(nodeId: string): void;
+  onSetWorkflowStart?(nodeId: string, enabled: boolean): void;
 }
 
 export type EditableSequenceDesignerProps = SequenceDesignerBaseProps & SequenceDesignerEditProps & { readOnly?: false };
@@ -56,7 +61,9 @@ export function SequenceDesigner({
   onMove,
   onDelete,
   onDuplicate,
+  onSetWorkflowStart,
   onOpenSlot,
+  onAddCollectionItem,
   availabilityLookup,
   children
 }: SequenceDesignerProps) {
@@ -159,7 +166,9 @@ export function SequenceDesigner({
                   onMove={boundaryIndex => onMove?.(node.id, boundaryIndex)}
                   onDelete={() => onDelete?.(node.id)}
                   onDuplicate={onDuplicate ? () => onDuplicate(node.id) : undefined}
+                  onSetWorkflowStart={onSetWorkflowStart ? enabled => onSetWorkflowStart(node.id, enabled) : undefined}
                   onOpenSlot={onOpenSlot}
+                  onAddCollectionItem={readOnly ? undefined : onAddCollectionItem}
                   availabilityLookup={availabilityLookup}
                 />
                 {index < nodes.length - 1 ? (
@@ -190,7 +199,9 @@ function SequenceStep({
   onMove,
   onDelete,
   onDuplicate,
+  onSetWorkflowStart,
   onOpenSlot,
+  onAddCollectionItem,
   availabilityLookup
 }: {
   node: Node<WorkflowNodeData>;
@@ -204,13 +215,15 @@ function SequenceStep({
   onMove(boundaryIndex: number): void;
   onDelete(): void;
   onDuplicate?: () => void;
+  onSetWorkflowStart?: (enabled: boolean) => void;
   onOpenSlot?: SequenceDesignerProps["onOpenSlot"];
+  onAddCollectionItem?: CollectionSlotAction;
   availabilityLookup?: WorkflowNodeAvailabilityLookup;
 }) {
   const { data } = node;
   const { icon, fallback, tone } = resolveNodeActivityVisual(data);
   const availability = availabilityLookup?.({ activityVersionId: data.activityVersionId, activityTypeKey: data.activityTypeKey }) ?? null;
-  const availabilityLabel = availability ? `No longer available for new use · ${getAvailabilityStateLabel(availability.state)}` : null;
+  const availabilityLabel = data.ghost ? "Activity unavailable in this environment" : availability ? `No longer available for new use · ${getAvailabilityStateLabel(availability.state)}` : null;
   const activityType = shortTypeName(data.activityTypeKey ?? data.activityVersionId);
   const summary = data.summary?.trim() || data.description?.trim();
 
@@ -274,14 +287,13 @@ function SequenceStep({
           <span className="wf-sequence-title-row">
             <span className="wf-sequence-title">{data.label}</span>
             {availabilityLabel ? <span className="wf-sequence-availability" role="img" aria-label={availabilityLabel}><AlertTriangle size={14} aria-hidden="true" /></span> : null}
-            <span className="wf-sequence-ordinal" aria-label={`Step ${index + 1}`}>{index + 1}</span>
           </span>
           <span className="wf-sequence-type">{data.category || activityType}</span>
           {summary ? <span className="wf-sequence-summary">{summary}</span> : null}
         </span>
       </button>
 
-      {data.childSlots.length ? (
+      {data.childSlots.length || (!readOnly && data.collectionSlots?.length) ? (
         <div className="wf-sequence-slots" aria-label={`${data.label} child slots`}>
           {data.childSlots.map(slot => (
             <button
@@ -296,6 +308,7 @@ function SequenceStep({
               <span className="wf-sequence-slot-summary">{slotSummary(slot)}<ChevronRight size={14} aria-hidden="true" /></span>
             </button>
           ))}
+          {!readOnly ? <NodeCollectionActions ownerNodeId={node.id} collections={data.collectionSlots} onAdd={onAddCollectionItem} className="wf-sequence-slot" /> : null}
         </div>
       ) : null}
 
@@ -309,6 +322,13 @@ function SequenceStep({
           <button type="button" aria-label={`Move ${data.label} down`} title="Move down" disabled={index === listSize - 1} onClick={() => onMove(index + 2)}>
             <ArrowDown size={15} aria-hidden="true" />
           </button>
+          {onSetWorkflowStart && data.workflowStartEnabled !== undefined ? <button
+            type="button"
+            aria-label={`Start new workflows from ${data.label}`}
+            aria-pressed={data.workflowStartEnabled}
+            title={data.workflowStartEnabled ? "Disable workflow start" : "Enable workflow start"}
+            onClick={() => onSetWorkflowStart(!data.workflowStartEnabled)}
+          ><Power size={15} aria-hidden="true" /></button> : null}
           {onDuplicate ? <button type="button" aria-label={`Duplicate ${data.label}`} title="Duplicate" onClick={onDuplicate}><Copy size={15} aria-hidden="true" /></button> : null}
           <button type="button" aria-label={`Delete ${data.label}`} title="Delete" onClick={onDelete}><Trash2 size={15} aria-hidden="true" /></button>
         </div>

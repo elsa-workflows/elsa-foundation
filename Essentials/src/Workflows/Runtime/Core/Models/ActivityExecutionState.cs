@@ -51,7 +51,40 @@ public sealed record ActivityExecutionState(
     string? SupersededByActivityExecutionId = null,
     DateTimeOffset? SupersededAt = null)
 {
+    /// <summary>
+    /// The value-flow document version. A document of version
+    /// <see cref="ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey"/> is read as the current version: its only
+    /// difference, the completion's single outcome key, is read as a named selection by <see cref="ActivityCompletion"/>
+    /// (spec 1208 FR-025), and the next write stores the current shape.
+    /// </summary>
+    public int DocumentVersion { get; init; } = DocumentVersion == ActivityExecutionValueFlowDocumentVersions.SingleOutcomeKey
+        ? ActivityExecutionValueFlowDocumentVersions.Current
+        : DocumentVersion;
+
     public string InvocationId => Execution.ActivityExecutionId;
+
+    /// <summary>
+    /// The logical invocation identity (ADR 0092 decision 8, amended 2026-11-16): the first attempt's row id for a row
+    /// that continues an earlier attempt (an operator retry), otherwise this row's own id. <see cref="InvocationId"/>
+    /// stays the row key that lineage, inspection and scheduling use; activity code that needs one identity across
+    /// retries reads this, or <see cref="OperationKey"/>.
+    /// </summary>
+    [JsonIgnore]
+    public string LogicalInvocationId => NonBlank((Attempt ?? Provenance.Attempt)?.FirstAttemptActivityExecutionId) ?? InvocationId;
+
+    /// <summary>The assigned logical effect key, then first-attempt identity, then this invocation identity.</summary>
+    [JsonIgnore]
+    public string OperationKey => AssignedOperationKey(Constants.RuntimeMetadataKeys.OperationKey)
+        ?? NonBlank((Attempt ?? Provenance.Attempt)?.FirstAttemptActivityExecutionId) ?? InvocationId;
+
+    /// <summary>The forward operation this occurrence acts on, when its structural parent assigned one.</summary>
+    [JsonIgnore]
+    public string? TargetOperationKey => AssignedOperationKey(Constants.RuntimeMetadataKeys.TargetOperationKey);
+
+    private string? AssignedOperationKey(string key) =>
+        NonBlank(Provenance.Metadata.GetValueOrDefault(key)) ?? NonBlank(Metadata.GetValueOrDefault(key));
+
+    private static string? NonBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     /// <summary>
     /// The enclosing hierarchy scope that contains this activity when the activity opens its own scope.
@@ -72,6 +105,121 @@ public sealed record ActivityExecutionState(
 
     /// <summary>Typed scheduler-carried values used to activate <see cref="IterationVariableFrame"/>.</summary>
     public LoopIterationScopeRequest? IterationFrameRequest { get; init; }
+
+    /// <summary>Last root control emission committed with this invocation's structural continuation.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeChildControlBatch? ProducedControl { get; init; }
+
+    /// <summary>Source commit of the current nonterminal batch; committed atomically with its one outbox responsibility.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProducedControlSourceCommitId { get; init; }
+
+    /// <summary>Optional exact-source control transported with an ordinary waited dispatch completion.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeChildControlTransport? ChildControl { get; init; }
+
+    /// <summary>Exact-call ordered acceptance; absent on ordinary and legacy invocations.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeChildControlInbox? ChildControlInbox { get; init; }
+
+    /// <summary>
+    /// The write history of this invocation's variable writes (spec 1221 FR-024): one record per applied write and per
+    /// lost update, committed with the write. Absent when the invocation wrote no variable and on legacy invocations.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<VariableWriteRecord>? VariableWrites { get; init; }
+
+    /// <summary>
+    /// The bases this invocation's own applied writes advanced (spec 1231 FR-010, ADR 0092 decision 4): one entry per
+    /// variable, at the version its latest own write produced. Persisted with the invocation, so a session write on
+    /// suspension and a capture on completion do not conflict, and restored on resume. Absent until the invocation
+    /// writes a variable.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<VariableReadSetEntry>? OwnVariableBases { get; init; }
+
+    /// <summary>
+    /// The reads this invocation's steps made through their variable session (spec 1231 FR-007), per attempt, with the
+    /// variable's protection policy. Inspection data only: a session read gives a base to its own attempt's writes and
+    /// is never carried to a new attempt or across a suspension.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<VariableSessionRead>? SessionReads { get; init; }
+
+    /// <summary>Appends session reads to this invocation's inspection record of them.</summary>
+    public ActivityExecutionState WithSessionReads(IReadOnlyCollection<VariableSessionRead> reads)
+    {
+        ArgumentNullException.ThrowIfNull(reads);
+        return reads.Count == 0
+            ? this
+            : this with { SessionReads = [.. SessionReads ?? [], .. reads] };
+    }
+
+    /// <summary>
+    /// The completion a <c>Fault</c> lost update refused (spec 1221 FR-017): the body succeeded, but its commit did not
+    /// apply. Kept on the faulted invocation so an operator can accept it without running the body again. Absent on
+    /// every other invocation.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RecordedActivityCompletion? RecordedCompletion { get; init; }
+
+    /// <summary>
+    /// The input snapshots a background admission refresh superseded (spec 1221 FR-020), oldest first, each linked to
+    /// the evaluation that replaced it and the variables that changed. Absent when the inputs were never refreshed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityInputRefresh>? InputRefreshes { get; init; }
+
+    /// <summary>
+    /// One stamp per lifecycle transition of this invocation (started, suspended, resumed, completed, faulted,
+    /// cancelled, superseded), each with the instance commit sequence that committed it (spec 1221 FR-024), so writes
+    /// and transitions share one order. Stamped by the checkpoint committer; absent on older records.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityLifecycleStamp>? Transitions { get; init; }
+
+    /// <summary>
+    /// The lowest and highest commit sequence over this row's transitions and write records (spec 1221 FR-024), kept by
+    /// the committer so a reader can page the instance's history by commit order. Absent when nothing on the row is
+    /// numbered.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? FirstCommitSequence { get; init; }
+
+    /// <inheritdoc cref="FirstCommitSequence"/>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? LastCommitSequence { get; init; }
+
+    /// <summary>
+    /// The number of lost-update warnings among this row's <see cref="VariableWrites"/> (spec 1229 FR-009, Q7), set when
+    /// the row is committed so the instance details can sum it from a store column without reading row documents.
+    /// Absent when the row recorded none, and on older records.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LostUpdateWarningCount { get; init; }
+
+    /// <summary>The lost-update warnings counted from <see cref="VariableWrites"/>, or null when there are none.</summary>
+    public static int? CountLostUpdateWarnings(IReadOnlyList<VariableWriteRecord>? records)
+    {
+        var count = records?.Count(record => record.Outcome == VariableCommitOutcome.LostUpdateWarning) ?? 0;
+        return count == 0 ? null : count;
+    }
+
+    /// <summary>Returns this row with <see cref="LostUpdateWarningCount"/> matching its write records.</summary>
+    public ActivityExecutionState WithLostUpdateWarningCount()
+    {
+        var count = CountLostUpdateWarnings(VariableWrites);
+        return count == LostUpdateWarningCount ? this : this with { LostUpdateWarningCount = count };
+    }
+
+    /// <summary>Appends write-history records to this invocation.</summary>
+    public ActivityExecutionState WithVariableWrites(IReadOnlyCollection<VariableWriteRecord> records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        return records.Count == 0
+            ? this
+            : this with { VariableWrites = [.. VariableWrites ?? [], .. records] };
+    }
 
     public void EnsureValueFlowCompatible()
     {

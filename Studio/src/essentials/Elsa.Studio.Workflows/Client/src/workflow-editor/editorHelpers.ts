@@ -1,7 +1,8 @@
+import { sha256Hex } from "../sha256";
 import type { Node } from "@xyflow/react";
 import { createHttpStarterState } from "./httpWorkflowStarter";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import type { CreateDefinitionRequest, ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { ChildSlot } from "../workflowAdapter";
 import { createActivityNode, flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
 import { shortTypeName } from "../workflowFormatting";
@@ -554,8 +555,29 @@ export function getDraftSignature(draft: WorkflowDraft) {
   });
 }
 
+/** A fast 32-bit hash of the working state, for change detection only. It is not a binding identity. */
 export function getDraftRevision(draft: WorkflowDraft) {
   return hashString(getDraftSignature(draft));
+}
+
+// Keyed by the exact canonical signature, never by object identity, so a draft object changed in place can never be
+// answered with a stale revision. A few recent entries cover the bridge, the applier and the reducer for one change.
+const contentRevisions = new Map<string, string>();
+
+/**
+ * The collision-resistant content revision of a working state (spec 1193 FR-008): SHA-256 over the same canonical
+ * signature the change detection uses. Weaver context, batch binding, compare-and-replace and receipts use this, so two
+ * different working states can never pass a comparison by sharing a 32-bit hash.
+ */
+export function getDraftContentRevision(draft: WorkflowDraft) {
+  const signature = getDraftSignature(draft);
+  let revision = contentRevisions.get(signature);
+  if (!revision) {
+    revision = `sha256:${sha256Hex(signature)}`;
+    if (contentRevisions.size >= 8) contentRevisions.delete(contentRevisions.keys().next().value!);
+    contentRevisions.set(signature, revision);
+  }
+  return revision;
 }
 
 // Resolves a child activity's friendly name from the catalog, falling back to a short type name and
@@ -612,6 +634,36 @@ export function collectWorkflowContextActivities(
   return result;
 }
 
+/** One activity's place in the tree as Weaver context discloses it (spec 1193 FR-014): its exact version, parent, slot and slots. */
+export interface WorkflowContextStructure {
+  activityVersionId: string;
+  parentId: string | null;
+  slot: string | null;
+  slots: Array<{ id: string; mode: ChildSlot["mode"]; cardinality: ChildSlot["cardinality"] }>;
+}
+
+/** The containment structure of every activity, keyed by node id, by the same slot resolution the designer renders. */
+export function collectWorkflowContextStructure(
+  activity: ActivityNode | null | undefined,
+  catalogByVersion: Map<string, ActivityCatalogItem>,
+  result: Map<string, WorkflowContextStructure> = new Map(),
+  parentId: string | null = null,
+  slotId: string | null = null
+) {
+  if (!activity) return result;
+  const slots = getChildSlots(activity, catalogByVersion);
+  result.set(activity.nodeId, {
+    activityVersionId: activity.activityVersionId,
+    parentId,
+    slot: slotId,
+    slots: slots.map(slot => ({ id: slot.id, mode: slot.mode, cardinality: slot.cardinality }))
+  });
+  for (const slot of slots) {
+    for (const child of slot.activities) collectWorkflowContextStructure(child, catalogByVersion, result, activity.nodeId, slot.id);
+  }
+  return result;
+}
+
 export function collectWorkflowContextConnections(
   activity: ActivityNode | null | undefined,
   catalogByVersion?: Map<string, ActivityCatalogItem>,
@@ -620,7 +672,7 @@ export function collectWorkflowContextConnections(
   if (!activity) return result;
 
   // flowchartEdges decodes the flowchart structure payload into source/target edges; reuse it so the
-  // agent sees the same wiring the designer renders.
+  // Weaver sees the same wiring the designer renders.
   for (const edge of flowchartEdges(activity)) {
     result.push({ source: edge.source, target: edge.target, sourcePort: edge.sourceHandle ?? undefined, targetPort: edge.targetHandle ?? undefined });
   }
@@ -656,7 +708,7 @@ function hashString(value: string) {
 }
 
 export function isRejectedTestRun(testRun: WorkflowTestRunView) {
-  return testRun.status.toLowerCase() === "rejected";
+  return ["rejected", "dispatchrejected"].includes(testRun.status.toLowerCase());
 }
 
 export function formatWorkflowVersionLoadError(error: string) {
@@ -690,4 +742,10 @@ function isNotFoundError(error: unknown, message: string) {
   } catch {
     return /not found/i.test(message);
   }
+}
+
+
+export function getCreateInitialDocument(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]): Pick<CreateDefinitionRequest, "initialState" | "layout" | "activityPresentation"> {
+  if (draft.templateContent) return { initialState: structuredClone(draft.templateContent.state), layout: structuredClone(draft.templateContent.layout), activityPresentation: structuredClone(draft.templateContent.activityPresentation ?? []) };
+  return { initialState: getCreateInitialState(draft, activities) };
 }

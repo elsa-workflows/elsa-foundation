@@ -42,6 +42,25 @@ public sealed record ActivityNode(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public ActivityExecutionPlacement ExecutionPlacement { get; init; }
+
+    /// <summary>
+    /// The per-node lost-update setting (spec 1221 FR-012): <see cref="Primitives.Models.LostUpdateMode.Fault"/> opts this
+    /// node in to strict read-modify-write. The default is omitted to preserve existing authored JSON. A node whose activity
+    /// type declares <c>Fault</c> stays <c>Fault</c>. Engineers set it through the design API; the workflow designer does
+    /// not offer it to authors (ADR 0092 decision 6).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public LostUpdateMode LostUpdateMode { get; init; }
+
+    /// <summary>
+    /// Turns off the background admission refresh for this node (spec 1221 FR-019): when a variable its inputs read
+    /// changed between Start and admission, the worker runs on the inputs Start read, and the stale base meets the
+    /// commit rule (a warning by default, a fault under <c>Fault</c>). Applies to background placement only; the default
+    /// (refresh on) is omitted to preserve existing authored JSON. Set by engineers through the design API; the workflow
+    /// designer does not offer it to authors (ADR 0092 decisions 6 and 9).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool DisableBackgroundInputRefresh { get; init; }
 }
 
 /// <summary>
@@ -103,7 +122,22 @@ public enum AuthoredWorkflowIntrinsicKind
 public sealed record ActivityChildProjection(
     string Name,
     IEnumerable<ActivityNode> Activities
-);
+)
+{
+    /// <summary>Structure-owned outcome declarations for individual child invocations.</summary>
+    public IReadOnlyCollection<ActivityChildOutcomeProjection> OutcomeProjections { get; init; } = [];
+}
+
+/// <summary>
+/// Additional outcomes owned by a child's structural relationships. Publication applies these only
+/// when the child's resolved activity type matches <see cref="ActivityTypeKey"/>. An optional literal
+/// input can also declare a fixed outcome; expression results remain constrained to the pinned names.
+/// </summary>
+public sealed record ActivityChildOutcomeProjection(
+    string NodeId,
+    string ActivityTypeKey,
+    IReadOnlyCollection<string> OutcomeNames,
+    string? LiteralOutcomeInputKey = null);
 
 /// <summary>
 /// Disclosure-safe public-contract usage contributed by an activity-owned structure for one child.

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Expressions.Core.Models;
@@ -7,6 +8,9 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Background;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -41,7 +45,10 @@ public sealed record ActivityTemplatePlacement(
     ExecutableNode Root,
     IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets,
     ExecutableLayoutSidecar LayoutSidecar,
-    IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement> RuntimeRequirements);
+    IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement> RuntimeRequirements)
+{
+    public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 /// <summary>
 /// Iteratively expands exact immutable templates under canonical invocation origins. Every placed
@@ -54,12 +61,171 @@ public sealed class ActivityTemplatePlacer(
     IActivityPlacementHasher placementHasher,
     IActivityStructureService activityStructureService,
     RuntimeInputBindingCompiler inputBindingCompiler,
-    RuntimeOutputCaptureCompiler outputCaptureCompiler)
+    RuntimeOutputCaptureCompiler outputCaptureCompiler,
+    IWellKnownTypeRegistry? typeRegistry = null,
+    Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null)
 {
     private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
+
+    /// <summary>
+    /// Keeps the constructor shape from before the placer gained its type registry
+    /// (adding an optional parameter is binary-breaking, review checklist §E5). Without the registry, background
+    /// template nodes are checked from their pinned contract; admission and the worker check their CLR type.
+    /// </summary>
+    public ActivityTemplatePlacer(
+        IActivityDefinitionVersionPublicationStore publications,
+        IExecutableActivityTemplateReader templates,
+        IWorkflowExecutableSourceReferenceReader sourceReferences,
+        IActivityPlacementHasher placementHasher,
+        IActivityStructureService activityStructureService,
+        RuntimeInputBindingCompiler inputBindingCompiler,
+        RuntimeOutputCaptureCompiler outputCaptureCompiler)
+        : this(publications, templates, sourceReferences, placementHasher, activityStructureService, inputBindingCompiler, outputCaptureCompiler, null)
+    {
+    }
+
+    internal static ActivityTemplateDataSelectionFacts DescribeTemplateDataSelectionFacts(
+        ExecutableNode root,
+        IEnumerable<string> publicRequestNames,
+        Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionDocument? source,
+        IActivityStructureService? structures)
+    {
+        var declarations = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
+        if (source is not null)
+        {
+            var closed = IsClosedScope(root.Descriptor);
+            declarations[closed ? root.ExecutableNodeId : VariableReference.WorkflowScopeId] = source.Variables.Select(x => x.ReferenceKey).ToArray();
+            if (closed && (root.ActivityContract is null ||
+                           !SameKeys(source.Inputs.Select(x => x.ReferenceKey), root.ActivityContract.Inputs.Keys)))
+                throw Rejected(root.AuthoredActivityId, "ActivityDataSelection/InputDeclarationMismatch", "The compiled closed body does not preserve its actual public input declarations.");
+        }
+        return DescribeDataSelectionFacts(root, publicRequestNames, declarations, source?.RootActivity, structures);
+    }
+
+    /// <summary>Projects read admission facts using the same contracts that placement/runtime scopes own.</summary>
+    /// <remarks>
+    /// A boundary consumes caller names and variables; only its descendants enter its closed body.
+    /// Canonical compiled structure variables are written by ExecutableNodeCompiler. Authored declarations,
+    /// when supplied, are projected through their actual handler and checked against that compiled contract.
+    /// </remarks>
+    internal static ActivityTemplateDataSelectionFacts DescribeDataSelectionFacts(
+        ExecutableNode root,
+        IEnumerable<string> outerRequestMembers,
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>>? outerVariableDeclarations = null,
+        ActivityNode? authoredRoot = null,
+        IActivityStructureService? structures = null,
+        bool outerRequestIsOpen = false)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(outerRequestMembers);
+        var declarations = (outerVariableDeclarations ?? new Dictionary<string, IReadOnlyCollection<string>>())
+            .ToDictionary(x => x.Key, x => (IReadOnlyCollection<string>)x.Value.ToArray(), StringComparer.Ordinal);
+        var visible = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
+        var requests = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
+        var authored = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
+        var openRequests = new HashSet<string>(StringComparer.Ordinal);
+        if (authoredRoot is not null && structures is not null)
+        {
+            var pending = new Stack<ActivityNode>();
+            pending.Push(authoredRoot);
+            while (pending.TryPop(out var current))
+            {
+                if (!authored.TryAdd(current.NodeId, structures.ProjectScopedVariables(current).Select(x => x.ReferenceKey).ToArray()))
+                    throw Rejected(current.NodeId, "ActivityDataSelection/VariableScopeAmbiguous", "The authored variable scope is not unique.");
+                foreach (var child in structures.ProjectChildren(current).SelectMany(x => x.Activities))
+                    pending.Push(child);
+            }
+        }
+
+        var initialScopes = declarations.ContainsKey(VariableReference.WorkflowScopeId) ? new[] { VariableReference.WorkflowScopeId } : [];
+        var work = new Stack<(ExecutableNode Node, IReadOnlyCollection<string> Requests, IReadOnlyCollection<string> Scopes, bool InClosedBody, bool RequestIsOpen)>();
+        work.Push((root, outerRequestMembers.ToArray(), initialScopes, false, outerRequestIsOpen));
+        while (work.TryPop(out var current))
+        {
+            var node = current.Node;
+            if (!visible.TryAdd(node.ExecutableNodeId, current.Scopes.ToArray()) ||
+                !requests.TryAdd(node.ExecutableNodeId, current.Requests.ToArray()))
+                throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/ConsumerAmbiguous", "The compiled consumer identity is not unique.");
+
+            if (current.RequestIsOpen) openRequests.Add(node.ExecutableNodeId);
+            var childRequestIsOpen = current.RequestIsOpen;
+            var childRequests = current.Requests;
+            IReadOnlyCollection<string> childScopes = current.Scopes;
+            var inClosedBody = current.InClosedBody;
+            if (IsClosedScope(node.Descriptor))
+            {
+                var keys = ReadGraphVariables(node.Descriptor).Select(x => x.ReferenceKey).ToArray();
+                AddDeclaration(node.ExecutableNodeId, keys, node.AuthoredActivityId);
+                if (node.ActivityContract is null)
+                    throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/InputDeclarationUnavailable", "The closed boundary has no pinned input contract.");
+                childRequests = node.ActivityContract.Inputs.Keys.ToArray();
+                childRequestIsOpen = false;
+                childScopes = [node.ExecutableNodeId];
+                inClosedBody = true;
+                // Before placement, the graph owner uses its explicit template-local graph scope.
+                // The existing remapper turns exactly these identities into the placed boundary ID.
+                if (!node.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityExecutionScope, out var model) ||
+                    model != RuntimeMetadataKeys.ActivityExecutionScopeClosed)
+                {
+                    AddDeclaration(VariableReference.WorkflowScopeId, keys, node.AuthoredActivityId);
+                    AddDeclaration(PlacedReferenceRemapper.LegacyGraphScopeId, keys, node.AuthoredActivityId);
+                    childScopes = [node.ExecutableNodeId, VariableReference.WorkflowScopeId, PlacedReferenceRemapper.LegacyGraphScopeId];
+                }
+            }
+
+            var scoped = ReadCompiledVariableKeys(node);
+            if (!current.InClosedBody && !IsClosedScope(node.Descriptor) && authored.TryGetValue(node.AuthoredActivityId, out var actual))
+            {
+                if (!SameKeys(actual, scoped))
+                    throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/VariableDeclarationMismatch", "The compiled scope does not preserve its actual authored declarations.");
+                scoped = actual;
+            }
+            if (scoped.Count != 0)
+            {
+                AddDeclaration(node.ExecutableNodeId, scoped, node.AuthoredActivityId);
+                childScopes = new[] { node.ExecutableNodeId }.Concat(childScopes).Distinct(StringComparer.Ordinal).ToArray();
+            }
+            foreach (var child in node.ChildSlots.SelectMany(x => x.Activities).Reverse())
+                work.Push((child, childRequests, childScopes, inClosedBody, childRequestIsOpen));
+        }
+        return new(new ReadOnlyDictionary<string, IReadOnlyCollection<string>>(declarations),
+            new ReadOnlyDictionary<string, IReadOnlyCollection<string>>(visible),
+            new ReadOnlyDictionary<string, IReadOnlyCollection<string>>(requests), openRequests);
+
+        void AddDeclaration(string scope, IReadOnlyCollection<string> keys, string origin)
+        {
+            if (declarations.TryGetValue(scope, out var existing) && !SameKeys(existing, keys))
+                throw Rejected(origin, "ActivityDataSelection/VariableScopeAmbiguous", "The same scope identity has different owner declarations.");
+            declarations[scope] = keys.ToArray();
+        }
+    }
+
+    private static IReadOnlyCollection<string> ReadCompiledVariableKeys(ExecutableNode node)
+    {
+        if (node.Structure?.Payload.ValueKind != JsonValueKind.Object ||
+            !node.Structure.Payload.TryGetProperty("variables", out var value) || value.ValueKind == JsonValueKind.Null)
+            return [];
+        try
+        {
+            // This exact field is the Publishing-owned RuntimeVariableDeclaration contract written by
+            // ExecutableNodeCompiler.CompileStructure, not an activity-specific JSON variables search.
+            return (value.Deserialize<RuntimeVariableDeclaration[]>(DescriptorPayloadSerializer.Options)
+                    ?? throw new JsonException()).Select(x => x.VariableKey).ToArray();
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException)
+        {
+            throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/VariableDeclarationUnavailable", "The compiled variable declarations do not match their owned contract.");
+        }
+    }
+
+    private static bool SameKeys(IEnumerable<string> left, IEnumerable<string> right) =>
+        left.Order(StringComparer.Ordinal).SequenceEqual(right.Order(StringComparer.Ordinal), StringComparer.Ordinal);
+
+    private static Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionRejectedException Rejected(string origin, string type, string message) =>
+        new([new($"{origin}/variables", type, message)]);
 
     public async ValueTask<ActivityTemplatePlacement> PlaceAsync(
         ActivityTemplatePlacementRequest request,
@@ -126,7 +292,7 @@ public sealed class ActivityTemplatePlacer(
             result.Root,
             result.ResumeTargets,
             new(result.LayoutSegments),
-            result.RuntimeRequirements);
+            result.RuntimeRequirements) { ActivityPresentation = result.ActivityPresentation };
     }
 
     private PlacementBuild BuildPlacement(
@@ -213,9 +379,10 @@ public sealed class ActivityTemplatePlacer(
                     current.Node.ActivityContract,
                     descriptor,
                     frame.ActivityTypeKey,
-                    frame.Publication.Version)
+                    frame.Publication.Version,
+                    frame.OccurrenceOverlay?.InputContracts, frame.OccurrenceOverlay?.Structure)
                 : current.Node.ActivityContract;
-            placedNodes[current.Node.ExecutableNodeId] = new(
+            var placed = new ExecutableNode(
                 nodeIds[current.Node.ExecutableNodeId],
                 isBoundary && stackIsRoot(frame) ? rootRequest.InvocationOrigin.Segments.LastOrDefault(x => x.Kind == ActivityInvocationOriginSegmentKind.AuthoredNode)?.Id ?? current.Node.AuthoredActivityId : current.Node.AuthoredActivityId,
                 isBoundary ? frame.ActivityTypeKey : current.Node.ActivityType,
@@ -232,6 +399,14 @@ public sealed class ActivityTemplatePlacer(
                 activityContract,
                 current.Node.IntrinsicKind,
                 current.Node.IntrinsicVariable);
+            // FR-012 (spec 1230): a background node a template provider compiled itself passes the same publication
+            // check as an authored one before it reaches a pinned executable. The check reads the node as it is pinned:
+            // the occurrence's bindings, stamped contract and overlay structure. A source-owned occurrence's template
+            // root is the authored node itself, so being a frame's root does not make a node a reusable boundary;
+            // an authored node that references a reusable definition is refused by the workflow compiler.
+            if (placed.ExecutionPlacement == ActivityExecutionPlacement.Background)
+                EnsureTemplateNodeBackgroundEligible(placed);
+            placedNodes[current.Node.ExecutableNodeId] = placed;
         }
 
         var resumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
@@ -266,6 +441,20 @@ public sealed class ActivityTemplatePlacer(
             frame.Children.Select(x => x.Origin).ToArray()));
         layoutSegments.AddRange(frame.Children.SelectMany(x => x.LayoutSegments));
 
+        // Only this exact template's identities may be mapped. Unknown authored metadata must
+        // never fall through to an outer node or another invocation of the same template.
+        var presentationIdentities = new Dictionary<string, string>(nodeIds, StringComparer.Ordinal);
+        foreach (var child in frame.Children)
+            if (child.OccurrenceId is not null)
+                presentationIdentities[child.OccurrenceId] = child.Root.ExecutableNodeId;
+        var presentation = frame.Children.SelectMany(child => child.ActivityPresentation)
+            .Concat(frame.SourceReference.ActivityPresentation
+                .Where(record => presentationIdentities.ContainsKey(record.ExecutableNodeId))
+                .Select(record => record with { ExecutableNodeId = presentationIdentities[record.ExecutableNodeId] }))
+            .GroupBy(record => record.ExecutableNodeId, StringComparer.Ordinal)
+            .Select(group => group.Last())
+            .ToArray();
+
         var requirements = frame.Template.RuntimeRequirements
             .Concat(frame.Children.SelectMany(x => x.RuntimeRequirements))
             .Distinct()
@@ -282,7 +471,8 @@ public sealed class ActivityTemplatePlacer(
             frame.ParentOccurrenceId,
             frame.ChildSlotName,
             frame.ChildIndex,
-            frame.OccurrenceOverlay);
+            frame.OccurrenceOverlay,
+            presentation);
 
         static bool stackIsRoot(PlacementFrame candidate) => candidate.OccurrenceId is null;
     }
@@ -356,6 +546,17 @@ public sealed class ActivityTemplatePlacer(
             .ThenBy(x => x.ChildIndex)
             .Select(x => rebuilt[x.OccurrenceId!])
             .ToArray();
+    }
+
+    private void EnsureTemplateNodeBackgroundEligible(ExecutableNode node)
+    {
+        var subject = typeRegistry is null
+            ? BackgroundEligibilitySubject.ForPinnedNode(node, activityType: null)
+            : BackgroundEligibilitySubject.ForPinnedNode(node, typeRegistry);
+        // A publishing shell need not host the runtime types a template provider pins (an agent designed without the
+        // agent runtime): what the contract shows is checked here, the CLR-type criteria at admission and on the worker.
+        if (BackgroundEligibility.CheckPublication(subject with { TypeCheckedAtRunTime = subject.ActivityType is null }) is { } refusal)
+            throw new InvalidOperationException(refusal.Message);
     }
 
     // A closed-scope body node's authored outputs capture into the graph's own variables.
@@ -440,7 +641,9 @@ public sealed class ActivityTemplatePlacer(
         Elsa.Activities.Runtime.Core.Models.ActivityContract? contract,
         RuntimeActivityDescriptor descriptor,
         string activityTypeKey,
-        string activityVersion)
+        string activityVersion,
+        IReadOnlyList<ActivityInputContract>? inputContracts = null,
+        ExecutableActivityStructure? structure = null)
     {
         if (contract is null)
             return null;
@@ -450,11 +653,14 @@ public sealed class ActivityTemplatePlacer(
             activityVersion,
             contract.DescriptorKind,
             descriptor.Payload,
-            contract.Inputs.Values,
+            inputContracts ?? contract.Inputs.Values.ToArray(),
             contract.Result,
-            contract.Outcomes,
+            inputContracts is null ? contract.Outcomes : contract.Outcomes.Union(ExecutableNodeCompiler.StructureOutcomes(structure), StringComparer.Ordinal).ToArray(),
             contract.Activation,
-            contract.SideEffectProfile);
+            contract.SideEffectProfile,
+            // Spec 1230: keep the type's background declaration, or a background leaf placed as an occurrence root
+            // would be pinned as not background-safe and refused at admission.
+            contract.SupportsBackgroundExecution);
     }
 
     private static ExecutableNode CloneWithChildSlots(
@@ -497,28 +703,62 @@ public sealed class ActivityTemplatePlacer(
         // An occurrence inside a reusable activity is authored like any node, so the same secret refusals apply
         // to it against its template root's activity kind and type.
         inputBindingCompiler.EnsureSecretBindingsAdmissible(frame.OccurrenceId!, templateRoot.Descriptor, inputStates);
-        return inputBindingCompiler.CompileAll(frame.OccurrenceId!, contract.Inputs.Values, inputStates);
+        return MarkScriptReads(inputBindingCompiler.CompileAll(frame.OccurrenceId!, overlay.InputContracts ?? contract.Inputs.Values.ToArray(), inputStates));
+    }
+
+    /// <summary>
+    /// An occurrence's inputs are compiled here, without the authored scopes publish pins against, so a script that
+    /// reads variables gets the fallback marker with no candidate list: every read it makes, literal or computed, is
+    /// served and recorded by the run-time lookup over the variables visible to the occurrence (spec 1222 FR-008, FR-010).
+    /// </summary>
+    private IReadOnlyDictionary<string, RuntimeInputBinding> MarkScriptReads(IReadOnlyDictionary<string, RuntimeInputBinding> bindings)
+    {
+        if (scriptVariableReadResolver is null)
+            return bindings;
+
+        var marked = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        foreach (var (key, binding) in bindings)
+        {
+            if (binding.Expression is not { VariableReadFallback: null } expression ||
+                !scriptVariableReadResolver.Supports(expression.Language) ||
+                scriptVariableReadResolver.Analyze(expression.Language, expression.Expression) is not { ReadsVariables: true })
+            {
+                marked[key] = binding;
+                continue;
+            }
+
+            marked[key] = new RuntimeInputBinding(
+                binding.InputName,
+                binding.TargetType,
+                binding.EffectivePolicy,
+                binding.Source,
+                binding.Selection,
+                binding.Literal,
+                binding.WorkflowRequest,
+                binding.Variable,
+                binding.ActivityResult,
+                new RuntimeExpressionBinding(
+                    expression.Language,
+                    expression.Expression,
+                    expression.ResultType,
+                    expression.Metadata,
+                    expression.Parameters,
+                    expression.Options,
+                    expression.CapabilityProfile,
+                    expression.ParameterConversionPlans,
+                    new VariableReadFallback([])),
+                binding.Metadata,
+                binding.ConversionPlan,
+                binding.ConversionRequest,
+                binding.Secret);
+        }
+
+        return marked;
     }
 
     // Studio picks a graph input as Input {referenceKey}. Inside a closed-scope body the request is the
     // graph's own inputs, keyed by reference key, so the pick is a request read of that key.
-    private static ArgumentState ToGraphInputRead(ArgumentState state)
-    {
-        if (!StringComparer.OrdinalIgnoreCase.Equals(state.Value.ExpressionType, "Input"))
-            return state;
-        var value = state.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(state.Value.Value);
-        if (value.ValueKind != JsonValueKind.Object ||
-            !value.TryGetProperty("referenceKey", out var referenceKey) ||
-            referenceKey.ValueKind != JsonValueKind.String)
-            return state;
-
-        return state with
-        {
-            Value = new ArgumentValue(
-                JsonSerializer.SerializeToElement(new { memberKey = referenceKey.GetString() }),
-                "WorkflowRequest")
-        };
-    }
+    private static ArgumentState ToGraphInputRead(ArgumentState state) => InputReadLowering.Lower(state, referenceKey => referenceKey);
 
     private ExecutableActivityStructure? RewriteStructure(
         ExecutableActivityStructure? structure,
@@ -654,5 +894,9 @@ public sealed class ActivityTemplatePlacer(
         string? ParentOccurrenceId,
         string ChildSlotName,
         int ChildIndex,
-        ExecutableActivityTemplateOccurrenceOverlay? OccurrenceOverlay = null);
+        ExecutableActivityTemplateOccurrenceOverlay? OccurrenceOverlay = null,
+        IReadOnlyList<WorkflowExecutableActivityPresentationRecord>? Presentation = null)
+    {
+        public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation => Presentation ?? [];
+    }
 }

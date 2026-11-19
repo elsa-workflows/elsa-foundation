@@ -84,7 +84,8 @@ public sealed class SwitchDrive : ControlFlowDrive
             "node-switch",
             typeof(SwitchActivity),
             SwitchActivity.StructureKind,
-            SwitchActivity.StructureSchemaVersion,
+            // This hand-built fixture uses the retained Value-matching executable contract.
+            SwitchActivity.LegacyStructureSchemaVersion,
             new
             {
                 cases = new[] { new { match = "a", activity = "node-a" } },

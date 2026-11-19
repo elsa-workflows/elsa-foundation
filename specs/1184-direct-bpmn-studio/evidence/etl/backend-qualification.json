@@ -1,0 +1,104 @@
+{
+  "formatVersion": 1,
+  "backendSource": "2334ae4700dd404ef7ccda56b65d8478271dd3e9",
+  "projectionSource": "d60e368d7252b9d660bb0e76f0979bca8841180c",
+  "baseMain": "94be29ece1b3fd55b534a6a9043d3b2b94f5e33c",
+  "sourceNote": "Worktree tests precede the recording commits. These source blobs identify the tested inputs; no actual composed-host build is qualified by this receipt.",
+  "testedSourceBlobs": {
+    "Essentials/src/Activities/Bpmn/Interchange/ActivitiesBpmnDirectPublishingFeature.cs": "a17c433dd198f2507270a36fd05de62b8bc25c42b70e031a5562021dc349388c",
+    "Essentials/src/Activities/Bpmn/Interchange/Services/BpmnAuthoredDirectProjection.cs": "ed19afdd29660f740da7ee7c5555e63e4a3958ac34671799d81580d248297bf1",
+    "Essentials/src/Activities/Bpmn/Interchange/Services/BpmnAuthoredDirectPublisher.cs": "fd0c731d2179887a3f6467c389e580f217db8563f361d95c870aa5ab0330b720",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs": "308a5647ddab458f494e67ba295ee585c7fe6757ccdee56d395101c5c813ae97",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnDirectBindingInterchangeTests.cs": "b9739e069b371da6757fd0d01589e4a35586ed3e181cffb0617225af34653942",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnDirectPublishingFeatureTests.cs": "bdb89bb56a5945d65f7f66ad5111dec9fe891004c7de1be3ca2c6ff9609b6530",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/bpmnServiceBinding.test.ts": "a3254e8c53fe03604a1c76f9bdbd590813999fa8e3507faa03d04708229812de",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/bpmnServiceSelection.test.tsx": "14f47011b51456d4fd3b4465729599ead883adf958698215815ae8d8ad0a04b5",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/directBpmnEditor.test.tsx": "2687c695fdedb0433659ee2d502f733ce26c48dff084e3ec412b8871e986c5e9",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/BpmnElementInspector.tsx": "24ba5b78f32e14df09b277293863b5d72ff7b70fb0b2a20ec76904688e5c5a88",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/BpmnServiceBindingEditor.tsx": "9028875f6be95cd79ff69f7449ba66293c84ac8796b02483e6d09b2210e2ad04",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/bpmnAdapter.ts": "928c7fc6f5ec28b33ca29870541fd4b7234c05cbb5fa11cd208523d7c22baff7",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/bpmnDirectBinding.ts": "a5064b66f593023820a3320fcbb48ddc4be7ee4121ab1705b506eba2568fc027",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor.tsx": "526bc78fd331114778a18a1ec65a82a9136054d2f150dc0a2ecf3076b104f477"
+  },
+  "dotnetResults": [
+    {
+      "name": "authored-service-before",
+      "counters": {
+        "total": 2,
+        "executed": 2,
+        "passed": 0,
+        "failed": 2,
+        "notExecuted": 0
+      },
+      "trxSha256": "70a7fc371bfad9a9178cdc27b097d874d6c42010dbb5aab58e78b851d19f26d2"
+    },
+    {
+      "name": "authored-service-after",
+      "counters": {
+        "total": 194,
+        "executed": 194,
+        "passed": 194,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      "trxSha256": "1cb93fc520567d62c44adebe299ab0c35bac0a38568e5eba35c68330c1210a3c"
+    },
+    {
+      "name": "authored-service-roundtrip-fixed",
+      "counters": {
+        "total": 61,
+        "executed": 61,
+        "passed": 61,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      "trxSha256": "6f903e3b31b7c6ad3cc50713eb7e06448acf18712eadebdbe8880429066f3d5f"
+    },
+    {
+      "name": "authored-service-capability",
+      "counters": {
+        "total": 2,
+        "executed": 2,
+        "passed": 2,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      "trxSha256": "78ee267746e8c928b20ffa5c75a83a343628c7a025a2b66c0552a509b5857d00"
+    }
+  ],
+  "frontend": {
+    "commandScope": "Seven files enumerated in README.md",
+    "total": 104,
+    "passed": 104,
+    "failed": 0,
+    "skipped": 0,
+    "newControls": 41,
+    "typecheck": "passed",
+    "lint": "passed",
+    "logSha256": "7c6caeb21e4956fd30539900b2d679b18a7ee8e11b529b21bb21a56363ad796d",
+    "retirementScopes": [
+      "backend",
+      "subject",
+      "tenant",
+      "disposed session",
+      "read-only",
+      "selected element",
+      "workflow draft",
+      "authored element edit",
+      "transport context"
+    ]
+  },
+  "etlProjection": {
+    "total": 53,
+    "passed": 53,
+    "newControls": 11,
+    "fixtureKind": "pure checkpoint fixture",
+    "actualApiBrowserLink": false
+  },
+  "rawEvidencePublication": "Deferred to completed ETL journey milestone; hashes are receipts, not download references.",
+  "actualRunEtlPublicationReplay": false,
+  "actualHostRestartRetryAcceptance": false,
+  "actualStudioServiceAcceptance": false,
+  "fullFinalQualification": false,
+  "verification": "Partial"
+}

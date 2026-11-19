@@ -1,0 +1,13 @@
+{
+  "studioSourceRevision": "90feccfedfa5d4c32a25bf2fc00da0ab6666d9b7",
+  "backendSourceRevision": "b2fc515ffc213e7ba96f4040769269f43b4c00d8",
+  "workflowDefinitionId": "14eFKWvetLV",
+  "workflowExecutionId": "14eFVUdk0rQ",
+  "artifactId": "artifact-3e510474765a",
+  "defaultFlowId": "default-flow",
+  "gatewayName": "Choose default route",
+  "otherConditionOutcome": "Never",
+  "timerDescriptor": "PT1S",
+  "exportedXmlSha256": "48f8b1fe219727defd14315d8676b4506be35a2cd84b486ce362aa8ef175f42b",
+  "verifiedAfterReload": true
+}

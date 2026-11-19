@@ -1,0 +1,96 @@
+using System.Text.Json;
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.Core.Models;
+
+namespace Acme.Home.Weaver;
+
+internal static class WidgetSizeValidation
+{
+    internal static readonly string ChangeSchema = """{"type":"object","required":["widgetId","revision","size","beforeSize","hostId"],"properties":{"widgetId":{"const":"acme.home:status"},"revision":{"type":"string","minLength":1},"size":{"enum":["small","medium"]},"beforeSize":{"enum":["small","medium"]},"hostId":{"type":"string","minLength":1}},"additionalProperties":false}""";
+
+    internal static string Canonical(string? size)
+    {
+        if (size is not ("small" or "medium"))
+            WidgetContract.Refuse("arguments_invalid", "The size must be exactly small or medium.", 400);
+        return size!;
+    }
+
+    internal static string Size(IReadOnlyDictionary<string, object?> arguments)
+    {
+        if (arguments.Count != 1 || !arguments.TryGetValue("size", out var raw))
+        {
+            WidgetContract.Refuse("arguments_invalid", "Exactly one canonical size argument is required.", 400);
+            return string.Empty;
+        }
+        if (raw is string text) return Canonical(text);
+        if (raw is JsonElement { ValueKind: JsonValueKind.String } json) return Canonical(json.GetString());
+        WidgetContract.Refuse("arguments_invalid", "The size argument must be a JSON string.", 400);
+        return string.Empty;
+    }
+
+    internal static string Size(JsonElement arguments)
+    {
+        if (arguments.ValueKind != JsonValueKind.Object || arguments.EnumerateObject().Count() != 1 ||
+            !arguments.TryGetProperty("size", out var size) || size.ValueKind != JsonValueKind.String)
+        {
+            WidgetContract.Refuse("arguments_invalid", "Exactly one canonical size argument is required.", 400);
+            return string.Empty;
+        }
+        return Canonical(arguments.GetProperty("size").GetString());
+    }
+
+    internal static void Prepared(WeaverPreparedToolInvocation invocation, WeaverToolDescriptor descriptor)
+    {
+        if (invocation.ToolName != descriptor.Name || invocation.ModuleId != descriptor.ModuleId || invocation.ToolContractVersion != "1" ||
+            invocation.ExecutionLocation != WeaverExecutionLocation.Server || invocation.Client is not null ||
+            string.IsNullOrWhiteSpace(invocation.InvocationId) || string.IsNullOrWhiteSpace(invocation.ActorId) || string.IsNullOrWhiteSpace(invocation.TenantId) ||
+            invocation.Risk != descriptor.Risk || invocation.ExpiresAt <= DateTimeOffset.UtcNow)
+            WidgetContract.Refuse("prepared_invalid", "The prepared size operation is unavailable or does not match this installed contract.");
+        // RequiresApproval is the engine's final policy decision. Both reviewed Manual and automatic FullAuto
+        // invocations use this exact owner operation; the module never lowers descriptor risk or other checks.
+    }
+}
+
+internal sealed class SetWidgetSizeTool(WidgetResource resource) : IWeaverTool
+{
+    internal static readonly WeaverToolDescriptor ToolDescriptor = new(WidgetContract.SizeTool, "Change Acme status card size",
+        "Set only the existing personal Acme status card size to small or medium. Preserve visibility and every other layout value.",
+        WeaverToolMutability.Mutating, WeaverRisk.ReviewRequired,
+        """{"type":"object","required":["size"],"properties":{"size":{"enum":["small","medium"]}},"additionalProperties":false}""",
+        [WidgetContract.ReadPermission, WidgetContract.WritePermission], WidgetContract.Scopes)
+    {
+        ModuleId = WidgetContract.Module, ResultType = WidgetContract.SizeResult, ResultSchemaVersion = "1",
+        ResultJsonSchema = WidgetSizeValidation.ChangeSchema, ResultRendererId = WidgetContract.SizeRenderer,
+        DisclosureSourceId = "acme.home.widget-context"
+    };
+
+    public WeaverToolDescriptor Descriptor => ToolDescriptor;
+
+    public async Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(WeaverToolInvocation invocation, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (invocation.ToolName != Descriptor.Name || !invocation.AllowMutations ||
+                string.IsNullOrWhiteSpace(invocation.ActorId) || string.IsNullOrWhiteSpace(invocation.TenantId))
+                WidgetContract.Refuse("mutation_denied", "This request does not admit a personal card size change.", 403);
+            var size = WidgetSizeValidation.Size(invocation.Arguments);
+            var state = await resource.ObserveAsync(invocation.ActorId, invocation.TenantId, true, cancellationToken);
+            WidgetToolValidation.Reference(invocation.Context, state, true);
+            if (WidgetResource.Size(state) == size) WidgetContract.Refuse("noop", "The Acme status card already has the requested size.");
+            return WeaverResult<WeaverToolPreparation>.Success(new(WidgetContract.Target(state), JsonSerializer.SerializeToElement(new { size }),
+                WeaverRisk.ReviewRequired, WidgetContract.SizePreview(state, size), false));
+        }
+        catch (WidgetRefusal refusal) { return WidgetToolValidation.Refused<WeaverToolPreparation>(refusal); }
+    }
+
+    public async Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            WidgetSizeValidation.Prepared(invocation, Descriptor);
+            var size = WidgetSizeValidation.Size(invocation.Arguments);
+            return WeaverResult<WeaverToolResult>.Success(await resource.ApplySizeAsync(invocation, size, cancellationToken));
+        }
+        catch (WidgetRefusal refusal) { return WidgetToolValidation.Refused<WeaverToolResult>(refusal); }
+    }
+}

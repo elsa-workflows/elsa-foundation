@@ -1,0 +1,12 @@
+--- a/Essentials/src/Tasks/Schedules/ScheduledTaskExecution.cs
++++ b/Essentials/src/Tasks/Schedules/ScheduledTaskExecution.cs
+@@ -56,7 +56,2 @@
+-        if (_wait == Timeout.InfiniteTimeSpan)
+-            return;
+-
+-        var remaining = _wait - _timeProvider.GetElapsedTime(_armedAt);
+-        // A finite tick exactly 1ms late also equals the infinite-wait sentinel. Only a
+-        // positive remainder can re-arm a finite wait; overdue ticks must run the action.
+-        if (remaining > TimeSpan.Zero && NextArm(remaining) is { } rest)
++        var remaining = _wait == Timeout.InfiniteTimeSpan ? _wait : _wait - _timeProvider.GetElapsedTime(_armedAt);
++        if (NextArm(remaining) is { } rest)

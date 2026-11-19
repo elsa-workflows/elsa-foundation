@@ -89,8 +89,8 @@ internal sealed partial class EfEtlRuntimeStore
         batch.OutputJson = json;
         batch.OutputDigest = MetadataDigest(json);
         batch.OutputBytes = bytes;
-        batch.MainEffectKind = output.Main is { } main ? (int)main.Kind : null;
-        batch.ErrorEffectKind = output.Errors is { } errors ? (int)errors.Kind : null;
+        batch.MainEffectKind = EffectMechanism(output.Main);
+        batch.ErrorEffectKind = EffectMechanism(output.Errors);
         batch.MetadataBytes = checked(batch.MetadataBytes + metadata);
         partition.BatchMetadataBytes = checked(partition.BatchMetadataBytes + metadata);
         partition.MetadataBytes = checked(partition.MetadataBytes + metadata);
@@ -107,6 +107,17 @@ internal sealed partial class EfEtlRuntimeStore
         return new(EtlStoreStatus.Applied, output);
     }
 
+    /// <summary>The indexed effect column records the delivery mechanism, not the route format: 1 is an HTTP delivery and
+    /// 2 is a recorded publication. Every prior writer stored 1 for HTTP and 2 for JSON Lines, so CSV files and SQL writes,
+    /// which are recorded through the same publication transition (spec 1197), share 2.</summary>
+    private static int? EffectMechanism(EtlConnectorRouteOutput? route) => route?.Kind switch
+    {
+        null => null,
+        EtlConnectorKind.Http => 1,
+        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq => 2,
+        _ => throw new InvalidDataException("The connector route kind has no delivery mechanism.")
+    };
+
     private static EtlConnectorBatchOutput? ReadConnectorBatchOutput(EtlConnectorBatchRecord batch)
     {
         if (batch.OutputJson is null)
@@ -120,8 +131,8 @@ internal sealed partial class EfEtlRuntimeStore
             var output = EtlConnectorRecordCodec.Read<EtlConnectorBatchOutput>(batch.OutputJson);
             if (batch.OutputDigest != MetadataDigest(batch.OutputJson) ||
                 batch.OutputBytes != ValidateConnectorOutputShape(output, batch.RecordCount) ||
-                batch.MainEffectKind != (output.Main is { } main ? (int)main.Kind : null) ||
-                batch.ErrorEffectKind != (output.Errors is { } errors ? (int)errors.Kind : null))
+                batch.MainEffectKind != EffectMechanism(output.Main) ||
+                batch.ErrorEffectKind != EffectMechanism(output.Errors))
                 throw new InvalidDataException("The retained connector output is inconsistent.");
             return output;
         }
@@ -164,7 +175,8 @@ internal sealed partial class EfEtlRuntimeStore
             }
             EtlRuntimeRecordCodec.ValidateObject(route.Body, "route body");
             if (count <= 0 || route.RecordCount != count || route.Body.ByteLength <= 0 ||
-                route.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl) || !EtlRuntimeRecordCodec.IsSha256(route.EffectId))
+                route.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or
+                    EtlConnectorKind.RabbitMq) || !EtlRuntimeRecordCodec.IsSha256(route.EffectId))
                 throw new InvalidDataException("The connector route body is invalid.");
             return route.Body.ByteLength;
         }

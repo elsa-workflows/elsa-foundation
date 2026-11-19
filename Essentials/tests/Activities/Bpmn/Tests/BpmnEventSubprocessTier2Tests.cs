@@ -12,6 +12,8 @@ using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 using F = Elsa.Activities.Bpmn.Tests.BpmnRuntimeFixture;
 
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>

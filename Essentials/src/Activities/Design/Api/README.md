@@ -8,7 +8,19 @@ See the [domain-owned API specification](../../../../../specs/220-domain-owned-a
 
 Add `ActivitiesDesignApiFeature` to the active shell together with an Activity Design persistence provider and the reconciliation features that populate its definitions. The feature supplies default availability evaluation, diagnostics projection, and an in-memory availability-settings store; durable hosts should replace that store as appropriate.
 
-The package has no dependency on `Elsa.Workbench`. Custom hosts expose the same routes by composing the feature in their own shell. `ActivitiesDesignApiFeature` calls the public `ActivitiesDesignApi.MapActivitiesDesignApi(IEndpointRouteBuilder)` mapping entry point; all 38 routes are ordinary ASP.NET Core Minimal API endpoints with standard route, authorization, API Explorer, and OpenAPI metadata.
+The package has no dependency on `Elsa.Workbench`. Custom hosts expose the same routes by composing the feature in their own shell. `ActivitiesDesignApiFeature` calls the public `ActivitiesDesignApi.MapActivitiesDesignApi(IEndpointRouteBuilder)` mapping entry point; all 39 routes are ordinary ASP.NET Core Minimal API endpoints with standard route, authorization, API Explorer, and OpenAPI metadata.
+
+The independent activity-data context route adds authorized metadata analysis at
+`POST /design/activities/drafts/{draftId}/activity-data/context`. It requires the shared
+`WorkflowDesignValidations` authority (and its Events dependency), preserves private provider-payload
+authorization, and analyzes persisted/current snapshots without writing them. Provider-owned graph
+projection and serialized-shape contributions supply the same facts used by headless publication.
+
+Draft validation always composes `ActivityDataSelectionDraftValidator` around the configured provider
+validator. `DataSelectionDraftValidationRegistration` checks the wrapper at registration/resolution and,
+when Tasks runs, once per shell activation as an `IStartupTask`; it registers no recurring job. The shared
+analyzer's separate Prepare-phase check requires exactly one scoped authority. See
+[EXTENSION_POINTS.md](EXTENSION_POINTS.md) for ownership, lifetimes and replacement rules.
 
 API-visible request and response types live in `Elsa.Activities.Design.Api.Core`. The implementation package forwards the former public type names, supplies owner-local source-generated JSON metadata, and keeps providers, stores, handlers, and transport adapters outside endpoint/OpenAPI contract metadata. This separation lets a retired feature generation release its endpoint, DI, serializer, and API-description state.
 
@@ -20,11 +32,12 @@ API-visible request and response types live in `Elsa.Activities.Design.Api.Core`
 | Availability | `GET/PUT /design/activities/availability/settings`, `GET /design/activities/availability/diagnostics` |
 | Definitions | Definition list/get/create/update, picker, recommendation, drafts, versions, and fork preview under `/design/activities/definitions` |
 | Drafts | Draft get/create/replace/presentation/conflict-copy/validate/migrate/discard/diff and contract proposals under `/design/activities/drafts` |
+| Activity data context | `POST /design/activities/drafts/{draftId}/activity-data/context` |
 | Versions | Version get/diff/dependencies and retire/restore/revoke under `/design/activities/versions` |
 | Forks | Candidate apply and idempotency status under `/design/activities/fork-candidates` and `/design/activities/forks` |
 | Upgrade plans | Create/get/apply/receipt/refresh under `/design/activities/upgrade-plans` |
 
-The exact method/template/operation inventory is the executable [38-route manifest](../../../../../specs/166-activities-design-api-migration/contracts/activities-design-route-manifest.md).
+The original management operations retain the executable [38-route manifest](../../../../../specs/166-activities-design-api-migration/contracts/activities-design-route-manifest.md); the additive activity-data context operation is listed above and covered by its owning endpoint/security contracts.
 
 Catalog and read operations declare exactly `activities/design:read`; management operations declare exactly `activities/design:manage`. Foundation Identity owns normalized-principal trust, `manage`-satisfies-`read`, wildcard matching, replaceable evaluation, tenant/resource handlers, and the standard `401`/`403` boundary. Wildcard is evaluator-level grant compatibility and is not endpoint-owned policy metadata. Transport errors preserve the reviewed RFC 7807 contract through the owner-local Minimal API mapping.
 

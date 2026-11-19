@@ -1,0 +1,101 @@
+#nullable enable
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionName.get -> string?
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionName.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionString.get -> string?
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.ConnectionString.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Pooling.get -> bool
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Pooling.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Provider.get -> string!
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Provider.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Schema.get -> string?
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.Schema.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions.AgentEntityFrameworkCoreOptions() -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentDbContext
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentDbContext.AgentDbContext(Microsoft.EntityFrameworkCore.DbContextOptions! options) -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEfModule
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.ConnectionName.get -> string?
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.ConnectionName.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.ConnectionString.get -> string?
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.ConnectionString.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.Pooling.get -> bool
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.Pooling.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.Provider.get -> string!
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.Provider.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.Schema.get -> string?
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.Schema.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.AgentEntityFrameworkCoreFeature() -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentModelBuilderExtensions
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentMySqlDbContext
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentMySqlDbContext.AgentMySqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Agent.Persistence.EntityFrameworkCore.AgentMySqlDbContext!>! options) -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentPostgreSqlDbContext
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentPostgreSqlDbContext.AgentPostgreSqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Agent.Persistence.EntityFrameworkCore.AgentPostgreSqlDbContext!>! options) -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSqlServerDbContext
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSqlServerDbContext.AgentSqlServerDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Agent.Persistence.EntityFrameworkCore.AgentSqlServerDbContext!>! options) -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSqliteDbContext
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSqliteDbContext.AgentSqliteDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Agent.Persistence.EntityFrameworkCore.AgentSqliteDbContext!>! options) -> void
+abstract Elsa.Agent.Persistence.EntityFrameworkCore.AgentDbContext.ConfigureProvider(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
+const Elsa.Agent.Persistence.EntityFrameworkCore.AgentEfModule.HistoryModuleName = "ElsaAgent" -> string!
+const Elsa.Agent.Persistence.EntityFrameworkCore.AgentMySqlDbContext.ExpectedProviderName = "MySql.EntityFrameworkCore" -> string!
+const Elsa.Agent.Persistence.EntityFrameworkCore.AgentPostgreSqlDbContext.ExpectedProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL" -> string!
+const Elsa.Agent.Persistence.EntityFrameworkCore.AgentSqlServerDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.SqlServer" -> string!
+const Elsa.Agent.Persistence.EntityFrameworkCore.AgentSqliteDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.Sqlite" -> string!
+override Elsa.Agent.Persistence.EntityFrameworkCore.AgentDbContext.OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
+static Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration.AddAgentTurnStore<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration.AddAgentEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Agent.Persistence.EntityFrameworkCore.AgentEfModule.HistoryTableName.get -> string!
+static Elsa.Agent.Persistence.EntityFrameworkCore.AgentModelBuilderExtensions.AddAgentModel(this Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder, string! providerName) -> Microsoft.EntityFrameworkCore.ModelBuilder!
+static readonly Elsa.Agent.Persistence.EntityFrameworkCore.AgentEfModule.Chain -> Elsa.Persistence.EntityFramework.EfSchemaChain!
+virtual Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.CaptureAsync(string! agentId, string! draftId, long expectedRevision, string! operationId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Core.Models.AgentSourceRevision!>!
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.CreateAsync(string! agentId, string! draftId, string! name, Elsa.Agent.Core.Models.AgentSourceContent! content, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Core.Models.AgentSourceDraft!>!
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.DiscardAsync(string! agentId, string! draftId, long expectedRevision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.EfAgentSources(TContext! db, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access) -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.FindAsync(string! agentId, string! draftId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Core.Models.AgentSourceDraft?>!
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.ListAsync(string? search, int skip, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Core.Models.AgentSourcePage!>!
+const Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.Profile = "elsa.agent-source/1" -> string!
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.ForkAsync(string! agentId, string! draftId, string! snapshotId, string! newAgentId, string! newDraftId, string! name, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Core.Models.AgentSourceDraft!>!
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.HistoryAsync(string! agentId, string! draftId, int skip = 0, int take = 100, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Elsa.Agent.Core.Models.AgentSourceRevision!>!>!
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.AgentSourcesEntityFrameworkCoreFeature() -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.ConnectionName.get -> string?
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.ConnectionName.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.ConnectionString.get -> string?
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.ConnectionString.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.Pooling.get -> bool
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.Pooling.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.Provider.get -> string!
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.Provider.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.Schema.get -> string?
+Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.Schema.set -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.SaveAsync(string! agentId, string! draftId, long expectedRevision, string! name, Elsa.Agent.Core.Models.AgentSourceContent! content, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Core.Models.AgentSourceDraft!>!
+static Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration.AddAgentSourceStore<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreRegistration.AddAgentSourcesEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Agent.Persistence.EntityFrameworkCore.DependencyInjection.AgentEntityFrameworkCoreOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+virtual Elsa.Agent.Persistence.EntityFrameworkCore.AgentSourcesEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.FindRevisionAsync(string! agentId, string! draftId, string! snapshotId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Core.Models.AgentSourceRevision?>!
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.ListDefinitionsAsync(string? search, int skip, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Core.Models.AgentDefinitionPage!>!
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.FindSourceRevisionAsync(string! agentId, string! snapshotId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Core.Models.AgentSourceRevision?>!
+Elsa.Agent.Persistence.EntityFrameworkCore.Stores.EfAgentSources<TContext>.SourceHistoryAsync(string! agentId, int skip = 0, int take = 50, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Agent.Core.Models.AgentRevisionPage!>!
+Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql.Initial
+Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql.Initial.Initial() -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql.Initial
+Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql.Initial.Initial() -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer.Initial
+Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer.Initial.Initial() -> void
+Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite.Initial
+Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite.Initial.Initial() -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void

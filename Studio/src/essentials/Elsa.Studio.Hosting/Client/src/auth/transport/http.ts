@@ -2,6 +2,8 @@ import { createHttpClient, type StudioHttpClient, type StudioRequestInit } from 
 import { authSessionEndedEvent, type AuthProviderManager } from "../types";
 
 export interface AuthenticatedHttpClientOptions {
+  /** Independent backend sessions must not announce their failures as loss of the stable Studio-host session. */
+  notifySessionLoss?: boolean;
   /** Default headers applied to every request before per-request RequestInit.headers are merged. */
   defaultHeaders?: HeadersInit;
   /** Alias for defaultHeaders retained for callers that pass fetch-like client options. */
@@ -44,6 +46,7 @@ function createAuthenticatedFetch(
     const retryOnUnauthorized = studioInit?.retryOnUnauthorized !== false;
     const requestInit = withoutRetryOption(init);
     const firstAttempt = await withBearerToken(requestUrl, auth, options, requestInit);
+    requestInit?.signal?.throwIfAborted();
     if (!firstAttempt.hasAuthorization && options.requireAuthorization === true && options.refreshOnUnauthorized !== false) {
       return authenticationRequiredResponse();
     }
@@ -53,12 +56,14 @@ function createAuthenticatedFetch(
       return firstResponse;
     }
 
-    const refreshed = await refreshOnce(requestUrl, auth, true);
+    const refreshed = await refreshOnce(requestUrl, auth, options.notifySessionLoss !== false);
+    requestInit?.signal?.throwIfAborted();
     if (!refreshed) {
       return new Response("Authentication required.", { status: 401 });
     }
 
     const retryAttempt = await withBearerToken(requestUrl, auth, options, requestInit, false);
+    requestInit?.signal?.throwIfAborted();
     return retryAttempt.hasAuthorization
       ? request(requestUrl, retryAttempt.init)
       : authenticationRequiredResponse();
@@ -107,7 +112,7 @@ async function refreshOnce(
 async function withBearerToken(
   requestUrl: string,
   auth: Pick<AuthProviderManager, "getAccessToken" | "refresh">,
-  options: Pick<AuthenticatedHttpClientOptions, "refreshOnUnauthorized" | "requireAuthorization">,
+  options: Pick<AuthenticatedHttpClientOptions, "refreshOnUnauthorized" | "requireAuthorization" | "notifySessionLoss">,
   init?: RequestInit,
   refreshIfMissing = true
 ): Promise<{ init: RequestInit; hasAuthorization: boolean }> {
@@ -115,7 +120,7 @@ async function withBearerToken(
   removeBlankAuthorization(headers);
   let token = await auth.getAccessToken();
   if (!token && !hasNonEmptyAuthorization(headers) && refreshIfMissing && options.refreshOnUnauthorized !== false) {
-    await refreshOnce(requestUrl, auth, options.requireAuthorization === true);
+    await refreshOnce(requestUrl, auth, options.requireAuthorization === true && options.notifySessionLoss !== false);
     token = await auth.getAccessToken();
   }
   if (token) {

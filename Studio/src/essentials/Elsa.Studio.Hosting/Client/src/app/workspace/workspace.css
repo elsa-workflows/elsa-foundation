@@ -1,0 +1,252 @@
+/* Workspace tab strip: one strip for every Studio screen, between the top bar and the content area. */
+.studio-workspace-tabs {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  min-width: 0;
+  border-bottom: 1px solid var(--studio-edge-subtle);
+  background: var(--studio-surface-muted);
+}
+
+.studio-workspace-tablist {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.studio-workspace-tab {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  max-width: 240px;
+  min-width: 0;
+  border-right: 1px solid var(--studio-edge-subtle);
+  color: var(--studio-text-muted);
+}
+
+.studio-workspace-tab[data-active="true"] {
+  background: var(--studio-bg);
+  color: var(--studio-text);
+}
+
+.studio-workspace-tab[data-active="true"]::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--studio-selection-mark, var(--studio-accent));
+  content: "";
+}
+
+.studio-workspace-tab[data-dragging="true"] {
+  opacity: 0.55;
+}
+
+.studio-workspace-tab:not([data-active="true"]):hover {
+  background: var(--studio-row-hover, var(--studio-accent-soft));
+  color: var(--studio-text);
+}
+
+.studio-workspace-tab-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 34px;
+  margin: 0;
+  padding: 0 4px 0 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.studio-workspace-tab[data-pinned="true"] .studio-workspace-tab-button {
+  padding-right: 10px;
+}
+
+.studio-workspace-tab-button:focus-visible,
+.studio-workspace-tab-close:focus-visible,
+.studio-workspace-tab-action:focus-visible,
+.studio-workspace-notice button:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: -2px;
+}
+
+.studio-workspace-tab-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.studio-workspace-tab-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.studio-workspace-tab-title {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-workspace-tab-detail {
+  flex: 0 0 auto;
+  max-width: 96px;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--studio-edge-subtle);
+  border-radius: 999px;
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-workspace-tab-unsaved {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--studio-accent);
+}
+
+.studio-workspace-tab-pin {
+  flex: 0 0 auto;
+  color: var(--studio-text-muted);
+}
+
+.studio-workspace-tab-close,
+.studio-workspace-tab-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+}
+
+.studio-workspace-tab-close {
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  opacity: 0;
+}
+
+.studio-workspace-tab[data-active="true"] .studio-workspace-tab-close,
+.studio-workspace-tab:hover .studio-workspace-tab-close,
+.studio-workspace-tab-close:focus-visible {
+  opacity: 1;
+}
+
+.studio-workspace-tab-close:hover,
+.studio-workspace-tab-action:hover,
+.studio-workspace-tab-action[aria-expanded="true"] {
+  background: var(--studio-accent-soft);
+  color: var(--studio-text);
+}
+
+.studio-workspace-tab-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+}
+
+.studio-workspace-tab-action {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 4px;
+}
+
+.studio-workspace-tab-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-workspace-notice {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--studio-edge-subtle);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-size: 13px;
+}
+
+.studio-workspace-notice button {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+}
+
+.studio-workspace-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.studio-workspace-menu-item[aria-checked="true"] {
+  background: var(--studio-accent-soft);
+  font-weight: 600;
+}
+
+.studio-workspace-menu-item:disabled {
+  color: var(--studio-text-muted);
+  cursor: default;
+  opacity: 0.6;
+}
+
+.studio-workspace-menu-item kbd {
+  color: var(--studio-text-muted);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+/* The active panel lays its screen out as a direct child of the content area, so route pages keep
+   their full-bleed and scrolling rules. */
+.studio-workspace-panel:not([hidden]) {
+  display: contents;
+}
+
+.studio-workspace-tab-error-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .studio-workspace-tab {
+    max-width: 168px;
+  }
+
+  .studio-workspace-tab-detail {
+    display: none;
+  }
+
+  .studio-workspace-tab-close {
+    opacity: 1;
+  }
+}

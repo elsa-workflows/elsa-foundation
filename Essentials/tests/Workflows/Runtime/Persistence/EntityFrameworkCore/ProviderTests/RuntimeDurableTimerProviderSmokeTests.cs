@@ -70,6 +70,7 @@ internal static class RuntimeDurableTimerProviderSmoke
             await store.SaveAsync(Timer("workflow-order", "future", now.AddTicks(1)));
 
             var due = await store.ListDueAsync(now, 2);
+            Assert.Equal(now, await store.GetNextDueTimeAsync());
             Assert.Equal(new[] { "a", "b" }, due.Select(timer => timer.TimerId));
             var firstPage = await store.ListPageAsync(new DurableTimerPageQuery("workflow-order", 2));
             Assert.Equal(new[] { "a", "b" }, firstPage.Items.Select(timer => timer.TimerId));
@@ -90,6 +91,16 @@ internal static class RuntimeDurableTimerProviderSmoke
             await claimStore.SaveAsync(Timer("workflow-claim", "timer", now));
             initialClaim = Assert.Single(await claimStore.ClaimDueAsync(new RuntimeDurableTimerClaimRequest(
                 "worker-a", now, TimeSpan.FromMinutes(1), 1)));
+            Assert.Equal(initialClaim.VisibleAfter, await claimStore.GetNextDueTimeAsync());
+
+            var seekStore = Store(restarted, $"{scope}-deadline-seek");
+            await seekStore.SaveAsync(Timer("seek", "leased", now.AddSeconds(5)));
+            await seekStore.SaveAsync(Timer("seek", "released", now.AddSeconds(30)));
+            var seekClaims = await seekStore.ClaimDueAsync(new("peer", now.AddSeconds(31), TimeSpan.FromMinutes(1), 2));
+            var released = Assert.Single(seekClaims, claim => claim.Timer.TimerId == "released");
+            Assert.True((await seekStore.ReleaseClaimAsync(released, now.AddSeconds(-1))).Succeeded);
+            await seekStore.SaveAsync(Timer("seek", "unclaimed", now.AddSeconds(6)));
+            Assert.Equal(now.AddSeconds(6), await seekStore.GetNextDueTimeAsync());
         }
 
         await using (var recovered = createContext(connectionString))
@@ -105,6 +116,7 @@ internal static class RuntimeDurableTimerProviderSmoke
             Assert.Equal(RuntimeDurableTimerClaimTransitionStatus.Succeeded,
                 (await claimStore.CompleteClaimAsync(recoveredClaim)).Status);
             Assert.Null(await claimStore.FindAsync("workflow-claim", "timer"));
+            Assert.Null(await claimStore.GetNextDueTimeAsync());
         }
     }
 

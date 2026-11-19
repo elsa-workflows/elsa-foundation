@@ -77,7 +77,11 @@ public sealed class ActivityUpgradeDiffBuilder(
                 candidate.ResumeTargetCount,
                 ActivityLayoutHasher.Compute(request.Layout),
                 request.Layout.Count,
-                candidate.RuntimeRequirements),
+                candidate.RuntimeRequirements)
+            {
+                PresentationHash = ActivityNodePresentationHasher.Compute(request.ActivityPresentation),
+                PresentationCount = request.ActivityPresentation.Count
+            },
             CompareDependencies: candidate.TemplateHash is not null,
             Diagnostics: diagnostics), cancellationToken);
     }
@@ -130,6 +134,10 @@ public sealed class ActivityUpgradeDiffBuilder(
         version.ResumeTargetCount,
         LayoutHash: layout is null ? null : ActivityLayoutHasher.Compute(layout.Records),
         LayoutCount: layout?.Records.Count,
-        RuntimeRequirements: version.RuntimeRequirements.ToArray());
+        RuntimeRequirements: version.RuntimeRequirements.ToArray())
+    {
+        PresentationHash = ActivityNodePresentationHasher.Compute(layout?.ActivityPresentation),
+        PresentationCount = layout?.ActivityPresentation.Count ?? 0
+    };
 
 }

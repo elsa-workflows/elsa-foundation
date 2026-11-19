@@ -24,6 +24,13 @@ internal sealed class ActivityValuePayloadDeniedSignal : Exception;
 /// <summary>A value payload was never captured: the published response is the 409 problem document.</summary>
 internal sealed class ActivityValuePayloadUnavailableSignal : Exception;
 
+/// <summary>Spec 1229 US4: two instances that cannot be compared; a 409 problem carrying the reason as its code.</summary>
+internal sealed class InstanceComparisonRefusedSignal(string code, string detail) : Exception
+{
+    public string Code { get; } = code;
+    public string Detail { get; } = detail;
+}
+
 /// <summary>A safe, actionable failure of a manual run deletion request.</summary>
 internal sealed class RuntimeRunDeletionRejectedSignal(int status, string detail) : Exception
 {

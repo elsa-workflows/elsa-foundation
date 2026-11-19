@@ -1,0 +1,88 @@
+#nullable enable
+Elsa.Api.Capabilities.Models.ApiCapabilityView.Id.get -> string!
+Elsa.Api.Capabilities.Models.ApiCapabilityView
+Elsa.Api.Capabilities.Models.ApiCapabilityView.Id.init -> void
+override Elsa.Api.Capabilities.Models.ApiCapabilityView.ToString() -> string!
+Elsa.Api.Capabilities.Exceptions.ApiCapabilityConflictException
+static Elsa.Api.Capabilities.Models.ApiCapabilityView.operator !=(Elsa.Api.Capabilities.Models.ApiCapabilityView? left, Elsa.Api.Capabilities.Models.ApiCapabilityView? right) -> bool
+static Elsa.Api.Capabilities.Models.ApiCapabilityView.operator ==(Elsa.Api.Capabilities.Models.ApiCapabilityView? left, Elsa.Api.Capabilities.Models.ApiCapabilityView? right) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView
+override Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.ToString() -> string!
+static Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.operator !=(Elsa.Api.Capabilities.Models.ApiCapabilityLinkView? left, Elsa.Api.Capabilities.Models.ApiCapabilityLinkView? right) -> bool
+static Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.operator ==(Elsa.Api.Capabilities.Models.ApiCapabilityLinkView? left, Elsa.Api.Capabilities.Models.ApiCapabilityLinkView? right) -> bool
+override Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.GetHashCode() -> int
+override Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.Equals(object? obj) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.Equals(Elsa.Api.Capabilities.Models.ApiCapabilityLinkView? other) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.<Clone>$() -> Elsa.Api.Capabilities.Models.ApiCapabilityLinkView!
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.Deconstruct(out string! Rel, out string! Href, out bool Templated) -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityView.ContractVersion.get -> string!
+Elsa.Api.Capabilities.Models.ApiCapabilityView.ContractVersion.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityView.Links.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Api.Capabilities.Models.ApiCapabilityLinkView!>!
+Elsa.Api.Capabilities.Models.ApiCapabilityView.Links.init -> void
+const Elsa.Api.Capabilities.Models.ApiCapabilityView.DormantStatus = "dormant" -> string!
+Elsa.Api.Capabilities.Models.ApiCapabilityLink
+override Elsa.Api.Capabilities.Models.ApiCapabilityLink.ToString() -> string!
+static Elsa.Api.Capabilities.Models.ApiCapabilityLink.operator !=(Elsa.Api.Capabilities.Models.ApiCapabilityLink? left, Elsa.Api.Capabilities.Models.ApiCapabilityLink? right) -> bool
+static Elsa.Api.Capabilities.Models.ApiCapabilityLink.operator ==(Elsa.Api.Capabilities.Models.ApiCapabilityLink? left, Elsa.Api.Capabilities.Models.ApiCapabilityLink? right) -> bool
+override Elsa.Api.Capabilities.Models.ApiCapabilityLink.GetHashCode() -> int
+override Elsa.Api.Capabilities.Models.ApiCapabilityLink.Equals(object? obj) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityLink.Equals(Elsa.Api.Capabilities.Models.ApiCapabilityLink? other) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.Rel.get -> string!
+Elsa.Api.Capabilities.Models.ApiCapabilityLink.<Clone>$() -> Elsa.Api.Capabilities.Models.ApiCapabilityLink!
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.Rel.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.Templated.get -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.Templated.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.Href.get -> string!
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.Href.init -> void
+Elsa.Api.Capabilities.ApiCapabilityRegistration
+Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.Capabilities.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Api.Capabilities.Models.ApiCapabilityView!>!
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration
+override Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.ToString() -> string!
+Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument
+static Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.operator !=(Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration? left, Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration? right) -> bool
+static Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.operator ==(Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration? left, Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration? right) -> bool
+override Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.GetHashCode() -> int
+override Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.ToString() -> string!
+override Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.Equals(object? obj) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.Equals(Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration? other) -> bool
+static Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.operator !=(Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument? left, Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument? right) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.<Clone>$() -> Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration!
+static Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.operator ==(Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument? left, Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument? right) -> bool
+override Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.GetHashCode() -> int
+override Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.Equals(object? obj) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.Capabilities.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.Equals(Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument? other) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.<Clone>$() -> Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument!
+Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.Deconstruct(out System.Collections.Generic.IReadOnlyCollection<Elsa.Api.Capabilities.Models.ApiCapabilityView!>! Capabilities) -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityLinkView.ApiCapabilityLinkView(string! Rel, string! Href, bool Templated = false) -> void
+Elsa.Api.Capabilities.Exceptions.ApiCapabilityConflictException.ApiCapabilityConflictException(string! message) -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityView.Status.get -> string?
+Elsa.Api.Capabilities.Models.ApiCapabilityView.ApiCapabilityView(string! Id, string! ContractVersion, System.Collections.Generic.IReadOnlyCollection<Elsa.Api.Capabilities.Models.ApiCapabilityLinkView!>! Links) -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityView.Status.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityView.Reason.get -> string?
+Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument.ApiCapabilitiesDocument(System.Collections.Generic.IReadOnlyCollection<Elsa.Api.Capabilities.Models.ApiCapabilityView!>! Capabilities) -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityView.Reason.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityLink.Rel.get -> string!
+Elsa.Api.Capabilities.Models.ApiCapabilityLink.Rel.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityLink.ApiCapabilityLink(string! rel, string! href, bool templated = false) -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityLink.Href.get -> string!
+Elsa.Api.Capabilities.Models.ApiCapabilityLink.Href.init -> void
+override Elsa.Api.Capabilities.Models.ApiCapabilityView.GetHashCode() -> int
+override Elsa.Api.Capabilities.Models.ApiCapabilityView.Equals(object? obj) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityLink.Templated.get -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityLink.Templated.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityView.Equals(Elsa.Api.Capabilities.Models.ApiCapabilityView? other) -> bool
+Elsa.Api.Capabilities.Models.ApiCapabilityView.<Clone>$() -> Elsa.Api.Capabilities.Models.ApiCapabilityView!
+Elsa.Api.Capabilities.Models.ApiCapabilityView.Deconstruct(out string! Id, out string! ContractVersion, out System.Collections.Generic.IReadOnlyCollection<Elsa.Api.Capabilities.Models.ApiCapabilityLinkView!>! Links) -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.CapabilityId.get -> string!
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.CapabilityId.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.ContractMajorVersion.get -> int
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.ContractMajorVersion.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.Links.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Api.Capabilities.Models.ApiCapabilityLink!>!
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.SourceFeatureId.get -> string!
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.SourceFeatureId.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.DormantReason.get -> string?
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.Links.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.DormantReason.init -> void
+Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration.ApiCapabilityDeclaration(string! capabilityId, int contractMajorVersion, System.Collections.Generic.IReadOnlyCollection<Elsa.Api.Capabilities.Models.ApiCapabilityLink!>! links, string! sourceFeatureId) -> void
+static Elsa.Api.Capabilities.ApiCapabilityRegistration.Add(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration! declaration) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

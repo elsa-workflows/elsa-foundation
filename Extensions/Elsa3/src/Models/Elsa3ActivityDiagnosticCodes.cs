@@ -49,7 +49,10 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>A required Elsa 4 input would stay unbound.</summary>
     public const string RequiredInputUnbound = "ELS3-ACTIVITY-REQUIRED-INPUT-UNBOUND";
 
-    /// <summary>A mode or placement Elsa 4 cannot express (Switch MatchAny, misplaced or multi-outcome Complete/End, …).</summary>
+    /// <summary>
+    /// A mode or placement Elsa 4 cannot express: a mode set by an expression, a MatchAny Switch case that holds an
+    /// activity, a misplaced Complete/End, an outcome set by an expression, several outcomes outside a reusable workflow, ….
+    /// </summary>
     public const string UnsupportedMode = "ELS3-ACTIVITY-UNSUPPORTED-MODE";
 
     /// <summary>
@@ -124,9 +127,6 @@ public static class Elsa3ActivityDiagnosticCodes
 
     /// <summary>ExecuteWorkflow becomes a durable dispatch instead of an in-process call.</summary>
     public const string ExecuteWorkflowDurable = "ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE";
-
-    /// <summary>RunJavaScript.PossibleOutcomes: routing is by return value.</summary>
-    public const string ScriptOutcomeRouting = "ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING";
 
     /// <summary>
     /// A null member of an alias or a verbatim catalog key gets the Elsa 4 input's default; Elsa 3 ran it with its own

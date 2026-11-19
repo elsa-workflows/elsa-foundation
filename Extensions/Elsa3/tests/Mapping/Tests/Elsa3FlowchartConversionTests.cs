@@ -1,3 +1,4 @@
+using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
 using Xunit;
@@ -29,6 +30,50 @@ public sealed class Elsa3FlowchartConversionTests
     }
 
     public static TheoryData<string> ConvertingFixtures() => new(Converting);
+
+    /// <summary>
+    /// Spec 1208 US2 scenario 3 (FR-026, #3295): across the corpus shapes, no converted RunJavaScript connection is on
+    /// <c>Unmatched</c>; an Elsa 3 <c>Done</c> connection stays on <c>Done</c>, with or without possible outcomes.
+    /// </summary>
+    [Fact]
+    public async Task No_converted_run_javascript_connection_is_on_unmatched()
+    {
+        var catalog = RealActivityCatalog.Create();
+        var checkedScripts = 0;
+        foreach (var fixture in Converting)
+        {
+            var source = Load(fixture);
+            var scripts = Elsa3Nodes(source.Root!).Where(node => node.Type == "Elsa.RunJavaScript").Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
+            if (scripts.Count == 0)
+                continue;
+
+            var result = await ConversionServices.ConvertAsync(catalog, source);
+
+            Assert.True(result.Succeeded, Describe(result.Diagnostics));
+            var connections = Elsa3ImportedActivityNodes.Walk(result.Value!.State.RootActivity!)
+                .Where(node => node.Structure?.Payload.ValueKind == System.Text.Json.JsonValueKind.Object && node.Structure.Payload.TryGetProperty("connections", out _))
+                .SelectMany(Connections)
+                .Where(connection => scripts.Contains(connection[..connection.IndexOf(':')]))
+                .ToArray();
+            Assert.DoesNotContain(connections, connection => connection.Contains(":Unmatched->", StringComparison.Ordinal));
+            checkedScripts += scripts.Count;
+        }
+
+        Assert.True(checkedScripts > 0, "No corpus shape holds a RunJavaScript connection.");
+    }
+
+    [Fact]
+    public async Task A_run_javascript_done_connection_stays_on_done()
+    {
+        var root = await RootAsync("script-done");
+
+        Assert.Equal(
+            ["plain:Done->listed", "listed:Done->routed", "routed:Approved->on-approved", "routed:Done->last"],
+            Connections(root));
+    }
+
+    private static IEnumerable<Elsa3Activity> Elsa3Nodes(Elsa3Activity node) =>
+        new[] { node }.Concat((node.Activities ?? []).SelectMany(Elsa3Nodes));
 
     [Fact]
     public async Task A_decision_tree_keeps_its_nodes_ports_and_start()

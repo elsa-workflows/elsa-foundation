@@ -75,6 +75,22 @@ export function analyzeActivityVersionChange(
   };
 }
 
+export const activityVersionChangePinnedReason = "A test-run snapshot is shown, not the editable draft, so activity versions cannot be changed here. Return to the draft first.";
+
+/**
+ * The reviewed version change for the editable draft. Refused while the editor shows a pinned test-run snapshot: that
+ * snapshot is not the draft the save writes, and it carries no history line of its own.
+ */
+export function planActivityVersionChange(draft: WorkflowDraft | null, request: { precondition: ActivityVersionChangePrecondition; targetVersionId: string; scope: ActivityVersionChangeScope }, canEdit: boolean): WorkflowDraft {
+  if (!canEdit) throw new Error(activityVersionChangePinnedReason);
+  if (!draft) throw new Error("No workflow draft is loaded.");
+  const staleReason = validateActivityVersionChangePrecondition(draft, request.precondition);
+  if (staleReason) throw new Error(staleReason);
+  const next = applyActivityVersionChange(draft, request.precondition.occurrenceId, request.precondition.fromVersionId, request.targetVersionId, request.scope);
+  if (next === draft) throw new Error("The reviewed occurrence no longer matches this version change.");
+  return next;
+}
+
 export function applyActivityVersionChange(
   draft: WorkflowDraft,
   occurrenceId: string,

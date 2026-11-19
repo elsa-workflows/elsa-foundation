@@ -12,6 +12,20 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class ValueConversionPlanResolverTests
 {
+    [Theory]
+    [InlineData("String", CollectionKind.Single, "System.Text.Json.JsonElement")]
+    [InlineData("Int64", CollectionKind.Single, "System.Text.Json.JsonElement?")]
+    [InlineData("Object", CollectionKind.Single, "System.Text.Json.JsonElement")]
+    [InlineData("System.Text.Json.JsonElement?", CollectionKind.Single, "System.Text.Json.JsonElement")]
+    [InlineData("String", CollectionKind.Array, "System.Text.Json.JsonElement")]
+    public void Any_activity_can_bind_a_json_compatible_value_to_a_json_contract(string alias, CollectionKind collection, string target)
+    {
+        var sourceType = new ValueTypeDescriptor(alias, collection);
+        var plan = new ValueConversionPlanResolver().Resolve(sourceType, ValueRepresentationDefaults.Infer(sourceType), new ValueTypeDescriptor(target));
+
+        Assert.Equal(ValueConversionOperation.CanonicalAny, plan.Operation);
+    }
+
     private readonly ValueConversionPlanResolver resolver = new();
 
     [Fact]
@@ -106,6 +120,37 @@ public sealed class ValueConversionPlanResolverTests
         Assert.Equal(ValueConversionOperation.Profile, structured.Operation);
         Assert.Equal(CollectionKind.List, structured.TargetType.CollectionKind);
         Assert.Contains("registered typed target alias", unregistered.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("System.Text.Json.JsonElement", "Boolean")]
+    [InlineData("System.Text.Json.JsonElement?", "Boolean")]
+    [InlineData("System.Text.Json.JsonElement", "JsonObject")]
+    [InlineData("System.Text.Json.JsonElement?", "JsonObject")]
+    [InlineData("System.Text.Json.JsonElement", "String")]
+    public void A_json_element_source_binds_to_a_typed_or_json_object_input_through_the_json_profile(string sourceAlias, string target)
+    {
+        var typedResolver = new ValueConversionPlanResolver(wellKnownTypeRegistry: TestWellKnownTypeRegistry.Create());
+        var source = Type(sourceAlias);
+
+        var plan = typedResolver.Resolve(source, ValueRepresentationDefaults.Infer(source), Type(target));
+
+        Assert.Equal(ValueRepresentation.StructuredValue, plan.SourceRepresentation);
+        Assert.Equal(ValueConversionOperation.Profile, plan.Operation);
+        Assert.Equal("elsa.json", plan.Profile!.Id);
+    }
+
+    [Theory]
+    [InlineData("System.Text.Json.JsonElement")]
+    [InlineData("System.Text.Json.JsonElement?")]
+    public void A_json_element_source_needs_a_registered_typed_target(string sourceAlias)
+    {
+        var source = Type(sourceAlias);
+
+        var exception = Assert.Throws<ValueConversionPublicationException>(() =>
+            resolver.Resolve(source, ValueRepresentationDefaults.Infer(source), Type("Acme.Unknown")));
+
+        Assert.Equal(ValueConversionRejectionReason.JsonTypedTargetRequired, exception.ReasonCode);
     }
 
     [Fact]

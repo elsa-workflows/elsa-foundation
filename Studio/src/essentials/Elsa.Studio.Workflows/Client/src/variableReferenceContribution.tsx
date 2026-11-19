@@ -50,7 +50,7 @@ function VariableReferenceEditor({ descriptor, value, disabled, onChange }: Stud
   const options = authoring.visibleVariables.map(variable => {
     const declaration = declarations.get(variableOptionKey(variable.referenceKey, variable.scopeId));
     const type = declaration ? readArgumentType(declaration) : null;
-    return { variable, type, compatible: type ? isArgumentTypeCompatible(type, descriptor.typeName) : false };
+    return { variable, type, compatible: type ? isArgumentTypeCompatible(type, descriptor.typeName, descriptor.collectionKind) : false };
   });
   const compatible = options.filter(option => option.compatible);
   const incompatible = options.filter(option => !option.compatible);
@@ -129,7 +129,7 @@ function VariableOption({
   );
 }
 
-function indexVariableDeclarations(state: WorkflowDefinitionState) {
+export function indexVariableDeclarations(state: WorkflowDefinitionState) {
   const declarations = new Map<string, VariableDefinition>();
   for (const variable of state.variables ?? []) {
     declarations.set(variableOptionKey(variable.referenceKey, WORKFLOW_SCOPE_ID), variable);
@@ -149,7 +149,7 @@ function normalizeScopeId(scopeId: string | null | undefined) {
   return !scopeId || scopeId === WORKFLOW_SCOPE_ID ? WORKFLOW_SCOPE_ID : scopeId;
 }
 
-function variableOptionKey(referenceKey: string, scopeId: string | null | undefined) {
+export function variableOptionKey(referenceKey: string, scopeId: string | null | undefined) {
   return `${normalizeScopeId(scopeId)}${variableOptionSeparator}${referenceKey}`;
 }
 

@@ -1,0 +1,13 @@
+#nullable enable
+Elsa.Agent.AgentInMemoryJournalFeature
+Elsa.Agent.AgentInMemoryJournalFeature.AgentInMemoryJournalFeature() -> void
+Elsa.Agent.AgentRuntimeFeature
+Elsa.Agent.AgentRuntimeFeature.AgentRuntimeFeature() -> void
+virtual Elsa.Agent.AgentInMemoryJournalFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Agent.AgentRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Agent.AgentRuntimeFeature.AllowNewOperations.get -> bool
+Elsa.Agent.AgentRuntimeFeature.AllowNewOperations.set -> void
+Elsa.Agent.AgentRuntimeFeature.ContentRetention.get -> System.TimeSpan
+Elsa.Agent.AgentRuntimeFeature.ContentRetention.set -> void
+Elsa.Agent.AgentRuntimeFeature.StreamResponses.get -> bool
+Elsa.Agent.AgentRuntimeFeature.StreamResponses.set -> void

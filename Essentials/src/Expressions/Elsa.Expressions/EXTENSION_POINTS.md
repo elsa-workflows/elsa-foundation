@@ -38,6 +38,21 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
 - **Signature:** `IEnumerable<TypeDescriptor> GetDescriptors()`.
 - **Consumed by:** `VariableTypeDescriptorCatalog` and alias-registry seeding.
 
+### `IExpressionVariableReader` *(Core — `Elsa.Expressions.Core`)*
+
+- **Kind:** a host-side lookup passed with one `ExpressionEvaluationRequest`, not a registered service (spec 1222
+  FR-008). An evaluator reads computed and opaque variable reads through it; the host records each read.
+- **Implementations:** `RuntimeVariableReadFallback` (`Elsa.Workflows.Runtime`, the recorded run-time lookup for
+  expressions publish marked with a `VariableReadFallback`) and `GraphVariableReader` (`Elsa.Activities.Graph.Runtime`,
+  a graph expression's own variables).
+- **Consumers:** the Jint evaluator's `variables` root and `getVariable`, and the Liquid handler's `variables` root.
+
+### `IScriptVariableReadAnalyzer` *(Core — `Elsa.Expressions.Core`)*
+
+- **Kind:** replacement contract per language: exactly one per language, checked at shell start (see the JavaScript
+  catalog). The JavaScript feature registers `JavaScriptVariableReadAnalyzer`, the Liquid feature
+  `LiquidVariableReadAnalyzer`.
+
 ## Cross-references
 
 - JavaScript binding boundary: [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md).
