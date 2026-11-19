@@ -269,8 +269,8 @@ lost updates. Values appear only through their states and the payload read.
   step and names the variable.
 - `RunJavaScript` script writes (`variables.x = v`, `setVariable`) and the Elsa 3 converter's rewrite of `setVariable`
   and generated setters are not built yet (spec 1231 Phases 5 and 8).
-- A value snapshot is kept for captures of a leaf (on completion and on resume, including background results) and
-  for intrinsic writes to the root and container frames. Captures into closed-scope rows, captures made while a
+- A value snapshot is kept for captures of a leaf (on completion and on resume, including background results), for
+  step-session writes (on completion and on suspension) and for intrinsic writes to the root and container frames. Captures into closed-scope rows, captures made while a
   composite completes and accepted overrides have their write record, but no value snapshot yet. (Loop iteration
   frames are read-only to intrinsics.)
 - Two captures of one completion into the same closed-scope variable are both judged against the stored row; the
