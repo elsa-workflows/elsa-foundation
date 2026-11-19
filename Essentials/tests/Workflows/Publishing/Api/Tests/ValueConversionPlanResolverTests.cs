@@ -123,14 +123,16 @@ public sealed class ValueConversionPlanResolverTests
     }
 
     [Theory]
-    [InlineData("System.Text.Json.JsonElement")]
-    [InlineData("System.Text.Json.JsonElement?")]
-    public void A_json_element_source_binds_to_a_registered_typed_input_through_the_json_profile(string sourceAlias)
+    [InlineData("System.Text.Json.JsonElement", "Boolean")]
+    [InlineData("System.Text.Json.JsonElement?", "Boolean")]
+    [InlineData("System.Text.Json.JsonElement", "JsonObject")]
+    [InlineData("System.Text.Json.JsonElement?", "JsonObject")]
+    public void A_json_element_source_binds_to_a_typed_or_json_object_input_through_the_json_profile(string sourceAlias, string target)
     {
         var typedResolver = new ValueConversionPlanResolver(wellKnownTypeRegistry: TestWellKnownTypeRegistry.Create());
         var source = Type(sourceAlias);
 
-        var plan = typedResolver.Resolve(source, ValueRepresentationDefaults.Infer(source), Type("Boolean"));
+        var plan = typedResolver.Resolve(source, ValueRepresentationDefaults.Infer(source), Type(target));
 
         Assert.Equal(ValueRepresentation.StructuredValue, plan.SourceRepresentation);
         Assert.Equal(ValueConversionOperation.Profile, plan.Operation);
