@@ -689,6 +689,17 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// <summary><c>const</c>/<c>let</c> names holding a known date.</summary>
         private readonly HashSet<string> _dateAliases = new(StringComparer.Ordinal);
 
+        /// <summary>
+        /// The nesting each date alias was declared at: functions, branches and loops each add one. An assignment drops the
+        /// alias only at that nesting, so one that may not run (in a branch, a loop or an uncalled function) keeps it.
+        /// </summary>
+        private readonly Dictionary<string, int> _dateAliasNesting = new(StringComparer.Ordinal);
+
+        private int _nesting;
+
+        private static bool Nests(Node node) => node is IFunction or IfStatement or ConditionalExpression or LogicalExpression or
+            ForStatement or ForInStatement or ForOfStatement or WhileStatement or DoWhileStatement or SwitchStatement or TryStatement;
+
         /// <summary>Whether the converted source reads variables by a computed name, which publish serves by the run-time fallback.</summary>
         public bool HasComputedVariableRead { get; private set; }
 
@@ -858,12 +869,17 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             };
             if (function is not null)
                 _functions.Add(function);
+            var nests = Nests(node);
+            if (nests)
+                _nesting++;
             try
             {
                 VisitNode(node);
             }
             finally
             {
+                if (nests)
+                    _nesting--;
                 if (function is not null)
                 {
                     _functions.RemoveAt(_functions.Count - 1);
@@ -1318,10 +1334,12 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 if (assignmentToName.Operator == Operator.AdditionAssignment &&
                     (IsKnownDate(assignmentToName.Right) || _dateAliases.Contains(assigned.Name)))
                     ZoneDependent(assignmentToName, DateUse.LocalFormat, null);
-                // A name holds a date only while what was last assigned to it is one (the set is not scoped: a gap).
-                if (assignmentToName.Operator == Operator.Assignment && IsKnownDate(assignmentToName.Right))
-                    _dateAliases.Add(assigned.Name);
-                else
+                // A plain = of something else drops the alias, but only where it surely runs: at the nesting the alias was
+                // declared at. A logical assignment (??=, ||=, &&=) may keep the date, so it never drops one.
+                if (IsKnownDate(assignmentToName.Right))
+                    AddDateAlias(assigned.Name);
+                else if (assignmentToName.Operator == Operator.Assignment &&
+                         _dateAliasNesting.TryGetValue(assigned.Name, out var declaredAt) && declaredAt == _nesting)
                     _dateAliases.Remove(assigned.Name);
                 return;
             }
@@ -1344,8 +1362,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     if (declarator.Id is Identifier alias)
                     {
                         if (declarator.Init is { } init && IsKnownDate(init))
-                            _dateAliases.Add(alias.Name);
-                        else
+                            AddDateAlias(alias.Name);
+                        else if (_dateAliasNesting.TryGetValue(alias.Name, out var declaredAt) && declaredAt == _nesting)
                             _dateAliases.Remove(alias.Name);
                     }
                 }
@@ -1973,9 +1991,23 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             // (Date.now() + ms, d.getTime() + offset).
             BinaryExpression { Operator: Operator.Addition } addition =>
                 IsNumber(addition.Left) && IsNumber(addition.Right) ||
-                IsNumber(addition.Left) && MayBeNumber(addition.Right) ||
-                MayBeNumber(addition.Left) && IsNumber(addition.Right),
+                IsEpoch(addition.Left) && MayBeNumber(addition.Right) ||
+                MayBeNumber(addition.Left) && IsEpoch(addition.Right),
             CallExpression { Callee: MemberExpression { Computed: false, Object: Identifier { Name: "Date" }, Property: Identifier { Name: "now" or "UTC" or "parse" } } } => !IsDeclared("Date"),
+            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" or "valueOf" } } } => true,
+            _ => false,
+        };
+
+        private void AddDateAlias(string name)
+        {
+            if (_dateAliases.Add(name) || !_dateAliasNesting.ContainsKey(name))
+                _dateAliasNesting[name] = _nesting;
+        }
+
+        /// <summary>Epoch milliseconds: <c>Date.now()</c>, <c>Date.UTC(...)</c>, <c>getTime()</c> or <c>valueOf()</c>.</summary>
+        private bool IsEpoch(Node node) => node switch
+        {
+            CallExpression { Callee: MemberExpression { Computed: false, Object: Identifier { Name: "Date" }, Property: Identifier { Name: "now" or "UTC" } } } => !IsDeclared("Date"),
             CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" or "valueOf" } } } => true,
             _ => false,
         };

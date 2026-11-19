@@ -104,6 +104,7 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("var s = '2026-10-28'; Date.parse(s)")]
     [InlineData("var t = '\"2026-10-28T09:15:00\"'; new Date(JSON.parse(t)).getTime()")]
     [InlineData("var s = 'x'; new Date(s + 'T09:15:00').getTime()")]
+    [InlineData("var rest = '-03-01T10:00'; new Date(2026 + rest).getUTCHours()")]
     [InlineData("Date.parse('1-7-2026')")]
     [InlineData("var parts = [2026, 0, 1]; new Date(...parts)")]
     public async Task Zone_dependent_usage_is_refused_under_refuse_naming_both_settings(string expression)
@@ -246,6 +247,9 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("String(new Date())")]
     [InlineData("var d = new Date(); d.toString()")]
     [InlineData("(function () { var d = new Date(0); var s = 'x'; s += d; return s; })()")]
+    [InlineData("(function () { var when = new Date(); if (Math.random() > 2) when = 'n/a'; return 'Due ' + when; })()")]
+    [InlineData("(function () { var d = new Date(); d ??= new Date(0); return 'at ' + d; })()")]
+    [InlineData("(function () { var d = new Date(); function f() { d = 1; } return '' + d; })()")]
     public async Task Local_text_is_refused_under_source_time_zone_and_warned_under_assume_utc(string expression)
     {
         var zoned = await ConvertAsync(expression, Elsa3DateInterpretation.SourceTimeZone, "Europe/Amsterdam");
