@@ -6,8 +6,8 @@ name: Kernel prototype
 #
 #   - pull request: a fast gate, the deterministic simulation at a small size plus both mutation checks, the in-memory
 #     store conformance and the graph engine corpus. Target: well under its 20-minute timeout.
-#   - nightly: the larger simulation sizes, the runtime and store conformance (built-in runtime, Orleans adapter,
-#     EF on SQLite in both fence modes) and the native smoke and cost runs.
+#   - nightly: the larger simulation sizes, the runtime and store conformance (built-in runtime, EF on SQLite in both
+#     fence modes) and the native smoke and cost runs.
 #
 # The database engines that run in containers (PostgreSQL, SQL Server, MySQL and the document database) stay manual:
 # see the README.
@@ -155,7 +155,7 @@ jobs:
 
       - name: Build
         run: |
-          for p in sim models/Native.Run models/Native.Recovery.Run models/Statecharts.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance models/Graph.Tests; do
+          for p in sim models/Native.Run models/Native.Recovery.Run models/Statecharts.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -193,26 +193,19 @@ jobs:
           $EFC sqlite --checked-fence semantic
           $EFC sqlite --fence-in-batch semantic
 
-      - name: Runtime conformance, built-in runtime and Orleans adapter
+      - name: Runtime conformance, built-in runtime
         run: |
           RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
-          ORC="dotnet runtime/Kernel.Runtime.Orleans.Conformance/$BIN/Kernel.Runtime.Orleans.Conformance.dll"
           $RTC semantic
           $RTC semantic --partitions 1024
           $RTC stress 20 2000
-          $ORC semantic
-          $ORC semantic --partitions 1024
-          $ORC stress 20 2000
 
       # The -broken forms break the store's fence on purpose; the runner decides whether the runtime failed as it must.
       - name: Fence broken on purpose
         run: |
           RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
-          ORC="dotnet runtime/Kernel.Runtime.Orleans.Conformance/$BIN/Kernel.Runtime.Orleans.Conformance.dll"
           $RTC semantic-broken
           $RTC stress-broken 10 1000
-          $ORC semantic-broken
-          $ORC stress-broken 10 1000
 
       - name: Native model, smoke and cost
         run: |

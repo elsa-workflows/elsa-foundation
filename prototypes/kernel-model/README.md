@@ -33,8 +33,6 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `conformance/Kernel.Runtime.Conformance` | The runtime conformance suite: semantic cases, the fence broken on purpose, the stress test, for any actor runtime |
 | `conformance/Kernel.Runtime.Conformance.Run` | The runtime suite against the built-in runtime |
 | `runtime/Kernel.Runtime.Hosting` | `RuntimeNode`: the built-in runtime of one node on a clock |
-| `runtime/Kernel.Runtime.Orleans` | The Orleans adapter: each partition a grain |
-| `runtime/Kernel.Runtime.Orleans.Conformance` | The runtime suite against the Orleans adapter, on Orleans' in-process test cluster |
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
 | `experiments/VirtualPartitions` | Round 5 A: the two fence granularities of virtual partitions (per virtual partition, per owned range) as EF stores, the measurement harness and the ownership simulation; results in [PARTITIONS.md](PARTITIONS.md) |
@@ -51,7 +49,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 One project at a time (they share `obj/` folders through project references):
 
 ```
-for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance; do dotnet build $p -c Release; done
+for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
@@ -101,17 +99,14 @@ SQL Server runs under amd64 emulation on arm64: slow, but the counts are not aff
 
 ## The runtime conformance suite
 
-On the in-memory store, the built-in runtime and the Orleans adapter (Orleans' in-process test cluster on its in-memory
-transport: no socket, no cloud). Each command's exit code says whether the runtime conforms; the `-broken` forms break
+On the in-memory store and the built-in runtime. (The Orleans adapter ran here too until its retirement on 19 November;
+FINDINGS section 27 and the K1 costs keep its results.) Each command's exit code says whether the runtime conforms; the `-broken` forms break
 the store's fence on purpose and must fail on it.
 
 ```
 RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll"
-ORC="dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll"
 $RTC semantic [filter]; $RTC semantic-broken
 $RTC stress 20 2000; $RTC stress-broken 10 1000
-$ORC semantic [filter]; $ORC semantic-broken
-$ORC stress 20 2000; $ORC stress-broken 10 1000
 ```
 
 ## The store conformance suite

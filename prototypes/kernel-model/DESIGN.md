@@ -1,5 +1,9 @@
 # Execution kernel: design as built (the kernel model in three layers, 12 November 2026)
 
+> **19 November 2026:** the Orleans reference adapter (`runtime/Kernel.Runtime.Orleans`) is retired at the owner's
+> decision: layers 1 and 2 are one replaceable foundation behind layer 3's contract ([register](../../docs/architecture/decisions.md#owner-decisions-after-k1-19-november)).
+> The sections below that describe it are history.
+
 Status: the design of the kernel model after round 4 stage A, which split the merged kernel into three layer projects
 and renamed step to turn and off-step work (run) to background job, at the owner's decisions of 12 November. Stage A
 changed no behaviour: every gate gives the numbers it gave before (FINDINGS section 24). Round 4's graph engine
@@ -142,7 +146,6 @@ named preset of the last two; a workflow behaves the same under every profile.
 |---|---|---|---|
 | Embedded | Built-in, one node | SQLite typically: **1,024 virtual partitions** by default, one node's set | `EfStore.CreateAsync()` on SQLite |
 | Cluster | Built-in, partitions over nodes | PostgreSQL, SQL Server, MySQL, MongoDB: **1,024 virtual partitions** by default | `EfStore.CreateAsync()`, `MongoStore.CreateAsync()` |
-| Orleans | The adapter: each partition a grain | Any | `AddKernelRuntime` on a silo, then `OrleansActorRuntime.StartAsync` with layer 2's host |
 
 Inline execution is what `Worker.Post` does: a start without a caller's key runs in the receiving process, in a
 partition it owns, with no row written until the instance commits.

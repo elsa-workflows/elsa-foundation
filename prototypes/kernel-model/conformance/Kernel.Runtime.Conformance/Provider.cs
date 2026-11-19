@@ -20,7 +20,7 @@ public interface IRuntimeProvider
     /// </summary>
     bool OneWorkerPerNode => false;
 
-    /// <summary>Who decides which node holds which scope: the kernel's balancer, or the runtime's own placement (Orleans, K1 D2).</summary>
+    /// <summary>Who decides which node holds which scope: the kernel's balancer, or the runtime's own placement (a runtime that places scopes itself, K1 D2).</summary>
     Placement Placement => Placement.Runtime;
 }
 
