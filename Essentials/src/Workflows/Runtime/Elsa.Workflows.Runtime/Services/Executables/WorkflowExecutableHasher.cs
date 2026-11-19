@@ -213,7 +213,12 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         var parameters = string.Join(',', expression.Parameters
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select(item => $"{item.Key}={CanonicalJson(JsonSerializer.SerializeToElement(item.Value, typeof(Elsa.Expressions.Core.Models.ExpressionParameterBinding)))}"));
-        return $"expression:{expression.Language}:{expression.Expression}:{resultType}:{expression.CapabilityProfile}:{CanonicalJson(expression.Options)}:({parameters})[{metadata}]";
+        // The fallback marker changes what the runtime loads and records (spec 1222), so it is behavior; it is appended
+        // only when present, so an expression without one hashes as before.
+        var fallback = expression.VariableReadFallback is { } marker
+            ? $":fallback({string.Join(',', marker.Candidates.Select(candidate => $"{candidate.Name}={candidate.DeclaringScopeNodeId}/{candidate.VariableKey}"))})"
+            : string.Empty;
+        return $"expression:{expression.Language}:{expression.Expression}:{resultType}:{expression.CapabilityProfile}:{CanonicalJson(expression.Options)}:({parameters})[{metadata}]{fallback}";
     }
 
     private static string FormatType(Elsa.Primitives.Models.ValueTypeDescriptor type) =>

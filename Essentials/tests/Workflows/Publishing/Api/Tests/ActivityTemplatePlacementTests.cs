@@ -149,6 +149,59 @@ public sealed class ActivityTemplatePlacementTests
     }
 
     [Fact]
+    public async Task An_occurrence_script_that_reads_variables_is_served_by_the_run_time_lookup()
+    {
+        // Spec 1222: an occurrence's inputs compile at placement, without the scopes publish pins against, so a
+        // script that reads variables is marked for the recorded run-time lookup instead of reading nothing.
+        var overlay = new ExecutableActivityTemplateOccurrenceOverlay(
+            "1",
+            Json("""[{"referenceKey":"condition","value":{"value":"variables.total > 1","expressionType":"JavaScript"}}]"""),
+            null);
+        var graphTemplate = Template(
+            "template-graph",
+            "hash-graph",
+            Node("graph-root"),
+            [new("definition-sequence", "version-sequence", "1.0.0", "template-sequence", "hash-sequence", "sequence", ActivityInvocationOrigin.Empty, null, "activity-graph", 0, overlay)]);
+        var sequenceTemplate = Template(
+            "template-sequence",
+            "hash-sequence",
+            new ExecutableNode(
+                "source-owned-root", "source-owned-root", "type.sequence", "1", new("sequence", "1", Json("{}")),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
+                new Dictionary<string, string>(), activityContract: RuntimeContractWithCondition("String")));
+        var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
+        var sequencePublication = Publication("definition-sequence", "version-sequence", "type.sequence", sequenceTemplate);
+        var references = new[] { Reference(graphPublication, ExecutableLayoutSidecar.Empty), Reference(sequencePublication, ExecutableLayoutSidecar.Empty) };
+        var placer = CreatePlacer(
+            new PublicationStore([graphPublication, sequencePublication]),
+            new TemplateReader([graphTemplate, sequenceTemplate]),
+            new SourceReader(references),
+            new Sha256ActivityPlacementHasher(),
+            new Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver([new VariablesDotAnalyzer()]));
+
+        var placement = await placer.PlaceAsync(new(
+            graphPublication,
+            graphTemplate,
+            references[0],
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            graphPublication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, RuntimeOutputCapture>()));
+
+        var condition = placement.Root.DescendantsAndSelf().Single(node => node.InputBindings.ContainsKey("condition")).InputBindings["condition"];
+        Assert.NotNull(condition.Expression!.VariableReadFallback);
+    }
+
+    /// <summary>A stand-in for the JavaScript analyzer, which this project does not reference.</summary>
+    private sealed class VariablesDotAnalyzer : Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer
+    {
+        public string Language => "JavaScript";
+
+        public Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis Analyze(string source, bool scriptBody = false) =>
+            new(source.Contains("variables.", StringComparison.Ordinal) ? ["total"] : [], false);
+    }
+
+    [Fact]
     public async Task Placement_refuses_a_template_background_node_that_fails_a_criterion()
     {
         // FR-012 (spec 1230): a template provider's own background nodes pass the publication check when placed.
@@ -906,7 +959,8 @@ public sealed class ActivityTemplatePlacementTests
         IActivityDefinitionVersionPublicationStore publications,
         IExecutableActivityTemplateReader templates,
         IWorkflowExecutableSourceReferenceReader references,
-        IActivityPlacementHasher hasher) => new(
+        IActivityPlacementHasher hasher,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null) => new(
         publications,
         templates,
         references,
@@ -914,7 +968,8 @@ public sealed class ActivityTemplatePlacementTests
         new SequenceOccurrenceStructureService(),
         new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
         new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])),
-        BackgroundLeafTypes());
+        BackgroundLeafTypes(),
+        readResolver);
 
     private static Elsa.Serialization.Core.IWellKnownTypeRegistry BackgroundLeafTypes()
     {

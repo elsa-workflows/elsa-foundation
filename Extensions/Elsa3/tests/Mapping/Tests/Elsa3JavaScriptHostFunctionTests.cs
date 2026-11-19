@@ -53,16 +53,30 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
     }
 
-    /// <summary>A variable whose parameter name is the one a built-in becomes is refused, not overwritten.</summary>
-    [Theory]
-    [InlineData("workflowCorrelationId", "getCorrelationId()")]
-    [InlineData("workflowInstanceId", "getWorkflowInstanceId()")]
-    public async Task A_variable_named_like_a_built_in_parameter_is_refused(string variable, string call)
+    /// <summary>
+    /// A variable named like the parameter a built-in becomes no longer collides with it: the variable is read through the
+    /// variables root, the built-in through args (spec 1222 FR-003, FR-026).
+    /// </summary>
+    [Fact]
+    public async Task A_variable_named_like_a_built_in_parameter_is_read_through_its_own_root()
     {
-        var result = await ConvertTextAsync($"getVariable('{variable}') + {call}", new Elsa3Variable { Id = "v", Name = variable, TypeName = "String" });
+        var result = await ConvertTextAsync("getVariable('workflowCorrelationId') + getCorrelationId()", new Elsa3Variable { Id = "v", Name = "workflowCorrelationId", TypeName = "String" });
 
-        Assert.False(result.Succeeded, "The variable's parameter would overwrite the built-in's.");
-        Assert.NotEmpty(result.Diagnostics);
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var expression = ReadExpression(result);
+        Assert.Equal("(variables.workflowCorrelationId + args.workflowCorrelationId) ?? null", expression.Source);
+        Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["variables.workflowCorrelationId"]);
+        Assert.IsType<WorkflowInstanceExpressionParameterBinding>(expression.Parameters["workflowCorrelationId"]);
+    }
+
+    /// <summary>A variable whose generated accessor has a built-in's name leaves the call ambiguous, so it is refused.</summary>
+    [Fact]
+    public async Task A_variable_whose_accessor_is_a_built_in_is_refused()
+    {
+        var result = await ConvertTextAsync("getVariable('workflowInstanceId') + getWorkflowInstanceId()", new Elsa3Variable { Id = "v", Name = "workflowInstanceId", TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
     }
 
     [Fact]

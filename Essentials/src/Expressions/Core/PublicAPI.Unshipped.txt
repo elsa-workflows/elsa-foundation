@@ -151,7 +151,6 @@ Elsa.Expressions.Core.Models.ExpressionCompletionRequest.Source.init -> void
 Elsa.Expressions.Core.Models.ExpressionDefinition
 Elsa.Expressions.Core.Models.ExpressionDefinition.CapabilityProfile.get -> string!
 Elsa.Expressions.Core.Models.ExpressionDefinition.Equals(Elsa.Expressions.Core.Models.ExpressionDefinition? other) -> bool
-Elsa.Expressions.Core.Models.ExpressionDefinition.ExpressionDefinition(string! language, string! source, Elsa.Primitives.Models.TypeReference! resultType, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.ExpressionParameterBinding!>! parameters, System.Text.Json.JsonElement options, string! capabilityProfile, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null) -> void
 Elsa.Expressions.Core.Models.ExpressionDefinition.Fingerprint.get -> string!
 Elsa.Expressions.Core.Models.ExpressionDefinition.Language.get -> string!
 Elsa.Expressions.Core.Models.ExpressionDefinition.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
@@ -204,11 +203,9 @@ Elsa.Expressions.Core.Models.ExpressionEditingMode.Reference = 3 -> Elsa.Express
 Elsa.Expressions.Core.Models.ExpressionEditingMode.Structured = 2 -> Elsa.Expressions.Core.Models.ExpressionEditingMode
 Elsa.Expressions.Core.Models.ExpressionEditingMode.Text = 1 -> Elsa.Expressions.Core.Models.ExpressionEditingMode
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest
-Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.AmbientVariables.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>!
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.CancellationToken.get -> System.Threading.CancellationToken
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Capabilities.get -> Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities!
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Definition.get -> Elsa.Expressions.Core.Models.ExpressionDefinition!
-Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.ExpressionEvaluationRequest(Elsa.Expressions.Core.Models.ExpressionDefinition! definition, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>! parameterValues, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>? ambientVariables, System.Threading.CancellationToken cancellationToken) -> void
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.ExpressionEvaluationRequest(Elsa.Expressions.Core.Models.ExpressionDefinition! definition, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>! parameterValues, System.Threading.CancellationToken cancellationToken) -> void
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.ParameterValues.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>!
 Elsa.Expressions.Core.Models.ExpressionHover
@@ -464,7 +461,6 @@ Elsa.Expressions.Core.Models.VariableDefinition.VariableDefinition(string! Refer
 Elsa.Expressions.Core.Models.VariableExpressionParameterBinding
 Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.DeclaringScopeNodeId.get -> string!
 Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? other) -> bool
-Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.VariableExpressionParameterBinding(string! declaringScopeNodeId, string! variableKey) -> void
 Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.VariableKey.get -> string!
 Elsa.Expressions.Core.Models.VariableReference
 Elsa.Expressions.Core.Models.VariableReference.<Clone>$() -> Elsa.Expressions.Core.Models.VariableReference!
@@ -682,3 +678,104 @@ override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding
 override sealed Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
 static Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? right) -> bool
+Elsa.Expressions.Core.Contracts.ExpressionVariableRead
+Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Equals(Elsa.Expressions.Core.Contracts.ExpressionVariableRead other) -> bool
+Elsa.Expressions.Core.Contracts.ExpressionVariableRead.ExpressionVariableRead() -> void
+Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Outcome.get -> Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome
+Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Refusal.get -> string?
+Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Value.get -> System.Text.Json.JsonElement
+Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome
+Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome.Missing = 1 -> Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome
+Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome.Present = 0 -> Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome
+Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome.Refused = 2 -> Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome
+Elsa.Expressions.Core.Contracts.IExpressionVariableReader
+Elsa.Expressions.Core.Contracts.IExpressionVariableReader.CandidateNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.Core.Contracts.IExpressionVariableReader.Read(string! name) -> Elsa.Expressions.Core.Contracts.ExpressionVariableRead
+Elsa.Expressions.Core.Models.ExpressionDefinition.ExpressionDefinition(string! language, string! source, Elsa.Primitives.Models.TypeReference! resultType, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.ExpressionParameterBinding!>! parameters, System.Text.Json.JsonElement options, string! capabilityProfile, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null, Elsa.Expressions.Core.Models.VariableReadFallback? variableReadFallback = null) -> void
+Elsa.Expressions.Core.Models.ExpressionDefinition.VariableReadFallback.get -> Elsa.Expressions.Core.Models.VariableReadFallback?
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.ArgumentValues() -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>!
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.ExpressionEvaluationRequest(Elsa.Expressions.Core.Models.ExpressionDefinition! definition, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>! parameterValues, Elsa.Expressions.Core.Contracts.IExpressionVariableReader? variableReader, System.Threading.CancellationToken cancellationToken) -> void
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.PinnedVariableValues() -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>!
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.VariableReader.get -> Elsa.Expressions.Core.Contracts.IExpressionVariableReader?
+Elsa.Expressions.Core.Models.ExpressionParameterSurfaces
+Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.IsVariablesSurface.get -> bool
+Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.Surface.get -> string?
+Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.VariableExpressionParameterBinding(string! declaringScopeNodeId, string! variableKey, string? surface = null) -> void
+Elsa.Expressions.Core.Models.VariableReadCandidate
+Elsa.Expressions.Core.Models.VariableReadCandidate.<Clone>$() -> Elsa.Expressions.Core.Models.VariableReadCandidate!
+Elsa.Expressions.Core.Models.VariableReadCandidate.DeclaringScopeNodeId.get -> string!
+Elsa.Expressions.Core.Models.VariableReadCandidate.Equals(Elsa.Expressions.Core.Models.VariableReadCandidate? other) -> bool
+Elsa.Expressions.Core.Models.VariableReadCandidate.Name.get -> string!
+Elsa.Expressions.Core.Models.VariableReadCandidate.VariableKey.get -> string!
+Elsa.Expressions.Core.Models.VariableReadCandidate.VariableReadCandidate(string! name, string! declaringScopeNodeId, string! variableKey) -> void
+Elsa.Expressions.Core.Models.VariableReadFallback
+Elsa.Expressions.Core.Models.VariableReadFallback.<Clone>$() -> Elsa.Expressions.Core.Models.VariableReadFallback!
+Elsa.Expressions.Core.Models.VariableReadFallback.Candidates.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.VariableReadCandidate!>!
+Elsa.Expressions.Core.Models.VariableReadFallback.Equals(Elsa.Expressions.Core.Models.VariableReadFallback? other) -> bool
+Elsa.Expressions.Core.Models.VariableReadFallback.VariableReadFallback(System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.VariableReadCandidate!>! candidates) -> void
+const Elsa.Expressions.Core.Models.ExpressionParameterSurfaces.Args = "args" -> string!
+const Elsa.Expressions.Core.Models.ExpressionParameterSurfaces.Variables = "variables" -> string!
+const Elsa.Expressions.Core.Models.ExpressionParameterSurfaces.VariablesKeyPrefix = "variables." -> string!
+override Elsa.Expressions.Core.Contracts.ExpressionVariableRead.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.VariableReadCandidate.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.VariableReadCandidate.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.VariableReadCandidate.ToString() -> string!
+override Elsa.Expressions.Core.Models.VariableReadFallback.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.VariableReadFallback.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.VariableReadFallback.ToString() -> string!
+static Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Missing.get -> Elsa.Expressions.Core.Contracts.ExpressionVariableRead
+static Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Present(System.Text.Json.JsonElement value) -> Elsa.Expressions.Core.Contracts.ExpressionVariableRead
+static Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Refused(string! refusal) -> Elsa.Expressions.Core.Contracts.ExpressionVariableRead
+static Elsa.Expressions.Core.Contracts.ExpressionVariableRead.operator !=(Elsa.Expressions.Core.Contracts.ExpressionVariableRead left, Elsa.Expressions.Core.Contracts.ExpressionVariableRead right) -> bool
+static Elsa.Expressions.Core.Contracts.ExpressionVariableRead.operator ==(Elsa.Expressions.Core.Contracts.ExpressionVariableRead left, Elsa.Expressions.Core.Contracts.ExpressionVariableRead right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionParameterSurfaces.TryGetVariableName(string! parameterKey, out string! name) -> bool
+static Elsa.Expressions.Core.Models.ExpressionParameterSurfaces.Validate(System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.ExpressionParameterBinding!>! parameters, string! parameterName) -> void
+static Elsa.Expressions.Core.Models.ExpressionParameterSurfaces.VariablesKey(string! name) -> string!
+static Elsa.Expressions.Core.Models.VariableReadCandidate.operator !=(Elsa.Expressions.Core.Models.VariableReadCandidate? left, Elsa.Expressions.Core.Models.VariableReadCandidate? right) -> bool
+static Elsa.Expressions.Core.Models.VariableReadCandidate.operator ==(Elsa.Expressions.Core.Models.VariableReadCandidate? left, Elsa.Expressions.Core.Models.VariableReadCandidate? right) -> bool
+static Elsa.Expressions.Core.Models.VariableReadFallback.operator !=(Elsa.Expressions.Core.Models.VariableReadFallback? left, Elsa.Expressions.Core.Models.VariableReadFallback? right) -> bool
+static Elsa.Expressions.Core.Models.VariableReadFallback.operator ==(Elsa.Expressions.Core.Models.VariableReadFallback? left, Elsa.Expressions.Core.Models.VariableReadFallback? right) -> bool
+~override Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Equals(object obj) -> bool
+~override Elsa.Expressions.Core.Contracts.ExpressionVariableRead.ToString() -> string
+Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer
+Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer.Analyze(string! source, bool scriptBody = false) -> Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis?
+Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer.Language.get -> string!
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.<Clone>$() -> Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis!
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.Equals(Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? other) -> bool
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.HasComputedRead.get -> bool
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.LiteralNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.ReadsVariables.get -> bool
+override Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.GetHashCode() -> int
+override Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.ToString() -> string!
+static Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.None.get -> Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis!
+static Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.operator !=(Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? left, Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? right) -> bool
+static Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.operator ==(Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? left, Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? right) -> bool
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.<Clone>$() -> Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead!
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Deconstruct(out string! Name, out int Start, out int End, out bool IsMemberName) -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.End.get -> int
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.End.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Equals(Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? other) -> bool
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.IsMemberName.get -> bool
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.IsMemberName.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Name.get -> string!
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Name.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.ScriptVariableLiteralRead(string! Name, int Start, int End, bool IsMemberName) -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Start.get -> int
+Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Start.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.LiteralReads.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead!>!
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.ScriptVariableReadAnalysis(System.Collections.Generic.IReadOnlyList<string!>! literalNames, bool hasComputedRead, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead!>? literalReads = null) -> void
+override Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.GetHashCode() -> int
+override Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.ToString() -> string!
+static Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.operator !=(Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? left, Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? right) -> bool
+static Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead.operator ==(Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? left, Elsa.Expressions.Core.Contracts.ScriptVariableLiteralRead? right) -> bool
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionEvaluationRequest!
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Equals(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest? other) -> bool
+override Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.ToString() -> string!
+static Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.operator !=(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest? left, Elsa.Expressions.Core.Models.ExpressionEvaluationRequest? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.operator ==(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest? left, Elsa.Expressions.Core.Models.ExpressionEvaluationRequest? right) -> bool

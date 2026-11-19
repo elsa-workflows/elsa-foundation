@@ -159,13 +159,29 @@ internal static class PlacedReferenceRemapper
             {
                 VariableExpressionParameterBinding variable when RemapScope(variable.DeclaringScopeNodeId, placedNodeIds, graphScopeId) is var scopeId &&
                                                                  !StringComparer.Ordinal.Equals(scopeId, variable.DeclaringScopeNodeId)
-                    => new VariableExpressionParameterBinding(scopeId, variable.VariableKey),
+                    => new VariableExpressionParameterBinding(scopeId, variable.VariableKey, variable.Surface),
                 ActivityResultExpressionParameterBinding result when placedNodeIds.TryGetValue(result.ProducerNodeId, out var producerId)
                     => new ActivityResultExpressionParameterBinding(producerId, result.ProjectionKey, result.IsOptional),
                 _ => parameter
             };
             changed |= !ReferenceEquals(remapped, parameter);
             parameters[name] = remapped;
+        }
+
+        var fallback = expression.VariableReadFallback;
+        if (fallback is not null)
+        {
+            var candidates = fallback.Candidates
+                .Select(candidate => RemapScope(candidate.DeclaringScopeNodeId, placedNodeIds, graphScopeId) is var scopeId &&
+                                     !StringComparer.Ordinal.Equals(scopeId, candidate.DeclaringScopeNodeId)
+                    ? new VariableReadCandidate(candidate.Name, scopeId, candidate.VariableKey)
+                    : candidate)
+                .ToArray();
+            if (candidates.Where((candidate, index) => !ReferenceEquals(candidate, fallback.Candidates[index])).Any())
+            {
+                fallback = new VariableReadFallback(candidates);
+                changed = true;
+            }
         }
 
         if (!changed)
@@ -179,7 +195,8 @@ internal static class PlacedReferenceRemapper
             parameters,
             expression.Options,
             expression.CapabilityProfile,
-            expression.ParameterConversionPlans);
+            expression.ParameterConversionPlans,
+            fallback);
     }
 
     private static string RemapScope(string scopeId, IReadOnlyDictionary<string, string> placedNodeIds, string graphScopeId)

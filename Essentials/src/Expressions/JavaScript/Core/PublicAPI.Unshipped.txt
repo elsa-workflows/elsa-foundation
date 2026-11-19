@@ -32,3 +32,16 @@ Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.JavaS
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.LiteralOutcomes.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.ReservedNameDeclarations.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionToolingRange>!
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.ReturnedStrings.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Deconstruct(out string! Name, out bool ReadsVariables) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Equals(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration? other) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.JavaScriptHostFunctionDeclaration(string! Name, bool ReadsVariables = false) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Name.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ReadsVariables.get -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ReadsVariables.init -> void
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Equals(object? obj) -> bool
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.GetHashCode() -> int
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ToString() -> string!
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.operator !=(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration? right) -> bool
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.operator ==(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration? right) -> bool

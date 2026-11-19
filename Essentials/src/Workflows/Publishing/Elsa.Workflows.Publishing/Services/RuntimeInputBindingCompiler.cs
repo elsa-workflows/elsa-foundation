@@ -1082,7 +1082,8 @@ public sealed class RuntimeInputBindingCompiler(
                 definition.Metadata,
                 definition.Parameters,
                 definition.Options,
-                definition.CapabilityProfile),
+                definition.CapabilityProfile,
+                variableReadFallback: definition.VariableReadFallback),
             metadata: BuildInputMetadata(inputDefinition));
     }
 

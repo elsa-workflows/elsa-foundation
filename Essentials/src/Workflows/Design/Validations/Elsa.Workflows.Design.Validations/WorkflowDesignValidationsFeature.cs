@@ -3,6 +3,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Extensions;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -72,6 +73,9 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<ScopedVariableReferenceRemapper>();
         services.AddScoped<IDraftValidator, UnknownActivityVersionValidator>();
         services.AddScoped<IDraftValidator, ScriptOutcomeValidator>();
+        services.TryAddScoped<ScriptVariableReadResolver>();
+        services.TryAddScoped<IScriptVariableRenamePlanner, ScriptVariableRenamePlanner>();
+        services.AddScoped<IDraftValidator, ScriptVariableReadValidator>();
         services.AddScoped<IDraftValidator, UnhandledActivityStructureValidator>();
         services.AddScoped<IDraftValidator, StartActivityValidator>();
         services.AddScoped<IDraftValidator, VariableUniquenessValidator>();

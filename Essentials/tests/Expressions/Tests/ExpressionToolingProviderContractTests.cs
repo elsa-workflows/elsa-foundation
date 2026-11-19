@@ -77,8 +77,9 @@ public sealed class ExpressionToolingProviderContractTests
     }
 
     [Fact]
-    public async Task JavaScript_projects_visible_variables_to_the_runtime_owned_namespace_and_getters()
+    public async Task JavaScript_projects_visible_variables_to_the_variables_namespace_without_generated_getters()
     {
+        // Spec 1222 FR-035a, FR-036: completions use variables.X; the runtime has no get<Name>() accessor to complete.
         var provider = new JavaScriptExpressionToolingProvider();
         var customerShape = new ExpressionValueShape(
             "Customer",
@@ -91,19 +92,17 @@ public sealed class ExpressionToolingProviderContractTests
 
         var root = await provider.GetCompletionsAsync(new(scope, "getCur", new(0, 6)), CancellationToken.None);
         var member = await provider.GetCompletionsAsync(new(scope, "variables.current", new(0, 17)), CancellationToken.None);
-        var getterMember = await provider.GetCompletionsAsync(
-            new(scope, "getCustomer().na", new(0, "getCustomer().na".Length)),
+        var nested = await provider.GetCompletionsAsync(
+            new(scope, "variables.customer.na", new(0, "variables.customer.na".Length)),
             CancellationToken.None);
-        var getterHover = await provider.GetHoverAsync(
-            new(scope, "getCustomer().name", new(0, "getCustomer().name".Length)),
+        var hover = await provider.GetHoverAsync(
+            new(scope, "variables.customer.name", new(0, "variables.customer.name".Length)),
             CancellationToken.None);
 
-        var rootGetter = Assert.Single(root.Payload!.Items);
-        Assert.Equal("getCurrentValue", rootGetter.Label);
-        Assert.Equal("getCurrentValue()", rootGetter.Detail);
+        Assert.DoesNotContain(root.Payload!.Items, item => item.Label.StartsWith("getCur", StringComparison.Ordinal));
         Assert.Equal("currentValue", Assert.Single(member.Payload!.Items).Label);
-        Assert.Equal("name", Assert.Single(getterMember.Payload!.Items).Label);
-        Assert.Contains("Customer name.", getterHover.Payload!.Contents, StringComparison.Ordinal);
+        Assert.Equal("name", Assert.Single(nested.Payload!.Items).Label);
+        Assert.Contains("Customer name.", hover.Payload!.Contents, StringComparison.Ordinal);
     }
 
     [Fact]

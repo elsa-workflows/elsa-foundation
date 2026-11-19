@@ -146,7 +146,8 @@ internal static class TestCompiler
         IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null,
         IExecutableNodeMetadataEnricher? metadataEnricher = null,
         IIncidentStrategyCatalog? incidentStrategyCatalog = null,
-        IActivityDataSelectionAnalyzer? dataSelectionAnalyzer = null)
+        IActivityDataSelectionAnalyzer? dataSelectionAnalyzer = null,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null)
     {
         var publications = activityPublications ?? new EmptyActivityPublicationStore();
         var templates = activityTemplates ?? new EmptyActivityTemplateReader();
@@ -177,7 +178,8 @@ internal static class TestCompiler
                 activityStructureService,
                 wellKnownTypeRegistry,
                 inputCompiler,
-                outputCompiler),
+                outputCompiler,
+                scriptVariableReadResolver: scriptVariableReadResolver),
             placementSidecars,
             metadataEnricher,
             incidentStrategyCatalog: incidentStrategyCatalog);

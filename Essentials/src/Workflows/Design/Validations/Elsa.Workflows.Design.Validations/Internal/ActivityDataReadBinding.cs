@@ -184,6 +184,9 @@ internal sealed record ActivityDataReadBinding(
     private static ActivityDataReadBinding? Parameter(ExpressionParameterBinding binding) => binding switch
     {
         WorkflowRequestExpressionParameterBinding request => new("WorkflowRequest", request.MemberKey, Path: request.Path),
+        // An authored variables-surface pin is derived again at publish from the script's names (spec 1222), so it is
+        // not an authored read to check; the compiled pin is checked like any other read.
+        VariableExpressionParameterBinding { IsVariablesSurface: true } => null,
         VariableExpressionParameterBinding variable => new("Variable", variable.VariableKey, variable.DeclaringScopeNodeId),
         ActivityResultExpressionParameterBinding result => new("ActivityResult", result.ProducerNodeId, Projection: result.ProjectionKey, IsOptional: result.IsOptional),
         _ => null

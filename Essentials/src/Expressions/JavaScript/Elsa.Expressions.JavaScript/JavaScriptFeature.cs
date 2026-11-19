@@ -22,6 +22,7 @@ public class JavaScriptFeature : IShellFeature
             .AddScoped<IPortableExpressionHandler, PortableJavaScriptExpressionHandler>()
             .AddScoped<IExpressionDescriptorProvider, JavaScriptExpressionDescriptorProvider>()
             .AddSingleton<IExpressionToolingProvider, JavaScriptExpressionToolingProvider>()
-            .AddSingleton<IJavaScriptScriptOutcomeAnalyzer, JavaScriptScriptOutcomeAnalyzer>();
+            .AddSingleton<IJavaScriptScriptOutcomeAnalyzer, JavaScriptScriptOutcomeAnalyzer>()
+            .AddSingleton<IScriptVariableReadAnalyzer, JavaScriptVariableReadAnalyzer>();
     }
 }

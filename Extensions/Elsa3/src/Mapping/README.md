@@ -204,8 +204,8 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
 
 ## Migrating Elsa 3 JavaScript
 
-Elsa 4 evaluates JavaScript in a sandbox. Each expression sees only the parameters it declares (`args`), and the
-sandbox has no clock, no randomness and no host functions. The converter therefore converts an Elsa 3 construct only
+Elsa 4 evaluates JavaScript in a sandbox. Each expression sees the parameters it declares (`args`) and the workflow
+variables it reads by name (`variables`, spec 1222), and the sandbox has no clock, no randomness and no host functions. The converter therefore converts an Elsa 3 construct only
 when Elsa 4 gives the same result. Anything else refuses the whole definition with a stable code. The guidance in each
 refusal says what to change in the Elsa 3 workflow so that it converts. Specs 236 and 247 hold the details (spec 247:
 `specs/247-elsa3-js-host-functions/contracts/javascript-conversion.md`).
@@ -214,8 +214,11 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 
 | Elsa 3 | Elsa 4 |
 |---|---|
-| `getVariable("x")`, `getInput("x")`, `variables.x` | A declared parameter, read as `args.x` |
-| `get{Name}()` generated for a variable (`get` + the name with its first letter upper-cased) or a workflow input (`get` + the name as written) | The same parameter as `getVariable`/`getInput`. Elsa 3's precedence applies: an activity output accessor `get{Output}From{Activity}()` shadows both and is refused; an input shadows a variable with the identical accessor name. In a reusable workflow, Elsa 3 declared inputs as variables, so only the variable-style name exists |
+| `getVariable("x")`, `variables.x`, `variables["x"]` in an input expression | `variables.x`, spelled as the variable is declared; publish pins it to the nearest declaring scope. A loop's current value becomes the loop's own `variables.currentItem` or `variables.index` |
+| `getVariable(name)`, `variables[name]` (a computed name) in an input expression | Kept as written; the Elsa 4 run-time lookup resolves the name nearest scope first and records the read. Inside a loop, or where a name is declared in more than one visible scope, the conversion warns (`VF-IMP-011`) |
+| `getInput("x")`, and any read in a RunJavaScript body | A declared parameter, read as `args.x`. A body reads variables through `args` until it has its own `variables` root |
+| `{{ Variables.x }}` in Liquid | `{{ variables.x }}` |
+| `get{Name}()` generated for a variable (`get` + the name with its first letter upper-cased) or a workflow input (`get` + the name as written) | The same read as `getVariable`/`getInput`. Elsa 3's precedence applies: an activity output accessor `get{Output}From{Activity}()` shadows both and is refused; an input shadows a variable with the identical accessor name. In a reusable workflow, Elsa 3 declared inputs as variables, so only the variable-style name exists |
 | `getCorrelationId()`, `getWorkflowInstanceId()` | A `WorkflowInstance` parameter that reads the running instance's correlation ID (null when it has none) or instance ID |
 | `isNullOrEmpty(x)`, `isNullOrWhiteSpace(x)` | An inline function with .NET's semantics, including .NET's whitespace characters |
 | A top-level `return` | The body runs as a function. A trailing expression gets a `return`; a bare `return;` returns `null` |
@@ -239,7 +242,10 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 | `getConfig(…)`, definition and instance-name readers, `getLastResult()` | `VF-IMP-005` | Pass the value in as a workflow input, or capture the producing output into a variable |
 | `setVariable`, `set{Name}(…)`, mutating a value read from the workflow | `VF-IMP-005` | Use a Set Variable activity |
 | `setCorrelationId`, `setWorkflowInstanceName` | `VF-IMP-005` | Use a Correlate or Set Name activity |
-| `get{Output}From{Activity}()`, `getOutputFrom`, a computed name | `VF-IMP-005` / `VF-IMP-006` | Capture the output into a variable and read the variable |
+| `get{Output}From{Activity}()`, `getOutputFrom`, a computed input or output name, a computed variable name in a RunJavaScript body | `VF-IMP-005` / `VF-IMP-006` | Capture the output into a variable and read the variable; name the variable literally in a body |
+| A literal variable read that an enclosing container's or loop's declaration of the same name would capture in Elsa 4, or an outer loop's value read inside a nested loop of the same kind | `VF-IMP-010` | Rename one of the two, or copy the outer value into another variable first |
+| A computed variable read in a workflow where an Elsa 3 variable holds a loop's current value (Elsa 4 never writes it) | `VF-IMP-010` | Read the loop's current value by its literal name |
+| A script that declares its own `args` or `variables` around a converted read, a Liquid loop variable named `variables`, or a Liquid input or output named `variables` | `VF-IMP-002` | Rename the script's own name, or the input or output (#3296) |
 | A variable or input whose accessor is a built-in name (`CorrelationId`) | `VF-IMP-002` | Rename it |
 | lodash `_`, `moment`, CLR globals, Elsa 3 `args` | `VF-IMP-005` | Rewrite with plain JavaScript and declared reads |
 | Any other undeclared function | `VF-IMP-005` | Replace it with plain JavaScript, or move it into an activity |

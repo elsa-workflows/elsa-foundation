@@ -639,7 +639,7 @@ public sealed class WorkflowIntrinsicExecutor(
             executable: executable,
             workflowInputEnvelopes: workflowInputEnvelopes,
             variableEnvelopes: frameEnvelopes,
-            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames, rootVariableNames),
+            visibleVariables: RuntimeContainerScopeService.ProjectReadableVariables(executable, visibleFrames, rootVariableNames),
             correlationId: projections.CorrelationId);
         if (binding.Selection is not null)
             return await MaterializeMemberAsync(binding, workflowState, intrinsicState, context, cancellationToken);

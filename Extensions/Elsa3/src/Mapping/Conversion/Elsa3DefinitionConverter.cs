@@ -6,6 +6,8 @@ using Elsa3.Models;
 
 using Elsa3.Mapping.Resolution;
 
+using Elsa3.Mapping.ActivityMap.Rewrites;
+
 namespace Elsa3.Mapping.Conversion;
 
 /// <summary>
@@ -215,7 +217,35 @@ internal sealed class Elsa3DefinitionConverter(
             plan.Request.IsReusable,
             (node, name) => plan.Find(node)?.Resolved?.Inputs
                 .FirstOrDefault(input => input.ReferenceKey.Equals(name, StringComparison.OrdinalIgnoreCase) ||
-                                         input.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Type));
+                                         input.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Type,
+            node => AncestorScopeNames(plan, node)));
+    }
+
+    /// <summary>
+    /// The names an Elsa 4 script can read from <paramref name="node"/> other than the workflow's own variables, nearest
+    /// scope first, each with the node that declares it (spec 1222 FR-031): an enclosing For's <c>index</c>, an enclosing
+    /// ForEach's <c>currentItem</c> and <c>currentIndex</c>, and an enclosing container's variables.
+    /// </summary>
+    private static IReadOnlyList<(string Name, string ScopeNodeId)> AncestorScopeNames(Elsa3ConversionPlan plan, Elsa3Activity node)
+    {
+        var names = new List<(string Name, string ScopeNodeId)>();
+        var parent = plan.Find(node)?.Parent;
+        while (parent is not null && plan.Find(parent) is { } parentPlan)
+        {
+            var scopeNodeId = !string.IsNullOrWhiteSpace(parent.NodeId) ? parent.NodeId : parent.Id;
+            if (parentPlan.Resolved?.ActivityTypeKey is { } typeKey &&
+                Elsa3LoopVariableReferencesRewrite.CurrentValueVariables.TryGetValue(typeKey, out var loopValue))
+            {
+                names.Add((loopValue, scopeNodeId));
+                if (loopValue == "currentItem")
+                    names.Add(("currentIndex", scopeNodeId));
+            }
+
+            names.AddRange(parentPlan.Variables.Select(variable => (variable.Name, scopeNodeId)));
+            parent = parentPlan.Parent;
+        }
+
+        return names;
     }
 
     /// <summary>The node's declared contract, plus its Elsa 4 loop variables as outputs so lowering can resolve them.</summary>

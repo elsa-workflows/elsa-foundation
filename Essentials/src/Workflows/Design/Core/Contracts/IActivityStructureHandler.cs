@@ -111,4 +111,13 @@ public interface IActivityStructureHandler
     /// visible to their descendant activities. Non-container activities declare none.
     /// </summary>
     IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
+
+    /// <summary>
+    /// Projects the loop iteration values this activity node gives each pass of its body (ADR 0028, spec 1222
+    /// FR-004a): ForEach's <c>currentItem</c> and <c>currentIndex</c>, For's <c>index</c>. A script in the body reads
+    /// them as variables declared by this node, in the innermost scope. They are kept apart from
+    /// <see cref="ProjectScopedVariables"/>: they are not container variables, and the runtime builds no container frame
+    /// for them. Activities without iteration values declare none.
+    /// </summary>
+    IReadOnlyCollection<VariableDefinition> ProjectIterationVariables(ActivityNode activity) => [];
 }

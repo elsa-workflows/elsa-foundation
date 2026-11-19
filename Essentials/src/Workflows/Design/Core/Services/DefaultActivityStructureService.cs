@@ -134,6 +134,15 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : [];
     }
 
+    public IReadOnlyCollection<VariableDefinition> ProjectIterationVariables(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.ProjectIterationVariables(activity)
+            : [];
+    }
+
     public bool SupportsScopedVariables(ActivityNode activity)
     {
         ArgumentNullException.ThrowIfNull(activity);
