@@ -383,7 +383,7 @@ public sealed class MySqlEngine : Engine
              SELECT "SeenAt" AS "Value" FROM "Nodes" WHERE "Id" = {"{0}"}
              """
             : $"""
-             INSERT INTO "Nodes" ("Id", "SeenAt", "LeaseUntil") VALUES ({"{0}"}, {Now}, {Now} + {"{1}"}) AS n ON DUPLICATE KEY UPDATE "SeenAt" = n."SeenAt", "LeaseUntil" = n."LeaseUntil";
+             INSERT INTO "Nodes" ("Id", "SeenAt", "LeaseUntil") SELECT * FROM (SELECT {"{0}"} AS i, t.now AS s, t.now + {"{1}"} AS l FROM (SELECT {Now} AS now) t) AS n ON DUPLICATE KEY UPDATE "SeenAt" = n.s, "LeaseUntil" = n.l;
              SELECT "SeenAt" AS "Value" FROM "Nodes" WHERE "Id" = {"{0}"}
              """), [node, .. lease is { } ms ? [ms] : Array.Empty<object>()]).ToListAsync(cancellationToken);
         return rows[0];

@@ -24,7 +24,8 @@ public sealed partial class EfStore
     /// has one writer, so its take cannot hold a read lock while it waits. Its lock waits are bounded by the lease: the
     /// engine's lock timeout (whole milliseconds; MySQL's in whole seconds, at least one) and the command timeout (whole
     /// seconds, at least one), which is also how long SQLite's provider retries a busy database. A timeout fails the
-    /// statement; disposing the transaction rolls the take back, and the caller takes again at its next round.
+    /// statement; disposing the transaction rolls the take back, and the caller takes again at its next round. SQL Server's
+    /// and MySQL's settings persist on the session, so a pooled connection keeps them after the take (coordinator decision).
     /// </summary>
     private async Task<IDbContextTransaction> BeginNodeTakeAsync(KernelDb db, TimeSpan lease, CancellationToken cancellationToken)
     {
@@ -81,7 +82,9 @@ public sealed partial class EfStore
     /// <summary>The node record's write: <c>SeenAt</c> at database time, <c>LeaseUntil</c> at that time plus the lease. Returns the time.</summary>
     private async Task<long> RenewAsync(KernelDb db, string node, TimeSpan lease, CancellationToken cancellationToken) =>
         Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken, (long)lease.TotalMilliseconds) : (await db.Database.SqlQueryRaw<long>(
-            $"""INSERT INTO "Nodes" ("Id", "SeenAt", "LeaseUntil") VALUES ({"{0}"}, {Now}, {Now} + {"{1}"}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", "LeaseUntil" = excluded."LeaseUntil" RETURNING "SeenAt" AS "Value" """,
+            // Database time read once, so LeaseUntil is exactly SeenAt plus the lease (as SQL Server's MERGE). SQLite needs
+            // the WHERE before ON CONFLICT after a SELECT.
+            $"""INSERT INTO "Nodes" ("Id", "SeenAt", "LeaseUntil") SELECT {"{0}"}, t.now, t.now + {"{1}"} FROM (SELECT {Now} AS now) t WHERE true ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", "LeaseUntil" = excluded."LeaseUntil" RETURNING "SeenAt" AS "Value" """,
             node, (long)lease.TotalMilliseconds).ToListAsync(cancellationToken))[0];
 
     /// <summary>
@@ -101,6 +104,8 @@ public sealed partial class EfStore
             {
                 await using var db = create();
                 await using var transaction = await BeginReadCommittedAsync(db, deadline.Token);
+                // PostgreSQL bounds the heartbeat on the server too (NL-10's bound rests on it); SET LOCAL ends with the transaction.
+                if (Engine is null && postgres) await db.Database.ExecuteSqlRawAsync(FormattableString.Invariant($"SET LOCAL statement_timeout = {Math.Max(1, (long)(lease / 3).TotalMilliseconds)}"), deadline.Token);
                 now = await RenewAsync(db, node, lease, deadline.Token);
                 owned = await db.Partitions.AsNoTracking().Where(p => p.Owner == node).OrderBy(p => p.Id).Select(p => new OwnedEpoch(p.Id, p.Epoch)).ToListAsync(deadline.Token);
                 await transaction.CommitAsync(deadline.Token);
