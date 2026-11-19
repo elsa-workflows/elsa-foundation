@@ -34,6 +34,10 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("new Date(Date.now() + 3600000).toISOString()")]
     [InlineData("new Date(new Date().getTime() + 60 * 1000).toISOString()")]
     [InlineData("'id-' + Date.now()")]
+    [InlineData("(function () { var ms = 1000; return new Date(Date.now() + ms).getTime(); })()")]
+    [InlineData("(function () { var d = new Date(); d = d.getTime(); return 'ts=' + d; })()")]
+    [InlineData("(function () { var now = new Date(); now = now.toISOString(); return 'Created ' + now; })()")]
+    [InlineData("new Date(5000) - new Date(1000)")]
     [InlineData("Math.random()")]
     [InlineData("newGuid()")]
     [InlineData("newGuidString()")]
@@ -198,6 +202,27 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     }
 
     [Fact]
+    public async Task Under_source_time_zone_a_null_receiver_outside_an_optional_chain_still_fails()
+    {
+        var call = await ConvertAsync("(function () { var d = null; return d.getHours?.(); })()", Elsa3DateInterpretation.SourceTimeZone, "Europe/Amsterdam");
+        Assert.True(call.Succeeded, Describe(call.Diagnostics));
+        await Assert.ThrowsAnyAsync<Exception>(() => PortableJavaScript.EvaluateAsync(ReadExpression(call)));
+
+        // Behind a deeper optional chain the helper cannot tell which link was null: refused, not guessed.
+        var chain = await ConvertAsync("(function () { var a = { b: null }; return a?.b.getHours(); })()", Elsa3DateInterpretation.SourceTimeZone, "Europe/Amsterdam");
+        Assert.Contains("?.", Assert.Single(chain.Diagnostics, diagnostic => diagnostic.IsError).Guidance, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Under_source_time_zone_a_spread_construction_is_refused_with_field_guidance()
+    {
+        var result = await ConvertAsync("new Date(...[2026, 9, 28]).getUTCHours()", Elsa3DateInterpretation.SourceTimeZone, "Europe/Amsterdam");
+
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Contains("separate arguments", refusal.Guidance, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Under_source_time_zone_a_script_body_converts_and_runs_in_the_zone()
     {
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript",
@@ -220,6 +245,7 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("`Started ${new Date()}`")]
     [InlineData("String(new Date())")]
     [InlineData("var d = new Date(); d.toString()")]
+    [InlineData("(function () { var d = new Date(0); var s = 'x'; s += d; return s; })()")]
     public async Task Local_text_is_refused_under_source_time_zone_and_warned_under_assume_utc(string expression)
     {
         var zoned = await ConvertAsync(expression, Elsa3DateInterpretation.SourceTimeZone, "Europe/Amsterdam");
@@ -234,6 +260,7 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [Theory]
     [InlineData("new Date(Date.UTC(2026, 9, 28, 8, 15)).toLocaleTimeString('nl-NL')", "09:15:00")]
     [InlineData("new Date(Date.UTC(2026, 6, 1, 8, 15)).toLocaleTimeString('nl-NL', {})", "10:15:00")]
+    [InlineData("new Date(Date.UTC(2026, 6, 1, 8, 15)).toLocaleTimeString('nl-NL', undefined)", "10:15:00")]
     [InlineData("new Intl.DateTimeFormat('nl-NL', { hour: '2-digit', minute: '2-digit' }).format(Date.UTC(2026, 9, 28, 8, 15))", "09:15")]
     [InlineData("Intl.DateTimeFormat('nl-NL', { hour: '2-digit', minute: '2-digit' }).format(Date.UTC(2026, 9, 28, 8, 15))", "09:15")]
     public async Task Under_source_time_zone_locale_text_on_a_date_names_the_zone(string expression, string expected)

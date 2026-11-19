@@ -1311,6 +1311,21 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 return;
             }
 
+            if (node is AssignmentExpression { Left: Identifier assigned } assignmentToName)
+            {
+                Visit(assignmentToName.Right);
+                Visit(assignmentToName.Left);
+                if (assignmentToName.Operator == Operator.AdditionAssignment &&
+                    (IsKnownDate(assignmentToName.Right) || _dateAliases.Contains(assigned.Name)))
+                    ZoneDependent(assignmentToName, DateUse.LocalFormat, null);
+                // A name holds a date only while what was last assigned to it is one (the set is not scoped: a gap).
+                if (assignmentToName.Operator == Operator.Assignment && IsKnownDate(assignmentToName.Right))
+                    _dateAliases.Add(assigned.Name);
+                else
+                    _dateAliases.Remove(assigned.Name);
+                return;
+            }
+
             if (node is TemplateLiteral template)
             {
                 foreach (var expression in template.Expressions)
@@ -1746,6 +1761,10 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     Visit(argument);
                 if (name is "toDateString" or "toTimeString")
                     ZoneDependent(call, DateUse.LocalFormat, null);
+                // Behind a deeper optional chain (a?.b.getHours()), Elsa 3 short-circuited only when a was null: the
+                // helper cannot tell, so the call is not rewritten.
+                else if (!callee.Optional && IsOptionalChain(callee.Object))
+                    ZoneDependent(call, DateUse.LocalField, null);
                 else
                     ZoneDependent(call, DateUse.LocalField, () => WrapLocalCall(call, callee, name));
                 return true;
@@ -1818,6 +1837,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             var zone = JsonSerializer.Serialize(SourceTimeZone);
             if (arguments.Count == 1 && arguments[0] is not SpreadElement)
                 return () => Edits.Add(new SourceEdit(arguments[0].End, arguments[0].End, $", {{ timeZone: {zone} }}"));
+            if (arguments.Count == 2 && IsUndefined(arguments[1]))
+                return () => Edits.Add(new SourceEdit(arguments[1].Start, arguments[1].End, $"{{ timeZone: {zone} }}"));
             if (arguments.Count == 2 && arguments[1] is ObjectExpression options)
                 return () => Edits.Add(new SourceEdit(options.Start + 1, options.Start + 1, $" timeZone: {zone},"));
             return null;
@@ -1871,6 +1892,12 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
                     rewrite();
                     return;
+                case Elsa3DateInterpretation.SourceTimeZone when !isText:
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                        $"JavaScript {what}, which the converter cannot rewrite into the Elsa 3 server's zone.",
+                        "Pass the date fields as separate arguments (new Date(year, month, day, ...)) instead of spreading them, and read a value reached through ?. into a variable before calling its date method, in the Elsa 3 workflow before import."));
+                    return;
                 case Elsa3DateInterpretation.SourceTimeZone:
                     Issues.Add(new Elsa3ExpressionRewriteIssue(
                         Elsa3ImportDiagnosticCodes.ForbiddenCapability,
@@ -1897,11 +1924,22 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 dot--;
             var open = Source.IndexOf('(', callee.End);
             // An optional chain (d?.getHours(), a?.b.getDate()) gives undefined for a null receiver, as it did in Elsa 3.
-            var optional = Source[call.Start..open].Contains("?.", StringComparison.Ordinal);
+            var optional = callee.Optional;
             Edits.Add(new SourceEdit(call.Start, call.Start, $"{Helper()}.call("));
             Edits.Add(new SourceEdit(dot, open + 1, $", {JsonSerializer.Serialize(name)}, ["));
             Edits.Add(new SourceEdit(call.End - 1, call.End, optional ? "], true)" : "])"));
         }
+
+        /// <summary>
+        /// Whether the receiver contains an optional link (<c>a?.b</c>) of the same chain. A parenthesized chain ends there,
+        /// and an optional call (<c>d.getHours?.()</c>) does not guard its receiver.
+        /// </summary>
+        private static bool IsOptionalChain(Node receiver) => receiver switch
+        {
+            MemberExpression member => member.Optional || IsOptionalChain(member.Object),
+            CallExpression call => call.Optional || IsOptionalChain(call.Callee),
+            _ => false,
+        };
 
         /// <summary>Whether <paramref name="node"/> is known to be a <c>Date</c>: a construction, a rewritten date value or an alias.</summary>
         private bool IsKnownDate(Node node) => node switch
@@ -1931,11 +1969,19 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             Literal => true,
             UnaryExpression { Operator: Operator.UnaryNegation or Operator.UnaryPlus } => true,
             BinaryExpression { Operator: Operator.Subtraction or Operator.Multiplication or Operator.Division or Operator.Remainder } => true,
-            BinaryExpression { Operator: Operator.Addition } addition => IsNumber(addition.Left) && IsNumber(addition.Right),
+            // A + is a number when both operands are, or when one is and the other cannot be text or a date
+            // (Date.now() + ms, d.getTime() + offset).
+            BinaryExpression { Operator: Operator.Addition } addition =>
+                IsNumber(addition.Left) && IsNumber(addition.Right) ||
+                IsNumber(addition.Left) && MayBeNumber(addition.Right) ||
+                MayBeNumber(addition.Left) && IsNumber(addition.Right),
             CallExpression { Callee: MemberExpression { Computed: false, Object: Identifier { Name: "Date" }, Property: Identifier { Name: "now" or "UTC" or "parse" } } } => !IsDeclared("Date"),
             CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" or "valueOf" } } } => true,
             _ => false,
         };
+
+        /// <summary>An operand that is not visibly text or a date: a literal string, a template or a known date.</summary>
+        private bool MayBeNumber(Node node) => node is not (Literal { Value: string } or TemplateLiteral) && !IsKnownDate(node);
 
         /// <summary>A literal date text that carries <c>Z</c> or an offset, or is date-only, which ECMAScript reads as UTC.</summary>
         private static bool IsZoneIndependentText(Node argument)
