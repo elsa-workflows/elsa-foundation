@@ -296,7 +296,9 @@ public interface IKernelStore : IMembership
     /// previous epoch and not done gets one more attempt, as a take from an expired owner counts it. Without it, it is the
     /// retake above. There is no set form: a pending row is still this node's at the epoch it held, so a set take would
     /// read it as a retake by the recorded owner and count nothing; the Worker retakes pending rows one at a time with
-    /// this call, as it retakes after a reset. The default refuses a counting retake.
+    /// this call, as it retakes after a reset. "A gain or set take that includes a pending partition is its retake"
+    /// (ownership-and-fencing.md) is the Worker's routing: it splits the pending partitions out of the take and retakes
+    /// each with <paramref name="countDeaths"/> set. The default refuses a counting retake.
     /// </summary>
     ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) =>
         countDeaths ? throw new NotSupportedException("This store does not count deaths at a retake.") : RetakeAsync(partition, node, epoch, lease, cancellationToken);
