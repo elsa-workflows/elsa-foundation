@@ -69,8 +69,13 @@ public sealed class ActivityDataContextEndpointTests
         Assert.Equal("definite", wire.RootElement.GetProperty("analysis").GetProperty("sources")[0].GetProperty("availability").GetString());
         var resultSource = wire.RootElement.GetProperty("analysis").GetProperty("sources").EnumerateArray()
             .Single(source => source.GetProperty("id").GetString() == "activity:producer:$result");
-        Assert.Equal(JsonValueKind.Null, resultSource.GetProperty("binding").ValueKind);
-        Assert.Equal("RuntimeScopeBindingUnavailable", resultSource.GetProperty("reasonCode").GetString());
+        // A complete binding the client can store unchanged, without a runtime scope.
+        var binding = resultSource.GetProperty("binding");
+        Assert.Equal("ActivityResult", binding.GetProperty("expressionType").GetString());
+        Assert.Equal("producer", binding.GetProperty("value").GetProperty("producerNodeId").GetString());
+        Assert.Equal("$result", binding.GetProperty("value").GetProperty("projectionKey").GetString());
+        Assert.False(binding.GetProperty("value").TryGetProperty("producerScopeId", out _));
+        Assert.False(resultSource.TryGetProperty("reasonCode", out var reason) && reason.ValueKind != JsonValueKind.Null);
         Assert.Equal("producer", resultSource.GetProperty("activityResultSource").GetProperty("producerNodeId").GetString());
         Assert.Equal("$result", resultSource.GetProperty("activityResultSource").GetProperty("projectionKey").GetString());
         Assert.Equal("Customer ID", result.Body.Analysis!.Target!.DisplayName);

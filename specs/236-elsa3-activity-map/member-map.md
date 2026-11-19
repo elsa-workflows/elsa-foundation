@@ -144,7 +144,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | .EnableResiliency | — | R3 (default false) | 0 |
 | .ParsedContent | `ResponseBody` (raw string) | Captured → unconvertible ("member semantics changed") | 0 |
 | .Result (HttpResponseMessage) | — | R4 | 0 |
-| outcomes `Failed to connect`, `Done` co-firing with status outcomes | `Failed`; single outcome | R8 + **W** | 0 |
+| outcomes `Failed to connect`, `Done` co-firing with status outcomes | `Failed`; single outcome | R8 + **W**. Superseded by spec 1208 (S-3), 2026-11: with expected status codes, `Done` maps onto every code and the unmatched status code (Elsa 4 has no `Done` there); the **W** now covers only "without expected codes, a non-2xx response goes to `Failed`" | 0 |
 | non-flow .ExpectedStatusCodes[].Activity, UnmatchedStatusCode / FailedToConnect / Timeout ports | — (leaf activity) | R6 when any port holds an activity | 0 |
 | WriteHttpResponse.StatusCode | `StatusCode` (int) | R5 (enum name literal → int) | 71 |
 | WriteHttpResponse.Content | `Body` (JSON value) | R1 rename + R5: a literal, or a variable declared `String`, converts with any content type; a script with a typed declaration (`String`, `Int32`, …) → unconvertible, `VF-IMP-008` (Elsa 3 converted its result to that type; Elsa 4 takes it as returned; spec 256 FR-013, all activities). Any other value converts when `ContentType` is unset, blank, or exactly `application/json` or `text/json` (Elsa 3 sent JSON then, inferring `application/json`; Elsa 4 does the same); another JSON type (letter case, a parameter, `+json`) converts with **W** `ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT` (Elsa 3 sent the type name, Elsa 4 the JSON). A non-JSON literal content type (Elsa 3 sent the value's type name), a computed content type, or `Byte[]`/`Stream` content → unconvertible (spec 256, #3050; was R5 string only, amended 2026-10-20 with the maintainer) | 71 |
@@ -184,9 +184,9 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 
 | Activity.member | Elsa 4 | Rule | JTest |
 |---|---|---|---|
-| RunJavaScript.Script | `script` (sandbox sees `args` only) + `arguments` | R1 + R7 (plan D-16): the literal body is rewritten in script mode. `getVariable`/`getInput`/`variables.x` become `arguments` entries read as `args.<name>`, and an Elsa 3 completion value becomes `return`. `setOutcome(s)` and other host calls → VF-IMP-005 (follow-up #2717) | 17 |
-| RunJavaScript.PossibleOutcomes | `possibleOutcomes` | R1 + **W** (routing by return value; `setOutcomes` with several outcomes is refused by the rewriter) | 17 |
-| RunJavaScript outcome `Done` | `Unmatched` | R8 (spec 239): Elsa 3 completes with `Done` unless the script calls `setOutcome` (refused); Elsa 4 completes with `Unmatched` when the return value names no possible outcome | 16 connections |
+| RunJavaScript.Script | `script` (sandbox sees `args` only) + `arguments` | R1 + R7 (plan D-16): the literal body is rewritten in script mode. `getVariable`/`getInput`/`variables.x` become `arguments` entries read as `args.<name>`, and an Elsa 3 completion value becomes `return`. `setOutcome(s)` and other host calls → VF-IMP-005 (follow-up #2717). Superseded by spec 1208 (S-3), 2026-11: `setOutcome(s)` converts to `return complete(<value>, <pending selection>)` (spec 1208 FR-027) | 17 |
+| RunJavaScript.PossibleOutcomes | `possibleOutcomes` | R1 + **W** (routing by return value; `setOutcomes` with several outcomes is refused by the rewriter). Superseded by spec 1208 (S-3), 2026-11: R1 only; Elsa 4 does not route by return value, literal `setOutcome` names join `possibleOutcomes`, and several outcomes are allowed | 17 |
+| RunJavaScript outcome `Done` | `Done` | R8. Spec 1208 (S-3), 2026-11, FR-026: `Done` → `Done`, with or without possible outcomes; RunJavaScript has no `Unmatched` outcome. Was `Done` → `Unmatched` (spec 239), which never fired (#3295) | 16 connections |
 | RunJavaScript.Result | `result` | R1 | 17 (9 captured) |
 
 ## Elsa 4 required members with no Elsa 3 source

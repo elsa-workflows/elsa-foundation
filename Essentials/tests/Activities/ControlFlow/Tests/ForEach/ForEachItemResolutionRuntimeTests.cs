@@ -47,6 +47,48 @@ public sealed class ForEachItemResolutionRuntimeTests
         run.AssertWorkflowCompleted();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_body_script_reads_each_passs_own_item_by_name(bool computed)
+    {
+        // Spec 1222 FR-004a (T006, T012): publish pins variables.currentItem to the ForEach node, and the computed form
+        // looks it up among the visible variables; either way each pass reads its own item, through the real engine.
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Expressions.ExpressionsFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Expressions.JavaScript.Jint.JintFeature().ConfigureServices(services))
+            .Build("actexec-foreach", "actexec-body-0", "actexec-body-1");
+        var source = computed ? "variables[['current', 'Item'].join('')] + '!'" : "variables.currentItem + '!'";
+        var expression = new RuntimeExpressionBinding(
+            "JavaScript",
+            source,
+            new RuntimeValueTypeDescriptor("alias", "String", null),
+            parameters: computed
+                ? null
+                : new Dictionary<string, Elsa.Expressions.Core.Models.ExpressionParameterBinding>
+                {
+                    ["variables.currentItem"] = new Elsa.Expressions.Core.Models.VariableExpressionParameterBinding(
+                        ForEachNodeId, ForEachActivity.CurrentItemVariableName, Elsa.Expressions.Core.Models.ExpressionParameterSurfaces.Variables)
+                },
+            variableReadFallback: computed
+                ? new Elsa.Expressions.Core.Models.VariableReadFallback(
+                    [new Elsa.Expressions.Core.Models.VariableReadCandidate(ForEachActivity.CurrentItemVariableName, ForEachNodeId, ForEachActivity.CurrentItemVariableName)])
+                : null);
+        var binding = new RuntimeInputBinding(
+            inputKey: "Value",
+            targetType: new ValueTypeDescriptor("String"),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
+            source: RuntimeInputBindingSource.Expression,
+            expression: expression);
+
+        var run = await harness.RunAsync(NewExecutable(JsonSerializer.SerializeToElement(new[] { "alpha", "beta" }), ForEachActivity.CurrentItemVariableName, "String", typeof(ForEachItemCaptureActivity), binding));
+
+        Assert.Equal(["alpha!", "beta!"], CapturedValuesInIterationOrder(run));
+        run.AssertWorkflowCompleted();
+    }
+
     // An Elsa.Any body input receives a JSON number item with its exact text (#3421): the item is never
     // narrowed to a CLR double between the collection and the body.
     [Fact]
@@ -94,7 +136,7 @@ public sealed class ForEachItemResolutionRuntimeTests
         return NewExecutable(JsonSerializer.SerializeToElement(collection), bodyReferenceKey, targetAlias, captureActivityType);
     }
 
-    private static WorkflowExecutable NewExecutable(JsonElement collection, string bodyReferenceKey, string targetAlias, Type captureActivityType)
+    private static WorkflowExecutable NewExecutable(JsonElement collection, string bodyReferenceKey, string targetAlias, Type captureActivityType, RuntimeInputBinding? valueBinding = null)
     {
         var body = new ExecutableNode(
             executableNodeId: BodyNodeId,
@@ -105,7 +147,7 @@ public sealed class ForEachItemResolutionRuntimeTests
             descriptorPayload: JsonSerializer.SerializeToElement(new { }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Value"] = new RuntimeInputBinding(
+                ["Value"] = valueBinding ?? new RuntimeInputBinding(
                     inputKey: "Value",
                     targetType: new ValueTypeDescriptor(targetAlias),
                     effectivePolicy: ValueProtectionPolicy.InstanceInline,

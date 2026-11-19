@@ -1,8 +1,8 @@
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
-import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioWeaverRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
@@ -12,7 +12,6 @@ import { readRunSelection } from "./runSelectionUrl";
 const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const WorkflowDefinitions = lazy(() => import("./WorkflowDefinitions").then(module => ({ default: module.WorkflowDefinitions })));
 const WorkflowExecutables = lazy(() => import("./WorkflowExecutables").then(module => ({ default: module.WorkflowExecutables })));
-const WorkflowExecutableInspectorWorkbench = lazy(() => import("./WorkflowExecutableInspector").then(module => ({ default: module.WorkflowExecutableInspectorWorkbench })));
 const WorkflowInstances = lazy(() => import("./WorkflowInstances").then(module => ({ default: module.WorkflowInstances })));
 const WorkflowInstanceDetailsWorkbench = lazy(() => import("./WorkflowInstances").then(module => ({ default: module.WorkflowInstanceDetailsWorkbench })));
 
@@ -36,8 +35,8 @@ export function WorkflowManagementPage({
   context: StudioEndpointContext;
   backendSession?: StudioBackendSession;
   onOpenBpmnProcesses?(): void;
-  ai: StudioAgentRegistry;
-  weaver?: WorkflowAgentController;
+  ai: StudioWeaverRegistry;
+  weaver?: WorkflowWeaverController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -98,7 +97,7 @@ export function WorkflowManagementPage({
     );
 }
 
-export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrowseDefinitions }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; canBrowseDefinitions?: boolean }) {
+export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrowseDefinitions }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; canBrowseDefinitions?: boolean }) {
   const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
 
   useEffect(() => {
@@ -130,47 +129,6 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrows
   );
 }
 
-export function WorkflowExecutableInspectorPage({ context, ai, weaver, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; weaver?: WorkflowAgentController; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
-  const [location, setLocation] = useState(readExecutableInspectorLocation);
-
-  useEffect(() => {
-    const syncFromLocation = () => setLocation(readExecutableInspectorLocation());
-    window.addEventListener("popstate", syncFromLocation);
-    return () => window.removeEventListener("popstate", syncFromLocation);
-  }, []);
-
-  // Selecting a reference re-renders the same artifact from that reference's Layout Sidecar; the
-  // choice is part of the page address (?ref=) so it survives reload and can be shared.
-  const selectReference = useCallback((sourceReferenceId: string | null) => {
-    const url = new URL(window.location.href);
-
-    if (sourceReferenceId) {
-      url.searchParams.set("ref", sourceReferenceId);
-    } else {
-      url.searchParams.delete("ref");
-    }
-
-    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-    setLocation(readExecutableInspectorLocation());
-  }, []);
-
-  return (
-    <WorkflowsPageFrame title="Executable Inspector" workbench>
-      <WorkflowLazyBoundary label="executable inspector">
-        <WorkflowExecutableInspectorWorkbench
-          context={context}
-          ai={ai}
-          weaver={weaver}
-          runInputEditors={runInputEditors}
-          artifactId={location.artifactId}
-          sourceReferenceId={location.sourceReferenceId}
-          onSelectReference={selectReference}
-        />
-      </WorkflowLazyBoundary>
-    </WorkflowsPageFrame>
-  );
-}
-
 export function WorkflowInstancesPage({ context, navigate }: { context: StudioEndpointContext; navigate(path: string): void }) {
   return (
     <WorkflowsPageFrame>
@@ -183,9 +141,9 @@ export function WorkflowInstancesPage({ context, navigate }: { context: StudioEn
 
 export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], navigate }: {
   context: StudioEndpointContext;
-  ai: StudioAgentRegistry;
-  /** The Workflows module's agent state: the run page contributes the exact Run and selected activity execution (spec 1193 FR-029). */
-  weaver?: WorkflowAgentController;
+  ai: StudioWeaverRegistry;
+  /** The Workflows module's Weaver state: the run page contributes the exact Run and selected activity execution (spec 1193 FR-029). */
+  weaver?: WorkflowWeaverController;
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -259,14 +217,6 @@ function readDefinitionIdFromUrl() {
 
 function readExecutableDefinitionFilterFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
-}
-
-function readExecutableInspectorLocation() {
-  const match = /^\/workflows\/executables\/([^/]+)$/.exec(window.location.pathname);
-  return {
-    artifactId: match ? decodeURIComponent(match[1]) : "",
-    sourceReferenceId: new URLSearchParams(window.location.search).get("ref")
-  };
 }
 
 function readWorkflowExecutionIdFromUrl(pathname = window.location.pathname) {

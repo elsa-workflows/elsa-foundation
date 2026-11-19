@@ -53,10 +53,10 @@ public sealed class RunJavaScriptContractTests
     {
         public JavaScriptScriptEvaluationRequest? Request { get; private set; }
 
-        public ValueTask<JsonElement?> EvaluateAsync(JavaScriptScriptEvaluationRequest request)
+        public ValueTask<JavaScriptScriptEvaluationResult> EvaluateAsync(JavaScriptScriptEvaluationRequest request)
         {
             Request = request;
-            return ValueTask.FromResult<JsonElement?>(result.Clone());
+            return ValueTask.FromResult(new JavaScriptScriptEvaluationResult(result.Clone()));
         }
     }
 

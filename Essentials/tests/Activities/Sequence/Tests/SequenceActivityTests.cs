@@ -25,7 +25,7 @@ public sealed class SequenceActivityTests : IDisposable
         var continuation = await ExecuteAsync(context);
 
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
         Assert.Empty(context.GetChildActivityScheduleRequests());
     }
 
@@ -37,7 +37,7 @@ public sealed class SequenceActivityTests : IDisposable
         var continuation = await ExecuteAsync(context);
 
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
         Assert.Empty(context.GetChildActivityScheduleRequests());
     }
 
@@ -91,7 +91,7 @@ public sealed class SequenceActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public sealed class SequenceActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Break, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Break }, continuation.OutcomeNames);
     }
 
     [Fact]

@@ -134,10 +134,10 @@ internal static partial class OptedCalledSnapshotReader
             {
                 Require(childRoot.Status == ActivityExecutionStatus.Faulted && childRoot.Fault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey) == "bpmn.error" && childRoot.Fault.Metadata.GetValueOrDefault(ActivityFault.FaultTypeMetadataKey) == "OTHER" &&
                     childIncidents.Single().ActivityExecutionId == childRoot.InvocationId && childIncidents.Single().IsBlocking && childIncidents.Single().FailureType == "ActivityReturnedFault" && childIncidents.Single().ResolutionOutcome?.ActionKind == IncidentResolutionActionKinds.FaultWorkflow &&
-                    call.Status == ActivityExecutionStatus.Completed && call.Completion?.OutcomeKey == "Faulted" && call.Fault is null, "Actual terminal authored failure was absorbed or changed.");
+                    call.Status == ActivityExecutionStatus.Completed && call.Completion?.OutcomeNames is ["Faulted"] && call.Fault is null, "Actual terminal authored failure was absorbed or changed.");
                 if (!interrupting) Require(parentRoot.Fault?.Metadata.GetValueOrDefault(ActivityFault.FaultTypeMetadataKey) == "OTHER", "Actual uncaught terminal authored failure was reclassified.");
             }
-            else if (call.Status == ActivityExecutionStatus.Completed) Require(call.Completion?.OutcomeKey == "Completed" && call.Fault is null, "Actual terminal escalation made a successful child fault.");
+            else if (call.Status == ActivityExecutionStatus.Completed) Require(call.Completion?.OutcomeNames is ["Completed"] && call.Fault is null, "Actual terminal escalation made a successful child fault.");
             if (terminal || advanced) Require(!string.IsNullOrEmpty(call.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId)), "Actual ordinary terminal leaf lost its completion receipt.");
             var physical = new List<BookmarkStateObservation>();
             foreach (var id in new[] { parentId, childId })

@@ -84,7 +84,7 @@ public sealed class LoopStructureTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
     }
 
     private static (string StructureKind, string StructureSchemaVersion, string BodySlotName) Identity(string loop) => loop switch

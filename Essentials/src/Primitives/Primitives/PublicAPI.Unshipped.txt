@@ -237,3 +237,6 @@ static Elsa.Primitives.Versioning.SemVer.operator >=(Elsa.Primitives.Versioning.
 static Elsa.Primitives.Versioning.SemVer.ToSortKey(string! version) -> string!
 static Elsa.Primitives.Versioning.SemVer.TryParse(string? value, out Elsa.Primitives.Versioning.SemVer result) -> bool
 static readonly Elsa.Primitives.Models.TypeAliasConvention.ReservedBareAliases -> System.Collections.Generic.IReadOnlySet<string!>!
+Elsa.Primitives.Models.LostUpdateMode
+Elsa.Primitives.Models.LostUpdateMode.Default = 0 -> Elsa.Primitives.Models.LostUpdateMode
+Elsa.Primitives.Models.LostUpdateMode.Fault = 1 -> Elsa.Primitives.Models.LostUpdateMode

@@ -14,7 +14,7 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   authored structure, compiles the executable structure (the body node id), and round-trips both through
   publishing so the runtime resolves the body without re-reading the design document. `For` is not a container scope, so it declares no container-scoped variables
   (`SupportsScopedVariables` defaults to `false`); the per-iteration `index` is supplied at runtime by the
-  loop owner via `RuntimeLoopIterationFrameFactory`, not declared as a container-scoped variable.
+  loop owner via `RuntimeLoopIterationFrameFactory`, not declared as a container-scoped variable. `ProjectIterationVariables` declares it at design time (spec 1222 FR-004a), so a body script reads `variables.index`, pinned at publish to the For node. Its `AssessChildResult` keeps availability `Unknown` and states `EarlierProducerRunCanReachConsumer = false`: the loop schedules every pass of its body itself, so an earlier pass is never behind a later one.
 
 ## Runtime extensions consumed
 
@@ -29,3 +29,4 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   runtime validates lexical ownership and iteration identity, then activates the request as the innermost
   durable frame before input materialization. Iteration frames are read-only; graph-visible Set intrinsics
   may mutate enclosing declared variable frames, but cannot target derived iteration values.
+- `LoopStructureHandler.RelateChildren` states that passes of the body never overlap, and the loop completes after its body (spec 266).

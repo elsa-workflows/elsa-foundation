@@ -136,7 +136,7 @@ public sealed class SecretInputPathCoverageTests
     }
 
     [Fact]
-    public async Task IP10_an_operator_reschedule_copies_the_withheld_envelope_and_the_successor_resolves_again()
+    public async Task IP10_an_operator_reschedule_materializes_the_withheld_reference_again_and_the_successor_resolves_again()
     {
         await using var harness = NewHarness(["actexec-wait"]);
         var executable = SecretResolutionTestSupport.NewWaitingExecutable(WaitNodeId);
@@ -158,18 +158,15 @@ public sealed class SecretInputPathCoverageTests
         Assert.True(preflight.IsAccepted, preflight.Failure?.Message);
         var builder = new WorkflowAlterationRuntimeCheckpointStateBuilder(workflow);
         Assert.IsAssignableFrom<IWorkflowAlterationRuntimeCheckpointStagedChange>(Assert.Single(staging.StagedChanges)).Apply(builder);
-        var successor = Assert.Single(builder.ActivityExecutions, change => change.State.Status == ActivityExecutionStatus.Running).State;
-        Assert.NotSame(source.InputSnapshot, successor.InputSnapshot);
-        Assert.Equal(successor.InvocationId, successor.InputSnapshot!.InvocationId);
+        // A reschedule is a re-execution (spec 1221): the successor carries no snapshot and is scheduled again, so its
+        // start materializes the secret reference afresh, withheld again, and its activation resolves it again.
+        var successor = Assert.Single(builder.ActivityExecutions, change => change.StateId != source.Execution.ActivityExecutionId).State;
+        Assert.Equal(ActivityExecutionStatus.Scheduled, successor.Status);
+        Assert.Null(successor.InputSnapshot);
         Assert.Equal(source.InvocationId, source.InputSnapshot!.InvocationId);
-        Assert.Equal(source.InputSnapshot.ContractFingerprint, successor.InputSnapshot.ContractFingerprint);
-        Assert.Equal(source.InputSnapshot.BindingFingerprint, successor.InputSnapshot.BindingFingerprint);
-        Assert.Equal(source.InputSnapshot.MaterializedAt, successor.InputSnapshot.MaterializedAt);
-        Assert.Equal(source.InputSnapshot.Values, successor.InputSnapshot.Values);
-        SecretResolutionTestSupport.AssertSnapshotWithheld(successor);
 
         // Commit the reschedule's activity states, then deliver its continuation through the real scheduler work
-        // handlers: the successor's start enqueues its invoke, whose activation resolves the reference again.
+        // handlers: the successor's schedule and start materialize its inputs, and its invoke resolves the reference.
         var activityStates = scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>();
         foreach (var change in builder.ActivityExecutions)
             await activityStates.SaveAsync(change.State);
@@ -435,8 +432,19 @@ public sealed class SecretInputPathCoverageTests
     {
         var handlers = services.GetServices<IWorkflowSchedulerWorkHandler>().OrderBy(handler => handler is IFallbackWorkflowSchedulerWorkHandler).ToArray();
         var queue = services.GetRequiredService<IWorkflowSchedulerWorkQueue>();
-        for (RuntimeSchedulerWorkItem? item = workItem; item is not null; item = await queue.DequeueAsync(workItem.WorkflowExecutionId))
+        var outbox = services.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        for (RuntimeSchedulerWorkItem? item = workItem; item is not null; item = await NextAsync())
             await handlers.First(handler => handler.CanHandle(item)).HandleAsync(item);
+
+        // As the drain loop does: deliver the commits' continuation intents into the queue before reading the next item.
+        async Task<RuntimeSchedulerWorkItem?> NextAsync()
+        {
+            await outbox.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 64,
+                workflowExecutionId: workItem.WorkflowExecutionId,
+                intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+            return await queue.DequeueAsync(workItem.WorkflowExecutionId);
+        }
     }
 
     private WorkflowExecutionHarness NewHarness(IReadOnlyCollection<string> activityExecutionIds, Action<IServiceCollection>? configure = null) =>

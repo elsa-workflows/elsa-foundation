@@ -107,7 +107,7 @@ public sealed class ActivityTemplatePlacementTests
         var writeTemplate = Template(
             "template-write",
             "hash-write",
-            Node("source-owned-root", ActivityExecutionPlacement.Background));
+            BackgroundLeaf("source-owned-root"));
         var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
         var sequencePublication = Publication("definition-sequence", "version-sequence", "type.sequence", sequenceTemplate);
         var writePublication = Publication("definition-write", "version-write", "type.write", writeTemplate);
@@ -142,9 +142,192 @@ public sealed class ActivityTemplatePlacementTests
 
         var write = Assert.Single(Assert.Single(sequence.ChildSlots, x => x.Name == "Activities").Activities);
         Assert.Equal(ActivityExecutionPlacement.Background, write.ExecutionPlacement);
+        Assert.True(write.ActivityContract!.SupportsBackgroundExecution);
         var structure = Assert.IsType<ExecutableActivityStructure>(sequence.Structure);
         var orderedChildIds = structure.Payload.Deserialize<SequenceExecutableStructure>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Activities;
         Assert.Equal([write.ExecutableNodeId], orderedChildIds);
+    }
+
+    [Fact]
+    public async Task An_occurrence_script_that_reads_variables_is_served_by_the_run_time_lookup()
+    {
+        // Spec 1222: an occurrence's inputs compile at placement, without the scopes publish pins against, so a
+        // script that reads variables is marked for the recorded run-time lookup instead of reading nothing.
+        var overlay = new ExecutableActivityTemplateOccurrenceOverlay(
+            "1",
+            Json("""[{"referenceKey":"condition","value":{"value":"variables.total > 1","expressionType":"JavaScript"}}]"""),
+            null);
+        var graphTemplate = Template(
+            "template-graph",
+            "hash-graph",
+            Node("graph-root"),
+            [new("definition-sequence", "version-sequence", "1.0.0", "template-sequence", "hash-sequence", "sequence", ActivityInvocationOrigin.Empty, null, "activity-graph", 0, overlay)]);
+        var sequenceTemplate = Template(
+            "template-sequence",
+            "hash-sequence",
+            new ExecutableNode(
+                "source-owned-root", "source-owned-root", "type.sequence", "1", new("sequence", "1", Json("{}")),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
+                new Dictionary<string, string>(), activityContract: RuntimeContractWithCondition("String")));
+        var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
+        var sequencePublication = Publication("definition-sequence", "version-sequence", "type.sequence", sequenceTemplate);
+        var references = new[] { Reference(graphPublication, ExecutableLayoutSidecar.Empty), Reference(sequencePublication, ExecutableLayoutSidecar.Empty) };
+        var placer = CreatePlacer(
+            new PublicationStore([graphPublication, sequencePublication]),
+            new TemplateReader([graphTemplate, sequenceTemplate]),
+            new SourceReader(references),
+            new Sha256ActivityPlacementHasher(),
+            new Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver([new VariablesDotAnalyzer()]));
+
+        var placement = await placer.PlaceAsync(new(
+            graphPublication,
+            graphTemplate,
+            references[0],
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            graphPublication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, RuntimeOutputCapture>()));
+
+        var condition = placement.Root.DescendantsAndSelf().Single(node => node.InputBindings.ContainsKey("condition")).InputBindings["condition"];
+        Assert.NotNull(condition.Expression!.VariableReadFallback);
+    }
+
+    /// <summary>A stand-in for the JavaScript analyzer, which this project does not reference.</summary>
+    private sealed class VariablesDotAnalyzer : Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer
+    {
+        public string Language => "JavaScript";
+
+        public Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis Analyze(string source, bool scriptBody = false) =>
+            new(source.Contains("variables.", StringComparison.Ordinal) ? ["total"] : [], false);
+    }
+
+    [Fact]
+    public async Task Placement_refuses_a_template_background_node_that_fails_a_criterion()
+    {
+        // FR-012 (spec 1230): a template provider's own background nodes pass the publication check when placed.
+        foreach (var (leaf, criterion) in new[]
+                 {
+                     (BackgroundLeaf("reader", BackgroundVariableReaderLeafAlias), "VF-BG-001 (C9): Background execution is not eligible for activity node 'node-"),
+                     (Node("bare", ActivityExecutionPlacement.Background), "VF-BG-001 (C3): Background execution is not eligible for activity node 'node-"),
+                     (BackgroundLeaf("any", result: new ActivityResultContract(new("Any"), true, ActivityValuePolicy.Default, [])),
+                         "VF-BG-001 (C3): Background execution is not eligible for activity node 'node-"),
+                     (BackgroundLeaf("parent", children: [Node("child")]), "VF-BG-001 (C1): Background execution is not eligible for activity node 'node-"),
+                     (BackgroundLeaf("stateful", BackgroundStatefulLeafAlias), "VF-BG-001 (C2): Background execution is not eligible for activity node 'node-"),
+                     (BackgroundLeaf("stream", result: new ActivityResultContract(new(typeof(Stream).FullName!), true, ActivityValuePolicy.Default, [])),
+                         "VF-BG-001 (C4): Background execution is not eligible for activity node 'node-"),
+                     (BackgroundLeaf("sensitive", result: new ActivityResultContract(new("Int32"), true, ActivityValuePolicy.Default with { IsSensitive = true }, [])),
+                         "VF-BG-001 (C5): Background execution is not eligible for activity node 'node-")
+                 })
+        {
+            var template = Template("template-root", "hash-root", Node("root", leaf));
+            var publication = Publication("definition-root", "version-root", "type.root", template);
+            var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
+            var placer = CreatePlacer(new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]),
+                new Sha256ActivityPlacementHasher());
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => placer.PlaceAsync(new(
+                publication, template, reference,
+                new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+                publication.ActivityTypeKey, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>())).AsTask());
+
+            Assert.StartsWith(criterion, exception.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Placement_defers_the_type_criteria_when_the_publishing_host_does_not_know_the_runtime_type()
+    {
+        // A design-only shell (for example an agent designed without the agent runtime) cannot resolve the type; the
+        // contract-visible criteria still pass, and admission and the worker check the type.
+        var template = Template("template-root", "hash-root", Node("root", BackgroundLeaf("unknown", "test.not-registered-here")));
+        var publication = Publication("definition-root", "version-root", "type.root", template);
+        var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
+        var placer = CreatePlacer(new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]),
+            new Sha256ActivityPlacementHasher());
+
+        var placement = await placer.PlaceAsync(new(
+            publication, template, reference,
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            publication.ActivityTypeKey, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
+
+        var leaf = Assert.Single(Assert.Single(placement.Root.ChildSlots).Activities);
+        Assert.Equal(ActivityExecutionPlacement.Background, leaf.ExecutionPlacement);
+    }
+
+    // Spec 1231 T033 (FR-031, User Story 5 scenario 5): a design-only shell defers the type checks, yet the step-variable
+    // signals the pinned contract carries are refused at placement with VF-BG-001 (C9).
+    [Theory]
+    [InlineData("marker", "[AccessesUndeclaredVariables]")]
+    [InlineData("writable", "input 'balance' is a VariableReference")]
+    [InlineData("read-only", "input 'balance' is a ReadOnlyVariableReference")]
+    public async Task Placement_without_the_runtime_type_refuses_a_contract_visible_step_variable_signal(string signal, string expected)
+    {
+        var unknown = BackgroundLeaf("unknown", "test.not-registered-here");
+        var contract = unknown.ActivityContract!;
+        IReadOnlyList<Elsa.Activities.Runtime.Core.Models.ActivityInputContract> inputs = signal == "marker"
+            ? []
+            :
+            [
+                new Elsa.Activities.Runtime.Core.Models.ActivityInputContract("balance", "Balance", new(VariableReferenceTypes.Alias), true, false, false, null, ActivityValuePolicy.Default)
+                {
+                    VariableReference = new ActivityInputVariableReference(
+                        signal == "writable" ? ActivityVariableAccess.ReadWrite : ActivityVariableAccess.Read, new("Decimal"))
+                }
+            ];
+        var leaf = new ExecutableNode(
+            unknown.ExecutableNodeId, unknown.AuthoredActivityId, unknown.ActivityType, unknown.ActivityTypeVersion, unknown.Descriptor,
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), ActivityExecutionPlacement.Background,
+            activityContract: new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+                contract.ActivityTypeKey, contract.ContractVersion, contract.DescriptorKind, contract.DescriptorPayload,
+                inputs, contract.Result, contract.Outcomes, contract.Activation, contract.SideEffectProfile,
+                supportsBackgroundExecution: true, accessesUndeclaredVariables: signal == "marker"));
+        var template = Template("template-root", "hash-root", Node("root", leaf));
+        var publication = Publication("definition-root", "version-root", "type.root", template);
+        var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
+        var placer = CreatePlacer(new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]),
+            new Sha256ActivityPlacementHasher());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => placer.PlaceAsync(new(
+            publication, template, reference,
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            publication.ActivityTypeKey, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>())).AsTask());
+
+        Assert.StartsWith("VF-BG-001 (C9): Background execution is not eligible for activity node 'node-", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(expected, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Placement_checks_the_background_node_as_pinned_with_the_occurrence_bindings()
+    {
+        // The template's own node has no bindings and passes; the occurrence binds a sensitive literal to its input,
+        // which would travel unprotected to a worker (C10).
+        var leaf = BackgroundLeaf("leaf");
+        var contract = leaf.ActivityContract!;
+        var withInput = new ExecutableNode(
+            leaf.ExecutableNodeId, leaf.AuthoredActivityId, leaf.ActivityType, leaf.ActivityTypeVersion, leaf.Descriptor,
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), ActivityExecutionPlacement.Background,
+            activityContract: new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+                contract.ActivityTypeKey, contract.ContractVersion, contract.DescriptorKind, contract.DescriptorPayload,
+                [new Elsa.Activities.Runtime.Core.Models.ActivityInputContract("token", "Token", new("String"), false, true, false, null, ActivityValuePolicy.Default)],
+                contract.Result, contract.Outcomes, contract.Activation, contract.SideEffectProfile, supportsBackgroundExecution: true));
+        var template = Template("template-leaf", "hash-leaf", withInput);
+        var publication = Publication("definition-leaf", "version-leaf", "type.leaf", template);
+        var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
+        var placer = CreatePlacer(new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]),
+            new Sha256ActivityPlacementHasher());
+        var sensitive = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true);
+        var binding = new RuntimeInputBinding("token", new("String"), sensitive, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(new("String"), Json("\"p@ss\""), sensitive));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => placer.PlaceAsync(new(
+            publication, template, reference,
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            publication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding> { ["token"] = binding },
+            new Dictionary<string, RuntimeOutputCapture>())).AsTask());
+
+        Assert.StartsWith("VF-BG-001 (C10):", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("input 'token' is sensitive", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -776,14 +959,76 @@ public sealed class ActivityTemplatePlacementTests
         IActivityDefinitionVersionPublicationStore publications,
         IExecutableActivityTemplateReader templates,
         IWorkflowExecutableSourceReferenceReader references,
-        IActivityPlacementHasher hasher) => new(
+        IActivityPlacementHasher hasher,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null) => new(
         publications,
         templates,
         references,
         hasher,
         new SequenceOccurrenceStructureService(),
         new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
-        new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])));
+        new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])),
+        BackgroundLeafTypes(),
+        readResolver);
+
+    private static Elsa.Serialization.Core.IWellKnownTypeRegistry BackgroundLeafTypes()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(BackgroundWriteLeaf), BackgroundWriteLeafAlias);
+        registry.RegisterType(typeof(BackgroundVariableReaderLeaf), BackgroundVariableReaderLeafAlias);
+        registry.RegisterType(typeof(BackgroundStatefulLeaf), BackgroundStatefulLeafAlias);
+        return registry;
+    }
+
+    private const string BackgroundWriteLeafAlias = "test.background-write-leaf";
+    private const string BackgroundVariableReaderLeafAlias = "test.background-variable-reader-leaf";
+    private const string BackgroundStatefulLeafAlias = "test.background-stateful-leaf";
+
+    // An eligible background leaf as a template provider compiles it: a pinned contract naming a registered,
+    // [BackgroundExecutionSafe] CLR type through its activation capability.
+    private static ExecutableNode BackgroundLeaf(
+        string id,
+        string alias = BackgroundWriteLeafAlias,
+        ActivityResultContract? result = null,
+        ExecutableNode[]? children = null)
+    {
+        var contract = new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+            alias, "1", "clr", Json("{}"), [],
+            result ?? new ActivityResultContract(new("Int32"), true, ActivityValuePolicy.Default, []), ["Done"],
+            new ActivityActivationRequirement("clr", alias), SideEffectProfile.External, supportsBackgroundExecution: true);
+        return children is null
+            ? new(id, id, alias, "1", new(WellKnownRuntimeActivityConsumers.ClrActivity, "1", Json("{}")),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), ActivityExecutionPlacement.Background,
+                activityContract: contract)
+            : new(executableNodeId: id, authoredActivityId: id, activityType: alias, activityTypeVersion: "1",
+                descriptorType: WellKnownRuntimeActivityConsumers.ClrActivity, descriptorPayload: Json("{}"),
+                inputBindings: new Dictionary<string, RuntimeInputBinding>(), metadata: new Dictionary<string, string>(),
+                childSlots: [new ExecutableChildSlot("Activities", children)], activityContract: contract,
+                executionPlacement: ActivityExecutionPlacement.Background);
+    }
+
+    [Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafe]
+    private sealed class BackgroundWriteLeaf : Activity<int>
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
+
+    [Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafe]
+    private sealed class BackgroundStatefulLeaf : Activity<int>, Elsa.Activities.Runtime.Core.Contracts.IStatefulActivity
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+
+        public ValueTask<ActivityTransition> ResumeAsync(Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest request) => throw new NotSupportedException();
+    }
+
+    [Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafe]
+    private sealed class BackgroundVariableReaderLeaf : Activity<int>, IRuntimeScopedVariableReader
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
 
     private static ExecutableNode Node(string id, params ExecutableNode[] children) => new(
         id, id, "local", "1", new("local", "1", Json("{}")),

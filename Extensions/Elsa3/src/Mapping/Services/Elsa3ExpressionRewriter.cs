@@ -38,12 +38,17 @@ public sealed class Elsa3ExpressionRewriter
     /// <see cref="Elsa3JavaScriptMode.Script"/>: a RunJavaScript body, whose completion value becomes a <c>return</c>
     /// (plan D-16).
     /// </param>
+    /// <param name="scriptOutcomes">
+    /// Script mode: the RunJavaScript node's Elsa 3 possible outcomes, so <c>setOutcome</c> / <c>setOutcomes</c> can be
+    /// converted to the returned <c>complete(result, outcomes)</c> form (spec 1208 FR-027). Without it the setters are refused.
+    /// </param>
     public Elsa3ExpressionRewriteResult Rewrite(
         string language,
         string source,
         TypeReference resultType,
         Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve,
-        Elsa3JavaScriptMode mode)
+        Elsa3JavaScriptMode mode,
+        Elsa3ScriptOutcomeContext? scriptOutcomes = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
@@ -53,7 +58,7 @@ public sealed class Elsa3ExpressionRewriter
         return language switch
         {
             var value when value.Equals("JavaScript", StringComparison.OrdinalIgnoreCase) =>
-                CheckStrictMode(RewriteJavaScript(source, resultType, resolve, mode), mode),
+                CheckStrictMode(RewriteJavaScript(source, resultType, resolve, mode, scriptOutcomes), mode),
             var value when value.Equals("Liquid", StringComparison.OrdinalIgnoreCase) =>
                 RewriteLiquid(source, resultType, resolve),
             _ => Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
@@ -67,7 +72,8 @@ public sealed class Elsa3ExpressionRewriter
         string source,
         TypeReference resultType,
         Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve,
-        Elsa3JavaScriptMode mode)
+        Elsa3JavaScriptMode mode,
+        Elsa3ScriptOutcomeContext? scriptOutcomes)
     {
         Script script;
         try
@@ -83,23 +89,51 @@ public sealed class Elsa3ExpressionRewriter
                 "Correct the JavaScript or replace it with a portable expression before import."));
         }
 
-        var analyzer = new JavaScriptAnalyzer(resolve);
+        var analyzer = new JavaScriptAnalyzer(resolve)
+        {
+            AllowsOutcomeSetters = mode == Elsa3JavaScriptMode.Script && scriptOutcomes is not null,
+            Mode = mode
+        };
         analyzer.Visit(script);
         if (analyzer.Issues.Count > 0)
             return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
+
+        // Elsa 4 reserves 'complete' in every JavaScript surface, setter or not: a script or expression that declares it
+        // would import and then fail draft validation (Scripts/ReservedName, JavaScript/ReservedName), so the import
+        // refuses it with the rename up front.
+        if (analyzer.DeclaresComplete)
+        {
+            return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                "JavaScript declares its own 'complete', which Elsa 4 reserves in every JavaScript surface for the returned completion form 'complete(result, outcomes)' (and which 'setOutcome' converts to).",
+                "Rename the script's 'complete' in the Elsa 3 workflow before import."));
+        }
+
+        var outcomes = analyzer.CallsOutcomeSetter ? PlanScriptOutcomes(analyzer, scriptOutcomes!) : null;
+        if (outcomes is { Issue: { } outcomeIssue })
+            return Elsa3ExpressionRewriteResult.Failure(outcomeIssue);
+        var selection = outcomes?.SelectionExpression;
 
         // Elsa 3 evaluated source as a statement script whose completion value is the result. Elsa 4 evaluates an
         // expression as one parenthesized expression and a script as a function body that must return.
         var edits = analyzer.Edits.ToList();
         var body = script.Body;
-        var prelude = analyzer.Prelude;
+        var prelude = analyzer.Prelude + (outcomes?.Prelude ?? string.Empty);
         var topLevelReturns = new List<ReturnStatement>();
         CollectTopLevelReturns(script, topLevelReturns);
         if (topLevelReturns.Count > 0)
         {
             // Elsa 3 turned a bare `return;` (undefined) into null; Elsa 4 refuses an undefined result.
             foreach (var bare in topLevelReturns.Where(statement => statement.Argument is null))
-                edits.Add(new SourceEdit(bare.Start + "return".Length, bare.Start + "return".Length, " null"));
+                edits.Add(new SourceEdit(bare.Start + "return".Length, bare.Start + "return".Length,
+                    selection is null ? " null" : $" complete(null, {selection})"));
+
+            // A converted setter: every value the script returns carries the pending selection (FR-027).
+            if (selection is not null)
+            {
+                foreach (var returned in topLevelReturns.Where(statement => statement.Argument is not null))
+                    AddCompletion(edits, returned.Argument!.Start, returned.Argument.End, selection);
+            }
 
             // An expression's returned value becomes null when it is undefined (spec 262 R-1).
             if (mode == Elsa3JavaScriptMode.Expression)
@@ -117,14 +151,17 @@ public sealed class Elsa3ExpressionRewriter
             {
                 if (mode == Elsa3JavaScriptMode.Expression)
                     AddNullCoalescing(edits, trailing.Start, ExpressionEnd(source, trailing));
+                if (selection is not null)
+                    AddCompletion(edits, trailing.Start, ExpressionEnd(source, trailing), selection);
                 edits.Add(new SourceEdit(trailing.Start, trailing.Start, "return "));
             }
 
             if (mode == Elsa3JavaScriptMode.Script)
             {
-                return Elsa3ExpressionRewriteResult.Success(
-                    CreateDefinition("JavaScript", EndScript(prelude + ApplyEdits(source, edits)), resultType, analyzer.Parameters),
-                    completionValueLost: !preserved);
+                return Elsa3ExpressionRewriteResult.SuccessReading(analyzer.HasComputedVariableRead, 
+                    CreateDefinition("JavaScript", EndScript(prelude + ApplyEdits(source, edits) + FinalCompletion(selection)), resultType, analyzer.Parameters),
+                    completionValueLost: !preserved,
+                    scriptOutcomes: outcomes?.Conversion);
             }
 
             if (!preserved)
@@ -133,7 +170,7 @@ public sealed class Elsa3ExpressionRewriter
                     "JavaScript returns at the top level but ends with a statement that is neither a return nor an expression, so its Elsa 3 result cannot be preserved as one Elsa 4 expression."));
             }
 
-            return Elsa3ExpressionRewriteResult.Success(CreateDefinition(
+            return Elsa3ExpressionRewriteResult.SuccessReading(analyzer.HasComputedVariableRead, CreateDefinition(
                 "JavaScript", $"(function () {{\n{prelude}{ApplyEdits(source, edits)}\n}})()", resultType, analyzer.Parameters));
         }
 
@@ -141,10 +178,15 @@ public sealed class Elsa3ExpressionRewriter
         {
             var hasCompletion = body.Count > 0 && body[^1] is ExpressionStatement;
             if (hasCompletion)
+            {
+                if (selection is not null)
+                    AddCompletion(edits, body[^1].Start, ExpressionEnd(source, (ExpressionStatement)body[^1]), selection);
                 edits.Add(new SourceEdit(body[^1].Start, body[^1].Start, "return "));
-            return Elsa3ExpressionRewriteResult.Success(
-                CreateDefinition("JavaScript", EndScript(prelude + ApplyEdits(source, edits)), resultType, analyzer.Parameters),
-                completionValueLost: body.Count > 0 && !hasCompletion);
+            }
+            return Elsa3ExpressionRewriteResult.SuccessReading(analyzer.HasComputedVariableRead, 
+                CreateDefinition("JavaScript", EndScript(prelude + ApplyEdits(source, edits) + FinalCompletion(selection)), resultType, analyzer.Parameters),
+                completionValueLost: body.Count > 0 && !hasCompletion,
+                scriptOutcomes: outcomes?.Conversion);
         }
 
         if (body.Count == 0)
@@ -172,14 +214,14 @@ public sealed class Elsa3ExpressionRewriter
             AddNullCoalescing(edits, last.Start, end);
             if (source.AsSpan(last.End).Contains("//", StringComparison.Ordinal))
                 edits.Add(new SourceEdit(source.Length, source.Length, "\n"));
-            return Elsa3ExpressionRewriteResult.Success(CreateDefinition("JavaScript", ApplyEdits(source, edits), resultType, analyzer.Parameters));
+            return Elsa3ExpressionRewriteResult.SuccessReading(analyzer.HasComputedVariableRead, CreateDefinition("JavaScript", ApplyEdits(source, edits), resultType, analyzer.Parameters));
         }
 
         // Statements: an immediately invoked function that returns the last expression, Elsa 3's completion value.
         AddNullCoalescing(edits, last.Start, ExpressionEnd(source, last));
         edits.Add(new SourceEdit(last.Start, last.Start, "return "));
         var wrapped = $"(function () {{\n{prelude}{ApplyEdits(source, edits)}\n}})()";
-        return Elsa3ExpressionRewriteResult.Success(CreateDefinition("JavaScript", wrapped, resultType, analyzer.Parameters));
+        return Elsa3ExpressionRewriteResult.SuccessReading(analyzer.HasComputedVariableRead, CreateDefinition("JavaScript", wrapped, resultType, analyzer.Parameters));
     }
 
     /// <summary>
@@ -211,6 +253,10 @@ public sealed class Elsa3ExpressionRewriter
         }
     }
 
+    private static bool IsLiquidIdentifier(string value) =>
+        value.Length > 0 && (char.IsLetter(value[0]) || value[0] == '_') &&
+        value.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '_' or '-');
+
     private static Elsa3ExpressionRewriteResult RewriteLiquid(
         string source,
         TypeReference resultType,
@@ -241,6 +287,15 @@ public sealed class Elsa3ExpressionRewriter
                 MutationGuidance));
         }
 
+        // A loop variable named `variables` would capture the converted `variables.X` reads inside it (spec 1222 FR-028).
+        if (syntax.OfType<Fluid.Ast.ForStatement>().Any(loop => loop.Identifier == "variables"))
+        {
+            return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                "Liquid declares its own 'variables' loop variable, and converted variable reads in its scope would read the loop item instead of the workflow's variables.",
+                "Rename the loop variable in the Elsa 3 workflow before import."));
+        }
+
         foreach (var member in syntax.OfType<Fluid.Ast.MemberExpression>())
         {
             var segments = member.Segments;
@@ -267,6 +322,31 @@ public sealed class Elsa3ExpressionRewriter
             if (!resolution.Succeeded)
             {
                 issues.Add(resolution.Issue!);
+                continue;
+            }
+
+            // Spec 1222 FR-005, FR-026: a variable read keeps a variables root, spelled as the variable is declared.
+            if (resolution.VariableName is { } variableName && resolution.Binding is VariableExpressionParameterBinding variable)
+            {
+                var pinned = new VariableExpressionParameterBinding(variable.DeclaringScopeNodeId, variable.VariableKey, ExpressionParameterSurfaces.Variables);
+                if (!TryAddParameter(parameters, ExpressionParameterSurfaces.VariablesKey(variableName), pinned, out var variableCollision))
+                {
+                    issues.Add(variableCollision!);
+                    continue;
+                }
+
+                requestedEdits.Add(new LiquidRootEdit(root.Identifier, memberSegment.Identifier,
+                    IsLiquidIdentifier(variableName) ? $"variables.{variableName}" : $"variables[{JsonSerializer.Serialize(variableName)}]"));
+                continue;
+            }
+
+            // A lowered input or output becomes a bare root; one named `variables` would be the variables root instead.
+            if (memberSegment.Identifier == "variables")
+            {
+                issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    $"Liquid reads '{root.Identifier}.variables', which in Elsa 4 would be the workflow's variables root, not this value.",
+                    "Rename the input or output in the Elsa 3 workflow before import."));
                 continue;
             }
 
@@ -301,7 +381,9 @@ public sealed class Elsa3ExpressionRewriter
             }
 
             used.Add(match.Start);
-            edits.Add(new SourceEdit(match.Start, match.MemberStart, string.Empty));
+            edits.Add(requested.Replacement is { } replacement
+                ? new SourceEdit(match.Start, match.MemberStart + requested.Member.Length, replacement)
+                : new SourceEdit(match.Start, match.MemberStart, string.Empty));
         }
 
         if (issues.Count > 0)
@@ -310,6 +392,72 @@ public sealed class Elsa3ExpressionRewriter
         return Elsa3ExpressionRewriteResult.Success(
             CreateDefinition("Liquid", ApplyEdits(source, edits), resultType, parameters));
     }
+
+    private const string PendingOutcomes = "__elsa3Outcomes";
+
+    private sealed record ScriptOutcomePlan(
+        string? Prelude,
+        string? SelectionExpression,
+        Elsa3ScriptOutcomeConversion? Conversion,
+        Elsa3ExpressionRewriteIssue? Issue);
+
+    /// <summary>
+    /// Plans the conversion of Elsa 3 <c>setOutcome</c> / <c>setOutcomes</c> (spec 1208 FR-027, Q7). Each call replaces a
+    /// pending selection held in a converter-owned local, as Elsa 3's did; every value the script returns becomes
+    /// <c>complete(value, pending)</c>, so a script that sets nothing still completes with <c>Done</c>. Literal names
+    /// join the node's outcome set. A computed name is faithful only with a known set: a name outside it selects a
+    /// converter-declared catch-all with no connection, so that path ends as it did in Elsa 3. With no known set the
+    /// conversion is refused; a warning would not make it faithful.
+    /// </summary>
+    private static ScriptOutcomePlan PlanScriptOutcomes(JavaScriptAnalyzer analyzer, Elsa3ScriptOutcomeContext context)
+    {
+        var literals = analyzer.OutcomeLiterals.Distinct(StringComparer.Ordinal).ToArray();
+        var known = (context.PossibleOutcomes ?? []).Concat(literals).Distinct(StringComparer.Ordinal).ToArray();
+        string? catchAll = null;
+        if (analyzer.HasComputedOutcome)
+        {
+            if (context.PossibleOutcomes is not { Count: > 0 })
+            {
+                return new(null, null, null, new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                    "JavaScript calls 'setOutcome' or 'setOutcomes' with a computed name, and the activity lists no possible outcomes, so Elsa 4 cannot know which outcomes the script selects.",
+                    "List every outcome the script can set in the activity's Possible Outcomes in the Elsa 3 workflow, before import."));
+            }
+
+            catchAll = Elsa3ScriptOutcomeConversion.CatchAllOutcome;
+            while (known.Contains(catchAll, StringComparer.Ordinal))
+                catchAll += " (Elsa 3)";
+        }
+
+        var prelude =
+            $"let {PendingOutcomes};\n" +
+            $"function __elsa3SetOutcome(outcome) {{ {PendingOutcomes} = [outcome]; }}\n" +
+            $"function __elsa3SetOutcomes(outcomes) {{ {PendingOutcomes} = Array.from(outcomes); }}\n";
+        var selection = PendingOutcomes;
+        if (catchAll is not null)
+        {
+            prelude += "function __elsa3RouteOutcomes(outcomes) { if (outcomes === undefined) return undefined; " +
+                       $"const known = {JsonSerializer.Serialize(known)}; " +
+                       $"return outcomes.map(outcome => known.includes(outcome) ? outcome : {JsonSerializer.Serialize(catchAll)}); }}\n";
+            selection = $"__elsa3RouteOutcomes({PendingOutcomes})";
+        }
+
+        return new(prelude, selection, new Elsa3ScriptOutcomeConversion(literals, catchAll), null);
+    }
+
+    /// <summary>
+    /// Wraps <c>source[start..end]</c> as the result of <c>complete((result), selection)</c>. Parenthesized, so a comma
+    /// expression (<c>return a, b;</c>) stays one argument whose value is its last operand, as Elsa 3 returned it.
+    /// </summary>
+    private static void AddCompletion(List<SourceEdit> edits, int start, int end, string selection)
+    {
+        edits.Add(new SourceEdit(start, start, "complete(("));
+        edits.Add(new SourceEdit(end, end, $"), {selection})"));
+    }
+
+    /// <summary>A script that ends without returning still completes with its pending selection.</summary>
+    private static string FinalCompletion(string? selection) =>
+        selection is null ? string.Empty : $"\nreturn complete(undefined, {selection});";
 
     /// <summary>The <c>return</c> statements outside every function, which Elsa 3 allowed and evaluated as the result.</summary>
     private static void CollectTopLevelReturns(Node node, List<ReturnStatement> returns)
@@ -444,6 +592,46 @@ public sealed class Elsa3ExpressionRewriter
     private sealed class JavaScriptAnalyzer(
         Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve)
     {
+        /// <summary>Script mode with a known node: <c>setOutcome</c> / <c>setOutcomes</c> are converted, not refused.</summary>
+        public bool AllowsOutcomeSetters { get; init; }
+
+        /// <summary>
+        /// Expression mode reads variables through the Elsa 4 <c>variables</c> root (spec 1222 FR-026, FR-027). Script
+        /// mode, a RunJavaScript body, keeps lowering them to <c>args</c> until the body has its <c>variables</c> root
+        /// (FR-026a, task T047), and still refuses computed reads, which the body cannot serve yet.
+        /// </summary>
+        public Elsa3JavaScriptMode Mode { get; init; }
+
+        private bool ReadsVariablesRoot => Mode == Elsa3JavaScriptMode.Expression;
+
+        /// <summary>Whether the converted source reads variables by a computed name, which publish serves by the run-time fallback.</summary>
+        public bool HasComputedVariableRead { get; private set; }
+
+        public bool CallsOutcomeSetter { get; private set; }
+        public bool HasComputedOutcome { get; private set; }
+        public List<string> OutcomeLiterals { get; } = [];
+        public bool DeclaresComplete { get; private set; }
+
+        private void RecordOutcomeSetter(CallExpression call, string name)
+        {
+            CallsOutcomeSetter = true;
+            var argument = call.Arguments.Count == 1 ? call.Arguments[0] : null;
+            if (name == "setOutcome" && argument is Literal { Value: string literal })
+            {
+                OutcomeLiterals.Add(literal);
+                return;
+            }
+
+            if (name == "setOutcomes" && argument is ArrayExpression array &&
+                array.Elements.All(element => element is Literal { Value: string }))
+            {
+                OutcomeLiterals.AddRange(array.Elements.Select(element => (string)((Literal)element!).Value!));
+                return;
+            }
+
+            HasComputedOutcome = true;
+        }
+
         private static readonly HashSet<string> SetterCalls = new(StringComparer.Ordinal)
         {
             "setVariable", "setOutput", "setInput", "setResult",
@@ -510,7 +698,9 @@ public sealed class Elsa3ExpressionRewriter
             "Elsa 4 expressions can read only the correlation ID and the instance ID of a workflow instance. Pass the value in as a workflow input, or move the operation into an activity, before import.";
 
         private const string OutcomeGuidance =
-            "Elsa 4 scripts have no outcomes. In the Elsa 3 workflow, route with a Decision or Switch activity whose conditions carry the script's logic, before import.";
+            "Only a RunJavaScript script selects outcomes in Elsa 4. In the Elsa 3 workflow, move the call into a RunJavaScript, or route with a Decision or Switch activity, before import.";
+
+        private const string Elsa4CompleteName = "complete";
 
         /// <summary>
         /// Elsa 3 host functions Elsa 4 cannot run the same, each with what to change in the Elsa 3 workflow
@@ -576,7 +766,11 @@ public sealed class Elsa3ExpressionRewriter
         {
             var scope = ScopeOf(node);
             if (scope is not null)
+            {
                 _scopes.Add(scope);
+                if (scope.Contains(Elsa4CompleteName))
+                    DeclaresComplete = true;
+            }
             var function = node switch
             {
                 IFunction and not ArrowFunctionExpression => new FunctionContext(((IFunction)node).Params),
@@ -826,6 +1020,18 @@ public sealed class Elsa3ExpressionRewriter
                 {
                     if (call.Arguments.Count != 1 || call.Arguments[0] is not Literal { Value: string name })
                     {
+                        // Spec 1222 FR-027: an Elsa 3 computed variable read keeps its form, getVariable(expr), and is
+                        // served by the Elsa 4 run-time lookup, which resolves the name nearest scope first.
+                        if (kind == Elsa3AmbientReferenceKind.Variable && ReadsVariablesRoot && call.Arguments.Count == 1 &&
+                            call.Arguments[0] is not SpreadElement)
+                        {
+                            if (!EnsureRootFree("getVariable", call))
+                                return;
+                            HasComputedVariableRead = true;
+                            Visit(call.Arguments[0]);
+                            return;
+                        }
+
                         Issues.Add(DynamicIssue($"JavaScript helper '{callee.Name}' uses a computed or dynamic name."));
                         return;
                     }
@@ -928,6 +1134,16 @@ public sealed class Elsa3ExpressionRewriter
                     return;
                 }
 
+                // Elsa 3 script outcomes convert to the returned completion form (spec 1208 FR-027).
+                if (AllowsOutcomeSetters && callee.Name is "setOutcome" or "setOutcomes")
+                {
+                    RecordOutcomeSetter(call, callee.Name);
+                    Edits.Add(new SourceEdit(callee.Start, callee.End, callee.Name == "setOutcome" ? "__elsa3SetOutcome" : "__elsa3SetOutcomes"));
+                    foreach (var argument in call.Arguments)
+                        Visit(argument);
+                    return;
+                }
+
                 if (RefusedHostFunctions.TryGetValue(callee.Name, out var refused))
                 {
                     Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, refused.Guidance));
@@ -1002,8 +1218,22 @@ public sealed class Elsa3ExpressionRewriter
             if (node is MemberExpression member && member.Object is Identifier root && !IsDeclared(root.Name) &&
                 TryGetAmbientKind(root.Name, out var memberKind))
             {
+                if (member.Computed && member.Property is Literal { Value: string literalMember })
+                {
+                    AddResolvedEdit(member, memberKind, literalMember);
+                    return;
+                }
+
                 if (member.Computed || member.Property is not Identifier property)
                 {
+                    // Spec 1222 FR-027: variables[expr] keeps its form and is served by the run-time lookup.
+                    if (member.Computed && ReadsVariablesRoot)
+                    {
+                        HasComputedVariableRead = true;
+                        Visit(member.Property);
+                        return;
+                    }
+
                     Issues.Add(DynamicIssue($"JavaScript ambient root '{root.Name}' uses a computed accessor."));
                     return;
                 }
@@ -1022,6 +1252,14 @@ public sealed class Elsa3ExpressionRewriter
 
             if (node is Identifier bareIdentifier && !IsDeclared(bareIdentifier.Name) && TryGetAmbientKind(bareIdentifier.Name, out _))
             {
+                // Spec 1222 FR-008, FR-027: the variables root used as a value (enumerated, passed, aliased) is an opaque
+                // read the run-time lookup serves.
+                if (ReadsVariablesRoot)
+                {
+                    HasComputedVariableRead = true;
+                    return;
+                }
+
                 Issues.Add(DynamicIssue($"JavaScript ambient root '{bareIdentifier.Name}' is not followed by a static member name."));
                 return;
             }
@@ -1070,6 +1308,32 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
+            // Spec 1222 FR-026: a variable read becomes variables.<name>, spelled as the variable is declared, and is
+            // pinned at publish to its nearest declaring scope. The parameter added here is what the converter resolved;
+            // publish derives the pins again.
+            if (ReadsVariablesRoot &&
+                resolution.VariableName is { } variableName &&
+                resolution.Binding is VariableExpressionParameterBinding variable)
+            {
+                if (!EnsureRootFree(ExpressionParameterSurfaces.Variables, node))
+                    return;
+
+                var pinned = new VariableExpressionParameterBinding(variable.DeclaringScopeNodeId, variable.VariableKey, ExpressionParameterSurfaces.Variables);
+                if (!TryAddParameter(Parameters, ExpressionParameterSurfaces.VariablesKey(variableName), pinned, out var variableCollision))
+                {
+                    Issues.Add(variableCollision!);
+                    return;
+                }
+
+                Edits.Add(new SourceEdit(node.Start, node.End, FormatVariableAccess(variableName)));
+                return;
+            }
+
+            // #3296: a lowered args.X inside a scope where the script declares its own args would read the script's
+            // value, not the converted one.
+            if (!EnsureRootFree("args", node))
+                return;
+
             if (!TryAddParameter(Parameters, name, resolution.Binding!, out var collision))
             {
                 Issues.Add(collision!);
@@ -1078,6 +1342,27 @@ public sealed class Elsa3ExpressionRewriter
 
             Edits.Add(new SourceEdit(node.Start, node.End, FormatArgumentAccess(name)));
         }
+
+        /// <summary>
+        /// Refuses a converted read whose Elsa 4 root the script declares itself in an enclosing scope (#3296,
+        /// faithful-or-refuse, spec 1222 FR-028): the read would bind to the script's own value.
+        /// </summary>
+        private bool EnsureRootFree(string root, Node read)
+        {
+            if (!IsDeclared(root))
+                return true;
+
+            Issues.Add(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                $"JavaScript declares its own '{root}', and a converted read in its scope would become '{root}' too, reading the script's value instead of the workflow's.",
+                $"Rename the script's '{root}' in the Elsa 3 workflow before import."));
+            return false;
+        }
+
+        private static string FormatVariableAccess(string name) =>
+            IsJavaScriptIdentifier(name)
+                ? $"variables.{name}"
+                : $"variables[{JsonSerializer.Serialize(name)}]";
 
         private static string FormatArgumentAccess(string name) =>
             IsJavaScriptIdentifier(name)
@@ -1269,7 +1554,7 @@ public sealed class Elsa3ExpressionRewriter
     }
 
     private sealed record SourceEdit(int Start, int End, string Replacement);
-    private sealed record LiquidRootEdit(string Root, string Member);
+    private sealed record LiquidRootEdit(string Root, string Member, string? Replacement = null);
     private sealed record LiquidRootToken(int Start, int MemberStart, string Root, string Member);
 }
 
@@ -1300,17 +1585,31 @@ public sealed record Elsa3AmbientReference(Elsa3AmbientReferenceKind Kind, strin
 
 public sealed class Elsa3ExpressionParameterResolution
 {
-    private Elsa3ExpressionParameterResolution(ExpressionParameterBinding? binding, Elsa3ExpressionRewriteIssue? issue)
+    private Elsa3ExpressionParameterResolution(ExpressionParameterBinding? binding, Elsa3ExpressionRewriteIssue? issue, string? variableName = null)
     {
         Binding = binding;
         Issue = issue;
+        VariableName = variableName;
     }
 
     public bool Succeeded => Binding is not null;
     public ExpressionParameterBinding? Binding { get; }
     public Elsa3ExpressionRewriteIssue? Issue { get; }
 
+    /// <summary>
+    /// The name an Elsa 4 script reads the resolved variable by, spelled as declared (spec 1222 FR-026): a workflow
+    /// variable's name, or a loop's iteration value (<c>currentItem</c>, <c>index</c>). Null for any other read.
+    /// </summary>
+    public string? VariableName { get; }
+
     public static Elsa3ExpressionParameterResolution Success(ExpressionParameterBinding binding) => new(binding, null);
+
+    /// <summary>A resolved variable read, which an Elsa 4 script reads as <c>variables.&lt;variableName&gt;</c>.</summary>
+    public static Elsa3ExpressionParameterResolution SuccessVariable(VariableExpressionParameterBinding binding, string variableName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(variableName);
+        return new(binding, null, variableName);
+    }
     public static Elsa3ExpressionParameterResolution Failure(Elsa3ExpressionRewriteIssue issue) => new(null, issue);
 }
 
@@ -1334,10 +1633,42 @@ public sealed class Elsa3ExpressionRewriteResult
     /// </summary>
     public bool CompletionValueLost { get; private init; }
 
-    public static Elsa3ExpressionRewriteResult Success(ExpressionDefinition definition, bool completionValueLost = false) =>
-        new(definition, []) { CompletionValueLost = completionValueLost };
+    /// <summary>Script mode: how Elsa 3 <c>setOutcome</c> / <c>setOutcomes</c> were converted; null when the script calls neither.</summary>
+    public Elsa3ScriptOutcomeConversion? ScriptOutcomes { get; private init; }
+
+    /// <summary>Whether the converted source reads variables by a computed name (spec 1222 FR-027), served by the run-time lookup.</summary>
+    public bool HasComputedVariableRead { get; private init; }
+
+    public static Elsa3ExpressionRewriteResult SuccessReading(
+        bool computedVariableRead,
+        ExpressionDefinition definition,
+        bool completionValueLost = false,
+        Elsa3ScriptOutcomeConversion? scriptOutcomes = null) =>
+        new(definition, []) { CompletionValueLost = completionValueLost, ScriptOutcomes = scriptOutcomes, HasComputedVariableRead = computedVariableRead };
+
+    public static Elsa3ExpressionRewriteResult Success(
+        ExpressionDefinition definition,
+        bool completionValueLost = false,
+        Elsa3ScriptOutcomeConversion? scriptOutcomes = null) =>
+        new(definition, []) { CompletionValueLost = completionValueLost, ScriptOutcomes = scriptOutcomes };
     public static Elsa3ExpressionRewriteResult Failure(params Elsa3ExpressionRewriteIssue[] issues) => new(null, issues);
     public static Elsa3ExpressionRewriteResult Failure(IEnumerable<Elsa3ExpressionRewriteIssue> issues) => new(null, issues.ToArray());
+}
+
+/// <summary>
+/// The RunJavaScript node's Elsa 3 possible outcomes, for converting <c>setOutcome</c> / <c>setOutcomes</c>.
+/// <paramref name="PossibleOutcomes"/> is null when an expression decides them.
+/// </summary>
+public sealed record Elsa3ScriptOutcomeContext(IReadOnlyList<string>? PossibleOutcomes);
+
+/// <summary>
+/// The outcomes a converted script selects that the node must declare: the literal names its setters pass, and the
+/// catch-all it selects for a computed name outside the known set, when it has one (spec 1208 FR-027).
+/// </summary>
+public sealed record Elsa3ScriptOutcomeConversion(IReadOnlyList<string> LiteralOutcomes, string? CatchAll)
+{
+    /// <summary>The catch-all outcome's name, unless the node already uses it.</summary>
+    public const string CatchAllOutcome = "Unlisted outcome";
 }
 
 public static class Elsa3ImportDiagnosticCodes
@@ -1351,4 +1682,13 @@ public static class Elsa3ImportDiagnosticCodes
     public const string UnsupportedShape = "VF-IMP-007";
     public const string IncompatibleValue = "VF-IMP-008";
     public const string LiveInstanceState = "VF-IMP-009";
+
+    /// <summary>A literal variable read would resolve to another declaration in Elsa 4 than in Elsa 3 (spec 1222 FR-031): refused.</summary>
+    public const string ResolutionDiffers = "VF-IMP-010";
+
+    /// <summary>Warning: a computed variable read could reach a name declared in more than one visible scope (spec 1222 FR-031).</summary>
+    public const string ShadowedCandidate = "VF-IMP-011";
+
+    /// <summary>Info: a converted script selects a converter-declared catch-all for computed names outside its known set (spec 1208).</summary>
+    public const string ScriptOutcomeCatchAll = "ELS3-SCRIPT-OUTCOME-CATCHALL";
 }

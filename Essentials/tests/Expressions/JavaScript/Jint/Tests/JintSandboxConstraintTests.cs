@@ -192,13 +192,13 @@ public class JintSandboxConstraintTests
         Assert.Equal(42, result!.Value.GetProperty("answer").GetInt32());
     }
 
-    private static ValueTask<JsonElement?> EvaluateAsync(
+    private static async ValueTask<JsonElement?> EvaluateAsync(
         IJavaScriptScriptEvaluator evaluator,
         string source,
         CancellationToken cancellationToken = default,
         JsonElement? arguments = null) =>
-        evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
+        (await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
             source,
             arguments ?? JsonSerializer.SerializeToElement(new { }),
-            cancellationToken));
+            cancellationToken))).Value;
 }

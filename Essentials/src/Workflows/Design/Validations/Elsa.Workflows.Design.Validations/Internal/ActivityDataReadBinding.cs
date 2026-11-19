@@ -1,5 +1,7 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Validations.Internal;
 
@@ -13,6 +15,18 @@ internal sealed record ActivityDataReadBinding(
     string? Path = null,
     string? Error = null)
 {
+    /// <summary>
+    /// True for a result an input binds to directly, false for one an expression reads as a parameter. A direct
+    /// binding without a <see cref="Scope"/> names only the producer.
+    /// </summary>
+    public bool IsDirect { get; init; }
+
+    /// <summary>The exact member segments of a member read; empty for a whole-value read.</summary>
+    public ImmutableArray<string> MemberPath { get; init; } = [];
+
+    /// <summary>Whether this reads one member of its source rather than the whole value.</summary>
+    public bool IsMemberRead => Role is "ActivityResultMember" or "VariableMember";
+
     // Match the publication compiler's descriptor payload profile, including case-insensitive
     // properties, last-wins aliases and polymorphic metadata in canonicalized object order.
     // Only existing expression contract types are deserialized; arbitrary authored CLR values
@@ -94,24 +108,24 @@ internal sealed record ActivityDataReadBinding(
         }
     }
 
-    public static ActivityDataReadBinding Direct(string? role, object? value, bool portable = false)
+    public static ActivityDataReadBinding Direct(string? role, object? value)
     {
         if (string.IsNullOrWhiteSpace(role)) return new("", Error: "InvalidSource");
-        if (IsMemberRole(role)) return new(role, Error: "UnsupportedMemberBinding");
         var json = value is JsonElement element ? element : default;
+        if (role.Equals("ActivityResultMember", StringComparison.OrdinalIgnoreCase))
+            return ResultMember(json);
+        if (role.Equals("VariableMember", StringComparison.OrdinalIgnoreCase))
+            return VariableMember(json);
+        if (IsMemberRole(role)) return new(role, Error: "UnsupportedMemberBinding");
         if (json.ValueKind == JsonValueKind.Object &&
             (json.TryGetProperty("memberPath", out _) ||
              (!role.Equals("WorkflowRequest", StringComparison.OrdinalIgnoreCase) && json.TryGetProperty("path", out _))))
             return new(role, Error: "UnsupportedMemberSelection");
 
         if (role.Equals("Variable", StringComparison.OrdinalIgnoreCase))
-        {
-            if (portable && json.ValueKind == JsonValueKind.Object)
-                return Required("Variable", String(json, "variableKey"), String(json, "declaringScopeNodeId"));
             return VariableReference.TryParse(value, out var reference) && reference is not null
                 ? Required("Variable", reference.ReferenceKey, reference.DeclaringScopeId)
                 : new("Variable", Error: "InvalidSource");
-        }
         if (role.Equals("Input", StringComparison.OrdinalIgnoreCase))
             return VariableReference.TryParse(value, out var reference) && reference is not null
                 ? Required("Input", reference.ReferenceKey, reference.DeclaringScopeId)
@@ -121,17 +135,58 @@ internal sealed record ActivityDataReadBinding(
         if (role.Equals("ActivityResult", StringComparison.OrdinalIgnoreCase))
         {
             var binding = Required("ActivityResult", String(json, "producerNodeId"), String(json, "producerScopeId"), String(json, "projectionKey"));
-            return binding.Error is null && (string.IsNullOrWhiteSpace(binding.Projection) || (!portable && string.IsNullOrWhiteSpace(binding.Scope)))
+            // A scope is optional: a binding the server supplied declares none. One that is declared must be usable.
+            var declaresScope = json.ValueKind == JsonValueKind.Object && json.TryGetProperty("producerScopeId", out var scope)
+                && scope.ValueKind != JsonValueKind.Null;
+            return binding.Error is null && (string.IsNullOrWhiteSpace(binding.Projection) || (declaresScope && string.IsNullOrWhiteSpace(binding.Scope)))
                 ? binding with { Error = "InvalidSource" }
-                : binding with { IsOptional = json.ValueKind == JsonValueKind.Object && json.TryGetProperty("isOptional", out var optional)
+                : binding with { IsDirect = true, IsOptional = json.ValueKind == JsonValueKind.Object && json.TryGetProperty("isOptional", out var optional)
                     && optional.ValueKind == JsonValueKind.True };
         }
         return new(role, Error: "InvalidSource");
     }
 
+    // A member read of an activity result names its producer by lineage alone, so it never declares a scope.
+    private static ActivityDataReadBinding ResultMember(JsonElement json)
+    {
+        const string role = "ActivityResultMember";
+        if (json.ValueKind != JsonValueKind.Object || json.TryGetProperty("path", out _) ||
+            json.TryGetProperty("producerScopeId", out var scope) && scope.ValueKind != JsonValueKind.Null)
+            return new(role, Error: "InvalidSource");
+        var binding = Required(role, String(json, "producerNodeId"), projection: String(json, "projectionKey"));
+        if (binding.Error is not null || string.IsNullOrWhiteSpace(binding.Projection))
+            return new(role, Error: "InvalidSource");
+        if (!ActivityDataMemberPath.TryRead(json, out var memberPath))
+            return new(role, Error: "InvalidMemberPath");
+        return binding with
+        {
+            IsDirect = true,
+            MemberPath = memberPath,
+            IsOptional = json.TryGetProperty("isOptional", out var optional) && optional.ValueKind == JsonValueKind.True
+        };
+    }
+
+    // A member read of a variable names its declaring scope explicitly: unlike a whole-value read, it has no default.
+    private static ActivityDataReadBinding VariableMember(JsonElement json)
+    {
+        const string role = "VariableMember";
+        if (json.ValueKind != JsonValueKind.Object || json.TryGetProperty("path", out _))
+            return new(role, Error: "InvalidSource");
+        var key = String(json, "referenceKey");
+        var scope = String(json, "declaringScopeId");
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(scope))
+            return new(role, Error: "InvalidSource");
+        return ActivityDataMemberPath.TryRead(json, out var memberPath)
+            ? new(role, key, scope) { MemberPath = memberPath }
+            : new(role, Error: "InvalidMemberPath");
+    }
+
     private static ActivityDataReadBinding? Parameter(ExpressionParameterBinding binding) => binding switch
     {
         WorkflowRequestExpressionParameterBinding request => new("WorkflowRequest", request.MemberKey, Path: request.Path),
+        // An authored variables-surface pin is derived again at publish from the script's names (spec 1222), so it is
+        // not an authored read to check; the compiled pin is checked like any other read.
+        VariableExpressionParameterBinding { IsVariablesSurface: true } => null,
         VariableExpressionParameterBinding variable => new("Variable", variable.VariableKey, variable.DeclaringScopeNodeId),
         ActivityResultExpressionParameterBinding result => new("ActivityResult", result.ProducerNodeId, Projection: result.ProjectionKey, IsOptional: result.IsOptional),
         _ => null

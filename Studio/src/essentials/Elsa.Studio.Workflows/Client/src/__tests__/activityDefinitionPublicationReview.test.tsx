@@ -18,11 +18,11 @@ afterEach(() => {
 describe("ActivityDefinitionPublicationReview toolbar mode", () => {
   it.each(["Error", "error"])("leads with deduplicated actionable blockers and explains the disabled publish action (%s)", async severity => {
     const diagnostic = {
-      code: "specialist.manifest.model", severity,
+      code: "agent.manifest.model", severity,
       message: "A complete model connection has not been selected.",
       remediation: "Choose a model connection with a configured model in Designer.",
-      subject: { kind: "ActivityDefinition", id: "elsa.specialist" },
-      location: { providerKey: "elsa.specialist", jsonPointer: "/model" },
+      subject: { kind: "ActivityDefinition", id: "elsa.agent" },
+      location: { providerKey: "elsa.agent", jsonPointer: "/model" },
       metadata: { actionLabel: "Choose model connection" }
     };
     const harness = renderReview({ postJson: async () => ({ ...publicationPreflight(), isPublishable: false, diagnostics: [diagnostic, diagnostic] }) });

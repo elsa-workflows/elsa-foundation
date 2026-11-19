@@ -81,6 +81,8 @@ public sealed partial class GraphActivityProviderTests
         var services = new ServiceCollection();
         services.AddSingleton<IActivityStructureService>(new TestActivityStructureService());
         services.AddSingleton(new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
+        // Spec 266: the workflow design validations feature supplies this singleton in a composed host.
+        services.AddSingleton<Elsa.Workflows.Design.Validations.Core.Contracts.IUnorderedVariableWriteAnalyzer, NoWriteOrderFindings>();
         new GraphActivitiesDesignFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         Assert.Same(provider.GetRequiredService<GraphActivityProvider>(), provider.GetRequiredService<IActivityDataSelectionDocumentProjector>());
@@ -104,5 +106,12 @@ public sealed partial class GraphActivityProviderTests
         Assert.Equal(rejected, diagnostics.Any(x => x.Code == "activity.graph.boundary-input-unknown"));
         if (rejected)
             Assert.Contains(diagnostics, x => x.Code == "activity.graph.boundary-input-unknown" && x.Location?.JsonPointer == "/outputMappings/0/source");
+    }
+
+    private sealed class NoWriteOrderFindings : Elsa.Workflows.Design.Validations.Core.Contracts.IUnorderedVariableWriteAnalyzer
+    {
+        public Elsa.Workflows.Design.Validations.Core.Models.UnorderedVariableWriteAnalysis Analyze(
+            Elsa.Workflows.Design.Core.Models.ActivityNode root, IActivityStructureService structures, bool includeIntrinsics, CancellationToken cancellationToken = default) =>
+            new([], []);
     }
 }

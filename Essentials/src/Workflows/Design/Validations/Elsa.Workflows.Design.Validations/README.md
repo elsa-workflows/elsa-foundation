@@ -23,8 +23,9 @@ also compose `EventsFeature`; the shared analyzer requires the canonical inline 
 
 The feature installs one scoped `IActivityDataSelectionAnalyzer` with `TryAddScoped`. Discovery,
 draft diagnostics and headless publication/test-run admission consume the same authority over the
-actual canonical candidate. `ValueFlowValidator` retains separate concurrent-write policy while
-structure handlers own entry/order/join/backedge facts. Providers can contribute their exact closed
+actual canonical candidate. Write order is a separate service: the singleton `IUnorderedVariableWriteAnalyzer`
+(spec 266) reads only the structures' `RelateChildren` and `CompletesAfterItsChildren` declarations, and
+`ValueFlowValidator` reports its findings as warnings that never block promotion. Providers can contribute their exact closed
 body through `IActivityDataSelectionDocumentProjector`; Graph Design ships that cross-domain projection.
 
 Catalog-backed target analysis publishes `InputConstraintsCollecting` inline (Sequential).
@@ -42,12 +43,31 @@ portable-parameter failures are not collapsed by a blanket path/type deduplicati
 
 ## Settings
 
-`WorkflowDesignValidatorOptions` (bound via the feature's `MaxRecursionDepth` property; default `100`).
+`WorkflowDesignValidatorOptions` (bound via the feature's `MaxRecursionDepth` and `MemberReads` properties).
 
 - `MaxRecursionDepth` — safety net for the iterative activity-tree walker. Validators that
   recurse through activity-owned structure (required-input, variable-expression
   resolver) stop descending past this depth. Iterative DFS internally, so the .NET call stack
   is never the actual risk — the bound guards against cyclic / malformed Draft data.
+- `MemberReads` — default `false`. Whether a binding may read one member of an activity result
+  (`ActivityResultMember`) or of a variable (`VariableMember`). While it is off the shared analyzer neither
+  offers nor admits one (`ActivityData/UnsupportedMemberBinding`), so no publication, test run, template
+  compilation, BPMN publication or import can produce an executable that carries one. With it on, a read inside
+  a reusable activity's body is published untyped and its member is checked when the run reads it, so an
+  explicit conversion on such a read is refused at publication. A variable member read names its variable's
+  declaring scope explicitly, is always published untyped (a variable can hold JSON from any writer), and so
+  refuses an explicit conversion too.
+
+  **Member names are matched exactly.** Each member segment matches the stored member name exactly, case
+  included. A variable seeded from a CLR value when a run starts is stored with its CLR property names, so
+  `CustomerId` reads that member and `customerId` reads it as absent (`VF-SEL-001` when the input needs a
+  value).
+
+  **Upgrade rule.** An executable with a member read cannot be read by a runtime built before member reads
+  existed: it reports the payload as corrupt, and without distributed placement the work item is poisoned and
+  the run blocked. Where several runtimes share one store, upgrade every one of them, then turn `MemberReads`
+  on. With distributed placement an older member does not claim such an execution; it waits for one that can
+  run it.
 
 ## Contributor interfaces registered
 
@@ -67,13 +87,27 @@ persisted.
 | `VariableUniquenessValidator` | Workflow-scope | `$workflow/variables/{Name}` · `Variables/Uniqueness` |
 | `RequiredInputOutputValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `InputOutput/MissingRequired` |
 | `VariableExpressionResolverValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `Expressions/UnresolvedVariable` |
-| `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (ConcurrentWrite, UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity) |
+| `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity, VariableReference (spec 1231: a variable-reference input not bound to a declared variable); ConcurrentWrite, DuplicateCaptureTarget (spec 266) and StepWriteOverlapsCapture (spec 1231) are warnings). Step-write checks need the activity catalog (`IActivityDefinitionLookup`); without it they are skipped |
 | `CredentialLiteralValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `Inputs/CredentialLiteral` (reporting only here; see below) |
+| `ScriptOutcomeValidator` | Catalog-backed root + nested (recurses); nodes whose `elsa.outcomes` facet names a `scriptInput` with a literal script | `{NodeId}/inputs/{scriptInput}` · `Scripts/UnknownOutcome` (`VF-AUTH-010`, error), `Scripts/ReturnedOutcomeName` (`VF-AUTH-012`, warning), `Scripts/ReservedName` (error) (see below) |
 
 Catalog-consulting validators resolve `ActivityVersionId`s through the scoped, memoizing
 `CatalogVersionResolver` (Internal), which translates the version store's throwing Get contract
 into a nullable result — see the Faulting note in `EXTENSION_POINTS.md` before writing a new
 catalog-consulting validator.
+
+## Script outcome checks (spec 1208)
+
+`ScriptOutcomeValidator` checks the script of an activity that selects outcomes by returning
+`complete(result, outcomes)` (the input its `elsa.outcomes` facet names as `scriptInput`, such as `RunJavaScript`'s
+`script`): a literal outcome name outside the node's outcome set (`VF-AUTH-010`, FR-015), a top-level returned string
+equal to a connected outcome (`VF-AUTH-012`, a warning: a returned value selects nothing, FR-008a) and a declaration of
+the reserved name `complete` (FR-007a). The outcome set follows the publish compiler's rule; a set an expression decides
+is not checked. Computed names are left to the run-time check (`VF-ACT-006`).
+
+The script is read through `IJavaScriptScriptOutcomeAnalyzer` (`Elsa.Expressions.JavaScript.Core`), which the
+JavaScript feature registers, so this project holds no JavaScript parser. The dependency is optional: in a host without
+the JavaScript feature the validator returns nothing.
 
 ## The credential-literal rule (spec 188, FR-008, FR-009)
 

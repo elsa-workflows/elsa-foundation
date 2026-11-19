@@ -64,7 +64,9 @@ For faster inner-loop work, open or build one of the committed
 the completion gate.
 
 To build and run the backend from source, check readiness, and execute a sample workflow, follow the
-[backend source quickstart](docs/contributing/backend-source-quickstart.md).
+[backend source quickstart](docs/contributing/backend-source-quickstart.md). To pair that Workbench with
+Studio from `Studio/` in this repository, follow the
+[Studio source quickstart](Studio/docs/contributing/studio-source-quickstart.md).
 
 ## Supported management APIs
 

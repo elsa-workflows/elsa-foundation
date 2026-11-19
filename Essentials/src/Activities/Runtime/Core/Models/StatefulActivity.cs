@@ -173,6 +173,8 @@ public sealed class ActivityStartContext<TTrigger>
         CancellationToken = attempt.CancellationToken;
         OperationKey = attempt.OperationKey;
         TargetOperationKey = attempt.TargetOperationKey;
+        LogicalInvocationId = attempt.LogicalInvocationId;
+        Variables = attempt.Variables;
         IsDirectInvocation = attempt.TriggerNodeId is null;
         IsTriggerDelivery = StringComparer.Ordinal.Equals(attempt.TriggerNodeId, attempt.ExecutableNodeId);
         HasTrigger = hasTrigger;
@@ -181,6 +183,9 @@ public sealed class ActivityStartContext<TTrigger>
 
     public string WorkflowExecutionId { get; }
     public string InvocationId { get; }
+
+    /// <inheritdoc cref="ActivityExecutionContext.Variables"/>
+    public IStepVariables Variables { get; }
     public string AttemptId { get; }
     public string ExecutableNodeId { get; }
     public CancellationToken CancellationToken { get; }
@@ -190,6 +195,9 @@ public sealed class ActivityStartContext<TTrigger>
 
     /// <inheritdoc cref="ActivityExecutionContext.TargetOperationKey"/>
     public string? TargetOperationKey { get; }
+
+    /// <inheritdoc cref="ActivityExecutionContext.LogicalInvocationId"/>
+    public string LogicalInvocationId { get; }
 
     public bool IsDirectInvocation { get; }
     public bool IsTriggerDelivery { get; }
@@ -305,6 +313,8 @@ public sealed class ActivityResumeContext<TState, TTrigger>
         CancellationToken = attempt.CancellationToken;
         OperationKey = attempt.OperationKey;
         TargetOperationKey = attempt.TargetOperationKey;
+        LogicalInvocationId = attempt.LogicalInvocationId;
+        Variables = attempt.Variables;
         State = alreadyMaterialized ? state : PersistableActivityValue.SnapshotAndMaterialize(state, "private state");
         Trigger = alreadyMaterialized ? trigger : PersistableActivityValue.SnapshotAndMaterialize(trigger, "trigger");
         RegistrationId = registrationId;
@@ -322,6 +332,15 @@ public sealed class ActivityResumeContext<TState, TTrigger>
 
     /// <inheritdoc cref="ActivityExecutionContext.TargetOperationKey"/>
     public string? TargetOperationKey { get; }
+
+    /// <inheritdoc cref="ActivityExecutionContext.LogicalInvocationId"/>
+    public string LogicalInvocationId { get; }
+
+    /// <summary>
+    /// The resumed step's variable session: a fresh one, with no session reads of the evaluation before the suspension
+    /// (ADR 0092 decision 11).
+    /// </summary>
+    public IStepVariables Variables { get; }
 
     public TState State { get; }
     public TTrigger Trigger { get; }

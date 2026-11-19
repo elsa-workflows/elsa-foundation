@@ -367,7 +367,7 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
-      "elsa.agent.specialists.core": {
+      "elsa.agent.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )",
@@ -375,11 +375,11 @@
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }
       },
-      "elsa.agent.specialists.persistence.entityframeworkcore": {
+      "elsa.agent.persistence.entityframeworkcore": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",

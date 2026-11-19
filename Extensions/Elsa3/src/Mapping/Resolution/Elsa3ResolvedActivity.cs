@@ -80,8 +80,12 @@ internal sealed record Elsa3ActivityOutcomes(IReadOnlyList<string> Ports, Elsa3D
     public bool HasPort(string port) => Ports.Contains(port, StringComparer.Ordinal);
 }
 
-/// <summary>Outcomes named by the items of the node's <paramref name="SourceInputKey"/> input, plus an unmatched outcome.</summary>
-internal sealed record Elsa3DynamicOutcomes(string SourceInputKey, string? UnmatchedOutcome);
+/// <summary>
+/// Outcomes named by the items of the node's <paramref name="SourceInputKey"/> input, plus an optional unmatched outcome.
+/// <paramref name="SelectsOnEveryCompletion"/>: with items configured, the node has no <c>Done</c> when true and keeps
+/// <c>Done</c> next to the items when false (the <c>Done</c> rule, spec 1208).
+/// </summary>
+internal sealed record Elsa3DynamicOutcomes(string SourceInputKey, string? UnmatchedOutcome, bool SelectsOnEveryCompletion = true);
 
 /// <summary>A native structure a catalog activity version declares through its structure design facet.</summary>
 internal sealed record Elsa3StructureContract(

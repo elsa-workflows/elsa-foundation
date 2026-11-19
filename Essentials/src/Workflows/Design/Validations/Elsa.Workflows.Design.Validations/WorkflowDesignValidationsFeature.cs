@@ -3,6 +3,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Extensions;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -45,11 +46,19 @@ public class WorkflowDesignValidationsFeature : IShellFeature
     [ManifestSetting(DisplayName = "Maximum recursion depth", Description = "Maximum activity tree depth inspected by workflow draft validation.", Category = "Validation", DefaultValue = "100")]
     public int MaxRecursionDepth { get; set; } = 100;
 
+    /// <summary>
+    /// Whether bindings may read one member of an activity result. Bound to
+    /// <see cref="WorkflowDesignValidatorOptions.MemberReads"/>. Default: off.
+    /// </summary>
+    [ManifestSetting(DisplayName = "Member reads", Description = "Lets a binding read one member of an activity result. Turn on only when every runtime sharing this host's stores can run member reads.", Category = "Validation", DefaultValue = "false")]
+    public bool MemberReads { get; set; }
+
     public void ConfigureServices(IServiceCollection services)
     {
         services.Configure<WorkflowDesignValidatorOptions>(options =>
         {
             options.MaxRecursionDepth = MaxRecursionDepth;
+            options.MemberReads = MemberReads;
         });
 
         services.AddEventHandler<DraftValidating, ExecuteValidations>();
@@ -59,9 +68,14 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<ActivityTreeWalker>();
         services.AddScoped<CatalogVersionResolver>();
         services.TryAddScoped<IActivityDataSelectionAnalyzer, ActivityDataSelectionAnalyzer>();
+        services.TryAddSingleton<IUnorderedVariableWriteAnalyzer, UnorderedVariableWriteAnalyzer>();
         DataSelectionAnalyzerCompositionCheck.Register(services);
         services.AddScoped<ScopedVariableReferenceRemapper>();
         services.AddScoped<IDraftValidator, UnknownActivityVersionValidator>();
+        services.AddScoped<IDraftValidator, ScriptOutcomeValidator>();
+        services.TryAddScoped<ScriptVariableReadResolver>();
+        services.TryAddScoped<IScriptVariableRenamePlanner, ScriptVariableRenamePlanner>();
+        services.AddScoped<IDraftValidator, ScriptVariableReadValidator>();
         services.AddScoped<IDraftValidator, UnhandledActivityStructureValidator>();
         services.AddScoped<IDraftValidator, StartActivityValidator>();
         services.AddScoped<IDraftValidator, VariableUniquenessValidator>();

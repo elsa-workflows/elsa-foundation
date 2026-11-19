@@ -36,13 +36,13 @@ test("real composed Studio reviews a native layout edit, observes working state 
   const dock = page.getByRole("region", { name: "Weaver assistant" });
   await expect(dock.getByLabel("Ask Weaver")).toBeEnabled();
   await dock.getByLabel("Ask Weaver").fill(process.env.ELSA_WEAVER_LAYOUT_PROMPT ?? JSON.stringify({ toolName: "workflow_set_designer_position", arguments: { activityId: nodeId, x: 480, y: 320 } }));
-  const sent = page.waitForResponse(response => response.url().includes("/_elsa/agent/sessions/") && response.url().endsWith("/messages") && response.request().method() === "POST");
+  const sent = page.waitForResponse(response => response.url().includes("/_elsa/weaver/sessions/") && response.url().endsWith("/messages") && response.request().method() === "POST");
   await dock.getByRole("button", { name: "Send message" }).click();
   const accepted = await sent; expect(accepted.ok()).toBe(true);
   const body = accepted.request().postDataJSON();
   expect(body.requestId).toBeTruthy();
   expect(body.contextAttachments).toEqual(expect.arrayContaining([expect.objectContaining({ contentType: "workflow.definition", moduleId: "Elsa.Studio.Workflows", target: expect.objectContaining({ resourceId: definitionId }), client: expect.objectContaining({ generationId: expect.any(String) }) })]));
-  const proposal = dock.locator(".agent-proposal").first();
+  const proposal = dock.locator(".weaver-proposal").first();
   await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
   await expect(proposal).toContainText(definitionId!);
   await proposal.getByRole("button", { name: "Approve", exact: true }).click();
@@ -92,7 +92,7 @@ test("whole-change Undo retries after leaving a captured read-only Test Run snap
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click(); await reachedOwner;
     await page.getByRole("button", { name: /^Weaver/ }).click(); const dock = page.getByRole("region", { name: "Weaver assistant" });
     await dock.getByLabel("Ask Weaver").fill(JSON.stringify({ toolName: "workflow_set_designer_position", arguments: { activityId: nodeId, x: 480, y: 320 } }));
-    await dock.getByRole("button", { name: "Send message" }).click(); const proposal = dock.locator(".agent-proposal").first();
+    await dock.getByRole("button", { name: "Send message" }).click(); const proposal = dock.locator(".weaver-proposal").first();
     await expect(proposal).toHaveAttribute("data-status", "awaiting-approval"); await approveReviewed(page, proposal);
     const acknowledged = page.waitForResponse(response => response.url().endsWith("/acknowledgements") && response.request().method() === "POST");
     await proposal.getByRole("button", { name: "Apply", exact: true }).click(); const acknowledgement = await acknowledged; expect(acknowledgement.ok()).toBe(true);
@@ -183,7 +183,7 @@ test("a real Save A response delayed until after native Weaver B cannot release 
     const dock = page.getByRole("region", { name: "Weaver assistant" });
     await dock.getByLabel("Ask Weaver").fill(JSON.stringify({ toolName: "workflow_set_designer_position", arguments: { activityId: nodeId, x: 480, y: 320 } }));
     await dock.getByRole("button", { name: "Send message" }).click();
-    const proposal = dock.locator(".agent-proposal").first();
+    const proposal = dock.locator(".weaver-proposal").first();
     await expect(proposal).toHaveAttribute("data-status", "awaiting-approval"); await approveReviewed(page, proposal);
     const acknowledged = page.waitForResponse(response => response.url().endsWith("/acknowledgements") && response.request().method() === "POST");
     await proposal.getByRole("button", { name: "Apply", exact: true }).click();
@@ -227,7 +227,7 @@ test("a dropped real accepted acknowledgement response retries its exact receipt
     await dock.getByLabel("Ask Weaver").fill(JSON.stringify({ toolName: "workflow_set_designer_position", arguments: { activityId: nodeId, x: 480, y: 320 } }));
     const sent = page.waitForResponse(response => response.url().endsWith("/messages") && response.request().method() === "POST");
     await dock.getByRole("button", { name: "Send message" }).click(); const delivered = await sent; expect(delivered.ok()).toBe(true);
-    const proposal = dock.locator(".agent-proposal").first(); await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
+    const proposal = dock.locator(".weaver-proposal").first(); await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
     await approveReviewed(page, proposal); await proposal.getByRole("button", { name: "Apply", exact: true }).click();
     await expect(proposal.getByRole("button", { name: "Retry confirmation", exact: true })).toBeEnabled();
     await expect(dock.getByLabel("Ask Weaver")).toBeDisabled();
@@ -266,7 +266,7 @@ test("Stop detaches a paused accepted-ACK conversation and the next prompt uses 
     await dock.getByLabel("Ask Weaver").fill(JSON.stringify({ toolName: "workflow_set_designer_position", arguments: { activityId: nodeId, x: 480, y: 320 } }));
     const originalMessage = page.waitForResponse(response => response.url().endsWith("/messages") && response.request().method() === "POST");
     await dock.getByRole("button", { name: "Send message" }).click(); const first = await originalMessage; expect(first.ok()).toBe(true);
-    const proposal = dock.locator(".agent-proposal").first(); await expect(proposal).toHaveAttribute("data-status", "awaiting-approval"); await approveReviewed(page, proposal);
+    const proposal = dock.locator(".weaver-proposal").first(); await expect(proposal).toHaveAttribute("data-status", "awaiting-approval"); await approveReviewed(page, proposal);
     const confirmed = page.waitForResponse(response => response.url().endsWith("/acknowledgements") && response.request().method() === "POST");
     await proposal.getByRole("button", { name: "Apply", exact: true }).click(); await held;
     await expect(node).toHaveAttribute("style", /translate\(480px, 320px\)/);
@@ -300,7 +300,7 @@ test("a delayed successful Deny cannot replace a fresh module conversation or cl
     const original = await route.fetch(); expect(original.ok()).toBe(true); denied = await original.json();
     denyArrived(); await denyReleased; await route.fulfill({ response: original });
   });
-  await page.route("**/_elsa/agent/sessions/*/stream", async route => {
+  await page.route("**/_elsa/weaver/sessions/*/stream", async route => {
     if (route.request().url() === oldStreamURL) { await route.continue(); return; }
     // The real backend prepares B before its original SSE response is delayed; no events are fabricated.
     const original = await route.fetch(); expect(original.ok()).toBe(true); heldFreshStream = true;
@@ -319,12 +319,12 @@ test("a delayed successful Deny cannot replace a fresh module conversation or cl
     const fresh = await freshMessage; expect(fresh.ok()).toBe(true); freshMessagesURL = fresh.url(); expect(freshMessagesURL).not.toBe(old.messagesURL);
     expect(fresh.request().postDataJSON()).toMatchObject({ requestId: expect.any(String), source: { moduleId: "Weaver.Journey", actionId: "weaver.journey.propose" } });
     await freshHeld; releaseDeny(); expect((await deniedResponse).ok()).toBe(true); await expect(old.proposal).toHaveAttribute("data-status", "denied");
-    releaseFresh(); const freshProposal = old.dock.locator(".agent-proposal").filter({ hasText: value });
+    releaseFresh(); const freshProposal = old.dock.locator(".weaver-proposal").filter({ hasText: value });
     await expect(freshProposal).toHaveAttribute("data-status", "awaiting-approval");
     expect(streamURLs.filter(url => url === oldStreamURL)).toHaveLength(1); expect(await readNote(page.request)).toEqual(before);
     const screenshot = testInfo.outputPath("late-deny-preserves-fresh-module-proposal.png"); await page.screenshot({ path: screenshot, fullPage: true });
     await testInfo.attach("late-deny-preserves-fresh-module-proposal", { path: screenshot, contentType: "image/png" });
-    await page.unroute("**/_elsa/agent/sessions/*/stream");
+    await page.unroute("**/_elsa/weaver/sessions/*/stream");
     const cleanup = page.waitForResponse(response => response.url().endsWith("/deny") && response.request().method() === "POST");
     await freshProposal.getByRole("button", { name: "Deny", exact: true }).click(); expect((await cleanup).ok()).toBe(true);
     await expect(freshProposal).toHaveAttribute("data-status", "denied"); await expect(old.dock).toHaveAttribute("aria-busy", "false");
@@ -332,7 +332,7 @@ test("a delayed successful Deny cannot replace a fresh module conversation or cl
   } finally {
     releaseDeny(); releaseFresh();
     await testInfo.attach("late-deny-generation-isolation", { body: JSON.stringify({ controlledRealResponseDelay: true, denied, cancellation, oldMessagesURL: old.messagesURL, freshMessagesURL, streamURLs, heldFreshStream, before, after: await readNote(page.request) }, null, 2), contentType: "application/json" });
-    await page.unroute("**/deny"); await page.unroute("**/_elsa/agent/sessions/*/stream");
+    await page.unroute("**/deny"); await page.unroute("**/_elsa/weaver/sessions/*/stream");
   }
 });
 
@@ -387,10 +387,10 @@ async function readNote(request: APIRequestContext) {
 async function prepareNote(page: Page, value: string) {
   await page.goto("/qualification/weaver-note"); await expect(page.getByTestId("note-value")).toBeVisible();
   await page.getByLabel("New note value").fill(value);
-  const sent = page.waitForResponse(response => response.url().includes("/_elsa/agent/sessions/") && response.url().endsWith("/messages") && response.request().method() === "POST");
+  const sent = page.waitForResponse(response => response.url().includes("/_elsa/weaver/sessions/") && response.url().endsWith("/messages") && response.request().method() === "POST");
   await page.getByRole("button", { name: "Review note change", exact: true }).click();
   const response = await sent; expect(response.ok()).toBe(true);
-  const dock = page.getByRole("region", { name: "Weaver assistant" }); const proposal = dock.locator(".agent-proposal").first();
+  const dock = page.getByRole("region", { name: "Weaver assistant" }); const proposal = dock.locator(".weaver-proposal").first();
   await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
   return { dock, proposal, messagesURL: response.url() };
 }
@@ -409,7 +409,7 @@ test("an unrelated module contributes context, review and a persisted owner-obse
   const beforeResponse = await page.request.get(backendPath("/_qualification/weaver/note")); expect(beforeResponse.ok()).toBe(true);
   const before = await beforeResponse.json();
   await page.getByLabel("New note value").fill(value);
-  const sent = page.waitForResponse(response => response.url().includes("/_elsa/agent/sessions/") && response.url().endsWith("/messages") && response.request().method() === "POST");
+  const sent = page.waitForResponse(response => response.url().includes("/_elsa/weaver/sessions/") && response.url().endsWith("/messages") && response.request().method() === "POST");
   await page.getByRole("button", { name: "Review note change", exact: true }).click();
   const accepted = await sent; expect(accepted.ok()).toBe(true);
   const delivered = accepted.request().postDataJSON();
@@ -419,7 +419,7 @@ test("an unrelated module contributes context, review and a persisted owner-obse
     expect.objectContaining({ id: `note:${before.id}`, contentType: "weaver.journey.note" })
   ]));
   const dock = page.getByRole("region", { name: "Weaver assistant" });
-  const proposal = dock.locator(".agent-proposal").first();
+  const proposal = dock.locator(".weaver-proposal").first();
   await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
   await expect(proposal).toContainText(before.id);
   await proposal.getByRole("button", { name: "Approve", exact: true }).click();

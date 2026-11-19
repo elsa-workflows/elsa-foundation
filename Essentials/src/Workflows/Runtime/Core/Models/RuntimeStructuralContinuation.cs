@@ -10,14 +10,14 @@ public sealed class RuntimeStructuralContinuation
 {
     private RuntimeStructuralContinuation(
         RuntimeStructuralContinuationKind kind,
-        string? outcomeName,
+        OutcomeSelection? selection,
         ActivityFault? fault,
         string? cancellationReason,
         RuntimeStructuralStateUpdate? stateUpdate = null,
         RuntimeChildControlBatch? control = null)
     {
         Kind = kind;
-        OutcomeName = outcomeName;
+        Selection = selection;
         Fault = fault;
         CancellationReason = cancellationReason;
         StateUpdate = stateUpdate;
@@ -27,7 +27,11 @@ public sealed class RuntimeStructuralContinuation
     public RuntimeStructuralContinuationKind Kind { get; }
     public bool IsComplete => Kind == RuntimeStructuralContinuationKind.Complete;
     public bool IsDeferred => Kind == RuntimeStructuralContinuationKind.Defer;
-    public string? OutcomeName { get; }
+    /// <summary>The outcome selection of a completion; <see langword="null"/> for any other kind.</summary>
+    public OutcomeSelection? Selection { get; }
+
+    /// <summary>The names a routing parent follows for a completion (<c>[Done]</c>, the names, or none); empty otherwise.</summary>
+    public IReadOnlyList<string> OutcomeNames => Selection?.ResolveNames() ?? [];
     public ActivityFault? Fault { get; }
     public string? CancellationReason { get; }
     /// <summary>One typed structural-state document staged for the continuation checkpoint.</summary>
@@ -38,12 +42,23 @@ public sealed class RuntimeStructuralContinuation
 
     public static RuntimeStructuralContinuation Defer { get; } = new(RuntimeStructuralContinuationKind.Defer, null, null, null);
 
-    public static RuntimeStructuralContinuation Complete(string outcomeName = ActivityOutcomes.Done)
+    /// <summary>Completes without choosing a branch: an unspecified selection, which routes <c>Done</c>.</summary>
+    public static RuntimeStructuralContinuation Complete() => Complete(OutcomeSelection.Unspecified);
+
+    /// <summary>Completes and selects one named outcome.</summary>
+    public static RuntimeStructuralContinuation Complete(string outcomeName)
     {
         if (string.IsNullOrWhiteSpace(outcomeName))
             throw new ArgumentException("Structural completion outcome name cannot be blank.", nameof(outcomeName));
 
-        return new RuntimeStructuralContinuation(RuntimeStructuralContinuationKind.Complete, outcomeName, null, null);
+        return Complete(OutcomeSelection.Named(outcomeName));
+    }
+
+    /// <summary>Completes with an explicit selection (unspecified, named or empty).</summary>
+    public static RuntimeStructuralContinuation Complete(OutcomeSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        return new RuntimeStructuralContinuation(RuntimeStructuralContinuationKind.Complete, selection, null, null);
     }
 
     public static RuntimeStructuralContinuation Faulted(ActivityFault fault) =>
@@ -63,7 +78,7 @@ public sealed class RuntimeStructuralContinuation
     {
         return new RuntimeStructuralContinuation(
             Kind,
-            OutcomeName,
+            Selection,
             Fault,
             CancellationReason,
             new RuntimeStructuralStateUpdate(stateVersion, value),
@@ -78,7 +93,7 @@ public sealed class RuntimeStructuralContinuation
             throw new ArgumentException("Control terminal status must match the structural continuation.", nameof(control));
         if (control.AuthoredFailureCode is not null && Kind != RuntimeStructuralContinuationKind.Fault)
             throw new ArgumentException("Authored failure classification requires a fault continuation.", nameof(control));
-        return new RuntimeStructuralContinuation(Kind, OutcomeName, Fault, CancellationReason, StateUpdate, control);
+        return new RuntimeStructuralContinuation(Kind, Selection, Fault, CancellationReason, StateUpdate, control);
     }
 }
 

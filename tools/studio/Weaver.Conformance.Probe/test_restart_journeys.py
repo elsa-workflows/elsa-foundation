@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import Mock
 
 from case_records import retained
-from consumers import DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE, enable_durable_agent_store
+from consumers import DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE, enable_durable_weaver_store
 import restart_journeys as rj
 from restart_journeys import (ABRUPT, AFTER_DEADLINE, CONTROL_ID, CORRELATION_KEYS, EXPECTED_CASES, EXPECTED_CONTROL, EXPECTED_OUTCOMES,
                               GRACEFUL, PHASE_ORDER, RESTART_CASES, RESTART_GROUPS, RestartCaseFailure, require_restart_inventory,
@@ -20,7 +20,7 @@ from test_lifecycle_journeys import COMMAND, INVOCATION, PROPOSAL, SESSION, TURN
 EXPIRES = "2026-11-02T10:05:00.1234567+00:00"
 DEADLINE = rj.instant(EXPIRES)
 CACHES = {"NUGET_PACKAGES": [], "NUGET_HTTP_CACHE_PATH": []}
-EXECUTE = "/_elsa/agent/proposals/" + PROPOSAL + "/execute"
+EXECUTE = "/_elsa/weaver/proposals/" + PROPOSAL + "/execute"
 APPROVED_AUDIT = {"id": "audit-approved", "kind": "proposalApproved", "actorId": "owner", "metadata": {"proposalId": PROPOSAL, "status": "Approved"}}
 
 
@@ -46,13 +46,13 @@ class Case:
         self.key, self.provider = key, provider
         parts = self.native.parts
         proposal = next(frame["value"]["payload"] for frame in parts["initialStream"]["frames"] if frame["value"]["kind"] == "proposalCreated")
-        listed = lambda status: http("GET", "/_elsa/agent/sessions/" + SESSION + "/proposals", 200, {"data": [dict(proposal, status=status)]})
+        listed = lambda status: http("GET", "/_elsa/weaver/sessions/" + SESSION + "/proposals", 200, {"data": [dict(proposal, status=status)]})
         result = self.native.result()
         self.recovered_at = DEADLINE - 60
         self.overrides = {}
         extra = {"recoveredSession": self.native.session([result])}
         continuation = {"continuationCommand": {"commandId": "command-2", "toolName": WITNESS["readTool"], "arguments": {}},
-                        "continuationMessage": http("POST", "/_elsa/agent/sessions/" + SESSION + "/messages", 200,
+                        "continuationMessage": http("POST", "/_elsa/weaver/sessions/" + SESSION + "/messages", 200,
                                                     {"data": {"message": {"id": "message-2", "sessionId": SESSION, "role": "user"}}}),
                         "continuationTrace": {"records": [{"kind": provider + ".request", "data": {"commandId": "command-2"}},
                                                           {"kind": provider + ".call", "data": {"commandId": "command-2", "toolName": WITNESS["readTool"]}}],
@@ -62,11 +62,11 @@ class Case:
                          ownerAtRecovery=owner("rev-1", "medium"), audit=audit(APPROVED_AUDIT))
         elif key == "second-client":
             refused = lambda method, path, status, code: http(method, path, status, {"data": None, "error": {"code": code}})
-            decision = http("POST", "/_elsa/agent/proposals/" + PROPOSAL + "/approve", 200, {"data": {"status": "approved", "approvedAt": "2026-11-02T10:01:00Z"}})
+            decision = http("POST", "/_elsa/weaver/proposals/" + PROPOSAL + "/approve", 200, {"data": {"status": "approved", "approvedAt": "2026-11-02T10:01:00Z"}})
             extra.update(restart=restart_record(GRACEFUL), audit=audit(APPROVED_AUDIT), ownerAfterForeign=owner("rev-1", "medium"),
-                         foreignSession=refused("GET", "/_elsa/agent/sessions/" + SESSION, 404, "agent.session.not_found"),
-                         foreignProposals=refused("GET", "/_elsa/agent/sessions/" + SESSION + "/proposals", 404, "agent.session.not_found"),
-                         foreignExecute=refused("POST", EXECUTE, 403, "agent.proposal.forbidden"),
+                         foreignSession=refused("GET", "/_elsa/weaver/sessions/" + SESSION, 404, "weaver.session.not_found"),
+                         foreignProposals=refused("GET", "/_elsa/weaver/sessions/" + SESSION + "/proposals", 404, "weaver.session.not_found"),
+                         foreignExecute=refused("POST", EXECUTE, 403, "weaver.proposal.forbidden"),
                          proposalsA=listed("awaitingApproval"), proposalsB=listed("awaitingApproval"),
                          approveA=decision, approveB=copy.deepcopy(decision), executeA=copy.deepcopy(parts["execute"]), executeB=copy.deepcopy(parts["execute"]))
         elif key == "idle":
@@ -86,16 +86,16 @@ class Case:
                                             {"kind": "protocol.gate.waiting", "data": {"provider": provider, "commandId": COMMAND, "epoch": "epoch-1"}}],
                                 "incompleteTailBytes": 0}, ownerAfter=owner("rev-1", "medium"))
             extra.update(restart=restart_record(ABRUPT), gate={"commandId": COMMAND, "epoch": "epoch-1", "state": "hold", "timeoutMilliseconds": 60000},
-                         interruptedStream={"status": 200, "termination": "read-error", "errorType": "AgentTransportError",
+                         interruptedStream={"status": 200, "termination": "read-error", "errorType": "WeaverTransportError",
                                             "frames": [{"ordinal": 1, "value": {"kind": "started", "id": "event-0", "payload": {"turnId": TURN}}}]},
-                         recoveredSession=recovered, recoveredProposals=http("GET", "/_elsa/agent/sessions/" + SESSION + "/proposals", 200, {"data": []}),
+                         recoveredSession=recovered, recoveredProposals=http("GET", "/_elsa/weaver/sessions/" + SESSION + "/proposals", 200, {"data": []}),
                          continuation=sse([{"kind": "started"}, {"kind": "completed"}]), audit=audit(), **continuation)
             self.overrides = {"continuationCommandId": "command-2", "gateEpoch": "epoch-1"}
         elif key == "receipt-recorded-paused":
             extra.update(restart=restart_record(GRACEFUL), recoveredProposals=listed("executed"), ownerAtRecovery=owner("rev-2", "small"),
                          settled=self.native.session([result]), audit=audit(APPROVED_AUDIT))
         elif key in ("pending-review-after-deadline", "approved-before-dispatch-after-deadline"):
-            parts["execute"] = http("POST", EXECUTE, 409, {"data": {"status": "expired", "executed": False}, "error": {"code": "agent.proposal.expired"}})
+            parts["execute"] = http("POST", EXECUTE, 409, {"data": {"status": "expired", "executed": False}, "error": {"code": "weaver.proposal.expired"}})
             parts["ownerAfter"] = owner("rev-1", "medium")
             extra.update(restart=restart_record(AFTER_DEADLINE), recoveredProposals=listed("expired"), audit=audit(APPROVED_AUDIT, settled("Expired")))
         elif key == "dispatched-without-receipt":
@@ -131,7 +131,7 @@ class Case:
 
 BINDING = {"clientId": "restart-witness-client", "generationId": "generation-1"}
 ARGUMENTS = {"activityId": "witness-write", "x": 480, "y": 320}
-RESOLUTION = "/_elsa/agent/sessions/" + SESSION + "/client-invocations/" + INVOCATION + "/resolution"
+RESOLUTION = "/_elsa/weaver/sessions/" + SESSION + "/client-invocations/" + INVOCATION + "/resolution"
 
 
 def owner_resolution_observation(root, provider="copilot", change=None):
@@ -144,21 +144,21 @@ def owner_resolution_observation(root, provider="copilot", change=None):
     statement = {"claim": "notApplied", "actorId": "owner", "resolvedAt": "2026-11-02T10:06:00Z"}
     resolved = {"id": "audit-resolved", "kind": "proposalResolved", "actorId": "owner", "metadata": {"proposalId": PROPOSAL, "claim": "notApplied"}}
     parts = {
-        "create": http("POST", "/_elsa/agent/sessions", 200, {"data": {"sessionId": SESSION}}),
+        "create": http("POST", "/_elsa/weaver/sessions", 200, {"data": {"sessionId": SESSION}}),
         "command": {"commandId": COMMAND, "toolName": rj.WORKFLOW_TOOL, "arguments": ARGUMENTS},
-        "message": http("POST", "/_elsa/agent/sessions/" + SESSION + "/messages", 200, {"data": {"message": {"id": "message-1"}}}),
+        "message": http("POST", "/_elsa/weaver/sessions/" + SESSION + "/messages", 200, {"data": {"message": {"id": "message-1"}}}),
         "initialStream": sse([{"kind": "started", "payload": {"turnId": TURN}}, {"kind": "proposalCreated", "payload": proposal},
                               {"kind": "toolApprovalRequested", "proposalId": PROPOSAL}]),
-        "approve": http("POST", "/_elsa/agent/proposals/" + PROPOSAL + "/approve", 200, {"data": {"status": "approved"}}),
+        "approve": http("POST", "/_elsa/weaver/proposals/" + PROPOSAL + "/approve", 200, {"data": {"status": "approved"}}),
         "execute": http("POST", EXECUTE, 202, {"data": {"proposalId": PROPOSAL, "executed": False, "clientInvocation": {"invocationId": INVOCATION}}}),
         "trace": {"records": [{"kind": provider + ".request", "data": {"commandId": COMMAND}},
                               {"kind": provider + ".call", "data": {"commandId": COMMAND, "toolName": rj.WORKFLOW_TOOL, "arguments": ARGUMENTS}}],
                   "incompleteTailBytes": 0},
         "restart": restart_record(AFTER_DEADLINE), "recoveredSession": {"status": 200},
-        "recoveredProposals": http("GET", "/_elsa/agent/sessions/" + SESSION + "/proposals", 200, {"data": [dict(proposal, status="uncertain")]}),
+        "recoveredProposals": http("GET", "/_elsa/weaver/sessions/" + SESSION + "/proposals", 200, {"data": [dict(proposal, status="uncertain")]}),
         "resolution": http("POST", RESOLUTION, 200, {"data": dict(proposal, status="uncertain", ownerResolution=statement)}, {"claim": "notApplied"}),
         "repeatResolution": http("POST", RESOLUTION, 200, {"data": dict(proposal, status="uncertain", ownerResolution=statement)}, {"claim": "notApplied"}),
-        "conflictingResolution": http("POST", RESOLUTION, 409, {"data": None, "error": {"code": "agent.invocation.resolution_conflict"}}, {"claim": "applied"}),
+        "conflictingResolution": http("POST", RESOLUTION, 409, {"data": None, "error": {"code": "weaver.invocation.resolution_conflict"}}, {"claim": "applied"}),
         "repeatExecute": http("POST", EXECUTE, 200, {"data": {"proposalId": PROPOSAL, "executed": False, "status": "uncertain", "clientInvocation": None}}),
         "audit": audit(APPROVED_AUDIT, dict(settled("Uncertain"), metadata={**settled("Uncertain")["metadata"], "dispatch": "client", "effect": "possible"}), resolved),
         "ownerBefore": workflow, "ownerAfter": copy.deepcopy(workflow)}
@@ -324,7 +324,7 @@ def complete_restart_section(ref, source="frozen"):
             "liveProvider": False, "qualified": False, "independentPackageWitness": False, "expectedCaseIds": sorted(EXPECTED_CASES),
             "controlId": CONTROL_ID, "cases": rows, "restarts": [ref],
             "durableStore": {"feature": DURABLE_STORE_FEATURE, "dependsOn": DURABLE_STORE_DEPENDENCY, "provider": "Sqlite",
-                             "database": "/owned/durable-agent-store/agent-records.db", "databaseObserved": True, "restart": ref},
+                             "database": "/owned/durable-weaver-store/weaver-records.db", "databaseObserved": True, "restart": ref},
             "control": {"id": CONTROL_ID, "provider": "anthropic", "status": "failed", "expectedFailureObserved": True,
                         "actual": copy.deepcopy(EXPECTED_CONTROL), "ownerBefore": ref, "ownerAfter": ref, "evidence": [ref]}}
 
@@ -363,7 +363,7 @@ class RestartManifestTests(unittest.TestCase):
             "no-evidence": lambda s: row(s).update(evidence=[]),
             "control-absent": lambda s: s.pop("control"),
             "control-passed": lambda s: s["control"].update(status="passed"),
-            "control-wrong-cause": lambda s: s["control"]["actual"].update(diagnostic="agent.session.owned_elsewhere"),
+            "control-wrong-cause": lambda s: s["control"]["actual"].update(diagnostic="weaver.session.owned_elsewhere"),
             "store-not-observed": lambda s: s["durableStore"].update(databaseObserved=False),
             "store-other-provider": lambda s: s["durableStore"].update(provider="InMemory"),
             "section-failed": lambda s: s.update(status="failed"),
@@ -390,7 +390,7 @@ class RestartManifestTests(unittest.TestCase):
     def test_a_complete_inventory_run_passes_its_own_final_gate(self):
         # T033 attempt 2 passed all 20 cases and the control, then failed because the gate saw status 'running'.
         complete = complete_restart_section(self.ref, source=None)
-        database = self.root / "agent-records.db"
+        database = self.root / "weaver-records.db"
         database.write_bytes(b"sqlite")
         store = dict(complete["durableStore"], database=str(database))
         run = SimpleNamespace(root=self.root, report={"independentPackageWitness": False}, source=None, save=lambda: None, assert_immutable_inputs=lambda: None)
@@ -488,7 +488,7 @@ class RestartOrchestrationTests(unittest.TestCase):
     def test_a_graceful_recovery_refuses_a_held_lease_at_once_and_only_an_abrupt_one_waits_for_it_to_lapse(self):
         from unittest.mock import patch
         held = SimpleNamespace(status=409, receipt={"held": True}, headers={"retry-after": "1"},
-                               json=lambda: {"error": {"code": "agent.session.owned_elsewhere"}})
+                               json=lambda: {"error": {"code": "weaver.session.owned_elsewhere"}})
         free = SimpleNamespace(status=200, receipt={"free": True})
         for kind, expected in (("graceful", "restart.lease_not_released"), ("abrupt", None)):
             with self.subTest(kind=kind):
@@ -560,20 +560,20 @@ class DurableStoreConfigurationTests(unittest.TestCase):
         root = Path(self.temporary.name).resolve()
         published = root / "backend-published"
         published.mkdir()
-        (published / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": {"FoundationAgentAbstractions": {}}}}}}))
-        self.store = root / "durable-agent-store"
+        (published / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": {"Weaver": {}}}}}}))
+        self.store = root / "durable-weaver-store"
         self.store.mkdir(mode=0o700)
         self.run = SimpleNamespace(root=root, profiles={"backend": {"published": published}})
 
     def test_enables_the_packaged_store_on_a_new_owned_sqlite_file_without_returning_the_key(self):
         key = "k" * 48
-        selected = enable_durable_agent_store(self.run, self.store / "agent-records.db", key)
+        selected = enable_durable_weaver_store(self.run, self.store / "weaver-records.db", key)
         path = self.run.profiles["backend"]["published"] / "shells.json"
         features = json.loads(path.read_text())["CShells"]["Shells"]["Authoring"]["Features"]
-        self.assertEqual({"Provider": "Sqlite", "ConnectionString": "Data Source=" + str(self.store / "agent-records.db"), "LeaseSeconds": 15},
+        self.assertEqual({"Provider": "Sqlite", "ConnectionString": "Data Source=" + str(self.store / "weaver-records.db"), "LeaseSeconds": 15},
                          features[DURABLE_STORE_FEATURE])
         self.assertEqual({"EncryptionKey": key}, features[DURABLE_STORE_DEPENDENCY])
-        self.assertIn("FoundationAgentAbstractions", features)
+        self.assertIn("Weaver", features)
         self.assertNotIn(key, json.dumps(selected))
         self.assertEqual(0o600, stat.S_IMODE(path.stat().st_mode))
 
@@ -582,13 +582,13 @@ class DurableStoreConfigurationTests(unittest.TestCase):
         self.addCleanup(outside.cleanup)
         existing = self.store / "existing.db"
         existing.write_bytes(b"")
-        for database, key in ((Path(outside.name) / "agent.db", "k" * 48), (existing, "k" * 48), (Path("relative.db"), "k" * 48),
-                              (self.store / "agent.db", "short")):
+        for database, key in ((Path(outside.name) / "weaver.db", "k" * 48), (existing, "k" * 48), (Path("relative.db"), "k" * 48),
+                              (self.store / "weaver.db", "short")):
             with self.subTest(database=str(database)), self.assertRaises(RuntimeError):
-                enable_durable_agent_store(self.run, database, key)
-        enable_durable_agent_store(self.run, self.store / "agent.db", "k" * 48)
+                enable_durable_weaver_store(self.run, database, key)
+        enable_durable_weaver_store(self.run, self.store / "weaver.db", "k" * 48)
         with self.assertRaises(RuntimeError):
-            enable_durable_agent_store(self.run, self.store / "again.db", "k" * 48)
+            enable_durable_weaver_store(self.run, self.store / "again.db", "k" * 48)
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ public sealed class SequenceRuntimeTests
         Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Complete, attempts[3].TransitionKind);
         Assert.NotNull(sequenceState.Completion);
         Assert.Equal(attempts[3].AttemptId, sequenceState.Completion.AttemptId);
-        Assert.Equal(ActivityOutcomes.Done, sequenceState.Completion.OutcomeKey);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, sequenceState.Completion.OutcomeNames);
         Assert.Equal("actexec-sequence", firstChildState.ParentActivityExecutionId);
         Assert.Equal("actexec-sequence", firstChildState.SchedulingActivityExecutionId);
     }

@@ -60,6 +60,22 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : new ActivityChildResultFacts(ActivityChildResultAvailability.Unknown);
     }
 
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(firstChildNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(secondChildNodeId);
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.RelateChildren(activity, firstChildNodeId, secondChildNodeId)
+            : ActivityChildTimeRelation.Unspecified;
+    }
+
+    public bool? CompletesAfterItsChildren(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        return TryGetHandler(activity.Structure, out var handler) ? handler.CompletesAfterItsChildren(activity) : null;
+    }
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         ArgumentNullException.ThrowIfNull(activity);
@@ -115,6 +131,15 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
 
         return TryGetHandler(activity.Structure, out var handler)
             ? handler.ProjectScopedVariables(activity)
+            : [];
+    }
+
+    public IReadOnlyCollection<VariableDefinition> ProjectIterationVariables(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.ProjectIterationVariables(activity)
             : [];
     }
 

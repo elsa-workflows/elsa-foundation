@@ -23,8 +23,8 @@ public sealed class OrdinalCollationMigrationTests
     /// <summary>The modules #1837 put in scope, by the prefix their context names share.</summary>
     private static readonly string[] CollatingModules =
     [
-        "ActivitiesDesign", "Agent", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
-        "PublishingSnapshotReview", "Secrets", "Specialists", "WorkflowsDesign"
+        "ActivitiesDesign", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
+        "PublishingSnapshotReview", "Secrets", "Agent", "Weaver", "WorkflowsDesign"
     ];
 
     /// <summary>
@@ -45,15 +45,15 @@ public sealed class OrdinalCollationMigrationTests
         ("ActivitiesDesign", "elsa_activity_definition_versions_v2", "SemVerSortKey"),
         // The owner list filters on actor and tenant, then orders by update time and session id for its cursor;
         // the record store compares owner token and fence, and keys and digests are matched exactly.
-        ("Agent", "elsa_agent_sessions", "SessionId"),
-        ("Agent", "elsa_agent_sessions", "TenantId"),
-        ("Agent", "elsa_agent_sessions", "ActorId"),
-        ("Agent", "elsa_agent_sessions", "Workspace"),
-        ("Agent", "elsa_agent_sessions", "OwnerToken"),
-        ("Agent", "elsa_agent_proposals", "ProposalId"),
-        ("Agent", "elsa_agent_call_keys", "KeyHash"),
-        ("Agent", "elsa_agent_disclosure_snapshots", "Digest"),
-        ("Agent", "elsa_agent_audit_owners", "TenantId"),
+        ("Weaver", "elsa_weaver_sessions", "SessionId"),
+        ("Weaver", "elsa_weaver_sessions", "TenantId"),
+        ("Weaver", "elsa_weaver_sessions", "ActorId"),
+        ("Weaver", "elsa_weaver_sessions", "Workspace"),
+        ("Weaver", "elsa_weaver_sessions", "OwnerToken"),
+        ("Weaver", "elsa_weaver_proposals", "ProposalId"),
+        ("Weaver", "elsa_weaver_call_keys", "KeyHash"),
+        ("Weaver", "elsa_weaver_disclosure_snapshots", "Digest"),
+        ("Weaver", "elsa_weaver_audit_owners", "TenantId"),
         // Host ids compare ordinally; a linguistic default would let two differing only in case
         // share one current incarnation.
         ("ClusterMembership", "elsa_cluster_members", "HostId"),
@@ -78,14 +78,14 @@ public sealed class OrdinalCollationMigrationTests
         // Part of the key and of the projection audit's keyset cursor, beside the name.
         ("Secrets", "elsa_secrets", "Tombstone"),
         ("Secrets", "elsa_secrets", "ScopeLookupKey"),
-        ("Specialists", "elsa_specialist_turns", "ScopeKey"),
-        ("Specialists", "elsa_specialist_turns", "Handle"),
-        ("Specialists", "elsa_specialist_turns", "OperationKey"),
-        ("Specialists", "elsa_specialist_turns", "SchemaVersion"),
-        ("Specialists", "elsa_specialist_turns", "Fence"),
-        ("Specialists", "elsa_specialist_conversations", "ScopeKey"),
-        ("Specialists", "elsa_specialist_conversations", "Id"),
-        ("Specialists", "elsa_specialist_conversations", "SchemaVersion"),
+        ("Agent", "elsa_agent_turns", "ScopeKey"),
+        ("Agent", "elsa_agent_turns", "Handle"),
+        ("Agent", "elsa_agent_turns", "OperationKey"),
+        ("Agent", "elsa_agent_turns", "SchemaVersion"),
+        ("Agent", "elsa_agent_turns", "Fence"),
+        ("Agent", "elsa_agent_conversations", "ScopeKey"),
+        ("Agent", "elsa_agent_conversations", "Id"),
+        ("Agent", "elsa_agent_conversations", "SchemaVersion"),
         ("WorkflowsDesign", "elsa_workflow_definitions_v2", "IdLookupHash"),
         ("WorkflowsDesign", "elsa_workflow_definition_versions", "SemVerSortKey")
     ];
@@ -100,13 +100,13 @@ public sealed class OrdinalCollationMigrationTests
         ("ActivitiesDesign", "elsa_activity_management_definitions", "SearchText"),
         ("ActivitiesDesign", "elsa_activity_definitions", "Description"),
         ("ActivitiesDesign", "elsa_activity_definitions", "DisplayName"),
-        ("Agent", "elsa_agent_sessions", "Payload"),
-        ("Agent", "elsa_agent_sessions", "Title"),
-        ("Agent", "elsa_agent_disclosure_snapshots", "Canonical"),
-        ("Agent", "elsa_agent_call_keys", "Key"),
+        ("Weaver", "elsa_weaver_sessions", "Payload"),
+        ("Weaver", "elsa_weaver_sessions", "Title"),
+        ("Weaver", "elsa_weaver_disclosure_snapshots", "Canonical"),
+        ("Weaver", "elsa_weaver_call_keys", "Key"),
         ("ClusterMembership", "elsa_cluster_members", "ReportJson"),
-        ("Specialists", "elsa_specialist_turns", "Payload"),
-        ("Specialists", "elsa_specialist_conversations", "Payload"),
+        ("Agent", "elsa_agent_turns", "Payload"),
+        ("Agent", "elsa_agent_conversations", "Payload"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "ContentJson"),
         ("IdentityIam", "identity_users", "PasswordHash"),
         ("IdentityIam", "identity_roles", "PermissionsJson"),

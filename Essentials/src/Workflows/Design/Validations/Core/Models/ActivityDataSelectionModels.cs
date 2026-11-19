@@ -82,7 +82,41 @@ public sealed record ActivityDataSelectionAnalysis(
     ActivityDataSelectionTargetFacts? Target,
     ImmutableArray<ActivityDataSelectionSourceFacts> Sources,
     ImmutableArray<ValidationError> Findings,
-    bool HasMoreSources = false);
+    bool HasMoreSources = false)
+{
+    /// <summary>
+    /// What the analysis established about each admitted member read of an activity result in the document, so
+    /// publication can pin the selected member's contract. A read the analysis could not type is listed as not known.
+    /// </summary>
+    public ImmutableArray<ActivityDataMemberReadFacts> MemberReads { get; init; } = [];
+}
+
+/// <summary>
+/// The selected member's contract for one admitted member read, at the consuming input <paramref name="Path"/>
+/// (<c>{nodeId}/inputs/{inputKey}</c>, the path findings use). When <paramref name="IsKnown"/> is false every other
+/// fact is unknown and the runtime checks the member's fit when it reads it.
+/// </summary>
+/// <param name="Path">The consuming input location.</param>
+/// <param name="ProducerNodeId">The producer the read names.</param>
+/// <param name="ProjectionKey">The producer projection the read names.</param>
+/// <param name="MemberPath">The exact member segments.</param>
+/// <param name="IsKnown">Whether the selected member's type is established.</param>
+/// <param name="SelectedType">The selected member's type, when known.</param>
+/// <param name="MayBeAbsent">Whether the member, or a member before it, may be missing, when known.</param>
+/// <param name="MayBeNull">Whether the member, or a member before it, may be null, when known.</param>
+/// <param name="Representation">The selected member's value representation, when known.</param>
+/// <param name="ProfileRevision">The serialization profile revision the facts were read under, when known.</param>
+public sealed record ActivityDataMemberReadFacts(
+    string Path,
+    string ProducerNodeId,
+    string ProjectionKey,
+    ImmutableArray<string> MemberPath,
+    bool IsKnown,
+    TypeReference? SelectedType = null,
+    bool? MayBeAbsent = null,
+    bool? MayBeNull = null,
+    ValueRepresentation? Representation = null,
+    string? ProfileRevision = null);
 
 /// <summary>An owner-supplied restriction. Multiple contributions intersect; none may weaken another.</summary>
 public sealed record ActivityDataInputConstraint(

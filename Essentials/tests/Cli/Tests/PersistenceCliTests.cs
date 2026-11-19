@@ -14,11 +14,12 @@ namespace Elsa.Cli.Tests;
 /// </summary>
 public sealed class PersistenceCliTests : IDisposable
 {
-    /// <summary>The 13-name vocabulary, the specialist turn journal and the Decisions module the Workbench composes by default, and the third-party module the fixture host installs beside them.</summary>
+    /// <summary>The 13-name vocabulary, the agent turn journal and the Decisions module the Workbench composes by default, and the third-party module the fixture host installs beside them.</summary>
     private static readonly string[] EveryModuleTheFixtureHostInstalls =
     [
         "Acme.Widgets",
         "Activities.Design",
+        "Agent",
         "Decisions",
         "Diagnostics.OpenTelemetry",
         "Diagnostics.StructuredLogs",
@@ -26,7 +27,6 @@ public sealed class PersistenceCliTests : IDisposable
         "Identity.Iam",
         "Identity.ProviderConfiguration",
         "Secrets",
-        "Specialists",
         "Studio.Preferences",
         "Workflows.Design",
         "Workflows.Publishing",

@@ -198,7 +198,12 @@ public sealed class WorkflowExecutableCompiler(
                 placedStorageDriverRequirements.UnionWith(template.StorageDriverRequirements);
                 var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
                                       ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no Source Reference '{publication.SourceReferenceId}'.");
-                var bindings = CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler, out var effectiveInputs);
+                var bindings = executableNodeCompiler.PinPlacedBoundaryReads(
+                    rootActivity,
+                    projection,
+                    state.Variables,
+                    activity.NodeId,
+                    CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler, out var effectiveInputs));
                 compiledBoundaryInputs.Add(activity.NodeId, effectiveInputs);
                 var outputCaptures = outputCaptureCompiler.CompileBoundaryOutputs(
                     activity.NodeId,
@@ -259,6 +264,7 @@ public sealed class WorkflowExecutableCompiler(
                     ResourceId = source.SourceId
                 };
 
+            compiledRoot = MemberReadSelectionPinner.Pin(compiledRoot, sourceAnalysis.MemberReads);
 
             IReadOnlyCollection<ExecutableDependencyClaim> dependencyClaims = [];
             if (metadataEnricher is not null)

@@ -433,10 +433,13 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     }
 
     /// <summary>Uploads the named fixtures as one collection and returns its handle.</summary>
-    public async Task<string> UploadCollectionAsync(params string[] fixtureNames)
+    public Task<string> UploadCollectionAsync(params string[] fixtureNames) => UploadCollectionJsonAsync(Collection(fixtureNames));
+
+    /// <summary>Uploads an export given as JSON text (a fixture a test adapted, such as a stub server's URL); returns its handle.</summary>
+    public async Task<string> UploadCollectionJsonAsync(string collection)
     {
         using var request = Request(HttpMethod.Post, $"{ImportRoute}/collections");
-        request.Content = new StringContent(Collection(fixtureNames), Encoding.UTF8, "application/json");
+        request.Content = new StringContent(collection, Encoding.UTF8, "application/json");
         using var response = await Client.SendAsync(request);
         return Required(await ReadSuccessAsync(response, "upload"), "collectionHandle");
     }

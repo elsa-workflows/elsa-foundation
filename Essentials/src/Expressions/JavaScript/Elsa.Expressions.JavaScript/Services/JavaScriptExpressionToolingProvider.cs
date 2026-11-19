@@ -1,7 +1,9 @@
 using Acornima;
+using Acornima.Ast;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Core.Services;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Models;
 using System.Text.RegularExpressions;
 
@@ -138,23 +140,10 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
                 [
                     new("getVariable(name)", ["name"], new("Any"))
                 ]));
-            projected.AddRange(variables
-                .Where(symbol => IsIdentifier(symbol.Name))
-                .Select(symbol => new ExpressionSymbol(
-                    $"javascript:getter:{symbol.SymbolId}",
-                    $"get{char.ToUpperInvariant(symbol.Name[0])}{symbol.Name[1..]}",
-                    ExpressionSymbolKind.Function,
-                    symbol.ValueShape,
-                    $"Reads the '{symbol.Name}' workflow variable.",
-                    [new($"get{char.ToUpperInvariant(symbol.Name[0])}{symbol.Name[1..]}()", ReturnShape: symbol.ValueShape)])));
+            // No generated get<Name>() accessors: the runtime does not provide them (spec 1222 FR-036, ADR 0089 decision 6).
         }
         return context with { RootSymbols = projected };
     }
-
-    private static bool IsIdentifier(string value) =>
-        value.Length > 0 &&
-        (char.IsLetter(value[0]) || value[0] is '_' or '$') &&
-        value.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '_' or '$');
 
     private static (string Source, ExpressionToolingPosition Position) NormalizeEmptyAccessorCalls(
         string source,
@@ -178,8 +167,10 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
         try
         {
             // Share grammar selection with runtime without evaluating authored code.
-            JavaScriptBindingSyntax.IsExpression(source);
-            return [];
+            Node parsed = JavaScriptBindingSyntax.IsExpression(source)
+                ? new Parser().ParseExpression(source, strict: true)
+                : new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source, strict: true);
+            return ReservedNameDiagnostics(parsed, revision);
         }
         catch (ParseErrorException exception)
         {
@@ -198,4 +189,18 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
             ];
         }
     }
+
+    /// <summary>
+    /// <c>complete</c> is a reserved built-in name in every JavaScript surface (spec 1208 FR-007a, ADR 0045 §5): a binding
+    /// that declares it, as a variable, function, class, parameter or catch binding, is refused at design time.
+    /// </summary>
+    private static IReadOnlyList<ExpressionDiagnostic> ReservedNameDiagnostics(Node root, string revision) =>
+        JavaScriptReservedNames.CollectCompleteDeclarations(root)
+            .Select(identifier => new ExpressionDiagnostic(
+                "JavaScript/ReservedName",
+                ExpressionDiagnosticSeverity.Error,
+                $"'{JavaScriptScriptBuiltIns.Complete}' is a reserved built-in name and cannot be declared in an expression. Rename it.",
+                revision,
+                JavaScriptReservedNames.RangeOf(identifier)))
+            .ToArray();
 }

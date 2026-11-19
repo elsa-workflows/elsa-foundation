@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Models;
@@ -27,6 +28,20 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
     public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
         BpmnLinearChildResultAnalysis.TryCreate(ReadAuthoredStructure(activity))?.Assess(producerChildNodeId, consumerChildNodeId)
         ?? new(ActivityChildResultAvailability.Unknown);
+
+    // One analysis per authored structure node: the unordered-write analysis asks about many pairs of one process.
+    private readonly ConditionalWeakTable<ActivityNode, TimeRelationHolder> _timeRelations = new();
+
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        _timeRelations.GetValue(activity, node => new(BpmnTimeRelationAnalysis.TryCreate(ReadAuthoredStructure(node))))
+            .Analysis?.Relate(firstChildNodeId, secondChildNodeId)
+        ?? ActivityChildTimeRelation.Unspecified;
+
+    private sealed record TimeRelationHolder(BpmnTimeRelationAnalysis? Analysis);
+
+    // The process runtime cancels its live children before it completes (BpmnProcessRuntime requests their subtree
+    // cancellation), so no child commits a write after the process completed.
+    public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
 
     public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) =>
         BpmnLinearChildResultAnalysis.TryCreate(ReadAuthoredStructure(activity))?.CompletedBefore(childNodeId);

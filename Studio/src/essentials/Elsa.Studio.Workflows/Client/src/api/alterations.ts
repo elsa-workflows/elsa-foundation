@@ -14,6 +14,8 @@ export const alterationRelations = {
 
 export const retryFaultedActivityKind = "RetryFaultedActivity";
 export const decideInterventionKind = "DecideIntervention";
+/** Spec 1221 FR-017: completes a step whose commit a `Fault` lost update refused, with its recorded completion. */
+export const acceptRecordedCompletionKind = "AcceptRecordedCompletion";
 
 export type AlterationPlanStatus =
   | "CapturingTargets" | "Queued" | "Running" | "Cancelling" | "Completed" | "CompletedWithFailures" | "Failed" | "Cancelled";
@@ -101,6 +103,19 @@ export function retryFaultedActivityPlan(workflowExecutionId: string, sourceActi
     target: { executionIds: [workflowExecutionId] },
     alterations: [{
       kind: retryFaultedActivityKind,
+      schemaVersion: 1,
+      payload: { sourceActivityExecutionId, ...(trimmed ? { reason: trimmed } : {}) }
+    }]
+  };
+}
+
+/** The plan for Accept recorded completion: the same payload as a retry (spec 1221 FR-014). */
+export function acceptRecordedCompletionPlan(workflowExecutionId: string, sourceActivityExecutionId: string, reason?: string | null): AlterationPlanRequest {
+  const trimmed = reason?.trim();
+  return {
+    target: { executionIds: [workflowExecutionId] },
+    alterations: [{
+      kind: acceptRecordedCompletionKind,
       schemaVersion: 1,
       payload: { sourceActivityExecutionId, ...(trimmed ? { reason: trimmed } : {}) }
     }]

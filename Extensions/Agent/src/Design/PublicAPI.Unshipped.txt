@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Agent.Design.AgentDesignFeature
+Elsa.Agent.Design.AgentDesignFeature.AgentDesignFeature() -> void
+virtual Elsa.Agent.Design.AgentDesignFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

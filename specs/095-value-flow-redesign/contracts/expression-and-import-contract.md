@@ -13,11 +13,13 @@ public sealed record ExpressionDefinition(
     TypeReference ResultType,
     IReadOnlyDictionary<string, ExpressionParameterBinding> Parameters,
     JsonElement Options,
-    string CapabilityProfile);
+    string CapabilityProfile,
+    VariableReadFallback? VariableReadFallback = null);   // spec 1222
 
 public sealed record ExpressionEvaluationRequest(
     ExpressionDefinition Definition,
     IReadOnlyDictionary<string, object?> ParameterValues,
+    IExpressionVariableReader? VariableReader,             // spec 1222: computed and opaque reads
     CancellationToken CancellationToken);
 
 public interface IExpressionEvaluator
@@ -35,10 +37,30 @@ Each parameter binding is exactly one of:
 ```text
 Literal(value)
 WorkflowRequest(memberKey)
-Variable(declaringScopeNodeId, variableKey)
+Variable(declaringScopeNodeId, variableKey, surface?)   // surface: args (default) | variables
 ActivityResult(producerNodeId, projectionKey)
 WorkflowInstance(member)        // member: correlationId | instanceId
 ```
+
+**Variable reads by name (spec 1222, ADR 0089, decision D-7).** A `Variable` parameter carries a `surface`
+flag: `args` (the default, omitted) or `variables`. Publish parses each script and pins every variable it names
+literally (`variables.X`, `variables['X']`, `getVariable('X')`) as a `Variable` parameter with `surface =
+variables`, keyed `variables.<name>` in the parameter map, recording the nearest declaring scope (a loop's
+iteration values innermost, then containers, then the workflow). A dotted key is never a JavaScript identifier,
+so it cannot collide with an explicit `args` parameter of the same name. The authored source is not rewritten.
+
+A script that reads variables it does not name literally (`variables[expr]`, `getVariable(expr)`, `variables`
+or `getVariable` used as a value, or a host function registered as reading variables) gets the **fallback
+marker** `VariableReadFallback(candidates)`: the conservative read report, every variable visible at that point,
+nearest scope first, each name once. The runtime then makes the candidates readable before evaluation and passes
+an `IExpressionVariableReader` with the request. Each read it serves is resolved nearest scope first, checked for
+protection, and recorded on the host side: a present read joins the step's input read set and input snapshot
+(`ComputedVariableReads`), a name that matches nothing reads `undefined` (nil in Liquid) and is recorded absent
+with warning `VF-READ-001`, and a withheld or transient match faults the step even if the script catches the
+error. An expression without the marker gets no reader and loads only the variables it names. A marker with an empty
+candidate list means publish could not resolve the expression's scopes (an occurrence input inside a reusable
+activity's body, compiled at placement): every read it makes, literal or computed, then goes through the recorded
+run-time lookup.
 
 `WorkflowInstance` was added by the ADR 0045 amendment for issue #2717 (spec 247). It reads the running
 instance's correlation ID or instance ID from committed runtime state as a declared parameter, so it satisfies
@@ -55,7 +77,7 @@ pinned as part of the consumer invocation's complete input snapshot.
   "language": "JavaScript",
   "source": "args.subtotal + args.tax",
   "resultType": { "alias": "Decimal", "collection": "None" },
-  "capabilityProfile": "binding-pure-v1",
+  "capabilityProfile": "binding-readonly-v1",
   "parameters": [
     {
       "name": "subtotal",
@@ -77,6 +99,30 @@ pinned as part of the consumer invocation's complete input snapshot.
 }
 ```
 
+A pinned variable read and the fallback marker serialize as:
+
+```json
+{
+  "parameters": {
+    "variables.order": {
+      "kind": "Variable",
+      "declaringScopeNodeId": "container-1",
+      "variableKey": "order",
+      "surface": "variables"
+    }
+  },
+  "variableReadFallback": {
+    "candidates": [
+      { "name": "order", "declaringScopeNodeId": "container-1", "variableKey": "order" },
+      { "name": "customer", "declaringScopeNodeId": "workflow", "variableKey": "customer" }
+    ]
+  }
+}
+```
+
+`surface` is omitted for `args`, and `variableReadFallback` is omitted for a literal-only expression, so existing
+definitions keep their shape and hash.
+
 Serialization invariants:
 
 - parameter names are unique using ordinal comparison and are rendered in ordinal order for hashing;
@@ -90,39 +136,82 @@ Serialization invariants:
 
 ## 3. Language surfaces
 
-JavaScript receives a read-only `args` object:
+JavaScript receives a read-only `args` object, and, when the script reads variables, a separate read-only
+`variables` object and a `getVariable(name)` function (spec 1222):
 
 ```javascript
-args.customer.id + ":" + args.orderNumber
+args.customer.id + ":" + args.orderNumber + ":" + variables.order.total
 ```
 
-Liquid receives only declared parameter roots:
+Liquid receives the declared `args` parameters as roots, and the same `variables` root:
 
 ```liquid
-{{ customer.id }}:{{ orderNumber }}
+{{ customer.id }}:{{ orderNumber }}:{{ variables.order.total }}
 ```
+
+Every read path to one variable returns the same frozen value within one evaluation. No generated
+`get<Name>()` accessor exists; it survives only as an Elsa 3 import form.
 
 Both engines MUST materialize dynamic `Any` parameters consistently from fresh `JsonNode` and durable
 `JsonElement` forms. Mutation of the engine-local object MUST NOT write workflow state and SHOULD be
 prevented/frozen where supported.
 
-The `binding-pure-v1` capability profile permits deterministic value transforms only. It forbids:
+The `binding-readonly-v1` capability profile (ADR 0083 amendment, epic #3052 decisions D-1, D-5, D-6
+and D-11; it replaces `binding-pure-v1`) permits value transforms that read workflow values and never
+change engine-owned workflow state. They need not be deterministic.
 
-- ambient `variables`, `input`, `output`, or `ExpressionExecutionContext` objects;
-- `getVariable`, `setVariable`, named variable getters/setters, `getInput`, `getOutput`, and
-  `getOutputFrom` host functions;
+It permits:
+
+- the native JavaScript intrinsics `Date`, `Intl`, `Temporal` and `Math` (including `Math.random`), so the
+  current time, random values and GUID generation; the profile is not limited to host functions. Evaluators
+  run in UTC with the invariant culture. Native `Date` and the current time come from the host's injectable
+  clock (`TimeProvider`), so tests can fix the time. The random source behind `Math.random` is the script
+  engine's own (Jint creates it with `new Random()`) and cannot be injected, so tests MUST NOT assume a fixed
+  random sequence;
+- functions implemented in .NET that are registered for this profile and exchange only JSON values with
+  the expression. A call is never refused or skipped because of what it does, and the workflow designer
+  owns the idempotency of external effects (D-6). No function profile is required. A function is effect-free
+  unless its host declares it effectful at registration; only a declared call gets the commit boundary
+  (ADR 0045 §5, D-6).
+
+It forbids:
+
+- ambient `input`, `output`, or `ExpressionExecutionContext` objects (the `variables` root reads only what
+  publish pinned or the recorded fallback serves, spec 1222);
+- `setVariable`, named variable getters/setters, `getInput`, `getOutput`, and `getOutputFrom` host
+  functions (`getVariable` reads like `variables`);
 - workflow/activity/instance identity not declared as a parameter;
-- configuration, environment, filesystem, network, process, reflection, and service access;
-- current time, GUID generation, random generation, or other nondeterminism unless supplied as a
-  pinned parameter or separately ratified deterministic capability;
-- workflow variable mutation or activity output publication;
-- registration of mutable host functions through evaluation events, filters, preprocessors, or
-  postprocessors; and
+- live .NET objects crossing into the expression while .NET interop is off, which is the default. A host
+  may enable .NET interop for JavaScript through one replaceable engine strategy, provided by a feature
+  (analysis A-1 and the ADR 0046 amendment, V10); it then applies to script activities and input-binding
+  expressions alike, so a JavaScript input expression takes the same input as a script in a JavaScript
+  script activity. Under the ADR 0046 amendment's guardrails (V10), such an expression returns a storable
+  value or is refused, no live object enters the input snapshot, and it never writes Elsa-owned workflow
+  state. Any workflow node that uses general .NET access, whether a binding or a script activity, gets a
+  publish-time warning with a stable diagnostic code and a marker on the node in Studio, so it is never
+  switched on unnoticed (ADR 0046 amendment, V12, gives the detail). Whether such an expression is treated
+  as possibly effectful is decided by the opt-in's implementing spec;
+- any change to engine-owned workflow state: variable mutation, workflow output publication,
+  correlation or instance-name changes, and outcome selection;
+- functions not registered for this profile, added through evaluation events, filters,
+  preprocessors, or postprocessors; and
 - nonpersistable results in durable execution.
+
+[ADR 0089](../../../docs/adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md)
+(decision D-7, accepted; implemented by spec 1222) lets `variables.X`, `variables['X']` and `getVariable('X')`
+read through publish-resolved declarations, pinned at publish. A computed name (`variables[x]`,
+`getVariable(expr)`) or a read inside an opaque host function falls back to a run-time lookup: it is
+reported conservatively at publish, and its actual reads are recorded, protection-checked and part of
+the step's input snapshot. A computed name that resolves to nothing reads `undefined` with a warning,
+and the read is marked absent (ADR 0089 amendment, R3).
+
+A result of `undefined` is an error unless the workflow selects the undefined-as-null policy (ADR 0045 §2
+amendment, D-11). Under that policy, an `undefined` result and every `undefined`-valued object property
+materialize as `null`.
 
 JavaScript/Liquid extension registration MUST declare the capability profiles in which it is allowed.
 The evaluator builds its processor/filter set from that allowlist. A global extension registration
-cannot silently join the pure profile.
+cannot silently join a capability profile.
 
 Stateful scripts, configuration-dependent scripts, or scripts with workflow-visible side effects are
 activities. They receive plain inputs, return a typed result, and use a separate graph-visible `Set`
@@ -136,7 +225,10 @@ For each expression input the runtime MUST:
 2. resolve every parameter binding from one structural/causal runtime view;
 3. type-check, policy-check, and snapshot parameter values;
 4. evaluate exactly once for the new logical invocation;
-5. coerce and validate the declared result type;
+5. apply the workflow's pinned undefined policy at the JavaScript-to-workflow boundary (ADR 0045 §2
+   amendment, D-11) — `undefined` array elements and sparse holes become `null` placeholders that preserve positions,
+   and the no-return check applies only to function-body scripts whose result is consumed — then coerce and validate
+   the declared result type;
 6. validate result persistability/protection policy; and
 7. include the final input value in the complete invocation snapshot before activity activation.
 
@@ -196,17 +288,26 @@ Examples:
 
 | Elsa 3 source | Canonical source | Added parameter |
 | --- | --- | --- |
-| `variables.total * 1.2` | `args.total * 1.2` | `total -> Variable(scope,key)` |
-| `getVariable("total")` | `args.total` | `total -> Variable(scope,key)` |
+| `variables.total * 1.2` | `variables.total * 1.2` | `variables.total -> Variable(scope,key,variables)` |
+| `getVariable("total")` | `variables.total` | `variables.total -> Variable(scope,key,variables)` |
+| `getTotal()` (generated accessor) | `variables.total` (spelled as declared) | `variables.total -> Variable(scope,key,variables)` |
+| `getVariable(name)` (computed) | `getVariable(name)` | none; publish sets the fallback marker |
 | `input.customerId` | `args.customerId` | `customerId -> WorkflowRequest(customer-id)` |
 | `getOutput("receiptId")` | `args.receiptId` | `receiptId -> ActivityResult(node,receipt-id)` |
-| `{{ Variables.customer.name }}` | `{{ customer.name }}` | `customer -> Variable(scope,key)` |
+| `{{ Variables.customer.name }}` | `{{ variables.customer.name }}` | `variables.customer -> Variable(scope,key,variables)` |
+
+Variable reads keep a `variables` root (spec 1222 FR-026); publish pins them again to the nearest declaring scope.
+A computed variable read is converted faithfully and served by the run-time fallback (FR-027). Until the
+`RunJavaScript` body has its own `variables` root (spec 1222 T047), a converted body keeps lowering variable reads
+to `args` and still refuses computed ones (FR-026a). A script whose own `args` or `variables` would capture a
+converted read is refused (#3296, FR-028); so is a literal read that Elsa 4's nearest-scope resolution would point at
+another declaration than the converter's (`VF-IMP-010`, FR-031).
 
 Rewriting MUST use a JavaScript parser or Liquid syntax tree appropriate to the registered language;
 regex-only semantic rewriting is forbidden. Property names, string literals, comments, and escaping
 must remain correct.
 
-The importer MUST fail rather than guess when source uses computed variable/output names, dynamic
+The importer MUST fail rather than guess when source uses computed output or input names, dynamic
 property discovery, variable assignment, setter host calls, ambient configuration/time/randomness,
 unknown host functions, multiple possible producers, or a producer outside the visible structural
 frame. A custom expression language requires an explicit importer lowering provider or fails as
@@ -245,10 +346,11 @@ represent the operation:
 3. parameter binding, options, result type, source, or capability change does change the hash;
 4. restart/retry uses the pinned value without reevaluation;
 5. fresh and durable `Any` values produce equivalent reads;
-6. undeclared ambient reads, all mutation forms, service/configuration access, and nondeterministic
-   helpers are rejected;
+6. undeclared ambient reads, all mutation forms and service/configuration access are rejected;
+   nondeterministic helpers (clock, randomness, GUIDs) are allowed (D-1);
 7. expression results cannot downgrade source sensitivity/protection; and
-8. no processor, filter, or event can add a forbidden host capability to the pure profile.
+8. no processor, filter, or event can add a forbidden host capability to the `binding-readonly-v1`
+   profile.
 
 Importer fixtures MUST include literals, variables, workflow inputs, unique prior outputs,
 output-only references, combined expression/reference values, JavaScript, Liquid, loops, and nested

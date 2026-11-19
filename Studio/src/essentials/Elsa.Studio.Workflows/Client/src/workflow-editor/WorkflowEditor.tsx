@@ -3,7 +3,7 @@ import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdap
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, History, LogIn, LogOut, ListTree, Variable, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioWeaverRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -23,6 +23,9 @@ import {
   updateActivity,
   type ChildSlot
 } from "../workflowAdapter";
+import { VariableRenameContext } from "../variableRenameContext";
+import { workflowVariableScopeId } from "../variableRename";
+import { VariableRenameNotice, useVariableRename } from "./VariableRenameNotice";
 import {
   indexActivityPresentation,
   resolveActivityLabel,
@@ -76,6 +79,11 @@ import { activateWorkflowCanvasNode } from "./workflowAccessibility";
 import { useDraftValidations } from "./useDraftValidations";
 import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
+import { useContributionDraftValidation } from "../useContributionDraftValidation";
+import {
+  collectContributionDraftValidation,
+  contributionDraftValidationCollectors
+} from "../contributionDraftValidation";
 import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
 import { LazyWorkflowTestDrivePanel } from "./lazyTestDriveUi";
@@ -85,6 +93,7 @@ import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
 import { useWorkflowCanvas } from "./useWorkflowCanvas";
 import { useWorkflowGraphOperationBatch } from "./useWorkflowGraphOperationBatch";
 import { useWorkflowPersistence } from "./useWorkflowPersistence";
+import { useWorkflowActivityDataSelection } from "./useWorkflowActivityDataSelection";
 import { useWorkflowEditorData } from "./useWorkflowEditorData";
 import { useDefinitionMetadata } from "./useDefinitionMetadata";
 import { DirectBpmnPublishAction } from "./DirectBpmnPublishAction";
@@ -138,7 +147,7 @@ const HttpTestRequestDialog = React.lazy(() =>
 
 export { PublicationReviewDialog } from "./PublicationReviewDialog";
 
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 
 export function WorkflowEditor({
   context,
@@ -165,8 +174,8 @@ export function WorkflowEditor({
   onOpenBpmnProcesses?(): void;
   definitionId: string;
   documentAdapter?: WorkflowEditorDocumentAdapter;
-  ai: StudioAgentRegistry;
-  weaver?: WorkflowAgentController;
+  ai: StudioWeaverRegistry;
+  weaver?: WorkflowWeaverController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -293,6 +302,7 @@ export function WorkflowEditor({
   // scoped-variable analysis) from the raw draft/frames/selection and the loaded catalog + descriptors.
   const {
     catalogByVersion,
+    describeActivity,
     availabilityLookup,
     scopeOwner,
     isUnsupportedDesigner,
@@ -387,17 +397,31 @@ export function WorkflowEditor({
   const structuralValidationErrors = useMemo(
     () => detectStructuralValidationErrors(draft?.state, activityLabels),
     [activityLabels, draft?.state]);
+  const localDraftValidation = useContributionDraftValidation(
+    draft?.state.rootActivity,
+    propertyEditors,
+    expressionEditors,
+    catalogByVersion
+  );
   const combinedValidationErrors = useMemo(
     () => humanizeValidationErrors(combineValidationErrors({
       draftErrors: draft?.validationErrors,
       serverErrors: draftValidations.available ? draftValidations.errors : null,
-      structuralErrors: structuralValidationErrors
+      structuralErrors: structuralValidationErrors,
+      localErrors: localDraftValidation.errors
     }), activityLabels),
-    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
+    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, localDraftValidation.errors, structuralValidationErrors]);
+  const collectLocalValidation = useCallback(async (snapshot: WorkflowDraft) => {
+    return collectContributionDraftValidation(
+      snapshot.state.rootActivity,
+      contributionDraftValidationCollectors(propertyEditors, expressionEditors),
+      catalogByVersion
+    );
+  }, [catalogByVersion, expressionEditors, propertyEditors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const explainVersionAction = findAiAction(ai, "weaver.workflows.explain-version");
-  const versionAgent = useMemo(() => ({ ai, controller: weaver, explainAction: explainVersionAction }), [ai, explainVersionAction, weaver]);
+  const versionWeaver = useMemo(() => ({ ai, controller: weaver, explainAction: explainVersionAction }), [ai, explainVersionAction, weaver]);
   const aiProviderAvailable = useAiProviderAvailability(ai);
 
   // The React Flow canvas mirror and every graph interaction (add/drag/connect/splice/delete/auto-layout)
@@ -602,7 +626,7 @@ export function WorkflowEditor({
 
   // Module-owned reviewed edits use the native document comparison/transaction seam.
   useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError, history: batchHistory,
-    resourceType: documentAdapter?.agentResource?.resourceType });
+    resourceType: documentAdapter?.weaverResource?.resourceType });
 
   useEffect(() => {
     if (!draft?.state.rootActivity || catalog.length === 0) return;
@@ -629,7 +653,7 @@ export function WorkflowEditor({
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
   useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned, validationErrors: combinedValidationErrors,
-    agentResource: documentAdapter?.agentResource });
+    weaverResource: documentAdapter?.weaverResource });
 
   // Memoized so contributed panels get a stable context identity and can bail out of re-renders
   // (React.memo / effect deps) while the editor re-renders for unrelated reasons.
@@ -703,7 +727,8 @@ export function WorkflowEditor({
     setError,
     setActiveRightPanelId,
     setInspectorCollapsed,
-    setAutosavePaused
+    setAutosavePaused,
+    collectLocalValidation
   });
 
   // Workflow declaration edits (variables/inputs/outputs) flow through here. Routing them through an in-place
@@ -1115,6 +1140,62 @@ export function WorkflowEditor({
     repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
   }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
 
+  // Spec 1222 FR-021/FR-022: a committed variable rename updates the scripts that read the variable and lists the
+  // references to repair by hand. Container variables are renamed in the inspector (scope = the inspected node); the
+  // Variables tab re-provides the workflow scope.
+  const variableRename = useVariableRename({ context, state: draft?.state, catalog: catalogByVersion, updateState: updateDraftState });
+  const inspectorRenameScope = useMemo(
+    () => documentAdapter || !inspectedNode ? null : { scopeId: inspectedNode.nodeId, onVariableRenamed: variableRename.onVariableRenamed },
+    [documentAdapter, inspectedNode, variableRename.onVariableRenamed]);
+  const variableRenameLabel = useCallback((nodeId: string, inputKey: string) => {
+    const node = findActivityNode(draft?.state.rootActivity, nodeId, catalogByVersion);
+    if (!node) return { activity: nodeId, input: inputKey };
+    const item = catalogByVersion.get(node.activityVersionId);
+    const input = describeActivity(node)?.inputs.find(candidate => candidate.name.toLowerCase() === inputKey.toLowerCase());
+    return {
+      activity: resolveActivityLabel(
+        draft?.activityPresentation?.find(record => record.nodeId === nodeId),
+        item,
+        item?.activityTypeKey ?? node.activityVersionId),
+      input: input ? input.displayName || input.name : inputKey
+    };
+  }, [draft?.state.rootActivity, draft?.activityPresentation, catalogByVersion, describeActivity]);
+  // Selects the activity and moves focus into the flagged input's editor once the inspector shows it. An input the
+  // inspector does not list (a structure-owned one, such as a Switch case condition) leaves focus on the activity.
+  const goToRenamedReference = useCallback((nodeId: string, inputKey: string) => {
+    setCanvasView("designer");
+    repairVariableReference(nodeId);
+    const label = variableRenameLabel(nodeId, inputKey).input;
+    let attempts = 0;
+    const focusInput = () => {
+      const row = [...(editorRootRef.current?.querySelectorAll<HTMLElement>(".wf-property-row") ?? [])]
+        .find(candidate => candidate.querySelector(".wf-property-row-header > label")?.textContent?.trim() === label);
+      const target = row && [...row.querySelectorAll<HTMLElement>("button, input, textarea, select, [contenteditable='true']")]
+        .find(element => !element.closest(".wf-property-row-header") && !element.matches(":disabled"));
+      if (target) target.focus();
+      else if (++attempts < 30) requestAnimationFrame(focusInput);
+    };
+    requestAnimationFrame(focusInput);
+  }, [repairVariableReference, variableRenameLabel]);
+  // Dismissing removes the focused button; focus returns to the editor view tabs rather than the page.
+  const dismissVariableRename = useCallback(() => {
+    variableRename.dismiss();
+    editorRootRef.current?.querySelector<HTMLElement>("[role='tablist'][aria-label='Editor view tabs'] [role='tab'][aria-selected='true']")?.focus();
+  }, [variableRename]);
+
+  // Choose data on ordinary activity inputs of a server workflow draft. BPMN-owned canvases keep their own model
+  // contracts and are not offered it here.
+  const activityDataSelection = useWorkflowActivityDataSelection({
+    context,
+    enabled: !documentAdapter && !isBpmnDesigner,
+    draft,
+    persistedDraft,
+    saving,
+    catalogByVersion,
+    validationErrors: combinedValidationErrors,
+    revealActivity: repairVariableReference
+  });
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -1278,6 +1359,7 @@ export function WorkflowEditor({
         </div> : bpmnInspectorProps && !selectedNode ? (
         <BpmnElementInspector {...bpmnInspectorProps} />
       ) : (
+        <VariableRenameContext.Provider value={inspectorRenameScope}>
         <InspectorPanel
           bpmnRoutingPanel={bpmnInspectorProps && selectedNode ? <BpmnElementConfiguration {...bpmnInspectorProps} /> : undefined}
           key={inspectedNode?.nodeId ?? "no-activity"}
@@ -1318,6 +1400,7 @@ export function WorkflowEditor({
           descriptorStatus={descriptorStatus}
           onRetryExpressionDescriptors={() => { void reloadExpressionDescriptors(); }}
           scopedVariableAnalysis={scopedVariableAnalysis}
+          activityDataSelection={activityDataSelection}
           activeTabId={activeInspectorTabId}
           onActiveTabChange={setActiveInspectorTabId}
           onSelectedActivityChange={updateSelectedActivity}
@@ -1333,6 +1416,7 @@ export function WorkflowEditor({
             onOpen: () => { if (inspectedNode) setHttpTestRequestActivityId(inspectedNode.nodeId); }
           } : undefined}
         />
+        </VariableRenameContext.Provider>
       )}
       </>
     },
@@ -1600,6 +1684,12 @@ export function WorkflowEditor({
               onSelect={tabId => setCanvasView(tabId as CanvasView)}
             />
           </div>
+          <VariableRenameNotice
+            outcome={variableRename.outcome}
+            labelFor={variableRenameLabel}
+            onSelectReference={goToRenamedReference}
+            onDismiss={dismissVariableRename}
+          />
           {canvasView === "code" ? (
             <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
@@ -1608,12 +1698,14 @@ export function WorkflowEditor({
             <div className="wf-properties-view">
               <section className="wf-properties-section">
                 <h3>Versions</h3>
-                <WorkflowVersionHistory definitionId={details.definition.id} versions={details.versions ?? []} agent={documentAdapter ? undefined : versionAgent} />
+                <WorkflowVersionHistory definitionId={details.definition.id} versions={details.versions ?? []} weaver={documentAdapter ? undefined : versionWeaver} />
               </section>
             </div>
           ) : canvasView !== "designer" ? (
             <fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}>
+              <VariableRenameContext.Provider value={documentAdapter ? null : { scopeId: workflowVariableScopeId, onVariableRenamed: variableRename.onVariableRenamed }}>
               <WorkflowDataView section={canvasView} draft={draft} context={context} onStateChange={updateDraftState} />
+              </VariableRenameContext.Provider>
             </fieldset>
           ) : (
           <>
@@ -1767,6 +1859,7 @@ export function WorkflowEditor({
             onSelectNode={goToValidationNode}
             onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
             unavailable={draftValidations.available === false}
+            pending={localDraftValidation.pending && combinedValidationErrors.length === 0}
           />
           </>
           )}

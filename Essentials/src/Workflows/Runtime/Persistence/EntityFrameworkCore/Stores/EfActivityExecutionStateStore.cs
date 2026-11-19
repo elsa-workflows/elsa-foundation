@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfActivityExecutionStateStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionStateStore
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionStateStore, IRunRowPresenceProbe
 {
     internal RuntimeDbContext Context => context;
     internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
@@ -72,14 +72,24 @@ public sealed class EfActivityExecutionStateStore(
 
     public async ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
-        ValidateIdentity(workflowExecutionId, activityExecutionId);
-        cancellationToken.ThrowIfCancellationRequested();
-        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var scope = RequireReadableRow(workflowExecutionId, activityExecutionId, cancellationToken);
         var id = ActivityExecutionEfSupport.CreateId("state", scope, workflowExecutionId, activityExecutionId);
         var row = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", id,
             () => context.ActivityExecutionStates.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken));
         return row is null ? null : ReadChecked(row, scope, workflowExecutionId, activityExecutionId);
     }
+
+    // Everything FindAsync refuses before it queries. The coalescing overlay runs the same checks for a read it
+    // answers without a query, so the two cannot drift apart.
+    private string RequireReadableRow(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken)
+    {
+        ValidateIdentity(workflowExecutionId, activityExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+    }
+
+    string IRunRowPresenceProbe.ResolveReadScope(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken) =>
+        RequireReadableRow(workflowExecutionId, activityExecutionId, cancellationToken);
 
     public async ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
@@ -90,6 +100,22 @@ public sealed class EfActivityExecutionStateStore(
             () => context.ActivityExecutionStates.LongCountAsync(row =>
                 row.ScopeKeyHash == ActivityExecutionEfSupport.Hash(scope) &&
                 row.WorkflowExecutionIdHash == ActivityExecutionEfSupport.Hash(workflowExecutionId), cancellationToken));
+    }
+
+    // The predicate matches on the scope and workflow hashes, as CountAsync does. A hash collision can only make
+    // another run's rows count as this run's, which answers true and costs the saving, never correctness. A row
+    // whose hash columns are corrupt is not counted, so for a run with no record a lookup of it can return nothing
+    // where FindAsync throws.
+    async ValueTask<bool> IRunRowPresenceProbe.HasAnyAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        ValidateWorkflow(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var scopeHash = ActivityExecutionEfSupport.Hash(scope);
+        var workflowHash = ActivityExecutionEfSupport.Hash(workflowExecutionId);
+        return await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "probing", workflowExecutionId,
+            () => context.ActivityExecutionStates.AsNoTracking().AnyAsync(row =>
+                row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash, cancellationToken));
     }
 
     public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken cancellationToken = default)

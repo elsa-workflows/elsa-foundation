@@ -260,7 +260,12 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // It moved for DesignFacets as an additive body init property, preserving the existing positional API.
         // #3750 adds node-presentation body init properties and thin wire envelopes. The existing
         // command constructors/deconstructors are retained and explicitly covered above.
-        Assert.Equal("4180874702ea7eac813efba4dc50a9b2463bab7970f125ecd4a06796db22730d", PublicShapeHash(ContractTypes));
+        // It moved for RuntimeActivityType as an additive body init property on ActivityAuthoringDescriptorView: the declared
+        // runtime type (e.g. Elsa.HttpEndpoint) a compiled node carries for a CLR activity whose catalog key is its CLR full name.
+        // Spec 1231 moved it for VariableAccess, an optional trailing positional parameter on ActivityInputDescriptorView
+        // (as ConnectionType before it), and AccessesUndeclaredVariables, an additive body init property on
+        // ActivityAuthoringDescriptorView: an input's variable-reference direction and the free-name marker.
+        Assert.Equal("b62958b33e6d5393d406e685f7df2fd7f9bef3027127d6bffcce1f00faef8fd1", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

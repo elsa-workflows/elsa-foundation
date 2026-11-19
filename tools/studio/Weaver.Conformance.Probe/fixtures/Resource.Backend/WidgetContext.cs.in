@@ -1,33 +1,33 @@
 using System.Text.Json;
-using Elsa.Agent.Core.Contracts;
-using Elsa.Agent.Core.Models;
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.Core.Models;
 
 namespace Acme.Home.Weaver;
 
-internal sealed class WidgetCapabilities : IAgentCapabilityProvider
+internal sealed class WidgetCapabilities : IWeaverCapabilityProvider
 {
-    public ValueTask<IReadOnlyCollection<AgentCapability>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyCollection<WeaverCapability>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult<IReadOnlyCollection<AgentCapability>>([
+        return ValueTask.FromResult<IReadOnlyCollection<WeaverCapability>>([
             new("acme.home.read", WidgetContract.Module, "Explain Acme status card", "Read current personal visibility without exposing the full Home layout.",
-                AgentCapabilityKind.Answer, AgentRisk.ReadOnly, WidgetContract.Scopes, [WidgetContract.ReadPermission], [WidgetContract.ContextType]) { Modes = ["explain"] },
+                WeaverCapabilityKind.Answer, WeaverRisk.ReadOnly, WidgetContract.Scopes, [WidgetContract.ReadPermission], [WidgetContract.ContextType]) { Modes = ["explain"] },
             new("acme.home.visibility", WidgetContract.Module, "Review Acme status card visibility", "Review showing or hiding the existing card in the current personal Home layout.",
-                AgentCapabilityKind.Proposal, AgentRisk.ReviewRequired, WidgetContract.Scopes,
+                WeaverCapabilityKind.Proposal, WeaverRisk.ReviewRequired, WidgetContract.Scopes,
                 [WidgetContract.ReadPermission, WidgetContract.WritePermission], [WidgetContract.ContextType]) { Modes = ["build"] },
             new("acme.home.size", WidgetContract.Module, "Change Acme status card size", "Set the existing personal card size to small or medium under the current session policy.",
-                AgentCapabilityKind.Action, AgentRisk.ReviewRequired, WidgetContract.Scopes,
+                WeaverCapabilityKind.Action, WeaverRisk.ReviewRequired, WidgetContract.Scopes,
                 [WidgetContract.ReadPermission, WidgetContract.WritePermission], [WidgetContract.ContextType]) { Modes = ["build"] }
         ]);
     }
 }
 
-internal sealed class WidgetContextSource(WidgetResource resource, IAgentSessionService sessions) : IAgentContextProvider
+internal sealed class WidgetContextSource(WidgetResource resource, IWeaverSessionService sessions) : IWeaverContextProvider
 {
-    public AgentContextProviderDescriptor Descriptor { get; } = new("acme.home.widget-context", WidgetContract.Module, "acme-home",
+    public WeaverContextProviderDescriptor Descriptor { get; } = new("acme.home.widget-context", WidgetContract.Module, "acme-home",
         [WidgetContract.ContextType, WidgetContract.GuidanceType], ["1"], [WidgetContract.ResourceType]);
 
-    public async ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverContextContribution> CollectAsync(WeaverContextRequest request, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -41,42 +41,42 @@ internal sealed class WidgetContextSource(WidgetResource resource, IAgentSession
             if (request.CallerAttachments.Count > 1 || request.CallerAttachments.Any(item => item.ModuleId != WidgetContract.Module ||
                     item.ContentType != WidgetContract.ContextType || item.SchemaVersion != "1" || !WidgetContract.SameTarget(item.Target, state)))
                 WidgetContract.Refuse("context_invalid", "Only a current Acme status card reference is supported.");
-            var sensitivity = request.CallerAttachments.Select(item => item.Sensitivity == AgentContextSensitivity.SecretRedacted
-                ? AgentContextSensitivity.Secret : item.Sensitivity).Append(AgentContextSensitivity.Internal).Max();
-            var canonical = new AgentContextAttachment("acme.home:widget:" + state.Document.Revision, WidgetContract.ContextType, WidgetContract.WidgetId,
+            var sensitivity = request.CallerAttachments.Select(item => item.Sensitivity == WeaverContextSensitivity.SecretRedacted
+                ? WeaverContextSensitivity.Secret : item.Sensitivity).Append(WeaverContextSensitivity.Internal).Max();
+            var canonical = new WeaverContextAttachment("acme.home:widget:" + state.Document.Revision, WidgetContract.ContextType, WidgetContract.WidgetId,
                 "Acme status card", WidgetContract.ContextType, sensitivity, WidgetContract.Route,
                 "Current personal Acme status card visibility, reread from the owning Home layout.",
                 JsonSerializer.SerializeToElement(new { widgetId = WidgetContract.WidgetId, visible = state.Visible, revision = state.Document.Revision }),
                 new Dictionary<string, string>())
             {
                 ModuleId = WidgetContract.Module, SchemaVersion = "1", Target = WidgetContract.Target(state),
-                Origin = AgentContextOrigin.AuthoritativeRead, AgentScopes = WidgetContract.Scopes
+                Origin = WeaverContextOrigin.AuthoritativeRead, WeaverScopes = WidgetContract.Scopes
             };
             return new([canonical, InstalledGuidance()], []);
         }
         catch (WidgetRefusal refusal) { return new([], [new(Descriptor.Id, refusal.Error.Code, refusal.Error.Message, true)]); }
     }
 
-    public async ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverContextContribution> AdmitDisclosureAsync(WeaverContextDisclosureRequest request, CancellationToken cancellationToken = default)
     {
         try
         {
             var session = await sessions.FindAsync(request.SessionId, cancellationToken);
-            if (session is not { Status: AgentSessionStatus.Active } || string.IsNullOrWhiteSpace(session.ActorId)
+            if (session is not { Status: WeaverSessionStatus.Active } || string.IsNullOrWhiteSpace(session.ActorId)
                 || string.IsNullOrWhiteSpace(session.TenantId) || session.ExpiresAt <= DateTimeOffset.UtcNow)
                 WidgetContract.Refuse("session_denied", "A current personal Weaver session is required.", 403);
             // The actual owner enforces current principal, tenant, host and read permission.
             // This observation does not repeat a reviewed effect or rewrite its stored receipt.
             var state = await resource.ObserveAsync(session!.ActorId, session.TenantId, false, cancellationToken);
-            var retained = new List<AgentContextAttachment>();
+            var retained = new List<WeaverContextAttachment>();
             foreach (var item in request.Context)
             {
                 if (item.ModuleId != WidgetContract.Module || item.SchemaVersion != "1")
                     WidgetContract.Refuse("disclosure_invalid", "The retained context belongs to another module or schema.");
-                if (item.ContentType == WidgetContract.GuidanceType && item.Origin == AgentContextOrigin.InstalledGuidance) continue;
+                if (item.ContentType == WidgetContract.GuidanceType && item.Origin == WeaverContextOrigin.InstalledGuidance) continue;
                 if (item.ContentType != WidgetContract.ContextType)
                     WidgetContract.Refuse("disclosure_invalid", "The retained context kind is unsupported.");
-                if (item.Sensitivity != AgentContextSensitivity.SecretRedacted)
+                if (item.Sensitivity != WeaverContextSensitivity.SecretRedacted)
                 {
                     if (!OwnTarget(item.Target))
                         WidgetContract.Refuse("disclosure_invalid", "The retained context does not identify this personal status card.");
@@ -98,17 +98,17 @@ internal sealed class WidgetContextSource(WidgetResource resource, IAgentSession
         catch (WidgetRefusal refusal) { return new([], [new(Descriptor.Id, refusal.Error.Code, refusal.Error.Message, true)]); }
     }
 
-    private static bool OwnTarget(AgentResourceTarget? target) => target is
+    private static bool OwnTarget(WeaverResourceTarget? target) => target is
         { ModuleId: WidgetContract.Module, ResourceType: WidgetContract.ResourceType, ResourceId: WidgetContract.WidgetId };
 
-    private static AgentContextAttachment InstalledGuidance() => new("acme.home:installed-guidance", "acme.home.module", null, "Acme Home guidance",
-        WidgetContract.GuidanceType, AgentContextSensitivity.Public, "module",
+    private static WeaverContextAttachment InstalledGuidance() => new("acme.home:installed-guidance", "acme.home.module", null, "Acme Home guidance",
+        WidgetContract.GuidanceType, WeaverContextSensitivity.Public, "module",
         "The Acme module reads the existing personal status card, proposes one reviewed boolean visibility change, and can set its size to exactly small or medium. " +
         "The size operation is eligible for automatic execution only when the current server session policy permits it; visibility always requires review. Use only the declared tools. " +
         "A persisted receipt confirms the personal Home layout; reload native Home to observe it. Missing personal layouts/cards, stale revisions and no-op changes are refused. " +
         "Other widgets, options and default layouts are outside this contribution. An uncertain result must be reread and never replayed automatically.",
         null, new Dictionary<string, string>())
     {
-        ModuleId = WidgetContract.Module, SchemaVersion = "1", Origin = AgentContextOrigin.InstalledGuidance, AgentScopes = []
+        ModuleId = WidgetContract.Module, SchemaVersion = "1", Origin = WeaverContextOrigin.InstalledGuidance, WeaverScopes = []
     };
 }

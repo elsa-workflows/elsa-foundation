@@ -88,6 +88,23 @@ internal sealed class ActivityDataSelectionGraph(IActivityStructureService struc
         return false;
     }
 
+    /// <summary>
+    /// Whether a run of the producer other than the one just before the consumer can lead to it, as far as the
+    /// structures know. The lowest structure holding both answers for the pair of its children; every structure above
+    /// it answers for its child that holds both, with itself, because running that child again would bring an earlier
+    /// producer run along. Any structure that does not say counts as "it can".
+    /// </summary>
+    public bool EarlierProducerRunCanReachConsumer(Location producer, Location consumer)
+    {
+        if (Assess(producer, consumer).EarlierProducerRunCanReachConsumer != false) return true;
+        for (var container = Common(producer, consumer)?.Parent; container is not null; container = container.Parent)
+        {
+            var child = ChildBelow(consumer, container).Node.NodeId;
+            if (Pair(container, child, child).EarlierProducerRunCanReachConsumer != false) return true;
+        }
+        return false;
+    }
+
     public static bool CrossesOutOfScope(Location producer, Location consumer) => producer.Parent is not null && consumer.Parent is not null
         && !ReferenceEquals(producer.Parent, consumer.Parent) && !IsAncestorOrSelf(producer.Parent, consumer.Parent);
 

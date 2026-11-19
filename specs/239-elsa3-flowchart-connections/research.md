@@ -53,6 +53,8 @@ the decisions the plan rests on.
   - Dynamic outcomes (`SendHttpRequest` status codes, `RunJavaScript` possible outcomes): a port is valid when it is
     one of the node's literal items for the facet's `source` input, or the `unmatched` name. An item list bound by
     expression cannot be checked: the connection is `GRAPH-OUTCOME-UNMAPPED` (G-1).
+    Superseded by spec 1208 (S-3), 2026-11: RunJavaScript has no `unmatched` name (its outcomes are `Done` plus its
+    possible outcomes), and its Elsa 3 `Done` maps to Elsa 4 `Done`, no longer to `Unmatched` (FR-026, #3295).
 - **Rationale**: FR-003 needs to know whether an Elsa 4 activity emits a port; the facet is the catalog's own answer
   and the CLR scanner already writes it.
 
@@ -94,6 +96,8 @@ Computed on the Elsa 3 graph before collapsing, over forward edges only (R-8).
   branch edges, or any node with two or more edges on the same Elsa 3 port. (Distinct ports of one node are
   alternatives, not fan-out, because each converted activity completes with one outcome. The spec 236 map already
   refuses or warns where an Elsa 3 activity fires several outcomes at once.)
+  Spec 1208 (S-3), 2026-11: a completion may now select several outcomes where the node's outcome set allows it;
+  a converted RunJavaScript whose script calls `setOutcomes` with several names does so. This bullet predates that.
 - **Concurrent inbound edges**: two inbound edges `e1`, `e2` of a join are concurrent when some fan-out point has two
   distinct outgoing edges `f1`, `f2` with the source of `e1` reachable from `f1` and the source of `e2` from `f2`
   (reachability over forward edges, not through the join). Different entry points (triggers) are never concurrent:

@@ -131,7 +131,7 @@ public sealed class Elsa3CollectionLoweringTests : IAsyncDisposable
         var call = Node(parentState, "call");
         var message = Input(call, "Message");
         Assert.Equal("JavaScript", message.Value.ExpressionType);
-        Assert.Contains("args.greeting", Source(message), StringComparison.Ordinal);
+        Assert.Contains("variables.greeting", Source(message), StringComparison.Ordinal);
     }
 
     public async ValueTask DisposeAsync() => await _services.DisposeAsync();

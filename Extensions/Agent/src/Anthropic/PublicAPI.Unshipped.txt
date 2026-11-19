@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Agent.Anthropic.AnthropicAgentsFeature
+Elsa.Agent.Anthropic.AnthropicAgentsFeature.AnthropicAgentsFeature() -> void
+virtual Elsa.Agent.Anthropic.AnthropicAgentsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

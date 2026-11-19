@@ -617,7 +617,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             candidate => candidate.Attribute!.Key ?? candidate.Property.Name,
             candidate => NormalizeBinding(node, candidate.Property, candidate.Attribute!),
             StringComparer.Ordinal);
-        var outcomes = ResolveOutcomes(node, activityType);
+        var outcomes = ResolveOutcomes(node, activityType, bindings);
         var contract = NewActivityContract(activityType, descriptor, inputs, outcomes);
 
         return CopyNode(node, childSlots, descriptor.Payload, bindings, contract, WithStructuralFaultHandling(node.Metadata, activityType));
@@ -734,6 +734,10 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             // A secret read keeps its own policy: it is what makes the withheld input render as sensitive.
             RuntimeInputBindingSource.SecretRead => new RuntimeInputBinding(
                 key, type, binding.EffectivePolicy, binding.Source, metadata: binding.Metadata, conversionPlan: binding.ConversionPlan, secret: binding.Secret),
+            // A member read keeps its role payload and selection, so the engine, not the harness, decides what to do with it.
+            RuntimeInputBindingSource.WorkflowRequestMember or RuntimeInputBindingSource.VariableMember or RuntimeInputBindingSource.ActivityResultMember =>
+                new RuntimeInputBinding(key, type, ValueProtectionPolicy.InstanceInline, binding.Source, binding.Selection,
+                    workflowRequest: binding.WorkflowRequest, variable: binding.Variable, activityResult: binding.ActivityResult, metadata: binding.Metadata),
             _ => throw new InvalidOperationException(
                 $"Test executable input '{key}' on node '{node.ExecutableNodeId}' still uses legacy binding source '{binding.Source}'.")
         };
@@ -759,7 +763,12 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         return property.PropertyType.IsValueType ? Activator.CreateInstance(property.PropertyType) : null;
     }
 
-    private static IReadOnlyCollection<string> ResolveOutcomes(ExecutableNode node, Type activityType)
+    // Mirrors ExecutableNodeCompiler.ResolveOutcomes (spec 1208): static outcomes, Switch case labels, the BPMN
+    // transaction outcome and value-derived outcomes with the Done rule.
+    private static IReadOnlyCollection<string> ResolveOutcomes(
+        ExecutableNode node,
+        Type activityType,
+        IReadOnlyDictionary<string, RuntimeInputBinding> bindings)
     {
         var outcomes = activityType.GetCustomAttributes<ActivityOutcomeAttribute>(inherit: true)
             .Select(attribute => attribute.Key)
@@ -784,9 +793,41 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             outcomes.Add("Cancelled");
         }
 
+        AddValueDerivedOutcomes(activityType, bindings, outcomes);
+
         if (outcomes.Count == 0)
             outcomes.Add(ActivityOutcomes.Done);
         return outcomes.ToArray();
+    }
+
+    private static void AddValueDerivedOutcomes(Type activityType, IReadOnlyDictionary<string, RuntimeInputBinding> bindings, HashSet<string> outcomes)
+    {
+        var declaration = activityType.GetCustomAttribute<ActivityValueOutcomesAttribute>(inherit: true);
+        if (declaration is null || !bindings.TryGetValue(declaration.InputKey, out var binding) ||
+            binding.LiteralValue is not { ValueKind: JsonValueKind.Array } array)
+            return;
+
+        var added = false;
+        foreach (var item in array.EnumerateArray())
+        {
+            var name = item.ValueKind switch
+            {
+                JsonValueKind.String => item.GetString(),
+                JsonValueKind.Number => item.GetRawText(),
+                _ => null
+            };
+            if (!string.IsNullOrWhiteSpace(name) && outcomes.Add(name))
+                added = true;
+        }
+
+        if (!added)
+            return;
+        if (declaration.UnmatchedOutcome is { } unmatched)
+            outcomes.Add(unmatched);
+        if (declaration.SelectsOnEveryCompletion)
+            outcomes.Remove(ActivityOutcomes.Done);
+        else
+            outcomes.Add(ActivityOutcomes.Done);
     }
 
     private static RuntimeInputBinding NewLiteralBinding(string key, ValueTypeDescriptor type, object? value)

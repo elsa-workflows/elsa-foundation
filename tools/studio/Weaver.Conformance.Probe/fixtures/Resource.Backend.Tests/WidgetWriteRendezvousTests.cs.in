@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Acme.Home.Weaver;
-using Elsa.Agent.Core.Contracts;
+using Elsa.Weaver.Core.Contracts;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Studio.Preferences.Core.Contracts;
@@ -232,7 +232,7 @@ public sealed class WidgetWriteRendezvousTests
         var services = new ServiceCollection();
         services.AddSingleton<IHttpContextAccessor>(env.Http); services.AddSingleton<IAuthSessionService>(env.Auth);
         services.AddSingleton<IPermissionAuthorizationService>(env.Permissions); services.AddSingleton<IStudioPreferenceService>(env.Preferences);
-        services.AddSingleton<IAgentSessionService>(env.Sessions);
+        services.AddSingleton<IWeaverSessionService>(env.Sessions);
         new AcmeHomeWidgetFeature { StudioHostId = WidgetTestEnvironment.HostId, WriteRendezvousControlFile = files.Control,
             WriteRendezvousReceiptFile = files.Receipt }.ConfigureServices(services);
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });

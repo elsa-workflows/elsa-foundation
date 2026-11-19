@@ -442,8 +442,20 @@
           "name": "Outcome",
           "type": "String",
           "collectionKind": "Single",
-          "isRequired": true,
-          "isNullable": false,
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "outcomes",
+          "name": "Outcomes",
+          "type": "String",
+          "collectionKind": "List",
+          "isRequired": false,
+          "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
           "defaultSyntax": null,
@@ -823,6 +835,7 @@
         ],
         "dynamic": {
           "kind": "valuePerItem",
+          "selectsOnEveryCompletion": true,
           "source": "ExpectedStatusCodes",
           "unmatched": "Unmatched status code"
         }
@@ -1100,7 +1113,7 @@
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
-          "uiHint": null,
+          "uiHint": "user-task-form-version",
           "defaultValue": null,
           "defaultSyntax": null,
           "uiSpecifications": null
@@ -1137,7 +1150,7 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": "{}",
+          "defaultValue": {},
           "defaultSyntax": "Object",
           "uiSpecifications": null
         },
@@ -1188,6 +1201,7 @@
         "ports": [],
         "dynamic": {
           "kind": "valuePerItem",
+          "selectsOnEveryCompletion": true,
           "source": "Actions",
           "unmatched": "Unmatched"
         }
@@ -1627,7 +1641,7 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": "{}",
+          "defaultValue": {},
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1672,8 +1686,8 @@
         "ports": [],
         "dynamic": {
           "kind": "valuePerItem",
-          "source": "possibleOutcomes",
-          "unmatched": "Unmatched"
+          "selectsOnEveryCompletion": false,
+          "source": "possibleOutcomes"
         }
       },
       "structure": null

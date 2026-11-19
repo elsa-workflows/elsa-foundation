@@ -23,7 +23,8 @@ dotnet test Essentials/tests/Workflows/Runtime/Tests --filter "FullyQualifiedNam
    - Without a correlation ID, it writes `null`.
 4. **Refusals.**
    - `newGuid()` is refused, and the guidance names `getWorkflowInstanceId()`.
-   - `setOutcome('x')` is refused, and the guidance names Decision and Switch.
+   - `setOutcome('x')` is refused, and the guidance names Decision and Switch. Superseded by spec 1208 (S-3): in a
+     RunJavaScript script it converts to `return complete(<value>, ['x'])`; it stays refused in input expressions.
 5. **Corpus measurement** (local only; the harness and the corpus are never committed):
    - Rerun the throwaway probe over the JTest workflow definitions.
    - Expect 0 parse refusals (SC-001), and at least 7 of 33 definitions with fully converting JavaScript (SC-002).

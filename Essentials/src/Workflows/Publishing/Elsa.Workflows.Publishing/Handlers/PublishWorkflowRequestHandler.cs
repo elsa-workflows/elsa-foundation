@@ -132,10 +132,20 @@ public sealed class PublishWorkflowRequestHandler(
 
         var resolved = plan.ResolvedAction;
         var slot = plan.Slot;
+        IReadOnlyList<string> warnings = [];
         if (slot is { ActiveActivationId: { } activePublicationId, Source: { } activeSource } &&
             activeSource.IsSameOwnerAs(PublicationActivator.Source))
         {
             var current = await publicationStore.FindAsync(activePublicationId, cancellationToken);
+            // Spec 1222 FR-024: a literal script read that now resolves to another declaration than the version being
+            // replaced is a warning.
+            if (current is not null && !StringComparer.Ordinal.Equals(current.ArtifactId, identity.ArtifactId))
+            {
+                warnings = ScriptReadShadowChanges.Find(await executableStore.FindAsync(current.ArtifactId, cancellationToken), executable);
+                foreach (var warning in warnings)
+                    logger?.LogWarning("Publish: {Warning}", warning);
+            }
+
             if (current is not null &&
                 StringComparer.Ordinal.Equals(current.ArtifactId, identity.ArtifactId) &&
                 plan.Result.Changes.All(change => change.Change == PublicationTriggerChangeKind.Retained))
@@ -180,7 +190,10 @@ public sealed class PublishWorkflowRequestHandler(
                     "but its source reference is gone. It is not reported as published."));
         }
 
-        return PublishedWorkflowView.From(executable, reference, activation.Publication);
+        return PublishedWorkflowView.From(executable, reference, activation.Publication) with
+        {
+            Warnings = warnings.Count == 0 ? null : warnings
+        };
     }
 
     /// <summary>

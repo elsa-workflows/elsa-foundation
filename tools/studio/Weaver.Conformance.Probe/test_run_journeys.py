@@ -314,11 +314,11 @@ class RunBrowserAndGateTests(unittest.TestCase):
                 ("run-control-offered", {**synthetic_native(), "controls-refused": {"control": "controls-refused", "unchanged": True,
                                                                                       "offered": [RUN_TOOL, "workflow_retry_run"]}}, None),
                 ("run-tool-missing", {**synthetic_native(), "controls-refused": {"control": "controls-refused", "unchanged": True, "offered": []}}, None),
-                ("shape", {**synthetic_native(), "runtime-agent-absent": {"control": "runtime-agent-absent", "code": "other"}}, None),
+                ("shape", {**synthetic_native(), "runtime-weaver-absent": {"control": "runtime-weaver-absent", "code": "other"}}, None),
                 ("canary", None, {"files": 3, "found": 1}), ("no-files", None, {"files": 0, "found": 0})):
             with self.subTest(change=name), self.assertRaises(RuntimeError):
                 require_workflow_run(self.section(native, search), self.root, source="a" * 40)
-        self.assertEqual(ADMISSION_REFUSAL["code"], synthetic_native()["runtime-agent-absent"]["code"])
+        self.assertEqual(ADMISSION_REFUSAL["code"], synthetic_native()["runtime-weaver-absent"]["code"])
 
 
 class RunBrowserFailureDiagnosticTests(unittest.TestCase):

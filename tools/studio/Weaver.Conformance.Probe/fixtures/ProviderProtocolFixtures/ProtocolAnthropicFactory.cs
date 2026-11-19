@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using Elsa.Agent.Anthropic.Services;
+using Elsa.Weaver.Anthropic.Services;
 using Microsoft.Extensions.AI;
 
 namespace Acme.Weaver.ProtocolFixtures;

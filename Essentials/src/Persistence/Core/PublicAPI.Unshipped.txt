@@ -110,3 +110,34 @@ Elsa.Persistence.Core.SourceWorkingCopy.SourceIdentity.get -> string?
 Elsa.Persistence.Core.SourceWorkingCopy.SourceIdentity.set -> void
 Elsa.Persistence.Core.ISourceRevisionWriter.SaveAsync(string! sourceId, string! copyId, long expectedRevision, string! name, string! profile, string! content, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourceWorkingCopy!>!
 Elsa.Persistence.Core.ISourceRevisionReader.FindSnapshotAsync(string! sourceId, string! copyId, string! snapshotId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourceSnapshot?>!
+Elsa.Persistence.Core.ISourceRevisionReader.ListSourcesAsync(string? search, int skip, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourcePage!>!
+Elsa.Persistence.Core.ISourceRevisionReader.FindSourceSnapshotAsync(string! sourceId, string! snapshotId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourceSnapshotRead?>!
+Elsa.Persistence.Core.ISourceRevisionReader.HistorySourceAsync(string! sourceId, int skip = 0, int take = 50, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Persistence.Core.SourceSnapshotPage!>!
+Elsa.Persistence.Core.SourceSnapshotRead
+Elsa.Persistence.Core.SourceSnapshotRead.<Clone>$() -> Elsa.Persistence.Core.SourceSnapshotRead!
+Elsa.Persistence.Core.SourceSnapshotRead.Deconstruct(out string! CopyId, out Elsa.Persistence.Core.SourceSnapshot! Snapshot) -> void
+Elsa.Persistence.Core.SourceSnapshotRead.Equals(Elsa.Persistence.Core.SourceSnapshotRead? other) -> bool
+Elsa.Persistence.Core.SourceSnapshotRead.SourceSnapshotRead(string! CopyId, Elsa.Persistence.Core.SourceSnapshot! Snapshot) -> void
+Elsa.Persistence.Core.SourceSnapshotRead.CopyId.get -> string!
+Elsa.Persistence.Core.SourceSnapshotRead.CopyId.init -> void
+Elsa.Persistence.Core.SourceSnapshotRead.Snapshot.get -> Elsa.Persistence.Core.SourceSnapshot!
+Elsa.Persistence.Core.SourceSnapshotRead.Snapshot.init -> void
+override Elsa.Persistence.Core.SourceSnapshotRead.Equals(object? obj) -> bool
+override Elsa.Persistence.Core.SourceSnapshotRead.GetHashCode() -> int
+override Elsa.Persistence.Core.SourceSnapshotRead.ToString() -> string!
+static Elsa.Persistence.Core.SourceSnapshotRead.operator !=(Elsa.Persistence.Core.SourceSnapshotRead? left, Elsa.Persistence.Core.SourceSnapshotRead? right) -> bool
+static Elsa.Persistence.Core.SourceSnapshotRead.operator ==(Elsa.Persistence.Core.SourceSnapshotRead? left, Elsa.Persistence.Core.SourceSnapshotRead? right) -> bool
+Elsa.Persistence.Core.SourceSnapshotPage
+Elsa.Persistence.Core.SourceSnapshotPage.<Clone>$() -> Elsa.Persistence.Core.SourceSnapshotPage!
+Elsa.Persistence.Core.SourceSnapshotPage.Deconstruct(out int Total, out System.Collections.Generic.IReadOnlyList<Elsa.Persistence.Core.SourceSnapshotRead!>! Items) -> void
+Elsa.Persistence.Core.SourceSnapshotPage.Equals(Elsa.Persistence.Core.SourceSnapshotPage? other) -> bool
+Elsa.Persistence.Core.SourceSnapshotPage.SourceSnapshotPage(int Total, System.Collections.Generic.IReadOnlyList<Elsa.Persistence.Core.SourceSnapshotRead!>! Items) -> void
+Elsa.Persistence.Core.SourceSnapshotPage.Total.get -> int
+Elsa.Persistence.Core.SourceSnapshotPage.Total.init -> void
+Elsa.Persistence.Core.SourceSnapshotPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Persistence.Core.SourceSnapshotRead!>!
+Elsa.Persistence.Core.SourceSnapshotPage.Items.init -> void
+override Elsa.Persistence.Core.SourceSnapshotPage.Equals(object? obj) -> bool
+override Elsa.Persistence.Core.SourceSnapshotPage.GetHashCode() -> int
+override Elsa.Persistence.Core.SourceSnapshotPage.ToString() -> string!
+static Elsa.Persistence.Core.SourceSnapshotPage.operator !=(Elsa.Persistence.Core.SourceSnapshotPage? left, Elsa.Persistence.Core.SourceSnapshotPage? right) -> bool
+static Elsa.Persistence.Core.SourceSnapshotPage.operator ==(Elsa.Persistence.Core.SourceSnapshotPage? left, Elsa.Persistence.Core.SourceSnapshotPage? right) -> bool

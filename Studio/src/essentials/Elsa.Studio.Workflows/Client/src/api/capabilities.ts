@@ -5,6 +5,7 @@ import { assertSafePathSegments } from "./pathSegments";
 export const capabilityIds = {
   workflowDesign: "elsa.api.workflow-design",
   activityDesign: "elsa.api.activity-design",
+  activityDataSelection: "elsa.api.activity-data-selection",
   expressions: "elsa.api.expressions",
   expressionTooling: "expressions.tooling.v1",
   publishing: "elsa.api.publishing",
@@ -22,6 +23,7 @@ export type ApiCapabilityId = typeof capabilityIds[keyof typeof capabilityIds];
 const supportedContractVersions: Record<ApiCapabilityId, string> = {
   [capabilityIds.workflowDesign]: "1",
   [capabilityIds.activityDesign]: "1",
+  [capabilityIds.activityDataSelection]: "1",
   [capabilityIds.expressions]: "1",
   [capabilityIds.expressionTooling]: "1",
   [capabilityIds.publishing]: "1",

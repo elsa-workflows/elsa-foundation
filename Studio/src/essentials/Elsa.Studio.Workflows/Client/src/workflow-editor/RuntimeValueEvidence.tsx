@@ -343,6 +343,12 @@ function DiagnosticSnapshotReference({ node }: { node: DiagnosticSnapshotPayload
   );
 }
 
+export function RuntimeCapturedValue({ value, captureMode }: { value: unknown; captureMode?: string | null }) {
+  return captureMode === "DiagnosticSnapshot" && isDiagnosticSnapshotNode(value)
+    ? <DiagnosticSnapshotTree node={value} />
+    : <RuntimeInputPayload payload={value} />;
+}
+
 function RuntimeInputPayload({ payload }: { payload: unknown }) {
   const text = formatSnapshotPayload(payload);
   const displayText = text.length === 0 ? '""' : text;

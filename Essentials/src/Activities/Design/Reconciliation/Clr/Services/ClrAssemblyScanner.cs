@@ -49,6 +49,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
     private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
+    private static readonly string ActivityScriptOutcomesAttributeFullName = typeof(ActivityScriptOutcomesAttribute).FullName!;
     private static readonly string ActivityAttributeFullName = typeof(ActivityAttribute).FullName!;
     private static readonly string RefusesSecretBindingAttributeFullName = typeof(RefusesSecretBindingAttribute).FullName!;
     private static readonly string ReplacesActivityTypeAttributeFullName = typeof(ReplacesActivityTypeAttribute).FullName!;
@@ -165,10 +166,22 @@ public sealed class ClrAssemblyScanner(
                 defaultSyntax ??= "Connection";
             }
 
+            // Spec 1231 FR-022: a VariableReference<T> or ReadOnlyVariableReference<T> input binds a declared variable. Its
+            // catalog type is T, the value type the activity reads; its direction is recorded beside it.
+            var inputType = property.PropertyType;
+            string? variableAccess = null;
+            if (VariableReferenceTypes.TryGet(property.PropertyType, out var access, out var valueType))
+            {
+                inputType = valueType;
+                variableAccess = access == ActivityVariableAccess.ReadWrite ? InputVariableAccess.ReadWrite : InputVariableAccess.Read;
+                uiHint ??= InputVariableAccess.UiHint;
+                defaultSyntax ??= InputVariableAccess.ExpressionType;
+            }
+
             inputs.Add(new InputDefinition(
                 ReferenceKey: key,
                 Name: property.Name,
-                Type: ToTypeReference(property.PropertyType),
+                Type: ToTypeReference(inputType),
                 StorageDriverType: null,
                 DisplayName: metadata.DisplayName ?? property.Name.Humanize(),
                 Category: metadata.Category,
@@ -177,7 +190,7 @@ public sealed class ClrAssemblyScanner(
                 Order: metadata.Order,
                 UiHint: uiHint,
                 UISpecifications: metadata.UiSpecifications,
-                IsRequired: HasRequired(property),
+                IsRequired: variableAccess is not null || HasRequired(property),
                 DefaultValue: metadata.DefaultValue,
                 DefaultSyntax: defaultSyntax,
                 // Null rather than false when not declared, so an input that declares nothing keeps its catalog hash.
@@ -186,7 +199,8 @@ public sealed class ClrAssemblyScanner(
                 // Presentation only, but part of the descriptor hash: a tier-only change on an existing version
                 // is refreshed in place by reconciliation instead of raising a hash mismatch.
                 Tier: metadata.Tier,
-                ConnectionType: string.IsNullOrWhiteSpace(connectionType) ? null : connectionType));
+                ConnectionType: string.IsNullOrWhiteSpace(connectionType) ? null : connectionType,
+                VariableAccess: variableAccess));
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -284,6 +298,16 @@ public sealed class ClrAssemblyScanner(
         if (outcomesFacet is not null)
             facets.Add(outcomesFacet);
 
+        // Spec 1231 FR-026: the free-name marker is part of the descriptor.
+        // The marker (inherited) or an engine script activity: the same fact the runtime contract pins.
+        if (VariableReferenceTypes.AccessesUndeclaredVariables(type))
+        {
+            facets.Add(new ActivityDesignFacet(
+                VariableAccessDesignFacet.Kind,
+                VariableAccessDesignFacet.SchemaVersion,
+                JsonSerializer.SerializeToElement(new Dictionary<string, bool> { [VariableAccessDesignFacet.AccessesUndeclaredVariablesMember] = true })));
+        }
+
         var iconFacet = BuildIconFacet(type);
         if (iconFacet is not null)
             facets.Add(iconFacet);
@@ -353,6 +377,7 @@ public sealed class ClrAssemblyScanner(
         var outcomes = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         CustomAttributeData? valueOutcomes = null;
+        string? scriptInput = null;
 
         for (var current = (Type?)type; current is not null; current = current.BaseType)
         {
@@ -361,6 +386,13 @@ public sealed class ClrAssemblyScanner(
                 if (attribute.AttributeType.FullName == ActivityValueOutcomesAttributeFullName)
                 {
                     valueOutcomes ??= attribute;
+                    continue;
+                }
+
+
+                if (attribute.AttributeType.FullName == ActivityScriptOutcomesAttributeFullName)
+                {
+                    scriptInput ??= attribute.ConstructorArguments is [{ Value: string scriptKey }] ? scriptKey : null;
                     continue;
                 }
 
@@ -373,14 +405,17 @@ public sealed class ClrAssemblyScanner(
         }
 
         var dynamicOutcomes = BuildDynamicOutcomesDescriptor(valueOutcomes);
-        if (outcomes.Count == 0 && dynamicOutcomes is null)
+        if (outcomes.Count == 0 && dynamicOutcomes is null && scriptInput is null)
             return null;
 
         var ports = outcomes.Select(name => new { name, type = "outcome" }).ToArray();
-        var payload = dynamicOutcomes is null
-            ? JsonSerializer.SerializeToElement(new { ports }, SerializerOptions)
-            : JsonSerializer.SerializeToElement(new { ports, dynamicOutcomes }, SerializerOptions);
-        return new ActivityDesignFacet("elsa.outcomes", "1", payload);
+        var payload = new Dictionary<string, object> { ["ports"] = ports };
+        if (dynamicOutcomes is not null)
+            payload["dynamicOutcomes"] = dynamicOutcomes;
+        // The input whose script selects with complete(result, outcomes); draft validation checks its literal names.
+        if (!string.IsNullOrWhiteSpace(scriptInput))
+            payload["scriptInput"] = scriptInput;
+        return new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(payload, SerializerOptions));
     }
 
     /// <summary>
@@ -395,14 +430,26 @@ public sealed class ClrAssemblyScanner(
             string.IsNullOrWhiteSpace(sourceInput))
             return null;
 
-        var unmatched = ReadNamedStringArgument(attribute, nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome));
-        return new
+        // Absent means the attribute's default catch-all; an explicit null declares none (a RunJavaScript, spec 1208).
+        // A default CustomAttributeNamedArgument has no member, so look the arguments up by name instead of FirstOrDefault.
+        var named = attribute.NamedArguments.ToDictionary(argument => argument.MemberName, argument => argument.TypedValue.Value, StringComparer.Ordinal);
+        var unmatched = named.TryGetValue(nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome), out var unmatchedValue)
+            ? unmatchedValue as string
+            : "Unmatched";
+        var selectsOnEveryCompletion = !named.TryGetValue(nameof(ActivityValueOutcomesAttribute.SelectsOnEveryCompletion), out var selects) || selects is true;
+        var descriptor = new Dictionary<string, object>
         {
-            kind = "valuePerItem",
-            source = sourceInput,
-            unmatched = string.IsNullOrWhiteSpace(unmatched) ? "Unmatched" : unmatched
+            ["kind"] = "valuePerItem",
+            ["source"] = sourceInput,
+            // With items configured: true drops Done (every completion selects an item or the catch-all), false keeps
+            // Done next to the items (the Done rule, ADR 0045 §6).
+            ["selectsOnEveryCompletion"] = selectsOnEveryCompletion
         };
+        if (!string.IsNullOrWhiteSpace(unmatched))
+            descriptor["unmatched"] = unmatched;
+        return descriptor;
     }
+
 
     private static ActivityChildSlotDesignDescriptor ToSlotDescriptor(CustomAttributeData attribute) =>
         new(
@@ -952,8 +999,40 @@ public sealed class ClrAssemblyScanner(
             return JsonSerializer.SerializeToElement(doubleValue);
         if (typeName == typeof(decimal).FullName && decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue))
             return JsonSerializer.SerializeToElement(decimalValue);
+        if (IsJsonType(valueType) && TryParseJson(value, out var jsonValue))
+            return jsonValue;
 
         return JsonSerializer.SerializeToElement(value);
+    }
+
+    // A JSON-typed input declares its default as JSON text (`DefaultValue = "{}"`). Read it as that JSON value,
+    // not as a JSON string holding the text: an unbound input compiles its default as a literal, so a string
+    // here would reach the activity as a string instead of an object (issue #3195).
+    private static bool IsJsonType(Type? valueType)
+    {
+        if (valueType is { IsGenericType: true } &&
+            StringComparer.Ordinal.Equals(valueType.GetGenericTypeDefinition().FullName, typeof(Nullable<>).FullName))
+            valueType = valueType.GetGenericArguments()[0];
+
+        return valueType?.FullName is "System.Text.Json.JsonElement"
+            or "System.Text.Json.Nodes.JsonNode"
+            or "System.Text.Json.Nodes.JsonObject"
+            or "System.Text.Json.Nodes.JsonArray";
+    }
+
+    private static bool TryParseJson(string value, out JsonElement element)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(value);
+            element = document.RootElement.Clone();
+            return true;
+        }
+        catch (JsonException)
+        {
+            element = default;
+            return false;
+        }
     }
 
     private sealed record ActivityInputMetadata(

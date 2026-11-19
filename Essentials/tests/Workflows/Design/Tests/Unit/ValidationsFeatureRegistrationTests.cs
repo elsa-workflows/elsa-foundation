@@ -42,6 +42,19 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.DoesNotContain(validatorTypes, type => type.Name.Contains("Orphan", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void Feature_registers_the_script_variable_read_services()
+    {
+        // Spec 1222: the draft check, the resolver publish pins with, and the rename planner.
+        using var provider = BuildProvider(_ => { });
+        using var scope = provider.CreateScope();
+
+        Assert.Contains(typeof(ScriptVariableReadValidator), scope.ServiceProvider.GetServices<IDraftValidator>().Select(v => v.GetType()));
+        Assert.NotNull(scope.ServiceProvider.GetService<Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver>());
+        Assert.IsType<Elsa.Workflows.Design.Validations.Services.ScriptVariableRenamePlanner>(
+            scope.ServiceProvider.GetService<Elsa.Workflows.Design.Core.Contracts.IScriptVariableRenamePlanner>());
+    }
+
     // Kept beside the composition test: uniqueness, exactly one DraftValidating handler.
     [Fact]
     public void Feature_registers_exactly_one_DraftValidating_handler()
@@ -163,6 +176,43 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.IsType<SecondAnalyzer>(Assert.Single(scope.ServiceProvider.GetServices<IActivityDataSelectionAnalyzer>()));
     }
 
+    // Spec 266: the write-order analyzer is a single-implementation replacement contract.
+    [Theory]
+    [InlineData("duplicate")]
+    [InlineData("missing")]
+    [InlineData("scoped")]
+    public async Task The_write_order_analyzer_must_be_one_singleton(string invalid)
+    {
+        using var provider = BuildProvider(_ => { }, services =>
+        {
+            if (invalid == "duplicate")
+                services.AddSingleton<IUnorderedVariableWriteAnalyzer, SecondWriteOrderAnalyzer>();
+            else
+                services.RemoveAll<IUnorderedVariableWriteAnalyzer>();
+            if (invalid == "scoped")
+                services.AddScoped<IUnorderedVariableWriteAnalyzer, SecondWriteOrderAnalyzer>();
+        });
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+        Assert.Contains(nameof(IUnorderedVariableWriteAnalyzer), failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_feature_composes_one_singleton_write_order_analyzer()
+    {
+        using var provider = BuildProvider(_ => { });
+
+        Assert.Null(await Record.ExceptionAsync(() => InitializeShellAsync(provider)));
+        Assert.Same(provider.GetRequiredService<IUnorderedVariableWriteAnalyzer>(), provider.GetRequiredService<IUnorderedVariableWriteAnalyzer>());
+    }
+
+    private sealed class SecondWriteOrderAnalyzer : IUnorderedVariableWriteAnalyzer
+    {
+        public Elsa.Workflows.Design.Validations.Core.Models.UnorderedVariableWriteAnalysis Analyze(
+            Elsa.Workflows.Design.Core.Models.ActivityNode root, Elsa.Workflows.Design.Core.Contracts.IActivityStructureService structures, bool includeIntrinsics, CancellationToken cancellationToken = default) =>
+            new([], []);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -216,6 +266,39 @@ public sealed class ValidationsFeatureRegistrationTests
         await SourceInitializer(childProvider).InitializeAsync();
         Assert.Single(child, descriptor => descriptor.ServiceType == typeof(IActivityDataSelectionAnalyzer));
     }
+
+    [Fact]
+    public async Task A_second_rename_planner_fails_the_shell_at_start()
+    {
+        // Spec 1222, framework 2.6.2: a replacement contract never wins silently.
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<Elsa.Workflows.Design.Core.Contracts.IScriptVariableRenamePlanner, Elsa.Workflows.Design.Validations.Services.ScriptVariableRenamePlanner>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(provider).InitializeAsync());
+
+        Assert.Contains("IScriptVariableRenamePlanner", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Two_read_analyzers_for_one_language_fail_the_shell_at_start()
+    {
+        using var provider = BuildProvider(_ => { }, services =>
+        {
+            services.AddSingleton<Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer>(new LanguageAnalyzer("JavaScript"));
+            services.AddSingleton<Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer>(new OtherLanguageAnalyzer("JavaScript"));
+        });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(provider).InitializeAsync());
+
+        Assert.Contains("'JavaScript'", exception.Message, StringComparison.Ordinal);
+    }
+
+    private class LanguageAnalyzer(string language) : Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer
+    {
+        public string Language => language;
+        public Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? Analyze(string source, bool scriptBody = false) => null;
+    }
+
+    private sealed class OtherLanguageAnalyzer(string language) : LanguageAnalyzer(language);
 
     private static IShellInitializer SourceInitializer(IServiceProvider provider) => Assert.Single(
         provider.GetServices<IShellInitializer>(), initializer => initializer.GetType().Name == "DataSelectionAnalyzerCompositionCheck");

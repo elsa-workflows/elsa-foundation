@@ -1,11 +1,11 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { HumanReviewPage } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/HumanReviewPage";
-import type { HumanReviewView, ReceiptStatus } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/reviewsApi";
+import { HumanReviewPage } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/HumanReviewPage";
+import type { HumanReviewView, ReceiptStatus } from "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/reviewsApi";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../../Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/styles.css";
+import "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/styles.css";
 
 // A durable fake backend: state lives in sessionStorage so a page reload behaves like a server that survived.
 const scenario = new URLSearchParams(window.location.search).get("scenario") ?? "default";

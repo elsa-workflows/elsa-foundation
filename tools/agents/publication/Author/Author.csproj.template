@@ -2,7 +2,7 @@
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Acme.Specialists.Design" Version="__VERSION__" />
+    <PackageReference Include="Acme.Agents.Design" Version="__VERSION__" />
     <PackageReference Include="Elsa.Workflows.Publishing.Api" Version="__VERSION__" />
     <PackageReference Include="Elsa.Events" Version="__VERSION__" />
     <PackageReference Include="Elsa.Workflows.Design.Validations" Version="__VERSION__" />

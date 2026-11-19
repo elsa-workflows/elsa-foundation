@@ -6,7 +6,7 @@ import { errorType, parseValidationErrorPath } from "../validationDiagnostics";
 import { isPlainRecord } from "../workflowProperties";
 
 // Spec 1193 slice D (FR-014, FR-016–FR-018): what an explanation of the active draft may read, beyond its graph. The server
-// admits each part strictly (WorkflowAgentExplainContext), so the shapes and bounds here are the same contract.
+// admits each part strictly (WorkflowWeaverExplainContext), so the shapes and bounds here are the same contract.
 
 /** The diagnostics one snapshot discloses; beyond this the count of the rest is reported. */
 export const workflowContextMaxDiagnostics = 64;
@@ -182,7 +182,7 @@ export function hostSerializedLength(value: unknown) {
 }
 
 /**
- * The host-measured length of the server's admitted projection of this snapshot content (`WorkflowAgentSnapshot.TryRead`):
+ * The host-measured length of the server's admitted projection of this snapshot content (`WorkflowWeaverSnapshot.TryRead`):
  * only the admitted fields, activities as id, type and display name, every connection with both ports, and the server's
  * interpretation status on each non-literal expression. The host bounds that projection, not what the editor sends, so the
  * size guard measures this.

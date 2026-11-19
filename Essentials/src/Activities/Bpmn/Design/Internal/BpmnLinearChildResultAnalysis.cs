@@ -15,8 +15,10 @@ internal sealed class BpmnLinearChildResultAnalysis(IReadOnlyList<string> childr
         var consumerIndex = Index(consumer);
         return producerIndex < 0 || consumerIndex < 0
             ? new(ActivityChildResultAvailability.Unknown)
+            // The proven shape is one unconditional chain without loops, so each task runs once per process run.
             : new(producerIndex < consumerIndex ? ActivityChildResultAvailability.Definite : ActivityChildResultAvailability.Unavailable,
-                IsCyclicBackEdge: false, MayRunConcurrently: false, AreMutuallyExclusive: false);
+                IsCyclicBackEdge: false, MayRunConcurrently: false, AreMutuallyExclusive: false)
+            { EarlierProducerRunCanReachConsumer = false };
     }
 
     public IReadOnlyList<string>? CompletedBefore(string consumer)

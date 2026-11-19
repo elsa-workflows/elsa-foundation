@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
-using Acme.Specialists.Design;
-using Acme.Specialists.Runtime;
+using Acme.Agents.Design;
+using Acme.Agents.Runtime;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
@@ -38,12 +38,12 @@ await using var publishing = new PublishingSnapshotReviewSqliteDbContext(new DbC
 await design.Database.EnsureCreatedAsync(); await runtime.Database.EnsureCreatedAsync(); await publishing.Database.EnsureCreatedAsync();
 var access = new Access();
 var stores = new EfActivityDesignStores(design, access, null, new EfActivityManagementProjectionWriter(design, access));
-var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "specialist-research-private-fixture-32-bytes", AllowEphemeralDevelopmentKey = false }));
+var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "agent-research-private-fixture-32-bytes", AllowEphemeralDevelopmentKey = false }));
 var templates = new EfExecutableActivityTemplateStore(runtime, access, codec);
 var sources = new EfWorkflowExecutableSourceReferenceStore(runtime, access, codec);
 var receipts = new EfActivityPublicationReceiptStore(publishing, access);
 var commit = new EfActivityPublicationCommand(receipts, templates, sources, stores, access);
-var provider = new SpecialistProvider();
+var provider = new AgentProvider();
 var admissionServices = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
 admissionServices.AddLogging();
 new Elsa.Events.EventsFeature().ConfigureServices(admissionServices);
@@ -60,14 +60,14 @@ var compiler = new ActivityTemplateCompiler(new ActivityTemplateProviderCompiler
 var validator = new ActivityDraftValidator(new ActivityProviderRegistry([provider]), new ActivityContractAuthoringValidator(new Capabilities()), TimeProvider.System);
 var publisher = new ActivityDefinitionPublisher(stores, stores, stores, stores, stores, stores, validator,
     new ActivityVersionDiffer(), compiler, access, commit, new SingleProcessLock(), new Ids(), TimeProvider.System,
-    receipts, control == "missing-consumer" ? [] : [new SpecialistActivationStrategy(new UnusedClient())],
+    receipts, control == "missing-consumer" ? [] : [new AgentActivationStrategy(new UnusedClient())],
     new RuntimeDurableValueStorageDriverRegistry(control == "missing-storage" ? [] : [new JsonRuntimeDurableValueStorageDriver()]));
 var now = DateTimeOffset.UtcNow;
 var schema = JsonSerializer.SerializeToElement(new { type = "object", properties = new { article = new { type = "string" } }, required = new[] { "article" }, additionalProperties = false });
-var descriptor = new SpecialistDescriptor("copywriter-v1", "Write the supplied brief.", "fixture-model", schema);
-var state = new ActivityDefinitionDraftState(SpecialistProvider.Contract(), new("acme.specialist", "1", JsonSerializer.SerializeToElement(descriptor)), new Dictionary<string, string>());
+var descriptor = new AgentDescriptor("copywriter-v1", "Write the supplied brief.", "fixture-model", schema);
+var state = new ActivityDefinitionDraftState(AgentProvider.Contract(), new("acme.agent", "1", JsonSerializer.SerializeToElement(descriptor)), new Dictionary<string, string>());
 await stores.ExecuteAsync(new CreateActivityDefinitionRequest(
-    new ActivityDefinition { Id = "copywriter", ActivityTypeKey = "acme.copywriter", Category = "Specialists", DisplayName = "Copywriter", CreatedAt = now, LastModifiedAt = now },
+    new ActivityDefinition { Id = "copywriter", ActivityTypeKey = "acme.copywriter", Category = "Agent", DisplayName = "Copywriter", CreatedAt = now, LastModifiedAt = now },
     new ActivityDefinitionAuthoringState { Id = "authoring", DefinitionId = "copywriter", ContentAuthority = new(ActivityContentAuthorityKind.Design, "elsa.design"), CreatedAt = now, LastModifiedAt = now },
     new ActivityDefinitionDraft { Id = "draft", DefinitionId = "copywriter", Revision = 1, State = state, CreatedAt = now, LastModifiedAt = now },
     new ActivityDefinitionDraftLayout { Id = "layout", DraftId = "draft", Revision = 1, CreatedAt = now, LastModifiedAt = now }));
@@ -90,17 +90,17 @@ var repeated = await publisher.PublishReviewedAsync(new("draft", 1, null, "1.0.0
 if (repeated.Status != receipt.Status) throw new InvalidOperationException("Publication idempotency changed");
 // Hold identity, SemVer, schema and model fixed: this control isolates prompt behavior in the hash.
 var promptOnly = new ActivityDefinitionDraft { Id = "prompt-only", DefinitionId = "copywriter", Revision = 1,
-    State = state with { Provider = new("acme.specialist", "1", JsonSerializer.SerializeToElement(descriptor with { Instructions = "A changed draft." })) } };
+    State = state with { Provider = new("acme.agent", "1", JsonSerializer.SerializeToElement(descriptor with { Instructions = "A changed draft." })) } };
 var promptRevision = await compiler.CompileAsync(new(await ((IActivityDefinitionStore)stores).GetAsync("copywriter"), promptOnly, "copywriter-v1", "1.0.0", 0));
 if (!promptRevision.IsSuccessful || promptRevision.Template!.TemplateHash == template.TemplateHash)
     throw new InvalidOperationException("Prompt-only change did not change behavior hash");
 // A new candidate version must not rewrite the already published Runtime artifact.
 var changed = new ActivityDefinitionDraft { Id = "changed", DefinitionId = "copywriter", Revision = 1,
-    State = state with { Provider = new("acme.specialist", "1", JsonSerializer.SerializeToElement(descriptor with { AgentVersionId = "copywriter-v2", Instructions = "A changed draft." })) } };
+    State = state with { Provider = new("acme.agent", "1", JsonSerializer.SerializeToElement(descriptor with { AgentVersionId = "copywriter-v2", Instructions = "A changed draft." })) } };
 var revised = await compiler.CompileAsync(new(await ((IActivityDefinitionStore)stores).GetAsync("copywriter"), changed, "copywriter-v2", "2.0.0", 0));
 if (!revised.IsSuccessful || revised.Template!.TemplateHash == template.TemplateHash
     || !JsonElement.DeepEquals((await templates.FindAsync(publication.TemplateId))!.Root.Descriptor.Payload, JsonSerializer.SerializeToElement(descriptor)))
-    throw new InvalidOperationException("Draft change rewrote immutable specialist publication");
+    throw new InvalidOperationException("Draft change rewrote immutable agent publication");
 Console.WriteLine(JsonSerializer.Serialize(new { published = publication.DefinitionVersionId, template.TemplateId, template.TemplateHash, receipt.Status, packageOnly = true, liveModel = false }));
 
 sealed class Access : IPersistenceAccessContextAccessor, IActivityPublishingAuthorizationContext
