@@ -477,7 +477,7 @@ public sealed partial class World
         };
         if (actor.Set)
         {
-            actor.Host = DurableHost.ForNode(name, wire, new WorkflowInstance(models), options);
+            actor.Host = DurableHost.ForNode(name, wire, new WorkflowInstance(models), options, placesPart: Config.Rows > Config.Partitions);
             actor.Worker = actor.Host.NodeWorker ?? throw new InvalidOperationException("A set world needs a store with owned sets.");
         }
         else actor.Worker = new Worker(name, partition, wire, new WorkflowInstance(models), options);

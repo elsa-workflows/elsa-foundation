@@ -18,7 +18,7 @@ namespace Kernel.Durable;
 /// </summary>
 public sealed class DurableHost : IScopeHost, IScopeCount
 {
-    private (IKernelStore Store, int Placed)? _counted;     // a node's host (ForNode): what its start checks
+    private (IKernelStore Store, int Placed, bool Part)? _counted;     // a node's host (ForNode): what its start checks
     private readonly Dictionary<int, Worker> _workers = [];
     private readonly Func<int, Worker?> _fixed;
     private readonly Worker? _node;
@@ -45,26 +45,29 @@ public sealed class DurableHost : IScopeHost, IScopeCount
     /// created when the scope is first activated. With a <paramref name="projection"/>, the node's commits and takes nudge
     /// its rounds, per virtual partition.
     /// </summary>
-    public static DurableHost ForNode(string node, IKernelStore store, IActorType type, WorkerOptions? options = null, NodeProjection? projection = null)
+    /// <param name="placesPart">The simulation's worlds only: the node places the first of the store's partitions, fewer
+    /// than it has, and the rest are left unserved on purpose. A database-backed node places every one.</param>
+    public static DurableHost ForNode(string node, IKernelStore store, IActorType type, WorkerOptions? options = null, NodeProjection? projection = null, bool placesPart = false)
     {
         if (projection is not null)
             options = (options ?? new()) with { OnJournal = options?.OnJournal is { } earlier ? moved => { earlier(moved); projection.Nudge(moved); } : projection.Nudge };
         var host = store.OwnedSetsAvailable ? new DurableHost(Worker.ForNode(node, store, type, options)) : new DurableHost(scope => new Worker(node, scope, store, type, options));
-        host._counted = (store, (options ?? new()).Partitions);
+        host._counted = (store, (options ?? new()).Partitions, placesPart);
         return host;
     }
 
     /// <summary>
-    /// K1 slice 7, a node's host when the runtime starts it: the runtime's scopes and the workers' placement count
-    /// (<see cref="WorkerOptions.Partitions"/>, which spread placement hashes over) must be equal, and the store must have
-    /// a partition row for each of them. Fewer than the store's is allowed: a node may place part of a larger database,
-    /// as the simulation's worlds do. A mismatch refuses the start, naming the three counts. The fixed host is not checked.
+    /// K1 slice 7, a node's host when the runtime starts it: the runtime's scopes, the workers' placement count
+    /// (<see cref="WorkerOptions.Partitions"/>, which spread placement hashes over) and the store's partitions must be
+    /// equal. Fewer would leave partitions with rows, and perhaps work, unserved; more would address partitions with no
+    /// row. A mismatch refuses the start, naming the three counts. Only a node built with <c>placesPart</c> (the
+    /// simulation's worlds) may place fewer than the store has. The fixed host is not checked.
     /// </summary>
     public async ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default)
     {
         if (_counted is not { } counted) return;
         var stored = await counted.Store.PartitionCountAsync(cancellationToken);
-        if (counted.Placed != scopes || stored < scopes)
+        if (counted.Placed != scopes || (counted.Part ? stored < scopes : stored is { } rows && rows != scopes))
             throw new InvalidOperationException($"The partition counts disagree: the runtime places {scopes} scopes, the workers place over {counted.Placed} partitions, and the store has {stored?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "an unknown number of"} partitions. Configure one count, the one the database was created with.");
     }
 

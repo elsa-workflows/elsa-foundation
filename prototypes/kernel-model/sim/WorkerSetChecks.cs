@@ -598,10 +598,11 @@ internal static class WorkerSetChecks
     // the runtime starts a node's host; a store created at 64 with a runtime and workers at 1,024 is refused.
     private static async Task CountsAgree(Action<bool, string> check)
     {
-        async Task<string?> Start(int stored, int placed, int scopes)
+        async Task<string?> Start(int stored, int placed, int scopes, bool part = false, int? waiting = null)
         {
             var store = new InMemoryStore(stored, () => 100);
-            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => 100, Partitions = placed });
+            if (waiting is { } p) await store.AddAsync(Add(InstanceRef.In(p, "late"), "t"));
+            var host = DurableHost.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => 100, Partitions = placed }, placesPart: part);
             try { await new PartitionRuntime("a", store, scopes, TimeSpan.FromSeconds(3)).StartAsync(host); return null; }
             catch (InvalidOperationException e) { return e.Message; }
         }
@@ -610,7 +611,11 @@ internal static class WorkerSetChecks
             $"a store at 64 with the runtime and workers at 1,024 is refused, naming the three counts ({refused ?? "started"})");
         check(await Start(1024, 64, 1024) is not null, "workers at 64 under a runtime of 1,024 are refused");
         check(await Start(1024, 1024, 1024) is null, "the runtime, the workers and the store at 1,024 start");
-        check(await Start(1024, 4, 4) is null, "a runtime and workers that place 4 of a store's 1,024 start (the simulation's worlds)");
+        var unserved = await Start(1024, 64, 64, waiting: 900);
+        check(unserved is not null && unserved.Contains("64 scopes") && unserved.Contains("has 1024 partitions"),
+            $"a store at 1,024 with a message in partition 900, and the runtime and workers at 64, is refused ({unserved ?? "started"})");
+        check(await Start(1024, 4, 4) is not null, "a runtime and workers that place 4 of a store's 1,024 are refused");
+        check(await Start(1024, 4, 4, part: true) is null, "with placesPart, the simulation's only, 4 of a store's 1,024 start");
     }
 }
 
