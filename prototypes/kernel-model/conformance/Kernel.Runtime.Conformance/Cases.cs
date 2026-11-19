@@ -431,7 +431,7 @@ public static class Cases
         }),
     ];
 
-    public static async Task<List<RuntimeOutcome>> RunAsync(IRuntimeProvider runtime, IStoreProvider store, bool brokenFence = false, Func<RuntimeCase, bool>? filter = null, TextWriter? output = null, int? partitions = null)
+    public static async Task<List<RuntimeOutcome>> RunAsync(IRuntimeProvider runtime, IStoreProvider store, bool brokenFence = false, Func<RuntimeCase, bool>? filter = null, TextWriter? output = null, int? partitions = null, bool nodeLease = false)
     {
         output ??= Console.Out;
         var outcomes = new List<RuntimeOutcome>();
@@ -445,7 +445,7 @@ public static class Cases
                 var setup = @case.Setup ?? Default;
                 if (partitions is { } count && @case.AnyCount && setup.Partitions == Default.Partitions) setup = setup with { Partitions = count };     // a case that chose its own count keeps it
                 var timeout = Scaled(setup.Partitions, Timeout);
-                await using var harness = await Harness.CreateAsync(runtime, store, setup with { BrokenFence = brokenFence });
+                await using var harness = await Harness.CreateAsync(runtime, store, setup with { BrokenFence = brokenFence, NodeLease = nodeLease });     // K1b: --node-lease, the store's switch on
                 try
                 {
                     await @case.Body(harness).WaitAsync(timeout);

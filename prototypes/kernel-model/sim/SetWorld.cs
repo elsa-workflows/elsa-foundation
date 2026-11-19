@@ -7,8 +7,14 @@ namespace Kernel.Sim;
 /// answers them. The queue keeps every continuation on that thread and in order: an operation starts when the one before
 /// it has ended, inline. Nothing else changes: the host and its worker are the runtime's.
 /// </summary>
-public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount
+public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount, INodeLeaseHost
 {
+    // K1b: the node lease. The heartbeat runs off the turn, as the built-in runtime's own loop sends it; the node passes
+    // are queued with the host's other operations.
+    public TimeSpan? NodeLease => host.NodeLease;
+    public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default) => host.HeartbeatAsync(window, cancellationToken);
+    public async ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default) => await Queued(() => host.PassAsync(cancellationToken));
+
     public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) => host.CheckScopesAsync(scopes, cancellationToken);
 
     private Task _tail = Task.CompletedTask;

@@ -406,7 +406,7 @@ public sealed partial class World
         if (config.Partitions > config.Rows) throw new ArgumentOutOfRangeException(nameof(config), "A world places at most the store's partitions.");
         Native = new NativeOracle(config.Partitions);
         Store = new InMemoryStore(config.Rows, () => Time, config.Flaws) { ObserveLifecycles = true, Refuses = row => row.State.Contains(Fragile.Sour), NodeLeaseAvailable = config.NodeLease };
-        Beats = new NodeHeartbeat?[config.Nodes];
+        Hosts = new DurableHost[config.Nodes];
         Store.Lifecycle!.AppliedCancellation = (state, consumed) => state is HttpState { AppliedCancellations: { } applied }
             ? applied.Find(cancel => _httpCancelInputs?.TryGetValue(cancel, out _) == true && consumed.Any(d => ReferenceEquals(d.Message, cancel))) : null;
         Current = new int[config.Nodes, config.Partitions];
@@ -433,16 +433,15 @@ public sealed partial class World
         Processes[first.Worker.Node] = new Requests($"node{node}.{Incarnation[node]}", Config.Flaws);
         IMembership membership = Config.Rows > Config.Partitions ? new Placed(Store, Config.Partitions) : Store;
         var runtime = Runtimes[node] = new PartitionRuntime(first.Worker.Node, membership, Config.Partitions, TimeSpan.FromSeconds(25), flaws: Config.Flaws);
-        IScopeHost host = first.Set ? first.Serial = new SerialHost(first.Host!) : new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker));
+        // K1b: the host keeps the node's heartbeat and pass gate, over the Workers of this incarnation, on its first actor's wire.
+        var durable = Hosts[node] = first.Set ? first.Host! : new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker));
+        IScopeHost host = first.Set ? first.Serial = new SerialHost(durable) : durable;
         runtime.StartAsync(host).AsTask().Wait();
         for (var partition = 0; partition < Config.Partitions; partition++) Of(node, partition).Runtime = runtime;
-        // K1b: the node's heartbeat and pass gate, over the Workers of this incarnation, on its first actor's wire.
-        if (Config.NodeLease)
-            Beats[node] = new NodeHeartbeat(first.Worker.Node, first.Wire, [.. (first.Set ? [first] : Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p))).Select(a => a.Worker)],
-                TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(25));
     }
 
-    public readonly NodeHeartbeat?[] Beats;
+    /// <summary>Each node's host of its current incarnation, whose heartbeat the node sends (K1b).</summary>
+    public readonly DurableHost[] Hosts;
 
     /// <summary>A process is alive while any of its workers is.</summary>
     public bool Running(string process) => Actors.Exists(a => !a.Dead && a.Worker.Node == process);
@@ -546,19 +545,14 @@ public sealed partial class World
             }
     }
 
-    /// <summary>K1b: the node's heartbeat. It renews at once; each Worker's next pass runs the answer's stand-down side.</summary>
-    public static async Task Heartbeat(NodeHeartbeat beat) => await beat.BeatAsync();
-
     /// <summary>
-    /// K1b: a pass, and then the pending partitions the last answer had the Worker retake in it join the runtime's
-    /// activations, as an activation of a partition the Worker already holds: the node is its Workers' host.
+    /// K1b: a pass, then the runtime's node pass, as the built-in runtime's pass loop runs it after its scopes' passes: the
+    /// passes no active scope gives, and the adoption of what the Workers took back by themselves (a pending retake).
     /// </summary>
     public async Task Adopting(Actor actor, Task pass)
     {
         await pass;
-        if (!Config.NodeLease || actor.Dead) return;
-        foreach (var fence in actor.Worker.Fences)
-            if (!actor.Runtime.Owns(fence.Partition) && !actor.Runtime.Activating(fence.Partition)) await actor.Runtime.ActivateAsync(fence.Partition);
+        if (Config.NodeLease && !actor.Dead) await actor.Runtime.NodePassAsync();
     }
 
     // A set world's pass runs under its host's turn, queued as the host's own passes, gains and losses are: a contended
@@ -691,11 +685,11 @@ public sealed partial class World
             }
             case "heartbeat":
             {
-                if (Paused[act.A] || Beats[act.A] is not { } beat) return null;
+                if (Paused[act.A] || !Config.NodeLease) return null;
                 var calls = Actors.Sum(a => a.Calls.Count);
-                var withheld = beat.Withheld;
-                Watch(Heartbeat(beat));
-                return beat.Withheld > withheld ? "withheld: a Worker that holds partitions has completed no pass within the lease" : $"{Actors.Sum(a => a.Calls.Count) - calls} call sent";
+                var withheld = Hosts[act.A].Heartbeat?.Withheld ?? 0;
+                Watch(Runtimes[act.A].HeartbeatAsync().AsTask());       // through the runtime and its host, as the node's heartbeat loop sends it
+                return (Hosts[act.A].Heartbeat?.Withheld ?? 0) > withheld ? "withheld: a Worker that holds partitions has completed no pass within the lease" : $"{Actors.Sum(a => a.Calls.Count) - calls} call sent";
             }
             case "pass":
             {

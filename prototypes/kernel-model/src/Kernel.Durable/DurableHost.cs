@@ -16,8 +16,9 @@ namespace Kernel.Durable;
 /// and the simulation use it, and so does a node on a store without owned sets (<c>commit=ef</c>: one partition per worker).</item>
 /// </list>
 /// </summary>
-public sealed class DurableHost : IScopeHost, IScopeCount
+public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
 {
+    private NodeHeartbeat? _beat;       // K1b: the node's heartbeat over this host's Workers, made at the first one
     private (IKernelStore Store, int Placed, bool Part)? _counted;     // a node's host (ForNode): what its start checks
     private readonly Dictionary<int, Worker> _workers = [];
     private readonly Func<int, Worker?> _fixed;
@@ -37,7 +38,13 @@ public sealed class DurableHost : IScopeHost, IScopeCount
 
     private DurableHost(Func<int, Worker> create) => _fixed = scope =>
     {
-        lock (_workers) return _workers.TryGetValue(scope, out var worker) ? worker : _workers[scope] = create(scope);
+        lock (_workers)
+        {
+            if (_workers.TryGetValue(scope, out var worker)) return worker;
+            _workers[scope] = worker = create(scope);
+            _beat?.Add(worker);      // a Worker created after the first heartbeat joins its gate and its answers
+            return worker;
+        }
     };
 
     /// <summary>
@@ -89,7 +96,8 @@ public sealed class DurableHost : IScopeHost, IScopeCount
         if (_node is not { } node)
         {
             if (_fixed(scope) is not { } worker) return null;
-            await worker.TakeAsync(cancellationToken);
+            // A Worker that holds its partition already (a pending retake brought it back) is adopted as it is.
+            if (!worker.Owns) await worker.TakeAsync(cancellationToken);
             return worker.Owns ? worker : null;
         }
         await _turn.WaitAsync(CancellationToken.None);
@@ -100,6 +108,50 @@ public sealed class DurableHost : IScopeHost, IScopeCount
             return _scopes.TryGetValue(scope, out var known) ? known : _scopes[scope] = new NodeScope(this, scope);
         }
         finally { _turn.Release(); }
+    }
+
+    // ---- K1b: the node lease (INodeLeaseHost) ---------------------------------------------------------------------
+
+    private IReadOnlyList<Worker> Workers
+    {
+        get
+        {
+            if (_node is { } node) return [node];
+            lock (_workers) return [.. _workers.Values];
+        }
+    }
+
+    private IKernelStore? Store => _counted?.Store ?? Workers.FirstOrDefault()?.Store;
+
+    /// <summary>The node's lease, once the store keeps one (<see cref="IKernelStore.NodeLeaseAvailable"/>); null before.</summary>
+    public TimeSpan? NodeLease => Store is { NodeLeaseAvailable: true } && Workers.FirstOrDefault() is { } first ? first.Lease : null;
+
+    /// <summary>
+    /// The node's heartbeat over every Worker of this host, its pass gate deciding (<see cref="NodeHeartbeat"/>). It runs
+    /// off the host's turn: the answer renews each Worker's guard at once, and its stand-down waits for the next pass.
+    /// </summary>
+    public async ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default)
+    {
+        if (NodeLease is not { } lease || Store is not { } store) return null;
+        NodeHeartbeat beat;
+        lock (_workers) beat = _beat ??= new NodeHeartbeat(Workers[0].Node, store, Workers, lease, window);
+        return (await beat.BeatAsync(cancellationToken))?.Cluster;
+    }
+
+    /// <summary>The heartbeat, once the first one was sent: its counts of withheld and missed renewals.</summary>
+    public NodeHeartbeat? Heartbeat => _beat;
+
+    /// <summary>
+    /// The passes no active scope gives: of each Worker that holds nothing while a partition is pending or a heartbeat answer
+    /// waits for it. The node's Worker passes under the turn; a fixed host's Workers have no turn, and the runtime's loop
+    /// that calls this calls their scopes' passes too, one after another. Returns the scopes the host holds afterwards.
+    /// </summary>
+    public async ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var worker in Workers)
+            if (!worker.Owns && (worker.Pending.Count > 0 || worker.AnswerWaiting))
+                await (worker == _node ? RunNodeAsync(cancellationToken) : worker.RunAsync(cancellationToken));
+        return [.. Workers.SelectMany(w => w.Fences.Select(f => f.Partition)).Distinct()];
     }
 
     /// <summary>

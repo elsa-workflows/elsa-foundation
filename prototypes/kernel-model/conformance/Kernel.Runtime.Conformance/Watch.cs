@@ -117,8 +117,15 @@ public sealed class Watcher
             if (_busy.TryGetValue((node, scope), out var now) && now == what) _busy.Remove((node, scope));
     }
 
-    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount
+    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost
     {
+        // K1b: the node lease is layer 2's too; the watcher passes it through, and watches what the node pass adopts as an activation.
+        public TimeSpan? NodeLease => (inner as INodeLeaseHost)?.NodeLease;
+        public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default) =>
+            inner is INodeLeaseHost lease ? lease.HeartbeatAsync(window, cancellationToken) : ValueTask.FromResult<Cluster?>(null);
+        public ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default) =>
+            inner is INodeLeaseHost lease ? lease.PassAsync(cancellationToken) : ValueTask.FromResult<IReadOnlyCollection<int>>([]);
+
         // The start's count check is layer 2's: the watcher passes it through, so a mismatch refuses the node here too.
         public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) =>
             inner is IScopeCount counted ? counted.CheckScopesAsync(scopes, cancellationToken) : ValueTask.CompletedTask;

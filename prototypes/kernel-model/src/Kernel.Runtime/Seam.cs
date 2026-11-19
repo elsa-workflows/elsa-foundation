@@ -51,11 +51,42 @@ public interface IScopeActivation : IAsyncDisposable
 
     /// <summary>
     /// One pass: the turns that are due, committed in batches. Returns when to call again: at once (zero) while there is
-    /// work, or after a delay for the next timer it holds or the next renewal of its lease, which layer 2 makes itself;
-    /// null once it no longer holds the scope. A runtime that calls again when asked keeps an idle scope's lease. A
-    /// cancelled token stops the pass at a turn boundary, before its commit: a process that goes away.
+    /// work, or after a delay for the next timer it holds; null once it no longer holds the scope. A cancelled token stops
+    /// the pass at a turn boundary, before its commit: a process that goes away.
+    /// <para>
+    /// R1, the lease. Under the node lease (<see cref="INodeLeaseHost"/>) a pass renews nothing: the node's heartbeat
+    /// renews one lease for every scope, and only while each pass completes within the lease (the pass gate). A runtime
+    /// that calls again when asked, at least once per poll interval, keeps its node live; one whose passes stop completing
+    /// stops its renewal, and another node takes its scopes. Under the per-partition lease (until K1b slice 6 deletes it)
+    /// the pass renews an idle scope's lease itself, and the delay it returns includes that renewal.
+    /// </para>
     /// </summary>
     ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// K1b: a host whose node keeps one lease for every scope it holds (ownership-and-fencing, "The node's heartbeat" and
+/// "Liveness follows the Worker's passes"). The runtime's node sends the heartbeat on a cadence of its own, at least three
+/// times per lease and at most half the membership window apart, apart from its balancing rounds; the host's pass gate
+/// decides whether it renews. The runtime also runs the passes no active scope gives, and adopts what they take back.
+/// </summary>
+public interface INodeLeaseHost
+{
+    /// <summary>The node's lease; null while the store keeps a lease per partition, which the passes renew.</summary>
+    TimeSpan? NodeLease { get; }
+
+    /// <summary>
+    /// One heartbeat, if the pass gate lets it: the node record's write, then the membership reads balancing needs. The
+    /// cluster it saw when it renewed; null when it did not, a failure of any kind being a missed renewal.
+    /// </summary>
+    ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The passes no active scope gives: of a Worker whose only partitions are pending, or that holds none while a
+    /// heartbeat answer waits for it. Returns the scopes the host holds afterwards; the runtime activates the ones it does
+    /// not know, as a scope already held (a pending retake brings a partition back by itself).
+    /// </summary>
+    ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>

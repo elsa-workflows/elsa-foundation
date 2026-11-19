@@ -482,6 +482,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>K1b: the store keeps the node lease, so the host's heartbeat renews and a commit renews nothing.</summary>
     private bool NodeLease => _store.NodeLeaseAvailable;
+    internal IKernelStore Store => _store;      // K1b: the host's heartbeat goes to the Workers' store
+    internal TimeSpan Lease => _options.Lease;
 
     /// <summary>
     /// The node lease's guard (decisions, "The local lease guard"): one deadline, the latest send time plus the lease over
