@@ -181,8 +181,8 @@
     "route": "/publishing/workflows/{versionId}/executable-export",
     "formatVersion": 1,
     "fileName": "current-format-external-closure.json",
-    "byteLength": 30090,
-    "sha256": "1df99828cf67ab371c17f2b30916dc57933e40a54ff3018a384cd0f9154df2be",
+    "byteLength": 30095,
+    "sha256": "1e542aa67ddd3ba75b1e5f2f5fc5388714220a33d694d7809cd7e45d4b834b3f",
     "responseStatus": 200
   }
 }
