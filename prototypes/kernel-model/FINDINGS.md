@@ -775,7 +775,8 @@ Branch `agent/claude/kernel-model-merged`: round 3 (`0f09246d32`) as the base, t
   same partition is not handed over in memory), F-N11 (two places say "ephemeral").
 - The owner's defaults of 12 November (run): events are not kept for a wait unless it asks (`Subscribe(..., keep:
   true)`; the simulation's waiter asks, so invariant 13 is checked as before; F-N9 is gone); lease 10 s
-  (`Defaults.Lease`); 64 partitions on server stores and 1 on SQLite (`CreateAsync()`); a response released after the
+  (`Defaults.Lease`); 64 partitions on server stores and 1 on SQLite (`CreateAsync()`; since K1 slice 7, 1,024 virtual
+  partitions on every store, PARTITIONS.md); a response released after the
   commit of the step that wrote it, opt-out per route. The simulation and stress tests keep their short leases.
 
 ### The gates
@@ -1638,7 +1639,8 @@ in-memory transport: no socket was open during a run, and nothing ran in a cloud
 ### How the suite works
 
 The suite builds layer 2 itself and meets the runtime only at the seam. For each node the runtime starts, it asks the
-suite for that node's layer 2 by name: a worker per partition over one fresh store, behind a `Watcher` that wraps the
+suite for that node's layer 2 by name: a worker per partition over one fresh store (since K1 slice 5a, one worker for
+the node's owned set, `DurableHost.ForNode`), behind a `Watcher` that wraps the
 node's `IScopeHost` and every activation it returns. Every commit that lands is recorded, and invariant 1 is checked
 on them from outside the store, as in the store suite. The watcher fails a case when a runtime:
 
@@ -1849,8 +1851,8 @@ as built costs *k* + 2 round trips against 3, a commit-SQL shape for round 5 B; 
 position row per virtual partition, needs an epoch counter, split, merge and carve, and stales a whole range at a
 split. The recommendation was the fence per virtual partition, conditional on a one-statement multi-row checked fence.
 **Decided by the owner on 16 November 2026: (i) the fence per virtual partition, the multi-row checked fence in round
-5 B's scope, and 1,024 virtual partitions** (the provisional 4,096 constant stays in code until the Worker refactor,
-which will use 1,024).
+5 B's scope, and 1,024 virtual partitions** (the provisional 4,096 constant stayed in code until the Worker refactor;
+K1 slice 7 set it to 1,024, and section 30 has K1).
 
 ## 29. Round 5 B: the owned commit, hand-written commit SQL on four engines. Run
 
@@ -1919,3 +1921,28 @@ What this round found, beyond COMMIT-SQL.md:
   modes on every engine: every cell but one fails (PostgreSQL 1,712 to 2,211 violations, MySQL 1,745 to 2,255, SQLite 33 to 2,133, SQL Server 1,154 to 2,281; the one run of SQL Server with the checked fence broken held, 449 fenced and 255 definite errors without a violated property in 40 s). One run per cell; COMMIT-SQL.md has the table. The tooling branch `agent/claude/4229-r5b-7` adds the option and these runs.
 
 Not done, unverified: COMMIT-SQL.md's last section.
+
+## 30. K1: range ownership in the integrated Worker. Run
+
+The Worker refactor of PARTITIONS.md's owner decisions, in slices 0 to 8 (#4809 to #4820 and #4821): a node's
+one worker owns a set of the 1,024 virtual partitions, each with its own fence row, epoch, position and journal; a
+flush lands whole or not at all under a k-row fence locked in ascending id; the balancer moves the fewest partitions,
+so sets may be scattered; Seen and Trial marks, suspects and child ids are per partition epoch. The record of each
+slice, the decisive witness, the mutations (the pin at 48) and the measured costs for scattered and contiguous sets
+are in [PARTITIONS.md](PARTITIONS.md) ("K1 slice 0" to "K1 costs").
+
+- **F-K1. The runtime moves partitions one row at a time.** Layer 1 activates one scope per virtual partition, so the
+  per-node host turns a join, a takeover through the runtime and a start-up into one-row takes and give-ups: about 800
+  round trips for a join at 1,024 on PostgreSQL, where the store's set take is 2. Correct, and under a second locally
+  at 4,096; a batched gain is the recorded option.
+- **F-K2. The idle beat is WAL.** 161 MB an hour on an idle four-node PostgreSQL cluster at 1,024, nearly all of it the
+  partition rows, 41 % of that lock records. Measured for D3; a node-level beat is not built.
+- **F-K3. Each Orleans grain's tick can cost a set poll.** 107 to 117 set polls a second per idle silo at 1,024, against one for
+  the built-in loop, on a quiet machine. The silo-level poll needs a seam decision.
+- **F-K4. A test's own bookkeeping can be the slow part.** The runtime suite's crash case took minutes at 4,096: it read
+  its holders in time cubic in the count, before the kill. Read once, in one pass, the case takes 14 s at every count
+  and its takeover 6.2 to 7.5 s, the lease (built-in runtime).
+- **F-K5. A wrapper that leaves a set operation to the interface's default changes its cost.** The suites' store
+  wrappers sent a set poll as one poll per partition, each a scan of the in-memory inbox, so a burst over 4,096
+  partitions took 21.0 s. Forwarded as one call, it takes 0.92 s. `FaultyStore` then has one chance to inject a fault
+  per set poll, where it had one per partition, so set polls see fewer injected faults.
