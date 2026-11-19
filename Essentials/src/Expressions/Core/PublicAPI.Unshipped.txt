@@ -800,7 +800,9 @@ Elsa.Expressions.Core.Models.ExecutionWarningSeverity.Warning = 1 -> Elsa.Expres
 Elsa.Expressions.Core.Contracts.IExecutionWarningSink
 Elsa.Expressions.Core.Models.ExecutionWarningSeverity
 Elsa.Expressions.Core.Models.ExecutionWarningCollector
-Elsa.Expressions.Core.Models.ExecutionWarningCollector.ExecutionWarningCollector() -> void
+Elsa.Expressions.Core.Models.ExecutionWarningCollector.ExecutionWarningCollector(bool protect = false) -> void
+Elsa.Expressions.Core.Models.ExecutionWarning.ProtectedForm.get -> Elsa.Expressions.Core.Models.ExecutionWarning?
+Elsa.Expressions.Core.Models.ExecutionWarning.ProtectedForm.init -> void
 Elsa.Expressions.Core.Models.ExecutionWarning.Code.get -> string!
 Elsa.Expressions.Core.Models.ExecutionWarning.Severity.get -> Elsa.Expressions.Core.Models.ExecutionWarningSeverity
 Elsa.Expressions.Core.Models.ExecutionWarning.Message.get -> string!
@@ -826,3 +828,4 @@ Elsa.Expressions.Core.Models.ExecutionWarning.WithDetail(string! key, string! va
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Warnings.init -> void
 Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure
+Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure.ValueFreeMessage.get -> string!

@@ -28,6 +28,7 @@ The same contract applies to script activities and JavaScript input expressions 
 | Assigned a whole value | Whole assignment | Step write replaces (equality by meaning, ADR 0090 C4) |
 | Changed an array | Whole array | Step write replaces the array |
 | Set a member equal, as JavaScript, to what it read | Unchanged | Nothing (accepted gap; a string forces the write) |
+| Added a member JSON cannot hold (a function, a Symbol, `undefined`) | Unchanged | Nothing: JSON drops such a member, so the stored value is what it was (an input expression is not refused for it) |
 | Returned a value | Result | The result, as JSON |
 
 A script activity's changes go to the step write path (S-7). An input expression never writes: an assignment visible

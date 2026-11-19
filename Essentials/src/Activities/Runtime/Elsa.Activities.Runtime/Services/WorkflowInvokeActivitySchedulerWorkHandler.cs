@@ -203,8 +203,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         SimpleActivityExecutionContext? context = null;
         // Spec 1231: the step's variable session, created with its context and committed with its transition.
         StepVariableSession? stepSession = null;
-        // Spec 1228: where the step reports warnings; they are recorded with whatever state the step ends in.
-        var stepWarnings = new ExecutionWarningCollector();
+        // Spec 1228: where the step reports warnings; they are recorded with whatever state the step ends in. A step with a
+        // protected input keeps each warning's protected form, which names no member of that value (spec 1229 FR-006).
+        var stepWarnings = new ExecutionWarningCollector(protect: ProtectsAnyInput(state.InputSnapshot));
         ActivityTransition? committedTransition = null;
         ActivityActivationLease? activationLease = null;
         ActivityAttempt? valueFlowAttempt = null;
@@ -1564,4 +1565,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         return changes.Values.ToArray();
     }
 
+    private static bool ProtectsAnyInput(ActivityInputSnapshot? snapshot) =>
+        snapshot?.Values.Values.Any(value =>
+            value.Policy.IsSensitive || value.Policy.RequiresEncryption || !string.IsNullOrWhiteSpace(value.Policy.RedactionMode)) == true;
 }

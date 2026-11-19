@@ -25,7 +25,10 @@ public static class ValueRepresentationDefaults
             ? type.Alias["System.".Length..]
             : type.Alias;
 
-        if (StringComparer.OrdinalIgnoreCase.Equals(alias, "String"))
+        // A nested collection names its element under the innermost alias (spec 1228 US5): a dictionary of string arrays
+        // is a String dictionary whose element is a String array. It is structured, as it was when its alias was
+        // System.String[]; a String type without an element is inferred as before.
+        if (StringComparer.OrdinalIgnoreCase.Equals(alias, "String") && type.Element is null)
             return ValueRepresentation.TextValue;
         if (StringComparer.OrdinalIgnoreCase.Equals(alias, "Byte") && type.CollectionKind is CollectionKind.Array or CollectionKind.List)
             return ValueRepresentation.BinaryContent;

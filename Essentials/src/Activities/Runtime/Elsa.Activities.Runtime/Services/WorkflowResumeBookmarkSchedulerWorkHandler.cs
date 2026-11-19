@@ -323,8 +323,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         // Spec 1231: a resumed step gets a fresh variable session, with no session reads of the evaluation before the
         // suspension (ADR 0092 decision 11); it commits with the resume's transition.
         StepVariableSession? stepSession;
-        // Spec 1228: where the step reports warnings; they are recorded with whatever state the step ends in.
-        var stepWarnings = new ExecutionWarningCollector();
+        // Spec 1228: where the step reports warnings; they are recorded with whatever state the step ends in. A step with a
+        // protected input keeps each warning's protected form, which names no member of that value (spec 1229 FR-006).
+        var stepWarnings = new ExecutionWarningCollector(protect: ProtectsAnyInput(executionState.InputSnapshot));
         ActivityActivationLease? activationLease = null;
         try
         {
@@ -1165,4 +1166,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             ValueSnapshots: valueSnapshots ?? []);
     }
 
+    private static bool ProtectsAnyInput(ActivityInputSnapshot? snapshot) =>
+        snapshot?.Values.Values.Any(value =>
+            value.Policy.IsSensitive || value.Policy.RequiresEncryption || !string.IsNullOrWhiteSpace(value.Policy.RedactionMode)) == true;
 }

@@ -58,7 +58,9 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
 - **Kind:** a channel, not a replacement: the runtime supplies the sink and records what is reported (spec 1228).
 - **Contract:** `Report(ExecutionWarning)`, where an `ExecutionWarning` has a stable `Code`, a `Message`, a `Severity`
   (`Warning` or `Information`) and string `Details`. A warning changes and refuses nothing, and it never carries a value
-  (spec 1229 FR-006): it names paths, inputs and variables only.
+  (spec 1229 FR-006): it names paths, inputs and variables only. A warning whose paths go below a root sets
+  `ProtectedForm`, naming roots only, since a member can be a key of a stored value; the runtime keeps that form when
+  the evaluation or step read a protected value (`ExecutionWarningCollector(protect: true)`).
 - **Where it comes from:** `ExpressionEvaluationRequest.Warnings` for an input expression (kept with the input snapshot,
   with the input key in `Details["input"]`), `JavaScriptScriptEvaluationRequest.Warnings` and
   `ActivityExecutionContext.Warnings` for a step (kept on the activity state). The activity execution inspection view

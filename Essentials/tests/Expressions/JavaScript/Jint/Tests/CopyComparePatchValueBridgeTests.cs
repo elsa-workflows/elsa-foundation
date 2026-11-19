@@ -262,6 +262,32 @@ public sealed class CopyComparePatchValueBridgeTests
         Assert.Equal("null", loss.Written);
     }
 
+    [Theory]
+    [InlineData("-variables.order.big")]
+    [InlineData("-1/0")]
+    [InlineData("({ v: -1/0 })")]
+    public void An_infinity_no_entered_number_lost_to_is_written_as_null_not_as_its_marker(string script)
+    {
+        // Only +Infinity entered (1e400), so -Infinity carries no loss, yet JSON still writes it as null.
+        using var run = Run(script, ("order", """{"big":1e400,"b":1}"""));
+
+        var write = run.Values.Write(run.Returned, "result");
+
+        Assert.Empty(write.Losses);
+        Assert.DoesNotContain("inf", write.Value!.Value.GetRawText());
+        Assert.Contains("null", write.Value!.Value.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("variables.order.items[0].id", "variables.order")]
+    [InlineData("variables[\"a.b\"].x", "variables[\"a.b\"]")]
+    [InlineData("variables[\"q\\\"]\"][1]", "variables[\"q\\\"]\"]")]
+    [InlineData("variables.order", "variables.order")]
+    [InlineData("args.balances[\"NL91\"]", "args")]
+    [InlineData("result", "result")]
+    public void A_value_free_path_names_the_root_only(string path, string root) =>
+        Assert.Equal(root, Elsa.Expressions.JavaScript.Jint.Services.ValuePaths.Root(path));
+
     [Fact]
     public void A_value_made_unserializable_is_reported_changed_as_a_whole()
     {

@@ -120,14 +120,55 @@ public sealed class ScriptValueModelRunTests
     }
 
     [Fact]
-    public async Task The_write_diagnostic_names_the_variable_and_path_even_when_the_variable_is_sensitive()
+    public async Task The_write_diagnostic_of_a_sensitive_variable_names_the_variable_but_not_the_path()
     {
-        // FR-006a: VF-BIND-001 carries no value, so protection does not redact it (spec 1229 FR-006).
+        // FR-006a, spec 1229 FR-006: the diagnostic keeps its value-free form. A member path can be a key of the
+        // protected value, so it is withheld; the declared name stays.
         var (_, incident) = await RunBlockedAsync("return 1;", "(() => { const o = variables.order; o.price = 1; return {}; })()", sensitive: true);
 
         Assert.Contains(JavaScriptValueDiagnostics.InputExpressionWrite, incident);
-        Assert.Contains("variables.order.price", incident);
+        Assert.Contains("variable 'order'", incident);
+        Assert.DoesNotContain("price", incident);
         Assert.DoesNotContain("9007199254740993", incident);
+    }
+
+    [Fact]
+    public async Task A_write_to_a_name_computed_from_a_sensitive_value_does_not_name_it()
+    {
+        var (_, incident) = await RunBlockedAsync("return 1;", "(() => { variables['k' + variables.order.price] = 1; return {}; })()", sensitive: true);
+
+        Assert.Contains(JavaScriptValueDiagnostics.InputExpressionWrite, incident);
+        Assert.Contains("a variable it names by a computed value", incident);
+        Assert.DoesNotContain("k10.5", incident);
+    }
+
+    [Fact]
+    public async Task The_write_diagnostic_of_an_unprotected_variable_names_the_path()
+    {
+        var (_, incident) = await RunBlockedAsync("return 1;", "(() => { const o = variables.order; o.price = 1; return {}; })()");
+
+        Assert.Contains("variables.order.price", incident);
+    }
+
+    [Fact]
+    public async Task Lossy_read_warnings_of_a_sensitive_value_name_roots_only()
+    {
+        // Spec 1229 FR-006: a member below a root can be a key of the protected value.
+        await using (var harness = NewHarness())
+        {
+            var run = await RunAsync(harness, "return args.order.price * 2;", "({ order: variables.order })", Order, sensitive: true);
+            run.AssertWorkflowCompleted();
+            Assert.Equal("args", Assert.Single(run.AssertCompleted("node-js").Warnings!).Details!["paths"]);
+        }
+
+        await using (var harness = NewHarness())
+        {
+            var run = await RunAsync(harness, "return args.total;", "({ total: variables.order.price * 2 })", Order, sensitive: true);
+            run.AssertWorkflowCompleted();
+            var input = Assert.Single(run.AssertCompleted("node-js").InputSnapshot!.Warnings!);
+            Assert.Equal("variables.order", input.Details!["paths"]);
+            Assert.DoesNotContain(".id", input.Message);
+        }
     }
 
     private static async Task<(WorkflowExecutionRun Run, string Incident)> RunBlockedAsync(string script, string argumentsExpression, bool sensitive = false)

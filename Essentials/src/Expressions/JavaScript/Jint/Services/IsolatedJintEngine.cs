@@ -179,6 +179,7 @@ internal static class IsolatedJintEngine
             if (target.HasOwnProperty(name))
                 continue;
             var captured = name;
+            variables.Declare(captured);
             var getter = new ClrFunction(engine, "get " + captured, (_, _) => Read(captured));
             var setter = new ClrFunction(engine, "set " + captured, (_, arguments) => Assign(captured, arguments.At(0)));
             target.DefineOwnProperty(captured, new GetSetPropertyDescriptor(getter, setter, enumerable: true, configurable: false));
@@ -217,6 +218,13 @@ internal static class IsolatedJintEngine
         private readonly Dictionary<string, JsValue> _current = new(StringComparer.Ordinal);
         private readonly HashSet<string> _assigned = new(StringComparer.Ordinal);
         private readonly List<string> _order = [];
+        private readonly HashSet<string> _declared = new(StringComparer.Ordinal);
+
+        /// <summary>A name the evaluation can name: pinned, or a candidate of its lookup.</summary>
+        public void Declare(string name) => _declared.Add(name);
+
+        /// <summary>Whether a name is declared; any other name the script computed, possibly from a value.</summary>
+        public bool IsDeclared(string name) => _declared.Contains(name);
 
         public bool TryGet(string name, out JsValue value) => _current.TryGetValue(name, out value!);
 
@@ -239,15 +247,16 @@ internal static class IsolatedJintEngine
         public IReadOnlyList<(string Name, ScriptValueChange Change)> Collect() =>
             _order.Select(name => (name, CollectOne(name))).ToArray();
 
-        // A value the script made unserializable (a cycle, a BigInt) was changed: it is reported as changed as a whole,
-        // so an input expression fails with its write diagnostic rather than the engine's error (spec 1228 FR-006a).
+        // A value the script made unserializable (a cycle, a BigInt) or grew past the JSON limits (depth, size) was
+        // changed: it is reported as changed as a whole, so an input expression fails with its write diagnostic rather
+        // than the engine's or the parser's error (spec 1228 FR-006a).
         private ScriptValueChange CollectOne(string name)
         {
             try
             {
                 return values.Collect(Key(name), _current[name], _assigned.Contains(name));
             }
-            catch (JavaScriptException)
+            catch (Exception exception) when (exception is JavaScriptException or System.Text.Json.JsonException or InvalidOperationException)
             {
                 return new ScriptValueChange(Key(name), ScriptValueChangeKind.WholeAssignment, null, [Key(name)], []);
             }

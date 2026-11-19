@@ -38,6 +38,7 @@ is exact for any length and exponent. A number held as a string (`"9007199254740
 | Assigned a whole value | Whole assignment | The step write replaces it |
 | Changed an array | Whole array | The step write replaces the array |
 | Set a member equal, as a JavaScript value, to what it read | Unchanged | Nothing (ADR 0090 C2; a string forces the write) |
+| Added a member JSON cannot hold (a function, a Symbol, `undefined`) | Unchanged | Nothing: JSON drops such a member, so the stored value is what it was (an input expression is not refused for it) |
 | Returned a value | Result | The result, as JSON |
 
 An entered value written unchanged, as a result or inside another value, is written from its original JSON, so it
@@ -53,10 +54,10 @@ A script activity's changes go to the step write path of ADR 0090 (spec 1231). A
 |---|---|---|---|
 | A lossy number reaches a write | Refused by the precision policy | `VF-PREC-001` | Path, stored and written value; an integer "exceeds the largest integer a JavaScript number holds exactly (9007199254740991)", a decimal "has more digits than a JavaScript number holds"; remedy: hold the number as a string |
 | A lossy element of an array written whole | Refused by the precision policy | `VF-PREC-001` | The array path, "written as a whole", each lossy element with both values; remedy: hold it as a string or do not change the array |
-| A lossy number read but not written | One warning per evaluation, recorded on the activity execution and shown in its inspection (`Warnings`) | `VF-PREC-002` | The lossy paths and why; never a value |
-| A lossy number passed to a host function | Logged warning, call not refused | `VF-PREC-002` | Function and argument path (the host function argument conversion is S-1's) |
+| A lossy number read but not written | One warning per evaluation, recorded on the activity execution and shown in its inspection (`Warnings`) | `VF-PREC-002` | The lossy paths and why; never a value. When the evaluation or step read a protected value, and in the log, only the roots (`variables.order`, `args`): a member below can be a key of that value |
+| A lossy number passed to a host function | Not yet: the isolated engine has no host functions. When S-1 adds them: logged warning, call not refused | `VF-PREC-002` | Function and argument path |
 | An input expression assigns a variable or a member of one, visibly in its source | Refused at publish | `VF-BIND-001` | Node, input, variable, path; "input expressions only read"; use a script activity |
-| An input expression changes a read value in a way publication cannot see | Evaluation fails, nothing written | `VF-BIND-001` | Same |
+| An input expression changes a read value in a way publication cannot see | Evaluation fails, nothing written | `VF-BIND-001` | Same; when a value it read is protected, the declared variable only, no path, and no name it computed |
 
 The precision policy is one replaceable host-wide component (`IJavaScriptPrecisionPolicy`, D-17). Elsa ships only
 `RefusingPrecisionPolicy`, with no options and no per-workflow or per-node override. A host that wants other handling

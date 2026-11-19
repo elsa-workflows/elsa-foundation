@@ -46,16 +46,30 @@ public sealed class JavaScriptPrecisionException : InvalidOperationException
 /// </summary>
 public sealed class InputExpressionWriteException : InvalidOperationException, Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure
 {
-    public InputExpressionWriteException(string variable, string path)
+    /// <param name="variable">The variable changed.</param>
+    /// <param name="path">The first changed path, which can name keys of the stored value.</param>
+    /// <param name="declared">
+    /// Whether the variable is one the expression can name (pinned, or a candidate of its lookup). A name it computed can
+    /// come from a value, so the value-free message withholds it.
+    /// </param>
+    public InputExpressionWriteException(string variable, string path, bool declared = true)
         : base(Describe(variable, path))
     {
         Variable = variable;
         Path = path;
+        ValueFreeMessage =
+            $"{JavaScriptValueDiagnostics.InputExpressionWrite}: the input expression changes " +
+            (declared ? $"variable '{variable}'" : "a variable it names by a computed value") +
+            "; the path is withheld because a value it read is protected. " +
+            "Input expressions only read; use a script activity (Run JavaScript) to change a variable, or change a local copy.";
     }
 
     public string Code => JavaScriptValueDiagnostics.InputExpressionWrite;
     public string Variable { get; }
     public string Path { get; }
+
+    /// <inheritdoc />
+    public string ValueFreeMessage { get; }
 
     /// <summary>The diagnostic text, shared with the publish-time refusal.</summary>
     public static string Describe(string variable, string path) =>

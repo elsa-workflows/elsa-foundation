@@ -152,8 +152,10 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 $"Input '{inputName}' on executable node '{nodeId}' is declared '{targetType.Alias}' and accepts only a JSON {mismatch.Expected}, but its expression returned a JSON {mismatch.Actual}.");
         }
 
+        // A warning's member paths can name keys of a protected value it read: the protected form names roots only.
         foreach (var warning in warnings.Warnings)
-            resolutionContext.Warnings?.Report(warning.WithDetail("input", inputName));
+            resolutionContext.Warnings?.Report(
+                ((Protects(effectivePolicy) ? warning.ProtectedForm : null) ?? warning).WithDetail("input", inputName));
         return new PortableExpressionEvaluation(value, effectivePolicy);
     }
 
@@ -209,6 +211,10 @@ internal sealed class RuntimePortableExpressionEvaluator(
         }
     }
 
+    // Spec 1229 FR-006: a sensitive, encrypted or redacted value is not shown, nor anything that can come from it.
+    private static bool Protects(ValueProtectionPolicy policy) =>
+        policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode);
+
     private static ExpressionInputFailureException NewInputFailure(
         string code,
         string phase,
@@ -221,13 +227,13 @@ internal sealed class RuntimePortableExpressionEvaluator(
         bool conservativelyRedact = false)
     {
         var message = $"Input '{inputName}' on executable node '{nodeId}' failed to materialize or evaluate its portable '{expression.Language}' expression with fingerprint '{definition.Fingerprint}'.";
-        // A failure that names only codes, variables and paths keeps its message: there is no value in it to protect.
-        var cause = exception is not IValueFreeExpressionFailure && (conservativelyRedact ||
-                    effectivePolicy.IsSensitive ||
-                    effectivePolicy.RequiresEncryption ||
-                    !string.IsNullOrWhiteSpace(effectivePolicy.RedactionMode))
-            ? new RedactedPortableExpressionException(exception.GetType())
-            : exception;
+        // A protected failure is redacted; one with a value-free form keeps that form, which names no member path and no
+        // computed name, so the diagnostic still says what went wrong.
+        var cause = !(conservativelyRedact || Protects(effectivePolicy))
+            ? exception
+            : exception is IValueFreeExpressionFailure valueFree
+                ? new RedactedPortableExpressionException(exception.GetType(), valueFree.ValueFreeMessage)
+                : new RedactedPortableExpressionException(exception.GetType());
         return new ExpressionInputFailureException(code, inputName, expression.Language, phase, message, cause);
     }
 
@@ -508,8 +514,9 @@ internal sealed class RuntimePortableExpressionEvaluator(
         new($"Portable expression parameter '{parameterName}' for input '{inputName}' on executable node '{nodeId}' {reason}.");
 }
 
-internal sealed class RedactedPortableExpressionException(Type evaluatorExceptionType)
-    : Exception($"Portable expression evaluator failure of type '{evaluatorExceptionType.FullName ?? evaluatorExceptionType.Name}' was redacted by value-protection policy.");
+internal sealed class RedactedPortableExpressionException(Type evaluatorExceptionType, string? valueFreeMessage = null)
+    : Exception(valueFreeMessage ??
+                $"Portable expression evaluator failure of type '{evaluatorExceptionType.FullName ?? evaluatorExceptionType.Name}' was redacted by value-protection policy.");
 
 internal sealed record PortableExpressionEvaluation(JsonElement Value, ValueProtectionPolicy EffectivePolicy);
 

@@ -46,6 +46,7 @@ internal static class JavaScriptValueWrites
         if (read.Length == 0)
             return;
         var paths = string.Join(", ", read.Select(number => number.Path).Distinct(StringComparer.Ordinal));
+        var roots = string.Join(", ", read.Select(number => ValuePaths.Root(number.Path)).Distinct(StringComparer.Ordinal));
         var integers = read.Any(number => number.IsInteger);
         var decimals = read.Any(number => !number.IsInteger);
         var why = (integers, decimals) switch
@@ -54,14 +55,22 @@ internal static class JavaScriptValueWrites
             (false, true) => "decimals with more digits than a JavaScript number holds",
             _ => $"integers beyond {RefusingPrecisionPolicy.MaxSafeInteger} or decimals with more digits than a JavaScript number holds"
         };
-        var message =
-            $"JavaScript read numbers it cannot hold exactly ({why}) and computed with the nearest value it holds: {paths}. " +
+        string Message(string where) =>
+            $"JavaScript read numbers it cannot hold exactly ({why}) and computed with the nearest value it holds: {where}. " +
             "Nothing was written from them. Hold such numbers as strings to keep every digit.";
+        // A member path can name keys of a stored value: the protected form and the log name the roots only.
+        var protectedForm = StringComparer.Ordinal.Equals(paths, roots)
+            ? null
+            : new ExecutionWarning(
+                JavaScriptValueDiagnostics.PrecisionLossRead,
+                Message(roots),
+                ExecutionWarningSeverity.Warning,
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["paths"] = roots });
         sink?.Report(new ExecutionWarning(
             JavaScriptValueDiagnostics.PrecisionLossRead,
-            message,
+            Message(paths),
             ExecutionWarningSeverity.Warning,
-            new Dictionary<string, string>(StringComparer.Ordinal) { ["paths"] = paths }));
-        logger?.LogWarning("{Code}: {Message}", JavaScriptValueDiagnostics.PrecisionLossRead, message);
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["paths"] = paths }) { ProtectedForm = protectedForm });
+        logger?.LogWarning("{Code}: {Message}", JavaScriptValueDiagnostics.PrecisionLossRead, Message(roots));
     }
 }

@@ -51,6 +51,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         private JsValue? _replacer;
         private JsValue? _infinityReplacer;
         private bool _enteredInfinity;
+        private bool _wroteInfinity;
         private long _enterTicks;
         private long _collectTicks;
         private long _bytes;
@@ -164,12 +165,15 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             var marked = Mark(value);
             var losses = new List<JavaScriptPrecisionLoss>();
             var buffer = new ArrayBufferWriter<byte>();
+            _wroteInfinity = false;
             using (var writer = NewWriter(buffer))
             {
                 WriteMarked(marked.Root, path, arrayPath: null, writer, losses, marked.Markers);
             }
 
-            var json = marked.Markers.Count == 0 && losses.Count == 0
+            // The serialized value is returned as is only when nothing in it was replaced: no marker, no loss and no
+            // Infinity, which is written as null even when no lossy entered number has its sign.
+            var json = marked.Markers.Count == 0 && losses.Count == 0 && !_wroteInfinity
                 ? marked.Root
                 : JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
             _bytes += buffer.WrittenCount;
@@ -354,6 +358,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     // JSON has no Infinity: it is written as null, and the number it came from carries that loss.
                     if (_lossyByValue.TryGetValue(infinity, out var lost))
                         losses.Add(new JavaScriptPrecisionLoss(path, lost, "null", arrayPath));
+                    _wroteInfinity = true;
                     writer.WriteNullValue();
                     break;
                 case JsonValueKind.String when markers.TryGetValue(element.GetString()!, out var origin):
@@ -520,6 +525,43 @@ internal static class ValuePaths
         IsIdentifier(name) ? $"{path}.{name}" : $"{path}[{JsonSerializer.Serialize(name)}]";
 
     public static string Index(string path, int index) => $"{path}[{index.ToString(CultureInfo.InvariantCulture)}]";
+
+    /// <summary>
+    /// The root a path starts at: <c>variables.order</c> for <c>variables.order.items[0]</c>, <c>args</c> for
+    /// <c>args.a</c>. Members below the root can be keys of a stored value, so a value-free diagnostic names roots only.
+    /// </summary>
+    public static string Root(string path)
+    {
+        var end = SegmentEnd(path, 0);
+        if (!StringComparer.Ordinal.Equals(path[..end], "variables") || end >= path.Length)
+            return path[..end];
+        return path[..SegmentEnd(path, path[end] == '.' ? end + 1 : end)];
+    }
+
+    // The end of the segment starting at `start`: an identifier runs to the next '.' or '['; a bracket runs to its ']',
+    // past a quoted name's escapes.
+    private static int SegmentEnd(string path, int start)
+    {
+        if (start < path.Length && path[start] == '[')
+        {
+            var index = start + 1;
+            var quoted = index < path.Length && path[index] == '"';
+            for (index += quoted ? 1 : 0; index < path.Length; index++)
+            {
+                if (quoted && path[index] == '\\')
+                    index++;
+                else if (quoted && path[index] == '"')
+                    quoted = false;
+                else if (!quoted && path[index] == ']')
+                    return index + 1;
+            }
+
+            return path.Length;
+        }
+
+        var next = path.IndexOfAny(['.', '['], start);
+        return next < 0 ? path.Length : next;
+    }
 
     private static bool IsIdentifier(string name) =>
         name.Length > 0 &&
