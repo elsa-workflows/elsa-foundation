@@ -202,10 +202,20 @@ a re-parse per value.
   expected one. Values the script changes or computes are new values and come back in the
   default format.
 - Because stored text keeps whatever notation arrived, two equal values can have different text. Nothing that decides
-  whether two values are equal compares their stored or freshly serialized text: it uses a defined semantic comparison
-  of the values. That is the no-op test of the ADR 0090 amendment (C4) and the value digest of ADR 0092, and it covers
-  the stores that today compare a fresh serialization with stored text exactly. Hashing is a separate concern: a hash
-  uses its own defined input (decision 7).
+  whether two values are equal compares their stored or freshly serialized text. It compares their **canonical form**:
+  two values are equal when they mean the same JSON.
+  - Objects have the same members, in any order, compared by their unescaped names.
+  - Strings are compared after unescaping (`"René"` equals `"René"`).
+  - Numbers are compared by exact decimal value, without rounding (`1.0`, `1` and `1e0` are equal; `9007199254740993`
+    and `9007199254740992` are not).
+  - Arrays have the same elements in the same order.
+  - A missing member and a `null` member are different.
+
+  This defines what equal means, not an algorithm. The canonical form is never stored or sent: stored and returned
+  data keeps its received text. It is the equality of the ADR 0090 amendment's no-op test (C4), and the value digest
+  of ADR 0092 is taken over a form that respects it. It also covers the stores that today compare a fresh
+  serialization with stored text exactly. Existing hash inputs are separate: they keep their frozen options
+  (decision 7).
 
 ### 4. One default output format
 
@@ -342,8 +352,8 @@ module could reintroduce any of them unnoticed. Rejected as the whole answer; it
 That is exactly how the host-wide leak happened. Rejected in favour of a read-only baseline with explicit copies.
 
 **Canonical output: normalize escaping and order everywhere.** Byte-stable output for every value, which is useful for
-hashing. Rejected because it changes data the user sent. Canonicalization stays where it belongs: in the hash
-preimage (decision 7).
+hashing. Rejected because it changes data the user sent. Canonicalization stays where it belongs: in comparisons
+and in new hashes over data (the canonical form, decision 3), never in data that is stored or sent.
 
 **A hard ban on deviations.** Clear, but some deviations are legitimate (decision 7), and a ban would push them into
 workarounds. Rejected in favour of a register: deviations stay possible, but each one is visible and justified.
@@ -365,7 +375,10 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
   - Design-store fingerprints stay valid.
   - Every registered hash input gives the same hash for the same input before and after the baseline is introduced.
   - Each direct-text hash and each check that compares serialized text is listed, and each text comparison that
-    decides equality of values uses the semantic comparison.
+    decides equality of values uses the canonical form.
+- **Equality.** `{"total":1.0,"name":"René"}` and `{"name":"René","total":1}` are equal, and assigning one over
+  the other writes nothing. `9007199254740993` and `9007199254740992` are not equal. `{}` and `{"x":null}` are not
+  equal. The value digest of ADR 0092 agrees with this equality on the same examples.
 - **Runtime durable state.** Fixed serialized examples show that old and new code read old and new rows with the same
   meaning. If they do not, the change is a stamped format change (decision 7).
 - **Nulls.** `IPayloadSerializer` keeps explicit nulls, and existing rows still read the same.
