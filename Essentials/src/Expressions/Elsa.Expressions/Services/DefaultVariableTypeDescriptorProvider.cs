@@ -28,8 +28,13 @@ internal sealed class DefaultVariableTypeDescriptorProvider : IVariableTypeDescr
         Descriptor("DateTimeOffset", typeof(DateTimeOffset), "Date/Time Offset", "date", false),
         Descriptor("TimeSpan", typeof(TimeSpan), "Duration", "text", false),
         Descriptor("Guid", typeof(Guid), "GUID", "text", false),
-        Descriptor("Object", typeof(object), "Object", "text", true),
-        Descriptor("System.Text.Json.JsonElement", typeof(JsonElement), "JSON", "json", true)
+        // Stored as ISO 8601 text: "2026-10-28", "09:15:00" (spec 1228 FR-020).
+        Descriptor("DateOnly", typeof(DateOnly), "Date", "date", false),
+        Descriptor("TimeOnly", typeof(TimeOnly), "Time of day", "text", false),
+        // The dynamic kind: any valid JSON value, shown as JSON. It replaces Object, which mapped to .NET object
+        // (spec 1228 FR-017, FR-018). JsonElement keeps its full .NET name for activities that declare it; the type
+        // registry resolves that name to the same CLR type.
+        Descriptor(TypeAliasConvention.AnyAlias, typeof(JsonElement), "JSON", "json", true)
     ];
 
     /// <inheritdoc />

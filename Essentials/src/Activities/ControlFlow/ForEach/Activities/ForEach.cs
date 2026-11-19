@@ -162,7 +162,7 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
     private static ValueEnvelope ToItemEnvelope(IRuntimeActivityExecutionContext runtimeContext, object? value)
     {
         if (!runtimeContext.ExecutableNode.InputBindings.TryGetValue(nameof(Collection), out var collectionBinding))
-            return ToEnvelope(value, new ValueTypeDescriptor("Elsa.Any"), ValueProtectionPolicy.InstanceInline);
+            return ToEnvelope(value, new ValueTypeDescriptor(TypeAliasConvention.AnyAlias), ValueProtectionPolicy.InstanceInline);
 
         var policy = collectionBinding.EffectivePolicy;
         if (policy.Lifecycle == DurableValueLifecycle.None)

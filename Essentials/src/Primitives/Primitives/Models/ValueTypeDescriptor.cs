@@ -26,7 +26,8 @@ public sealed record ValueTypeDescriptor
         if (element is not null && collectionKind == CollectionKind.Single)
             throw new ArgumentException("A single value has no nested element type.", nameof(element));
 
-        Alias = alias;
+        // Object, System.Object and Elsa.Any read as Any, the dynamic kind (spec 1228 FR-018).
+        Alias = TypeAliasConvention.ReadAlias(alias);
         CollectionKind = collectionKind;
         Schema = schema?.Clone();
         SchemaVersion = schemaVersion;

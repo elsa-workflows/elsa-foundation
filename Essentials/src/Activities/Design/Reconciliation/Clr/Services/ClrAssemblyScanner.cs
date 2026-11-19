@@ -1057,7 +1057,7 @@ public sealed class ClrAssemblyScanner(
     // convention, so these aliases resolve back to the real CLR type at compile time.
     private static TypeReference ToTypeReference(Type? valueType) =>
         valueType is null
-            ? new TypeReference("Object")
+            ? new TypeReference(TypeAliasConvention.AnyAlias)
             : TypeReferenceFactory.FromClrType(valueType, TypeAliasConvention.CanonicalAlias);
 
     private Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls) =>

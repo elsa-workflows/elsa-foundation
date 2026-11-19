@@ -81,7 +81,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             case ValueConversionOperation.RecursiveCollection when !ValueConversionCompatibility.CanRecursivelyWidenCollection(plan.SourceType, plan.TargetType):
                 throw Reject(plan, "recursive collection conversion does not have a safe element widening");
             case ValueConversionOperation.CanonicalAny when !ValueConversionCompatibility.IsCanonicalAnyTarget(plan.TargetType):
-                throw Reject(plan, "canonical dynamic projection requires the Elsa.Any target contract");
+                throw Reject(plan, "canonical dynamic projection requires the Any target contract");
         }
     }
 

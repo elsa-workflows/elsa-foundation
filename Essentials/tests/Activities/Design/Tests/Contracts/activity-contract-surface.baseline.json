@@ -383,7 +383,7 @@
         {
           "key": "Collection",
           "name": "Collection",
-          "type": "Object",
+          "type": "Any",
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
@@ -1353,7 +1353,7 @@
         {
           "key": "Expression",
           "name": "Expression",
-          "type": "Object",
+          "type": "Any",
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,

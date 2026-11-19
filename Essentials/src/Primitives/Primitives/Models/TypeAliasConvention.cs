@@ -12,7 +12,8 @@ namespace Elsa.Primitives.Models;
 /// </para>
 /// <list type="bullet">
 ///   <item>For framework primitives / common BCL value types: the reserved bare BCL alias (<c>String</c>,
-///   <c>Int32</c>, <c>Boolean</c>, <c>DateTime</c>, <c>Guid</c>, <c>Object</c>, …).</item>
+///   <c>Int32</c>, <c>Boolean</c>, <c>DateTime</c>, <c>Guid</c>, …). <c>System.Object</c> is the dynamic kind,
+///   <c>Any</c>: any valid JSON value (spec 1228 FR-017).</item>
 ///   <item>For every other type: its <see cref="Type.FullName"/> (dotted, namespace-qualified) with NO
 ///   assembly name and NO version. (<see cref="Type.Name"/> is used only in the degenerate case where
 ///   <see cref="Type.FullName"/> is null, e.g. open generic parameters.)</item>
@@ -34,7 +35,8 @@ public static class TypeAliasConvention
     {
         // Reference primitives.
         ["System.String"] = "String",
-        ["System.Object"] = "Object",
+        // System.Object is the dynamic kind: any valid JSON value, never a live .NET object (spec 1228 FR-018).
+        ["System.Object"] = AnyAlias,
         // Integral types.
         ["System.Byte"] = "Byte",
         ["System.SByte"] = "SByte",
@@ -55,7 +57,10 @@ public static class TypeAliasConvention
         ["System.DateTime"] = "DateTime",
         ["System.DateTimeOffset"] = "DateTimeOffset",
         ["System.TimeSpan"] = "TimeSpan",
-        ["System.Guid"] = "Guid"
+        ["System.Guid"] = "Guid",
+        // Dates and times of day without the rest, stored as ISO 8601 text (spec 1228 FR-020).
+        ["System.DateOnly"] = "DateOnly",
+        ["System.TimeOnly"] = "TimeOnly"
     };
 
     /// <summary>
@@ -65,6 +70,59 @@ public static class TypeAliasConvention
     /// </summary>
     public static readonly IReadOnlySet<string> ReservedBareAliases =
         new HashSet<string>(PrimitiveAliasesByFullName.Values, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The alias of the dynamic kind: any valid JSON value. Studio shows it as JSON (spec 1228 FR-017).
+    /// </summary>
+    public const string AnyAlias = "Any";
+
+    /// <summary>
+    /// The older names of the dynamic kind, which read as <see cref="AnyAlias"/> when a definition loads
+    /// (spec 1228 FR-018).
+    /// </summary>
+    private static readonly IReadOnlySet<string> AnyAliasNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        AnyAlias,
+        "Object",
+        "System.Object",
+        "Elsa.Any"
+    };
+
+    /// <summary>
+    /// Returns the alias a stored <paramref name="alias"/> reads as: <c>Object</c>, <c>System.Object</c> and
+    /// <c>Elsa.Any</c> read as <see cref="AnyAlias"/> (a nullable suffix is kept); every other alias reads as itself
+    /// (spec 1228 FR-018).
+    /// </summary>
+    [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull(nameof(alias))]
+    public static string? ReadAlias(string? alias)
+    {
+        if (alias is null)
+            return null;
+
+        var nullable = alias.EndsWith('?');
+        var name = nullable ? alias[..^1] : alias;
+        if (!AnyAliasNames.Contains(name) || StringComparer.Ordinal.Equals(name, AnyAlias))
+            return alias;
+
+        return nullable ? AnyAlias + "?" : AnyAlias;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="alias"/> is <see cref="AnyAlias"/> or one of the older names that read as it, nullable or
+    /// not. Unlike <see cref="IsDynamicKind"/>, the .NET JSON types an activity declares (<c>JsonElement</c>,
+    /// <c>JsonNode</c>) are not <c>Any</c>: they keep their own CLR type.
+    /// </summary>
+    public static bool IsAny(string? alias)
+    {
+        if (string.IsNullOrWhiteSpace(alias))
+            return false;
+
+        var name = alias.Trim();
+        if (name.EndsWith('?'))
+            name = name[..^1];
+
+        return AnyAliasNames.Contains(name);
+    }
 
     /// <summary>
     /// The names of the dynamic kind: any valid JSON value. <c>Any</c> is its alias; <c>Object</c>,

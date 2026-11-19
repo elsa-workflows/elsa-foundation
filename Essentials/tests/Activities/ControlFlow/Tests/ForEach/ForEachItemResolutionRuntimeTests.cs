@@ -89,7 +89,7 @@ public sealed class ForEachItemResolutionRuntimeTests
         run.AssertWorkflowCompleted();
     }
 
-    // An Elsa.Any body input receives a JSON number item with its exact text (#3421): the item is never
+    // An Any body input receives a JSON number item with its exact text (#3421): the item is never
     // narrowed to a CLR double between the collection and the body.
     [Fact]
     public async Task Body_receives_exact_number_text_through_an_any_input()
@@ -98,7 +98,7 @@ public sealed class ForEachItemResolutionRuntimeTests
         // The last two exceed decimal as well as double, so narrowing to either would show.
         string[] numbers = ["9007199254740993", "12345678901234567890", "1234567890.123456789012345", "1.0", "1234567890123456789012345678901234567890", "1e400"];
 
-        var run = await harness.RunAsync(NewExecutable(JsonArray(numbers), ForEachActivity.CurrentItemVariableName, "Elsa.Any", typeof(ForEachAnyItemCaptureActivity)));
+        var run = await harness.RunAsync(NewExecutable(JsonArray(numbers), ForEachActivity.CurrentItemVariableName, "Any", typeof(ForEachAnyItemCaptureActivity)));
 
         Assert.Equal(numbers, CapturedValuesInIterationOrder(run));
         run.AssertWorkflowCompleted();

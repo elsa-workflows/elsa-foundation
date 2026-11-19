@@ -603,7 +603,7 @@ public sealed class ExecutableNodeCompiler(
 
         // Dynamic JSON has no static source contract. Runtime validates its actual payload against
         // the destination contract before storage; do not invent a source type or parse string content.
-        if (sourceType is null || sourceType.Alias == "Elsa.Any")
+        if (sourceType is null || TypeAliasConvention.IsAny(sourceType.Alias))
             return binding;
         var source = new ValueTypeDescriptor(sourceType.Alias, sourceType.CollectionKind);
         try

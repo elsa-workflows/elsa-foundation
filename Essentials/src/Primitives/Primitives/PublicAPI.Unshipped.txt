@@ -1,4 +1,5 @@
 #nullable enable
+const Elsa.Primitives.Models.TypeAliasConvention.AnyAlias = "Any" -> string!
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.ActionForbidden = "activity.action.forbidden" -> string!
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.AuthorizationDenied = "activity.authorization.denied" -> string!
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.CursorExpired = "activity.cursor.expired" -> string!
@@ -220,7 +221,9 @@ static Elsa.Primitives.Models.ClrActivityDescriptor.operator ==(Elsa.Primitives.
 static Elsa.Primitives.Models.Result.Failure<T>(System.Exception! exception) -> Elsa.Primitives.Models.Result<T>!
 static Elsa.Primitives.Models.Result.Success<T>(T value) -> Elsa.Primitives.Models.Result<T>!
 static Elsa.Primitives.Models.TypeAliasConvention.CanonicalAlias(System.Type! type) -> string!
+static Elsa.Primitives.Models.TypeAliasConvention.IsAny(string? alias) -> bool
 static Elsa.Primitives.Models.TypeAliasConvention.IsDynamicKind(string? alias) -> bool
+static Elsa.Primitives.Models.TypeAliasConvention.ReadAlias(string? alias) -> string?
 static Elsa.Primitives.Models.TypeAliasConvention.IsShapedJson(string? alias) -> bool
 static Elsa.Primitives.Models.TypeReference.operator !=(Elsa.Primitives.Models.TypeReference? left, Elsa.Primitives.Models.TypeReference? right) -> bool
 static Elsa.Primitives.Models.TypeReference.operator ==(Elsa.Primitives.Models.TypeReference? left, Elsa.Primitives.Models.TypeReference? right) -> bool

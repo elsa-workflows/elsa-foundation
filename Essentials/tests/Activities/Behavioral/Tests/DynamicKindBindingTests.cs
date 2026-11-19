@@ -135,6 +135,32 @@ public sealed class DynamicKindBindingTests
         Assert.Equal("1", Assert.Single(headers.GetProperty("X-Test").EnumerateArray()).GetString());
     }
 
+    // Spec 1228 User Story 4, acceptance 2: a definition naming Object or Elsa.Any loads as Any, publishes and runs.
+    [Theory]
+    [InlineData("Object")]
+    [InlineData("Elsa.Any")]
+    [InlineData("Any")]
+    public async Task A_variable_named_with_an_older_dynamic_name_loads_as_Any_publishes_and_runs(string storedAlias)
+    {
+        var stored = JsonSerializer.Deserialize<VariableDefinition>(
+            $$$"""{"referenceKey":"customer","name":"Customer","type":{"alias":"{{{storedAlias}}}","collectionKind":"Single"}}""",
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        var customer = stored with { Default = new ArgumentValue(JsonSerializer.SerializeToElement(new { address = new { street = "Main" } }), "Object") };
+        Assert.Equal("Any", customer.Type.Alias);
+        using var publication = new MemberReadPublicationRunTests.Publication(memberReads: true, typed: true);
+        var reader = new ActivityNode("reader", "reader-version", [new(nameof(MemberReadPublicationRunTests.MemberReader.Value),
+            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "customer", declaringScopeId = "workflow", memberPath = new[] { "address", "street" } }),
+                "VariableMember"), null, null, null, null)], []);
+
+        var executable = await publication.Compile(reader, [customer]);
+
+        Assert.Equal("Any", Assert.Single(executable.WorkflowVariables).Type.Alias);
+        await using var harness = MemberReadPublicationRunTests.Harness();
+        var run = await harness.RunAsync(executable);
+        run.AssertWorkflowCompleted();
+        Assert.Equal("Main", run.AssertCompleted("reader").Completion!.Result.InlineValue!.Value.GetProperty("value").GetString());
+    }
+
     // One reader version per input, each declaring only that input, so the inputs a test leaves unbound are not
     // part of the contract.
     private static MemberReadPublicationRunTests.Publication Publication() =>

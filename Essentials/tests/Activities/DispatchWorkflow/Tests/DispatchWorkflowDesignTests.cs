@@ -770,7 +770,7 @@ public sealed class DispatchWorkflowDesignTests
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(int), "Int32");
         registry.RegisterType(typeof(bool), "Boolean");
-        registry.RegisterType(typeof(object), "Object");
+        registry.RegisterType(typeof(System.Text.Json.JsonElement), "Any");
         return new WorkflowExecutableInputValidator(registry);
     }
 
