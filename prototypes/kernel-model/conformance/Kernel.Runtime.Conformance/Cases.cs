@@ -150,7 +150,8 @@ public static class Cases
             });
             That(await Harness.WaitAsync(async () => (await h.RowAsync(id)) is { } row && Json.Read<CounterState>(row.State).Tokens.Count >= 3, Slack),
                 $"{a.Name} handled none of partition 0's messages before the crash");
-            var held = Enumerable.Range(0, h.Partitions).Where(p => h.Watcher.Holders(h.Partitions)[p].Contains(a.Name)).ToList();
+            var holders = h.Watcher.Holders(h.Partitions);       // once: it reads every watched activation
+            var held = Enumerable.Range(0, h.Partitions).Where(p => holders[p].Contains(a.Name)).ToList();
             var killing = Stopwatch.StartNew();
             var killedAt = Environment.TickCount64;
             await h.KillAsync(a);
