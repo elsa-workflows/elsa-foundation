@@ -89,6 +89,9 @@ jobs:
           $SIM --native --seeds 10000
           $SIM --lease-check
           $SIM --landed-check
+          # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
+          $SIM --placement-check
+          if $SIM --placement-check --flaw ContiguousOnlyBalancer > /dev/null; then echo "--placement-check did not catch ContiguousOnlyBalancer"; exit 1; fi
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
           dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
           dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
@@ -156,6 +159,9 @@ jobs:
           $SIM --native --seeds 20000 --actions 1000
           $SIM --lease-check
           $SIM --landed-check
+          # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
+          $SIM --placement-check
+          if $SIM --placement-check --flaw ContiguousOnlyBalancer > /dev/null; then echo "--placement-check did not catch ContiguousOnlyBalancer"; exit 1; fi
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
           dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
           dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys

@@ -76,8 +76,12 @@ public sealed class InProcessWakeSignal : IWakeSignal
     }
 }
 
-/// <summary>What a heartbeat sees: how many nodes were heard from within the window, and which partitions nobody holds.</summary>
-public sealed record Cluster(int Nodes, IReadOnlyList<int> Free, long Now);
+/// <summary>
+/// What a heartbeat sees: how many nodes were heard from within the window, and which partitions nobody holds.
+/// <paramref name="Rank"/> is this node's place among them in name order, where the membership knows it (0 otherwise);
+/// only the <see cref="Flaw.ContiguousOnlyBalancer"/> mutation reads it.
+/// </summary>
+public sealed record Cluster(int Nodes, IReadOnlyList<int> Free, long Now, int Rank = 0);
 
 /// <summary>The built-in runtime's view of the cluster, kept by the store: a node's heartbeat and the partitions nobody holds.</summary>
 public interface IMembership

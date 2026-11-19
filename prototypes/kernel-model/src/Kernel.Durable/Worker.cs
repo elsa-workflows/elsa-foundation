@@ -76,6 +76,8 @@ public sealed record WorkerOptions
 
     /// <summary>Called when a turn starts, with the worker's idea of database time. For tests.</summary>
     public Action<InstanceRef, IReadOnlyList<Message>, long>? OnTurn { get; init; }
+    /// <summary>K1: the partitions whose journal a landed commit moved, or that a take or gain just took (<see cref="NodeProjection.Nudge"/>).</summary>
+    public Action<IReadOnlyCollection<int>>? OnJournal { get; init; }
     /// <summary>Original stored metadata when a newly polled delivery is held; for the simulation's history oracle.</summary>
     public Action<Stored>? OnObservedDelivery { get; init; }
     /// <summary>A job dispatch or result observed an expired local window; for deterministic witnesses.</summary>
@@ -563,6 +565,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
         }
+        _options.OnJournal?.Invoke([.. lease.Taken.Select(t => t.Partition)]);     // a take may find a journal not projected yet
         LeaseUsable(); // an answer delayed past the safe deadline cannot authorize work
     }
 
@@ -657,6 +660,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
         finally { _taking = false; }
         if (lease is null) return false;
+        var installed = false;
         lock (_turnSync)
             if (generation == _generation && Owns && !_releasing && !_retaking)
             {
@@ -665,9 +669,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 Observe(lease.Now);
                 Renewed();
                 _caughtUp = false;      // F1: until a short poll has read the new partition's inbox, nothing is handed over in memory
-                _woken = true;
-                return true;
+                (_woken, installed) = (true, true);
             }
+        if (installed)
+        {
+            _options.OnJournal?.Invoke([partition]);       // a take may find a journal not projected yet
+            return true;
+        }
         try { await _store.ReleaseAsync(partition, lease.Epoch, cancellationToken); }      // the set changed meanwhile: give it back
         catch (Exception) { /* then the lease runs out instead */ }
         return false;
@@ -807,14 +815,22 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _polling = false;
         Observe(polled.Now);    // anchored when the answer arrives, so the estimate never runs ahead of the database
         if (!LeaseUsable()) return;
+        var read = 0;
         foreach (var row in polled.Messages)
         {
-            if (!_items.ContainsKey(row.Message.InboxKey) && !_consumed.Contains(row.Message.InboxKey)) _options.OnObservedDelivery?.Invoke(row);
+            if (!_items.ContainsKey(row.Message.InboxKey) && !_consumed.Contains(row.Message.InboxKey))
+            {
+                read++;
+                _options.OnObservedDelivery?.Invoke(row);
+            }
             Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts, suspect: Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0, cancellationToken: cancellationToken);
             if (!LeaseUsable()) return;
         }
         // Finding F1: caught up when a poll comes back short and every row this owner wrote meanwhile has come back with it.
         if (polled.Messages.Count < _options.PollLimit && _behind.Count == 0) _caughtUp = true;
+        // K1 D1: a full poll that read something new is read on at the next pass, without waiting for a hint or the poll
+        // interval. One poll serves the node's whole set, so a backlog in one partition must not slow the others' reads.
+        if (polled.Messages.Count >= _options.PollLimit && read > 0) _woken = true;
     }
 
     /// <summary>
@@ -1779,6 +1795,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (!LeaseUsable()) return Outcome.Lost;
             var sending = DbNow;
             var started = _options.Monotonic();
+            List<int> journaled = [];
             Committed result;
             try
             {
@@ -1820,6 +1837,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 foreach (var fence in batch.Fenced)
                 {
                     var moved = _held[fence.Partition];
+                    if (batch.PositionsIn(fence.Partition) > 0) journaled.Add(fence.Partition);
                     moved.Position += batch.PositionsIn(fence.Partition);
                     moved.Renewed = Math.Max(moved.Renewed, sending);      // a commit that lands renews the lease of the rows it fences
                     moved.SafeUntil = Math.Max(moved.SafeUntil, started + (long)_options.Lease.TotalMilliseconds);
@@ -1827,6 +1845,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 Observe(result.Now);
                 Renewed();
             }
+            if (journaled.Count > 0) _options.OnJournal?.Invoke(journaled);
             if (!LeaseUsable()) return Outcome.Lost; // a late acknowledgement cannot revive the old local deadline
             foreach (var item in marks.Concat(trial))
                 if (item.Suspect && !trial.Contains(item)) item.Shelved = true;

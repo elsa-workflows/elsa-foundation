@@ -291,6 +291,39 @@ The follow-ups that slice 2a recorded for this slice:
   The fixed host's set take is unchanged.
 - **`commit=ef` stays one partition per worker:** `ForNode` falls back to a worker per scope on such a store.
 
+### K1 slice 5b: the fewest-moves balancer, the projector per partition, and fairness
+
+- **The balancer** (`Balancer.Plan`, which `PartitionRuntime.BalanceAsync` runs) is unchanged in what it decides, and
+  now a pure function with a witness. A node's share is the partitions over the nodes heard from, rounded up. It gives up
+  only what is above its share, the highest first, and asks for free partitions up to it, the lowest first. A join
+  therefore moves only the surplus above the new share, a leave only the leaver's partitions, and the sets end scattered.
+  `sim --placement-check` runs four joins, a leave and a join through the plan at 64 and at 1,024. At 1,024 the four
+  joins move 0, 512, 340 and 256 (1,108), the leave 256 and the last join 256, each the fewest, and the four sets end in
+  7 ranges. Under the new mutation `ContiguousOnlyBalancer` (each node keeps its fair contiguous range by rank) the same
+  joins move 0, 512, 511 and 513, the check fails, and CI requires that it fails. `GreedyBalancer` fails it too. The
+  mutation is a placement cost: correctness is unaffected, so the random sim cannot catch it, and it is not in the
+  `--mutations` list (the pins stay 43 and 15). `Cluster.Rank` (the node's place in name order, from the in-memory
+  membership) exists only for that mutation.
+- **The projector per virtual partition** (`NodeProjection`). A landed commit nudges the partitions whose position it
+  moved, and a take or a gain the partition it took (its journal may not be projected yet). One drain at a time runs a
+  round for each nudged partition, and again while a round moves on and leaves more. Nothing sweeps every partition on a
+  timer. The runtime conformance case writes in two of four partitions: the other two get one round each, from their
+  take, and the two written get theirs until the projection reaches the journal.
+- **Fairness under one worker per node** (the plan's D1 risk). The set's poll is first in, first out across the set: one
+  query, in seq order, at most `PollLimit` rows. A message in a quiet partition therefore waits behind the rows of every
+  partition of the node that arrived before it, and behind none that arrived after it. A full poll that read something
+  new is now read on at the next pass, without waiting for a hint or the poll interval: before, a node drained a
+  backlog at `PollLimit` rows per poll interval across its whole set, where a worker per partition drained each
+  partition at that rate. Once read, it takes its turn in
+  the next pass at the latest, because a pass gives every ready instance of the whole set one turn (the fairness page's
+  per-instance rule, now spanning the set). The runtime conformance case puts 600 rows for 60 instances in a hot
+  partition, then one row in another partition, then 600 more in the hot one: no later row is read before it, and no
+  instance takes more than two turns between its read and its turn. **The trial pause:** the trial gate is the node's, so
+  a trial in any partition of the set holds back the turns of all of them until the trial's commit (FINDINGS F11: a
+  death kills every partition the process holds). Under a worker per partition the runtime suite gave each worker its
+  own gate; under the per-node set the pause is structural. Trials happen only for suspects, so the pause is rare, and
+  it lasts one commit of the instance on trial.
+
 ## Placement and rebalance (`sim --placement-check`)
 
 - `VirtualPartitions.Of(name, count)` is the hash of today, so an address embeds its virtual partition as it embeds
@@ -341,7 +374,8 @@ The follow-ups that slice 2a recorded for this slice:
   complete with no deadlock; locked in batch order they deadlock ([experiments/K1.LockOrder](experiments/K1.LockOrder/README.md)).
   Provider qualification is K4.
 - Not modelled: a flush that spans two of a node's range fragments in (ii); MongoDB; in (i), the per-node Worker (D1)
-  itself and its fairness (slice 5), poison (`MaxAttempts`) and trial groups, and deletes in the projector.
+  itself and its fairness (slice 5 tests them in the runtime conformance suite instead), poison (`MaxAttempts`) and
+  trial groups, and deletes in the projector.
 - `tcp` for one 100-instance flush read 3 instead of 2 once (README: the PostgreSQL stream varies by a read or two).
 - **Unverified (raised in review):** on PostgreSQL every row update is a new tuple version, so (i)'s beat of *R* rows
   every few seconds per node is steady WAL and vacuum churn even when the cluster is idle (1,024 rows per beat at

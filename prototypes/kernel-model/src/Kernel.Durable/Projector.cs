@@ -21,16 +21,23 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
     /// <summary>Rounds this projector has run, whatever they found. For tests.</summary>
     public int Rounds { get; private set; }
 
-    /// <summary>A round, as the host's timer or a nudge after commits runs it: nothing if one is under way, and no failure ever escapes.</summary>
-    public async Task RoundAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// A round, as a nudge after commits runs it (<see cref="NodeProjection"/>): nothing if one is under way, and no
+    /// failure ever escapes. True when it moved the projection and left it behind the position it read: there is more.
+    /// </summary>
+    public async Task<bool> RoundAsync(CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
-            if (_running) return;
+            if (_running) return false;
             _running = true;
         }
-        try { await OneAsync(cancellationToken); }
-        catch (Exception) { /* a read or a write in doubt: the next round reads the position again */ }
+        try
+        {
+            var page = await OneAsync(cancellationToken);
+            return page.At > page.From && page.At < page.Written;
+        }
+        catch (Exception) { return false; /* a read or a write in doubt: the next round reads the position again */ }
         finally { Done(); }
     }
 
@@ -140,5 +147,60 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
             }
         }
         return new(from, to, written, contiguous);
+    }
+}
+
+/// <summary>
+/// The projection of one node's set (K1): a projector per virtual partition, and rounds only for partitions whose journal
+/// moved. A landed commit nudges the partitions whose position it moved, and a take the partition it took. One drain at a
+/// time runs a round for each nudged partition, and again while a round moves on and leaves more; nothing sweeps every
+/// partition on a timer. A partition that moved to another node is projected there; the cursor write is conditional, so
+/// rounds of two nodes race safely.
+/// </summary>
+public sealed class NodeProjection(IKernelStore store, int take = 100, Flaw flaws = Flaw.None)
+{
+    private readonly Dictionary<int, Projector> _projectors = [];
+    private readonly SortedSet<int> _dirty = [];
+    private Task _drain = Task.CompletedTask;
+    private bool _draining;
+
+    /// <summary>Rounds run so far, over every partition. For tests.</summary>
+    public int Rounds { get { lock (_dirty) return _projectors.Values.Sum(p => p.Rounds); } }
+
+    /// <summary>Rounds run so far for one partition. For tests.</summary>
+    public int RoundsOf(int partition) { lock (_dirty) return _projectors.TryGetValue(partition, out var projector) ? projector.Rounds : 0; }
+
+    /// <summary>Done when no nudged partition waits for a round. For tests.</summary>
+    public Task Idle { get { lock (_dirty) return _drain; } }
+
+    public void Nudge(IEnumerable<int> partitions)
+    {
+        lock (_dirty)
+        {
+            _dirty.UnionWith(partitions);
+            if (_draining || _dirty.Count == 0) return;
+            _draining = true;
+            _drain = Task.Run(DrainAsync);
+        }
+    }
+
+    private async Task DrainAsync()
+    {
+        while (true)
+        {
+            int[] nudged;
+            lock (_dirty)
+            {
+                if (_dirty.Count == 0) { _draining = false; return; }
+                nudged = [.. _dirty];
+                _dirty.Clear();
+            }
+            foreach (var partition in nudged)
+            {
+                Projector projector;
+                lock (_dirty) projector = _projectors.TryGetValue(partition, out var known) ? known : _projectors[partition] = new(store, partition, take, flaws);
+                if (await projector.RoundAsync()) lock (_dirty) _dirty.Add(partition);     // a full page: another round
+            }
+        }
     }
 }

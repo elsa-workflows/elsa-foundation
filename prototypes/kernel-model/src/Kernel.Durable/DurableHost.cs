@@ -41,10 +41,15 @@ public sealed class DurableHost : IScopeHost
 
     /// <summary>
     /// The host of one node (D1): one worker for the node's owned set. On a store without owned sets, a worker per scope,
-    /// created when the scope is first activated.
+    /// created when the scope is first activated. With a <paramref name="projection"/>, the node's commits and takes nudge
+    /// its rounds, per virtual partition.
     /// </summary>
-    public static DurableHost ForNode(string node, IKernelStore store, IActorType type, WorkerOptions? options = null) =>
-        store.OwnedSetsAvailable ? new(Worker.ForNode(node, store, type, options)) : new(scope => new Worker(node, scope, store, type, options));
+    public static DurableHost ForNode(string node, IKernelStore store, IActorType type, WorkerOptions? options = null, NodeProjection? projection = null)
+    {
+        if (projection is not null)
+            options = (options ?? new()) with { OnJournal = options?.OnJournal is { } earlier ? moved => { earlier(moved); projection.Nudge(moved); } : projection.Nudge };
+        return store.OwnedSetsAvailable ? new(Worker.ForNode(node, store, type, options)) : new(scope => new Worker(node, scope, store, type, options));
+    }
 
     /// <summary>The node's one worker, or null for a host of a worker per scope.</summary>
     public Worker? NodeWorker => _node;

@@ -90,4 +90,7 @@ public enum Flaw : long
     ForgetShortWaits = 1L << 44,   // an Ephemeral instance written after waiting in memory leaves its timers and jobs in memory only; a stand-down does not write it
     NoWriteFirst = 1L << 45,       // a command or a message from outside is given to an instance held in memory without writing it first
     KeepExpiredCallers = 1L << 42, // an owner keeps a caller's reply address past its deadline: it pins the instance and is still sent replies
+
+    // K1 slice 5: a placement cost, witnessed by sim --placement-check, not by the random sim.
+    ContiguousOnlyBalancer = 1L << 49, // a node keeps one contiguous range, its fair one by rank: a join or a leave moves more than the fewest
 }
