@@ -1,0 +1,87 @@
+.studio-refresh-control {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--studio-space-1);
+}
+
+.studio-refresh-buttons {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.studio-refresh-buttons[data-split="true"] .studio-refresh-main {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.studio-refresh-buttons .studio-refresh-trigger {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  margin-inline-start: -1px;
+  padding-inline: var(--studio-space-2);
+}
+
+.studio-refresh-buttons .studio-button:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+.studio-refresh-interval {
+  align-self: center;
+  margin-inline-start: var(--studio-space-2);
+  font-size: var(--studio-label-size);
+  font-weight: 400;
+}
+
+.studio-refresh-error {
+  max-width: 28rem;
+  color: var(--studio-danger);
+  font-size: var(--studio-label-size);
+}
+
+.studio-refresh-popover {
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.studio-refresh-menu {
+  display: grid;
+  padding: var(--studio-space-1);
+}
+
+.studio-refresh-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--studio-space-2);
+  min-height: var(--studio-control-height);
+  padding: var(--studio-space-1) var(--studio-space-2);
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-family: var(--studio-font-ui);
+  font-size: var(--studio-body-size);
+  text-align: start;
+  cursor: pointer;
+}
+
+.studio-refresh-menu-item:hover,
+.studio-refresh-menu-item:focus-visible {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
+.studio-refresh-menu-item:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: -2px;
+}
+
+.studio-refresh-menu-check {
+  width: 1em;
+  flex: none;
+}

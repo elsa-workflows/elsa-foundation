@@ -66,6 +66,12 @@ this foundation's layer 2, was retired on 19 November for that reason.
 
 ### 2. The turn contract
 
+*Owner decision 1 of 19 November ([the foundation contract](../architecture/foundation-contract.md#owner-decisions-19-november)),
+approved with conditions by the independent architecture review on 19 November at `2825b0ed1` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)):
+the paragraph below is the earlier approved text of 18 November; under the approved contract `SendOptions.DueAt` becomes the `dueAt`
+argument of `Send`, `JobSpec` is `(Key, Arguments)` with the effect key inside the arguments, `TurnAsync(ITurn)` and
+`ExecuteJobAsync(IJob)` stay, and `RestoreWaits` returns `TimerSpec`, `JobSpec` and `SubscriptionSpec`.*
+
 An execution model implements `TurnAsync(ITurn)` and `ExecuteJobAsync(IJob)` over opaque state. A turn reads its
 inbox and state in memory and produces new state, sends, timers, subscriptions, jobs and journal entries; the kernel
 commits them atomically at the turn's end and only there. Everything that crosses an instance boundary is a message; no
@@ -83,25 +89,35 @@ arguments captured at arm, effect key) and each subscription counts toward the p
 coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fourth-review-round-18-november))
 ([observability](../architecture/observability.md#recover)). Termination is bounded kernel work (fifth review, a coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fifth-review-round-18-november)): a terminate's cascade is a durable obligation that layer 2 discharges in pages of at most `P_cascade` entries, with an idempotent job cancel, and every terminate of that cascade carries a kernel-only cascade origin mark that each recipient checks against its recorded parent in every state, while a model's own `kernel.terminate` keeps its existing authorization ([observability](../architecture/observability.md#every-park-operation-names-its-park)). Events reach waits without a clock: every publish, a turn's or an outside one, is a publish ticket whose match step reads the committed subscriptions, so a wait that did not ask for kept events receives every event accepted after it committed and an earlier one only while that step is outstanding, with no clock bound, and a wait that keeps events is entitled from max(its registration, the tenant's sweep horizon plus 1 ms) to every event whose window was open, which the sweep keeps while the wait's catch-up on that key is outstanding (fifth review, a coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fifth-review-round-18-november); the non-keeping wait's window is an owner decision of 18 November, [register](../architecture/decisions.md#the-gate-2-sixth-review-round-18-november)). The sixth review's repairs are coordinator design choices too ([register](../architecture/decisions.md#the-gate-2-sixth-review-round-18-november)). A live row's envelope check reserves its model's terminal growth, reported by the layer 3 hook `TerminalGrowth(state)` (Native: 7 bytes per open invocation inbox and 23 per non-final receipt, measured; 0 for a model with no terminal growth), beside its registries at the marker's sizes, so a terminate's ending commit always fits; a terminate drain withholds physical job entry, and a model's own job cancel is the cascade's idempotent cancel. Event deliveries are bound to a publication: an event row's 16-byte `Incarnation`, a random value the kernel generates, enters the match digest, the delivery id and the outside publish ticket's id (version 2 of the canonical encoding), so a later publication of the same key and event id never collides with an earlier one's delivery or receipt. A keeping wait's catch-up is one chain with a stable `CatchUpId`, and its coverage is keyed by the subscription incarnation and that id. Match steps page subscriptions and meet steps page matches, each within a byte allowance. The seventh review's answers ([register](../architecture/decisions.md#the-gate-2-seventh-review-round-18-november)): a live row's envelope check counts the projected terminal row, so `CustomHandles` and every other variable-length field are counted at their encoded size beside the state, its terminal growth and the registries, and a fixed reserve covers only the bounded fields (a coordinator design choice); and a turn's event id carries the reserved first code unit `~`, while the outside publish refuses `InvalidEventId` any caller event id provider-equal to one starting with `~`, so workflow-issued and caller-issued event ids never share an event row (an owner decision of 18 November).
 
-### 3. Four logical seams
+### 3. The foundation contract
 
-Layer 2 offers four logical seams: **commit** (append a fenced batch), **ownership** (take, renew, lose authority),
-**delivery** (route a message identity, deduplicate, keep one sender's order) and **read models** (every non-owner
-query). A storage provider implements all four as one unit. A send is recorded atomically with its sender's state and
-may be delivered later. The prototype's `IKernelStore` and `IActorRuntime` still combine them; the split is part of
-the first product slice's design
-([round 5 H paper](../reports/clean-slate-kernel/log-profile-contract-sketch.md)).
+*The owner's wording of 19 November (decision 1 of [the foundation contract](../architecture/foundation-contract.md#owner-decisions-19-november)),
+approved with conditions by the independent architecture review on 19 November at `2825b0ed1`
+([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998); the review ran on Claude Fable at the owner's choice, with 0 Blockers, 0 Majors, 8 Minors and
+4 Conditions, FC-C1 to FC-C4, in the plan's gate 2 conditions). The earlier approved wording of 18 November, at
+`addffea7c`, is kept for comparison:*
 
-**Tenant identity** (the owner's tenancy decisions of 17 November; [tenancy](../architecture/tenancy.md)). Every ingress takes the tenant only
-from a `BoundScope`, the bound persistence scope of ADR 0097's binder, and refuses a request without one. Every name a
-caller chooses is stored tenant-qualified, `Q(t, n)`, under a canonical tenant-id grammar, so store-wide deduplication,
-event matching and the effect key never cross tenants; every tenant-keyed record also carries a `tenant` column that
-the owner checks on load and consumption. Release 1 runs only the shared store: tenants share one database and its
-1,024 virtual partitions. On SQL Server and MySQL every column holding a tenant id, an actor id or a tenant-qualified
-name has one pinned, non-locale collation, used in every expression over it, so `Q` stays injective whatever the
-database's default collation is. A caller key resolves its actor id through a binding row unique under that collation, written by
-insert-or-read before routing, so equivalent spellings reach one actor; a keyed request's operation id is compared exactly and
-stored as a digest, while an operator command's operation id stays its outside id `Q(t, operation)` (fourth review R4-M6, a coordinator design choice).
+> **Four logical seams.** Layer 2 offers four logical seams: **commit** (append a fenced batch), **ownership** (take,
+> renew, lose authority), **delivery** (route a message identity, deduplicate, keep one sender's order) and **read
+> models** (every non-owner query). A storage provider implements all four as one unit. A send is recorded atomically
+> with its sender's state and may be delivered later. The prototype's `IKernelStore` and `IActorRuntime` still combine
+> them; the split is part of the first product slice's design
+> ([round 5 H paper](../reports/clean-slate-kernel/log-profile-contract-sketch.md)).
+
+Layer 3 sees a foundation through one contract in plain domain words: the **actor turn** (what an actor type receives
+and returns: its inbox, state, sends, timers, jobs, events, subscriptions, children, journal entries and live output,
+all landing in one atomic outcome), **ingress** (an outside add, request, publish or start subscription under a bound
+scope, addressed to a ref, a caller key, an event key, which makes it the outside publish, or a start spec) and **read models** (every non-owner query, with
+opaque handles, selections and page tokens). A foundation implements all of it as one unit and supplies the guarantees
+itself: single-writer turns, the atomic outcome, at-least-once delivery deduplicated per sender, target and id in one
+sender's order, durable timers as messages, jobs that run at least once with a result applied once, events matched to
+committed subscriptions, children with their notices and a terminate cascade, commands delivered alone, Park and
+recovery from the actor type's restore plan, tenancy and exact refs (cases FC-1 to FC-18). A send is recorded
+atomically with its sender's state and may be delivered later. Commit, ownership, fences, epochs, positions, leases,
+node records and `IKernelStore` are the built-in foundation's own and never cross the contract; `IKernelStore` stays
+its way to swap EF Core, MongoDB and in-memory storage. Every ingress takes the tenant only from a `BoundScope` (the
+owner's tenancy decisions of 17 November, [tenancy](../architecture/tenancy.md)); how the built-in foundation keeps
+tenants apart is stated under section 5.
 
 ### 4. Deployment profiles
 
@@ -128,6 +144,17 @@ SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the sch
 ([ownership and fencing](../architecture/ownership-and-fencing.md),
 [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md), [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).
 
+**Tenant identity in the built-in foundation** (the owner's tenancy decisions of 17 November, moved here from section 3 on 19 November with the foundation contract, which the independent review approved with conditions the same day, wording unchanged; [tenancy](../architecture/tenancy.md)). Every ingress takes the tenant only
+from a `BoundScope`, the bound persistence scope of ADR 0097's binder, and refuses a request without one. Every name a
+caller chooses is stored tenant-qualified, `Q(t, n)`, under a canonical tenant-id grammar, so store-wide deduplication,
+event matching and the effect key never cross tenants; every tenant-keyed record also carries a `tenant` column that
+the owner checks on load and consumption. Release 1 runs only the shared store: tenants share one database and its
+1,024 virtual partitions. On SQL Server and MySQL every column holding a tenant id, an actor id or a tenant-qualified
+name has one pinned, non-locale collation, used in every expression over it, so `Q` stays injective whatever the
+database's default collation is. A caller key resolves its actor id through a binding row unique under that collation, written by
+insert-or-read before routing, so equivalent spellings reach one actor; a keyed request's operation id is compared exactly and
+stored as a digest, while an operator command's operation id stays its outside id `Q(t, operation)` (fourth review R4-M6, a coordinator design choice).
+
 ### 6. Persistence modes
 
 The author chooses per workflow. **Ephemeral:** an instance that ends in its first turn without sending writes nothing,
@@ -146,9 +173,22 @@ once; deduplication is the receiver's
 
 ### 8. Layer 3 is host-neutral
 
-Execution models, activities, Studio and the operator APIs depend only on the turn contract, the four seams and read
-models. They never see partitions, positions, epochs or SQL. Release 1 ships a contracts package that layer 3 builds
-against, and layers 1 and 2 as their own packages behind it.
+*The owner's wording of 19 November (decision 1 of the contract page), approved with conditions by the
+independent architecture review on 19 November at `2825b0ed1` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)). The earlier approved wording of
+18 November is kept for comparison:*
+
+> Execution models, activities, Studio and the operator APIs depend only on the turn contract, the four seams and read
+> models. They never see partitions, positions, epochs or SQL. Release 1 ships a contracts package that layer 3 builds
+> against, and layers 1 and 2 as their own packages behind it.
+
+Actor types, execution models, activities, Studio and the operator APIs depend only on the foundation contract of
+section 3 and on the model contract layer 3 builds on its actor turn. They never see partitions, positions, epochs,
+fences, leases, node records or SQL, and they store refs, handles, selections and page tokens as opaque strings.
+Release 1 ships two contracts packages (owner, 19 November; names provisional): the foundation contract, which a
+foundation adapter builds against, and the model contract, which an execution model builds against, with an
+architecture guard, and layers 1 and 2 as the built-in foundation's own packages behind them; a future foundation
+adapter supplies the same contract and passes the same conformance cases plus a contract-level run of the
+simulation's workloads.
 
 ### 9. Replace whole layers and edges, never pieces of the commit
 
@@ -157,6 +197,15 @@ actor runtime, execution models and actor types, ingress adapters (brokers, webh
 inserts), egress through jobs or an outbox with the effect key, the wake notifier and a test clock. No external broker
 is the inbox and no scheduler library is the timer engine
 ([sketch, extensibility boundary](../reports/clean-slate-kernel/design-sketch-draft-5.md#extensibility-boundary-owner-principle-15-november)).
+
+*The owner's reading of 19 November (decision 1 of the contract page), approved with conditions by the
+independent architecture review on 19 November at `2825b0ed1` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)); the paragraph above is the earlier
+approved text.* Timers, messages, events and subscriptions stay inside the
+foundation's atomic commit, which in the built-in foundation is the fenced commit. Replaceable behind the contract: a
+foundation as a whole, execution models and actor types, ingress adapters on the contract's ingress, and egress
+through jobs or an outbox with the effect key. Storage as a whole unit, the actor runtime, the wake notifier and a test
+clock stay the built-in foundation's own swap points and are never offered through the contract. No external broker is
+the inbox and no scheduler library is the timer engine.
 
 ### 10. Release 1 scope
 

@@ -49,7 +49,7 @@ public sealed partial class EfStore
         // ascending partition id). Checked, it is a round trip of its own and nothing else is sent until it held; in the
         // batch, it is the first statement of the one command.
         var fences = Fenced(batch);
-        dialect.Fence(c, fences, lease, window, Unfenced, FenceIgnoresCount);
+        dialect.Fence(c, fences, NodeLease ? null : lease, window, Unfenced, FenceIgnoresCount);
         // An owned batch, one fence or several: each turn writes its own partition's rows and journal, each mark takes the
         // epoch of its message's partition, and a mark, consume or done may touch only the fenced partitions' messages
         // (InboxKey does not name its partition, so the statements carry the bound and their counts check it).
@@ -189,7 +189,7 @@ public sealed partial class EfStore
         await using var db = create();
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         var c = new OwnedCommand(dialect) { HasFence = true };
-        dialect.Fence(c, rows.OrderBy(r => r.Id).ToArray(), (long)lease.TotalMilliseconds, null, Unfenced, FenceIgnoresCount);
+        dialect.Fence(c, rows.OrderBy(r => r.Id).ToArray(), NodeLease ? null : (long)lease.TotalMilliseconds, null, Unfenced, FenceIgnoresCount);
         var result = await RunAsync(db, dialect, c, cancellationToken);
         if (!result.Landed) return null;
         await transaction.CommitAsync(cancellationToken);
@@ -302,10 +302,23 @@ public sealed partial class EfStore
     /// <summary>A take of a set: one statement, each row decided as the one-partition take decides it; the death count as that take's.</summary>
     public async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
+        try { return await TakeSetAsync(partitions, node, lease, cancellationToken); }
+        catch (Exception e) when (TransientTake(e) is { } transient) { throw transient; }
+    }
+
+    private async ValueTask<OwnedLease> TakeSetAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken)
+    {
         if (partitions.Count == 0) return new([], 0);
         var ids = List(partitions.Distinct().Order());
-        var take = $""" "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"}""";
-        var free = $"""("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"})""";
+        await using var db = create();
+        await using var transaction = await (NodeLease ? BeginNodeTakeAsync(db, lease, cancellationToken) : Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        // The node lease (K1b): the owners' node records read first, then this node's own written, then the rows below.
+        var expired = NodeLease ? await ReadAndRenewAsync(db, NodeReadInUpdate ? null : ids, node, lease, cancellationToken) : null;
+        var take = NodeLease ? """ "Owner" = {0}, "Epoch" = "Epoch" + 1""" : $""" "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"}""";
+        var free = expired is null ? $"""("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"})"""
+            : NodeReadInUpdate ? $"""("Owner" IS NULL OR "Owner" = {"{0}"} OR NOT EXISTS (SELECT 1 FROM "Nodes" n WHERE n."Id" = "Partitions"."Owner" AND n."LeaseUntil" >= {Now}))"""     // MUTATION
+            : $"""("Owner" IS NULL OR "Owner" = {"{0}"}{(expired.Count == 0 ? "" : $" OR \"Owner\" IN ({string.Join(", ", expired.Select((_, i) => $"{{{i + 1}}}"))})")})""";
+        object[] parameters = expired is null ? [node, (long)lease.TotalMilliseconds] : [node, .. expired];
         var died = """("Owner" IS NOT NULL AND "Owner" <> {0})""";
         var sql = Engine switch
         {
@@ -315,9 +328,7 @@ public sealed partial class EfStore
             _ when postgres => $"""{Locked(ids)}UPDATE "Partitions" SET "Died" = {died},{take} FROM l WHERE {Pid} = l."Id" AND {free} RETURNING {Pid}, "Owner", "Epoch", "Position", {Now} AS "Now", "Died" """,
             _ => $"""UPDATE "Partitions" SET "Died" = {died},{take} WHERE "Id" IN ({ids}) AND {free} RETURNING "Id", "Owner", "Epoch", "Position", {Now} AS "Now", "Died" """,
         };
-        await using var db = create();
-        await using var transaction = await (Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        var rows = await db.Database.SqlQueryRaw<SetRow>(sql, node, (long)lease.TotalMilliseconds).ToListAsync(cancellationToken);
+        var rows = await db.Database.SqlQueryRaw<SetRow>(sql, parameters).ToListAsync(cancellationToken);
         // Taken from another owner, so its lease had expired: one more attempt for what it had on trial in that partition.
         if (rows.Where(r => r.Died).Select(r => FormattableString.Invariant($"""("Partition" = {r.Id} AND "Trial" = {r.Epoch - 1})""")).ToList() is { Count: > 0 } dead)
             await db.Database.ExecuteSqlRawAsync(Q($"""UPDATE "Messages" SET "Attempts" = "Attempts" + 1 WHERE "Done" = {False} AND ({string.Join(" OR ", dead)})"""), cancellationToken);
@@ -329,7 +340,14 @@ public sealed partial class EfStore
     /// A take after a reset, only if this node still holds the row at <paramref name="epoch"/>: one conditional UPDATE on
     /// owner and epoch that bumps the epoch, renews the lease and keeps the position. No death: no attempt is counted.
     /// </summary>
-    public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default)
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) =>
+        NodeLease ? RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths: false, cancellationToken) : RetakeAutocommitAsync(partition, node, epoch, lease, cancellationToken);
+
+    /// <summary>The retake, counting a death on the previous epoch's unfinished trial messages when asked (#4837, a pending partition).</summary>
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) =>
+        NodeLease || countDeaths ? RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths, cancellationToken) : RetakeAutocommitAsync(partition, node, epoch, lease, cancellationToken);
+
+    private async ValueTask<Lease?> RetakeAutocommitAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken)
     {
         var update = $"""UPDATE "Partitions" SET "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{2}"}""";
         var mine = """ "Id" = {0} AND "Owner" = {1} AND "Epoch" = {3}""";

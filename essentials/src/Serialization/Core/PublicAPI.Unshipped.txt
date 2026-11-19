@@ -65,4 +65,9 @@ static Elsa.Serialization.Core.PayloadCatalogFile.ReadArray<TModel>(string! path
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.<Clone>$() -> Elsa.Serialization.Core.Options.ObjectConverterOptions!
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.EqualityContract.get -> System.Type!
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.Equals(Elsa.Serialization.Core.Options.ObjectConverterOptions? other) -> bool
+Elsa.Serialization.Core.NullableJsonElementConverter
+Elsa.Serialization.Core.NullableJsonElementConverter.NullableJsonElementConverter() -> void
+override Elsa.Serialization.Core.NullableJsonElementConverter.HandleNull.get -> bool
+override Elsa.Serialization.Core.NullableJsonElementConverter.Read(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> System.Text.Json.JsonElement?
+override Elsa.Serialization.Core.NullableJsonElementConverter.Write(System.Text.Json.Utf8JsonWriter! writer, System.Text.Json.JsonElement? value, System.Text.Json.JsonSerializerOptions! options) -> void
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.PrintMembers(System.Text.StringBuilder! builder) -> bool

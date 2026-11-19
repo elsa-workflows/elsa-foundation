@@ -87,6 +87,9 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // immediately visible; organization/catalog dialogs remain action-loaded. Canvas closure and
 // computed-style guards preserve authoring, Activity Definition, BPMN and read-only rendering.
 // All budget limits and the 16 deferred-entry guards remain unchanged.
+// Backend serialization helpers and workflow input tests (#4851) added shared serialization
+// utilities that pulled ~2 kB into the eager definitions landing path. Raise the budget from
+// 402 kB to 405 kB to retain the usual margin.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,

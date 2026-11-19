@@ -20,7 +20,8 @@ These pages describe the clean-slate execution kernel's approved design. They ar
 10. [Job workers outside the process](job-workers.md) — **Approved design**: one job contract for in-process and remote workers, attempt leases, heartbeats, the effect key, completion through the fenced commit, and the release placement of standalone Jobs.
 11. [Observability and operator actions](observability.md) — **Approved design**: trace context on every message, stable metric names, inspect, retry and discard of parked work, and the read models operators use.
 12. [Tenancy](tenancy.md) — **Approved design**: where the kernel takes the tenant from, tenant-qualified names, and the uniqueness and authorization rule of every ingress, match, read and administrative operation.
-13. [Decision register](decisions.md) — **Approved design**: every owner decision that binds the kernel, by topic, with its date and source.
+13. [The foundation contract](foundation-contract.md) — **Approved design, with conditions** (19 November, at `2825b0ed1`): the contract between a foundation (what layers 1 and 2 provide) and layer 3, in plain domain words; its vocabulary, the built-in foundation's mapping, the leak inventory and conformance cases FC-1 to FC-18.
+14. [Decision register](decisions.md) — **Approved design**: every owner decision that binds the kernel, by topic, with its date and source.
 
 The walkthrough's data cards link to the storage reference. Its ownership chapter links to the fencing explanation. These references explain the contract; experiment reports carry implementation status and measured results.
 

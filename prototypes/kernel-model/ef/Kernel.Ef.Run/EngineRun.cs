@@ -12,8 +12,8 @@ using Npgsql;
 
 /// <summary>
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
-///   x stress|cost|probe|block|definite|deadlock|fence|lockorder|setcost|setidle postgres|sqlserver|mysql|sqlite "connection" [key=value ...]   (setcost, setidle: SetCost.cs)
-/// Options: fence=checked|batch (default: the engine's, batch on every engine since 16 November for the owned commit; checked is SQL Server's 13 November fallback and its default with commit=ef, E9)  commit=ef|owned (default: the engine's; COMMIT-SQL.md)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  fencecount=0 (the owned fence ignores its matched count)  unordered=1 (lockorder: the k fence rows locked in the batch's order, the negative)  stalelease=1 (the Worker commits past its local lease deadline: stale owners reach the fence; a pin's harness)  seconds=40  messages=5000  partitions=2  nodes=3
+///   x stress|cost|probe|block|definite|deadlock|fence|lockorder|nodelease|setcost|setidle postgres|sqlserver|mysql|sqlite "connection" [key=value ...]   (setcost, setidle: SetCost.cs)
+/// Options: fence=checked|batch (default: the engine's, batch on every engine since 16 November for the owned commit; checked is SQL Server's 13 November fallback and its default with commit=ef, E9)  commit=ef|owned (default: the engine's; COMMIT-SQL.md)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  fencecount=0 (the owned fence ignores its matched count)  unordered=1 (lockorder: the k fence rows locked in the batch's order, the negative)  case=heartbeat|mutual|heartbeats mutation=subquery|rr|membership expect=none|deadlock (nodelease: NL-9, NodeLeaseRun.cs)  stalelease=1 (the Worker commits past its local lease deadline: stale owners reach the fence; a pin's harness)  seconds=40  messages=5000  partitions=2  nodes=3
 ///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc takerr=1 (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
 ///          savepoints=1 (leave Entity Framework's savepoint on, SQL Server and MySQL)   batchsize=n (statements per command, SQL Server and MySQL; default 1000)
@@ -35,6 +35,17 @@ static class EngineRun
             catch (ArgumentException error) { Console.Error.WriteLine(error.Message); return 2; }
         }
         // Validate every size before constructing Target (which can start a proxy), opening a database or resetting it.
+        if (args[0] == "nodelease")
+        {
+            // An unknown value would run the store as built under another name: refused before anything is opened.
+            foreach (var (key, allowed) in new[] { ("case", new[] { "heartbeat", "mutual", "heartbeats" }), ("mutation", ["", "subquery", "rr", "membership"]), ("expect", ["none", "deadlock"]) })
+                if (options.TryGetValue(key, out var value) && !allowed.Contains(value))
+                {
+                    Console.Error.WriteLine($"nodelease: unknown {key}={value}; one of {string.Join(", ", allowed.Select(a => a == "" ? "(empty)" : a))}");
+                    return 2;
+                }
+            options["nodelease"] = "1";
+        }
         var target = new Target(args[1], args[2], options);
         return args[0] switch
         {
@@ -46,6 +57,7 @@ static class EngineRun
             "deadlock" => await Deadlock(target),
             "fence" => await Fence(target),
             "lockorder" => await LockOrder(target),
+            "nodelease" => await NodeLeaseRun.RunAsync(target),
             "setcost" => await SetCost.RunAsync(target),
             "setidle" => await SetCost.IdleAsync(target),
             _ => 2,
@@ -779,6 +791,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     public EfStore Store(Func<KernelDb> create) => new(create, postgres: engine != "sqlite", FenceInBatch)
     {
         Unfenced = Has("unfenced"), DefiniteBeatsFence = Has("m5"), FenceIgnoresCount = Get("fencecount", "1") == "0", UnorderedFenceLocks = Has("unordered"),
+        NodeLease = Has("nodelease"), NodeReadInUpdate = Get("mutation", "") == "subquery", RepeatableReadTake = Get("mutation", "") == "rr", MembershipInHeartbeat = Get("mutation", "") == "membership",
         CommitSql = Get("commit", "") switch { "ef" => CommitSql.EntityFramework, "owned" => CommitSql.Owned, _ => null },
         Engine = Dialect(),
     };
