@@ -130,8 +130,8 @@ public sealed class ScriptVariableReadAnalyzerTests
         new JavaScriptFeature().ConfigureServices(services);
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookupRate", _ => default, ReadsVariables: true));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.formatRate", _ => default));
-        foreach (var builtIn in JavaScriptBuiltInFunctions.Declarations)
-            services.AddSingleton(builtIn);
+        foreach (var builtIn in JavaScriptBuiltInFunctions.Names)
+            services.AddSingleton(new JavaScriptHostFunctionDeclaration(builtIn, _ => default));
         using var provider = services.BuildServiceProvider();
         var analyzer = provider.GetServices<IScriptVariableReadAnalyzer>().Single(candidate => candidate.Language == "JavaScript");
 

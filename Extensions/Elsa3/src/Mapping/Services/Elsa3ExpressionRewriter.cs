@@ -26,7 +26,13 @@ namespace Elsa3.Mapping.Services;
 /// <param name="options">The converter's settings; the default refuses zone-dependent date usage.</param>
 public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNetUsage, Elsa3ConversionOptions? options = null)
 {
-    private readonly Elsa3ConversionOptions _options = options ?? new();
+    private readonly Elsa3ConversionOptions _options = Validated(options ?? new());
+
+    private static Elsa3ConversionOptions Validated(Elsa3ConversionOptions options)
+    {
+        options.Validate();
+        return options;
+    }
 
     /// <summary>How Elsa 3 local date and time is read (spec 1223 FR-034).</summary>
     public Elsa3DateInterpretation DateInterpretation => _options.DateInterpretation;
@@ -1242,6 +1248,15 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     return;
                 }
 
+                // String(d) of a date is its local text (FR-022).
+                if (callee.Name == "String" && call.Arguments.Count == 1 && !IsDeclared("String"))
+                {
+                    Visit(call.Arguments[0]);
+                    if (IsKnownDate(call.Arguments[0]))
+                        ZoneDependent(call, DateUse.LocalFormat, null);
+                    return;
+                }
+
                 // Date(...) without new returns the current time as local text (FR-022).
                 if (callee.Name == "Date")
                 {
@@ -1286,13 +1301,32 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 VisitDateOrLocaleCall(dateOrLocaleCall, dateOrLocaleCallee))
                 return;
 
+            // A date turned into text implicitly ('at ' + d, `${d}`, String(d)) is local text in Elsa 3 (FR-022).
+            if (node is BinaryExpression { Operator: Operator.Addition } addition)
+            {
+                Visit(addition.Left);
+                Visit(addition.Right);
+                if (IsKnownDate(addition.Left) || IsKnownDate(addition.Right))
+                    ZoneDependent(addition, DateUse.LocalFormat, null);
+                return;
+            }
+
+            if (node is TemplateLiteral template)
+            {
+                foreach (var expression in template.Expressions)
+                    Visit(expression);
+                if (template.Expressions.Any(IsKnownDate))
+                    ZoneDependent(template, DateUse.LocalFormat, null);
+                return;
+            }
+
             if (node is VariableDeclaration declaration)
             {
                 foreach (var declarator in declaration.Declarations)
                 {
                     Visit(declarator);
-                    // A const/let alias of a known date is a known date (FR-022).
-                    if (declaration.Kind is VariableDeclarationKind.Const or VariableDeclarationKind.Let && declarator.Id is Identifier alias)
+                    // An alias of a known date is a known date (FR-022). Elsa 3 scripts mostly declare with var, so var counts too.
+                    if (declarator.Id is Identifier alias)
                     {
                         if (declarator.Init is { } init && IsKnownDate(init))
                             _dateAliases.Add(alias.Name);
@@ -1671,7 +1705,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 foreach (var argument in call.Arguments)
                     Visit(argument);
                 if (call.Arguments.Count > 0 && !IsZoneIndependentText(call.Arguments[0]))
-                    ZoneDependent(call, DateUse.Parse, () => Edits.Add(new SourceEdit(callee.Start, callee.End, $"{Elsa3ZonedDateHelper.Name}.parse")));
+                    ZoneDependent(call, DateUse.Parse, () => Edits.Add(new SourceEdit(callee.Start, callee.End, $"{Helper()}.parse")));
                 return true;
             }
 
@@ -1691,7 +1725,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 if (call.Arguments.Count == 0 || IsUndefined(call.Arguments[0]))
                     Issues.Add(LocaleRefusal(call, name));
                 else if (IsKnownDate(receiver) && !HasTimeZoneOption(call.Arguments, 1))
-                    ZoneDependent(call, DateUse.ZoneFormat, null);
+                    ZoneDependent(call, DateUse.ZoneFormat, ZoneOption(call.Arguments));
                 return true;
             }
 
@@ -1710,8 +1744,10 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 Visit(receiver);
                 foreach (var argument in call.Arguments)
                     Visit(argument);
-                var use = name is "toDateString" or "toTimeString" ? DateUse.LocalFormat : DateUse.LocalField;
-                ZoneDependent(call, use, () => WrapLocalCall(call, callee, name));
+                if (name is "toDateString" or "toTimeString")
+                    ZoneDependent(call, DateUse.LocalFormat, null);
+                else
+                    ZoneDependent(call, DateUse.LocalField, () => WrapLocalCall(call, callee, name));
                 return true;
             }
 
@@ -1743,15 +1779,22 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     return;
                 ZoneDependent(construction, DateUse.Parse, () =>
                 {
-                    Edits.Add(new SourceEdit(argument.Start, argument.Start, $"{Elsa3ZonedDateHelper.Name}.from("));
+                    Edits.Add(new SourceEdit(argument.Start, argument.Start, $"{Helper()}.from("));
                     Edits.Add(new SourceEdit(argument.End, argument.End, ")"));
                 });
                 return;
             }
 
+            // A spread (new Date(...parts)) may be one value or the fields: it cannot be rewritten faithfully.
+            if (arguments.Any(argument => argument is SpreadElement))
+            {
+                ZoneDependent(construction, DateUse.LocalConstructor, null);
+                return;
+            }
+
             ZoneDependent(construction, DateUse.LocalConstructor, () =>
             {
-                Edits.Add(new SourceEdit(arguments[0].Start, arguments[0].Start, $"{Elsa3ZonedDateHelper.Name}.local("));
+                Edits.Add(new SourceEdit(arguments[0].Start, arguments[0].Start, $"{Helper()}.local("));
                 Edits.Add(new SourceEdit(arguments[^1].End, arguments[^1].End, ")"));
             });
         }
@@ -1762,7 +1805,29 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             if (arguments.Count == 0 || IsUndefined(arguments[0]))
                 Issues.Add(LocaleRefusal(node, $"Intl.{constructor}"));
             else if (constructor == "DateTimeFormat" && !HasTimeZoneOption(arguments, 1))
-                ZoneDependent(node, DateUse.ZoneFormat, null);
+                ZoneDependent(node, DateUse.ZoneFormat, ZoneOption(arguments));
+        }
+
+        /// <summary>
+        /// Under <c>SourceTimeZone</c>, locale text on a date names the Elsa 3 server's zone explicitly: a
+        /// <c>{ timeZone }</c> options argument is added, or <c>timeZone</c> is added to a literal options object. Null
+        /// when the options are not a literal, which is refused.
+        /// </summary>
+        private Action? ZoneOption(IReadOnlyList<Node> arguments)
+        {
+            var zone = JsonSerializer.Serialize(SourceTimeZone);
+            if (arguments.Count == 1 && arguments[0] is not SpreadElement)
+                return () => Edits.Add(new SourceEdit(arguments[0].End, arguments[0].End, $", {{ timeZone: {zone} }}"));
+            if (arguments.Count == 2 && arguments[1] is ObjectExpression options)
+                return () => Edits.Add(new SourceEdit(options.Start + 1, options.Start + 1, $" timeZone: {zone},"));
+            return null;
+        }
+
+        /// <summary>The zone helper's name; a rewrite that calls it writes the helper into the expression once.</summary>
+        private string Helper()
+        {
+            _usesZonedHelper = true;
+            return Elsa3ZonedDateHelper.Name;
         }
 
         /// <summary>
@@ -1793,9 +1858,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                         $"JavaScript {what}. It is converted as if the Elsa 3 server ran on UTC (date interpretation AssumeUtc); the result differs from Elsa 3 if that server was not on UTC.",
                         "If the Elsa 3 server was not on UTC, set the date interpretation to SourceTimeZone with its IANA time zone and convert again."));
                     return;
-                case Elsa3DateInterpretation.SourceTimeZone when !isText && rewrite is not null:
+                case Elsa3DateInterpretation.SourceTimeZone when rewrite is not null:
                     AppliedDateInterpretation = true;
-                    _usesZonedHelper = true;
                     if (IsDeclared(Elsa3ZonedDateHelper.Name))
                     {
                         Issues.Add(new Elsa3ExpressionRewriteIssue(
@@ -1832,9 +1896,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             if (dot > 0 && Source[dot - 1] == '?')
                 dot--;
             var open = Source.IndexOf('(', callee.End);
-            Edits.Add(new SourceEdit(call.Start, call.Start, $"{Elsa3ZonedDateHelper.Name}.call("));
+            // An optional chain (d?.getHours(), a?.b.getDate()) gives undefined for a null receiver, as it did in Elsa 3.
+            var optional = Source[call.Start..open].Contains("?.", StringComparison.Ordinal);
+            Edits.Add(new SourceEdit(call.Start, call.Start, $"{Helper()}.call("));
             Edits.Add(new SourceEdit(dot, open + 1, $", {JsonSerializer.Serialize(name)}, ["));
-            Edits.Add(new SourceEdit(call.End - 1, call.End, "])"));
+            Edits.Add(new SourceEdit(call.End - 1, call.End, optional ? "], true)" : "])"));
         }
 
         /// <summary>Whether <paramref name="node"/> is known to be a <c>Date</c>: a construction, a rewritten date value or an alias.</summary>
@@ -1849,11 +1915,26 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         private bool IsZoneIndependentDateArgument(Node argument) => argument switch
         {
             Literal { Value: string } => IsZoneIndependentText(argument),
+            // ISO 8601 text of an instant always carries Z.
+            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "toISOString" or "toJSON" } } } => true,
+            _ => IsNumber(argument) || IsKnownDate(argument),
+        };
+
+        /// <summary>
+        /// An expression known to give a number, as epoch milliseconds do: a number literal, arithmetic on numbers,
+        /// <c>Date.now()</c>, <c>Date.UTC(...)</c>, <c>Date.parse(...)</c> (classified on its own), <c>getTime()</c> or
+        /// <c>valueOf()</c>. A <c>+</c> is a number only when both operands are; otherwise it may join text.
+        /// </summary>
+        private bool IsNumber(Node node) => node switch
+        {
+            Literal { Value: string } => false,
             Literal => true,
             UnaryExpression { Operator: Operator.UnaryNegation or Operator.UnaryPlus } => true,
             BinaryExpression { Operator: Operator.Subtraction or Operator.Multiplication or Operator.Division or Operator.Remainder } => true,
-            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" or "valueOf" or "now" or "UTC" or "parse" or "toISOString" or "toJSON" } } } => true,
-            _ => IsKnownDate(argument),
+            BinaryExpression { Operator: Operator.Addition } addition => IsNumber(addition.Left) && IsNumber(addition.Right),
+            CallExpression { Callee: MemberExpression { Computed: false, Object: Identifier { Name: "Date" }, Property: Identifier { Name: "now" or "UTC" or "parse" } } } => !IsDeclared("Date"),
+            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" or "valueOf" } } } => true,
+            _ => false,
         };
 
         /// <summary>A literal date text that carries <c>Z</c> or an offset, or is date-only, which ECMAScript reads as UTC.</summary>
@@ -1870,8 +1951,10 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
         private static readonly System.Text.RegularExpressions.Regex DateOnlyText = new(@"^\s*[+-]?\d{4,6}(?:-\d{2}(?:-\d{2})?)?\s*$");
 
+        // An offset follows a time (09:15Z, 09:15:00+01:00), or is named (GMT+0100, UTC). The trailing "-2026" of a
+        // day-month-year text is not one.
         private static readonly System.Text.RegularExpressions.Regex OffsetText =
-            new(@"(?:[zZ]|[+-]\d{2}(?::?\d{2})?|\b(?:UTC|GMT|UT)\b[^()]*)\s*(?:\([^)]*\))?\s*$");
+            new(@"(?:\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:[zZ]|[+-]\d{2}(?::?\d{2})?)|\b(?:UTC|GMT|UT)\b[^()]*)\s*(?:\([^)]*\))?\s*$");
 
         private static bool IsUndefined(Node node) => node is Identifier { Name: "undefined" };
 

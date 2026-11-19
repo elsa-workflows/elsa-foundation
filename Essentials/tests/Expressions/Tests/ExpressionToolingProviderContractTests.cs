@@ -1,5 +1,6 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Services;
 using Elsa.Expressions.Liquid.Services;
 using Elsa.Expressions.Services;
@@ -279,6 +280,25 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Equal(ExpressionDiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains($"'{quoted}'", diagnostic.Message, StringComparison.Ordinal);
         Assert.NotNull(diagnostic.Range);
+    }
+
+    // Spec 1223 FR-027: a declaration that hides a built-in, a namespace root or an unused read root warns.
+    [Theory]
+    [InlineData("const newGuid = 1; return newGuid;", "newGuid")]
+    [InlineData("const input = 1; return input;", "input")]
+    [InlineData("const acme = 1; return acme;", "acme")]
+    public async Task JavaScript_validation_warns_on_a_shadowed_platform_name(string source, string name)
+    {
+        var provider = new JavaScriptExpressionToolingProvider(
+            new JavaScriptDotNetUsageAnalyzer(),
+            [new JavaScriptHostFunctionDeclaration("acme.lookup", _ => default)]);
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        var diagnostic = Assert.Single(result.Payload!.Diagnostics);
+        Assert.Equal("JavaScript/ShadowedFunction", diagnostic.Code);
+        Assert.Equal(ExpressionDiagnosticSeverity.Warning, diagnostic.Severity);
+        Assert.Contains($"'{name}'", diagnostic.Message, StringComparison.Ordinal);
     }
 
     [Theory]

@@ -213,7 +213,10 @@ internal sealed partial class JavaScriptExpressionToolingProvider(
             Node parsed = JavaScriptBindingSyntax.IsExpression(source)
                 ? new Parser().ParseExpression(source, strict: true)
                 : new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source, strict: true);
-            return ReservedNameDiagnostics(parsed, revision).Concat(DotNetUsageDiagnostics(source, revision)).ToArray();
+            return ReservedNameDiagnostics(parsed, revision)
+                .Concat(ShadowedNameDiagnostics(parsed, revision))
+                .Concat(DotNetUsageDiagnostics(source, revision))
+                .ToArray();
         }
         catch (ParseErrorException exception)
         {
@@ -231,6 +234,28 @@ internal sealed partial class JavaScriptExpressionToolingProvider(
                         new(line, column + 1)))
             ];
         }
+    }
+
+    /// <summary>
+    /// A declaration of <c>input</c>, <c>activities</c>, <c>workflow</c>, a built-in function name or a registered
+    /// namespace root hides that name in the expression (spec 1223 FR-027): a warning, as for scripts
+    /// (<c>Scripts/ShadowedFunction</c>).
+    /// </summary>
+    private IEnumerable<ExpressionDiagnostic> ShadowedNameDiagnostics(Node root, string revision)
+    {
+        var shadowable = new HashSet<string>(["input", "activities", "workflow"], StringComparer.Ordinal);
+        shadowable.UnionWith(JavaScriptBuiltInFunctions.Names);
+        shadowable.UnionWith((hostFunctions ?? [])
+            .Select(function => function.Name)
+            .Where(name => name.Contains('.', StringComparison.Ordinal))
+            .Select(name => name[..name.IndexOf('.', StringComparison.Ordinal)]));
+        return JavaScriptReservedNames.CollectDeclarations(root, shadowable.Contains)
+            .Select(identifier => new ExpressionDiagnostic(
+                "JavaScript/ShadowedFunction",
+                ExpressionDiagnosticSeverity.Warning,
+                $"'{identifier.Name}' is a name the platform reserves for a built-in function, a registered function namespace or a read root; the expression's own declaration hides it. Rename it unless that is intended.",
+                revision,
+                JavaScriptReservedNames.RangeOf(identifier)));
     }
 
     /// <summary>

@@ -482,11 +482,14 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 $"{property.JsonPath}.expression.value", null, Elsa3MigrationDiagnosticSeverity.Warning));
         }
 
-        if (!rewrite.AppliedDateInterpretation ||
+        // Every workflow whose JavaScript was converted under an interpretation that assumes something records it once;
+        // under Refuse nothing is assumed, and zone-dependent usage was refused instead.
+        var interpretation = expressionRewriter.DateInterpretation;
+        if (interpretation == Elsa3DateInterpretation.Refuse ||
+            rewrite.Definition?.Language.Equals("JavaScript", StringComparison.OrdinalIgnoreCase) != true ||
             diagnostics.Any(diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
             return;
 
-        var interpretation = expressionRewriter.DateInterpretation;
         diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
             interpretation == Elsa3DateInterpretation.SourceTimeZone
                 ? $"The workflow's scripts were converted with the date interpretation SourceTimeZone '{expressionRewriter.SourceTimeZone}': each use of Elsa 3 local time names that zone in the converted code."
@@ -726,8 +729,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                             "Read the value inside the loop, or copy it into another variable there."));
 
                     var binding = new VariableExpressionParameterBinding(loop.ActivityNodeId, loop.StablePropertyKey);
+                    // The Elsa 3 variable the loop wrote declares what the current value was in a script (FR-016, FR-032).
+                    var loopKind = Elsa3ScriptValueKinds.Classify(matches[0].TypeName, matches[0].IsArray);
                     if (!Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(loop.StablePropertyKey))
-                        return Elsa3ExpressionParameterResolution.Success(binding);
+                        return Elsa3ExpressionParameterResolution.Success(binding, loopKind);
 
                     // An Elsa 4 script reads a loop's current value as the loop's iteration value, by name, nearest scope
                     // first (spec 1222 FR-004a). Inside a nested loop of the same kind the name reaches the inner loop's
@@ -740,7 +745,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                             $"Variable '{ambient.Name}' holds loop '{loop.ActivityNodeId}''s current value, but the script runs inside the nested loop '{nearest.ScopeNodeId}', whose own '{loop.StablePropertyKey}' Elsa 4 would read instead.",
                             "Copy the outer loop's current value into another variable inside the outer loop's body, and read that variable, before import."));
 
-                    return Elsa3ExpressionParameterResolution.SuccessVariable(binding, loop.StablePropertyKey);
+                    return Elsa3ExpressionParameterResolution.SuccessVariable(binding, loop.StablePropertyKey, loopKind);
                 }
 
                 // Spec 1222 FR-031: Elsa 4 resolves the name nearest scope first, so an enclosing container's variable of

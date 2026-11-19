@@ -9,6 +9,11 @@ namespace Elsa.Expressions.JavaScript.Core.Contracts;
 /// objects in Elsa 3. It belongs to the default strategy: the opt-in .NET interop strategy (#4103) decides whether it
 /// applies there.
 /// <para>
+/// Replacement contract (framework §2.6.2): exactly one per host. The JavaScript feature registers the default with
+/// <c>TryAdd</c>; a host replaces it by registering its own first or with <c>Replace</c>. A second registration fails shell
+/// activation, naming both.
+/// </para>
+/// <para>
 /// Refused: a reference to a .NET type (static access or construction) whose name is in the analyzer's catalog and is
 /// not a JavaScript global; an invocation of a PascalCase member on a value the script did not define; and, with a
 /// <see cref="JavaScriptDotNetUsageContext"/>, member use on a known .NET-object value. Allowed: property reads of any

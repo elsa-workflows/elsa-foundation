@@ -8,7 +8,7 @@ namespace Elsa.Expressions.JavaScript.Services;
 /// The default strategy's .NET-usage analysis (spec 1223 FR-016 to FR-019, FR-030; data-model §3), shared by publish
 /// validation and the Elsa 3 converter. See <see cref="IJavaScriptDotNetUsageAnalyzer"/> for the rules.
 /// </summary>
-public sealed class JavaScriptDotNetUsageAnalyzer(IEnumerable<JavaScriptHostFunctionDeclaration>? hostFunctions = null)
+internal sealed class JavaScriptDotNetUsageAnalyzer(IEnumerable<JavaScriptHostFunctionDeclaration>? hostFunctions = null)
     : IJavaScriptDotNetUsageAnalyzer
 {
     private const string JsonGuidance =
@@ -37,6 +37,15 @@ public sealed class JavaScriptDotNetUsageAnalyzer(IEnumerable<JavaScriptHostFunc
         "reduceRight", "reverse", "shift", "slice", "some", "sort", "splice", "toReversed", "toSorted", "toSpliced",
         "unshift", "values", "with", "toString", "toLocaleString", "valueOf", "hasOwnProperty", "isPrototypeOf",
         "propertyIsEnumerable",
+    };
+
+    /// <summary>
+    /// .NET members of a list or dictionary with no JavaScript counterpart: in Elsa 3 <c>items.Count</c> was the count,
+    /// in Elsa 4 it reads <c>undefined</c>.
+    /// </summary>
+    private static readonly HashSet<string> DotNetCollectionMembers = new(StringComparer.Ordinal)
+    {
+        "Count", "Keys", "Values", "Capacity", "Comparer", "IsReadOnly", "IsFixedSize", "IsSynchronized", "SyncRoot",
     };
 
     private readonly HashSet<string> _namespaceRoots = (hostFunctions ?? [])
@@ -181,8 +190,9 @@ public sealed class JavaScriptDotNetUsageAnalyzer(IEnumerable<JavaScriptHostFunc
         {
             if (KnownKind(member.Object) is { } kind)
             {
-                // A list or dictionary answered property reads like a JavaScript value; anything else had no JSON member.
-                if (kind != JavaScriptDotNetValueKind.Collection)
+                // A list or dictionary answered property reads like a JavaScript value, except its .NET members; anything
+                // else had no JSON member.
+                if (kind != JavaScriptDotNetValueKind.Collection || MemberName(member) is { } read && DotNetCollectionMembers.Contains(read))
                     AddKnown(member, kind);
                 else if (member.Computed)
                     Visit(member.Property);
@@ -239,17 +249,19 @@ public sealed class JavaScriptDotNetUsageAnalyzer(IEnumerable<JavaScriptHostFunc
         private bool IsDotNetType(string name) =>
             DotNetTypes.Contains(name) && !_declared.Contains(name) && !_namespaceRoots.Contains(name);
 
-        /// <summary>Whether the receiver is rooted at a JavaScript global or a registered function namespace.</summary>
+        /// <summary>
+        /// Whether the receiver is a JavaScript global or a registered function namespace itself, or a static member of one
+        /// (<c>Intl</c>, <c>Temporal.PlainDate</c>, <c>acme</c>). A value computed from one (<c>JSON.parse(s).Items</c>) is a
+        /// value like any other.
+        /// </summary>
         private bool IsNativeReceiver(Node receiver) =>
-            RootIdentifier(receiver) is { } root &&
+            StaticRoot(receiver) is { } root &&
             (JavaScriptGlobals.Contains(root) && !_declared.Contains(root) || _namespaceRoots.Contains(root));
 
-        private static string? RootIdentifier(Node node) => node switch
+        private static string? StaticRoot(Node node) => node switch
         {
             Identifier identifier => identifier.Name,
-            MemberExpression member => RootIdentifier(member.Object),
-            CallExpression { Callee: var callee } => RootIdentifier(callee),
-            NewExpression { Callee: var callee } => RootIdentifier(callee),
+            MemberExpression { Computed: false } member => StaticRoot(member.Object),
             _ => null
         };
 

@@ -39,23 +39,26 @@ internal static class Elsa3ZonedDateHelper
         "return Temporal.PlainDateTime.from({ year: u.year, month: u.month, day: u.day, hour: u.hour, minute: u.minute, second: u.second, millisecond: u.millisecond }).toZonedDateTime(zone, { disambiguation: 'compatible' }).epochMilliseconds; } " +
         "var first = { setFullYear: 0, setYear: 0, setMonth: 1, setDate: 2, setHours: 3, setMinutes: 4, setSeconds: 5, setMilliseconds: 6 }; " +
         "var count = { setFullYear: 3, setYear: 1, setMonth: 2, setDate: 1, setHours: 4, setMinutes: 3, setSeconds: 2, setMilliseconds: 1 }; " +
-        "function call(d, name, args) { " +
+        "function call(d, name, args, optional) { " +
+        "if (optional && d == null) return undefined; " +
         "if (!(d instanceof Date)) return d[name].apply(d, args); " +
         "var t = d.getTime(); var setter = Object.prototype.hasOwnProperty.call(first, name); " +
-        "if (t !== t) { if (name !== 'setFullYear' && name !== 'setYear') { if (setter) args.map(Number); return NaN; } t = 0; } " +
-        "var z = at(t); " +
+        "var invalid = t !== t; " +
+        "if (invalid && name !== 'setFullYear' && name !== 'setYear') { if (setter) args.map(Number); return NaN; } " +
+        "var z = invalid ? null : at(t); " +
         "switch (name) { " +
         "case 'getFullYear': return z.year; case 'getYear': return z.year - 1900; case 'getMonth': return z.month - 1; " +
         "case 'getDate': return z.day; case 'getDay': return z.dayOfWeek % 7; case 'getHours': return z.hour; " +
         "case 'getMinutes': return z.minute; case 'getSeconds': return z.second; case 'getMilliseconds': return z.millisecond; " +
         "case 'getTimezoneOffset': return -z.offsetNanoseconds / 60000000000; } " +
-        "var f = [z.year, z.month - 1, z.day, z.hour, z.minute, z.second, z.millisecond]; var a = args.map(Number); " +
+        // On an invalid date, setFullYear starts from local midnight on 1 January 1970, as ECMAScript does.
+        "var f = invalid ? [1970, 0, 1, 0, 0, 0, 0] : [z.year, z.month - 1, z.day, z.hour, z.minute, z.second, z.millisecond]; var a = args.map(Number); " +
         "if (a.length === 0) return d.setTime(NaN); " +
         "for (var i = 0; i < Math.min(a.length, count[name]); i++) f[first[name] + i] = a[i]; " +
         "if (name === 'setYear' && f[0] === f[0]) { var y = Math.trunc(f[0]); if (y >= 0 && y <= 99) f[0] = 1900 + y; } " +
         "return d.setTime(wall(f, false)); } " +
         "function local() { var a = Array.prototype.slice.call(arguments).map(Number); while (a.length < 7) a.push(a.length === 2 ? 1 : 0); return wall(a, true); } " +
-        "var offset = /(?:[zZ]|[+-]\\d{2}(?::?\\d{2})?|\\b(?:UTC|GMT|UT)\\b[^()]*)\\s*(?:\\([^)]*\\))?\\s*$/; " +
+        "var offset = /(?:\\d:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?\\s*(?:[zZ]|[+-]\\d{2}(?::?\\d{2})?)|\\b(?:UTC|GMT|UT)\\b[^()]*)\\s*(?:\\([^)]*\\))?\\s*$/; " +
         "var dateOnly = /^\\s*[+-]?\\d{4,6}(?:-\\d{2}(?:-\\d{2})?)?\\s*$/; " +
         "function parse(value) { var text = String(value); " +
         "if (dateOnly.test(text) || offset.test(text)) return Date.parse(text); " +

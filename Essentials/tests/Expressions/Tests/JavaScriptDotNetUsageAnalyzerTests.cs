@@ -24,6 +24,38 @@ public sealed class JavaScriptDotNetUsageAnalyzerTests
         Assert.IsType<JavaScriptDotNetUsageAnalyzer>(provider.GetRequiredService<IJavaScriptDotNetUsageAnalyzer>());
     }
 
+    // Framework §2.6.2: a replacement contract. A host's analyzer registered first wins; a second one fails activation.
+    [Fact]
+    public async Task A_host_analyzer_registered_first_replaces_the_default()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IJavaScriptDotNetUsageAnalyzer, HostAnalyzer>();
+        new JavaScriptFeature().ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        Assert.IsType<HostAnalyzer>(provider.GetRequiredService<IJavaScriptDotNetUsageAnalyzer>());
+        await provider.GetServices<CShells.Lifecycle.IShellInitializer>().OfType<JavaScriptDotNetUsageAnalyzerCheck>().Single().InitializeAsync();
+    }
+
+    [Fact]
+    public async Task A_second_analyzer_fails_activation_naming_both()
+    {
+        var services = new ServiceCollection();
+        new JavaScriptFeature().ConfigureServices(services);
+        services.AddSingleton<IJavaScriptDotNetUsageAnalyzer, HostAnalyzer>();
+
+        await using var provider = services.BuildServiceProvider();
+        var check = provider.GetServices<CShells.Lifecycle.IShellInitializer>().OfType<JavaScriptDotNetUsageAnalyzerCheck>().Single();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => check.InitializeAsync());
+        Assert.Contains(nameof(HostAnalyzer), exception.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(JavaScriptDotNetUsageAnalyzer), exception.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class HostAnalyzer : IJavaScriptDotNetUsageAnalyzer
+    {
+        public IReadOnlyList<JavaScriptDotNetUsage>? Analyze(string source, bool scriptBody = false, JavaScriptDotNetUsageContext? context = null) => [];
+    }
+
     [Theory]
     [InlineData("TimeSpan.FromHours(1)", "TimeSpan.FromHours(1)", "TimeSpan")]
     [InlineData("new Uri(s)", "new Uri(s)", "Uri")]

@@ -122,7 +122,7 @@ public sealed class ExpressionCapabilityTests
     [InlineData("00000000-0000-0000-0000-000000000000", "AAAAAAAAAAAAAAAAAAAAAA")]
     [InlineData("fbfbfbfb-fbfb-fbfb-fbfb-fbfbfbfbfbfb", "v7v7v7v7v7w")]
     public void Short_guid_matches_elsa_3_for_a_fixed_guid(string guid, string expected) =>
-        Assert.Equal(expected, JavaScriptBuiltInFunctions.ShortGuid(Guid.Parse(guid)));
+        Assert.Equal(expected, Elsa.Expressions.JavaScript.Jint.Services.JavaScriptBuiltIns.ShortGuid(Guid.Parse(guid)));
 
     [Theory]
     [InlineData("{6F9619FF-8B86-D011-B42D-00CF4FC964FF}")]
@@ -162,6 +162,19 @@ public sealed class ExpressionCapabilityTests
         {
             Assert.Equal(base64, result[0].GetString());
             Assert.Equal(text, result[1].GetString());
+        }
+    }
+
+    // Elsa 3 converted a number argument to its text.
+    [Fact]
+    public async Task StringToBase64_encodes_a_number_as_its_text()
+    {
+        var (binding, script) = await BothAsync("[stringToBase64(123), stringToBase64(1.5)]");
+
+        foreach (var result in new[] { binding, script })
+        {
+            Assert.Equal("MTIz", result[0].GetString());
+            Assert.Equal("MS41", result[1].GetString());
         }
     }
 
@@ -273,7 +286,7 @@ public sealed class ExpressionCapabilityTests
         Assert.Equal(JavaScriptBuiltInFunctions.Names.Order(StringComparer.Ordinal), declarations.Order(StringComparer.Ordinal));
         Assert.All(provider.GetServices<JavaScriptHostFunctionDeclaration>(), declaration => Assert.False(declaration.ReadsVariables));
         Assert.NotNull(provider.GetRequiredService<JavaScriptHostFunctions>());
-        Assert.IsType<Elsa.Expressions.JavaScript.Services.JavaScriptDotNetUsageAnalyzer>(provider.GetRequiredService<IJavaScriptDotNetUsageAnalyzer>());
+        Assert.NotNull(provider.GetRequiredService<IJavaScriptDotNetUsageAnalyzer>());
         foreach (var initializer in provider.GetServices<IShellInitializer>())
             await initializer.InitializeAsync();
     }

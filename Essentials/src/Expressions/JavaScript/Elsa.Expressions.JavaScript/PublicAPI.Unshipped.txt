@@ -2,6 +2,3 @@
 Elsa.Expressions.JavaScript.JavaScriptFeature
 Elsa.Expressions.JavaScript.JavaScriptFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Expressions.JavaScript.JavaScriptFeature.JavaScriptFeature() -> void
-Elsa.Expressions.JavaScript.Services.JavaScriptDotNetUsageAnalyzer
-Elsa.Expressions.JavaScript.Services.JavaScriptDotNetUsageAnalyzer.Analyze(string! source, bool scriptBody = false, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext? context = null) -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage!>?
-Elsa.Expressions.JavaScript.Services.JavaScriptDotNetUsageAnalyzer.JavaScriptDotNetUsageAnalyzer(System.Collections.Generic.IEnumerable<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration!>? hostFunctions = null) -> void

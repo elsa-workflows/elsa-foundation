@@ -80,7 +80,7 @@ public class JintFeature : IShellFeature
 
         // The built-in functions are part of every JavaScript surface (spec 1223 FR-003, FR-006, FR-007, FR-026); host
         // functions are registered beside them. The naming rule is checked at shell activation (FR-027).
-        foreach (var builtIn in JavaScriptBuiltInFunctions.Declarations)
+        foreach (var builtIn in JavaScriptBuiltIns.Declarations)
             services.AddSingleton(builtIn);
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<JavaScriptHostFunctions>();

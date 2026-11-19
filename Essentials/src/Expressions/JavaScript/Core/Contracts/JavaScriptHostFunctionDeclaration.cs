@@ -33,8 +33,12 @@ public sealed record JavaScriptHostFunctionCall(
 /// <para>
 /// <b>Name.</b> A host function carries a namespace prefix, <c>acme.lookup</c>: it is installed as member <c>lookup</c>
 /// of a read-only global object <c>acme</c>. Only the built-ins of <see cref="JavaScriptBuiltInFunctions"/> are
-/// unprefixed. A duplicate name, a namespace root that is reserved (<see cref="JavaScriptBuiltInFunctions.IsReservedRoot"/>)
-/// or a malformed name fails startup with a message naming the function.
+/// unprefixed. A duplicate name, a reserved namespace root (a read root, a built-in name, <c>complete</c>,
+/// <c>getVariable</c> or a JavaScript global) or a malformed name fails startup with a message naming the function.
+/// </para>
+/// <para>
+/// Register one with <c>services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookup", call =&gt; ...))</c>.
+/// The Jint engine collects the registrations into its function catalog, checked at shell activation.
 /// </para>
 /// <para>
 /// <b>Reads.</b> A function that reads workflow variables the script does not name in source must say so with

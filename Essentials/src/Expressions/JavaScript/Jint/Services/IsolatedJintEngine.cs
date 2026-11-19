@@ -64,6 +64,7 @@ internal static class IsolatedJintEngine
         " var Native = Intl.DateTimeFormat;" +
         " function withUtc(options) {" +
         "  if (options === undefined) return { timeZone: 'UTC' };" +
+        "  if (options === null) return options;" +
         "  var o = Object(options); return o.timeZone === undefined ? Object.assign({}, o, { timeZone: 'UTC' }) : options;" +
         " }" +
         " function DateTimeFormat(locales, options) { return new Native(locales, withUtc(options)); }" +

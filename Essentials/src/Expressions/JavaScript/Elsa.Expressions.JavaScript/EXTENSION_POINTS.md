@@ -57,14 +57,21 @@ with portable expression evaluation.
   effectful declaration ships with its boundary (#4831).
 - **Reads:** `ReadsVariables: true` makes publish treat a call as an opaque read and set the fallback marker; the
   function reads through the call's `Variables`.
+- **Registration:** `services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookup", call => ...))`.
+- **Aggregation:** `JavaScriptHostFunctions` (Jint, internal) collects every declaration, checks the naming rule at shell
+  activation (`JavaScriptHostFunctionCheck`) and installs the functions into each evaluation. The analyzers and the
+  expression tooling read the same registrations.
+- **Known implementations:** the eight built-ins, registered by `JintFeature` (intra-domain, `JavaScriptBuiltIns`).
 - **Publish:** a script that declares `variables` gets the error `Scripts/ReservedName`. A script that declares `input`,
-  `activities`, `workflow`, a built-in name or a namespace root gets the warning `Scripts/ShadowedFunction`.
+  `activities`, `workflow`, a built-in name or a namespace root gets the warning `Scripts/ShadowedFunction`, and an
+  input expression the warning `JavaScript/ShadowedFunction`.
 
 ## Overridable contracts
 
 ### IJavaScriptDotNetUsageAnalyzer *(Core — Elsa.Expressions.JavaScript.Core)*
 
-- **Kind:** replacement contract: one per host, part of the default JSON-only engine strategy (spec 1223 FR-030).
+- **Kind:** replacement contract (framework §2.6.2): one per host, part of the default JSON-only engine strategy (spec
+  1223 FR-030). A second registration fails shell activation (`JavaScriptDotNetUsageAnalyzerCheck`).
 - **Contract:** `Analyze(source, scriptBody, context)` refuses, quoting the expression:
   - a reference to a catalogued .NET type (`new Uri(s)`, `Enumerable.Range(…)`);
   - an invocation of a PascalCase member on a value the script did not define (`items.Where(f)`);
@@ -72,7 +79,7 @@ with portable expression evaluation.
 
   It allows JSON property reads of any casing, calls on JavaScript globals and registered namespaces, members and names
   the script defines, and computed access.
-- **Implementation:** `JavaScriptDotNetUsageAnalyzer` (Acornima), registered with `TryAdd` by `JavaScriptFeature`.
+- **Implementation:** `JavaScriptDotNetUsageAnalyzer` (internal, Acornima), registered with `TryAdd` by `JavaScriptFeature`.
 - **Consumers:** `ScriptOutcomeValidator` (`Scripts/DotNetMemberUsage`), the expression tooling
   (`JavaScript/DotNetMemberUsage`) and the Elsa 3 converter (`VF-IMP-012`).
 - **Override when:** the opt-in .NET interop strategy (#4103) replaces the default strategy and decides whether this

@@ -22,7 +22,7 @@ internal static class ConversionServices
         services.AddSingleton(TypeRegistry());
         services.AddSingleton(SerializationServices.ObjectConverter());
         // The converter checks converted scripts with the JavaScript strategy (the feature depends on JavaScriptExpressions).
-        services.AddSingleton<Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptDotNetUsageAnalyzer>(new Elsa.Expressions.JavaScript.Services.JavaScriptDotNetUsageAnalyzer());
+        new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services);
         (feature ?? new Elsa3MappingFeature()).ConfigureServices(services);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
@@ -38,6 +38,14 @@ internal static class ConversionServices
         await using var scope = provider.CreateAsyncScope();
         var converter = scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>();
         return await converter.ConvertAsync(new Elsa3ConversionRequest(definition, isReusable));
+    }
+
+    /// <summary>The JavaScript feature's .NET-usage analysis, as a host composes it.</summary>
+    public static Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptDotNetUsageAnalyzer DotNetUsageAnalyzer()
+    {
+        var services = new ServiceCollection();
+        new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services);
+        return services.BuildServiceProvider().GetRequiredService<Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptDotNetUsageAnalyzer>();
     }
 
     public static IWellKnownTypeRegistry TypeRegistry()

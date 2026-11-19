@@ -97,7 +97,7 @@ internal static class ImportFixtures
         services.AddSingleton(registry);
         services.AddSingleton(SerializationServices.ObjectConverter());
         // The converter checks converted scripts with the JavaScript strategy (the feature depends on JavaScriptExpressions).
-        services.AddSingleton<Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptDotNetUsageAnalyzer>(new Elsa.Expressions.JavaScript.Services.JavaScriptDotNetUsageAnalyzer());
+        new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services);
         new Elsa3MappingFeature().ConfigureServices(services);
         var scope = services.BuildServiceProvider().CreateScope();
         return new(

@@ -66,7 +66,7 @@ internal sealed class JavaScriptHostFunctions
             if (parts.Length != 2 || !parts.All(IsIdentifier))
                 throw new InvalidOperationException(
                     $"JavaScript function '{name}' is not a valid name: use '<namespace>.<function>', both JavaScript identifiers.");
-            if (JavaScriptBuiltInFunctions.IsReservedRoot(parts[0]))
+            if (IsReservedRoot(parts[0]))
                 throw new InvalidOperationException(
                     $"JavaScript function '{name}' uses the reserved name '{parts[0]}' as its namespace. Read roots, built-in function names and JavaScript globals cannot be namespaces.");
         }
@@ -84,9 +84,7 @@ internal sealed class JavaScriptHostFunctions
         var parse = engine.GetValue("JSON").AsObject().Get("parse");
         foreach (var declaration in _globals)
         {
-            engine.Global.DefineOwnProperty(declaration.Name, new PropertyDescriptor(
-                Function(engine, options, parse, declaration, declaration.Name, variables, cancellationToken),
-                writable: false, enumerable: false, configurable: false));
+            Define(engine, declaration.Name, Function(engine, options, parse, declaration, declaration.Name, variables, cancellationToken));
         }
 
         foreach (var (root, members) in _namespaces)
@@ -100,7 +98,7 @@ internal sealed class JavaScriptHostFunctions
             }
 
             target.PreventExtensions();
-            engine.Global.DefineOwnProperty(root, new PropertyDescriptor(target, writable: false, enumerable: false, configurable: false));
+            Define(engine, root, target);
         }
     }
 
@@ -148,6 +146,37 @@ internal sealed class JavaScriptHostFunctions
                 $"{function}: argument {index} is not a JSON value. {exception.Message}");
         }
     }
+
+    // A global the engine already holds read-only cannot be replaced; failing beats a silently missing function.
+    private static void Define(Engine engine, string name, JsValue value)
+    {
+        if (!engine.Global.DefineOwnProperty(name, new PropertyDescriptor(value, writable: false, enumerable: false, configurable: false)))
+            throw new InvalidOperationException($"JavaScript function '{name}' could not be installed: the engine already defines '{name}'.");
+    }
+
+    /// <summary>
+    /// Whether no host function may use <paramref name="name"/> as its namespace root: a read root, a built-in name, a
+    /// global the platform installs (<c>complete</c>, <c>getVariable</c>) or a standard JavaScript global.
+    /// </summary>
+    internal static bool IsReservedRoot(string name) =>
+        JavaScriptBuiltInFunctions.ReadRoots.Contains(name, StringComparer.Ordinal) ||
+        JavaScriptBuiltInFunctions.Names.Contains(name) ||
+        EngineGlobals.Contains(name) ||
+        name.StartsWith("__elsa", StringComparison.Ordinal);
+
+    private static readonly HashSet<string> EngineGlobals = new(StringComparer.Ordinal)
+    {
+        JavaScriptScriptBuiltIns.Complete, "getVariable",
+        "globalThis", "undefined", "NaN", "Infinity", "eval", "isFinite", "isNaN", "parseFloat", "parseInt",
+        "decodeURI", "decodeURIComponent", "encodeURI", "encodeURIComponent", "escape", "unescape",
+        "String", "Number", "Boolean", "Array", "Object", "Date", "Math", "JSON", "Intl", "Temporal", "RegExp", "Map", "Set",
+        "WeakMap", "WeakSet", "WeakRef", "Symbol", "BigInt", "Promise", "Error", "Function", "Proxy", "Reflect",
+        "ArrayBuffer", "SharedArrayBuffer", "DataView", "Atomics", "Iterator", "AggregateError", "EvalError", "RangeError",
+        "ReferenceError", "SyntaxError", "TypeError", "URIError", "FinalizationRegistry", "DisposableStack",
+        "AsyncDisposableStack", "SuppressedError", "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array",
+        "Uint16Array", "Int32Array", "Uint32Array", "Float16Array", "Float32Array", "Float64Array", "BigInt64Array",
+        "BigUint64Array",
+    };
 
     private static bool IsIdentifier(string value) =>
         value.Length > 0 && (char.IsLetter(value[0]) || value[0] is '_' or '$') &&

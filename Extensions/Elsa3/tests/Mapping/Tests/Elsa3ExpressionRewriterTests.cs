@@ -7,7 +7,7 @@ namespace Elsa3.Mapping.Tests;
 
 public sealed class Elsa3ExpressionRewriterTests
 {
-    private readonly Elsa3ExpressionRewriter _sut = new(new Elsa.Expressions.JavaScript.Services.JavaScriptDotNetUsageAnalyzer());
+    private readonly Elsa3ExpressionRewriter _sut = new(Support.ConversionServices.DotNetUsageAnalyzer());
 
     [Fact]
     public void JavaScript_rewrites_only_parser_proven_reads_and_preserves_literals_comments_and_property_names()

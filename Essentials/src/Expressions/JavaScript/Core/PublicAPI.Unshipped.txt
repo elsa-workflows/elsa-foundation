@@ -67,14 +67,8 @@ const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.Stri
 override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.Equals(object? obj) -> bool
 override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.GetHashCode() -> int
 override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.ToString() -> string!
-static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.CanonicalGuid(string! text) -> string!
-static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.Declarations.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration!>!
-static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.FromBase64(string! base64) -> string!
-static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.IsReservedRoot(string! name) -> bool
 static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.Names.get -> System.Collections.Generic.IReadOnlySet<string!>!
 static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.ReadRoots.get -> System.Collections.Generic.IReadOnlyList<string!>!
-static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.ShortGuid(System.Guid guid) -> string!
-static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.ToBase64(string! text) -> string!
 static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.operator !=(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall? right) -> bool
 static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.operator ==(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall? right) -> bool
 virtual Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunction.Invoke(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall! call) -> System.Text.Json.JsonElement
