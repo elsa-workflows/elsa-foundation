@@ -120,7 +120,7 @@ An author uses the built-in functions and expects them to behave the same in an 
 - **FR-010**: The existing null/whitespace helpers (`isNullOrEmpty`, `isNullOrWhiteSpace`) MUST remain available as already specified. *(spec 247)*
 - **FR-011**: By default — no .NET interop strategy installed — every value crossing between an expression and a .NET-implemented function (arguments and results) MUST be a value of the core value model as JSON. No .NET-implemented function may accept or return a live .NET object. Script values passed as arguments map to the value model as a script result does (a `Date` becomes its ISO 8601 UTC text, `undefined` becomes `null`). *(ADR 0045 §5 D-5, ADR 0046 V10)*
 - **FR-028**: A number argument that carries the value model's loss information (it lost precision when it entered JavaScript), passed to a .NET-implemented function, MUST log a warning that names the function and the argument path; the call MUST NOT be refused. A function MUST NOT turn a number into a string to avoid the loss. *(ADR 0046 V9, value-model spec FR-015 and FR-016)*
-- **FR-012**: The host-function registration MUST let a host declare a function **effectful** (one optional flag for the host developer, never visible to workflow authors). A function registered without the declaration is effect-free. The declaration MUST NOT refuse, skip or deduplicate a call; idempotency stays with the designer. The built-in functions of this spec are registered without it. It is the only effect metadata a function carries. This spec records the declaration; placing the commit before and after an input evaluation that calls a declared function belongs to the execution-contract implementation (ADR 0045 §2–§3 as amended by D-2, ADR 0032, ADR 0020), specified in spec 1232. *(D-6)*
+- **FR-012**: Functions MUST carry no effect metadata in this spec. Every registered function, the built-ins included, is effect-free under D-6: calling one adds no commit boundary, and a call is never refused, skipped or deduplicated; idempotency stays with the designer. The effectful declaration D-6 allows arrives together with the commit boundary that acts on it (#4831), so a host is never offered a declaration that has no effect. None of the Elsa 3 functions this spec converts is effectful. *(D-6)*
 - **FR-027**: Function names MUST follow ADR 0045 §5 D-5: the read roots (`variables`, `input`, `activities`, `workflow`, `args`), the built-in function names of this spec, and every registered namespace root are reserved. A host-registered function MUST carry a namespace prefix (`acme.lookup`); its namespace root is installed as a read-only global object holding the namespace's functions. A duplicate registration, or a registration under a reserved name, MUST fail at startup with a message naming the function. A script that declares a read root MUST get the existing publish error for reserved names (the declaration would break pinning); a script that declares a built-in name or a namespace root MUST get a publish warning of its own that names it.
 - **FR-029**: Registering a function MUST mark it as allowed in `binding-readonly-v1`, and MUST state whether it reads workflow variables (the existing host-function declaration's flag, ADR 0089 R3). The built-in functions of this spec read no variables, so calling one never makes publish report an expression as possibly reading every variable. *(ADR 0083, ADR 0089)*
 
@@ -162,7 +162,7 @@ An author uses the built-in functions and expects them to behave the same in an 
 
 - **Expression**: author-written JavaScript evaluated in an input binding or a script; consumes and produces JSON values.
 - **Capability profile** (`binding-readonly-v1`): the capabilities granted to expressions on both surfaces — standard JS intrinsics plus the registered .NET-implemented functions (ADR 0083; spec 095's expression contract holds the full definition).
-- **Host-function registration**: a function's name, whether it reads variables, whether it is effectful, and its implementation; the only registration surface for .NET-implemented functions.
+- **Host-function registration**: a function's name, whether it reads variables, and its implementation; the only registration surface for .NET-implemented functions.
 - **Known .NET-object value**: a value the converter can show was a live .NET object in Elsa 3 (FR-016).
 - **Conversion / publish diagnostic**: a refusal or warning carrying a code, a message that quotes the offending expression, and guidance.
 
@@ -181,7 +181,7 @@ An author uses the built-in functions and expects them to behave the same in an 
 
 ## Dependencies & agreed decisions
 
-- **ADR 0045 §5 (D-1, D-5, D-6)** — expressions may read the clock, generate random values and GUIDs; Elsa 3 date and GUID functions convert directly; .NET-implemented functions exchange JSON by default, follow one naming rule, and carry only an optional effectful declaration.
+- **ADR 0045 §5 (D-1, D-5, D-6)** — expressions may read the clock, generate random values and GUIDs; Elsa 3 date and GUID functions convert directly; .NET-implemented functions exchange JSON by default, follow one naming rule, and are effect-free unless declared effectful (the declaration ships with its commit boundary, #4831).
 - **D-2 execution contract** (ADR 0045 §3, ADR 0032, ADR 0020 as amended) and **ADR 0092** decisions 8 and 9 — when a value is recorded, reused or evaluated again; the safety basis for FR-001 and FR-020.
 - **ADR 0083** — the capability profile `binding-readonly-v1`; left to this spec: the constant rename, the `Inline` justification, and the registration that marks a function as allowed.
 - **ADR 0046** (as amended) — *Dates*: UTC clock, IANA zones, the converter's source time zone; the core value model; V9 precision loss; V10 .NET interop off by default, opt-in through one replaceable engine strategy (#4103).
@@ -190,7 +190,7 @@ An author uses the built-in functions and expects them to behave the same in an 
 - **Spec 1222** (scripts read by name) — the host-function declaration this spec extends, the read roots, and import codes `VF-IMP-010`/`VF-IMP-011`.
 - **Spec 1228** (value model) — the boundary rules for host-function arguments (FR-015, FR-016 there) and the default-only interop stance.
 - **Spec 1231** (activities change variables) — script writes, which this spec does not change.
-- **Spec 1230 / ADR 0093** (background eligibility) — unchanged: `RunJavaScript` stays ineligible; input bindings run on the coordinator, so the effectful declaration does not affect eligibility.
+- **Spec 1230 / ADR 0093** (background eligibility) — unchanged: `RunJavaScript` stays ineligible; input bindings run on the coordinator, so functions called from them do not affect eligibility.
 
 ## Open questions
 

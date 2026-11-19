@@ -38,12 +38,12 @@ Calling any of these is refused (at conversion for imported workflows; see the c
 
 ## C5 — Registration (D-5, D-6, ADR 0083, ADR 0089)
 
-- One registration per function: name, `ReadsVariables`, `Effectful`, implementation. It extends spec 1222's `JavaScriptHostFunctionDeclaration`.
+- One registration per function: name, `ReadsVariables`, implementation. It extends spec 1222's `JavaScriptHostFunctionDeclaration`.
 - A registered function is allowed in `binding-readonly-v1`.
 - **Names**: the read roots (`variables`, `input`, `activities`, `workflow`, `args`), built-in names and registered namespace roots are reserved; host functions are namespace-prefixed (`acme.lookup`, installed as a read-only global object `acme`); a duplicate or reserved registration fails at startup naming the function. A script declaring a read root gets the existing publish **error** `Scripts/ReservedName`; declaring a built-in name or namespace root gets the publish **warning** `Scripts/ShadowedFunction`.
-- **Effect**: without `Effectful` a function is effect-free. With it, the execution contract places a commit before and after an input evaluation that calls it (not implemented by this spec). The flag never refuses, skips or deduplicates a call. The C3 functions are registered without it.
+- **Effect**: none in this spec. Every function is effect-free under D-6 and calling it adds no commit boundary; the effectful declaration ships with its boundary (#4831).
 - **Reads**: the C3 functions have `ReadsVariables = false`, so calling them does not make publish report an expression as possibly reading every variable.
 - **Arguments**: script values map to the value model as a script result does (`Date` → ISO 8601 UTC text, `undefined` → `null`).
 - **Precision**: a number argument that carries the value model's loss information logs a warning naming the function and the argument path; the call runs (ADR 0046 V9).
 
-**Contract tests**: a duplicate name fails startup; an unprefixed host function fails startup; `const newGuid = 1` warns at publish (`Scripts/ShadowedFunction`); `const variables = 1` is a publish error (`Scripts/ReservedName`); a function registered with `Effectful` reports it, one without reports effect-free, and a call runs exactly as often either way; calling `newGuid()` adds no fallback read marker; a lossy number argument logs the warning and the call returns.
+**Contract tests**: a duplicate name fails startup; an unprefixed host function fails startup; `const newGuid = 1` warns at publish (`Scripts/ShadowedFunction`); `const variables = 1` is a publish error (`Scripts/ReservedName`); calling `newGuid()` adds no fallback read marker; a lossy number argument logs the warning and the call returns.

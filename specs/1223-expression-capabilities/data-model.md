@@ -27,10 +27,9 @@ One registration per function, extending spec 1222's `JavaScriptHostFunctionDecl
 |---|---|
 | `Name` | Global name. Built-ins: unprefixed and reserved. Host functions: namespace-prefixed (`acme.lookup`). Duplicate or reserved name → startup failure naming the function. |
 | `ReadsVariables` | Whether the function reads workflow variables (ADR 0089 R3). All built-ins: `false`. |
-| `Effectful` | D-6 declaration; default `false`. All built-ins: `false`. The only effect metadata. |
 | Implementation | The .NET delegate the engine installs; JSON values in and out. |
 
-A registered function is allowed in `binding-readonly-v1` (ADR 0083). Functions are installed as non-writable globals, as `getVariable` is today.
+A registered function is allowed in `binding-readonly-v1` (ADR 0083). It carries no effect metadata: every function is effect-free under D-6 until the effectful declaration ships with its commit boundary (#4831). Functions are installed as non-writable globals, as `getVariable` is today.
 
 **Reserved names**: the read roots `variables`, `input`, `activities`, `workflow`, `args`; the built-in names below; every registered namespace root. A host function `acme.lookup` is installed as member `lookup` of a read-only global object `acme`. A script declaring a read root gets the existing publish **error** `Scripts/ReservedName` (it would break pinning); declaring a built-in name or namespace root gets the publish **warning** `Scripts/ShadowedFunction`.
 

@@ -17,7 +17,7 @@
 - [ ] T002 Rename `ExpressionCapabilityProfiles.BindingPureV1` to `BindingReadonlyV1` (value `binding-readonly-v1`) in `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs` and update `ExpressionEvaluationCapabilities` so the profile allows time and randomness; update every user (portable, Jint, Liquid and runtime evaluators; `Elsa3ExpressionRewriter`; `Elsa3ValueFlowLowerer`; `BindingPureArgsDeclarationContributor`). No alias or reader for the old value (FR-031).
 - [ ] T003 Regenerate stored fixtures and golden executable hashes that carry `capabilityProfile` in place; verify with the affected test projects (FR-031).
 - [ ] T004 Remove the `Inline` comment that grounds replay safety in `binding-pure-v1` (`Essentials/src/Activities/Primitives/Activities/Inline.cs`); reference the D-2 contract instead (FR-031).
-- [ ] T005 Extend `JavaScriptHostFunctionDeclaration` with `Effectful` (default `false`) and an implementation delegate taking and returning JSON values; keep `ReadsVariables` (FR-012, FR-029).
+- [ ] T005 Extend `JavaScriptHostFunctionDeclaration` with an implementation delegate (no effect metadata, FR-012) taking and returning JSON values; keep `ReadsVariables` (FR-012, FR-029).
 
 ## Phase 3: User Story 1 — Current time, randomness, GUIDs in expressions (P1)
 
@@ -27,7 +27,7 @@
 - [ ] T006 [US1] Remove `DisableAmbientCapabilities` in `IsolatedJintEngine.cs` and `StrippedAmbientCapabilities` plus the "deterministic binding sandbox" rethrow in `JintPortableJavaScriptEvaluator.cs`, so `Date`, `Intl`, `Temporal` and native `Math.random` are admitted (FR-001, FR-004, FR-005).
 - [ ] T007 [US1] Implement a Jint `ITimeSystem` over the host `System.TimeProvider`; set `Options.TimeSystem`, `Options.TimeZone = UTC`, `Options.Culture = Invariant` on engine construction (FR-002).
 - [ ] T008 [US1] Install every registered `JavaScriptHostFunctionDeclaration` in `IsolatedJintEngine` as a non-writable global, as `SetReadOnlyVariables` installs `getVariable`; marshal arguments and results as JSON values (FR-011, FR-029).
-- [ ] T009 [P] [US1] Register the GUID built-ins `newGuid`, `newGuidString`, `getGuidString`, `newShortGuid`, `getShortGuid` and `parseGuid` with `ReadsVariables = false`, `Effectful = false` (FR-006, FR-026; T001 fixtures).
+- [ ] T009 [P] [US1] Register the GUID built-ins `newGuid`, `newGuidString`, `getGuidString`, `newShortGuid`, `getShortGuid` and `parseGuid` with `ReadsVariables = false` (FR-006, FR-026; T001 fixtures).
 - [ ] T010 [P] [US1] xUnit: intrinsics restored; clock reads a controlled `TimeProvider` (`Date`, `Temporal.Now`); UTC and invariant formatting; `Math.random` permitted to differ — quickstart A1–A4, SC-003.
 - [ ] T011 [P] [US1] xUnit: GUID built-ins return strings in Elsa 3's forms; `parseGuid` accepted forms and invalid text — quickstart B6, B7.
 - [ ] T012 [P] [US1] xUnit: `Temporal` and `Intl.DateTimeFormat` convert between UTC and `Europe/Amsterdam` in winter and summer; record the result on the host OS used by CI (FR-025) — quickstart A5a.
@@ -42,7 +42,7 @@
 - [ ] T015 [US4] Extend the publish check (`JavaScriptReservedNames`): declaring a read root → the existing error `Scripts/ReservedName`; declaring a built-in name or namespace root → the new warning `Scripts/ShadowedFunction` (FR-027).
 - [ ] T016 [US4] Warn on a number argument that carries spec 1228's loss information, naming the function and the argument path; never refuse, never stringify (FR-028).
 - [ ] T017 [P] [US4] xUnit: Base64 round trip and Elsa 3 parity; no `toJson` global; no live .NET object in or out — quickstart B8–B10, SC-005, SC-008.
-- [ ] T018 [P] [US4] xUnit: naming failures, reserved-name warning, no fallback read marker for built-ins, `Effectful` recorded and never changes call count, V9 warning — quickstart B11–B11b.
+- [ ] T018 [P] [US4] xUnit: naming failures, reserved-name warning, no fallback read marker for built-ins, no effectful option on the registration, V9 warning — quickstart B11–B11b.
 - [ ] T019 [P] [US4] xUnit: surface parity — each intrinsic and built-in identical in an input binding and a `RunJavaScript` script (FR-003) — quickstart A5, SC-004.
 
 ## Phase 5: User Story 2 — Elsa 3 time / GUID / string functions convert faithfully (P1)
@@ -81,7 +81,7 @@
 
 - [ ] T038 [P] Update the JS feature docs (capabilities, built-ins, registration rules) and `EXTENSION_POINTS.md` (host-function registration) — quickstart F28.
 - [ ] T039 Confirm new tests are in the unit tier; update `tools/ci/test-tiers.json` only if a test project is added — Elsa §E7.
-- [ ] T040 Public-surface review: `BindingReadonlyV1`, `Effectful`, the implementation delegate, the analyzer contract — framework §2.23.3.
+- [ ] T040 Public-surface review: `BindingReadonlyV1`, the implementation delegate, the analyzer contract — framework §2.23.3.
 - [ ] T041 Regenerate solution filters only if project references changed (expected: none); verify with `git diff --stat`.
 
 ---

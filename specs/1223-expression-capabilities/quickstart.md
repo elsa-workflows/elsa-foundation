@@ -20,7 +20,7 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 9. No `toJson` global exists in Elsa 4. Invalid Base64 fails; invalid UTF-8 gives U+FFFD.
 10. No built-in accepts or returns a live .NET object.
 11. **Registration** — a duplicate name, an unprefixed host function or a reserved name fails startup with the function's name; `const newGuid = 1` gets the publish warning `Scripts/ShadowedFunction`; `const workflow = 1` gets the publish error `Scripts/ReservedName`; a host function `acme.lookup` is callable as `acme.lookup(x)`; calling a built-in adds no fallback read marker (`ReadsVariables = false`).
-11a. **Effect declaration** — a function registered with `Effectful` reports it, one without reports effect-free; a call runs exactly as often either way.
+11a. **No effect metadata** — the registration has no effectful option; calling a built-in adds no commit.
 11b. **Precision** — a number argument carrying the value model's loss information passed to a host function logs a warning naming the function and the argument path; the call returns.
 
 ## C. Conversion — faithful (no refusal)
