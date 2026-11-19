@@ -34,7 +34,7 @@ A registered function is allowed in `binding-readonly-v1` (ADR 0083). Functions 
 
 **Reserved names**: the read roots `variables`, `input`, `activities`, `workflow`, `args`; the built-in names below; every registered namespace root. A host function `acme.lookup` is installed as member `lookup` of a read-only global object `acme`. A script declaring a read root gets the existing publish **error** `Scripts/ReservedName` (it would break pinning); declaring a built-in name or namespace root gets the publish **warning** `Scripts/ShadowedFunction`.
 
-**Arguments**: script values map to the value model as a script result does (`Date` → ISO 8601 UTC text, `undefined` → `null`), unless a built-in states its own mapping (`toJson`).
+**Arguments**: script values map to the value model as a script result does (`Date` → ISO 8601 UTC text, `undefined` → `null`).
 
 **Precision (ADR 0046 V9)**: a number argument that carries the value model's loss information logs a warning naming the function and the argument path; the call runs.
 
@@ -50,9 +50,10 @@ A registered function is allowed in `binding-readonly-v1` (ADR 0083). Functions 
 | `parseGuid` | string | string | Elsa 3 returned a .NET `Guid` from `Guid.Parse`; its `D` text is returned; invalid text fails the evaluation |
 | `stringToBase64` | string | string | UTF-8 → standard Base64 |
 | `stringFromBase64` | string | string | standard Base64 → UTF-8 |
-| `toJson` | any | string | System.Text.Json, `JavaScriptEncoder.Create(UnicodeRanges.All)`, not indented, no naming policy; `Date` as Elsa 3's UTC `DateTime` text, `undefined` → `null`; `NaN`/`Infinity`/functions fail |
 
 **Inlined elsewhere (unchanged, spec 247):** `isNullOrEmpty`, `isNullOrWhiteSpace`.
+
+**Not an Elsa 4 function:** `toJson`. Scripts serialize with `JSON.stringify` only; the converter rewrites Elsa 3's `toJson` (§5).
 
 **Not provided (refused on use):** `bytesToString`/`bytesFromString`/`bytesToBase64`/`bytesFromBase64`/`streamToBytes`/`streamToBase64` (binary/stream, not JSON), `getConfig`/`getConfiguration` (host configuration — deferred).
 
@@ -127,7 +128,7 @@ Updates the conversion table in `Extensions/Elsa3/src/Mapping/README.md`.
 | `newGuid`, `newGuidString`, `newShortGuid`, `getGuidString`, `getShortGuid`, `parseGuid` | Refused | **Faithful** (built-ins → strings) |
 | Member use on a `newGuid()`/`parseGuid()` result, other than `toString()` | — | Refused (`VF-IMP-012`) |
 | `stringToBase64`, `stringFromBase64` | Refused | **Faithful** |
-| `toJson` | Refused | **Faithful** (Elsa 3 encoder) |
+| `toJson(x)` | Refused | **Rewritten to `JSON.stringify(x)`** with a behaviour warning naming the text differences (no Elsa 4 `toJson`) |
 | `isNullOrEmpty`, `isNullOrWhiteSpace` | Inlined | Inlined (unchanged) |
 | `bytes*` / `stream*` helpers | Refused | Refused (binary/stream) |
 | `getConfig` / `getConfiguration` | Refused | Refused (deferred) |

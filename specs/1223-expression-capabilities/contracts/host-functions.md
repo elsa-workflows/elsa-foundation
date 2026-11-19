@@ -29,9 +29,8 @@ The capabilities and functions available to Elsa 4 JavaScript expressions under 
 | `parseGuid(s)` | `(string) => string` | `D` text of `Guid.Parse(s)`; invalid text fails the evaluation |
 | `stringToBase64(s)` | `(string) => string` | UTF-8 bytes → standard Base64 |
 | `stringFromBase64(s)` | `(string) => string` | standard Base64 → UTF-8 string; invalid Base64 fails the evaluation, invalid UTF-8 gives U+FFFD |
-| `toJson(v)` | `(any) => string` | Elsa 3's text for `v`: System.Text.Json, `JavaScriptEncoder.Create(UnicodeRanges.All)`, compact, no naming policy; a `Date` as Elsa 3's UTC `DateTime` text, `undefined` as `null`; `NaN`, `Infinity`, functions fail |
 
-**Contract tests**: each returns a string; `newShortGuid` for a fixed GUID equals Elsa 3's algorithm output; `parseGuid('{6F9619FF-8B86-D011-B42D-00CF4FC964FF}')` returns `6f9619ff-8b86-d011-b42d-00cf4fc964ff`; `stringFromBase64(stringToBase64(x)) === x` for UTF-8 `x`; `toJson({a: '<b>'})` equals `{"a":"\u003Cb\u003E"}` and every golden case equals Elsa 3.5.3's output for the same value, including `Date` arguments, `undefined` (→ `null`) and non-BMP characters; `toJson(NaN)` fails the evaluation.
+**Contract tests**: each returns a string; `newShortGuid` for a fixed GUID equals Elsa 3's algorithm output; `parseGuid('{6F9619FF-8B86-D011-B42D-00CF4FC964FF}')` returns `6f9619ff-8b86-d011-b42d-00cf4fc964ff`; `stringFromBase64(stringToBase64(x)) === x` for UTF-8 `x`; no `toJson` global exists.
 
 ## C4 — Refused functions
 
@@ -44,7 +43,7 @@ Calling any of these is refused (at conversion for imported workflows; see the c
 - **Names**: the read roots (`variables`, `input`, `activities`, `workflow`, `args`), built-in names and registered namespace roots are reserved; host functions are namespace-prefixed (`acme.lookup`, installed as a read-only global object `acme`); a duplicate or reserved registration fails at startup naming the function. A script declaring a read root gets the existing publish **error** `Scripts/ReservedName`; declaring a built-in name or namespace root gets the publish **warning** `Scripts/ShadowedFunction`.
 - **Effect**: without `Effectful` a function is effect-free. With it, the execution contract places a commit before and after an input evaluation that calls it (not implemented by this spec). The flag never refuses, skips or deduplicates a call. The C3 functions are registered without it.
 - **Reads**: the C3 functions have `ReadsVariables = false`, so calling them does not make publish report an expression as possibly reading every variable.
-- **Arguments**: script values map to the value model as a script result does (`Date` → ISO 8601 UTC text, `undefined` → `null`) unless a built-in states its own mapping (`toJson`, C3).
+- **Arguments**: script values map to the value model as a script result does (`Date` → ISO 8601 UTC text, `undefined` → `null`).
 - **Precision**: a number argument that carries the value model's loss information logs a warning naming the function and the argument path; the call runs (ADR 0046 V9).
 
 **Contract tests**: a duplicate name fails startup; an unprefixed host function fails startup; `const newGuid = 1` warns at publish (`Scripts/ShadowedFunction`); `const variables = 1` is a publish error (`Scripts/ReservedName`); a function registered with `Effectful` reports it, one without reports effect-free, and a call runs exactly as often either way; calling `newGuid()` adds no fallback read marker; a lossy number argument logs the warning and the call returns.

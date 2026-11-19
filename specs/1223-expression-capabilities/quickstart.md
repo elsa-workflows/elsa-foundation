@@ -17,7 +17,7 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 6. `newGuid`, `newGuidString`, `getGuidString` return a 36-character GUID string; `parseGuid('{6F9619FF-8B86-D011-B42D-00CF4FC964FF}')` returns `6f9619ff-8b86-d011-b42d-00cf4fc964ff`; invalid text fails the evaluation.
 7. `newShortGuid` / `getShortGuid` for a fixed GUID equal Elsa 3's algorithm output (standard Base64 of `ToByteArray()` with `/`, `+`, `=` removed).
 8. `stringFromBase64(stringToBase64(x)) === x` for representative UTF-8 `x`, and `stringToBase64` matches Elsa 3 for the same `x`.
-9. `toJson` equals Elsa 3.5.3's output for golden values: HTML-sensitive characters (`<` → `\u003C`), non-ASCII and non-BMP characters, a `Date` argument, `undefined`; `toJson(NaN)` fails. Invalid Base64 fails; invalid UTF-8 gives U+FFFD.
+9. No `toJson` global exists in Elsa 4. Invalid Base64 fails; invalid UTF-8 gives U+FFFD.
 10. No built-in accepts or returns a live .NET object.
 11. **Registration** — a duplicate name, an unprefixed host function or a reserved name fails startup with the function's name; `const newGuid = 1` gets the publish warning `Scripts/ShadowedFunction`; `const workflow = 1` gets the publish error `Scripts/ReservedName`; a host function `acme.lookup` is callable as `acme.lookup(x)`; calling a built-in adds no fallback read marker (`ReadsVariables = false`).
 11a. **Effect declaration** — a function registered with `Effectful` reports it, one without reports effect-free; a call runs exactly as often either way.
@@ -31,8 +31,8 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 12c. `variables.due.getTime()` and `variables.due < new Date()` with `due: DateTime` in Elsa 3 convert and equal Elsa 3 (FR-032).
 12d. `n.toLocaleString()`, `a.localeCompare(b)` and `new Intl.NumberFormat()` without a locale are refused; with `'nl-NL'` they convert (FR-033).
 12e. `toLocaleString()` on a number is not treated as zone-dependent; `toString()` on a `Date` is.
-13. The GUID functions and `parseGuid` convert without refusal; `'id-' + newGuid()`, `newGuid().toString()` and `toJson(newGuid())` convert.
-14. `stringToBase64`/`stringFromBase64` and `toJson` convert without refusal.
+13. The GUID functions and `parseGuid` convert without refusal; `'id-' + newGuid()`, `newGuid().toString()` and `toJson(newGuid())` (as `JSON.stringify(newGuid())`) convert.
+14. `stringToBase64`/`stringFromBase64` convert without refusal; `toJson(x)` is rewritten to `JSON.stringify(x)` with a behaviour warning that quotes it and names the differences.
 15. **SC-001 measure**: 100% of the available corpus workflows whose JS uses only faithful functions and zone-independent `Date` usage convert without refusal; with a source time zone set, also those with zone-dependent usage. **SC-007**: none with zone-dependent usage converts without a source time zone.
 
 ## D. Conversion — refused (with guidance)

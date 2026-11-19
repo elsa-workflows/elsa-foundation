@@ -45,7 +45,7 @@ Date/time **semantics** (arithmetic, parsing edge cases) are owned by **ADR 0046
 
 ## R-4 — The function surface (supersedes spec 247 R-6 for these functions)
 
-**Decision**: Provide, as JSON-exchanging .NET built-ins on the shared surface: `newGuid`, `newGuidString`, `getGuidString`, `newShortGuid`, `getShortGuid`, `parseGuid` (GUID strings); `stringToBase64`, `stringFromBase64` (UTF-8 / standard Base64 strings); `toJson` (Elsa 3's text, R-11). Keep `isNullOrEmpty`/`isNullOrWhiteSpace` inlined as spec 247 specifies. **Refuse**: byte/stream helpers (binary, not JSON) and `getConfig`/`getConfiguration` (host configuration — deferred).
+**Decision**: Provide, as JSON-exchanging .NET built-ins on the shared surface: `newGuid`, `newGuidString`, `getGuidString`, `newShortGuid`, `getShortGuid`, `parseGuid` (GUID strings); `stringToBase64`, `stringFromBase64` (UTF-8 / standard Base64 strings). `toJson` is not provided; the converter rewrites it to `JSON.stringify` (R-11). Keep `isNullOrEmpty`/`isNullOrWhiteSpace` inlined as spec 247 specifies. **Refuse**: byte/stream helpers (binary, not JSON) and `getConfig`/`getConfiguration` (host configuration — deferred).
 
 **Elsa 3 source** (verified in Elsa.JavaScript 3.5.3, `Handlers/ConfigureEngineWithCommonFunctions`):
 
@@ -128,13 +128,13 @@ Conversion emits **`VF-IMP-012`** (spec 1222 took `010` and `011`); publish emit
 
 ---
 
-## R-11 — `toJson` reproduces Elsa 3's text
+## R-11 — No `toJson` in Elsa 4; the converter rewrites it to `JSON.stringify`
 
-**Decision**: `toJson(value)` serializes the JSON value with System.Text.Json using Elsa 3's options (`JavaScriptEncoder.Create(UnicodeRanges.All)`, not indented, no naming policy). It does not use the engine's `JSON.stringify` and does not depend on the JSON-integrity ADR (A-5).
+**Decision**: Elsa 4 provides no `toJson`. Scripts serialize with the engine's `JSON.stringify`, the same serializer the engine captures for script results (`JintResultMaterializer`). The converter rewrites an Elsa 3 `toJson(x)` to `JSON.stringify(x)` and attaches a behaviour warning that quotes the expression and names the differences.
 
-**Rationale**: Faithful-or-refuse (D-13). Elsa 3's encoder writes HTML-sensitive characters as `\u003C` and similar escapes; `JSON.stringify` writes them as-is, so a converted script that sends or compares the text would change. Non-JSON arguments follow Elsa 3's mapping: Jint handed a `Date` to the .NET function as a UTC `DateTime` (serialized with trimmed fractional seconds, unlike `toISOString()`), `undefined` as `null`, and `NaN` made the serializer throw; Elsa 4's built-in does the same. For a JSON value the remaining Elsa 3 differences (PascalCase .NET properties, enums as strings) cannot occur, because no .NET object reaches the function. `toJson(newGuid())` gives the quoted GUID text in both versions. A known .NET-object value of another type passed to `toJson` would have serialized with its .NET property names in Elsa 3, so the converter refuses it (FR-016). The text is a string the script asked for, not stored data, so it is outside a "one baseline for stored data" rule; if the JSON-integrity ADR is accepted with every serializer deriving from one baseline, `toJson` is named there as an exception (OQ-5).
+**Rationale**: For a JSON value, `toJson` does nothing an Elsa 4 author needs that `JSON.stringify` does not; its only differences are Elsa 3 quirks of System.Text.Json with `JavaScriptEncoder.Create(UnicodeRanges.All)`: HTML-sensitive characters and non-BMP characters as `\u003C`-style escapes, a `Date` with trimmed fractional seconds, `undefined` as `null`, and failure on `NaN`. Reproducing them would keep a second JSON serializer alive under a name that says nothing about why anyone would pick it. Parsing either text gives the same value apart from the `undefined` and `NaN` cases, so the rewrite is a documented exception with a warning (D-13), as ADR 0046's behaviour warnings are. A known .NET-object value passed to `toJson` (other than a GUID) is still refused, because Elsa 3 serialized its .NET properties.
 
-**Alternatives considered**: `toJson` = the engine's captured `JSON.stringify` (simpler, same path as result materialization; rejected — different text from Elsa 3 for HTML-sensitive characters, which would need a conversion warning on every `toJson`); keep `toJson` refused (rejected — 3 corpus uses, and the faithful form is a few lines).
+**Alternatives considered**: a `toJson` built-in that reproduces Elsa 3's text (the 19 Nov first recheck; rejected — a second serializer with no author-facing purpose); the same under a purpose-revealing name such as `toHtmlSafeJson` (rejected — nothing in the corpus or the initiative needs HTML-safe JSON from a script); refuse `toJson` unless parsed straight back (stricter; kept as the OQ-5 alternative); keep `toJson` refused (rejected — 3 corpus uses, and the rewrite is faithful in value).
 
 ---
 

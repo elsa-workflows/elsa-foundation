@@ -10,9 +10,9 @@ The converter MUST convert these without refusal and preserve behaviour:
 - `Math.random()` → native `Math.random`.
 - `newGuid()`, `newGuidString()`, `newShortGuid()`, `getGuidString()`, `getShortGuid()`, `parseGuid(s)` → the built-in GUID functions (string results, Elsa 3's text).
 - `stringToBase64()`, `stringFromBase64()` → the built-in Base64 functions.
-- `toJson()` → the built-in `toJson` (Elsa 3's text).
+- `toJson(x)` → `JSON.stringify(x)`, with a behaviour warning that quotes the expression and names the text differences (escaping, `Date` precision, `undefined`, `NaN`). Elsa 4 has no `toJson`.
 
-These flip the current refusals: the rewriter's nondeterministic-call path is removed for `Math.random`/`Date.now` (it keeps `crypto.randomUUID`), the `Date` global leaves the refused globals, and the GUID/Base64/`toJson`/`parseGuid` names move out of `RefusedHostFunctions`. Guidance texts that say "no clock" or "no random" are reworded.
+These flip the current refusals: the rewriter's nondeterministic-call path is removed for `Math.random`/`Date.now` (it keeps `crypto.randomUUID`), the `Date` global leaves the refused globals, and the GUID/Base64/`parseGuid` names move out of `RefusedHostFunctions` and `toJson` gets the rewrite. Guidance texts that say "no clock" or "no random" are reworded.
 
 ## D1a — `Date` and the source time zone
 
@@ -61,7 +61,7 @@ The source time zone travels with the converted expression as part of its publis
 | `newGuid().toString('N')` (converted) | Refuse `VF-IMP-012`, message quotes it |
 | `const g = parseGuid(s); g.toByteArray()` (converted) | Refuse `VF-IMP-012` |
 | `variables.upload.openReadStream()` with `upload: FormFile` in Elsa 3 (converted) | Refuse `VF-IMP-012` |
-| `'id-' + newGuid()`, `newGuid().toString()`, `toJson(newGuid())` (converted) | Allow |
+| `'id-' + newGuid()`, `newGuid().toString()`, `toJson(newGuid())` → `JSON.stringify(newGuid())` (converted) | Allow (the `toJson` rewrite warns) |
 | `toJson(variables.upload)` with `upload: FormFile` in Elsa 3 (converted) | Refuse `VF-IMP-012` |
 | `someValue.Where(f)` / `.ToArray()` | Refuse (conversion `VF-IMP-012`, publish `Scripts/DotNetMemberUsage`) |
 | `TimeSpan.FromHours(1)`, `new Uri(s)` | Refuse |
@@ -76,4 +76,4 @@ The source time zone travels with the converted expression as part of its publis
 
 ## D4 — Faithfulness note
 
-GUID, Base64 and `toJson` conversions are faithful because the built-ins reproduce Elsa 3's algorithms (verified against Elsa 3.5.3's `ConfigureEngineWithCommonFunctions` during implementation, with fixed inputs).
+GUID and Base64 conversions are faithful because the built-ins reproduce Elsa 3's algorithms (verified against Elsa 3.5.3's `ConfigureEngineWithCommonFunctions` during implementation, with fixed inputs). The `toJson` rewrite is a documented exception with a warning (D-13).

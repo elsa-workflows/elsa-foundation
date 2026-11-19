@@ -15,7 +15,7 @@ Four moving parts, all in existing projects:
 
 1. **Profile** — rename `binding-pure-v1` to `binding-readonly-v1` everywhere (Expressions.Core, evaluators, converter, executable hash), with no alias; regenerate fixtures; drop the `Inline` replay comment.
 2. **Engine** — re-admit `Date`, `Intl`, `Temporal` and `Math.random` in the isolated Jint engine and the portable evaluator, wire the clock to the host `TimeProvider` (UTC, invariant), and accept a source time zone as the one evaluator option a converted expression may carry.
-3. **Functions** — extend spec 1222's host-function declaration with `Effectful` and an implementation, install declared functions in the engine, enforce the naming rule, warn on lossy number arguments, and register the built-ins (GUID family incl. `parseGuid`, Base64 pair, `toJson` with Elsa 3's encoder).
+3. **Functions** — extend spec 1222's host-function declaration with `Effectful` and an implementation, install declared functions in the engine, enforce the naming rule, warn on lossy number arguments, and register the built-ins (GUID family incl. `parseGuid`, Base64 pair). No `toJson`: scripts serialize with `JSON.stringify`, and the converter rewrites Elsa 3's `toJson` with a warning.
 4. **Converter and publish** — flip the faithful Elsa 3 functions, classify `Date` usage by zone dependence, and add a .NET-usage analysis in Essentials that the converter (with Elsa 3 types) and publish validation both call.
 
 [Research](research.md) records the findings and decisions. [Data model](data-model.md) defines the profile, the function catalog and the classification rules. [contracts/](contracts/) hold the function contract and the conversion/diagnostic contract. [Quickstart](quickstart.md) is the verification inventory.
@@ -31,7 +31,7 @@ Four moving parts, all in existing projects:
 | Converter | Acornima analysis in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` (`JavaScriptAnalyzer.VisitNode`, `RefusedHostFunctions`, `ElsaThreeGlobals`, `IsNondeterministicCall`), `Internal/Elsa3JavaScriptNames.cs`, `Elsa3ImportDiagnosticCodes` (`VF-IMP-001..011`). Planned: flip faithful functions, `Date` classification, call the shared analyzer with Elsa 3 types, add `VF-IMP-012`. |
 | Clock | Host `System.TimeProvider` wrapped in a Jint `ITimeSystem`. Date semantics belong to ADR 0046. |
 | Randomness | Native `Math.random`; Jint's RNG is not injectable (accepted). GUIDs via `Guid.NewGuid()`. |
-| Serialization | JSON values only at the function boundary (ADR 0046 V10 default). `toJson` uses System.Text.Json with Elsa 3's encoder options; it does not depend on the JSON-integrity ADR. |
+| Serialization | JSON values only at the function boundary (ADR 0046 V10 default). One serializer for scripts: the engine's `JSON.stringify` (also used for script results). No `toJson`; no dependency on the JSON-integrity ADR. |
 | Testing | xUnit only (**no FluentAssertions**). Unit tests in the existing JavaScript, Expressions, Workflows Design and Elsa3 mapping test projects; no new integration tier. |
 | Target | Design-only, Runtime-only and combined compositions; both expression surfaces. No new project or package. |
 | Compatibility | Faithful to Elsa 3 (Elsa.JavaScript 3.5.3) for every converted function. No compatibility for pre-release Elsa 4 formats: the profile rename and the evaluator-option change regenerate fixtures in place. |
