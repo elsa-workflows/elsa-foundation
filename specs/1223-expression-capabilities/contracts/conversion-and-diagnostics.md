@@ -16,7 +16,7 @@ These flip the current refusals: the rewriter's nondeterministic-call path is re
 
 ## D1a — `Date` and the date interpretation
 
-The date interpretation is the Elsa 3 converter setting of FR-034 (ADR 0046 *Dates*), recorded on the converted workflow and in the published conversion contract: `Refuse` (default), `AssumeUtc`, or `SourceTimeZone` with an IANA ID. One setting covers scripts and date literals.
+The date interpretation is the Elsa 3 converter setting of FR-034 (ADR 0046 *Dates*), recorded on the converted workflow and in the published conversion contract: `Refuse` (default), `AssumeUtc`, or `SourceTimeZone` with an IANA ID. S-1 applies it to scripts; S-9 (spec 1207) applies the same setting at the JSON to .NET boundary.
 
 | Usage | `Refuse` (default) | `AssumeUtc` | `SourceTimeZone` |
 |---|---|---|---|

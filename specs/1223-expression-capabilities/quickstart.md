@@ -19,7 +19,7 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 8. `stringFromBase64(stringToBase64(x)) === x` for representative UTF-8 `x`, and `stringToBase64` matches Elsa 3 for the same `x`.
 9. No `toJson` global exists in Elsa 4. Invalid Base64 fails; invalid UTF-8 gives U+FFFD.
 10. No built-in accepts or returns a live .NET object.
-11. **Registration** — a duplicate name, an unprefixed host function or a reserved name fails startup with the function's name; `const newGuid = 1` gets the publish warning `Scripts/ShadowedFunction`; `const workflow = 1` gets the publish error `Scripts/ReservedName`; a host function `acme.lookup` is callable as `acme.lookup(x)`; calling a built-in adds no fallback read marker (`ReadsVariables = false`).
+11. **Registration** — a duplicate name, an unprefixed host function or a reserved name fails startup with the function's name; `const newGuid = 1` gets the publish warning `Scripts/ShadowedFunction`; `const variables = 1` gets the publish error `Scripts/ReservedName`, `const workflow = 1` the warning `Scripts/ShadowedFunction`, and a converted script that declares its own `args` publishes as spec 1222 defines; a host function `acme.lookup` is callable as `acme.lookup(x)`; calling a built-in adds no fallback read marker (`ReadsVariables = false`).
 11a. **No effect metadata** — the registration has no effectful option; calling a built-in adds no commit.
 11b. **Precision** — a number argument carrying the value model's loss information passed to a host function logs a warning naming the function and the argument path; the call returns.
 
@@ -28,7 +28,7 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 12. Zone-independent `Date` usage (`Date.now()`, `getTime()`, `toISOString()`) and `Math.random()` convert without refusal under every date interpretation.
 12a. Zone-dependent usage (`getHours()`, `new Date('2026-10-28T09:15:00')`): under `Refuse` (default) it is refused and the message names both fixes (`SourceTimeZone` with the Elsa 3 server's IANA zone, `AssumeUtc`); under `AssumeUtc` it converts, evaluates in UTC and carries a behaviour warning; under `SourceTimeZone` = `Europe/Amsterdam` it evaluates as Elsa 3 did on a server in that zone (winter and summer dates), with no warning.
 12b. A non-literal parse (`new Date(input)`) behaves as zone-dependent usage under each value; `new Date('2026-10-28')` converts under every value.
-12f. The date interpretation is recorded on each converted workflow and in its conversion contract; one setting covers scripts and date literals.
+12f. The date interpretation is recorded on each converted workflow and in its conversion contract; S-9 applies the same setting at the JSON to .NET boundary.
 12c. `variables.due.getTime()` and `variables.due < new Date()` with `due: DateTime` in Elsa 3 convert and equal Elsa 3 (FR-032).
 12d. `n.toLocaleString()`, `a.localeCompare(b)` and `new Intl.NumberFormat()` without a locale are refused; with `'nl-NL'` they convert (FR-033).
 12e. `toLocaleString()` on a number is not treated as zone-dependent; `toString()` on a `Date` is.

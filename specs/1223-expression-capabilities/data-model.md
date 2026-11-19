@@ -31,7 +31,7 @@ One registration per function, extending spec 1222's `JavaScriptHostFunctionDecl
 
 A registered function is allowed in `binding-readonly-v1` (ADR 0083). It carries no effect metadata: every function is effect-free under D-6 until the effectful declaration ships with its commit boundary (#4831). Functions are installed as non-writable globals, as `getVariable` is today.
 
-**Reserved names**: the read roots `variables`, `input`, `activities`, `workflow`, `args`; the built-in names below; every registered namespace root. A host function `acme.lookup` is installed as member `lookup` of a read-only global object `acme`. A script declaring a read root gets the existing publish **error** `Scripts/ReservedName` (it would break pinning); declaring a built-in name or namespace root gets the publish **warning** `Scripts/ShadowedFunction`.
+**Reserved names** (registration): the read roots `variables`, `input`, `activities`, `workflow`, `args`; the built-in names below; every registered namespace root. A host function `acme.lookup` is installed as member `lookup` of a read-only global object `acme`. In a script: declaring `variables` gets the existing publish **error** `Scripts/ReservedName` (it would break pinning); `args` follows spec 1222 and `complete` keeps spec 1208's error; declaring `input`, `activities`, `workflow`, a built-in function name or a namespace root gets the publish **warning** `Scripts/ShadowedFunction`.
 
 **Arguments**: script values map to the value model as a script result does (`Date` → ISO 8601 UTC text, `undefined` → `null`).
 
@@ -102,8 +102,8 @@ At conversion, .NET globals already in the converter's `ElsaThreeGlobals` refusa
 |---|---|---|---|
 | Conversion | `VF-IMP-012` (next free import code; `010`/`011` belong to spec 1222) | Error | Quotes the offending expression (node `.Start`/`.End`); says values are JSON and live .NET objects are not available; how to rewrite with JS or a built-in |
 | Publish | `Scripts/DotNetMemberUsage` | Error | Same message and guidance |
-| Publish | `Scripts/ReservedName` (extended to all read roots) | Error | Names the read root the script declares |
-| Publish | `Scripts/ShadowedFunction` | Warning | Names the built-in or namespace root the script declares |
+| Publish | `Scripts/ReservedName` (extended to `variables`) | Error | Names the reserved name the script declares |
+| Publish | `Scripts/ShadowedFunction` | Warning | Names the built-in, namespace root or unused read root (`input`, `activities`, `workflow`) the script declares |
 | Conversion | existing date refusal | Error | Zone-dependent or non-literal date usage under `Refuse`; the guidance names `SourceTimeZone` (the Elsa 3 server's IANA zone) and `AssumeUtc` |
 | Conversion | behaviour warning | Warning | Zone-dependent or non-literal date usage under `AssumeUtc` |
 | Conversion | locale refusal | Error | Locale-dependent call without an explicit locale |
@@ -114,7 +114,7 @@ No JS source line/column (OQ-2 follow-up); the quoted snippet is the locator.
 
 ## 5. Elsa 3 → Elsa 4 conversion disposition
 
-**Date interpretation (FR-034)**: one Elsa 3 converter setting, recorded on each converted workflow — `Refuse` (default), `AssumeUtc` (warning per affected expression), `SourceTimeZone` + IANA ID. It covers scripts and date literals.
+**Date interpretation (FR-034)**: one Elsa 3 converter setting, recorded on each converted workflow — `Refuse` (default), `AssumeUtc` (warning per affected expression), `SourceTimeZone` + IANA ID. S-1 applies it to scripts; S-9 (spec 1207) applies it at the JSON to .NET boundary.
 
 Updates the conversion table in `Extensions/Elsa3/src/Mapping/README.md`.
 

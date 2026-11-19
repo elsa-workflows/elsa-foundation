@@ -39,7 +39,7 @@
 
 - [ ] T013 [US4] Register `stringToBase64`, `stringFromBase64` (invalid Base64 fails, invalid UTF-8 → U+FFFD) as built-ins (FR-007); no `toJson` global (FR-009); map other script arguments as a script result is mapped (FR-011).
 - [ ] T014 [US4] Enforce the naming rule at startup: reserved names (`variables`, `input`, `activities`, `workflow`, `args`, the built-ins, namespace roots), namespace prefix for host functions, duplicate detection; failure names the function. Install a namespace as a read-only global object holding its functions (FR-027).
-- [ ] T015 [US4] Extend the publish check (`JavaScriptReservedNames`): declaring a read root → the existing error `Scripts/ReservedName`; declaring a built-in name or namespace root → the new warning `Scripts/ShadowedFunction` (FR-027).
+- [ ] T015 [US4] Extend the publish check (`JavaScriptReservedNames`): declaring `variables` → the existing error `Scripts/ReservedName`; `args` unchanged (spec 1222); `complete` unchanged (spec 1208); declaring `input`, `activities`, `workflow`, a built-in name or a namespace root → the new warning `Scripts/ShadowedFunction` (FR-027).
 - [ ] T016 [US4] Warn on a number argument that carries spec 1228's loss information, naming the function and the argument path; never refuse, never stringify (FR-028).
 - [ ] T017 [P] [US4] xUnit: Base64 round trip and Elsa 3 parity; no `toJson` global; no live .NET object in or out — quickstart B8–B10, SC-005, SC-008.
 - [ ] T018 [P] [US4] xUnit: naming failures, reserved-name warning, no fallback read marker for built-ins, no effectful option on the registration, V9 warning — quickstart B11–B11b.
@@ -54,14 +54,14 @@
 - [ ] T021 [US2] Classify `Date` usage (contract D1a): zone-independent converts; zone-dependent usage and non-literal parses follow the date interpretation — refused under `Refuse` with guidance naming `SourceTimeZone` and `AssumeUtc`, converted with a behaviour warning under `AssumeUtc`, converted under `SourceTimeZone`; generic method names count only on a known `Date` receiver (FR-021, FR-022, FR-024).
 - [ ] T042 [US2] Rewrite each direct read of a `DateTime`/`DateTimeOffset`-typed Elsa 3 variable, input or activity output to `v == null ? v : new Date(v)` and mark it a known `Date` (FR-032).
 - [ ] T043 [US2] Refuse locale-dependent calls without an explicit locale (`toLocale*String`, `localeCompare`, `Intl` constructors) with a quoted diagnostic (FR-033).
-- [ ] T044 [US2] Add the date interpretation setting to the Elsa 3 converter feature (`Refuse` default, `AssumeUtc`, `SourceTimeZone` + IANA ID), record it on each converted workflow and in its conversion contract, and use it for date literals as well (FR-034).
+- [ ] T044 [US2] Add the date interpretation setting to the Elsa 3 converter feature (`Refuse` default, `AssumeUtc`, `SourceTimeZone` + IANA ID), record it on each converted workflow and in its conversion contract; S-9 applies it at the JSON to .NET boundary (FR-034).
 - [ ] T022 [US2] Under `SourceTimeZone`, carry the zone into the converted expression as an evaluator option; accept that option in `JintPortableJavaScriptEvaluator` (it rejects all options today) and apply it as Jint `Options.TimeZone`; the option enters the executable hash (FR-023).
 - [ ] T023 [P] [US2] xUnit for D1a: `Refuse` refusal and its guidance text; `AssumeUtc` conversion with warning; `SourceTimeZone` = `Europe/Amsterdam` winter and summer equal Elsa 3; zone-independent usage under every value; non-literal parse per value; date-only literal; date-typed value rewrite; locale refusal — quickstart C12–C12f, SC-007.
 - [ ] T024 [P] [US2] xUnit conversion tests (faithful): `new Date()`, `Date.now()`, `Math.random()`, GUID family, `parseGuid`, Base64 pair and GUIDs used as text convert; `toJson` is rewritten with the warning; `isNullOrEmpty`/`isNullOrWhiteSpace` still inline (FR-010) — quickstart C13, C14, SC-008.
 - [ ] T025 [P] [US2] xUnit conversion tests (refused): bytes/streams, `getConfig`/`getConfiguration`, `crypto.randomUUID`; `Guid`/`DateTime`/`Random` keep `VF-IMP-005` with the new guidance (FR-013, FR-015) — quickstart D16, D17.
 - [ ] T026 [US2] SC-001 coverage check against the available corpus — quickstart C15.
 - [ ] T027 [P] [US2] Update the conversion table in `Extensions/Elsa3/src/Mapping/README.md` (refused → converted rows; add `VF-IMP-012`) — quickstart F26.
-- [ ] T028 [P] [US2] Update spec 247 `research.md` R-6 rows that S-1 supersedes (GUID family, `parseGuid`, Base64; `toJson` rewritten to `JSON.stringify`) — quickstart F27.
+- [ ] T028 [P] [US2] Record in spec 247 (`spec.md` and `research.md` R-6) that spec 1223 supersedes its refusals; update the R-6 rows that S-1 supersedes (GUID family, `parseGuid`, Base64; `toJson` rewritten to `JSON.stringify`) — quickstart F27.
 
 ## Phase 6: User Story 3 — Relied-on live .NET objects fail clearly (P1)
 
