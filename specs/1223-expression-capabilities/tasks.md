@@ -82,8 +82,8 @@
 
 - [x] T038 [P] Update the JS feature docs (capabilities, built-ins, registration rules) and `EXTENSION_POINTS.md` (host-function registration) — quickstart F28.
 - [x] T039 Confirm new tests are in the unit tier; update `tools/ci/test-tiers.json` only if a test project is added — Elsa §E7.
-- [ ] T040 Public-surface review: `BindingReadonlyV1`, the implementation delegate, the analyzer contract — framework §2.23.3.
-- [ ] T041 Regenerate solution filters only if project references changed (expected: none); verify with `git diff --stat`.
+- [x] T040 Public-surface review: `BindingReadonlyV1`, the implementation delegate, the analyzer contract — framework §2.23.3.
+- [x] T041 Regenerate solution filters only if project references changed (expected: none); verify with `git diff --stat`.
 
 ---
 
