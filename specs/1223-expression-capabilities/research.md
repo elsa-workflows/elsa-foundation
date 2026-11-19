@@ -13,7 +13,7 @@ Phase 0 for [plan.md](plan.md). Format per decision: **Decision / Rationale / Al
 1. **The goal is cancelled.** D-1 establishes that expressions need not be deterministic; D-2 makes them *safe* to be non-deterministic (a recorded step never re-runs, so a value is captured once and reused on retry/recovery — it is never re-evaluated "by accident"). The platform principle is guardrails, not the removal of standard language capabilities authors expect.
 2. **The strip never actually bought determinism.** Even with `Date`/`random` removed, two evaluations of the same expression could differ: variable/`getVariable` reads change between evaluations, loop iterations produce new values. The real determinism attempt was value **recording/pinning** (the ADR 0088 line), which was built and **withdrawn**. The strip was enforcing a guarantee it could not, on its own, provide.
 
-So the strip was a *defensible mechanism for the doctrine of its time*, not a mistake — but it is aimed at a target the initiative has abandoned, and S-1 removes it. (Recorded here at Joey's request as context for future readers of the ADR/spec.)
+So the strip was a *defensible mechanism for the doctrine of its time*, not a mistake — but it is aimed at a target the initiative has abandoned, and S-1 removes it. (Recorded as context for future readers.)
 
 **Alternatives considered**: Keep the strip and add bespoke .NET date/random helpers instead (rejected — reintroduces the exact capability behind a worse, non-standard surface, and still relies on `.NET` member shapes authors don't expect); keep the strip but relax case-by-case (rejected — leaves the determinism-era restriction as the default, against D-1).
 
@@ -25,9 +25,11 @@ So the strip was a *defensible mechanism for the doctrine of its time*, not a mi
 
 **Rationale**: Jint 4.9.1 supports a custom `ITimeSystem` through `options.TimeSystem`; `DateConstructor` uses `_timeSystem.GetUtcNow()` for both `new Date()` and `Date.now()`. The default `DefaultTimeSystem.GetUtcNow()` returns `DateTimeOffset.UtcNow` (wall clock), **not** a `TimeProvider`; to make the engine clock-injectable (and test-controllable at the host level) we wrap the host `TimeProvider` in a small `ITimeSystem`. `TimeZone=UTC` + `Culture=Invariant` make time values and formatting deterministic in representation (ADR 0045 §5 / ADR 0046's UTC-invariant direction), independent of server locale. `Options.Interop.DateTimeKind` already defaults to `Utc`.
 
-**Alternatives considered**: Leave `Date` reading wall-clock `DateTimeOffset.UtcNow` directly (rejected — not injectable, tests can't control it, and ignores the host clock abstraction); add a `.NET` `now()` as the *only* time source and keep `Date` stripped (rejected per R-1). We still provide a small `now()` host function returning an ISO-8601 UTC string as a convenient import target and sugar, alongside native `Date`.
+**Alternatives considered**: Leave `Date` reading wall-clock `DateTimeOffset.UtcNow` directly (rejected — not injectable, tests can't control it, and ignores the host clock abstraction); add a `.NET` `now()` as the *only* time source and keep `Date` stripped (rejected per R-1). The 10 Nov draft also added a `now()` helper as sugar; it is dropped (R-12, OQ-6). `Temporal.Now` reads the same `ITimeSystem`.
 
-Date/time **semantics** (arithmetic, parsing edge cases) are deferred to **ADR 0046** (#3422); S-1 wires the source and the UTC/invariant frame, not new date math. Converted Elsa 3 scripts with a source time zone are the one exception to the UTC frame; see R-10.
+Date/time **semantics** (arithmetic, parsing edge cases) are owned by **ADR 0046** *Dates*; S-1 wires the source and the UTC/invariant frame, not new date math. Converted Elsa 3 scripts with a source time zone are the one exception to the UTC frame; see R-10.
+
+**Date helpers (FR-025)**: ADR 0045 §5 D-1 and ADR 0046 leave "the built-in date helpers" for converting between an instant and an IANA zone to this spec. Jint 4.9.1 ships `Temporal` (`Instant.prototype.toZonedDateTimeISO`, `ZonedDateTime`) and `Intl.DateTimeFormat` with `timeZone`, so the native facilities are the helpers and no date host function is added. Implementation verifies that they resolve IANA IDs through the host's time zone data (ICU on Windows) with daylight saving; a gap there becomes a finding, not a shim.
 
 ---
 
@@ -41,63 +43,71 @@ Date/time **semantics** (arithmetic, parsing edge cases) are deferred to **ADR 0
 
 ---
 
-## R-4 — The host-function surface (supersedes spec 247 R-6 for these functions)
+## R-4 — The function surface (supersedes spec 247 R-6 for these functions)
 
-**Decision**: Provide, as JSON-exchanging .NET host functions on the shared read-only surface:
-`newGuid`, `newGuidString`, `newShortGuid`, `getGuidString`, `getShortGuid` (GUID strings); `stringToBase64`, `stringFromBase64` (UTF-8 / standard Base64 strings); `now` (ISO-8601 UTC string); `toJson` (canonical JSON via ADR 0091). Keep `isNullOrEmpty`/`isNullOrWhiteSpace` inlined as spec 247 already specifies. **Refuse**: `parseGuid` (returns a live .NET `Guid`), byte/stream helpers (binary, not JSON), `getConfig`/`getConfiguration` (host configuration — deferred to a later spec).
+**Decision**: Provide, as JSON-exchanging .NET built-ins on the shared surface: `newGuid`, `newGuidString`, `getGuidString`, `newShortGuid`, `getShortGuid`, `parseGuid` (GUID strings); `stringToBase64`, `stringFromBase64` (UTF-8 / standard Base64 strings); `toJson` (Elsa 3's text, R-11). Keep `isNullOrEmpty`/`isNullOrWhiteSpace` inlined as spec 247 specifies. **Refuse**: byte/stream helpers (binary, not JSON) and `getConfig`/`getConfiguration` (host configuration — deferred).
 
-**Rationale**: These are the Elsa 3 built-ins with a faithful, JSON-only Elsa 4 form. Spec 247's research (R-6) previously **refused** `toJson`, the GUID family, and the Base64 pair; those refusals were correct *under the determinism/CLR-value constraints of the time*. With proxies off and values JSON-only, and with the ADR 0091 canonical encoder available, `toJson` is now faithful (no CLR PascalCase casing / HTML-escaping divergence because there are no CLR values to serialize — the encoder defines the shape), and the GUID/Base64 functions return plain strings. This spec therefore **supersedes spec 247 R-6** for exactly these functions; `parseGuid`, bytes/streams stay refused there and here.
+**Elsa 3 source** (verified in Elsa.JavaScript 3.5.3, `Handlers/ConfigureEngineWithCommonFunctions`):
 
-`newShortGuid` must reproduce Elsa 3's exact short-GUID encoding (URL-safe Base64 of the 16 GUID bytes, trimmed to 22 chars) — a faithfulness requirement verified during implementation against Elsa 3's `ShortGuid`.
+| Function | Elsa 3 implementation |
+|---|---|
+| `newGuid` | `Func<Guid>`: `Guid.NewGuid()` — a .NET `Guid` handed to the script as a wrapped object |
+| `newGuidString`, `getGuidString` | `Func<string>`: `Guid.NewGuid().ToString()` — both create a new GUID; neither takes an argument |
+| `newShortGuid`, `getShortGuid` | `Func<string>`: `Regex.Replace(Convert.ToBase64String(Guid.NewGuid().ToByteArray()), "[/+=]", "")` — standard Base64 with three characters removed, not URL-safe Base64, so the length varies (at most 22) |
+| `parseGuid` | `Func<string, Guid>`: `Guid.Parse(value)` — a wrapped .NET `Guid` |
+| `stringToBase64` / `stringFromBase64` | UTF-8 and `Convert.ToBase64String` / `FromBase64String` |
+| `toJson` | `JsonSerializer.Serialize(value, options)` with `JavaScriptEncoder.Create(UnicodeRanges.All)` and `JsonStringEnumConverter`, not indented |
 
-**Corpus cost of the refusals** (JTest, 36 definitions, counted as calls `name(` in the definition JSON, the same throwaway method as spec 247's measured baseline): `getConfig` 0; `getConfiguration` 1 use in 1 definition (`javascript-script-handler-functions`, `getConfiguration(key)[name]`; Elsa 3 has only `getConfig`, so it was unknown there too); `parseGuid` 1 use in 1 definition (`javascript-elsa-functions`, `parseGuid(text)`). Deferring costs at most 2 of 36 definitions.
+**Rationale**: These are the Elsa 3 built-ins with a faithful JSON-only Elsa 4 form. ADR 0045 §5 D-1 says Elsa 3 date and GUID functions convert directly and their names alone never cause a refusal, so `parseGuid` and `newGuid` convert: both returned a .NET `Guid`, whose text is the canonical `D` form, so returning that text is faithful wherever the script uses the GUID as text (concatenation, `toString()`, comparison with a string, a returned or stored value). Using a .NET member of the `Guid` (`newGuid().toString('N')`, `toByteArray()`) is not faithful and is refused by R-7. Spec 247 R-6 refused the GUID family, the Base64 pair and `toJson` under the determinism rule and without a host-function mechanism; this spec supersedes those rows. The Base64 pair needed a hand-written UTF-8 encoder in a sandbox without `btoa`/`TextEncoder`; as a .NET built-in it is the same code Elsa 3 ran.
 
-**Alternatives considered**: Provide `getConfig` now (rejected — pulls in host `IConfiguration` surface and secret-exposure questions beyond S-1's scope; deferred). Keep `toJson` refused (rejected — the original reasons no longer hold once values are JSON-only and the canonical encoder exists). Rename `toJson` to `toCanonicalJson` (considered for self-description; **decided to keep `toJson`** for faithful import and author familiarity).
+**Corpus cost of the refusals** (JTest, 36 definitions, counted as calls `name(` in the definition JSON): `getConfig` 0; `getConfiguration` 1 use in 1 definition (`javascript-script-handler-functions`; Elsa 3 has only `getConfig`, so it already failed there). `parseGuid` (1 use in `javascript-elsa-functions`) now converts.
+
+**Alternatives considered**: Provide `getConfig` now (rejected — host `IConfiguration` surface and secret exposure are beyond S-1; deferred). Keep `parseGuid` refused (rejected — contradicts ADR 0045 §5 D-1; its member use is caught by R-7 instead). Return GUIDs as objects that emulate `Guid` members (rejected — a shim; values are JSON).
 
 ---
 
 ## R-5 — Function effect declaration (D-6)
 
-**Decision (provisional, direction agreed by two approvers)**: A .NET-implemented function registered without a declaration is **effect-free**. The registration API takes one optional flag that declares a function **effectful**; only then does the engine commit before and after an input evaluation that calls it. The flag never refuses, skips or deduplicates a call. The built-ins of R-4 are registered without it. No effect profiles.
+**Decision**: A .NET-implemented function registered without a declaration is **effect-free**. Registration takes one optional flag that declares a function **effectful**; only then does the engine commit before and after an input evaluation that calls it. The flag never refuses, skips or deduplicates a call. The built-ins of R-4 are registered without it. No effect profiles. (D-6, decided and written into ADR 0045 §5.)
 
-**Rationale**: Most functions called from expressions have no side effects, so the default is optimized for them. Treating every registered function as possibly effectful would make every step whose inputs call any function, `newGuid()` included, pay two commits with no way out. The boundary narrows the window for a repeated effect and does not close it, so the designer needs idempotency either way, and external business operations belong in activities. The flag has a consumer: it is what turns the commit-around-effects guarantee on for a function. Accepted cost: an effectful function registered without the flag gets no boundary, and after a crash its effect can repeat anywhere in the step. S-1 adds and records the flag; placing the commits belongs to the execution-contract details amendment (ADR 0045 §3, ADR 0032, ADR 0020).
+**Rationale**: Most functions called from expressions have no side effects, so the default is optimized for them. The boundary narrows the window for a repeated effect and does not close it, so the designer needs idempotency either way, and external business operations belong in activities. Accepted cost: an effectful function registered without the flag gets no boundary. S-1 adds and records the flag; placing the commits belongs to the D-2 execution-contract implementation. Until that lands, the flag is recorded and has no run-time effect.
 
-**Open**: OQ-1. One approver holds the no-metadata position; it goes to the approvers' call if held. ADR 0045 §5's text is on #3384.
+**Background eligibility**: input bindings run on the coordinator and `RunJavaScript` is ineligible for background runs (ADR 0093 C9, spec 1230), so the flag does not interact with eligibility. A host function that reads variables (`ReadsVariables`) is a computed read and falls under C9 like any other.
 
-**Alternatives considered**: No metadata at all, every registered function possibly effectful (not chosen — two commits for every step whose inputs call any function); an optional durability *hint* that changes only where state is recorded (superseded by the effectful flag, which has a defined consumer); a richer effect classification or function profiles (rejected — no consumer); the earlier `functions.*` object idea (withdrawn by its proposer as adding no value).
+**Alternatives considered**: No metadata at all, every registered function possibly effectful (not chosen in D-6 — two commits for every step whose inputs call any function); a richer effect classification or function profiles (rejected — no consumer).
 
 ---
 
-## R-6 — `binding-readonly-v1` delivered by re-admitting native intrinsics — findings for #3390
+## R-6 — `binding-readonly-v1` delivered by re-admitting native intrinsics
 
-**Decision**: Deliver the `binding-readonly-v1` capability profile by re-admitting the native JS intrinsics plus the registered JSON host functions, and introduce the profile constant in code here.
+**Decision**: Deliver `binding-readonly-v1` by re-admitting the native JS intrinsics plus the registered JSON functions, and rename the profile constant (R-13).
 
-**Rationale**: PR #3390 frames the profile's grants host-side ("time comes from the host's `TimeProvider`"; ".NET functions registered for this profile exchange only JSON") and explicitly **defers to S-1** both "renaming the profile constant in code" and "the registration API for profile-allowed functions". S-1 is where those land.
-
-**Findings to flow back to #3390** (confirmed with Joey):
-
-1. **Native intrinsics are admitted, not just host functions.** #3390's text does not state that native `Date`/`Math`/`Intl`/`Temporal` are re-enabled; S-1 does exactly that (they are the primary way authors handle dates and randomness). #3390's grant description should acknowledge the native-intrinsic surface, not only host-registered `.NET` functions.
-2. **The Jint 4.9.1 RNG is not injectable** (R-3). Any #3390 language implying a controllable time/random source should distinguish time (injectable via `ITimeSystem`) from randomness (not injectable in this engine version).
+**Rationale**: ADR 0083 defines the profile, records that native intrinsics are admitted and that the Jint 4.9.1 RNG is not injectable (R-3), and leaves three things to this spec: the constant rename with the `Inline` justification, the registration that marks a function as allowed, and the editor guidance for an `undefined` result. The first two are here (R-12, R-13); the editor guidance belongs to the null and undefined spec (S-2).
 
 **Alternatives considered**: Deliver the profile purely as host functions with intrinsics kept stripped (rejected per R-1/R-2).
 
 ---
 
-## R-7 — Proxy-dependent-usage detector
+## R-7 — .NET-usage analysis
 
-**Decision**: A static, syntactic detector extending the existing `JavaScriptAnalyzer.VisitNode` walker. Rule:
+**Decision**: One static analysis in the Essentials JavaScript analysis services (beside spec 1222's `JavaScriptVariableReadAnalyzer`, which already uses Acornima), called by the Elsa 3 converter with the Elsa 3 types and by publish validation for every script:
 
-- **Refuse** a method **invocation** `x.M(...)` when `M` is PascalCase (no native JS prototype method is PascalCase), or in a small curated CLR-method set.
-- **Refuse** a reference to a **CLR type** identifier (static access `T.Member`, or construction `new T(...)`) where `T` is in a curated CLR-type catalog that **excludes** JS globals (`String`, `Number`, `Array`, `Object`, `Date`, `Math`, `JSON`, …).
-- **Allow** property **reads** `x.P` (may be a legitimate JSON key, including PascalCase keys from .NET-serialized data).
-- **Allow** (do not classify) dynamic/computed member access `x[expr](...)` — a recorded gap.
-- **Allow** an invocation of a member the script defines itself: a property key of an object literal, a class method or field, or a member assignment `x.M = ...` anywhere in the same script (e.g. `helpers.Format(x)` with `helpers` declared in the script). The walker collects these names in one pass before classifying invocations. A script that defines `M` and also invokes a .NET `M` on a boundary value is not caught — a recorded gap.
+- *Conversion only*: refuse a member read or invocation on a **known .NET-object value** — the result of `newGuid()`/`parseGuid()`, or a read of a variable, input or activity output whose Elsa 3 type Elsa 3's engine handed over as a wrapped object — used directly or through a `const`/`let` alias in the same script. `toString()` without arguments on a GUID is allowed (same text).
+- Refuse a reference to a **.NET type** identifier (static access or `new`) from a curated catalog that excludes JS globals. At conversion, the globals the converter already refuses (`ElsaThreeGlobals`: `DateTime`, `Guid`, `Random`, …) keep `VF-IMP-005`.
+- Refuse an invocation of a **PascalCase member** on a value the script did not define, unless the receiver is a JS global (`Intl.DateTimeFormat(...)` is valid JS).
+- **Allow** property reads of other values in any casing (JSON keys), computed member access (gap), values reached indirectly (gap), and invocations of members the script defines itself.
 
-Emit a new diagnostic code **`VF-IMP-010`**; the message **quotes the offending expression** (reconstructed from the Acornima node's `.Start`/`.End` offsets against the source the rewriter already holds) and explains the JSON-only / proxies-off contract. Register the detector **only while proxies are disabled** (`!ProxiesEnabled`, A-1 default). Run it at **publish** as well as **convert** (shared pass).
+Conversion emits **`VF-IMP-012`** (spec 1222 took `010` and `011`); publish emits the script validation error `Scripts/DotNetMemberUsage`. The message quotes the offending expression (from the Acornima node's `.Start`/`.End`).
 
-**Rationale**: "Proxy-dependent usage" is a *shape*, not a function list. JSON values carry only native JS prototype methods (camelCase) — so a PascalCase **invocation** can never be a valid native call and is an unambiguous proxy signal with near-zero false positives. .NET static types are not JS globals, so a reference to one is equally unambiguous. Property **reads** are the one case that overlaps with legitimate JSON (PascalCase keys are common in .NET-serialized data), so reads are allowed — the key false-positive guard. A full taint/dataflow engine would be more precise about *which value* is a proxy but is far heavier and can miss proxies from unknown sources; the syntactic net catches them regardless and degrades safely (over-refuses the genuinely weird, never silently passes a proxy call). Gating on `!ProxiesEnabled` keeps the migration unblocked now while preserving the seam: if a setting enables proxies, CLR-member usage becomes valid again and the detector is simply not registered. The same-script exemption removes the one false positive the PascalCase rule has on hand-authored scripts that would otherwise have no override.
+**Rationale**: A corpus scan of all 224 JavaScript expressions in the 36 JTest definitions found that a PascalCase-invocation rule refuses none of them, while the corpus does use .NET members — in camelCase, which Elsa 3's engine resolved (`formFile.openReadStream()`, `formFile.name` on an `IFormFile[]`). The signal is therefore *which value* was a .NET object, not the member's casing. The converter knows that for the values it can trace: the Elsa 3 built-ins' return types (R-4) and the declared Elsa 3 types of variables, inputs and outputs (the Elsa 3 type map). Following direct use and plain aliases covers the corpus's pattern without a data-flow engine. The PascalCase and type rules stay as a cheap net that also serves publish, where no Elsa 3 types exist and no Elsa 4 value is a .NET object by default. Property reads of other values stay allowed because PascalCase JSON keys are common.
 
-**Alternatives considered**: Taint analysis (rejected — complexity the signal doesn't need; no existing dataflow infra); flag PascalCase property reads too (rejected — refuses legitimate JSON keys); refuse all dynamic dispatch (rejected — over-refuses faithful scripts); thread real line/column into the diagnostic (deferred — see R-8; quoting the snippet gives most of the value and quoting survives minified source better than a line number).
+**Corpus check**: the one corpus case (`http-endpoints`) is already refused by other routes (the `FormFile[]` variable and the lost files output); T018 recounts the corpus after implementation.
+
+**Default strategy only**: ADR 0046 V10 makes .NET interop an opt-in engine strategy provided by a feature (#4103), and spec 1228 ships the default only. The analysis is part of the default strategy; S-1 adds no switch. The opt-in decides whether the analysis applies under it, and it brings its own publish warning (ADR 0083, V12).
+
+**Why not in the converter's private walker**: `JavaScriptAnalyzer` is a private class of the Elsa 3 extension; publish validation in Essentials cannot depend on it. Spec 1222 already put publish-side JavaScript analysis in Essentials.
+
+**Alternatives considered**: PascalCase invocation only (the 10 Nov design — rejected by the corpus scan); full taint/data-flow analysis (rejected — complexity the signal does not need); refuse every member use on any value read from a variable (rejected — refuses faithful JSON access); refuse all dynamic dispatch (rejected — over-refuses).
 
 ---
 
@@ -105,22 +115,56 @@ Emit a new diagnostic code **`VF-IMP-010`**; the message **quotes the offending 
 
 **Decision**: Extend the existing pieces rather than add new components.
 
-**Findings (verified in source)**:
-- The converter parses with **Acornima 1.6.1** and already runs a real recursive AST visitor — `JavaScriptAnalyzer.VisitNode` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` — with correct JS scoping (`IsDeclared` separates a host global from a shadowing local). Node types available: `CallExpression`, `MemberExpression` (`.Object`/`.Property`/`.Computed`), `NewExpression`, `Identifier`, etc. Positions are `int` offsets (`.Start`/`.End`), used today for `SourceEdit`s.
-- Name authority is `Internal/Elsa3JavaScriptNames.cs` (`BuiltIns` `FrozenSet`); per-function behaviour tables live in dictionaries in the rewriter (`InlineHelpers`, `InstanceMembers`, `RefusedHostFunctions`, `PureGlobalCalls`, `ElsaThreeGlobals`).
-- The rewriter already has an `IsNondeterministicCall` path refusing `Math.random`/`Date.now`/`crypto.randomUUID`, and a globals/`NewExpression` path refusing `new Date()`/`Guid`. **S-1 flips these**: remove the nondeterministic refusal, admit `new Date()`/`Date.now()`/`Date` and `Math.random`, keep `Guid`/`DateTime` constructors and `parseGuid`/bytes/streams/`getConfig` refused, and move the GUID/Base64/`toJson` names out of `RefusedHostFunctions` into resolved host calls.
-- Diagnostics are `Elsa3ExpressionRewriteIssue(Code, Message, Guidance)` with codes in `Elsa3ImportDiagnosticCodes` (`VF-IMP-001..009`; `VF-IMP-005 ForbiddenCapability`, `VF-IMP-009 LiveInstanceState`). **No diagnostic carries a JS source line/column today** — hence R-7's "quote the snippet" and OQ-2's follow-up. `VF-IMP-010` is added for proxy-dependent usage (distinct from `LiveInstanceState`, which is about live workflow-instance state).
-- There is **no structured return-type catalog** for built-ins (only prose in `RefusedHostFunctions` messages). The detector needs none (R-7 is value-agnostic); a tiny "returned a CLR object in Elsa 3" note-map is used only to enrich messages for the direct cases.
+**Findings (verified in source at `b6a67a880`)**:
+- The converter parses with **Acornima** in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`; `JavaScriptAnalyzer.VisitNode` walks the AST with JS scoping and has an Expression/Script mode. Positions are `int` offsets (`.Start`/`.End`).
+- Name authority is `Internal/Elsa3JavaScriptNames.cs` (`BuiltIns`); per-function tables live in the rewriter (`InlineHelpers`, `RefusedHostFunctions`, `ElsaThreeGlobals`, …). `IsNondeterministicCall` refuses `Math.random`, `Date.now` and `crypto.randomUUID`; `ElsaThreeGlobals` includes `Date`, `Guid`, `DateTime` and `Random`. The guidance texts `TimeGuidance` and `UniqueValueGuidance` still say there is no clock or randomness and need rewording.
+- Diagnostic codes live in `Elsa3ImportDiagnosticCodes` at the end of the rewriter (`VF-IMP-001..011`; `005 ForbiddenCapability`, `009 LiveInstanceState`, `010 ResolutionDiffers`, `011 ShadowedCandidate`). No diagnostic carries a JS source line/column.
+- The profile constant is `ExpressionCapabilityProfiles.BindingPureV1` in Expressions.Core (`ExpressionDefinition.cs`), checked by the evaluators (portable, Jint, Liquid, runtime), emitted by the converter, serialized as `capabilityProfile` and hashed by `WorkflowExecutableHasher`.
+- `JintPortableJavaScriptEvaluator` keeps its own `StrippedAmbientCapabilities` list and rethrows "unavailable in the deterministic binding sandbox"; both go with the strip. It rejects every evaluator option today.
+- Spec 1222 added `JavaScriptHostFunctionDeclaration(Name, ReadsVariables)` in Expressions.JavaScript.Core; its doc notes the isolated engine cannot install host functions yet. `variables` and `getVariable` are installed by `IsolatedJintEngine.SetReadOnlyVariables` as non-writable globals.
+- Publish-side script validation (`ScriptOutcomeValidator`) emits `Scripts/*` validation errors, including `Scripts/ReservedName` for `complete`.
 
-**Rationale / alternative**: Building a parallel analysis component was rejected — the existing walker already has scope handling and the diagnostic pipeline; extension is lower-risk and keeps one source of truth for JS analysis.
+**Rationale / alternative**: Building parallel components was rejected — the existing pieces already hold scope handling, the declaration record and the diagnostic pipelines.
+
+---
+
+## R-11 — `toJson` reproduces Elsa 3's text
+
+**Decision**: `toJson(value)` serializes the JSON value with System.Text.Json using Elsa 3's options (`JavaScriptEncoder.Create(UnicodeRanges.All)`, not indented, no naming policy). It does not use the engine's `JSON.stringify` and does not depend on the JSON-integrity ADR (A-5).
+
+**Rationale**: Faithful-or-refuse (D-13). Elsa 3's encoder writes HTML-sensitive characters as `<` and similar escapes; `JSON.stringify` writes them as-is, so a converted script that sends or compares the text would change. For a JSON value the remaining Elsa 3 differences (PascalCase .NET properties, enums as strings) cannot occur, because no .NET object reaches the function. `toJson(newGuid())` gives the quoted GUID text in both versions. A known .NET-object value of another type passed to `toJson` would have serialized with its .NET property names in Elsa 3, so the converter refuses it (FR-016). The text is a string the script asked for, not stored data, so it is outside a "one baseline for stored data" rule; if the JSON-integrity ADR is accepted with every serializer deriving from one baseline, `toJson` is named there as an exception (OQ-5).
+
+**Alternatives considered**: `toJson` = the engine's captured `JSON.stringify` (simpler, same path as result materialization; rejected — different text from Elsa 3 for HTML-sensitive characters, which would need a conversion warning on every `toJson`); keep `toJson` refused (rejected — 3 corpus uses, and the faithful form is a few lines).
+
+---
+
+## R-12 — Registration, names and precision
+
+**Decision**: Extend spec 1222's `JavaScriptHostFunctionDeclaration` with `Effectful` and an implementation delegate, and install registered functions in `IsolatedJintEngine` the way `getVariable` is installed. A registration marks the function as allowed in `binding-readonly-v1` (ADR 0083). Names follow ADR 0045 §5 D-5: the read roots and built-in names are reserved; host functions carry a namespace prefix; a duplicate or reserved registration fails at startup; a script that declares a reserved name gets the publish warning `Scripts/ReservedName`. A lossy number argument logs a warning naming the function and the argument path, and the call runs (ADR 0046 V9; spec 1228 FR-015 hands this to S-1).
+
+**`now()` dropped**: the 10 Nov draft added `now()` as sugar. Elsa 3 had no `now`, so it serves no conversion; native `Date` and `Temporal.Now` cover it; and as a reserved name it would warn on the common `const now = new Date()`.
+
+**Severity of the reserved-name diagnostic**: a warning, because the script's own declaration wins inside the script and nothing breaks; ADR 0045 asks for "a publish diagnostic" without a severity.
+
+**Alternatives considered**: A second registration API for S-1 (rejected — spec 1222's record is already the registration surface); fail publish on a reserved-name declaration (rejected — breaks scripts that work).
+
+---
+
+## R-13 — Profile constant rename, no alias
+
+**Decision**: Rename `BindingPureV1` to `BindingReadonlyV1` (value `binding-readonly-v1`) everywhere: definitions, converter, evaluators (portable, Jint, Liquid, runtime), `ExpressionEvaluationCapabilities` (time and randomness allowed), and the executable hash. Regenerate stored fixtures and golden hashes in place. Remove the `Inline` comment that grounds its replay safety in `binding-pure-v1`; its basis is the D-2 contract.
+
+**Rationale**: ADR 0083 says there is no compatibility path for `binding-pure-v1`, and compatibility is owed only from Elsa 4's first stable release. One constant serves every evaluator; keeping a second name for Liquid would leave the cancelled determinism doctrine alive under its old label. Liquid's filters are unchanged by S-1; unblocking its date filters under D-1 is a follow-up (OQ-7).
+
+**Alternatives considered**: Keep the string and change only what it grants (rejected — the name would say the opposite of the rule); keep a reader for the old value (rejected — a pre-release shim).
 
 ---
 
 ## R-10 — Time zones in converted scripts
 
-**Decision**: Classify `Date` usage in a converted script as zone-independent or zone-dependent (FR-021, FR-022). Zone-independent usage converts faithfully. Zone-dependent usage converts only when the conversion has a source time zone (ADR 0046 *Dates*: an IANA ID set on the converter feature and recorded on the converted workflow and in the published conversion contract); a converted expression with a source time zone evaluates with that zone as the Jint engine's local time zone (`Options.TimeZone`), the clock instant unchanged. Without a source time zone, zone-dependent usage is refused with a quoted diagnostic. A non-literal string parse converts with a behaviour warning (FR-024).
+**Decision**: Classify `Date` usage in a converted script as zone-independent or zone-dependent (FR-021, FR-022). Zone-independent usage converts faithfully. Zone-dependent usage converts only when the conversion has a source time zone (ADR 0046 *Dates*: an IANA ID set on the converter feature and recorded on the converted workflow and in the published conversion contract; ADR 0046's assume-UTC policy is the source time zone `UTC`); a converted expression with a source time zone evaluates with that zone as the Jint engine's local time zone (`Options.TimeZone`), the clock instant unchanged. Without a source time zone, zone-dependent usage is refused with a quoted diagnostic. A non-literal string parse converts with a behaviour warning (FR-024).
 
-**Rationale**: Elsa 3 evaluated scripts in the server's time zone. `Date.now()`, `getTime()` and `toISOString()` give the same result on every server; `getHours()`, `toLocaleString()`, the local multi-argument constructor and an offset-less parse (`new Date('2026-10-28T09:15:00')`) do not. Running every converted script in UTC would silently change those on any workflow from a non-UTC server, which faithful-or-refuse forbids and which ADR 0046 removes for literals. The source time zone is the same option ADR 0046 defines for literals, so one setting covers a converted workflow. Jint takes the time zone per engine, so a converted expression can carry it as an evaluator option.
+**Rationale**: Elsa 3 evaluated scripts in the server's time zone. `Date.now()`, `getTime()` and `toISOString()` give the same result on every server; `getHours()`, `toLocaleString()`, the local multi-argument constructor and an offset-less parse (`new Date('2026-10-28T09:15:00')`) do not. Running every converted script in UTC would silently change those on any workflow from a non-UTC server, which faithful-or-refuse forbids and which ADR 0046 removes for literals. The source time zone is the same option ADR 0046 defines for literals, so one setting covers a converted workflow. Jint takes the time zone per engine, so a converted expression can carry it as an evaluator option. `JintPortableJavaScriptEvaluator` rejects every evaluator option today and options enter the executable hash, so S-1 adds this one option to the evaluator's schema; the hash change is fine before the first stable release.
 
 **Non-literal parse**: the converter cannot see whether `new Date(input)` receives text with an offset. ADR 0046 gives a non-literal date expression a behaviour warning, and R-10 follows it rather than refusing (OQ-3). Corpus: 3 definitions parse non-literal strings (`javascript-date-methods`, `performance-minimal-baseline`, `composition-execute-workflow-root`); none uses a local-time getter, local formatting, the multi-argument constructor or an offset-less literal.
 
@@ -130,6 +174,6 @@ Emit a new diagnostic code **`VF-IMP-010`**; the message **quotes the offending 
 
 ## R-9 — Execution-contract basis (context, not re-specified)
 
-**Decision**: Rely on D-2 as the safety basis; do not re-specify it.
+**Decision**: Rely on D-2 and ADR 0092 decisions 8 and 9 as the safety basis; do not re-specify them.
 
-**Rationale**: Non-deterministic expressions are safe because a recorded step never re-runs: its value is captured once and reused on retry/recovery; a genuine re-run is a new execution with new values, and idempotency across external effects is the designer's concern with engine-supplied stable invocation ids. This is ADR 0045 §5 / D-2 territory. The Inline activity's old "pure replay" justification (which leaned on `binding-pure-v1`) is withdrawn; its re-justification depends on the D-2 details amendment and `binding-readonly-v1`, **not** on S-1 re-specifying it.
+**Rationale**: Non-deterministic expressions are safe because a value recorded in an invocation's input snapshot is reused on retry and recovery. A re-execution or reschedule is a new invocation with fresh inputs; a background refresh of a stale snapshot (ADR 0092 decision 9) and each pass of a loop that re-materializes its inputs evaluate again; validation probes never execute effectful bindings. Idempotency across external effects is the designer's concern, with engine-supplied stable invocation ids. The `Inline` activity's old "pure replay" justification leaned on `binding-pure-v1`; S-1 removes it (R-13), and its basis is this contract.

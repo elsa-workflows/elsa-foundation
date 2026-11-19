@@ -31,6 +31,6 @@
 
 ## Notes
 
-- This is a **provisional** initiative spec (#3052 S-1). It names its dependency ADRs/decisions and records the one unsettled dependency (D-6) as an explicit open question (OQ-1) rather than silently choosing a side — this is the intended shape for a provisional spec, not a completeness gap.
+- This is a **provisional** initiative spec (#3052 S-1). Rechecked 2026-11-19: every decision it applies is agreed; its open questions (OQ-2 to OQ-7) each carry a recommended answer that the text follows.
 - Spec-level requirements name specific function identifiers (e.g. `newGuid`, `toJson`) because these are the external contract being converted *from* Elsa 3; the *how* (engine wiring, AST pass) is deliberately deferred to plan.md / research.md.
 - Items marked incomplete would require spec updates before `/speckit.plan`. None are incomplete.

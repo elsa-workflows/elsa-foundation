@@ -1,6 +1,6 @@
-# Contract: Elsa 3 conversion & proxy diagnostics
+# Contract: Elsa 3 conversion & .NET-usage diagnostics
 
-How the Elsa 3 → Elsa 4 converter treats expression constructs, and the proxy-dependent-usage detector. Semantic contract for review.
+How the Elsa 3 → Elsa 4 converter treats expression constructs, and the .NET-usage analysis shared by conversion and publish. Semantic contract for review.
 
 ## D1 — Faithful conversions (must not refuse)
 
@@ -8,15 +8,15 @@ The converter MUST convert these without refusal and preserve behaviour:
 
 - Zone-independent `Date` usage → native `Date` (clock-backed, UTC/invariant); see D1a.
 - `Math.random()` → native `Math.random`.
-- `newGuid()`, `newGuidString()`, `newShortGuid()`, `getGuidString()`, `getShortGuid()` → the host GUID functions (string results; short GUID byte-for-byte).
-- `stringToBase64()`, `stringFromBase64()` → the host Base64 functions.
-- `toJson()` → the canonical `toJson`.
+- `newGuid()`, `newGuidString()`, `newShortGuid()`, `getGuidString()`, `getShortGuid()`, `parseGuid(s)` → the built-in GUID functions (string results, Elsa 3's text).
+- `stringToBase64()`, `stringFromBase64()` → the built-in Base64 functions.
+- `toJson()` → the built-in `toJson` (Elsa 3's text).
 
-These flip the current refusals: the rewriter's nondeterministic-call path (`Math.random`/`Date.now`) and the `new Date()`/globals refusal are removed for these constructs, and the GUID/Base64/`toJson` names move out of the refused-host-function set into resolved host calls.
+These flip the current refusals: the rewriter's nondeterministic-call path is removed for `Math.random`/`Date.now` (it keeps `crypto.randomUUID`), the `Date` global leaves the refused globals, and the GUID/Base64/`toJson`/`parseGuid` names move out of `RefusedHostFunctions`. Guidance texts that say "no clock" or "no random" are reworded.
 
 ## D1a — `Date` and the source time zone
 
-The source time zone is the Elsa 3 converter option of ADR 0046 *Dates*, recorded on the converted workflow and in the published conversion contract.
+The source time zone is the Elsa 3 converter option of ADR 0046 *Dates*, recorded on the converted workflow and in the published conversion contract. The assume-UTC policy is the source time zone `UTC`.
 
 | Usage | No source time zone | Source time zone set |
 |---|---|---|
@@ -24,44 +24,47 @@ The source time zone is the Elsa 3 converter option of ADR 0046 *Dates*, recorde
 | `getHours()`, `getDate()`, `getDay()`, `getMonth()`, `getFullYear()`, `getTimezoneOffset()`, local setters; `toString()`, `toDateString()`, `toTimeString()`, `toLocale*String()`; `new Date(y, m, d, ...)`; parse of a literal without an offset (`new Date('2026-10-28T09:15:00')`, `Date.parse(...)`) | **Refuse** (quotes the expression; guidance: set the source time zone, or use UTC methods or an explicit offset) | Convert; the expression evaluates with the source zone as its local time zone |
 | Parse of a non-literal string (`new Date(input)`) | Convert with a behaviour warning (quotes the expression) | Convert |
 
-**Contract tests**: `new Date('2026-10-28T09:15:00').getHours()` refused without a zone; with `Europe/Amsterdam` it converts and returns `9`, and `new Date(Date.UTC(2026, 9, 28, 8, 15)).getHours()` returns `9` (CET) and in July the summer offset applies; `Date.now()` and `new Date().toISOString()` convert in both cases.
+The source time zone travels with the converted expression as part of its published form (an evaluator option today rejected by `JintPortableJavaScriptEvaluator`; S-1 adds it, and it enters the executable hash).
+
+**Contract tests**: `new Date('2026-10-28T09:15:00').getHours()` refused without a zone; with `Europe/Amsterdam` it converts and returns `9`, and `new Date(Date.UTC(2026, 9, 28, 8, 15)).getHours()` returns `9` (CET); in July the summer offset applies; `Date.now()` and `new Date().toISOString()` convert in both cases.
 
 ## D2 — Refused conversions (must refuse with guidance)
 
-- `Guid` / `DateTime` constructors and static access (CLR types) → refuse.
-- `parseGuid` (live .NET `Guid`), byte/stream helpers, `getConfig`/`getConfiguration` → refuse.
+- `Guid` / `DateTime` / `Random` globals (constructors and static access) → refused as today (`VF-IMP-005`).
+- Byte/stream helpers, `getConfig`/`getConfiguration`, `crypto.randomUUID` → refused as today.
 
-Each refusal carries a code, a message, and guidance, as the existing pipeline already does.
+## D3 — .NET-usage analysis
 
-## D3 — Proxy-dependent-usage detector
+**Where**: one analysis in the Essentials JavaScript analysis services, called by the converter (Elsa 3 import, with the Elsa 3 types) and by publish validation (any script). It belongs to the default JSON-only engine strategy; this spec adds no switch. Whether it applies under the opt-in .NET interop strategy is decided by that feature (#4103).
 
-**When active**: only while live-.NET-object proxies are disabled (`!ProxiesEnabled`, A-1 default). If a setting enables proxies, the detector is **not registered**, and the constructs below are valid again.
+**Rules** (see [data-model.md §3](../data-model.md)):
 
-**Where**: at **conversion** (Elsa 3 import) and at **publish** (hand-authored Elsa 4 scripts) — one shared analysis pass.
+1. *Conversion only*: refuse any member read or invocation on a **known .NET-object value** — the result of `newGuid()`/`parseGuid()`, or a read of a variable, input or activity output whose Elsa 3 type was a wrapped .NET type — used directly or through a `const`/`let` alias; except `toString()` with no arguments on a GUID; also refuse passing such a value, other than a GUID, to `toJson`. → `VF-IMP-012`
+2. Refuse a reference to a **.NET type** identifier (static access or `new`) in the catalog and not a JS global; at conversion, names already refused under `VF-IMP-005` keep that code.
+3. Refuse an invocation of a **PascalCase member** on a value the script did not define, unless the receiver is a JS global.
+4. **Allow** property reads of any casing on other values (JSON keys).
+5. **Allow** (do not classify) dynamic/computed member access — recorded gap; values reached indirectly (function arguments, computed reads, object fields) are not followed — recorded gap.
+6. **Allow** an invocation of a member defined in the same script (object-literal key, class member, or `x.M = ...`).
 
-**Rules** (input: Acornima AST; see [data-model.md §3](../data-model.md) for the full table):
-
-1. Refuse a **method invocation** whose member name is PascalCase (or a curated CLR method). → `VF-IMP-010`
-2. Refuse a reference to a **CLR type** identifier (static access or `new`), where the identifier is in the CLR-type catalog and is not a JS global. → `VF-IMP-010`
-3. **Allow** property reads of any casing (JSON keys).
-4. **Allow** (do not classify) dynamic/computed member invocation — recorded gap.
-5. **Allow** an invocation of a member defined in the same script (object-literal key, class member, or `x.M = ...`).
-
-**Diagnostic `VF-IMP-010`**: message quotes the offending expression (from node offsets); guidance explains boundary values are JSON while proxies are disabled, and how to rewrite to JSON/JS equivalents. No source line/column (OQ-2 follow-up).
+**Diagnostics**: conversion `VF-IMP-012`; publish `Scripts/DotNetMemberUsage`. The message quotes the offending expression (from node offsets); guidance explains that values are JSON and live .NET objects are not available, and how to rewrite. No source line/column (OQ-2 follow-up).
 
 **Contract tests**:
 
 | Case | Expected |
 |---|---|
-| `getVariable('x').ToString()` (after lowering, a boundary value) | Refuse `VF-IMP-010`, message quotes `…ToString()` |
-| `someValue.Where(f)` / `.ToArray()` / `.Contains(y)` | Refuse `VF-IMP-010` |
-| `DateTime.Now`, `new Guid(s)`, `Convert.ToBase64String(b)` | Refuse `VF-IMP-010` |
-| `payload.OrderId` (PascalCase property read) | Allow |
-| `s.toUpperCase()`, `a.map(f)`, `JSON.stringify(o)`, `new Date()` | Allow |
+| `newGuid().toString('N')` (converted) | Refuse `VF-IMP-012`, message quotes it |
+| `const g = parseGuid(s); g.toByteArray()` (converted) | Refuse `VF-IMP-012` |
+| `variables.upload.openReadStream()` with `upload: FormFile` in Elsa 3 (converted) | Refuse `VF-IMP-012` |
+| `'id-' + newGuid()`, `newGuid().toString()`, `toJson(newGuid())` (converted) | Allow |
+| `toJson(variables.upload)` with `upload: FormFile` in Elsa 3 (converted) | Refuse `VF-IMP-012` |
+| `someValue.Where(f)` / `.ToArray()` | Refuse (conversion `VF-IMP-012`, publish `Scripts/DotNetMemberUsage`) |
+| `TimeSpan.FromHours(1)`, `new Uri(s)` | Refuse |
+| `DateTime.Now`, `new Guid(s)` (converted) | Refuse `VF-IMP-005` (unchanged) |
+| `payload.OrderId`, `variables.Order.Status` | Allow |
+| `s.toUpperCase()`, `a.map(f)`, `JSON.stringify(o)`, `new Date()`, `Intl.DateTimeFormat('en-GB')` | Allow |
 | `o[name]()` (computed) | Allow (gap) |
 | `const helpers = { Format: x => x }; helpers.Format(v)` | Allow (defined in the script) |
-| Same proxy-using script with proxies **enabled** | Not refused by this detector |
 
 ## D4 — Faithfulness note
 
-`newShortGuid` conversion is faithful only if the Elsa 4 host function reproduces the Elsa 3 short-GUID encoding exactly; this is verified during implementation against Elsa 3's `ShortGuid`.
+GUID, Base64 and `toJson` conversions are faithful because the built-ins reproduce Elsa 3's algorithms (verified against Elsa 3.5.3's `ConfigureEngineWithCommonFunctions` during implementation, with fixed inputs).

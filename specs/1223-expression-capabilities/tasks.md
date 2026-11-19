@@ -2,112 +2,107 @@
 
 **Feature**: [spec.md](spec.md) | [plan.md](plan.md) | [data-model.md](data-model.md) | [research.md](research.md) | contracts: [host-functions](contracts/host-functions.md), [conversion-and-diagnostics](contracts/conversion-and-diagnostics.md) | [quickstart.md](quickstart.md)
 
-**Status**: Provisional (initiative #3052, S-1). Tasks implement the design on the agreed-as-if positions; D-6 (OQ-1) has an agreed direction between two approvers, with the third position on the call list. Test cadence: not greenfield, no TDD declared — tests are risk-based and may land with or after the implementation they cover (xUnit only; **no FluentAssertions**).
+**Status**: Provisional until the spec is approved (initiative #3052, S-1). Regenerated 2026-11-19 against `b6a67a880`. Test cadence: not greenfield, no TDD declared — tests are risk-based and may land with or after the implementation they cover (xUnit only; **no FluentAssertions**).
 
-**Touched code**: `Essentials/src/Expressions/JavaScript/Jint/Services/IsolatedJintEngine.cs` (+ new host-function / `ITimeSystem` files); `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`, `Internal/Elsa3JavaScriptNames.cs`, `Elsa3ImportDiagnosticCodes`, `README.md`; corresponding xUnit test projects.
+**Touched code**: `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs`; `Essentials/src/Expressions/JavaScript/Core/Contracts/JavaScriptHostFunctionDeclaration.cs`; `Essentials/src/Expressions/JavaScript/Jint/Services/IsolatedJintEngine.cs`, `JintPortableJavaScriptEvaluator.cs` (+ new time-system and built-in files); `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Services/` (new analyzer, reserved names); the Design validators (`ScriptOutcomeValidator` or a sibling); `Essentials/src/Expressions/Liquid/Services/PortableLiquidExpressionHandler.cs`; `Essentials/src/Activities/Primitives/Activities/Inline.cs`; `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`, `Services/Elsa3ValueFlowLowerer.cs`, `Internal/Elsa3JavaScriptNames.cs`, `README.md`; corresponding xUnit test projects and fixtures.
 
 ---
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Add a short-GUID parity reference fixture (a known GUID → its exact Elsa 3 short-GUID string, verified against Elsa 3 `ShortGuid`) under the Elsa3 mapping test project for use by T006/T010/T016.
+- [ ] T001 [P] Add Elsa 3 parity fixtures under the Elsa3 mapping test project: for fixed inputs, the exact Elsa.JavaScript 3.5.3 output of the short-GUID algorithm, `Guid.Parse(...).ToString()` for each accepted form, `stringToBase64`, and `toJson` (Elsa 3 encoder options) including HTML-sensitive and non-ASCII characters. Used by T009, T011 and T019.
 
 ## Phase 2: Foundational (blocking prerequisites)
 
-- [ ] T002 Introduce the `binding-readonly-v1` profile constant in `Essentials/src/Expressions/JavaScript/Jint/Services/IsolatedJintEngine.cs`, superseding the `binding-pure-v1` doctrine reference (profile-constant rename deferred to S-1 by PR #3390).
-- [ ] T003 Add `ProxiesEnabled` setting plumbing (A-1 default `false`) that the converter/publish detector registration in Phase 6 consumes; no proxy implementation (proxies stay disabled).
+- [ ] T002 Rename `ExpressionCapabilityProfiles.BindingPureV1` to `BindingReadonlyV1` (value `binding-readonly-v1`) in `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs` and update `ExpressionEvaluationCapabilities` so the profile allows time and randomness; update every user (portable, Jint, Liquid and runtime evaluators; `Elsa3ExpressionRewriter`; `Elsa3ValueFlowLowerer`; `BindingPureArgsDeclarationContributor`). No alias or reader for the old value (FR-031).
+- [ ] T003 Regenerate stored fixtures and golden executable hashes that carry `capabilityProfile` in place; verify with the affected test projects (FR-031).
+- [ ] T004 Remove the `Inline` comment that grounds replay safety in `binding-pure-v1` (`Essentials/src/Activities/Primitives/Activities/Inline.cs`); reference the D-2 contract instead (FR-031).
+- [ ] T005 Extend `JavaScriptHostFunctionDeclaration` with `Effectful` (default `false`) and an implementation delegate taking and returning JSON values; keep `ReadsVariables` (FR-012, FR-029).
 
 ## Phase 3: User Story 1 — Current time, randomness, GUIDs in expressions (P1)
 
-**Goal**: An author gets current time, randomness and new GUIDs in input bindings and scripts with no configuration.
-**Independent test**: Evaluate a binding and a script that each read time, a random number and a new GUID; all yield well-formed values, no refusal (quickstart A, B6/B7/B9).
+**Goal**: An author gets current time, randomness, new GUIDs and zone conversion in input bindings and scripts with no configuration.
+**Independent test**: quickstart A1–A5a, B6, B7.
 
-- [ ] T004 [US1] Remove the `DisableAmbientCapabilities` strip in `IsolatedJintEngine.cs` so `Date`, `Intl`, `Temporal` and native `Math.random` are admitted on the read-only surface.
-- [ ] T005 [US1] Implement a custom Jint `ITimeSystem` over the host `System.TimeProvider`; set `Options.TimeSystem`, `Options.TimeZone = UTC`, `Options.Culture = Invariant` on engine construction.
-- [ ] T006 [P] [US1] Register the GUID host functions (`newGuid`, `newGuidString`, `newShortGuid`, `getGuidString`, `getShortGuid`) returning JSON strings; `newShortGuid` reproduces the Elsa 3 short-GUID encoding (use the T001 fixture).
-- [ ] T007 [P] [US1] Register the `now()` host function returning an ISO-8601 UTC string from the injected clock.
-- [ ] T037 [P] [US1] Add the optional **effectful** flag to the host-function registration API (default: effect-free) and record it on the registration; register every S-1 built-in without it. Placing the commits is the execution-contract amendment's job, not this task (FR-012).
-- [ ] T038 [P] [US1] xUnit tests: a function registered with the flag reports effectful, one without reports effect-free; the flag never changes whether or how often a call runs (contract C5).
-- [ ] T008 [P] [US1] Register the Base64 string pair (`stringToBase64`, `stringFromBase64`) and `toJson` (canonical encoder, ADR 0091) host functions — registered here as the earliest story that needs them; their contract is verified in US4.
-- [ ] T009 [US1] xUnit behaviour tests: intrinsics restored (`Date`/`Intl`/`Temporal`/`Math.random` not `undefined`); clock reads a controlled `TimeProvider`; UTC + invariant formatting; `Math.random` permitted to differ (no fixed-sequence assertion) — quickstart A1–A4.
-- [ ] T010 [P] [US1] xUnit behaviour tests: GUID functions return strings; `newShortGuid` matches the parity fixture; `now()` equals the controlled clock — quickstart B6, B7, B9.
+- [ ] T006 [US1] Remove `DisableAmbientCapabilities` in `IsolatedJintEngine.cs` and `StrippedAmbientCapabilities` plus the "deterministic binding sandbox" rethrow in `JintPortableJavaScriptEvaluator.cs`, so `Date`, `Intl`, `Temporal` and native `Math.random` are admitted (FR-004, FR-005).
+- [ ] T007 [US1] Implement a Jint `ITimeSystem` over the host `System.TimeProvider`; set `Options.TimeSystem`, `Options.TimeZone = UTC`, `Options.Culture = Invariant` on engine construction (FR-002).
+- [ ] T008 [US1] Install every registered `JavaScriptHostFunctionDeclaration` in `IsolatedJintEngine` as a non-writable global, as `SetReadOnlyVariables` installs `getVariable`; marshal arguments and results as JSON values (FR-011, FR-029).
+- [ ] T009 [P] [US1] Register the GUID built-ins `newGuid`, `newGuidString`, `getGuidString`, `newShortGuid`, `getShortGuid` and `parseGuid` with `ReadsVariables = false`, `Effectful = false` (FR-006, FR-026; T001 fixtures).
+- [ ] T010 [P] [US1] xUnit: intrinsics restored; clock reads a controlled `TimeProvider` (`Date`, `Temporal.Now`); UTC and invariant formatting; `Math.random` permitted to differ — quickstart A1–A4.
+- [ ] T011 [P] [US1] xUnit: GUID built-ins return strings in Elsa 3's forms; `parseGuid` accepted forms and invalid text — quickstart B6, B7.
+- [ ] T012 [P] [US1] xUnit: `Temporal` and `Intl.DateTimeFormat` convert between UTC and `Europe/Amsterdam` in winter and summer; record the result on the host OS used by CI (FR-025) — quickstart A5a.
 
 ## Phase 4: User Story 4 — Built-in helpers & .NET functions, consistent across surfaces (P2)
 
-**Goal**: Host functions behave identically in bindings and scripts and exchange only JSON.
-**Independent test**: Call each host function from both surfaces; confirm identical behaviour and JSON-only values (quickstart A5, B8, B10, B11).
+**Goal**: Functions behave identically on both surfaces, exchange only JSON, follow the naming rule and warn on precision loss.
+**Independent test**: quickstart A5, B8–B11b.
 
-- [ ] T011 [US4] xUnit tests: `stringFromBase64(stringToBase64(x)) === x` for UTF-8 `x`; `toJson(v)` equals the canonical encoder output for representative values; every host function returns a JSON value and accepts only JSON — quickstart B8, B10, B11.
-- [ ] T012 [US4] xUnit tests: surface parity — each native capability and each host function available and identical in an input binding and in a `RunJavaScript` script — quickstart A5.
+- [ ] T013 [US4] Register `stringToBase64`, `stringFromBase64` and `toJson` (System.Text.Json with `JavaScriptEncoder.Create(UnicodeRanges.All)`, compact, no naming policy) as built-ins (FR-007, FR-009).
+- [ ] T014 [US4] Enforce the naming rule at startup: reserved names (`variables`, `args`, the built-ins), namespace prefix for host functions, duplicate detection; failure names the function (FR-027).
+- [ ] T015 [US4] Extend the reserved-name publish check (`JavaScriptReservedNames` and the `Scripts/ReservedName` validation) to the read roots and built-in names, as a warning (FR-027).
+- [ ] T016 [US4] Warn on a number argument JavaScript cannot hold exactly, naming the function and the argument path; never refuse, never stringify (FR-028).
+- [ ] T017 [P] [US4] xUnit: Base64 round trip and Elsa 3 parity; `toJson` equals the T001 fixtures; no live .NET object in or out — quickstart B8–B10.
+- [ ] T018 [P] [US4] xUnit: naming failures, reserved-name warning, no fallback read marker for built-ins, `Effectful` recorded and never changes call count, V9 warning — quickstart B11–B11b.
+- [ ] T019 [P] [US4] xUnit: surface parity — each intrinsic and built-in identical in an input binding and a `RunJavaScript` script — quickstart A5.
 
 ## Phase 5: User Story 2 — Elsa 3 time / GUID / string functions convert faithfully (P1)
 
 **Goal**: Elsa 3 workflows using the faithful functions convert without refusal; genuinely unavailable ones are refused with guidance.
-**Independent test**: Convert representative/corpus workflows; faithful ones succeed, refused ones produce a guided refusal (quickstart C, D).
+**Independent test**: quickstart C, D.
 
-- [ ] T013 [US2] In `Elsa3ExpressionRewriter.cs`, remove the `IsNondeterministicCall` refusal for `Math.random`/`Date.now` and the `new Date()`/`Date` globals refusal; admit them as faithful conversions.
-- [ ] T039 [US2] In `Elsa3ExpressionRewriter.cs`, classify `Date` usage (contract D1a): zone-independent converts; zone-dependent converts only with the converter's source time zone (ADR 0046 *Dates*) and is otherwise refused with a quoted diagnostic and guidance; a non-literal string parse converts with a behaviour warning when no zone is set (FR-021 to FR-024).
-- [ ] T040 [US2] Carry the source time zone into the converted expression's evaluator options so it evaluates with that zone as its local time zone (Jint `Options.TimeZone`); unconverted expressions stay UTC (FR-023).
-- [ ] T041 [P] [US2] xUnit tests for D1a: refusal without a zone; `Europe/Amsterdam` winter and summer results equal Elsa 3's; zone-independent usage converts in both modes; non-literal parse warning — quickstart C12a, C12b, SC-007.
-- [ ] T014 [US2] Move the GUID family, `stringToBase64`/`stringFromBase64` and `toJson` out of `RefusedHostFunctions` into resolved host-function calls.
-- [ ] T015 [US2] Verify and retain refusals for `Guid`/`DateTime` constructors and static access, `parseGuid`, byte/stream helpers, and `getConfig`/`getConfiguration`.
-- [ ] T016 [P] [US2] xUnit conversion tests (faithful): `new Date()`, `Date.now()`, `Math.random()`, GUID family, Base64 pair, `toJson` convert without refusal and preserve shape — quickstart C12–C14.
-- [ ] T017 [P] [US2] xUnit conversion tests (refused): `parseGuid`, bytes/streams, `getConfig`, `Guid`/`DateTime` refused with guidance — quickstart D16–D17.
-- [ ] T018 [US2] SC-001 coverage check: 100% of available-corpus workflows whose JS uses only faithful functions convert without refusal — quickstart C15.
-- [ ] T019 [P] [US2] Update the conversion table in `Extensions/Elsa3/src/Mapping/README.md` (refused → converted rows; add the `VF-IMP-010` row) — quickstart F26.
-- [ ] T020 [P] [US2] Update spec 247 `research.md` R-6 notes where S-1 supersedes them (time/GUID/Base64/`toJson`) — quickstart F27.
+- [ ] T020 [US2] In `Elsa3ExpressionRewriter.cs`, remove `Math.random`/`Date.now` from `IsNondeterministicCall` (keep `crypto.randomUUID`), take `Date` out of the refused globals, move the GUID family, `parseGuid`, the Base64 pair and `toJson` out of `RefusedHostFunctions`, and reword `TimeGuidance`/`UniqueValueGuidance` (FR-014, FR-015).
+- [ ] T021 [US2] Classify `Date` usage (contract D1a): zone-independent converts; zone-dependent converts only with the source time zone (assume-UTC = `UTC`) and is otherwise refused with a quoted diagnostic; a non-literal parse warns without a zone (FR-021 to FR-024).
+- [ ] T022 [US2] Carry the source time zone into the converted expression as an evaluator option; accept that option in `JintPortableJavaScriptEvaluator` (it rejects all options today) and apply it as Jint `Options.TimeZone`; the option enters the executable hash (FR-023).
+- [ ] T023 [P] [US2] xUnit for D1a: refusal without a zone; `Europe/Amsterdam` winter and summer equal Elsa 3; `UTC`; zone-independent usage in both modes; non-literal parse warning — quickstart C12–C12b, SC-007.
+- [ ] T024 [P] [US2] xUnit conversion tests (faithful): `new Date()`, `Date.now()`, `Math.random()`, GUID family, `parseGuid`, Base64 pair, `toJson`, and GUIDs used as text convert — quickstart C13, C14.
+- [ ] T025 [P] [US2] xUnit conversion tests (refused): bytes/streams, `getConfig`/`getConfiguration`, `crypto.randomUUID`; `Guid`/`DateTime`/`Random` keep `VF-IMP-005` with the new guidance — quickstart D16, D17.
+- [ ] T026 [US2] SC-001 coverage check against the available corpus — quickstart C15.
+- [ ] T027 [P] [US2] Update the conversion table in `Extensions/Elsa3/src/Mapping/README.md` (refused → converted rows; add `VF-IMP-012`) — quickstart F26.
+- [ ] T028 [P] [US2] Update spec 247 `research.md` R-6 rows that S-1 supersedes (GUID family, `parseGuid`, Base64, `toJson`) — quickstart F27.
 
 ## Phase 6: User Story 3 — Relied-on live .NET objects fail clearly (P1)
 
-**Goal**: While proxies are disabled, proxy-dependent usage is refused with a clear quoted diagnostic at convert and publish, not a cryptic runtime failure.
-**Independent test**: Convert/publish scripts with CLR-member usage and with legitimate JSON access; confirm the verdicts in quickstart E.
+**Goal**: Member use on values that were .NET objects in Elsa 3, and .NET type references, are refused with a quoted diagnostic at conversion and publish.
+**Independent test**: quickstart E.
 
-- [ ] T021 [US3] Add `VF-IMP-010` (proxy-dependent usage) to `Elsa3ImportDiagnosticCodes`, distinct from `VF-IMP-009 LiveInstanceState`.
-- [ ] T022 [US3] Add the CLR-type deny catalog and the JS-global allow set (data-model §3) as data in the converter; include a small "returned a CLR object in Elsa 3" note-map for message enrichment.
-- [ ] T023 [US3] Extend `JavaScriptAnalyzer.VisitNode`: refuse PascalCase method invocations (and curated CLR methods) with `VF-IMP-010`, message quoting the offending expression (reconstructed from node `.Start`/`.End`).
-- [ ] T024 [US3] Extend the walker: refuse CLR-type identifier static access and `new T(...)` with `VF-IMP-010`; allow JS-global identifiers; allow property reads of any casing; do not classify computed/dynamic member invocation.
-- [ ] T042 [US3] Exempt invocations of members defined in the same script (object-literal keys, class members, `x.M = ...` assignments), collected in one pass before classification (FR-018).
-- [ ] T025 [US3] Register the detector only while `!ProxiesEnabled` (T003), and run the shared analysis pass at **publish** as well as convert.
-- [ ] T026 [P] [US3] Feature-registration test (logic-bearing wiring, §2.23.1): detector active when `ProxiesEnabled=false`, not registered when `true`.
-- [ ] T027 [P] [US3] Detector tests: PascalCase invocation refused with quoted snippet; CLR-type reference refused — quickstart E18, E19.
-- [ ] T028 [P] [US3] Detector tests: PascalCase property read allowed; native JS invocations and `new Date()` allowed; computed dispatch allowed; `helpers.Format(x)` with `helpers` defined in the script allowed — quickstart E20–E22a.
-- [ ] T029 [P] [US3] Detector tests: runs at publish; inactive when proxies enabled; SC-002 — no proxy/CLR-dependent script reaches run time undetected — quickstart E23–E25.
+- [ ] T029 [US3] Add the .NET-usage analyzer in `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Services/` behind a contract the Elsa 3 extension can call: .NET-type rule, PascalCase-invocation rule with the JS-global receiver and same-script-member exemptions, and the known-.NET-object rule fed by caller-supplied value sources; quotes the offending expression from node offsets (FR-016 to FR-019).
+- [ ] T030 [US3] Add the .NET type catalog and the JS-global allow set (data-model §3.2) as data in the analyzer; add the wrapped-.NET-type catalog beside the Elsa 3 type map in the converter (data-model §3.1).
+- [ ] T031 [US3] In the converter, call the analyzer with the known .NET-object sources (`newGuid()`/`parseGuid()` results; variables, inputs and outputs whose Elsa 3 type is in the wrapped catalog) and their `const`/`let` aliases; emit `VF-IMP-012` (new constant in `Elsa3ImportDiagnosticCodes`); leave `ElsaThreeGlobals` on `VF-IMP-005` (FR-016, FR-017).
+- [ ] T032 [US3] Call the analyzer from publish validation and emit `Scripts/DotNetMemberUsage` (FR-017, FR-018).
+- [ ] T033 [US3] Register the analyzer as part of the default JavaScript strategy in the existing feature; no setting (FR-030).
+- [ ] T034 [P] [US3] Feature-registration test (§2.23.1): the analyzer and the built-ins resolve in the default composition.
+- [ ] T035 [P] [US3] Analyzer tests (refuse): GUID member calls, `toByteArray()` through an alias, a `FormFile` variable's members, `toJson` of a non-GUID .NET value, .NET type references, PascalCase invocations — quickstart E18–E20.
+- [ ] T036 [P] [US3] Analyzer tests (allow): PascalCase property reads incl. `variables.Order.Status`, native calls incl. `Intl.DateTimeFormat('en-GB')`, computed dispatch, same-script members, GUIDs as text — quickstart E21–E22a.
+- [ ] T037 [P] [US3] SC-002 check over the corpus and representative cases; one analyzer used at conversion and publish — quickstart E23, E24.
 
 ## Phase 7: Polish & cross-cutting
 
-- [ ] T030 [P] Update owning JS-expression feature docs to note the `binding-readonly-v1` capabilities — quickstart F28.
-- [ ] T031 Confirm new tests are in the unit tier (not Testcontainers/child-host); update `tools/ci/test-tiers.json` only if a new test project was introduced — Elsa §E7.
-- [ ] T032 Public-surface review: track the profile constant and any new public registration API via `ElsaTrackPublicApi` where the project opts in — framework §2.23.3.
-- [ ] T033 Regenerate `dependency-map.json` / `.slnf` if project references changed (expected: none); verify with `git diff --stat`.
-
-## Phase 8: Governance surfaces (coordinator — non-code, external posts need Joey's OK)
-
-- [ ] T034 Keep FR-012 in step with D-6 on ADR 0045 §5's PR (#3384) until it is agreed — quickstart G29.
-- [ ] T035 Post the two findings (native intrinsics admitted; Jint 4.9.1 RNG not injectable) on PR #3390 — quickstart G30.
-- [ ] T036 Open the draft PR against `initiative/3052-elsa3-to-elsa4-conversion` (body "Part of #3052", approval plan Sipke + Frans, request both) and add the pointer comment on #3052 — quickstart G31.
+- [ ] T038 [P] Update the JS feature docs (capabilities, built-ins, registration rules) and `EXTENSION_POINTS.md` (host-function registration) — quickstart F28.
+- [ ] T039 Confirm new tests are in the unit tier; update `tools/ci/test-tiers.json` only if a test project is added — Elsa §E7.
+- [ ] T040 Public-surface review: `BindingReadonlyV1`, `Effectful`, the implementation delegate, the analyzer contract — framework §2.23.3.
+- [ ] T041 Regenerate solution filters only if project references changed (expected: none); verify with `git diff --stat`.
 
 ---
 
 ## Dependencies & execution order
 
-- **Setup (T001)** → **Foundational (T002–T003)** block everything.
-- **US1 (T004–T010)** depends on Foundational; registers all engine capabilities (intrinsics, clock, random, GUID, `now`, and — earliest-needed — Base64/`toJson`).
-- **US4 (T011–T012)** depends on US1 (verifies the host-function contract + surface parity).
-- **US2 (T013–T020)** depends on US1 (the converter resolves to the functions US1 registered).
-- **US3 (T021–T029)** depends on Foundational (`ProxiesEnabled`) and shares the converter file with US2 — run US2 then US3 to avoid edit collisions in `Elsa3ExpressionRewriter.cs`.
-- **Polish (T030–T033)** after the stories. **Governance (T034–T036)** after the code is pushed; T034/T035 are external posts requiring the coordinator's approval.
+- **Setup (T001)** and **Foundational (T002–T005)** block everything; T003 follows T002.
+- **US1 (T006–T012)** depends on Foundational; T008 depends on T005.
+- **US4 (T013–T019)** depends on T008.
+- **US2 (T020–T028)** depends on US1 and T013 (the converter resolves to registered built-ins).
+- **US3 (T029–T037)** depends on Foundational; its converter task T031 shares `Elsa3ExpressionRewriter.cs` with US2 — run T020–T022 before T031.
+- **Polish (T038–T041)** after the stories.
 
 ## Parallel opportunities
 
-- T006, T007, T008 (distinct host-function registrations) can be written in parallel after T004/T005.
-- T016, T017, T019, T020 (distinct test/doc files) in parallel within US2.
-- T027, T028, T029 (distinct detector test cases) in parallel within US3; T026 alongside.
-- US2 and US3 both edit `Elsa3ExpressionRewriter.cs`, so their **implementation** tasks (T013–T015 vs T023–T025) are **not** parallel with each other.
+- T010, T011, T012 after T006–T009.
+- T017, T018, T019 within US4.
+- T023–T025, T027, T028 within US2 (distinct files).
+- T029/T030 (Essentials) can run alongside US2's converter work; T031 waits for T020–T022.
+- T034–T037 within US3.
 
 ## Implementation strategy
 
-- **MVP = US1** (engine capabilities): restores the core author-facing capability and is independently demonstrable.
-- Then **US2** (faithful conversion) unblocks the Elsa 3 migration — the initiative's purpose.
-- Then **US3** (proxy detector) protects migrations from silent breakage.
-- **US4** is verification-heavy (JSON contract + parity) and can land with US1 or just after.
-- **Governance (Phase 8)** closes the loop: provisional surfaces on the dependency ADRs + the draft PR and #3052 pointer.
+- **MVP = Foundational + US1**: the renamed profile, restored intrinsics, clock and GUID built-ins.
+- Then **US4** (registration rules, remaining built-ins) and **US2** (faithful conversion), which unblocks the Elsa 3 migration.
+- Then **US3** (.NET-usage analysis) protects migrations from silent breakage.
