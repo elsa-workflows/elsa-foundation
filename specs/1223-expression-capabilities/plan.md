@@ -16,7 +16,7 @@ Four moving parts, all in existing projects:
 1. **Profile** — rename `binding-pure-v1` to `binding-readonly-v1` everywhere (Expressions.Core, evaluators, converter, executable hash), with no alias; regenerate fixtures; drop the `Inline` replay comment.
 2. **Engine** — re-admit `Date`, `Intl`, `Temporal` and `Math.random` in the isolated Jint engine and the portable evaluator, wire the clock to the host `TimeProvider` (UTC, invariant), and accept a source time zone as the one evaluator option a converted expression may carry.
 3. **Functions** — extend spec 1222's host-function declaration with an implementation, install declared functions in the engine, enforce the naming rule, warn on lossy number arguments, and register the built-ins (GUID family incl. `parseGuid`, Base64 pair). No `toJson`: scripts serialize with `JSON.stringify`, and the converter rewrites Elsa 3's `toJson` with a warning.
-4. **Converter and publish** — flip the faithful Elsa 3 functions, classify `Date` usage by zone dependence, and add a .NET-usage analysis in Essentials that the converter (with Elsa 3 types) and publish validation both call.
+4. **Converter and publish** — flip the faithful Elsa 3 functions, add the converter's date interpretation setting (`Refuse` default, `AssumeUtc`, `SourceTimeZone`), classify `Date` usage by zone dependence, and add a .NET-usage analysis in Essentials that the converter (with Elsa 3 types) and publish validation both call.
 
 [Research](research.md) records the findings and decisions. [Data model](data-model.md) defines the profile, the function catalog and the classification rules. [contracts/](contracts/) hold the function contract and the conversion/diagnostic contract. [Quickstart](quickstart.md) is the verification inventory.
 

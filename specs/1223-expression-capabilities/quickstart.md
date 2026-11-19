@@ -25,15 +25,16 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 
 ## C. Conversion — faithful (no refusal)
 
-12. Zone-independent `Date` usage (`Date.now()`, `getTime()`, `toISOString()`) and `Math.random()` convert without refusal, with or without a source time zone.
-12a. Zone-dependent usage (`getHours()`, `toLocaleString()`, `new Date('2026-10-28T09:15:00')`) is refused without a source time zone; with `Europe/Amsterdam` it converts and evaluates as Elsa 3 did on a server in that zone (winter and summer dates); with source time zone `UTC` (assume-UTC) it converts and evaluates in UTC.
-12b. A non-literal parse (`new Date(input)`) is refused without a source time zone and converts with one; `new Date('2026-10-28')` converts without one.
+12. Zone-independent `Date` usage (`Date.now()`, `getTime()`, `toISOString()`) and `Math.random()` convert without refusal under every date interpretation.
+12a. Zone-dependent usage (`getHours()`, `new Date('2026-10-28T09:15:00')`): under `Refuse` (default) it is refused and the message names both fixes (`SourceTimeZone` with the Elsa 3 server's IANA zone, `AssumeUtc`); under `AssumeUtc` it converts, evaluates in UTC and carries a behaviour warning; under `SourceTimeZone` = `Europe/Amsterdam` it evaluates as Elsa 3 did on a server in that zone (winter and summer dates), with no warning.
+12b. A non-literal parse (`new Date(input)`) behaves as zone-dependent usage under each value; `new Date('2026-10-28')` converts under every value.
+12f. The date interpretation is recorded on each converted workflow and in its conversion contract; one setting covers scripts and date literals.
 12c. `variables.due.getTime()` and `variables.due < new Date()` with `due: DateTime` in Elsa 3 convert and equal Elsa 3 (FR-032).
 12d. `n.toLocaleString()`, `a.localeCompare(b)` and `new Intl.NumberFormat()` without a locale are refused; with `'nl-NL'` they convert (FR-033).
 12e. `toLocaleString()` on a number is not treated as zone-dependent; `toString()` on a `Date` is.
 13. The GUID functions and `parseGuid` convert without refusal; `'id-' + newGuid()`, `newGuid().toString()` and `toJson(newGuid())` (as `JSON.stringify(newGuid())`) convert.
 14. `stringToBase64`/`stringFromBase64` convert without refusal; `toJson(x)` is rewritten to `JSON.stringify(x)` with a behaviour warning that quotes it and names the differences.
-15. **SC-001 measure**: 100% of the available corpus workflows whose JS uses only faithful functions and zone-independent `Date` usage convert without refusal; with a source time zone set, also those with zone-dependent usage. **SC-007**: none with zone-dependent usage converts without a source time zone.
+15. **SC-001 measure**: 100% of the available corpus workflows whose JS uses only faithful functions and zone-independent `Date` usage convert without refusal; under `AssumeUtc` or `SourceTimeZone`, also those with zone-dependent usage. **SC-007**: under `Refuse`, none with zone-dependent usage converts.
 
 ## D. Conversion — refused (with guidance)
 

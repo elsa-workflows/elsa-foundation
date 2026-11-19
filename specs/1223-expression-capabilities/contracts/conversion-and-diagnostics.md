@@ -14,24 +14,23 @@ The converter MUST convert these without refusal and preserve behaviour:
 
 These flip the current refusals: the rewriter's nondeterministic-call path is removed for `Math.random`/`Date.now` (it keeps `crypto.randomUUID`), the `Date` global leaves the refused globals, and the GUID/Base64/`parseGuid` names move out of `RefusedHostFunctions` and `toJson` gets the rewrite. Guidance texts that say "no clock" or "no random" are reworded.
 
-## D1a — `Date` and the source time zone
+## D1a — `Date` and the date interpretation
 
-The source time zone is the Elsa 3 converter option of ADR 0046 *Dates*, recorded on the converted workflow and in the published conversion contract. The assume-UTC policy is the source time zone `UTC`.
+The date interpretation is the Elsa 3 converter setting of FR-034 (ADR 0046 *Dates*), recorded on the converted workflow and in the published conversion contract: `Refuse` (default), `AssumeUtc`, or `SourceTimeZone` with an IANA ID. One setting covers scripts and date literals.
 
-| Usage | No source time zone | Source time zone set |
-|---|---|---|
-| `Date.now()`, `new Date()` as an instant, `getTime()`/`valueOf()`, epoch arithmetic, `new Date(number)`, `Date.UTC(...)`, `toISOString()`/`toJSON()`, `getUTC*`/`setUTC*`, parse of a literal with `Z` or an offset; parse of a date-only literal (`new Date('2026-10-28')`, UTC in ECMAScript); a date-typed Elsa 3 value rewritten to a `Date` (FR-032) used as an instant | Convert | Convert |
-| `getHours()`, `getDate()`, `getDay()`, `getMonth()`, `getFullYear()`, `getTimezoneOffset()`, local setters; `toString()`, `toDateString()`, `toTimeString()` on a receiver known to be a `Date`; `new Date(y, m, d, ...)`; parse of a date-time literal without an offset (`new Date('2026-10-28T09:15:00')`, `Date.parse('2026-10-28T09:15:00')`) | **Refuse** (quotes the expression; guidance: set the source time zone, or use UTC methods or an explicit offset) | Convert; the expression evaluates with the source zone as its local time zone |
-| Parse of a non-literal string (`new Date(input)`, `Date.parse(input)`) | **Refuse** (quotes the expression; same guidance) | Convert |
-| `toLocaleString()`, `toLocaleDateString()`, `toLocaleTimeString()`, `localeCompare`, `Intl` constructors **without** an explicit locale (FR-033) | **Refuse** (guidance: pass an explicit locale) | **Refuse** (same) |
+| Usage | `Refuse` (default) | `AssumeUtc` | `SourceTimeZone` |
+|---|---|---|---|
+| `Date.now()`, `new Date()` as an instant, `getTime()`/`valueOf()`, epoch arithmetic, `new Date(number)`, `Date.UTC(...)`, `toISOString()`/`toJSON()`, `getUTC*`/`setUTC*`, parse of a literal with `Z` or an offset; parse of a date-only literal (`new Date('2026-10-28')`, UTC in ECMAScript); a date-typed Elsa 3 value rewritten to a `Date` (FR-032) used as an instant | Convert | Convert | Convert |
+| `getHours()`, `getDate()`, `getDay()`, `getMonth()`, `getFullYear()`, `getTimezoneOffset()`, local setters; `toString()`, `toDateString()`, `toTimeString()` on a receiver known to be a `Date`; `new Date(y, m, d, ...)`; parse of a date-time literal without an offset (`new Date('2026-10-28T09:15:00')`, `Date.parse('2026-10-28T09:15:00')`); parse of a non-literal string (`new Date(input)`, `Date.parse(input)`) | **Refuse**: quotes the expression; guidance: set `SourceTimeZone` to the Elsa 3 server's IANA zone (for example `Europe/Amsterdam`), or set `AssumeUtc` to accept UTC, or rewrite with UTC methods or an explicit offset | Convert, evaluate in UTC, **behaviour warning** quoting the expression (differs from Elsa 3 if its server was not on UTC) | Convert; evaluate with the zone as local time zone; no warning |
+| `toLocaleString()`, `toLocaleDateString()`, `toLocaleTimeString()`, `localeCompare`, `Intl` constructors **without** an explicit locale (FR-033) | **Refuse** (guidance: pass an explicit locale) | **Refuse** (same) | **Refuse** (same) |
 
 Date-only method names (`getHours` ...) are recognised by name; the generic names (`toString`, `valueOf`) only on a receiver known to be a `Date` (`new Date(...)`, a `Date`-returning call, a rewritten date value, or a `const`/`let` alias). A `Date` reached indirectly is not classified (gap).
 
 **Date-typed Elsa 3 values (FR-032)**: each direct read of a variable, input or activity output whose Elsa 3 type was `DateTime`/`DateTimeOffset` is rewritten to a `Date` of the same instant, `null` kept (`v == null ? v : new Date(v)`), because Elsa 3 handed such values to scripts as a `Date` and Elsa 4 hands over ISO text.
 
-The source time zone travels with the converted expression as part of its published form (an evaluator option today rejected by `JintPortableJavaScriptEvaluator`; S-1 adds it, and it enters the executable hash).
+Under `SourceTimeZone` the zone travels with the converted expression as part of its published form (an evaluator option today rejected by `JintPortableJavaScriptEvaluator`; S-1 adds it, and it enters the executable hash).
 
-**Contract tests**: `new Date('2026-10-28T09:15:00').getHours()` and `new Date(input)` refused without a zone; `new Date('2026-10-28')` converts without one; `variables.due.getTime()` with `due: DateTime` converts and equals Elsa 3; `n.toLocaleString()` refused, `n.toLocaleString('nl-NL')` converts; with `Europe/Amsterdam` it converts and returns `9`, and `new Date(Date.UTC(2026, 9, 28, 8, 15)).getHours()` returns `9` (CET); in July the summer offset applies; `Date.now()` and `new Date().toISOString()` convert in both cases.
+**Contract tests**: under `Refuse`, `new Date('2026-10-28T09:15:00').getHours()` and `new Date(input)` are refused and the message names `SourceTimeZone` and `AssumeUtc`; under `AssumeUtc` both convert with a behaviour warning and `getHours()` returns `9`; `new Date('2026-10-28')` converts under every value; `variables.due.getTime()` with `due: DateTime` converts and equals Elsa 3; `n.toLocaleString()` refused, `n.toLocaleString('nl-NL')` converts; under `SourceTimeZone` = `Europe/Amsterdam` it converts and returns `9`, and `new Date(Date.UTC(2026, 9, 28, 8, 15)).getHours()` returns `9` (CET); in July the summer offset applies; `Date.now()` and `new Date().toISOString()` convert under every value.
 
 ## D2 — Refused conversions (must refuse with guidance)
 

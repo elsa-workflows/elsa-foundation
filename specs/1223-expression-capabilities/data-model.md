@@ -104,7 +104,9 @@ At conversion, .NET globals already in the converter's `ElsaThreeGlobals` refusa
 | Publish | `Scripts/DotNetMemberUsage` | Error | Same message and guidance |
 | Publish | `Scripts/ReservedName` (extended to all read roots) | Error | Names the read root the script declares |
 | Publish | `Scripts/ShadowedFunction` | Warning | Names the built-in or namespace root the script declares |
-| Conversion | existing date refusal and a locale refusal | Error | Zone-dependent or non-literal date usage without a source time zone; locale-dependent call without an explicit locale |
+| Conversion | existing date refusal | Error | Zone-dependent or non-literal date usage under `Refuse`; the guidance names `SourceTimeZone` (the Elsa 3 server's IANA zone) and `AssumeUtc` |
+| Conversion | behaviour warning | Warning | Zone-dependent or non-literal date usage under `AssumeUtc` |
+| Conversion | locale refusal | Error | Locale-dependent call without an explicit locale |
 | Startup | — | Failure | Duplicate or reserved host-function name |
 | Run time | — | Warning (log) | Number argument with loss information to a host function (V9) |
 
@@ -112,13 +114,15 @@ No JS source line/column (OQ-2 follow-up); the quoted snippet is the locator.
 
 ## 5. Elsa 3 → Elsa 4 conversion disposition
 
+**Date interpretation (FR-034)**: one Elsa 3 converter setting, recorded on each converted workflow — `Refuse` (default), `AssumeUtc` (warning per affected expression), `SourceTimeZone` + IANA ID. It covers scripts and date literals.
+
 Updates the conversion table in `Extensions/Elsa3/src/Mapping/README.md`.
 
 | Elsa 3 construct | Current | S-1 disposition |
 |---|---|---|
 | Zone-independent `Date` usage (`Date.now()`, `getTime()`, `toISOString()`, epoch arithmetic, UTC methods, parse with offset) | Refused | **Faithful** (native `Date`, clock-backed) |
-| Zone-dependent `Date` usage (local getters/setters, local formatting, local multi-argument constructor, offset-less literal parse) | Refused | **Faithful with a source time zone** (evaluated in that zone); refused without one |
-| `Date` string parse of a non-literal | Refused | Faithful with a source time zone; refused without one |
+| Zone-dependent `Date` usage (local getters/setters, local formatting, local multi-argument constructor, offset-less literal parse) | Refused | `Refuse` (default): refused with guidance; `AssumeUtc`: converted in UTC with a warning; `SourceTimeZone`: **faithful** in that zone |
+| `Date` string parse of a non-literal | Refused | As zone-dependent usage (refused / UTC with warning / faithful in the zone) |
 | Date-only literal parse (`new Date('2026-10-28')`) | Refused | **Faithful** (UTC in ECMAScript) |
 | Read of a `DateTime`/`DateTimeOffset` variable, input or output | Value converts as ISO text | **Rewritten to a `Date`** (FR-032) |
 | `toLocale*String()`, `localeCompare`, `Intl` constructors without a locale | Refused (`Date`) or converted silently | **Refused** (culture differs, FR-033); faithful with an explicit locale |

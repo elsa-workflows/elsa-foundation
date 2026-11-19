@@ -51,11 +51,12 @@
 **Independent test**: quickstart C, D.
 
 - [ ] T020 [US2] In `Elsa3ExpressionRewriter.cs`, remove `Math.random`/`Date.now` from `IsNondeterministicCall` (keep `crypto.randomUUID`), take `Date` out of the refused globals, move the GUID family, `parseGuid` and the Base64 pair out of `RefusedHostFunctions`, rewrite `toJson(x)` to `JSON.stringify(x)` with a quoted behaviour warning naming the differences (FR-009), and reword `TimeGuidance`/`UniqueValueGuidance` (FR-014, FR-015).
-- [ ] T021 [US2] Classify `Date` usage (contract D1a): zone-independent converts; zone-dependent converts only with the source time zone (assume-UTC = `UTC`) and is otherwise refused with a quoted diagnostic; a non-literal parse is refused without a zone; generic method names count only on a known `Date` receiver (FR-021, FR-022, FR-024).
+- [ ] T021 [US2] Classify `Date` usage (contract D1a): zone-independent converts; zone-dependent usage and non-literal parses follow the date interpretation — refused under `Refuse` with guidance naming `SourceTimeZone` and `AssumeUtc`, converted with a behaviour warning under `AssumeUtc`, converted under `SourceTimeZone`; generic method names count only on a known `Date` receiver (FR-021, FR-022, FR-024).
 - [ ] T042 [US2] Rewrite each direct read of a `DateTime`/`DateTimeOffset`-typed Elsa 3 variable, input or activity output to `v == null ? v : new Date(v)` and mark it a known `Date` (FR-032).
 - [ ] T043 [US2] Refuse locale-dependent calls without an explicit locale (`toLocale*String`, `localeCompare`, `Intl` constructors) with a quoted diagnostic (FR-033).
-- [ ] T022 [US2] Carry the source time zone into the converted expression as an evaluator option; accept that option in `JintPortableJavaScriptEvaluator` (it rejects all options today) and apply it as Jint `Options.TimeZone`; the option enters the executable hash (FR-023).
-- [ ] T023 [P] [US2] xUnit for D1a: refusal without a zone; `Europe/Amsterdam` winter and summer equal Elsa 3; `UTC`; zone-independent usage in both modes; non-literal parse refusal; date-only literal; date-typed value rewrite; locale refusal — quickstart C12–C12e, SC-007.
+- [ ] T044 [US2] Add the date interpretation setting to the Elsa 3 converter feature (`Refuse` default, `AssumeUtc`, `SourceTimeZone` + IANA ID), record it on each converted workflow and in its conversion contract, and use it for date literals as well (FR-034).
+- [ ] T022 [US2] Under `SourceTimeZone`, carry the zone into the converted expression as an evaluator option; accept that option in `JintPortableJavaScriptEvaluator` (it rejects all options today) and apply it as Jint `Options.TimeZone`; the option enters the executable hash (FR-023).
+- [ ] T023 [P] [US2] xUnit for D1a: `Refuse` refusal and its guidance text; `AssumeUtc` conversion with warning; `SourceTimeZone` = `Europe/Amsterdam` winter and summer equal Elsa 3; zone-independent usage under every value; non-literal parse per value; date-only literal; date-typed value rewrite; locale refusal — quickstart C12–C12f, SC-007.
 - [ ] T024 [P] [US2] xUnit conversion tests (faithful): `new Date()`, `Date.now()`, `Math.random()`, GUID family, `parseGuid`, Base64 pair and GUIDs used as text convert; `toJson` is rewritten with the warning; `isNullOrEmpty`/`isNullOrWhiteSpace` still inline (FR-010) — quickstart C13, C14, SC-008.
 - [ ] T025 [P] [US2] xUnit conversion tests (refused): bytes/streams, `getConfig`/`getConfiguration`, `crypto.randomUUID`; `Guid`/`DateTime`/`Random` keep `VF-IMP-005` with the new guidance (FR-013, FR-015) — quickstart D16, D17.
 - [ ] T026 [US2] SC-001 coverage check against the available corpus — quickstart C15.
@@ -91,7 +92,7 @@
 - **Setup (T001)** and **Foundational (T002–T005)** block everything; T003 follows T002.
 - **US1 (T006–T012)** depends on Foundational; T008 depends on T005.
 - **US4 (T013–T019)** depends on T008.
-- **US2 (T020–T028, T042, T043)** depends on US1 and T013 (the converter resolves to registered built-ins).
+- **US2 (T020–T028, T042–T044)** depends on US1 and T013 (the converter resolves to registered built-ins).
 - **US3 (T029–T037)** depends on Foundational; its converter task T031 shares `Elsa3ExpressionRewriter.cs` with US2 — run T020–T022 before T031.
 - **Polish (T038–T041)** after the stories.
 
