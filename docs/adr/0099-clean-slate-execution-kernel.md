@@ -68,7 +68,7 @@ this foundation's layer 2, was retired on 19 November for that reason.
 
 *Owner decision 1 of 19 November ([the foundation contract](../architecture/foundation-contract.md#owner-decisions-19-november)),
 approved with conditions by the independent architecture review on 19 November at `2825b0ed1` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)):
-the paragraph below is the earlier approved text of 18 November; under the proposed contract `SendOptions.DueAt` becomes the `dueAt`
+the paragraph below is the earlier approved text of 18 November; under the approved contract `SendOptions.DueAt` becomes the `dueAt`
 argument of `Send`, `JobSpec` is `(Key, Arguments)` with the effect key inside the arguments, `TurnAsync(ITurn)` and
 `ExecuteJobAsync(IJob)` stay, and `RestoreWaits` returns `TimerSpec`, `JobSpec` and `SubscriptionSpec`.*
 
