@@ -66,8 +66,9 @@ this foundation's layer 2, was retired on 19 November for that reason.
 
 ### 2. The turn contract
 
-*Proposed on 19 November (owner question 1 of [the foundation contract](../architecture/foundation-contract.md)):
-the paragraph below is the approved text; under the proposed contract `SendOptions.DueAt` becomes the `dueAt`
+*Owner decision 1 of 19 November ([the foundation contract](../architecture/foundation-contract.md#owner-decisions-19-november)),
+proposed only until the independent architecture review approves the contract: the paragraph below is the approved
+text of 18 November; under the proposed contract `SendOptions.DueAt` becomes the `dueAt`
 argument of `Send`, `JobSpec` is `(Key, Arguments)` with the effect key inside the arguments, `TurnAsync(ITurn)` and
 `ExecuteJobAsync(IJob)` stay, and `RestoreWaits` returns `TimerSpec`, `JobSpec` and `SubscriptionSpec`.*
 
@@ -90,9 +91,9 @@ coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fo
 
 ### 3. The foundation contract
 
-*Proposed on 19 November 2026 under the owner's cards of that day (owner question 1 of
-[the foundation contract](../architecture/foundation-contract.md)). The approved wording of 18 November, at `addffea7c`,
-stands until the owner approves it:*
+*The owner's wording of 19 November (decision 1 of [the foundation contract](../architecture/foundation-contract.md#owner-decisions-19-november)),
+proposed only until the independent architecture review approves the contract. The approved wording of 18 November, at
+`addffea7c`, is kept for comparison:*
 
 > **Four logical seams.** Layer 2 offers four logical seams: **commit** (append a fenced batch), **ownership** (take,
 > renew, lose authority), **delivery** (route a message identity, deduplicate, keep one sender's order) and **read
@@ -104,7 +105,7 @@ stands until the owner approves it:*
 Layer 3 sees a foundation through one contract in plain domain words: the **actor turn** (what an actor type receives
 and returns: its inbox, state, sends, timers, jobs, events, subscriptions, children, journal entries and live output,
 all landing in one atomic outcome), **ingress** (an outside add, request, publish or start subscription under a bound
-scope, addressed to a ref, a caller key, an event key or a start spec) and **read models** (every non-owner query, with
+scope, addressed to a ref, a caller key, an event key, which makes it the outside publish, or a start spec) and **read models** (every non-owner query, with
 opaque handles, selections and page tokens). A foundation implements all of it as one unit and supplies the guarantees
 itself: single-writer turns, the atomic outcome, at-least-once delivery deduplicated per sender, target and id in one
 sender's order, durable timers as messages, jobs that run at least once with a result applied once, events matched to
@@ -170,8 +171,8 @@ once; deduplication is the receiver's
 
 ### 8. Layer 3 is host-neutral
 
-*Proposed wording of 19 November (owner question 1 of the contract page). The approved wording of 18 November stands
-until the owner approves it:*
+*The owner's wording of 19 November (decision 1 of the contract page), proposed only until the independent
+architecture review approves the contract. The approved wording of 18 November is kept for comparison:*
 
 > Execution models, activities, Studio and the operator APIs depend only on the turn contract, the four seams and read
 > models. They never see partitions, positions, epochs or SQL. Release 1 ships a contracts package that layer 3 builds
@@ -180,9 +181,11 @@ until the owner approves it:*
 Actor types, execution models, activities, Studio and the operator APIs depend only on the foundation contract of
 section 3 and on the model contract layer 3 builds on its actor turn. They never see partitions, positions, epochs,
 fences, leases, node records or SQL, and they store refs, handles, selections and page tokens as opaque strings.
-Release 1 ships the contracts package that layer 3 builds against, with an architecture guard, and layers 1 and 2 as
-the built-in foundation's own packages behind it; a future foundation adapter supplies the same contract and passes
-the same conformance cases.
+Release 1 ships two contracts packages (owner, 19 November; names provisional): the foundation contract, which a
+foundation adapter builds against, and the model contract, which an execution model builds against, with an
+architecture guard, and layers 1 and 2 as the built-in foundation's own packages behind them; a future foundation
+adapter supplies the same contract and passes the same conformance cases plus a contract-level run of the
+simulation's workloads.
 
 ### 9. Replace whole layers and edges, never pieces of the commit
 
@@ -192,8 +195,8 @@ inserts), egress through jobs or an outbox with the effect key, the wake notifie
 is the inbox and no scheduler library is the timer engine
 ([sketch, extensibility boundary](../reports/clean-slate-kernel/design-sketch-draft-5.md#extensibility-boundary-owner-principle-15-november)).
 
-*Proposed reading of 19 November under the card that retired the Orleans adapter (owner question 1 of the contract
-page); the paragraph above is the approved text.* Timers, messages, events and subscriptions stay inside the
+*The owner's reading of 19 November (decision 1 of the contract page), proposed only until the independent
+architecture review approves the contract; the paragraph above is the approved text.* Timers, messages, events and subscriptions stay inside the
 foundation's atomic commit, which in the built-in foundation is the fenced commit. Replaceable behind the contract: a
 foundation as a whole, execution models and actor types, ingress adapters on the contract's ingress, and egress
 through jobs or an outbox with the effect key. Storage as a whole unit, the actor runtime, the wake notifier and a test
