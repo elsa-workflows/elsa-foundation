@@ -67,8 +67,8 @@ this foundation's layer 2, was retired on 19 November for that reason.
 ### 2. The turn contract
 
 *Owner decision 1 of 19 November ([the foundation contract](../architecture/foundation-contract.md#owner-decisions-19-november)),
-proposed only until the independent architecture review approves the contract: the paragraph below is the approved
-text of 18 November; under the proposed contract `SendOptions.DueAt` becomes the `dueAt`
+approved with conditions by the independent architecture review on 19 November at `2825b0ed1` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)):
+the paragraph below is the earlier approved text of 18 November; under the approved contract `SendOptions.DueAt` becomes the `dueAt`
 argument of `Send`, `JobSpec` is `(Key, Arguments)` with the effect key inside the arguments, `TurnAsync(ITurn)` and
 `ExecuteJobAsync(IJob)` stay, and `RestoreWaits` returns `TimerSpec`, `JobSpec` and `SubscriptionSpec`.*
 
@@ -92,7 +92,9 @@ coordinator design choice, [register](../architecture/decisions.md#the-gate-2-fo
 ### 3. The foundation contract
 
 *The owner's wording of 19 November (decision 1 of [the foundation contract](../architecture/foundation-contract.md#owner-decisions-19-november)),
-proposed only until the independent architecture review approves the contract. The approved wording of 18 November, at
+approved with conditions by the independent architecture review on 19 November at `2825b0ed1`
+([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998); the review ran on Claude Fable at the owner's choice, with 0 Blockers, 0 Majors, 8 Minors and
+4 Conditions, FC-C1 to FC-C4, in the plan's gate 2 conditions). The earlier approved wording of 18 November, at
 `addffea7c`, is kept for comparison:*
 
 > **Four logical seams.** Layer 2 offers four logical seams: **commit** (append a fenced batch), **ownership** (take,
@@ -142,7 +144,7 @@ SQL Server, SQLite and MySQL, with the fence in the batch; EF Core keeps the sch
 ([ownership and fencing](../architecture/ownership-and-fencing.md),
 [PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md), [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)).
 
-**Tenant identity in the built-in foundation** (the owner's tenancy decisions of 17 November, moved here from section 3 on 19 November, wording unchanged; [tenancy](../architecture/tenancy.md)). Every ingress takes the tenant only
+**Tenant identity in the built-in foundation** (the owner's tenancy decisions of 17 November, moved here from section 3 on 19 November with the foundation contract, which the independent review approved with conditions the same day, wording unchanged; [tenancy](../architecture/tenancy.md)). Every ingress takes the tenant only
 from a `BoundScope`, the bound persistence scope of ADR 0097's binder, and refuses a request without one. Every name a
 caller chooses is stored tenant-qualified, `Q(t, n)`, under a canonical tenant-id grammar, so store-wide deduplication,
 event matching and the effect key never cross tenants; every tenant-keyed record also carries a `tenant` column that
@@ -171,8 +173,9 @@ once; deduplication is the receiver's
 
 ### 8. Layer 3 is host-neutral
 
-*The owner's wording of 19 November (decision 1 of the contract page), proposed only until the independent
-architecture review approves the contract. The approved wording of 18 November is kept for comparison:*
+*The owner's wording of 19 November (decision 1 of the contract page), approved with conditions by the
+independent architecture review on 19 November at `2825b0ed1` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)). The earlier approved wording of
+18 November is kept for comparison:*
 
 > Execution models, activities, Studio and the operator APIs depend only on the turn contract, the four seams and read
 > models. They never see partitions, positions, epochs or SQL. Release 1 ships a contracts package that layer 3 builds
@@ -195,8 +198,9 @@ inserts), egress through jobs or an outbox with the effect key, the wake notifie
 is the inbox and no scheduler library is the timer engine
 ([sketch, extensibility boundary](../reports/clean-slate-kernel/design-sketch-draft-5.md#extensibility-boundary-owner-principle-15-november)).
 
-*The owner's reading of 19 November (decision 1 of the contract page), proposed only until the independent
-architecture review approves the contract; the paragraph above is the approved text.* Timers, messages, events and subscriptions stay inside the
+*The owner's reading of 19 November (decision 1 of the contract page), approved with conditions by the
+independent architecture review on 19 November at `2825b0ed1` ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)); the paragraph above is the earlier
+approved text.* Timers, messages, events and subscriptions stay inside the
 foundation's atomic commit, which in the built-in foundation is the fenced commit. Replaceable behind the contract: a
 foundation as a whole, execution models and actor types, ingress adapters on the contract's ingress, and egress
 through jobs or an outbox with the effect key. Storage as a whole unit, the actor runtime, the wake notifier and a test
