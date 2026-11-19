@@ -157,7 +157,14 @@ internal static class OwnedSetChecks
         var b = await c.S.TakeAsync([0, 1, 2, 4, 7], "b", Context.Long);
         Context.Equal("0 2 7", string.Join(" ", Ids(b)), "b's take leaves out a's partitions");
 
-        foreach (var (id, p) in new[] { ("m6", 6), ("m2", 2), ("m1", 1), ("m4", 4), ("n1", 1) }) await c.S.AddAsync(Make.M(id, p));
+        // A set poll merges its partitions in the store's sequence. Mongo's comes from each partition's clock in
+        // milliseconds (MONGO.md), so two adds to two partitions in one millisecond tie and may come in either order; the
+        // contract orders across partitions only to the store's tick, so these adds are a few milliseconds apart.
+        foreach (var (id, p) in new[] { ("m6", 6), ("m2", 2), ("m1", 1), ("m4", 4), ("n1", 1) })
+        {
+            await c.S.AddAsync(Make.M(id, p));
+            await Task.Delay(3);
+        }
         var polled = await c.S.PollAsync(a.Taken, TimeSpan.Zero, 100);
         // Each row is compared with its own partition's epoch: p1, seen at 1's earlier epoch, is due again.
         Context.Equal("p1 m6 m1 m4 n1", string.Join(" ", polled.Messages.Select(m => m.Message.Id)), "one poll over a's set, in seq order");

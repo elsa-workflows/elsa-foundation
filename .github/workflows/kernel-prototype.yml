@@ -82,11 +82,14 @@ jobs:
             dotnet build "$p" -c Release --no-restore
           done
 
+      # K1 slice 7: the worlds run at both virtual-partition counts (--count; 1,024 is the default).
       - name: Simulation, kernel and native, plus the lease witness
         run: |
           SIM="dotnet sim/$BIN/Kernel.Sim.dll"
           $SIM --seeds 10000
+          $SIM --seeds 10000 --count 4096
           $SIM --native --seeds 10000
+          $SIM --native --seeds 10000 --count 4096
           $SIM --lease-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
@@ -155,10 +158,12 @@ jobs:
       - name: Simulation, full sizes
         run: |
           SIM="dotnet sim/$BIN/Kernel.Sim.dll"
-          $SIM --seeds 200000
-          $SIM --seeds 20000 --actions 1000
-          $SIM --native --seeds 200000
-          $SIM --native --seeds 20000 --actions 1000
+          for count in 1024 4096; do
+            $SIM --seeds 200000 --count $count
+            $SIM --seeds 20000 --actions 1000 --count $count
+            $SIM --native --seeds 200000 --count $count
+            $SIM --native --seeds 20000 --actions 1000 --count $count
+          done
           $SIM --lease-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
@@ -189,8 +194,10 @@ jobs:
           RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
           ORC="dotnet runtime/Kernel.Runtime.Orleans.Conformance/$BIN/Kernel.Runtime.Orleans.Conformance.dll"
           $RTC semantic
+          $RTC semantic --partitions 1024
           $RTC stress 20 2000
           $ORC semantic
+          $ORC semantic --partitions 1024
           $ORC stress 20 2000
 
       # The -broken forms break the store's fence on purpose; the runner decides whether the runtime failed as it must.
