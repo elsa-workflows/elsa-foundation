@@ -73,6 +73,7 @@ public sealed class MongoProvider(string connection, MongoStoreOptions options) 
 
         public override IKernelStore Store => store;
         public override ICostCounter? Counter => counter;
+        public override Func<int, Task>? Reopen => partitions => new MongoStore(provider._admin.Value, database).CreateAsync(partitions);
 
         public override IKernelStore NewClient() => new MongoStore(provider._outside.Value[Interlocked.Increment(ref _next) % 2], database);
 

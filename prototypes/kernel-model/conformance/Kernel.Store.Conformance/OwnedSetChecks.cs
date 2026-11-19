@@ -15,6 +15,7 @@ internal static class OwnedSetChecks
     [
         new("owned sets: a one-element set is today's one-partition take, poll, commit and release", Level.Required, OneElement),
         new("owned sets: one stale fence rolls the whole flush back; the kept partitions have no hole and no stranded mark", Level.Required, PartialStaleness, Partitions),
+        new("owned sets: a database created at 64 partitions refuses to open at 1,024, and opens at 64", Level.Required, ReopenAtAnotherCount, 64),
         new("owned sets: a release of a subset leaves the kept rows untouched", Level.Required, SubsetRelease, Partitions),
         new("owned sets: a take of a scattered set, and one poll over it", Level.Required, ScatteredTake, Partitions),
         new("owned sets: the k-row fence locks in ascending partition id", Level.Required, LockOrder, Partitions),
@@ -107,6 +108,29 @@ internal static class OwnedSetChecks
         }
         Context.Equal(1L, (await c.S.ProjectedAsync(3)).Written, "position of partition 3 after b's commit");
         Context.Equal(b!.Epoch, (await c.Row(3, "s3"))!.Seen, "seen mark in partition 3 at b's epoch");
+    }
+
+    /// <summary>
+    /// The count is fixed when the database is created (K1 slice 7). A database of 64 partitions opened at the default
+    /// 1,024 would address partitions 64 to 1,023, which have no row, so it is refused, definitely, naming both counts.
+    /// Nothing is migrated: no data exists before release, so a database is recreated.
+    /// </summary>
+    private static async Task ReopenAtAnotherCount(Context c)
+    {
+        if (c.Provided.Reopen is not { } reopen) throw new SkipException("the store has no database to reopen");
+        await c.S.AddAsync(Make.M("kept", 63));
+        try
+        {
+            await reopen(VirtualPartitions.Small);
+            throw new ConformanceException("a database of 64 partitions opened at 1,024");
+        }
+        catch (StoreException e)
+        {
+            Context.Equal(Failure.Definite, e.Failure, "the failure of an open at another count");
+            Context.That(e.Message.Contains("64") && e.Message.Contains("1024"), $"the refusal does not name both counts: {e.Message}");
+        }
+        await reopen(64);
+        Context.Equal("kept", string.Join(" ", (await c.S.PollAsync(63, (await c.Take(63)).Epoch, TimeSpan.Zero, 10)).Messages.Select(m => m.Message.Id)), "partition 63 after the open at 64");
     }
 
     private static async Task SubsetRelease(Context c)

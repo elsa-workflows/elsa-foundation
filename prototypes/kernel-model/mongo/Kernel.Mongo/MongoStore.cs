@@ -77,6 +77,10 @@ public sealed class MongoStore : IKernelStore
         await _journal.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "instance", 1 } }));
         await _events.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument("key", 1)));
         await _journal.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "position", 1 } }, new CreateIndexOptions { Unique = true }));
+        // The count is fixed when the database is created (K1 slice 7): another count would address partitions with no
+        // document, or leave some unserved. Nothing is migrated: recreate the database.
+        if (await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty) is var rows and > 0 && rows != partitions)
+            throw new StoreException(Failure.Definite, $"The database has {rows} partitions and was opened with {partitions}. The count is fixed at creation: recreate the database.");
         for (var p = 0; p < partitions; p++)
         {
             await _partitions.UpdateOneAsync(new BsonDocument("_id", p), new BsonDocument("$setOnInsert", new BsonDocument
