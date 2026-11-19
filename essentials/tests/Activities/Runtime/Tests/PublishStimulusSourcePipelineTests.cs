@@ -5,9 +5,11 @@ using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Activities.Primitives;
@@ -51,6 +53,86 @@ public sealed class PublishStimulusSourcePipelineTests
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, actual.Status);
         Assert.NotNull(await harness.Bookmarks.FindAsync("existing", "wait"));
         Assert.Equal(0, harness.Lookup.Reads); Assert.Empty(harness.Actors.Attempts);
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task Prior_protocol_quiescence_retains_stamped_logical_sources_and_preserves_legacy_reissue(bool capturedInputs, bool mixed)
+    {
+        // Controlled prior contribution and source-input policy: real producer/committer/coalescer/native memory,
+        // no history writer/events/handler. Current subscription publication is a separate mandatory boundary below.
+        var inputs = new PublicationInputs(capturedInputs);
+        await using var harness = new Harness(coalescing: true, historySource: inputs, priorPublicationProtocol: true);
+        await harness.SeedMaterial();
+        var (original, flush) = await harness.FlushOwnerInputs(mixed);
+        var rows = flush.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
+        Assert.Equal(mixed ? 2 : 1, rows.Length);
+        if (capturedInputs)
+        {
+            Assert.Empty(flush.PostCommitIntents);
+            var retained = Assert.Single(rows, item => item.Intent.Kind == PublishStimulusConstants.PublishStimulusIntentKind);
+            Assert.Equal(original.OutboxItemId, retained.OutboxItemId);
+            Assert.Equal(original.Intent.HistoryCausation, retained.Intent.HistoryCausation);
+            Assert.Equal(retained.OutboxItemId, retained.Intent.HistoryCausation!.DeliveryId);
+            Assert.Equal(Scope, retained.StimulusDeliverySourceScope);
+            Assert.Equal(1, inputs.Calls); // Physical flush must not revisit the logical producer.
+            if (mixed) Assert.Contains(rows, item => item.OutboxItemId == "source-inputs:legacy");
+        }
+        else
+        {
+            Assert.Equal(rows.Length, flush.PostCommitIntents.Count);
+            Assert.Null(await harness.Store.FindDurableAsync(original.OutboxItemId));
+            Assert.All(rows, item =>
+            {
+                Assert.Equal(RuntimePostCommitOutboxItems.OutboxItemId(flush.CommitId, item.Intent), item.OutboxItemId);
+                Assert.Null(item.Intent.HistoryCausation);
+            });
+        }
+        RuntimeCheckpointCommitValidator.Validate(flush);
+        Assert.Empty(harness.Actors.Attempts);
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task Current_subscription_publication_is_durable_before_quiescence_with_original_source_identity(bool capturedInputs, bool mixed)
+    {
+        var inputs = new PublicationInputs(capturedInputs);
+        await using var harness = new Harness(coalescing: true, historySource: inputs);
+        await harness.SeedMaterial();
+        var (original, commit) = await harness.FlushOwnerInputs(mixed, physicalBoundary: true);
+        Assert.Equal("source-inputs", commit.CommitId);
+        Assert.Equal(RuntimeSubscriptionDelivery.CurrentVersion, original.SubscriptionDeliveryProtocolVersion);
+        var rows = commit.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
+        Assert.Equal(mixed ? 2 : 1, rows.Length);
+        Assert.All(rows, item => Assert.StartsWith("source-inputs:", item.OutboxItemId));
+        var retained = Assert.Single(rows, item => item.Intent.Kind == PublishStimulusConstants.PublishStimulusIntentKind);
+        Assert.Equal(original.OutboxItemId, retained.OutboxItemId);
+        Assert.Equal(original.Intent.HistoryCausation, retained.Intent.HistoryCausation);
+        if (capturedInputs)
+            Assert.Equal(retained.OutboxItemId, retained.Intent.HistoryCausation!.DeliveryId);
+        else
+            Assert.Null(retained.Intent.HistoryCausation);
+        Assert.Equal(Scope, retained.StimulusDeliverySourceScope);
+        Assert.Equal(1, inputs.Calls);
+        Assert.NotNull(await harness.Store.FindDurableAsync(original.OutboxItemId));
+        RuntimeCheckpointCommitValidator.Validate(commit);
+        Assert.Empty(harness.Actors.Attempts);
+    }
+
+    private sealed class PublicationInputs(bool complete) : IRuntimeHistorySourceExtension
+    {
+        internal int Calls;
+        public ValueTask<RuntimeCheckpointCommit> AddFactsAsync(RuntimeCheckpointCommit commit,
+            Func<RuntimeHistoryCapturePolicy, IEnumerable<RuntimeHistorySourceFact>> factory, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            var kinds = complete ? new[] { "StimulusPublicationCommitted", "StimulusRoutingAttemptObserved", "StimulusRoutingDispositionObserved" }
+                : ["StimulusPublicationCommitted"];
+            var facts = factory(new("runtime-history-v3", 3, true, kinds)).ToArray();
+            return ValueTask.FromResult(facts.Length == 0 ? commit : commit with { HistorySourceFacts = facts });
+        }
     }
 
     [Theory]
@@ -245,12 +327,23 @@ public sealed class PublishStimulusSourcePipelineTests
         public IWorkflowExecutableSourceReferenceStore References => Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
         public InMemoryExecutionLivenessStateStore Ownership => (InMemoryExecutionLivenessStateStore)Services.GetRequiredService<IExecutionLivenessStateStore>();
         public CountingLookup Lookup => Services.GetRequiredService<CountingLookup>();
-        public Harness(bool coalescing = false, string schema = "finalized", bool laterEnricher = false, bool skip = false, string pipeline = "modern")
+        public Harness(bool coalescing = false, string schema = "finalized", bool laterEnricher = false, bool skip = false,
+            string pipeline = "modern", IRuntimeHistorySourceExtension? historySource = null, bool priorPublicationProtocol = false)
         {
             var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(Clock); services.AddSingleton<IPersistenceAccessContextAccessor, Access>();
+            if (historySource is not null) services.AddSingleton(historySource);
             services.AddSingleton<IWorkflowExecutionActorProvider>(Actors);
             if (schema != "missing") services.AddSingleton<ISchemaDormancyCheck>(new SchemaDormancyCheck(observed: schema == "unobserved" ? null : new Observed(schema)));
             new ActivitiesPrimitivesFeature().ConfigureServices(services);
+            if (priorPublicationProtocol)
+            {
+                var descriptor = Assert.Single(services, service => service.ImplementationInstance is RuntimePostCommitIntentHandlerContribution contribution &&
+                    contribution.IntentKind == PublishStimulusConstants.PublishStimulusIntentKind);
+                var current = (RuntimePostCommitIntentHandlerContribution)descriptor.ImplementationInstance!;
+                services.Remove(descriptor);
+                services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(current.IntentKind, current.HandlerType,
+                    current.RetryPolicy, current.RequiresDurableSource, current.StimulusDeliveryProtocolVersion));
+            }
             if (skip) services.AddSingleton<IRuntimeCheckpointPersistencePolicy, SkipPolicy>();
             if (laterEnricher) services.AddSingleton<IRuntimeCheckpointCommitEnricher>(new LateEnricher(() => lateEnvelope));
             services.AddSingleton(new PersistenceModeOptions()); services.AddWorkflowRuntime(); if (coalescing) services.AddPersistenceModes();
@@ -295,6 +388,25 @@ public sealed class PublishStimulusSourcePipelineTests
             }
             CommitResult = await Services.GetRequiredService<RuntimeCheckpointCommitter>().CommitAsync(commit);
             return (await Store.FindAsync(RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, intent)))!;
+        }
+        public async Task<(RuntimePostCommitOutboxItem Original, RuntimeCheckpointCommit Flush)> FlushOwnerInputs(bool mixed, bool physicalBoundary = false)
+        {
+            await using var drain = Services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>()
+                .Begin("publisher", new(PersistenceMode.Balanced, RunHasRecord: true));
+            var publication = new RuntimePostCommitIntent("send", "publisher", PublishStimulusConstants.PublishStimulusIntentKind, Now, "publisher-activity", "key", null);
+            RuntimePostCommitIntent[] intents = mixed ? [publication, new("legacy", "publisher", "other-component-kind", Now, null, "other", null)] : [publication];
+            var commit = new RuntimeCheckpointCommit("source-inputs", new("source-checkpoint", RuntimeCheckpointNames.ActivityCompleted,
+                "publisher", Now, ["publisher-activity"], new Dictionary<string, string>()),
+                new(null, null, [], [], [], [], []), intents, new Dictionary<string, string>());
+            var result = await Services.GetRequiredService<RuntimeCheckpointCommitter>().CommitAsync(commit);
+            Assert.True(result.Succeeded); Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, result.PersistenceDecision.Mode);
+            var original = (await Services.GetRequiredService<IPostCommitOutboxLookupStore>().FindAsync("source-inputs:send"))!;
+            Assert.NotNull(original);
+            if (physicalBoundary) Assert.NotNull(await Store.FindDurableAsync(original.OutboxItemId));
+            else Assert.Null(await Store.FindDurableAsync(original.OutboxItemId));
+            await drain.FlushAtQuiescenceAsync();
+            var flush = Assert.Single(Store.ListCommits()).Commit;
+            return (original, flush);
         }
         public IRuntimePostCommitOutboxProcessor Processor => Services.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
         public async Task<RuntimePostCommitOutboxItem?> Find(string id) => await Store.FindAsync(id);

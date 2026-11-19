@@ -16,8 +16,10 @@ public static class RuntimeHistorySafety
         if (e.Authority != RuntimeHistoryAuthority.DeliveryObservation || e.Category != RuntimeHistoryEventCategory.DeliveryObservation ||
             e.SchemaVersion != 1 || e.Sequence != 0 || e.PhysicalCommitId is not null || e.RecordedAt is not null ||
             e.CheckpointId is not null || e.CheckpointOrdinal is not null ||
-            !DeliveryObservationKinds.Contains(e.Name) || !observation.Policy.SupportedKinds.Contains(e.Name, StringComparer.Ordinal))
+            !(DeliveryObservationKinds.Contains(e.Name) || RuntimeHistorySourceFacts.IsPublicationObservation(e.Name)) ||
+            !observation.Policy.SupportedKinds.Contains(e.Name, StringComparer.Ordinal))
             throw new InvalidOperationException("A delivery observation must be safe, unpositioned and admitted by its retained policy.");
+        if (RuntimeHistorySourceFacts.IsPublicationObservation(e.Name)) RuntimeHistorySourceFacts.ValidatePublicationObservation(observation);
     }
 
     public static void Validate(RuntimeHistoryBatch batch, string workflowExecutionId)
