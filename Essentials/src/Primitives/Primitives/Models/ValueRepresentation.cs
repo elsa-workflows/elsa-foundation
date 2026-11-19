@@ -47,15 +47,11 @@ public static class ValueRepresentationDefaults
         "Elsa.Any",
         "JsonNode",
         "JsonObject",
-        "JsonArray",
-        "JsonValue",
         "JsonElement",
         "JsonElement?",
         "Text.Json.JsonElement",
         "Text.Json.JsonElement?",
         "Text.Json.Nodes.JsonNode",
-        "Text.Json.Nodes.JsonObject",
-        "Text.Json.Nodes.JsonArray",
-        "Text.Json.Nodes.JsonValue"
+        "Text.Json.Nodes.JsonObject"
     };
 }

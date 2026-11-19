@@ -127,8 +127,7 @@ public sealed class ValueConversionPlanResolverTests
     [InlineData("System.Text.Json.JsonElement?", "Boolean")]
     [InlineData("System.Text.Json.JsonElement", "JsonObject")]
     [InlineData("System.Text.Json.JsonElement?", "JsonObject")]
-    [InlineData("System.Text.Json.Nodes.JsonValue", "Boolean")]
-    public void A_json_source_binds_to_a_typed_or_json_object_input_through_the_json_profile(string sourceAlias, string target)
+    public void A_json_element_source_binds_to_a_typed_or_json_object_input_through_the_json_profile(string sourceAlias, string target)
     {
         var typedResolver = new ValueConversionPlanResolver(wellKnownTypeRegistry: TestWellKnownTypeRegistry.Create());
         var source = Type(sourceAlias);
@@ -143,8 +142,7 @@ public sealed class ValueConversionPlanResolverTests
     [Theory]
     [InlineData("System.Text.Json.JsonElement")]
     [InlineData("System.Text.Json.JsonElement?")]
-    [InlineData("System.Text.Json.Nodes.JsonArray")]
-    public void A_json_source_needs_a_registered_typed_target(string sourceAlias)
+    public void A_json_element_source_needs_a_registered_typed_target(string sourceAlias)
     {
         var source = Type(sourceAlias);
 
