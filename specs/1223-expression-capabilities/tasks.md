@@ -24,11 +24,11 @@
 **Goal**: An author gets current time, randomness, new GUIDs and zone conversion in input bindings and scripts with no configuration.
 **Independent test**: quickstart A1–A5a, B6, B7.
 
-- [ ] T006 [US1] Remove `DisableAmbientCapabilities` in `IsolatedJintEngine.cs` and `StrippedAmbientCapabilities` plus the "deterministic binding sandbox" rethrow in `JintPortableJavaScriptEvaluator.cs`, so `Date`, `Intl`, `Temporal` and native `Math.random` are admitted (FR-004, FR-005).
+- [ ] T006 [US1] Remove `DisableAmbientCapabilities` in `IsolatedJintEngine.cs` and `StrippedAmbientCapabilities` plus the "deterministic binding sandbox" rethrow in `JintPortableJavaScriptEvaluator.cs`, so `Date`, `Intl`, `Temporal` and native `Math.random` are admitted (FR-001, FR-004, FR-005).
 - [ ] T007 [US1] Implement a Jint `ITimeSystem` over the host `System.TimeProvider`; set `Options.TimeSystem`, `Options.TimeZone = UTC`, `Options.Culture = Invariant` on engine construction (FR-002).
 - [ ] T008 [US1] Install every registered `JavaScriptHostFunctionDeclaration` in `IsolatedJintEngine` as a non-writable global, as `SetReadOnlyVariables` installs `getVariable`; marshal arguments and results as JSON values (FR-011, FR-029).
 - [ ] T009 [P] [US1] Register the GUID built-ins `newGuid`, `newGuidString`, `getGuidString`, `newShortGuid`, `getShortGuid` and `parseGuid` with `ReadsVariables = false`, `Effectful = false` (FR-006, FR-026; T001 fixtures).
-- [ ] T010 [P] [US1] xUnit: intrinsics restored; clock reads a controlled `TimeProvider` (`Date`, `Temporal.Now`); UTC and invariant formatting; `Math.random` permitted to differ — quickstart A1–A4.
+- [ ] T010 [P] [US1] xUnit: intrinsics restored; clock reads a controlled `TimeProvider` (`Date`, `Temporal.Now`); UTC and invariant formatting; `Math.random` permitted to differ — quickstart A1–A4, SC-003.
 - [ ] T011 [P] [US1] xUnit: GUID built-ins return strings in Elsa 3's forms; `parseGuid` accepted forms and invalid text — quickstart B6, B7.
 - [ ] T012 [P] [US1] xUnit: `Temporal` and `Intl.DateTimeFormat` convert between UTC and `Europe/Amsterdam` in winter and summer; record the result on the host OS used by CI (FR-025) — quickstart A5a.
 
@@ -41,9 +41,9 @@
 - [ ] T014 [US4] Enforce the naming rule at startup: reserved names (`variables`, `args`, the built-ins), namespace prefix for host functions, duplicate detection; failure names the function (FR-027).
 - [ ] T015 [US4] Extend the reserved-name publish check (`JavaScriptReservedNames` and the `Scripts/ReservedName` validation) to the read roots and built-in names, as a warning (FR-027).
 - [ ] T016 [US4] Warn on a number argument JavaScript cannot hold exactly, naming the function and the argument path; never refuse, never stringify (FR-028).
-- [ ] T017 [P] [US4] xUnit: Base64 round trip and Elsa 3 parity; `toJson` equals the T001 fixtures; no live .NET object in or out — quickstart B8–B10.
+- [ ] T017 [P] [US4] xUnit: Base64 round trip and Elsa 3 parity; `toJson` equals the T001 fixtures; no live .NET object in or out — quickstart B8–B10, SC-005, SC-008.
 - [ ] T018 [P] [US4] xUnit: naming failures, reserved-name warning, no fallback read marker for built-ins, `Effectful` recorded and never changes call count, V9 warning — quickstart B11–B11b.
-- [ ] T019 [P] [US4] xUnit: surface parity — each intrinsic and built-in identical in an input binding and a `RunJavaScript` script — quickstart A5.
+- [ ] T019 [P] [US4] xUnit: surface parity — each intrinsic and built-in identical in an input binding and a `RunJavaScript` script (FR-003) — quickstart A5, SC-004.
 
 ## Phase 5: User Story 2 — Elsa 3 time / GUID / string functions convert faithfully (P1)
 
@@ -51,11 +51,11 @@
 **Independent test**: quickstart C, D.
 
 - [ ] T020 [US2] In `Elsa3ExpressionRewriter.cs`, remove `Math.random`/`Date.now` from `IsNondeterministicCall` (keep `crypto.randomUUID`), take `Date` out of the refused globals, move the GUID family, `parseGuid`, the Base64 pair and `toJson` out of `RefusedHostFunctions`, and reword `TimeGuidance`/`UniqueValueGuidance` (FR-014, FR-015).
-- [ ] T021 [US2] Classify `Date` usage (contract D1a): zone-independent converts; zone-dependent converts only with the source time zone (assume-UTC = `UTC`) and is otherwise refused with a quoted diagnostic; a non-literal parse warns without a zone (FR-021 to FR-024).
+- [ ] T021 [US2] Classify `Date` usage (contract D1a): zone-independent converts; zone-dependent converts only with the source time zone (assume-UTC = `UTC`) and is otherwise refused with a quoted diagnostic; a non-literal parse warns without a zone (FR-021, FR-022, FR-024).
 - [ ] T022 [US2] Carry the source time zone into the converted expression as an evaluator option; accept that option in `JintPortableJavaScriptEvaluator` (it rejects all options today) and apply it as Jint `Options.TimeZone`; the option enters the executable hash (FR-023).
 - [ ] T023 [P] [US2] xUnit for D1a: refusal without a zone; `Europe/Amsterdam` winter and summer equal Elsa 3; `UTC`; zone-independent usage in both modes; non-literal parse warning — quickstart C12–C12b, SC-007.
-- [ ] T024 [P] [US2] xUnit conversion tests (faithful): `new Date()`, `Date.now()`, `Math.random()`, GUID family, `parseGuid`, Base64 pair, `toJson`, and GUIDs used as text convert — quickstart C13, C14.
-- [ ] T025 [P] [US2] xUnit conversion tests (refused): bytes/streams, `getConfig`/`getConfiguration`, `crypto.randomUUID`; `Guid`/`DateTime`/`Random` keep `VF-IMP-005` with the new guidance — quickstart D16, D17.
+- [ ] T024 [P] [US2] xUnit conversion tests (faithful): `new Date()`, `Date.now()`, `Math.random()`, GUID family, `parseGuid`, Base64 pair, `toJson`, and GUIDs used as text convert; `isNullOrEmpty`/`isNullOrWhiteSpace` still inline (FR-010) — quickstart C13, C14, SC-008.
+- [ ] T025 [P] [US2] xUnit conversion tests (refused): bytes/streams, `getConfig`/`getConfiguration`, `crypto.randomUUID`; `Guid`/`DateTime`/`Random` keep `VF-IMP-005` with the new guidance (FR-013, FR-015) — quickstart D16, D17.
 - [ ] T026 [US2] SC-001 coverage check against the available corpus — quickstart C15.
 - [ ] T027 [P] [US2] Update the conversion table in `Extensions/Elsa3/src/Mapping/README.md` (refused → converted rows; add `VF-IMP-012`) — quickstart F26.
 - [ ] T028 [P] [US2] Update spec 247 `research.md` R-6 rows that S-1 supersedes (GUID family, `parseGuid`, Base64, `toJson`) — quickstart F27.
@@ -71,7 +71,7 @@
 - [ ] T032 [US3] Call the analyzer from publish validation and emit `Scripts/DotNetMemberUsage` (FR-017, FR-018).
 - [ ] T033 [US3] Register the analyzer as part of the default JavaScript strategy in the existing feature; no setting (FR-030).
 - [ ] T034 [P] [US3] Feature-registration test (§2.23.1): the analyzer and the built-ins resolve in the default composition.
-- [ ] T035 [P] [US3] Analyzer tests (refuse): GUID member calls, `toByteArray()` through an alias, a `FormFile` variable's members, `toJson` of a non-GUID .NET value, .NET type references, PascalCase invocations — quickstart E18–E20.
+- [ ] T035 [P] [US3] Analyzer tests (refuse): GUID member calls, `toByteArray()` through an alias, a `FormFile` variable's members, `toJson` of a non-GUID .NET value, .NET type references, PascalCase invocations; each message quotes the offending expression (SC-006) — quickstart E18–E20.
 - [ ] T036 [P] [US3] Analyzer tests (allow): PascalCase property reads incl. `variables.Order.Status`, native calls incl. `Intl.DateTimeFormat('en-GB')`, computed dispatch, same-script members, GUIDs as text — quickstart E21–E22a.
 - [ ] T037 [P] [US3] SC-002 check over the corpus and representative cases; one analyzer used at conversion and publish — quickstart E23, E24.
 
