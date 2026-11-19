@@ -220,7 +220,13 @@ internal static class OwnedSetChecks
             throw new ConformanceException("a database created for 64 partitions, with 40 written, opened at 1,024");
         }
         catch (StoreException e) { Context.Equal(Failure.Definite, e.Failure, "the failure of an open at another count after a cut"); }
+        // The count a node's start reads counts as configured only once every partition row exists.
+        var incomplete = "";
+        try { incomplete = $"gave {await c.S.PartitionCountAsync()}"; }
+        catch (StoreException e) { incomplete = e.Failure == Failure.Definite && e.Message.Contains("Initialization incomplete", StringComparison.Ordinal) ? "" : e.Message; }
+        Context.Equal("", incomplete, "the partition count of a database whose first open was cut short");
         await reopen(64);
+        Context.Equal((int?)64, await c.S.PartitionCountAsync(), "the partition count after the open at 64 finished the rows");
         await c.S.AddAsync(Make.M("late", 63));
         Context.Equal("late", string.Join(" ", (await c.S.PollAsync(63, (await c.Take(63)).Epoch, TimeSpan.Zero, 10)).Messages.Select(m => m.Message.Id)), "partition 63 after the open at 64 finished the rows");
     }

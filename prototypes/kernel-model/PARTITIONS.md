@@ -406,13 +406,17 @@ The follow-ups that slice 2a recorded for this slice:
   recreated):
   - `EfStore.CreateAsync` and `MongoStore.CreateAsync` refuse, definitely, to open a database at a count other than
     the one it was created with, naming both. Mongo writes its partition documents one at a time, so its first open
-    records the count first, and an open cut short is finished by the next open at the same count. EF writes its rows
+    records the count first, and an open cut short is finished by the next open at the same count. Until every
+    partition document exists, the count a node's start reads refuses ("initialization incomplete"). EF writes its rows
     in one transaction.
   - `IKernelStore.PartitionCountAsync` gives that count. When the built-in runtime or the Orleans adapter starts a
     node's host (`DurableHost.ForNode`, `IScopeCount`), the runtime's scopes must equal `WorkerOptions.Partitions`,
     which spread placement hashes over, and both must equal the store's count: fewer would leave partitions, and
-    perhaps their work, unserved. A mismatch refuses the start, naming the three counts. Only the simulation's worlds
-    place fewer than the store has, behind `ForNode`'s explicit `placesPart`.
+    perhaps their work, unserved. A mismatch refuses the start, naming the three counts. `ForNode` takes the count as
+    an explicit argument, and refuses options that say another. Only the simulation's worlds place fewer than the
+    store has, behind `ForNode`'s explicit `placesPart`.
+  - The guard protects developer-local prototype databases, which are regenerated; anything further on it is K4's
+    provider schema work.
 - **Set worlds.** `sim --count 1024|4096` (1,024 by default) gives the world's store a fence row and a journal for each
   of the count's virtual partitions. The world places four of them on its two or three nodes. Each node runs one worker
   for its owned set, through `DurableHost.ForNode`, as the built-in runtime does. Its takes and give-ups name a partition
