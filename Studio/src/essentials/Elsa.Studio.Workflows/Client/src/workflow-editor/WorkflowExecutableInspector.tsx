@@ -696,6 +696,18 @@ function WorkflowExecutableNodePanel({
         <dd>{fact.authoredActivityId}</dd>
       </dl>
       {!fact.available ? <p className="wf-instance-note">This activity is not available in this environment; the executable cannot run here.</p> : null}
+      {fact.structureDiagnostics && fact.structureDiagnostics.length > 0 ? (
+        <div className="wf-instance-note" role="note">
+          <strong>Executable structure mapping</strong>
+          <ul>
+            {fact.structureDiagnostics.map((diagnostic, index) => (
+              <li key={`${diagnostic.code}:${diagnostic.wireSlot}:${index}`}>
+                <code>{diagnostic.wireSlot}</code>: {diagnostic.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {fact.inputBindings.length > 0 ? (
         <dl className="wf-instance-meta wf-executable-bindings">
           {fact.inputBindings.map(binding => (
