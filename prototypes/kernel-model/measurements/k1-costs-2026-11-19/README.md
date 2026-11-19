@@ -12,7 +12,7 @@ as committed after it, before its `count=` option, which changes nothing at 1,02
 | `sqlite-setcost.txt` | `$EFR x setcost sqlite "Data Source=<file>" runs=5` |
 | `mysql-setcost.txt` | `$EFR x setcost mysql "server=localhost;port=<p>;database=k1s8_cost" proxy=1 runs=5` (MySQL 8.4) |
 | `mssql-setcost.txt` | `$EFR x setcost sqlserver "$MS;Database=k1s8_cost" proxy=1 runs=5` (SQL Server 2022, amd64 emulation) |
-| `pg-idle.txt` | `$EFR x setidle postgres "$PG;Database=k1s8_idle" seconds=120 writes=1` (D3) |
+| `pg-idle.txt` | `$EFR x setidle postgres "$PG;Database=k1s8_idle" seconds=120 writes=1` (D3). Its "MB an hour" is MiB (153.5 MiB, 161 MB); the harness now prints both |
 | `runtime-cost-1024.txt` | `Kernel.Runtime.Orleans.Conformance.dll cost 1024 10 1024` and `Kernel.Runtime.Conformance.Run.dll cost 1024 10 1024`, three interleaved runs each |
 | `pg-owned-witness.txt`, `other-owned-witness.txt` | `Kernel.Ef.Conformance.dll postgres|sqlserver|mysql "<connection>" --fence-in-batch|--checked-fence semantic "owned set"` |
 | `conformance-after-fix.txt`, `conformance-after-merge.txt` | the runtime suites after the holder-read fix, before and after merging 7b's `8e0cbb7e1` |
@@ -22,3 +22,4 @@ as committed after it, before its `count=` option, which changes nothing at 1,02
 | `conformance-after-setpoll.txt` | after the wrappers' set-poll fix (`961b599ea`): Orleans `cost 1024` twice, both runtime suites at the default count, 1,024 (and built-in 4,096), both runtime stresses, the in-memory store suite and its stress, EF SQLite |
 | `runtime-burst-after-setpoll.txt` | the built-in `cost 1024 10 1024` and `cost 4096 10 4096` after that fix |
 | `runtime-burst-before-setpoll.txt` | the same two cost runs at `2c1f7ecbf`, before that fix (rerun in a detached worktree for this record) |
+| `crash-case-phases-before-1024.txt` | the crash case before the fix, timed by phase with the same temporary markers: at 1,024 it passed in 14.8 s; at 4,096 it failed (167 s) before the kill marker was added |

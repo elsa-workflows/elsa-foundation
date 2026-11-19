@@ -505,7 +505,7 @@ static class SetCost
         {
             var (parts, kinds) = await writes.SplitAsync(from, to);
             var wal = PgWrites.Bytes(to.Lsn) - PgWrites.Bytes(from.Lsn);
-            Console.WriteLine($"  WAL {wal:N0} bytes ({wal / elapsed:N0} a second, {wal / elapsed * 3600 / 1024 / 1024:N1} MB an hour), {to.WalRecords - from.WalRecords:N0} records, {to.WalFpi - from.WalFpi:N0} full-page images");
+            Console.WriteLine($"  WAL {wal:N0} bytes ({wal / elapsed:N0} a second, {wal / elapsed * 3600 / 1e6:N1} MB, {wal / elapsed * 3600 / 1024 / 1024:N1} MiB an hour), {to.WalRecords - from.WalRecords:N0} records, {to.WalFpi - from.WalFpi:N0} full-page images");
             foreach (var p in parts.Where(p => p.Bytes > 0)) Console.WriteLine($"    {p.Table,-12} {p.Part,-6} {p.Records,8:N0} records {p.Bytes,12:N0} B ({p.Bytes / elapsed,9:N0} B/s), first-block FPI {p.Fpi:N0} B");
             foreach (var group in kinds.GroupBy(k => k.Table)) Console.WriteLine($"    {group.Key,-12} " + string.Join(", ", group.Select(k => $"{k.Kind} {k.Records:N0} x {k.Bytes:N0} B")));
             Console.WriteLine($"  {"table",-11} {"upd",8} {"hot",8} {"dead before",11} {"dead after",10} {"autovac",7} {"heap B",9}");

@@ -549,8 +549,11 @@ bookkeeping, below). The raw outputs are in
 - **Rebalance** runs the real rounds. Scattered uses the default balancer. Contiguous runs them with the
   `ContiguousOnlyBalancer` mutation (each node keeps its fair range by rank), the only contiguous balancer the code has;
   the harness supplies the rank, which the EF store's membership does not give.
-- **Each row runs five times from its own setup, which is not counted.** The counts are the most common run's: a row's
+- **Each row runs five times, most from a setup of their own, which is not counted** (the beat, heartbeat and idle-poll
+  rows run on one node that holds A). The counts are the most common run's: a row's
   first run may open connections, and their handshakes count. The time is the median of the five.
+- **The contiguous rounds' rank** comes from an extra read of the node rows at every heartbeat (`Ranked` in
+  `SetCost.cs`), on the admin connection: it is not counted, but it is inside the rebalance rows' time.
 - **Units, as above.** `tcp` is round trips on the TCP stream through the cost runs' proxy, and `exec` is PostgreSQL
   Execute frames (statements). `rows` is the fence rows the operation wrote, read back from `Partitions` before and
   after. The worker's lease is an hour, as in the cost runs, so no beat lands inside a row.
@@ -610,10 +613,11 @@ F-B6: the PostgreSQL stream varies by a read).
 | The mark and the turns of a 100-instance flush | 3 and 3 | 3 and 3 | 6 and 6 |
 
 SqlClient sends BEGIN alone, and Connector/NET adds a Ping and an Init DB per pooled connection and two trips for a
-BEGIN (ENGINES.md). Hence SQL Server's and MySQL's extra trips. SQL Server's commands match PostgreSQL's statements. MySQL's
-set operations match too, but its one-row take and retake read the row back (no RETURNING), so its one-row paths send
-more commands: start-up 512 against PostgreSQL's 256 statements, the takeover through the host 768 against 512, the
-reset 512 against 258, and the join 796 against 540 (scattered) and 1,567 against 1,054 (contiguous).
+BEGIN (ENGINES.md). Hence SQL Server's and MySQL's extra trips. SQL Server's commands match PostgreSQL's commands (EF
+command counts; PostgreSQL's Execute frames count each statement of a command, so a beat is 1 command and 2 frames).
+MySQL's set operations match too, but its one-row take and retake read the row back (no RETURNING), so its one-row
+paths send more commands: start-up 512 against PostgreSQL's 256 commands, the takeover through the host 768 against
+512, the reset 512 against 257, and the join 796 against 540 (scattered) and 1,567 against 1,054 (contiguous).
 
 **4,096, R = 1,024, PostgreSQL scattered** (`... count=4096 shape=scattered runs=3`; one set take of 1,024 rows):
 
@@ -648,15 +652,16 @@ as there, and the one-row operations scale with the partitions moved.
 None of these is a correctness defect. Each is the kernel's design at K1: the first is a kernel rule, the second and
 third are the serial path that slices 2a and 5a recorded for this slice, and the fourth is the trial protocol.
 
-**The crash case at 4,096 (raised in the 7a review; built-in runtime only).** The built-in runtime suite's case
-"crash: a crashed node's scopes are taken over" took 17 s at 1,024 and over 120 s at 4,096 in that review, and 15 s at
-1,024 here.
+**The crash case at 4,096 (raised in the 7a review; built-in runtime only).** Before the fix below, the built-in
+runtime suite's case "crash: a crashed node's scopes are taken over" took 14.8 s at 1,024 here and did not end within
+its 120 s at 4,096 ([crash-case-phases-before-1024.txt](measurements/k1-costs-2026-11-19/crash-case-phases-before-1024.txt),
+[crash-case-phases-before.txt](measurements/k1-costs-2026-11-19/crash-case-phases-before.txt)).
 - **Where the time went: before the kill.** The case built the holder list of every partition once per partition, and
   the list read every watched activation once per scope, so cubic in the count. Timed by phase at 4,096 before the fix
   ([crash-case-phases-before.txt](measurements/k1-costs-2026-11-19/crash-case-phases-before.txt); `crash-case-phases.txt`
   has the runs at 1,024, 2,048 and 4,096 after it): the case reached the steady state at 6.3 s and the kill at 198 s. The case's takeover line measures from the kill, so it
   showed 6 to 7 s while the case ran minutes; applying the case's 30 tokens after the takeover took about 1 ms.
-- **The fix** (`528eabf7e`, the suite only): `Watcher.Holders` reads the live activations in one pass, and the case
+- **The fix** (`528eabf7e`, the suite only; it landed on main with 7a, #4819): `Watcher.Holders` reads the live activations in one pass, and the case
   reads the list once. The case now takes 13.8 s at 1,024, 14.0 s at 2,048 and 14.3 s at 4,096, on the built-in
   runtime (the Orleans adapter was run at its default count and at 1,024). The takeover itself, from the kill until
   every scope is held again, takes 6.2 to 7.5 s at each count: the 6 s lease runs out and a balancing round takes the
@@ -674,7 +679,7 @@ third are the serial path that slices 2a and 5a recorded for this slice, and the
   The other candidates are small: `RuntimeNode` makes 4,258 pass calls a second at 4,096 (4,700 before the fix) with
   1.4 to 1.5 worker passes, the one-pass rule answers the rest with no store call, and on PostgreSQL the set poll over 1,024 is one
   query of 1.6 ms. Since that fix the cost run's "Store calls" column counts a set poll once; "Set polls" is unchanged.
-- The built-in suite at 4,096 took 215 s at `bc8021514`, 50 s after the holder-read fix
+- The built-in suite at 4,096 took 215 s at `bc8021514` (7b's PR body, [#4820](https://github.com/elsa-workflows/elsa-foundation/pull/4820)), 50 s after the holder-read fix
   ([conformance-after-merge.txt](measurements/k1-costs-2026-11-19/conformance-after-merge.txt)) and 46 s after the
   set-poll forwarding as well. Every suite run at
   the default count and at 1,024 passes on both runtimes, with the stresses
@@ -700,7 +705,7 @@ another and settled at 256 each, then 120 s with nothing to do:
 |---|---|
 | Statements a second | 17.0: heartbeats 8.0 (2 statements each, a node a second), free lists 4.0, set polls 4.0 (one per node a second), beats 1.2 |
 | Partitions rows updated | 36,864, so 307 a second (1,024 rows every 3.3 s); 95 % HOT |
-| WAL | 5.36 MB, 44.7 kB a second, 161 MB an hour |
+| WAL | 5.36 MB, 44.7 kB a second, 161 MB an hour (153.5 MiB; the raw output at the time labels it MB) |
 | Of which `Partitions` | 42.9 kB a second (96 %): updates 2.73 MB (HOT and non-HOT), lock records 2.09 MB, index 0.12 MB, pruning 0.2 MB |
 | Of which `Nodes` (the four node rows, a heartbeat a second each) | 582 B a second |
 | Dead tuples in `Partitions` | 2,584 before, 1,486 after; 2 autovacuums in the window |

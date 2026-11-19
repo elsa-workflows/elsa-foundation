@@ -23,7 +23,7 @@ whose due time has passed. Future timers do not count towards due depth.
 
 ## What the prototype does today
 
-Built, in `prototypes/kernel-model` at main `433c79341`, with the rows K1 changed (range ownership, slices 5 to 8) as of `8e0cbb7e1`:
+Built, in `prototypes/kernel-model` at main `433c79341`, with the rows K1 changed (range ownership, slices 5 to 8) as of main `36bc9860a`:
 
 | Behaviour | Where | Effect on fairness |
 |---|---|---|
