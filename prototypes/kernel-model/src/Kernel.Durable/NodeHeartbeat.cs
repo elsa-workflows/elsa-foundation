@@ -3,7 +3,8 @@ namespace Kernel.Durable;
 /// <summary>
 /// K1b: a host's node heartbeat and its pass gate (ownership and fencing, "The node's heartbeat" and "Liveness follows
 /// the Worker's passes"). The host sends it on its own cadence; this decides whether it may, sends it, and hands the
-/// answer to each Worker with the monotonic time just before it was sent.
+/// answer to each Worker with the monotonic time just before it was sent. The hand-over renews each Worker's guard at once,
+/// off the host's turn; each Worker's next pass runs the answer's stand-down side (<see cref="Worker.HeartbeatAnswered"/>).
 /// <para>
 /// The gate: the host renews only while each of its Workers that holds a partition, pending ones included, has completed
 /// a pass within the last lease (<see cref="Worker.Live"/>). A withheld heartbeat closes every take of the host's Workers
@@ -31,7 +32,10 @@ public sealed class NodeHeartbeat
     public int Withheld { get; private set; }
     public int Missed { get; private set; }
 
-    /// <summary>One heartbeat, if the gate is open. Null when it was withheld or failed; otherwise the answer, handed over.</summary>
+    /// <summary>
+    /// One heartbeat, if the gate is open. Null when it was withheld or failed; otherwise the answer, handed over. It may run
+    /// beside the Workers' passes: it renews, and leaves the stand-down, release and retake to each Worker's next pass.
+    /// </summary>
     public async Task<NodeBeat?> BeatAsync(CancellationToken cancellationToken = default)
     {
         if (!Open)
@@ -50,7 +54,7 @@ public sealed class NodeHeartbeat
         for (var i = 0; i < _workers.Count; i++)
         {
             var self = _workers[i];
-            await self.HeartbeatAnsweredAsync(sent[i], answer, cancellationToken, partition => _workers.Any(w => w != self && w.Claims(partition)));
+            self.HeartbeatAnswered(sent[i], answer, partition => _workers.Any(w => w != self && w.Claims(partition)));
         }
         return answer;
     }

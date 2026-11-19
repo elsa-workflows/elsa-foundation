@@ -26,6 +26,37 @@ internal static class NodeLeaseChecks
         await LateHeartbeat(check);
         await WedgedWorker(check);
         await RenewsDuringARetake(check);
+        await AnswerDuringAPass(check);
+    }
+
+    // Review of 4b: an answer that arrives during a long pass renews the guard at once, and its stand-down side waits for the
+    // next pass. q forces 1 away while p's pass waits on its commit; the heartbeat sent at 5 s omits 1. At 12 s, past the
+    // take's deadline, the pass ends and p still owns, still holding 1: nothing stood down beside the pass. Its next pass
+    // stands 1 down and keeps 0 and 2 at their epochs.
+    private static async Task AnswerDuringAPass(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(3, out _);
+        var wire = new DelayedCommit(store);
+        var worker = Owner(wire, [0, 1, 2], clock);
+        await new DurableHost([worker]).ActivateAsync(0);
+        var before = worker.Fences;
+        var beat = new NodeHeartbeat("p", wire, [worker], Lease, Window);
+        await store.AddAsync(new Message("m", InstanceRef.In(0, "x"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
+        await worker.WokenAsync(null);
+        wire.DelayNext = true;          // the pass's commit lands and its answer waits
+        var pass = worker.RunAsync().AsTask();
+        await wire.Landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        (store.Partitions[1].Owner, store.Partitions[1].Epoch) = ("q", store.Partitions[1].Epoch + 1);     // a forced take by q
+        advance(5_000);
+        var answered = await beat.BeatAsync() is { } answer && answer.Owned.All(o => o.Partition != 1);
+        var during = worker.Holds(1);
+        advance(7_000);                 // 12 s
+        wire.Reply.SetResult();
+        var ended = await pass.WaitAsync(TimeSpan.FromSeconds(5));
+        var after = worker.Holds(1);
+        var next = await worker.RunAsync();
+        check(answered && during && ended is not null && after && next is not null && worker.Owns && worker.Fences.Select(f => (f.Partition, f.Epoch)).SequenceEqual(before.Where(f => f.Partition != 1).Select(f => (f.Partition, f.Epoch))),
+            $"an answer during a pass renews at once and stands down at the next pass: held 1 during {during}, after {after}, owns at 12 s {worker.Owns}, held [{string.Join(", ", worker.Fences)}]");
     }
 
     // Review of #4868: a heartbeat answered while a retake is in flight renews the guard; only its stand-down side waits.
@@ -77,6 +108,7 @@ internal static class NodeLeaseChecks
         var stranded = store.Partitions[1].Owner == "p" && !worker.Holds(1);
         await worker.RunAsync();
         await beat.BeatAsync();
+        await worker.RunAsync();        // the answer's release side runs in the next pass
         check(stranded && store.Partitions[1].Owner is null && worker.Holds(0),
             $"NL-8: a release whose call failed is released by the next answer: stranded first {stranded}, owner of 1 now {store.Partitions[1].Owner ?? "none"}");
     }
@@ -99,11 +131,12 @@ internal static class NodeLeaseChecks
         await wire.Retaken.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var during = worker.BeforeHeartbeat();
         var middle = await store.NodeHeartbeatAsync("p", Lease, Window);
-        await worker.HeartbeatAnsweredAsync(during, middle);
-        await worker.HeartbeatAnsweredAsync(before, early);
+        worker.HeartbeatAnswered(during, middle);
+        worker.HeartbeatAnswered(before, early);
         wire.RetakeReply.SetResult();
         await flush;
-        await worker.HeartbeatAnsweredAsync(before, early);
+        worker.HeartbeatAnswered(before, early);
+        await worker.RunAsync();        // the pass runs the recorded answer's stand-down side
         var owned = Enumerable.Range(0, 3).All(p => store.Partitions[p].Owner == "p" && worker.EpochOf(p) == store.Partitions[p].Epoch && store.Partitions[p].Epoch == 2);
         check(owned, $"NL-8: answers from before and during the retakes release and stand down nothing: held [{string.Join(", ", worker.Fences)}]");
     }
@@ -117,6 +150,7 @@ internal static class NodeLeaseChecks
         await host.ActivateAsync(0); await host.ActivateAsync(1);
         var beat = new NodeHeartbeat("p", store, [w0, w1], Lease, Window);
         await beat.BeatAsync();
+        await w0.RunAsync(); await w1.RunAsync();
         check(w0.Holds(0) && w1.Holds(1) && store.Partitions[0].Owner == "p" && store.Partitions[1].Owner == "p",
             $"NL-8: a fixed host divides the answer and neither Worker releases the other's partition: owners {store.Partitions[0].Owner ?? "none"}, {store.Partitions[1].Owner ?? "none"}");
     }
@@ -140,7 +174,8 @@ internal static class NodeLeaseChecks
         var pending = worker.Pending;
         var stoodDown = !worker.Owns && pending.Count == 2;
         await worker.RunAsync();        // a pass completes without the pending partitions
-        await beat.BeatAsync();         // then the heartbeat, then the retake
+        await beat.BeatAsync();         // then the heartbeat
+        await worker.RunAsync();        // and the next pass retakes
         var retaken = worker.Fences;
         check(stoodDown && retaken.Count == 2 && retaken.Zip(epochs).All(t => t.First.Epoch == t.Second + 1) && worker.Pending.Count == 0 && trial.Attempts == 1,
             $"NL-10: a late heartbeat stands every partition down, kept pending; the next pass and heartbeat retake them at new epochs, counting the death: pending {pending.Count}, retaken [{string.Join(", ", retaken)}], attempts {trial.Attempts}");
@@ -194,7 +229,7 @@ internal static class NodeLeaseChecks
     {
         var sent = worker.BeforeHeartbeat();
         var answer = await store.NodeHeartbeatAsync(worker.Node, Lease, Window);
-        await worker.HeartbeatAnsweredAsync(sent, alter?.Invoke(answer) ?? answer);
+        worker.HeartbeatAnswered(sent, alter?.Invoke(answer) ?? answer);
         return sent;
     }
 
@@ -224,7 +259,7 @@ internal static class NodeLeaseChecks
         var sent = worker.BeforeHeartbeat();
         var answer = await store.NodeHeartbeatAsync(worker.Node, Lease, Window);
         if (late) advance(10_500);      // the answer arrives at 15.5 s: past 5 s plus the lease
-        await worker.HeartbeatAnsweredAsync(sent, answer);
+        worker.HeartbeatAnswered(sent, answer);
         if (!late) advance(7_000);      // 12 s: past the take's deadline, within the heartbeat's
         var pass = await worker.RunAsync();
         check(late ? pass is null && !worker.Owns : pass is not null && worker.Owns,
@@ -232,8 +267,8 @@ internal static class NodeLeaseChecks
                  : $"a heartbeat answered in time renews the guard to its send time plus the lease: owns at 12 s {worker.Owns}");
     }
 
-    // NL-3's Worker part: another process takes partition 1 while p renews; p's answer omits it. p stands 1 down within
-    // the heartbeat and keeps 0 and 2 at their epochs, since nothing of 1 is in flight.
+    // NL-3's Worker part: another process takes partition 1 while p renews; p's answer omits it. p stands 1 down at its
+    // next pass and keeps 0 and 2 at their epochs, since nothing of 1 is in flight.
     private static async Task StandsDownWhatTheAnswerOmits(Action<bool, string> check)
     {
         var (store, clock, advance) = World(3, out _);
@@ -243,6 +278,7 @@ internal static class NodeLeaseChecks
         (store.Partitions[1].Owner, store.Partitions[1].Epoch) = ("q", store.Partitions[1].Epoch + 1);     // a forced take by q
         advance(1_000);
         await Beat(store, worker);
+        await worker.RunAsync();        // the stand-down side runs at the next pass
         var after = worker.Fences;
         check(after.SequenceEqual(before.Where(f => f.Partition != 1)) && !worker.Holds(1),
             $"a partition the answer omits is stood down and the rest keep their epochs: before [{string.Join(", ", before)}], after [{string.Join(", ", after)}]");
@@ -261,7 +297,8 @@ internal static class NodeLeaseChecks
         await store.AddAsync(new Message("m", InstanceRef.In(0, "x"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
         await worker.PollAsync(); await worker.FlushAsync();
         var retaken = worker.Fences;
-        await worker.HeartbeatAnsweredAsync(sent, answer);      // lists 0 and 1 at the epochs from before the retakes
+        worker.HeartbeatAnswered(sent, answer);      // lists 0 and 1 at the epochs from before the retakes
+        await worker.RunAsync();
         advance(1_000);
         check(retaken.Count > 0 && worker.Fences.SequenceEqual(retaken) && sent.Generation != worker.BeforeHeartbeat().Generation,
             $"an answer sent before a reset is discarded: retaken [{string.Join(", ", retaken)}], after the answer [{string.Join(", ", worker.Fences)}]");

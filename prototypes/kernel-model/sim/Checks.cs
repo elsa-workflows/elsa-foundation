@@ -549,7 +549,7 @@ public sealed partial class World
             if (Config.NodeLease)       // K1b: each node's heartbeat, which its pass gate may withhold
                 for (var n = 0; n < Config.Nodes; n++)
                 {
-                    if (Beats[n] is { } beat) Watch(Heartbeat(n, beat));
+                    if (Beats[n] is { } beat) Watch(Heartbeat(beat));
                     if (_dying.Count != 0) FinishDeaths();
                 }
             else for (var p = 0; p < Config.Partitions; p++)
@@ -576,7 +576,7 @@ public sealed partial class World
                     // K1b: a Worker whose only partitions are pending keeps getting passes, so that its gate reopens.
                     if (Config.NodeLease && !worker.Owns && worker.Pending.Count > 0 && worker.Pending.ContainsKey(partition) && !actor.Passing)
                     {
-                        Watch(worker.RunAsync().AsTask());
+                        Watch(Adopting(actor, actor.Host is { } host ? host.RunNodeAsync().AsTask() : worker.RunAsync().AsTask()));
                         if (_dying.Count != 0) FinishDeaths();
                         continue;
                     }
@@ -588,7 +588,7 @@ public sealed partial class World
                     {
                         if (Dying is not null) _pass.Cancel();
                         Watch(actor.Runtime.WakeAsync(InstanceRef.In(partition, "")).AsTask());     // over the runtime's wake signal
-                        Watch(actor.Runtime.PassAsync(partition, _pass.Token).AsTask());
+                        Watch(Adopting(actor, actor.Runtime.PassAsync(partition, _pass.Token).AsTask()));
                     }
                     _pass = null;
                     if (_dying.Count != 0)     // a turn or a background job killed its process

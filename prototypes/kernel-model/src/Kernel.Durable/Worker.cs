@@ -152,6 +152,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // retake that counts a death. Reset leaves them.
     private readonly SortedDictionary<int, long> _pending = [];
     private long _lastPass, _takesStarted;
+    private Answered? _answered;     // K1b: the last answer's stand-down side, for the next pass
+    private sealed record Answered(HeartbeatSent Sent, NodeBeat Answer, Func<int, bool>? Sibling);
     private int _gaining = -1;
     private bool _retaking, _retakeStoodDown;      // a stand-down during a retake (RetakeAsync) cancels it
 
@@ -398,6 +400,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private async ValueTask<TimeSpan?> PassAsync(CancellationToken cancellationToken)
     {
         if (_releasing) return null;
+        if (Owns && !LeaseUsable()) return null;
+        // K1b: the last heartbeat answer's stand-down side, under the host's turn, before the pass reads or writes.
+        if (Volatile.Read(ref _answered) is not null && !cancellationToken.IsCancellationRequested) await AnsweredAsync(cancellationToken);
         if (!LeaseUsable()) return null;
         if (cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
         if (_woken)
@@ -508,34 +513,50 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>
     /// The heartbeat's answer, as the host hands it over (ownership-and-fencing, "The node's heartbeat"). Judged only
-    /// within the generation it was sent in: a Worker that reset meanwhile discards it. Otherwise it renews the guard, if
-    /// the reply came within its send time plus the lease, and stands down every partition held at the send that the
-    /// answer omits or lists at another epoch, through <see cref="LoseAsync"/>: when nothing of those partitions is in
-    /// flight their memory goes and the rest keep their epochs, otherwise the Worker resets and takes the rest back. While a
-    /// release or retake is in flight the answer still renews the guard, and only the stand-down side waits. A heartbeat
-    /// sent after the guard had expired renews nothing: the Worker stands everything down, pending.
-    /// The other way: a partition the answer lists as this process's, at an epoch the Worker does not hold, is released at
-    /// that epoch, unless a take of this Worker ran between the send and the answer, it is pending, or
-    /// <paramref name="sibling"/> (another Worker of the host) claims it; a release that fails is retried at the next
-    /// answer. A pending partition listed at its epoch is retaken, counting the death; one listed otherwise, or not at all,
-    /// is no longer pending.
+    /// within the generation it was sent in: a Worker that reset meanwhile discards it.
+    /// <para>
+    /// The calling contract: the host calls this when the answer arrives, from any thread, off the host's turn and
+    /// beside a pass. It runs only the renewal side, at once, so a long pass never makes a timely reply look late: the
+    /// guard moves to the send time plus the lease if the reply came within it, and the store's clock is observed. A
+    /// heartbeat sent after the guard had expired renews nothing; the next pass stands everything down, pending. The rest
+    /// is recorded (the latest answer only, since a newer one judges the same rows again) and the next pass runs it at its
+    /// start, under the host's turn (<see cref="AnsweredAsync"/>): a stand-down never runs beside a pass, whose flush
+    /// state sits outside the turn's lock.
+    /// </para>
     /// </summary>
-    public async Task HeartbeatAnsweredAsync(HeartbeatSent sent, NodeBeat answer, CancellationToken cancellationToken = default, Func<int, bool>? sibling = null)
+    public void HeartbeatAnswered(HeartbeatSent sent, NodeBeat answer, Func<int, bool>? sibling = null)
+    {
+        lock (_turnSync)
+        {
+            if (sent.Generation != _generation) return;
+            if (Owns && sent.At >= Volatile.Read(ref _safeUntil)) return;     // sent after the guard expired: the next pass stands down
+            RenewGuard(sent.At);
+            Observe(answer.Now);
+            _answered = new(sent, answer, sibling);
+        }
+    }
+
+    /// <summary>
+    /// K1b: the stand-down side of the last answer, at the start of a pass. Every partition held at the send that the
+    /// answer omits or lists at another epoch, and still held at that epoch, is stood down through <see cref="LoseAsync"/>:
+    /// when nothing of those partitions is in flight their memory goes and the rest keep their epochs, otherwise the Worker
+    /// resets and takes the rest back. While a release or retake is in flight the answer stays recorded, for a later pass.
+    /// The other way: a partition the answer lists as this process's, at an epoch the Worker does not hold, is released at
+    /// that epoch, unless a take of this Worker ran since the send, it is pending, or <c>sibling</c> (another Worker of the
+    /// host) claims it; a release that fails is retried at the next answer. A pending partition listed at its epoch is
+    /// retaken, counting the death; one listed otherwise, or not at all, is no longer pending.
+    /// </summary>
+    private async Task AnsweredAsync(CancellationToken cancellationToken)
     {
         HashSet<int> lost;
         List<PartitionFence> release = [];
         List<int> retake = [];
         lock (_turnSync)
         {
+            if (_answered is not { } answered || _releasing || _retaking) return;
+            var (sent, answer, sibling) = answered;
+            _answered = null;
             if (sent.Generation != _generation) return;
-            if (Owns && sent.At >= Volatile.Read(ref _safeUntil))
-            {
-                LeaseUsable();      // sent after the guard expired: it stands everything down, pending; the next answer retakes
-                return;
-            }
-            RenewGuard(sent.At);
-            Observe(answer.Now);
-            if (_releasing || _retaking) return;    // the stand-down side waits: the release or retake in flight covers these rows
             var listed = answer.Owned.ToDictionary(o => o.Partition, o => o.Epoch);
             foreach (var (partition, epoch) in _pending.ToList())
                 if (listed.GetValueOrDefault(partition, -1) == epoch) retake.Add(partition);
@@ -921,9 +942,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
             {
                 var held = Fences;
                 leaving = [.. held.Where(f => partitions.Contains(f.Partition))];
-                kept = [.. held.Where(f => !partitions.Contains(f.Partition))];
-                Reset();
-                if (kept.Count > 0) (_retaking, _retakeStoodDown) = (true, false);
+                if (leaving.Count > 0)      // empty: the drain's refusal reset already, or the partitions went; no second reset
+                {
+                    kept = [.. held.Where(f => !partitions.Contains(f.Partition))];
+                    Reset();
+                    if (kept.Count > 0) (_retaking, _retakeStoodDown) = (true, false);
+                }
             }
         }
         // A drain refused down to a reset with no retake holds nothing: give up what was captured, as ReleaseAsync does.

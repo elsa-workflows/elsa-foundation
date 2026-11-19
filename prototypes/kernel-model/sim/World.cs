@@ -539,22 +539,26 @@ public sealed partial class World
             }
     }
 
+    /// <summary>K1b: the node's heartbeat. It renews at once; each Worker's next pass runs the answer's stand-down side.</summary>
+    public static async Task Heartbeat(NodeHeartbeat beat) => await beat.BeatAsync();
+
     /// <summary>
-    /// K1b: the node's heartbeat. The node is its Workers' host, so a pending partition the answer had its Worker retake
-    /// joins the runtime's activations, as an activation of a partition the Worker already holds.
+    /// K1b: a pass, and then the pending partitions the last answer had the Worker retake in it join the runtime's
+    /// activations, as an activation of a partition the Worker already holds: the node is its Workers' host.
     /// </summary>
-    public async Task Heartbeat(int node, NodeHeartbeat beat)
+    public async Task Adopting(Actor actor, Task pass)
     {
-        await beat.BeatAsync();
-        foreach (var actor in Actors.Where(a => !a.Dead && a.Node == node && Beats[node] == beat).ToList())
-            foreach (var fence in actor.Worker.Fences)
-                if (!actor.Runtime.Owns(fence.Partition) && !actor.Runtime.Activating(fence.Partition)) await actor.Runtime.ActivateAsync(fence.Partition);
+        await pass;
+        if (!Config.NodeLease || actor.Dead) return;
+        foreach (var fence in actor.Worker.Fences)
+            if (!actor.Runtime.Owns(fence.Partition) && !actor.Runtime.Activating(fence.Partition)) await actor.Runtime.ActivateAsync(fence.Partition);
     }
 
+    // A set world's pass runs under its host's turn, as the host's own passes, gains and losses do.
     private static async Task Pass(Actor actor)
     {
         using var cancel = actor.PassCancel = new CancellationTokenSource();
-        try { await actor.Worker.RunAsync(cancel.Token); }
+        try { await (actor.Host is { } host ? host.RunNodeAsync(cancel.Token) : actor.Worker.RunAsync(cancel.Token)); }
         finally { (actor.Passing, actor.PassCancel) = (false, null); }
     }
 
@@ -682,14 +686,14 @@ public sealed partial class World
                 if (Paused[act.A] || Beats[act.A] is not { } beat) return null;
                 var calls = Actors.Sum(a => a.Calls.Count);
                 var withheld = beat.Withheld;
-                Watch(Heartbeat(act.A, beat));
+                Watch(Heartbeat(beat));
                 return beat.Withheld > withheld ? "withheld: a Worker that holds partitions has completed no pass within the lease" : $"{Actors.Sum(a => a.Calls.Count) - calls} call sent";
             }
             case "pass":
             {
                 if (Live(act.A) is not { Passing: false } actor) return null;
                 actor.Passing = true;
-                Watch(Pass(actor));
+                Watch(Adopting(actor, Pass(actor)));
                 return "";
             }
             case "balance":
