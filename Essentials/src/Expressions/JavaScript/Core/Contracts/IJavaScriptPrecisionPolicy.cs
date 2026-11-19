@@ -3,6 +3,13 @@ using Elsa.Expressions.JavaScript.Core.Models;
 namespace Elsa.Expressions.JavaScript.Core.Contracts;
 
 /// <summary>
+/// Declares a JavaScript value contract a replacement contract: exactly one implementation is active per host. Shell
+/// activation fails when more than one is registered, naming every registration (framework §2.6.2).
+/// </summary>
+[AttributeUsage(AttributeTargets.Interface, Inherited = false)]
+public sealed class JavaScriptValueReplacementContractAttribute : Attribute;
+
+/// <summary>
 /// Decides what happens when a number a JavaScript number cannot hold exactly reaches a write (ADR 0046 V9, D-17,
 /// spec 1228 FR-012). Replacement contract: exactly one implementation is active per host, host-wide, with no
 /// per-workflow or per-node override. The JavaScript Jint feature installs <c>RefusingPrecisionPolicy</c>; a host that
@@ -12,6 +19,7 @@ namespace Elsa.Expressions.JavaScript.Core.Contracts;
 /// Called only for a write that carries at least one loss: a script's or an input expression's result, or a change a
 /// script made. Computing with a lossy value and passing one to a host function never reach the policy; they warn.
 /// </remarks>
+[JavaScriptValueReplacementContract]
 public interface IJavaScriptPrecisionPolicy
 {
     JavaScriptPrecisionDecision Decide(JavaScriptPrecisionContext context);

@@ -49,6 +49,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         private readonly Dictionary<double, JavaScriptLossyNumber> _lossyByValue = [];
         private readonly string _markerPrefix = MarkerStart + Guid.NewGuid().ToString("N") + ":";
         private JsValue? _replacer;
+        private JsValue? _infinityReplacer;
+        private bool _enteredInfinity;
         private long _enterTicks;
         private long _collectTicks;
         private long _bytes;
@@ -181,8 +183,9 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         private (JsonElement Root, Dictionary<string, JsonElement> Markers) Mark(JsValue value)
         {
             var markers = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
-            // A value with no object in it (a number, a string) cannot hold an entered value: no replacer is needed.
-            if (value is not ObjectInstance || _origins.Count == 0)
+            // A value with no object in it (a number, a string) cannot hold an entered value: no replacer is needed, unless
+            // an entered number became Infinity, which JSON writes as null and so must be marked to be found.
+            if (!_enteredInfinity && (value is not ObjectInstance || _origins.Count == 0))
             {
                 var plain = JintResultMaterializer.Stringify(_engine, value)
                     ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
@@ -222,9 +225,41 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             });
             // Plain operators only, so nothing the script changed on the prototypes can intercept the replacer.
             var factory = _engine.Evaluate(
-                "(function (lookup) { return function (key, value) { return value !== null && typeof value === 'object' ? lookup(value) : value; }; })");
-            return _engine.Invoke(factory, lookup);
+                "(function (lookup, infinity) { return function (key, value) {" +
+                " if (value === Infinity || value === -Infinity) return infinity(value);" +
+                " return value !== null && typeof value === 'object' ? lookup(value) : value; }; })");
+            return _engine.Invoke(factory, lookup, InfinityMarker());
         }
+
+        /// <summary>
+        /// JSON writes <c>Infinity</c> as <c>null</c>. A number that entered as a value too large for a double holds
+        /// <c>Infinity</c>, so on the way out it is marked: an unchanged one still compares equal to what entered, and one
+        /// that is written is a loss (spec 1228 FR-011: a number that becomes Infinity is lossy).
+        /// </summary>
+        private ClrFunction InfinityMarker() =>
+            new(_engine, "infinity", (_, arguments) => new JsString(InfinityMarkerText(arguments.At(0).AsNumber())));
+
+        private string InfinityMarkerText(double value) => _markerPrefix + (value > 0 ? "+inf" : "-inf");
+
+        private bool TryReadInfinity(JsonElement element, out double value)
+        {
+            value = 0;
+            if (element.ValueKind != JsonValueKind.String)
+                return false;
+            var text = element.GetString()!;
+            if (StringComparer.Ordinal.Equals(text, InfinityMarkerText(double.PositiveInfinity)))
+                value = double.PositiveInfinity;
+            else if (StringComparer.Ordinal.Equals(text, InfinityMarkerText(double.NegativeInfinity)))
+                value = double.NegativeInfinity;
+            else
+                return false;
+            return true;
+        }
+
+        private JsValue InfinityOnlyReplacer() =>
+            _infinityReplacer ??= _engine.Invoke(
+                _engine.Evaluate("(function (infinity) { return function (key, value) { return value === Infinity || value === -Infinity ? infinity(value) : value; }; })"),
+                InfinityMarker());
 
         private bool IsUnchanged(ObjectInstance instance)
         {
@@ -233,7 +268,9 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             if (_unchanged.TryGetValue(instance, out var known))
                 return known;
 
-            var text = JintResultMaterializer.Stringify(_engine, instance);
+            var text = _enteredInfinity
+                ? JintResultMaterializer.Stringify(_engine, instance, InfinityOnlyReplacer())
+                : JintResultMaterializer.Stringify(_engine, instance);
             bool unchanged;
             if (text is null)
                 unchanged = false;
@@ -296,6 +333,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 var lossy = new JavaScriptLossyNumber(path, text, JavaScriptNumberPrecision.JavaScriptText(held), held, isInteger);
                 _lossy.Add(lossy);
                 _lossyByValue.TryAdd(held, lossy);
+                _enteredInfinity |= double.IsInfinity(held);
             }
 
             return JsNumber.Create(held);
@@ -312,6 +350,12 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         {
             switch (element.ValueKind)
             {
+                case JsonValueKind.String when TryReadInfinity(element, out var infinity):
+                    // JSON has no Infinity: it is written as null, and the number it came from carries that loss.
+                    if (_lossyByValue.TryGetValue(infinity, out var lost))
+                        losses.Add(new JavaScriptPrecisionLoss(path, lost, "null", arrayPath));
+                    writer.WriteNullValue();
+                    break;
                 case JsonValueKind.String when markers.TryGetValue(element.GetString()!, out var origin):
                     origin.WriteTo(writer);
                     // Written from its original JSON: its lossy numbers keep every digit.
@@ -406,13 +450,15 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         /// Whether two JSON values are the same JavaScript value: numbers equal as doubles, object members equal in any
         /// order, arrays element by element. A marker in <paramref name="current"/> stands for the original it names.
         /// </summary>
-        private static bool SameJavaScriptValue(JsonElement original, JsonElement current, IReadOnlyDictionary<string, JsonElement>? markers)
+        private bool SameJavaScriptValue(JsonElement original, JsonElement current, IReadOnlyDictionary<string, JsonElement>? markers)
         {
             if (markers is not null && current.ValueKind == JsonValueKind.String && markers.TryGetValue(current.GetString()!, out var origin))
                 return SameJavaScriptValue(original, origin, null);
 
             switch (original.ValueKind)
             {
+                case JsonValueKind.Number when TryReadInfinity(current, out var infinity):
+                    return JavaScriptNumberPrecision.Parse(original.GetRawText()) == infinity;
                 case JsonValueKind.Number:
                     return current.ValueKind == JsonValueKind.Number &&
                            JavaScriptNumberPrecision.Parse(original.GetRawText()) == JavaScriptNumberPrecision.Parse(current.GetRawText());

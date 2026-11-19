@@ -1,3 +1,4 @@
+using Elsa.Expressions.JavaScript;
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
@@ -25,7 +26,7 @@ public sealed class ScriptValueAdapterTests
     [InlineData("(() => { getVariable('order').extra = true; return 1; })()", "variables.order.extra")]
     public async Task An_input_expression_that_changes_a_read_value_fails_with_the_path(string source, string path)
     {
-        var exception = await Assert.ThrowsAsync<JavaScriptInputExpressionWriteException>(() => ExpressionAsync(source));
+        var exception = await Assert.ThrowsAsync<InputExpressionWriteException>(() => ExpressionAsync(source));
 
         Assert.Equal("order", exception.Variable);
         Assert.Equal(path, exception.Path);
@@ -147,6 +148,45 @@ public sealed class ScriptValueAdapterTests
         Assert.Equal(JsonValueKind.Number, result!.Value.ValueKind);
         Assert.Equal("9007199254740992", result.Value.GetRawText());
         Assert.Equal("result", Assert.Single(policy.Seen).Target);
+    }
+
+    [Fact]
+    public async Task The_default_bridge_and_policy_are_registered_once_and_a_host_replacement_wins()
+    {
+        // Framework §2.23.1: the JavaScript features register conditionally, so their wiring is tested.
+        var services = new ServiceCollection();
+        new JintFeature().ConfigureServices(services);
+        new JavaScriptFeature().ConfigureServices(services);
+        new JintFeature().ConfigureServices(services);
+
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IJavaScriptPrecisionPolicy));
+        var adapter = Assert.Single(services, descriptor => descriptor.ImplementationInstance is ExpressionValueAdapter).ImplementationInstance;
+        Assert.Equal(new ExpressionValueAdapter("JavaScript", JavaScriptValueAdapter.Version), adapter);
+
+        var policy = new AllowingPolicy();
+        var replaced = new ServiceCollection();
+        replaced.AddSingleton<IJavaScriptPrecisionPolicy>(policy);
+        new JintFeature().ConfigureServices(replaced);
+        await using var provider = replaced.BuildServiceProvider();
+        Assert.Same(policy, provider.GetRequiredService<IJavaScriptPrecisionPolicy>());
+    }
+
+    [Fact]
+    public async Task A_second_policy_registration_fails_shell_activation_naming_both()
+    {
+        // Framework §2.6.2: a replacement contract never resolves by registration order.
+        var services = new ServiceCollection();
+        new JintFeature().ConfigureServices(services);
+        services.AddSingleton<IJavaScriptPrecisionPolicy, AllowingPolicy>();
+        await using var provider = services.BuildServiceProvider();
+        var validator = new Elsa.Expressions.JavaScript.Jint.Services.JavaScriptValueCompositionValidator(
+            provider.GetRequiredService<Elsa.Expressions.JavaScript.Jint.Services.JavaScriptValueComposition>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.InitializeAsync());
+
+        Assert.Contains("RefusingPrecisionPolicy", exception.Message);
+        Assert.Contains("AllowingPolicy", exception.Message);
     }
 
     [Theory]

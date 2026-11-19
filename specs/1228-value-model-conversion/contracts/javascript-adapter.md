@@ -6,7 +6,7 @@ Version: the first pinned version of the JSON profile (ADR 0046 V12). Any change
 
 | Core value | JavaScript value | Loss |
 |---|---|---|
-| Object | Plain, changeable object; key order and casing kept | none |
+| Object | Plain, changeable object; key order and casing kept while it is unchanged or changes in a member | none |
 | Array | Real, changeable array | none |
 | String (dates included) | String | none |
 | Boolean, null | Boolean, null | none |
@@ -40,7 +40,7 @@ Notation may change (`2.0` → `2`, `1e21` → `1e+21`); values do not.
 |---|---|---|
 | A lossy number reaches a write | Refused (policy) | Path, stored, written; integer: "exceeds 9007199254740991"; decimal: "has more digits than a JavaScript number holds"; remedy: hold it as a string |
 | A lossy element in a written array | Refused (policy) | Array path, "written as a whole", each lossy element with both values, remedy |
-| A lossy number read but not written | One warning per evaluation (instance diagnostic) | Lossy paths and stored values |
+| A lossy number read but not written | One warning per evaluation (instance diagnostic) | Lossy paths and why; never a value (spec 1229 FR-006) |
 | A value returned or written unchanged | Written from the original JSON | No diagnostic |
 | A lossy number passed to a host function | Logged warning | Function, argument path |
 | An input expression assigns a variable or a member of one | Refused at publish | Node, input, variable, path; "input expressions only read"; use a script activity |

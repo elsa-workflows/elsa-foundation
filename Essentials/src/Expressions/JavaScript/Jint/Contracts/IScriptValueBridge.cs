@@ -15,6 +15,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Contracts;
 /// It lives with the Jint engine, not in the engine-neutral JavaScript core, because entering a value and finding a
 /// change both work on the engine's values.
 /// </remarks>
+[Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptValueReplacementContract]
 public interface IScriptValueBridge
 {
     /// <summary>Starts the values of one evaluation in <paramref name="engine"/>. Dispose it when the evaluation ends.</summary>

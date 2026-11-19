@@ -86,10 +86,13 @@ public class JintFeature : IShellFeature
             .AddScoped<IJavaScriptScriptEvaluator, JintJavaScriptScriptEvaluator>();
 
         // Replacement contracts (spec 1228 FR-009, FR-012): one of each is active per host. A host feature replaces the
-        // default with services.Replace(...); there is no per-workflow or per-node override.
+        // default with services.Replace(...); there is no per-workflow or per-node override, and a second registration
+        // fails shell activation. Both are singletons on purpose: they hold no state and no scoped dependency; the
+        // per-evaluation state lives in the IScriptValueEvaluation each evaluation begins (framework §2.5.1).
         services.TryAddSingleton<IScriptValueBridge, CopyComparePatchValueBridge>();
         services.TryAddSingleton<IJavaScriptPrecisionPolicy, RefusingPrecisionPolicy>();
-        // Spec 1228 FR-028: publication pins this version into each node that uses JavaScript; the runtime checks it.
+        JavaScriptValueCompositionValidator.Register(services);
+        // Spec 1228 FR-028: publication pins this version into each executable that uses JavaScript.
         if (!services.Any(descriptor => descriptor.ImplementationInstance is ExpressionValueAdapter { Language: "JavaScript" }))
             services.AddSingleton(new ExpressionValueAdapter("JavaScript", JavaScriptValueAdapter.Version));
     }

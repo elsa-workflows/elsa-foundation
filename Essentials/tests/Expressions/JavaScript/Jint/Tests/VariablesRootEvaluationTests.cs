@@ -85,7 +85,7 @@ public sealed class VariablesRootEvaluationTests
     {
         // Spec 1228 FR-006a: the values are changeable (FR-001), so the bridge sees the change and the evaluation fails
         // with Elsa's diagnostic, never a bare TypeError and never a silent drop.
-        var exception = await Assert.ThrowsAsync<JavaScriptInputExpressionWriteException>(() => EvaluateAsync(
+        var exception = await Assert.ThrowsAsync<InputExpressionWriteException>(() => EvaluateAsync(
             source,
             pinned: new() { ["count"] = Json(5) }));
 

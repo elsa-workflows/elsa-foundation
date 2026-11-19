@@ -853,3 +853,4 @@ Elsa.Expressions.Core.Models.ExecutionWarningCollector.Warnings.get -> System.Co
 Elsa.Expressions.Core.Models.ExecutionWarning.WithDetail(string! key, string! value) -> Elsa.Expressions.Core.Models.ExecutionWarning!
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Warnings.init -> void
+Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure

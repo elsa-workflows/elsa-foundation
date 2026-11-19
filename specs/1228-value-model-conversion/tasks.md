@@ -18,7 +18,7 @@ Paths: `Jint/` = `Essentials/src/Expressions/JavaScript/Jint/`, `JsCore/` =
 ## Phase 1: Setup
 
 - [x] T001 Create the precision test suite data (numbers beyond ±2^53, a 29-digit decimal, `0.10000000000000000000000000001`, `10.50`, `2.0`, `1e21`, `1e30`, `1e400`, negatives) as shared test fixtures in `Essentials/tests/Expressions/JavaScript/Jint/Tests/Fixtures/PrecisionCases.cs`
-- [ ] T002 [P] Record the baseline JTest corpus measurement (convert and publish counts) before any change, using the spec 267 method (throwaway tests against a local JTest checkout, deleted before commit); note the counts in the PR description
+- [x] T002 [P] Record the baseline JTest corpus measurement (convert and publish counts) before any change, using the spec 267 method (throwaway tests against a local JTest checkout, deleted before commit); note the counts in the PR description — 8 of 36 convert and 6 of 36 publish at `b6a67a880a` (2 run to completion); in the PR description
 
 ## Phase 2: Foundational
 
@@ -113,8 +113,8 @@ Paths: `Jint/` = `Essentials/src/Expressions/JavaScript/Jint/`, `JsCore/` =
 - [x] T042 [P] Write the adapter contracts for JavaScript, activity inputs and outputs, and Liquid (FR-027) in `docs/reference/value-adapters.md`, from `contracts/javascript-adapter.md` and the ADR 0046 adapter tables
 - [x] T043 [P] Test that Liquid reads large numbers and long decimals without narrowing in `Essentials/tests/Expressions/Tests/LiquidNumberTests.cs`
 - [x] T044 Run the bridge benchmark on 1 KB, 100 KB and 1 MB inputs against today's engine (SC-007), keep it in the benchmark project so a later bridge can be compared, and record the result in the PR description — opt-in xunit benchmark `ScriptValueBridgeBenchmark` (no benchmark project exists and the plan adds no external dependency); the baseline is the pre-spec frozen conversion, kept in the benchmark; results in the PR
-- [ ] T045 Re-run the JTest corpus measurement (SC-008) and compare with T002
-- [ ] T046 Regenerate the dependency map and solution filters if project references changed; run the quickstart by hand
+- [x] T045 Re-run the JTest corpus measurement (SC-008) and compare with T002 — unchanged at the PR head: 8 of 36 convert and 6 of 36 publish (2 run to completion); one definition moved between refusal codes; SC-008 holds
+- [x] T046 Regenerate the dependency map and solution filters if project references changed; run the quickstart by hand — no project reference changed (only a package reference in the Jint project, whose lock files are updated), so the solution filters are unchanged and the dependency map is generated, not committed; quickstart steps 5 and 6 and the input-expression parts were run in the real app (PR description); steps 1 to 4 need the Run JavaScript body's `variables` root (S-4 T047)
 - [ ] T047 Set the spec status to `Implemented` in the finishing PR — **Waits on** US3, US6 and US7; the spec stays Approved, not Implemented, in this PR.
 
 ## Dependencies

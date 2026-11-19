@@ -81,7 +81,7 @@ internal sealed class JintPortableJavaScriptEvaluator(
         foreach (var (name, change) in variables?.Collect() ?? [])
         {
             if (change.Kind != ScriptValueChangeKind.Unchanged)
-                throw new JavaScriptInputExpressionWriteException(name, change.ChangedPaths.Count > 0 ? change.ChangedPaths[0] : change.Key);
+                throw new InputExpressionWriteException(name, change.ChangedPaths.Count > 0 ? change.ChangedPaths[0] : change.Key);
         }
 
         if (result.IsUndefined())

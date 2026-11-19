@@ -252,3 +252,6 @@ static readonly Elsa.Primitives.Models.TypeAliasConvention.ReservedBareAliases -
 Elsa.Primitives.Models.LostUpdateMode
 Elsa.Primitives.Models.LostUpdateMode.Default = 0 -> Elsa.Primitives.Models.LostUpdateMode
 Elsa.Primitives.Models.LostUpdateMode.Fault = 1 -> Elsa.Primitives.Models.LostUpdateMode
+Elsa.Primitives.Models.ValueTypeDescriptor.ValueTypeDescriptor(string! alias, Elsa.Primitives.Models.CollectionKind collectionKind, System.Text.Json.JsonElement? schema, int? schemaVersion) -> void
+Elsa.Primitives.Models.TypeReference.TypeReference(string! Alias, Elsa.Primitives.Models.CollectionKind CollectionKind) -> void
+Elsa.Primitives.Models.TypeReference.Deconstruct(out string! Alias, out Elsa.Primitives.Models.CollectionKind CollectionKind) -> void

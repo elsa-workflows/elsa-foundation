@@ -61,7 +61,7 @@ A script activity's changes go to the step write path of ADR 0090 (spec 1231). A
 | A lossy number passed to a host function | Logged warning, call not refused | `VF-PREC-002` | Function and argument path (the host function argument conversion is S-1's) |
 | An input expression assigns a variable or a member of one, visibly in its source | Refused at publish | `VF-BIND-001` | Node, input, variable, path; "input expressions only read"; use a script activity |
 | An input expression changes a read value in a way publication cannot see | Evaluation fails, nothing written | `VF-BIND-001` | Same |
-| A node published with no adapter version, or another one | Refused at run time | `VF-ADPT-001` | Node, pinned and running version; republish |
+| An executable published with no adapter version, or another one | Refused at run time | `VF-ADPT-001` | Executable, pinned and running version; republish |
 
 The precision policy is one replaceable host-wide component (`IJavaScriptPrecisionPolicy`, D-17). Elsa ships only
 `RefusingPrecisionPolicy`, with no options and no per-workflow or per-node override. A host that wants other handling

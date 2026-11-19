@@ -36,9 +36,12 @@ public sealed class ScriptValueModelRunTests
         run.AssertWorkflowCompleted();
         Assert.Equal(21, run.AssertCompleted("node-js").Completion!.Result.InlineValue!.Value.GetProperty("value").GetInt32());
         var frame = Assert.IsType<VariableFrameState>(run.WorkflowState?.RootVariableFrame);
-        // SC-001: no stored value changes after a read; the stored text, large id and 10.50 included, is the same.
+        // SC-001: no stored value changes after a read; the stored text, large id and 10.50 included, is the same, and
+        // so is the version: nothing was written.
         Assert.Equal(Order, frame.Values["var-order"].InlineValue!.Value.GetRawText());
         Assert.Equal(Other, frame.Values["var-other"].InlineValue!.Value.GetRawText());
+        Assert.Equal(VariableVersion.Initial.Version, frame.VersionOf("var-order").Version);
+        Assert.Equal(VariableVersion.Initial.Version, frame.VersionOf("var-other").Version);
 
         // Spec 1228 FR-015: the script computed with a lossy id it did not write, so the step records one warning; the
         // input expression passed the order through unchanged, so it raised none.
@@ -116,10 +119,21 @@ public sealed class ScriptValueModelRunTests
         Assert.Equal(3, run.AssertCompleted("node-js").Completion!.Result.InlineValue!.Value.GetProperty("value").GetInt32());
     }
 
-    private static async Task<(WorkflowExecutionRun Run, string Incident)> RunBlockedAsync(string script, string argumentsExpression)
+    [Fact]
+    public async Task The_write_diagnostic_names_the_variable_and_path_even_when_the_variable_is_sensitive()
+    {
+        // FR-006a: VF-BIND-001 carries no value, so protection does not redact it (spec 1229 FR-006).
+        var (_, incident) = await RunBlockedAsync("return 1;", "(() => { const o = variables.order; o.price = 1; return {}; })()", sensitive: true);
+
+        Assert.Contains(JavaScriptValueDiagnostics.InputExpressionWrite, incident);
+        Assert.Contains("variables.order.price", incident);
+        Assert.DoesNotContain("9007199254740993", incident);
+    }
+
+    private static async Task<(WorkflowExecutionRun Run, string Incident)> RunBlockedAsync(string script, string argumentsExpression, bool sensitive = false)
     {
         await using var harness = NewHarness();
-        var run = await RunAsync(harness, script, argumentsExpression, Order);
+        var run = await RunAsync(harness, script, argumentsExpression, Order, sensitive);
         var incident = Assert.Single(await harness.Services.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IIncidentStateStore>().ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
         Assert.True(incident.IsBlocking);
         return (run, incident.Message + " " + string.Join(" ", incident.Metadata.Values));
@@ -146,7 +160,7 @@ public sealed class ScriptValueModelRunTests
             })
             .Build("actexec-js");
 
-    private static async Task<WorkflowExecutionRun> RunAsync(WorkflowExecutionHarness harness, string script, string argumentsExpression, string order)
+    private static async Task<WorkflowExecutionRun> RunAsync(WorkflowExecutionHarness harness, string script, string argumentsExpression, string order, bool sensitive = false)
     {
         var node = new ExecutableNode(
             executableNodeId: "node-js",
@@ -165,16 +179,18 @@ public sealed class ScriptValueModelRunTests
         return await harness.RunAsync(
             WorkflowExecutionHarness.NewExecutable(
                 node,
-                Declare("var-order", "order", order),
+                Declare("var-order", "order", order, sensitive),
                 Declare("var-other", "other", Other)),
             allowPendingWorkOnTerminalCompletion: true,
             allowAcceptedButFaulted: true);
     }
 
-    private static RuntimeVariableDeclaration Declare(string key, string name, string json)
+    private static RuntimeVariableDeclaration Declare(string key, string name, string json, bool sensitive = false)
     {
         var type = new ValueTypeDescriptor("Object");
-        var policy = ValueProtectionPolicy.InstanceInline;
+        var policy = sensitive
+            ? new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true)
+            : ValueProtectionPolicy.InstanceInline;
         return new RuntimeVariableDeclaration(key, name, type, policy,
             new RuntimeInputBinding(key, type, policy, RuntimeInputBindingSource.Literal,
                 literal: ValueEnvelope.Inline(type, JsonSerializer.Deserialize<JsonElement>(json), policy)));

@@ -238,6 +238,41 @@ public sealed class CopyComparePatchValueBridgeTests
     }
 
     [Fact]
+    public void A_value_holding_a_number_too_large_for_a_double_passes_through_unchanged_and_exactly()
+    {
+        // FR-011: 1e400 becomes Infinity, which JSON writes as null. Unchanged, it is still written from its original JSON.
+        using var run = Run("variables.order.b;", ("order", """{"big":1e400,"b":1}"""));
+
+        Assert.Equal(ScriptValueChangeKind.Unchanged, Assert.Single(run.Changes).Change.Kind);
+        var write = run.Values.Write(run.Values.Enter("probe", JsonSerializer.Deserialize<JsonElement>("""{"big":-1e400}""")), "result");
+        Assert.Equal("""{"big":-1e400}""", write.Value!.Value.GetRawText());
+        Assert.Empty(write.Losses);
+    }
+
+    [Theory]
+    [InlineData("variables.order.big")]
+    [InlineData("({ v: variables.order.big })")]
+    public void A_number_that_became_infinity_and_is_written_is_a_loss_not_a_silent_null(string script)
+    {
+        using var run = Run(script, ("order", """{"big":1e400,"b":1}"""));
+
+        var write = run.Values.Write(run.Returned, "result");
+        var loss = Assert.Single(write.Losses);
+        Assert.Equal("1e400", loss.Entered.Stored);
+        Assert.Equal("null", loss.Written);
+    }
+
+    [Fact]
+    public void A_value_made_unserializable_is_reported_changed_as_a_whole()
+    {
+        using var run = Run("variables.order.self = variables.order;", ("order", Order));
+
+        var change = Assert.Single(run.Changes).Change;
+        Assert.Equal(ScriptValueChangeKind.WholeAssignment, change.Kind);
+        Assert.Equal(["variables.order"], change.ChangedPaths);
+    }
+
+    [Fact]
     public void The_bridge_records_its_cost_per_evaluation()
     {
         var measured = new List<string>();

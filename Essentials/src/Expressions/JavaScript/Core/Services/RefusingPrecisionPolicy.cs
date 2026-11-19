@@ -8,6 +8,10 @@ namespace Elsa.Expressions.JavaScript.Core.Services;
 /// It has no options. The diagnostic names the path, the stored and the written value, says why, and gives the remedy;
 /// an element of an array written as a whole also names the array.
 /// </summary>
+/// <remarks>
+/// Public so that a host's own policy can compose it: allow some losses and delegate the rest, or reuse
+/// <see cref="Diagnose"/> for the same diagnostic text. It holds no state.
+/// </remarks>
 public sealed class RefusingPrecisionPolicy : IJavaScriptPrecisionPolicy
 {
     /// <summary>The largest integer a JavaScript number holds exactly: 2^53 − 1.</summary>

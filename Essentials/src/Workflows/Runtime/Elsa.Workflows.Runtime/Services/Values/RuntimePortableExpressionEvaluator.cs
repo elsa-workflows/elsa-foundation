@@ -221,10 +221,11 @@ internal sealed class RuntimePortableExpressionEvaluator(
         bool conservativelyRedact = false)
     {
         var message = $"Input '{inputName}' on executable node '{nodeId}' failed to materialize or evaluate its portable '{expression.Language}' expression with fingerprint '{definition.Fingerprint}'.";
-        var cause = conservativelyRedact ||
+        // A failure that names only codes, variables and paths keeps its message: there is no value in it to protect.
+        var cause = exception is not IValueFreeExpressionFailure && (conservativelyRedact ||
                     effectivePolicy.IsSensitive ||
                     effectivePolicy.RequiresEncryption ||
-                    !string.IsNullOrWhiteSpace(effectivePolicy.RedactionMode)
+                    !string.IsNullOrWhiteSpace(effectivePolicy.RedactionMode))
             ? new RedactedPortableExpressionException(exception.GetType())
             : exception;
         return new ExpressionInputFailureException(code, inputName, expression.Language, phase, message, cause);

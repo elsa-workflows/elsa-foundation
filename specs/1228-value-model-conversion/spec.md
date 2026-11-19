@@ -298,7 +298,7 @@ sensitive and redacted where the variable is.
 - Negative integers below −(2^53 − 1) lose like positive ones.
 - `1e21` and `2.0` come back as `1e+21` and `2`. The notation changes, the number does not; no loss.
 - A script that deletes a member reports a member change.
-- Key order and key casing are kept.
+- Key order and key casing are kept for a value that is unchanged or changes in a member: untouched members keep their stored text and place. A value the script builds or changes as a whole, or returns changed, has JavaScript's key order (integer-like keys first), as JavaScript holds it.
 - A changed array with no lossy element is reported as a whole with no diagnostic.
 - Liquid reads JSON numbers as decimals and does not narrow; it needs no precision policy.
 - A local copy (`{...variables.order}`) changed by a script or an input expression is not a change to `order`.

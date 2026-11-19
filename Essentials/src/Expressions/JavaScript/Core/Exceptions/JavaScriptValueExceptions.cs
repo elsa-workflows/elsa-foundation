@@ -54,9 +54,9 @@ public sealed class JavaScriptPrecisionException : InvalidOperationException
 /// (replay, each loop pass, preflight), so a write would apply a variable number of times. The evaluation fails and
 /// nothing is written.
 /// </summary>
-public sealed class JavaScriptInputExpressionWriteException : InvalidOperationException
+public sealed class InputExpressionWriteException : InvalidOperationException, Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure
 {
-    public JavaScriptInputExpressionWriteException(string variable, string path)
+    public InputExpressionWriteException(string variable, string path)
         : base(Describe(variable, path))
     {
         Variable = variable;

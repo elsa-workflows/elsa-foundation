@@ -8,6 +8,12 @@ namespace Elsa.Primitives.Models;
 /// </summary>
 public sealed record ValueTypeDescriptor
 {
+    /// <summary>Keeps the constructor from before the nested element existed (review checklist §E5).</summary>
+    public ValueTypeDescriptor(string alias, CollectionKind collectionKind, JsonElement? schema, int? schemaVersion)
+        : this(alias, collectionKind, schema, schemaVersion, element: null)
+    {
+    }
+
     public ValueTypeDescriptor(
         string alias,
         CollectionKind collectionKind = CollectionKind.Single,

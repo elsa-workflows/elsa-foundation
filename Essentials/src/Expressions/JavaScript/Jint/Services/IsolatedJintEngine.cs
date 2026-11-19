@@ -237,7 +237,21 @@ internal static class IsolatedJintEngine
 
         /// <summary>One change per variable read or assigned, in the order the script first touched them.</summary>
         public IReadOnlyList<(string Name, ScriptValueChange Change)> Collect() =>
-            _order.Select(name => (name, values.Collect(Key(name), _current[name], _assigned.Contains(name)))).ToArray();
+            _order.Select(name => (name, CollectOne(name))).ToArray();
+
+        // A value the script made unserializable (a cycle, a BigInt) was changed: it is reported as changed as a whole,
+        // so an input expression fails with its write diagnostic rather than the engine's error (spec 1228 FR-006a).
+        private ScriptValueChange CollectOne(string name)
+        {
+            try
+            {
+                return values.Collect(Key(name), _current[name], _assigned.Contains(name));
+            }
+            catch (JavaScriptException)
+            {
+                return new ScriptValueChange(Key(name), ScriptValueChangeKind.WholeAssignment, null, [Key(name)], []);
+            }
+        }
 
         public static string Key(string name) => ValuePaths.Member("variables", name);
 
