@@ -1341,21 +1341,20 @@ jobs:
             ${{ runner.os }}-studio-nuget-
 
       - name: Restore
-        run: dotnet restore Elsa.Studio.slnx --locked-mode -p:WarningsNotAsErrors=NU1603
+        run: dotnet restore Elsa.Studio.slnx --locked-mode
         working-directory: Studio
 
       - name: Build
-        run: dotnet build Elsa.Studio.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603 "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA"
+        run: dotnet build Elsa.Studio.slnx -c Release --no-restore "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA"
         working-directory: Studio
 
       - name: Test
-        run: dotnet test Elsa.Studio.slnx -c Release --no-build -p:WarningsNotAsErrors=NU1603 "-p:Version=$STUDIO_PACKAGE_VERSION"
+        run: dotnet test Elsa.Studio.slnx -c Release --no-build "-p:Version=$STUDIO_PACKAGE_VERSION"
         working-directory: Studio
 
       - name: Pack Studio NuGet projects without publishing
         run: >-
           dotnet pack Elsa.Studio.slnx -c Release --no-build
-          -p:WarningsNotAsErrors=NU1603
           "-p:Version=$STUDIO_PACKAGE_VERSION"
           "-p:SourceRevisionId=$GITHUB_SHA"
           "-p:PackageOutputPath=$RUNNER_TEMP/studio-nuget"

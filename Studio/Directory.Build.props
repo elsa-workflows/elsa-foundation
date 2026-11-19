@@ -4,9 +4,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Until Elsa 4's first release, RS0016/RS0017 stay warnings and must not fail the build.
-         Re-enable them (drop WarningsNotAsErrors) with a fresh PublicAPI.Shipped.txt baseline at that
-         release. Studio does not import the root Directory.Build.props, so this is set here too. -->
-    <WarningsNotAsErrors>$(WarningsNotAsErrors);RS0016;RS0017</WarningsNotAsErrors>
+         NU1603 is listed here too so CI and Docker do not pass -p:WarningsNotAsErrors=NU1603, which
+         is a global property and would override this list, dropping RS0016/RS0017. Re-enable the
+         public-API rules (remove RS0016/RS0017 from this list, keep NU1603) with a fresh
+         PublicAPI.Shipped.txt baseline at that release; see #4862. Studio does not import the root
+         Directory.Build.props, so this is set here. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1603;RS0016;RS0017</WarningsNotAsErrors>
     <PackageIcon>icon.png</PackageIcon>
     <!-- Shared NuGet package metadata for the publishable Elsa.Studio.* module libraries.
          No Version here — CI injects /p:Version. -->

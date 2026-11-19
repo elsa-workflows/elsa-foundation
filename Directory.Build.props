@@ -134,10 +134,13 @@
     after this file but before any item, so an item condition here sees it and a property condition would
     not. RS0016 (public API not declared) and RS0017 (declared API removed) stay warnings until Elsa 4's
     first release: there is no compatibility promise yet, and promoting them to errors failed builds
-    before any tests ran. WarningsNotAsErrors keeps TreatWarningsAsErrors from re-promoting them. At the
-    first Elsa 4 release, put them back in WarningsAsErrors, drop WarningsNotAsErrors, and refresh
-    PublicAPI.Shipped.txt as a new baseline. Every other PublicApiAnalyzers rule stays a warning.
-    PrivateAssets="all" keeps the analyzer out of every packed nupkg's dependencies.
+    before any tests ran. They do not fail the build here because they are not in WarningsAsErrors and
+    root projects do not set TreatWarningsAsErrors. WarningsNotAsErrors is a local safety net only; some
+    non-Studio CI steps still pass -p:WarningsNotAsErrors=NU1603, which is a global property and would
+    override this list. At the first Elsa 4 release (see #4862), put them back in WarningsAsErrors,
+    drop them from WarningsNotAsErrors, and refresh PublicAPI.Shipped.txt as a new baseline. Every other
+    PublicApiAnalyzers rule stays a warning. PrivateAssets="all" keeps the analyzer out of every packed
+    nupkg's dependencies.
 
     The condition reads a project-file property, never $(Configuration), so the Release and Debug restore
     graphs agree; EfCoreDependencyGuardTests admits exactly this condition.
