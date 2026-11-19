@@ -260,6 +260,7 @@ public sealed partial class MongoStore : IKernelStore
         CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
         if (batch.Window is not null) throw new NotSupportedException("MongoDB cannot enforce the requested commit window.");
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
         try
         {
@@ -446,6 +447,13 @@ public sealed partial class MongoStore : IKernelStore
                     await session.AbortTransactionAsync(cancellationToken);
                     return new Committed(false, 0, []);
                 }
+            }
+            if (_options.NodeLease && System.Diagnostics.Stopwatch.GetElapsedTime(sentAt) > batch.Lease)
+            {
+                // The commit-step deadline (the node lease): past the lease since the batch was sent, the owner's guard has
+                // expired too; abort instead of committing.
+                await session.AbortTransactionAsync(cancellationToken);
+                return new Committed(false, 0, []);
             }
             await session.CommitTransactionAsync(cancellationToken);
             if (_options.FenceInBatch) foreach (var fence in fences) _known[(fence.Partition, fence.Epoch)] = clocks[fence.Partition];

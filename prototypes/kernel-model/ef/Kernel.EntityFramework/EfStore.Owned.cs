@@ -38,6 +38,7 @@ public sealed partial class EfStore
 
     private async Task<Committed> CommitOwnedAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, CancellationToken cancellationToken)
     {
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         var dialect = RequireDialect();
         await using var db = create();
         db.Database.AutoSavepointsEnabled = false;
@@ -173,6 +174,7 @@ public sealed partial class EfStore
             if (command.HasFence) now = result.Now;
             seqs.AddRange(result.Seqs);
         }
+        if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
         return new Committed(true, now, seqs);
     }

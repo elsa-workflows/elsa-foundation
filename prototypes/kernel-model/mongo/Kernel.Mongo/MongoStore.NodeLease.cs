@@ -61,7 +61,15 @@ public sealed partial class MongoStore
     /// of the lease (maxTimeMS on the reads, and the client's cancel). 3: one updateMany takes each document that is free,
     /// this node's, or owned by an expired owner, in ascending id; then the deaths, as before.
     /// </summary>
-    private Task<OwnedLease> NodeTakeAsync(IReadOnlyList<int> set, string node, TimeSpan lease, CancellationToken cancellationToken) => RetriedAsync(async session =>
+    private async Task<OwnedLease> NodeTakeAsync(IReadOnlyList<int> set, string node, TimeSpan lease, CancellationToken cancellationToken)
+    {
+        // The clocks are recorded once the transaction has committed: a retried attempt's documents are nobody's.
+        var (taken, clocks) = await RetriedAsync(session => NodeTakeOnceAsync(session, set, node, lease, cancellationToken), cancellationToken);
+        foreach (var (partition, epoch, clock) in clocks) Known(partition, epoch, clock);
+        return taken;
+    }
+
+    private async Task<(OwnedLease, List<(int, long, long)>)> NodeTakeOnceAsync(IClientSessionHandle session, IReadOnlyList<int> set, string node, TimeSpan lease, CancellationToken cancellationToken)
     {
         var ids = new BsonDocument("$in", new BsonArray(set));
         var expired = new BsonArray();
@@ -69,15 +77,22 @@ public sealed partial class MongoStore
         {
             deadline.CancelAfter(lease / 3);
             var bounded = new FindOptions { MaxTime = lease / 3 };
-            var owners = (await _partitions.Find(session, new BsonDocument { { "_id", ids }, { "owner", new BsonDocument("$nin", new BsonArray { BsonNull.Value, node }) } }, bounded)
-                .Project(new BsonDocument("owner", 1)).ToListAsync(deadline.Token)).Select(d => d["owner"].AsString).Distinct(StringComparer.Ordinal).ToList();
-            if (owners.Count > 0)
+            try
             {
-                var live = (await _nodes.Find(session, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(owners)) }, { "$expr", new BsonDocument("$gte", new BsonArray { "$leaseUntil", NowMs }) } }, bounded)
-                    .Project(new BsonDocument("_id", 1)).ToListAsync(deadline.Token)).Select(d => d["_id"].AsString).ToHashSet(StringComparer.Ordinal);
-                foreach (var owner in owners.Where(o => !live.Contains(o))) expired.Add(owner);
+                var owners = (await _partitions.Find(session, new BsonDocument { { "_id", ids }, { "owner", new BsonDocument("$nin", new BsonArray { BsonNull.Value, node }) } }, bounded)
+                    .Project(new BsonDocument("owner", 1)).ToListAsync(deadline.Token)).Select(d => d["owner"].AsString).Distinct(StringComparer.Ordinal).ToList();
+                if (owners.Count > 0)
+                {
+                    var live = (await _nodes.Find(session, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(owners)) }, { "$expr", new BsonDocument("$gte", new BsonArray { "$leaseUntil", NowMs }) } }, bounded)
+                        .Project(new BsonDocument("_id", 1)).ToListAsync(deadline.Token)).Select(d => d["_id"].AsString).ToHashSet(StringComparer.Ordinal);
+                    foreach (var owner in owners.Where(o => !live.Contains(o))) expired.Add(owner);
+                }
+                await _nodes.UpdateOneAsync(session, new BsonDocument("_id", node), NodeRenewal(lease), new UpdateOptions { IsUpsert = true }, deadline.Token);
             }
-            await _nodes.UpdateOneAsync(session, new BsonDocument("_id", node), NodeRenewal(lease), new UpdateOptions { IsUpsert = true }, deadline.Token);
+            catch (Exception e) when (Deadline(e, deadline, cancellationToken))
+            {
+                throw new StoreException(Failure.Transient, "The take's read of the node documents and its own document's write outlasted a third of the lease.", e);
+            }
         }
         var takeable = new BsonDocument
         {
@@ -88,9 +103,13 @@ public sealed partial class MongoStore
         var docs = await _partitions.Find(session, new BsonDocument { { "_id", ids }, { "owner", node } }).Sort(new BsonDocument("_id", 1)).ToListAsync(cancellationToken);
         if (docs.Where(d => d["died"].AsBoolean).Select(d => new BsonDocument { { "partition", d["_id"] }, { "trial", d["epoch"].AsInt64 - 1 }, { "done", false } }).ToList() is { Count: > 0 } dead)
             await _messages.UpdateManyAsync(session, new BsonDocument("$or", new BsonArray(dead)), new BsonDocument("$inc", new BsonDocument("attempts", 1)), cancellationToken: cancellationToken);
-        foreach (var d in docs) Known(d["_id"].AsInt32, d["epoch"].AsInt64, d["clock"].AsInt64);
-        return new OwnedLease([.. docs.Select(d => new PartitionFence(d["_id"].AsInt32, d["epoch"].AsInt64, d["position"].AsInt64))], docs.Count > 0 ? docs[0]["now"].AsInt64 : 0);
-    }, cancellationToken);
+        return (new OwnedLease([.. docs.Select(d => new PartitionFence(d["_id"].AsInt32, d["epoch"].AsInt64, d["position"].AsInt64))], docs.Count > 0 ? docs[0]["now"].AsInt64 : 0),
+            [.. docs.Select(d => (d["_id"].AsInt32, d["epoch"].AsInt64, d["clock"].AsInt64))]);
+    }
+
+    // A bound of a third of the lease ran out: the client's cancel of the deadline, or the server's maxTimeMS (MaxTimeMSExpired).
+    private static bool Deadline(Exception e, CancellationTokenSource? deadline, CancellationToken caller) =>
+        !caller.IsCancellationRequested && (deadline?.IsCancellationRequested == true || e is MongoExecutionTimeoutException);
 
     /// <summary>The take's $set without the per-partition lease: a death, the new owner and epoch, the primary's time.</summary>
     private static BsonDocument TakeSet(string node) => new()
@@ -134,10 +153,19 @@ public sealed partial class MongoStore
     public async ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default)
     {
         if (!_options.NodeLease) throw new NotSupportedException("The node lease is off in this store.");
-        var beat = await _nodes.FindOneAndUpdateAsync(new BsonDocument("_id", node), NodeRenewal(lease),
-            new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After, MaxTime = lease / 3 }, cancellationToken);
+        BsonDocument beat;
+        List<BsonDocument> owned;
+        try
+        {
+            beat = await _nodes.FindOneAndUpdateAsync(new BsonDocument("_id", node), NodeRenewal(lease),
+                new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After, MaxTime = lease / 3 }, cancellationToken);
+            owned = await _partitions.Find(new BsonDocument("owner", node), new FindOptions { MaxTime = lease / 3 }).Project(new BsonDocument("epoch", 1)).Sort(new BsonDocument("_id", 1)).ToListAsync(cancellationToken);
+        }
+        catch (Exception e) when (Deadline(e, null, cancellationToken))
+        {
+            throw new StoreException(Failure.Unknown, "The heartbeat outlasted a third of the lease.", e);
+        }
         var now = beat["seenAt"].AsInt64;
-        var owned = await _partitions.Find(new BsonDocument("owner", node), new FindOptions { MaxTime = lease / 3 }).Project(new BsonDocument("epoch", 1)).Sort(new BsonDocument("_id", 1)).ToListAsync(cancellationToken);
         return new NodeBeat([.. owned.Select(d => new OwnedEpoch(d["_id"].AsInt32, d["epoch"].AsInt64))], now, await MembershipAsync(now, window, cancellationToken));
     }
 

@@ -485,6 +485,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, CancellationToken cancellationToken)
     {
         if (OwnedCommit) return await CommitOwnedAsync(batch, waits, cancellationToken);      // EfStore.Owned.cs
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         await using var db = create();
         foreach(var turn in batch.Turns.Where(t=>t.Row is {} r && t.Instance!=r.Id))
         {
@@ -604,6 +605,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (turn.Delete)
                 await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
         }
+        if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
         return new Committed(true, now, sent.Select(m => m.Seq).ToList());
     }
