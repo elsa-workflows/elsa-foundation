@@ -2245,7 +2245,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
 /// every partition the process holds, so a trial in one of a worker's partitions holds back its other partitions too.
 /// Within a worker, the trial filters of <c>ReadyForTurns</c> and <c>RunTurn</c> enforce that
 /// (<see cref="Flaw.TrialSparesOtherPartitions"/> breaks them); <see cref="Flaw.TrialPerPartition"/> gives each worker its
-/// own gate, which is per partition only while a worker owns one, as on a store without owned sets. A reset releases the gate, so a trial in a partition the worker dropped gates nothing it took back.
+/// own gate, which is per partition only while a worker owns one, as on a store without owned sets. A reset releases the
+/// gate, so a trial in a partition the worker dropped gates nothing it took back.
 /// </summary>
 public sealed class TrialGate
 {

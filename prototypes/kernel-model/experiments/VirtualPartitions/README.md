@@ -77,10 +77,12 @@ In (i) it also models K1's protocol (slice 0 of the range-ownership work, before
 - **The witness.** An outstanding flush spans several virtual partitions. Some of them, never all, move to other nodes,
   by lease expiry (a late beat; commits renewed the rest) or by a cooperative release during the flush. Then the flush
   lands. It must be refused whole.
-- **The keeping reset.** After a refused flush the owner re-reads its rows in one statement, renewing them like a beat
-  that returns id, owner, epoch and position. It keeps every partition still its at the epoch it holds, with the store's
-  position. It takes nothing and drops the rest. It then polls the kept partitions again, including what it marked at
-  their epoch.
+- **The reset after a refused flush, as the Worker does it** (K1 slice 7; the Worker's choice of slice 2a). The owner
+  retakes, one at a time and each at a new epoch with the store's position, every partition still its at the epoch it
+  holds (`IKernelStore.RetakeAsync`: no death, nothing counted). It drops the rest and takes nothing else, then polls
+  the kept partitions at their new epochs, which reads back what it marked at the old ones. Slice 0 modelled a keeping
+  reset instead (one statement that kept the epochs, and a poll with `Seen <= epoch` once); it is now the mutation
+  `ResetPollsSeenBelow`, without that one poll.
 - **The reset after a lost answer** re-takes, one partition at a time and each at a new epoch, the picture's partitions
   that are still the node's or free, and drops the rest. Every take keeps what it got.
 - **The projector per virtual partition.** A round reads one partition's cursor and position and writes later or at
@@ -91,7 +93,7 @@ Its checks:
 - **W1:** a flush lands whole or not at all.
 - **W3 (liveness):** after the witness, the old owner serves every partition of the flush it still holds, at the
   store's epoch and position.
-- **W4 (cost):** the reset took none of those again.
+- **W4:** the reset retook each of those once, at the epoch after the one it held.
 - **L1 (liveness, after every reset and at the end):** what a live process holds live in the store, it serves in a picture.
 - **S1:** no message is marked above its partition's epoch, or at it while the owner does not have it in memory (stranded).
 - **S2:** the poll's suspect test agrees with who really marked the message.
@@ -104,8 +106,10 @@ Its checks:
 Mutations and what catches them, at both counts:
 - `FenceSubset`: W1.
 - `SeenAtNodeEpoch`: S1; with S1 off, S2.
-- `ResetAll`: W4. It is a cost, since the kept partitions are taken again.
-- `ResetPollsSeenBelow`: S1.
+- `ResetAll` (K1 slice 7: a refused flush drops the whole picture, what is still held included, and takes nothing
+  back): W3. Before slice 7 it reset by a take, which is the Worker's cost now, so W4 no longer flags it as one.
+- `ResetPollsSeenBelow` (K1 slice 7: the reset keeps the held epochs, with no retake, and polls `Seen < epoch`): W4,
+  first. It is slice 0's keeping reset without its one `Seen <= epoch` poll, which slice 0 caught by S1 (stranded).
 - `ProjectorBlindWrite`: P1.
 - `ProjectorJumps`: P3.
 - C1 has no mutation of its own: a second consumption needs a second landing, which the fence refuses and I1 catches first.

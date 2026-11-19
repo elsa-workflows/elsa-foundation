@@ -502,8 +502,9 @@ public sealed partial class World
         foreach (var turn in batch.Turns)
             foreach (var sent in turn.Sent)
             {
-                if (sent.Kind != Kinds.Start || sent.Sender != turn.Instance || !sent.Target.ChildAddress) continue;
-                var issued = sent.Target.Id[(sent.Target.Id.IndexOf("/child/", StringComparison.Ordinal) + 7)..].Split('.');
+                var at = sent.Target.Id.IndexOf("/child/", StringComparison.Ordinal);
+                if (sent.Kind != Kinds.Start || sent.Sender != turn.Instance || !sent.Target.ChildAddress || at < 0) continue;
+                var issued = sent.Target.Id[(at + 7)..].Split('.');
                 var (partition, epoch) = (batch.PartitionOf(turn), fences.GetValueOrDefault(batch.PartitionOf(turn)));
                 if (issued.Length != 3 || issued[0] != partition.ToString(System.Globalization.CultureInfo.InvariantCulture) || issued[1] != epoch.ToString(System.Globalization.CultureInfo.InvariantCulture))
                     Faults.Add($"C2 {turn.Instance} started child {sent.Target}, and its commit is fenced at partition {partition}, epoch {epoch}");
