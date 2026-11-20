@@ -21,6 +21,8 @@ internal static class StudioAssetCaching
     public static IEndpointRouteBuilder MapStudioFallback(this IEndpointRouteBuilder endpoints, string indexFile)
     {
         endpoints.MapFallbackToFile(indexFile, RevalidatingStaticFiles);
+        // Dotted opaque identities need an HTML navigation fallback without claiming static-file requests.
+        endpoints.MapFallbackToFile("{*path:studioHtmlNavigation}", indexFile, RevalidatingStaticFiles);
         return endpoints;
     }
 }

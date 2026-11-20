@@ -228,13 +228,19 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       expect(records.rows).toHaveLength(4);
       expect(new Set(records.rows.map(row => row.values.executionId.value))).toEqual(new Set(seeded.executionIds));
       await capture(page, info, "question-records");
-      const dashboardNavigation = page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Dashboards", exact: true });
+      const dashboardNavigation = page.getByRole("navigation", { name: "Operate", exact: true }).getByRole("link", { name: "Dashboards", exact: true });
+      async function revealDashboardNavigation() {
+        if (!await dashboardNavigation.isVisible()) await page.getByRole("button", { name: "Operate", exact: true }).click();
+        await expect(dashboardNavigation).toBeVisible();
+      }
+      await revealDashboardNavigation();
       const cancelPrompt = page.waitForEvent("dialog"); const cancelledNavigation = dashboardNavigation.click();
       const discard = await cancelPrompt; expect(discard.type()).toBe("confirm"); expect(discard.message()).toContain("Discard unsaved changes"); await discard.dismiss(); await cancelledNavigation;
       await expectResourceLocation("questions", copied.id); await expect(page.getByRole("combobox", { name: "Query form", exact: true })).toHaveValue("records");
       await capture(page, info, "question-navigation-cancelled");
       const tabs = page.getByRole("tablist", { name: "Open screens", exact: true });
       const questionTabId = await tabs.getByRole("tab", { selected: true }).getAttribute("data-tab-id"); expect(questionTabId).toBeTruthy();
+      await revealDashboardNavigation();
       await dashboardNavigation.click({ modifiers: ["Alt"] }); await expect(page.getByRole("heading", { name: "Dashboards", level: 2, exact: true })).toBeVisible();
       const dashboardTabId = await tabs.getByRole("tab", { selected: true }).getAttribute("data-tab-id"); expect(dashboardTabId).not.toBe(questionTabId);
       await tabs.locator(`[data-tab-id="${questionTabId}"]`).click();
@@ -245,6 +251,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       // the dirty editor and must ask its guard, rather than switching to an existing tab.
       await tabs.locator(`[data-tab-id="${dashboardTabId}"]`).press("Delete");
       await expect(tabs.locator(`[data-tab-id="${dashboardTabId}"]`)).toHaveCount(0);
+      await revealDashboardNavigation();
       const confirmPrompt = page.waitForEvent("dialog"); const confirmedNavigation = dashboardNavigation.click();
       const confirmedDiscard = await confirmPrompt; expect(confirmedDiscard.type()).toBe("confirm"); await confirmedDiscard.accept(); await confirmedNavigation;
       await expect(page.getByRole("heading", { name: "Dashboards", level: 2, exact: true })).toBeVisible(); await capture(page, info, "question-navigation-confirmed");

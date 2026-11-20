@@ -28,7 +28,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
     {
         ArgumentNullException.ThrowIfNull(decision);
         var scheduledNodes = new HashSet<string>(StringComparer.Ordinal);
-        var takenConnectionIds = new HashSet<string>(StringComparer.Ordinal);
+        var selectedRoutes = new FlowchartSelectedRoutes();
         var firstWinsScopeId = ResolveFirstWinsScopeId(state, decision, currentPath, policyKind);
         if (firstWinsScopeId is not null)
         {
@@ -57,7 +57,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
             }
             state = command.Kind switch
             {
-                FlowchartPolicyCommandKind.ScheduleNode => ApplyScheduleNodeCommand(context, state, graph, effectiveCommand, currentPath, schedulingActivityExecutionId, policyKind, scheduledNodes, takenConnectionIds),
+                FlowchartPolicyCommandKind.ScheduleNode => ApplyScheduleNodeCommand(context, state, graph, effectiveCommand, currentPath, schedulingActivityExecutionId, policyKind, scheduledNodes, selectedRoutes),
                 FlowchartPolicyCommandKind.WriteDiagnostic => ApplyDiagnosticCommand(state, effectiveCommand, currentPath),
                 FlowchartPolicyCommandKind.CompleteExecutionPath => UpdatePath(state, currentPath with { Status = ExecutionPathStatus.Completed }),
                 FlowchartPolicyCommandKind.WaitExecutionPath => UpdatePath(state, currentPath with { Status = ExecutionPathStatus.Waiting }),
@@ -68,8 +68,8 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
 
         // A policy decides which of its node's outbound connections to take, so the ones it left out are the
         // untaken half of this completion, exactly as an unmatched outcome port is on the routing path. Dead
-        // arrivals land in the same scope the schedule commands used, so live and dead answers to one join
-        // share a partition key.
+        // alternatives to a selected target use that target's actual arrival partition. Other dead edges use
+        // the decision's default partition.
         //
         // Only when the policy actually routed. A decision that schedules nothing — one that parks the path
         // with WaitExecutionPath, or cancels it — has not answered the routing question at all, and reading its
@@ -79,14 +79,14 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
             return state;
 
         var deadPathScopeId = firstWinsScopeId ?? defaultScheduleScopeId ?? currentPath.ExecutionScopeId;
-        return joinCoordinator.RouteUntakenOutbound(
+        return joinCoordinator.RouteUntakenConnections(
             context,
             state,
             graph,
             sourceNodeId,
             deadPathScopeId,
             ResolveIterationKey(state, deadPathScopeId),
-            takenConnectionIds,
+            selectedRoutes,
             schedulingActivityExecutionId);
     }
 
@@ -99,7 +99,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
         string schedulingActivityExecutionId,
         string policyKind,
         HashSet<string> scheduledNodes,
-        HashSet<string> takenConnectionIds)
+        FlowchartSelectedRoutes selectedRoutes)
     {
         if (string.IsNullOrWhiteSpace(command.NodeId))
             throw NewInvalidPolicyCommand(policyKind, "ScheduleNode command requires a node id.");
@@ -115,8 +115,6 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
 
         var iterationKey = ResolveIterationKey(state, executionScopeId);
         var connection = ResolveScheduleConnection(graph, command, currentPath, nodeId, policyKind);
-        if (connection is not null)
-            takenConnectionIds.Add(graph.GetConnectionId(connection));
         if (connection is not null && reachabilityAnalyzer.IsBackwardEdge(graph, connection.Source.NodeId, connection.Target.NodeId))
         {
             var currentScope = state.Scopes.FirstOrDefault(scope => StringComparer.Ordinal.Equals(scope.ExecutionScopeId, currentPath.ExecutionScopeId))
@@ -135,6 +133,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
             var arrivalPath = NewPath(state, currentPath.ExecutionPathId, executionScopeId, nodeId, connectionId, schedulingActivityExecutionId, ExecutionPathStatus.Active, iterationKey);
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, schedulingActivityExecutionId);
+            selectedRoutes.Record(connection, arrivalPath);
 
             if (joinCoordinator.ShouldWaitForTarget(state, graph, nodeId, executionScopeId, iterationKey))
             {
@@ -163,9 +162,19 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
 
     private static FlowchartConnection? ResolveScheduleConnection(FlowchartGraph graph, FlowchartPolicyCommand command, ExecutionPath currentPath, string nodeId, string policyKind)
     {
-        if (!string.IsNullOrWhiteSpace(command.ConnectionId))
+        var selected = command.SelectedConnection;
+        // A delegated policy can run against a copied context or reuse a command from another graph.
+        // A hint can only disambiguate a current outbound edge; public fields remain authoritative.
+        if (selected is not null && (currentPath.CurrentNodeId is not { } source ||
+                                     selected.Source.NodeId != source || selected.Target.NodeId != nodeId ||
+                                     selected.GetId() != command.ConnectionId ||
+                                     !graph.GetOutboundConnections(source).Any(edge => ReferenceEquals(edge, selected))))
+            selected = null;
+
+        if (selected is not null || !string.IsNullOrWhiteSpace(command.ConnectionId))
         {
-            var connection = graph.FindConnectionById(command.ConnectionId)
+            // Built-ins retain the exact selected edge; ID-only custom commands keep their legacy first match.
+            var connection = selected ?? graph.FindConnectionById(command.ConnectionId!)
                              ?? throw NewInvalidPolicyCommand(policyKind, $"ScheduleNode command references unknown connection id '{command.ConnectionId}'.");
 
             if (!StringComparer.Ordinal.Equals(connection.Target.NodeId, nodeId))

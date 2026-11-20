@@ -7,7 +7,7 @@ import {
   normalizeFlowchartStartNode,
   readFlowchartStartNodeId
 } from "./flowchartStartNode";
-import { bpmnStructureKind } from "./bpmn/bpmnTypes";
+import { bpmnStructureKind } from "./bpmn/bpmnStructure";
 import { compensationScopeChildSlots, compensationScopeStructureKind, replaceCompensationScopeActivities } from "./compensationScope";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 import { getActivityDisplay } from "./activityDisplay";
@@ -16,6 +16,8 @@ import { getHttpEndpointResponseMode, type HttpEndpointResponseMode } from "./ht
 import { persistedNodeWidth, readSavedNodeWidth } from "./graph-authoring/nodeWidth";
 import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 import type { CollectionSlot } from "./collectionSlots";
+import { parseStructureDesignFacetPayload, type StructureDesignFacet, type StructureDesignSlotDescriptor } from "./structureDesign";
+import { readExecutableChildSlots } from "./executableStructure";
 
 export { getActivityDisplay } from "./activityDisplay";
 export type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
@@ -33,7 +35,7 @@ export {
   readFlowchartStartNodeId,
   setFlowchartStartNode
 } from "./flowchartStartNode";
-export { bpmnStructureKind } from "./bpmn/bpmnTypes";
+export { bpmnStructureKind } from "./bpmn/bpmnStructure";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
@@ -128,31 +130,7 @@ export interface ChildSlot {
   itemIdProperty?: string;
 }
 
-export interface StructureDesignFacet {
-  kind: string;
-  schemaVersion: string;
-  payload: StructureDesignFacetPayload;
-}
-
-export interface StructureDesignFacetPayload {
-  mode: ChildSlot["mode"];
-  supportsScopedVariables: boolean;
-  slots: StructureDesignSlotDescriptor[];
-  initialPayload: Record<string, unknown>;
-}
-
-export interface StructureDesignSlotDescriptor {
-  name: string;
-  property: string;
-  displayName: string;
-  cardinality: ChildSlot["cardinality"];
-  collectionProperty?: string;
-  childProperty?: string;
-  labelProperty?: string;
-  slotNameTemplate?: string;
-  itemIdProperty?: string;
-  conditionProperty?: string;
-}
+export type { StructureDesignFacet, StructureDesignFacetPayload, StructureDesignSlotDescriptor } from "./structureDesign";
 
 export type ActivityCatalogLookup = ActivityCatalogItem | ActivityCatalogItem[] | Map<string, ActivityCatalogItem> | null | undefined;
 
@@ -474,6 +452,9 @@ function findChildInAnySlot(owner: ActivityNode, nodeId: string, catalog?: Activ
 }
 
 export function getChildSlots(activity: ActivityNode, catalog?: ActivityCatalogLookup): ChildSlot[] {
+  const executableSlots = readExecutableChildSlots(activity);
+  if (executableSlots !== undefined) return executableSlots;
+
   const structure = activity.structure;
   if (!structure || !structure.payload || typeof structure.payload !== "object") return [];
 
@@ -510,15 +491,22 @@ export function getChildSlots(activity: ActivityNode, catalog?: ActivityCatalogL
 }
 
 export function readStructureDesignFacet(activity: ActivityCatalogItem | null | undefined): StructureDesignFacet | null {
+  return readStructureDesignFacetResult(activity).facet;
+}
+
+export function readStructureDesignFacetResult(activity: ActivityCatalogItem | null | undefined): { facet: StructureDesignFacet | null; errors: string[] } {
+  let errors: string[] = [];
   if (activity?.containerStructure && activity.authoringTemplate?.structure) {
-    const payload = readStructureDesignFacetPayload(activity.containerStructure);
-    if (payload) {
-      return {
+    const parsed = parseStructureDesignFacetPayload(activity.containerStructure);
+    if (parsed.payload) return {
+      facet: {
         kind: activity.authoringTemplate.structure.kind,
         schemaVersion: activity.authoringTemplate.structure.schemaVersion,
-        payload
-      };
-    }
+        payload: parsed.payload
+      },
+      errors: []
+    };
+    errors = parsed.errors;
   }
 
   for (const facet of activity?.designFacets ?? []) {
@@ -527,51 +515,16 @@ export function readStructureDesignFacet(activity: ActivityCatalogItem | null | 
     const schemaVersion = typeof facet.schemaVersion === "string" ? facet.schemaVersion : "";
     if (!kind || !schemaVersion || !isRecord(facet.payload)) continue;
 
-    const payload = readStructureDesignFacetPayload(facet.payload);
-    if (payload) return { kind, schemaVersion, payload };
+    const parsed = parseStructureDesignFacetPayload(facet.payload);
+    if (parsed.payload) return { facet: { kind, schemaVersion, payload: parsed.payload }, errors: [] };
+    if (kind.endsWith(".structure") || "mode" in facet.payload || "slots" in facet.payload) errors = parsed.errors;
   }
 
-  return null;
+  return { facet: null, errors };
 }
 
-function readStructureDesignFacetPayload(payload: Record<string, unknown>): StructureDesignFacetPayload | null {
-  const mode = payload.mode;
-  if (mode !== "sequence" && mode !== "flowchart" && mode !== "bpmn" && mode !== "compensation" && mode !== "generic") return null;
-  if (typeof payload.supportsScopedVariables !== "boolean") return null;
-  if (!Array.isArray(payload.slots) || !isRecord(payload.initialPayload)) return null;
-
-  const slots = payload.slots.map(readStructureDesignSlotDescriptor).filter(slot => slot !== null);
-  return {
-    mode,
-    supportsScopedVariables: payload.supportsScopedVariables,
-    slots,
-    initialPayload: payload.initialPayload
-  };
-}
-
-function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotDescriptor | null {
-  if (!isRecord(value)) return null;
-  const name = typeof value.name === "string" ? value.name : "";
-  const property = typeof value.property === "string" ? value.property : "";
-  const displayName = typeof value.displayName === "string" ? value.displayName : "";
-  const cardinality = value.cardinality;
-  if (!name || !property || !displayName || (cardinality !== "single" && cardinality !== "many")) return null;
-
-  return {
-    name,
-    property,
-    displayName,
-    cardinality,
-    collectionProperty: readOptionalString(value.collectionProperty),
-    childProperty: readOptionalString(value.childProperty),
-    labelProperty: readOptionalString(value.labelProperty),
-    itemIdProperty: readOptionalString(value.itemIdProperty),
-    conditionProperty: readOptionalString(value.conditionProperty),
-    slotNameTemplate: readOptionalString(value.slotNameTemplate)
-  };
-}
-
-function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
+/** Declared physical slots, without a designer's additional navigation projections. */
+export function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
   const fixedLabels = new Set(facet.payload.slots.filter(slot => !slot.collectionProperty).map(slot => slot.displayName));
   return facet.payload.slots.flatMap(descriptor => {
     if (descriptor.collectionProperty && descriptor.childProperty) {
@@ -1142,7 +1095,11 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
     .filter(edge => edge !== null);
 }
 
+/** Complete terminates the nearest reusable graph boundary, regardless of legacy catalog Done metadata. */
+export const graphBoundaryCompleteTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
+
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  if (catalogItem?.activityTypeKey === graphBoundaryCompleteTypeKey) return [];
   // Executable inspection supplies its immutable contract; never recompute it from today's catalog defaults.
   const pinned = readStringList(activity.executableOutcomes);
   if (Array.isArray(activity.executableOutcomes)) return pinned.map(name => ({ name, displayName: name }));
@@ -1266,10 +1223,6 @@ function uniquePorts(ports: WorkflowPortDescriptor[]) {
 
 function readStringList(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
-}
-
-function readOptionalString(value: unknown) {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function clonePayload(payload: Record<string, unknown>): Record<string, unknown> {

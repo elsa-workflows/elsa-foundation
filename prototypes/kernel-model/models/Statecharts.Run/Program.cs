@@ -7,6 +7,25 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
+if (args is ["--outcomes-list"]) { foreach (var n in NativeOutcomeWitness.Names.Concat(NativeOutcomeWitness.LegacyNames).Concat(NativeOutcomeReaders.ReaderNames).Concat(NativeOutcomeReaders.RefusalNames).Concat(NativeOutcomeReaders.TamperNames).Concat(NativeOutcomeGateWitness.Names)) Console.WriteLine(n); return; }
+if (args is ["--outcomes"]) { NativeOutcomeWitness.Run(); NativeOutcomeReaders.Run(); NativeOutcomeGateWitness.Run(); return; }
+if (args is ["--outcome-readers"]) { NativeOutcomeReaders.Run(); return; }
+if (args is ["--outcome-gate"]) { NativeOutcomeGateWitness.Run(); return; }
+if (args is ["--native-guards"]) { NativeGuardWitness.Run(); return; }
+if (args is ["--native-checkpoints"]) { NativeCheckpointWitness.Run(); return; }
+if (args is ["--native-prelude"]) { NativePreludeWitness.Run(); return; }
+if (args is ["--native-control-cuts"]) { NativeControlCutWitness.Run(); return; }
+if (args is ["--native-loops"]) { NativeLoopWitness.Run(); return; }
+if (args is ["--native-held-loops"]) { NativeHeldLoopWitness.Run(); return; }
+if (args is ["--native-internal-phases"]) { NativeInternalPhaseWitness.Run(); return; }
+if (args is ["--native-internal-regions"]) { NativeInternalRegionalWitness.Run(); return; }
+if (args is ["--native-internal-structure"]) { NativeInternalStructureWitness.Run(); return; }
+if (args is ["--native-priority"]) { NativePriorityWitness.Run(); return; }
+if (args is ["--native-internal-readers"]) { NativeInternalReaders.Run(); return; }
+if (args is ["--native-internal"]) { NativeInternalSuite.Run(); return; }
+if (args is ["--native-internal-list"]) { foreach (var n in NativeInternalSuite.Names) Console.WriteLine(n); return; }
+if (args is ["--internal"]) { InternalProgressWitness.Run(); return; }
+if (args is ["--internal-list"]) { foreach (var n in InternalProgressWitness.Names.Concat(InternalProgressWitness.ReaderNames)) Console.WriteLine(n); return; }
 if (args is ["--clr-readers"]) { ClrBoundaryReaders.Run(); ClrLegacyWitness.Run(); return; }
 if (args is ["--clr"]) { ClrFaultWitness.Run(); return; }
 if (args is ["--clr-list"]) { foreach (var n in ClrFaultWitness.Names) Console.WriteLine(n); return; }
@@ -30,6 +49,8 @@ if (args is ["--selection"]) { SelectionWitness.Run(); return; }
 if (args is ["--selection-export"]) { SelectionWitness.Export(); return; }
 if (args is ["--phases-list"]) { foreach (var name in PhaseWitness.Names.Concat(PhaseReaders.Names)) Console.WriteLine(name); return; }
 if (args is ["--phases"]) { PhaseWitness.RunAll(); PhaseReaders.Run(); return; }
+if (args is ["--effect-keys"]) { EffectKeyWitness.Run(); return; }
+if (args is ["--effect-keys-list"]) { foreach (var n in EffectKeyWitness.Names) Console.WriteLine(n); return; }
 if (args.Length != 0) throw new ArgumentException("Use --phases-list or --phases, or no argument for the original20 schedules.");
 
 foreach (var mode in new[] { Modes.Balanced, Modes.Durable })
@@ -37,6 +58,7 @@ foreach (var nested in new[] { false, true })
 foreach (var fault in Enum.GetValues<Fault>())
     new Witness(mode, nested, fault).Run();
 Console.WriteLine("20 passed: S1–S4 and kernel checks, root and Flowchart, Balanced and Durable, 5 fault schedules.");
+EffectKeyWitness.Run();     // round 5 C: a re-entered state's outbound activity gets a key per visit, in all three modes
 
 enum Fault { None, LostCommit, UnacknowledgedCommit, CrashedWhileHeld, StaleOwner }
 

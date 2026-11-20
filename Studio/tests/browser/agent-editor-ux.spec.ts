@@ -59,8 +59,8 @@ test("module-owned icons reach all three main navigation entries", async ({ page
   await expect(page.getByTestId("agent-editor")).toBeVisible();
   for (const [name, icon] of [["Agents", "bot"], ["Secrets", "key-round"], ["Connections", "cable"]]) {
     const entry = page.getByRole("link", { name, exact: true });
-    // More tools may start closed; the module icon must survive composition regardless.
-    if (!await entry.isVisible()) await page.getByRole("button", { name: /More tools/ }).click();
+    // Named groups start open; preserved user choices can still close a section.
+    if (!await entry.isVisible()) await page.getByRole("button", { name: name === "Agents" ? "Build" : "Integrations", exact: true }).click();
     await expect(entry.locator(`svg.lucide-${icon}`)).toBeVisible();
   }
 });
@@ -101,6 +101,8 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await instructions.fill("Proofread the supplied text.");
     await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
     await trigger.click();
+    await expect(dialog.getByRole("alert")).toContainText("The draft changed after review");
+    await dialog.getByRole("button", { name: "Prepare publication", exact: true }).click();
     await expect(blockers.locator(".ad-publication-diagnostics li")).toHaveCount(1);
     await blockers.getByRole("button", { name: "Choose model connection", exact: true }).click();
     const model = editor.getByRole("combobox", { name: /^Model connection/ });
@@ -108,6 +110,8 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await model.selectOption("azure-openai|proofreader");
     await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
     await trigger.click();
+    await expect(dialog.getByRole("alert")).toContainText("The draft changed after review");
+    await dialog.getByRole("button", { name: "Prepare publication", exact: true }).click();
     await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeEnabled();
     await expect(blockers).toHaveCount(0);
     await page.screenshot({ path: info.outputPath("ready.png"), fullPage: true });

@@ -80,10 +80,10 @@
 :where(.studio-field.studio-form-field > .studio-form-control) textarea:where([data-studio-field-control]) { resize: vertical; }
 .studio-field.studio-form-field > .studio-form-control select[data-studio-field-control]:not([multiple]):not([size]) { padding-inline-end: 30px; }
 .studio-field.studio-form-field > .studio-form-control [data-studio-field-control]:focus { outline: none; box-shadow: none; }
-.studio-field > .studio-form-control:focus-within { outline: 2px solid var(--studio-focus-ring-solid, var(--studio-accent)); outline-offset: 2px; }
+.studio-field > .studio-form-control:focus-within { border-color: var(--studio-focus-ring-solid, var(--studio-accent)); }
 
-.studio-field[data-invalid="true"] > .studio-form-control,
-.studio-field > .studio-form-control:has([data-studio-field-control][aria-invalid="true"]) { border-color: var(--studio-danger); }
+.studio-field[data-invalid="true"] > .studio-form-control:not(:focus-within),
+.studio-field > .studio-form-control:has([data-studio-field-control][aria-invalid="true"]):not(:focus-within) { border-color: var(--studio-danger); }
 
 .studio-field[data-invalid="true"] .studio-form-legend,
 .studio-field > .studio-form-control:has([data-studio-field-control][aria-invalid="true"]) > .studio-form-legend,
@@ -97,7 +97,8 @@
 
 @media (forced-colors: active) {
   .studio-field > .studio-form-control { border-color: CanvasText; }
-  .studio-field > .studio-form-control:focus-within { outline-color: Highlight; }
+  .studio-field > .studio-form-control:focus-within { border-color: Highlight; forced-color-adjust: none; background: Canvas; color: CanvasText; }
+  .studio-field > .studio-form-control:focus-within > * { forced-color-adjust: auto; }
   .studio-field > .studio-form-control:has([data-studio-field-control]:disabled) { opacity: 1; border-color: GrayText; }
   .studio-field.studio-form-field > .studio-form-control select[data-studio-field-control] { appearance: auto; background-image: none; }
 }
@@ -117,7 +118,7 @@
 .studio-form-adornment > button:not(.studio-button):hover { background: var(--studio-surface-hover); }
 .studio-form-adornment > button:focus-visible { outline: 2px solid var(--studio-focus-ring-solid, var(--studio-accent)); outline-offset: -3px; }
 
-.studio-field:not([data-invalid="true"]) > .studio-form-control:hover:not(:has([data-studio-field-control]:disabled, [data-studio-field-control][aria-invalid="true"])) { border-color: var(--studio-text-muted); }
+.studio-field:not([data-invalid="true"]) > .studio-form-control:hover:not(:focus-within):not(:has([data-studio-field-control]:disabled, [data-studio-field-control][aria-invalid="true"])) { border-color: var(--studio-text-muted); }
 
 .studio-choice-control { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
 .studio-choice-control > input:is([type="checkbox"], [type="radio"]) { inline-size: 16px; min-block-size: 0; block-size: 16px; flex: 0 0 auto; }

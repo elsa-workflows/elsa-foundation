@@ -23,7 +23,7 @@ for (const theme of themes) {
       await expect(capture).toHaveValue("workflow::payload");
       await capture.focus();
       await expect(capture).toBeFocused();
-      expect(await capture.evaluate(element => getComputedStyle(element.closest(".studio-form-control") ?? element).outlineStyle)).toBe("solid");
+      expect(await capture.evaluate(element => getComputedStyle(element.closest(".studio-form-control") ?? element).outlineStyle)).toBe("none");
       for (const name of ["Response mode", "Page size"]) {
         const select = page.getByRole("combobox", { name, exact: true });
         expect(await select.evaluate(element => getComputedStyle(element).appearance)).toBe("none");

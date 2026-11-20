@@ -71,7 +71,7 @@ export function useActivityDataSelectionAvailable() {
 type SourcesView =
   | { status: "loading" }
   | { status: "failed" }
-  | { status: "answered"; result: ActivityDataContextResult; requestedBase: string; refreshing?: boolean };
+  | { status: "answered"; result: ActivityDataContextResult; requestedBase: string; ownerContext?: object; refreshing?: boolean };
 
 /**
  * Loads the sources for one input while the browser is open, page by page. A request answers one document revision
@@ -79,7 +79,7 @@ type SourcesView =
  * asked about, the previous list stays in place, marked as updating. A stale answer while the editor's own save is in
  * flight, or caused by a save it has since acknowledged, is waited out and asked again; nothing here saves.
  */
-export function useActivityDataSources(host: ActivityDataSelectionHost | null, target: ActivityDataTarget, open: boolean) {
+export function useActivityDataSources(host: ActivityDataSelectionHost | null, target: ActivityDataTarget, open: boolean, expressionType?: string) {
   const [view, setView] = useState<SourcesView>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
@@ -88,6 +88,7 @@ export function useActivityDataSources(host: ActivityDataSelectionHost | null, t
   const documentRevision = host?.documentRevision;
   const requestSources = host?.requestSources;
   const baseRevision = host?.baseRevision ?? "";
+  const ownerContext = host?.ownerContext;
   const saving = host?.saving === true;
 
   useEffect(() => {
@@ -99,12 +100,12 @@ export function useActivityDataSources(host: ActivityDataSelectionHost | null, t
     setView(previous => previous.status === "answered" && listsSources(previous.result)
       ? { ...previous, refreshing: true }
       : { status: "loading" });
-    collectSourcePages(skip => requestSources(request, controller.signal, skip), controller.signal).then(
-      result => { if (!controller.signal.aborted) setView({ status: "answered", result, requestedBase }); },
+    collectSourcePages(skip => requestSources(request, controller.signal, skip, expressionType ? { expressionType, includeMemberShapes: true } : undefined), controller.signal).then(
+      result => { if (!controller.signal.aborted && hostRef.current?.ownerContext === ownerContext) setView({ status: "answered", result, requestedBase, ownerContext }); },
       () => { if (!controller.signal.aborted) setView({ status: "failed" }); }
     );
     return () => controller.abort();
-  }, [attempt, documentRevision, open, requestSources, target.inputKey, target.nodeId]);
+  }, [attempt, documentRevision, open, requestSources, target.inputKey, target.nodeId, expressionType, ownerContext]);
 
   const retry = useCallback(() => setAttempt(current => current + 1), []);
   const stale = view.status === "answered" && view.result.state === "stale";
@@ -116,12 +117,13 @@ export function useActivityDataSources(host: ActivityDataSelectionHost | null, t
 
   const refuse = useCallback((result: ActivityDataContextResult) => {
     activeRequest.current?.abort();
-    setView({ status: "answered", result: { ...result, sources: [], target: null, memberReadsEnabled: false }, requestedBase: hostRef.current?.baseRevision ?? "" });
+    setView({ status: "answered", result: { ...result, sources: [], target: null, memberReadsEnabled: false, expressionParametersEnabled: false }, requestedBase: hostRef.current?.baseRevision ?? "", ownerContext: hostRef.current?.ownerContext });
   }, []);
-  return { view, retry, refuse, awaitingSave: stale && (saving || staleForOlderBase) };
+  return { view: view.status === "answered" && view.ownerContext !== ownerContext ? { status: "loading" as const } : view, retry, refuse, awaitingSave: stale && (saving || staleForOlderBase) };
 }
 
 interface ActivityDataBrowserProps {
+  expression?: { type: string; onSelect(result: ActivityDataContextResult, source: ActivityDataSourceFacts): void };
   host: ActivityDataSelectionHost;
   target: ActivityDataTarget;
   inputLabel: string;
@@ -137,9 +139,10 @@ interface ActivityDataBrowserProps {
  * The shared source browser: a non-modal popover anchored to the control that opened it. Callers key it by target, so
  * a pending choice can never land in another activity's input.
  */
-export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open, current, onSelect, onClose }: ActivityDataBrowserProps) {
-  const { view, retry, refuse, awaitingSave } = useActivityDataSources(host, target, open);
-  const memberEnabled = view.status === "answered" && listsSources(view.result) && view.result.memberReadsEnabled === true;
+export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open, current, onSelect, onClose, expression }: ActivityDataBrowserProps) {
+  const { view, retry, refuse, awaitingSave } = useActivityDataSources(host, target, open, expression?.type);
+  const memberEnabled = view.status === "answered" && listsSources(view.result) && (expression
+    ? view.result.expressionParametersEnabled === true && view.result.expressionType === expression.type : view.result.memberReadsEnabled === true);
   const panelRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
   const consumerLabel = host.describeActivity(target.nodeId)?.label ?? "this activity";
@@ -274,7 +277,10 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
         </div>
         {memberEnabled && view.status === "answered" ? <ActivityDataMemberBrowser
           host={host} target={target} result={view.result} current={!!currentListing && view.result.baseRevision === host.baseRevision}
-          refreshing={view.refreshing === true} onSelect={commit} onRefusal={refuse} onRefresh={retry} /> : <ActivityDataBrowserContent
+          refreshing={view.refreshing === true} onSelect={commit} onRefusal={refuse} onRefresh={retry}
+          expression={expression ? { type: expression.type, onSelect: (result, source) => { expression.onSelect(result, source); onClose("none"); } } : undefined} />
+          : expression && view.status === "answered" && (listsSources(view.result) || view.result.state === "incompatible" && view.result.code === "activity-data.parameter-response-unreadable") ? <p className="wf-data-chooser-note" role="status">This server does not support compatible expression data insertion. Your expression is preserved.</p>
+          : <ActivityDataBrowserContent
           view={view}
           awaitingSave={awaitingSave}
           groups={groups}
@@ -511,11 +517,12 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
   const browsing = browsingFor === targetKey;
   const producer = reference && host ? host.describeActivity(reference.producerNodeId) : null;
   const missing = Boolean(reference && host && !producer);
+  const preview = useBindingConversionPreview(host, target, Boolean(reference && producer && !disabled));
   const problem = !reference
     ? "No output is chosen yet. Use Choose data to pick one."
     : missing
       ? "The source activity is no longer in this workflow. Replace it or clear it."
-      : host?.findingsFor(target).map(describeReferenceFinding).find((text): text is string => text != null) ?? null;
+      : preview?.rejection ?? host?.findingsFor(target).map(describeReferenceFinding).find((text): text is string => text != null) ?? null;
   const producerLabel = reference ? producer?.label ?? reference.producerNodeId : "";
   const disambiguation = reference && producer?.sharesLabel ? reference.producerNodeId : null;
   const outputLabel = reference ? describeOutput(reference.projectionKey, producer) : "";
@@ -545,6 +552,9 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
             {outputLabel}
           </span>
         </p>
+      ) : null}
+      {preview?.operation === "NumericToString" && !problem ? (
+        <p className="wf-data-chooser-note">{preview.sourceType.alias} → {preview.targetType.alias} · automatic</p>
       ) : null}
       {problem ? (
         <p className="wf-data-reference-problem">
@@ -600,6 +610,31 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
   );
 }
 
+/** The server reads both the reference and its conversion mode from the current snapshot. */
+function useBindingConversionPreview(host: ActivityDataSelectionHost | null, target: ActivityDataTarget, enabled: boolean) {
+  const [answer, setAnswer] = useState<{ key: string; preview: ActivityDataContextResult["bindingConversion"] } | null>(null);
+  const key = JSON.stringify([target.nodeId, target.inputKey, host?.documentRevision, host?.baseRevision]);
+  const requestSources = host?.requestSources;
+  const revision = host?.documentRevision;
+  const base = host?.baseRevision;
+  const { nodeId, inputKey } = target;
+  useEffect(() => {
+    setAnswer(null);
+    if (!enabled || !requestSources || !base || !revision) return;
+    const controller = new AbortController();
+    const revoke = () => { controller.abort(); setAnswer(null); };
+    window.addEventListener(authSessionEndedEvent, revoke);
+    requestSources({ nodeId, inputKey }, controller.signal, 0, { previewBindingConversion: true }).then(result => {
+      if (!controller.signal.aborted && (result.state === "empty" || result.state === "supported") &&
+        result.documentRevision === revision && result.baseRevision === base && result.target?.target?.nodeId === nodeId &&
+        result.target.target.inputKey === inputKey)
+        setAnswer({ key, preview: result.bindingConversion });
+    }, () => undefined);
+    return () => { controller.abort(); window.removeEventListener(authSessionEndedEvent, revoke); };
+  }, [enabled, requestSources, key, nodeId, inputKey, base, revision]);
+  return enabled && answer?.key === key ? answer.preview : null;
+}
+
 function ActivityDataMemberReferenceEditor({ descriptor, syntax, value, disabled, initialFocus, context, onChange }: StudioExpressionEditorProps) {
   const host = useActivityDataSelectionHost();
   const changeBinding = useContext(ActivityDataBindingChangeContext);
@@ -622,7 +657,7 @@ function ActivityDataMemberReferenceEditor({ descriptor, syntax, value, disabled
     host.requestSources(target, controller.signal, 0, { source, memberPath: member?.memberPath ?? [], includeMemberShapes: true }).then(result => {
       if (controller.signal.aborted || result.documentRevision !== host.documentRevision || result.baseRevision !== host.baseRevision) return;
       if (result.state === "supported" || result.state === "empty" || result.state === "invalid") setDetails({
-        result: result.state === "invalid" ? { ...result, sources: [], target: null, memberReadsEnabled: false } : result,
+        result: result.state === "invalid" ? { ...result, sources: [], target: null, memberReadsEnabled: false, expressionParametersEnabled: false } : result,
         targetKey, queryKey
       });
     }, () => undefined);

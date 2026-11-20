@@ -5,11 +5,13 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Sim.Native;
 
+if (args is ["--read-list"]) { foreach (var name in ReadWitness.Names) Console.WriteLine(name); return; }
+if (args is ["--read"]) { ReadWitness.Run(); return; }
 var cases = (from mode in new[] { Modes.Balanced, Modes.Durable } from nested in new[] { false, true } from reload in new[] { false, true }
     select (mode, nested, reload, agenda: false)).Concat(from nested in new[] { false, true } select (mode: Modes.Durable, nested, reload: true, agenda: true)).ToArray();
 string Name((string mode, bool nested, bool reload, bool agenda) c) => c.agenda ? $"lexical:agenda-reload,{c.mode},nested={c.nested}" : $"lexical:cross-phase,{c.mode},nested={c.nested},reload={c.reload}";
-if (args is ["--list"]) { foreach (var c in cases) Console.WriteLine(Name(c)); foreach (var name in LifecycleWitness.Names.Concat(SafetyWitness.Names).Concat(OwnershipWitness.Names).Concat(ReaderWitness.Names)) Console.WriteLine(name); return; }
-if (args.Length != 0) throw new ArgumentException("Use --list or no argument.");
+if (args is ["--list"]) { foreach (var c in cases) Console.WriteLine(Name(c)); foreach (var name in LifecycleWitness.Names.Concat(SafetyWitness.Names).Concat(OwnershipWitness.Names).Concat(ReaderWitness.Names).Concat(ReadWitness.Names)) Console.WriteLine(name); return; }
+if (args.Length != 0) throw new ArgumentException("Use --list, --read-list, --read or no argument.");
 foreach (var c in cases)
 {
     var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
@@ -69,6 +71,7 @@ LifecycleWitness.Run();
 SafetyWitness.Run();
 OwnershipWitness.Run();
 ReaderWitness.Run();
+ReadWitness.Run();
 Console.WriteLine("10/10 ordinary cross-phase scope schedules passed; StateMachine attachment, incident/retry and product/provider qualification remain separate.");
 
 // The resource belongs to this live composite; separate ordinary phases share its declared values.

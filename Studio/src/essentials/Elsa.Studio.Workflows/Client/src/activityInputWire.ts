@@ -83,7 +83,11 @@ function mapActivityTree(node: ActivityNode, transform: (node: ActivityNode) => 
 
   let changed = false;
   const nextPayload: Record<string, unknown> = { ...structure.payload };
+  const completeBpmnSource = structure.kind === "elsa.bpmn.structure" && structure.schemaVersion === "2.0.0";
   for (const [key, value] of Object.entries(structure.payload)) {
+    // The complete document owns one native forest. Compact scope headers and opaque metadata
+    // can resemble activity nodes, but are not additional independently authored trees.
+    if (completeBpmnSource && key !== "activities") continue;
     if (isActivityNode(value)) {
       nextPayload[key] = mapActivityTree(value, transform);
       changed = true;

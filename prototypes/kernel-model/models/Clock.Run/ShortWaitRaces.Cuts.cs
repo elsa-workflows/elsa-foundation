@@ -274,9 +274,12 @@ internal static partial class ShortWaitRaces
         public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken token = default) => inner.PublishedMatchesAsync(published, token);
         public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken token = default) => inner.KeptMatchesAsync(waits, token);
         public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+        public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
         public bool HasActorAliases => inner.HasActorAliases;
         public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => inner.LoadActorsAsync(ids, cancellationToken);
         public bool CommitClockAvailable => inner.CommitClockAvailable;
+        public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
+        public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
         public void Arm(string mode) { _mode = mode; _remaining = mode == "definite" ? 2 : 1; }
         public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken ct = default)
         {

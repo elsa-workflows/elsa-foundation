@@ -125,7 +125,7 @@ An explicit association from an outcome emitted by an Activity Definition Graph 
 _Avoid_: Inferred outcome, Outcome alias
 
 **Boundary Output Mapping**:
-An expression that produces one public output of a Graph Activity Definition from its graph implementation. A required public output has exactly one Boundary Output Mapping; an optional public output has at most one.
+An expression that produces one public output of a Graph Activity Definition from its graph implementation. A public output can receive its value from a Boundary Output Mapping or from Set Output in the designer. Set Output assigns the enclosing reusable activity's output; a workflow-level Set Output assigns a workflow output. A Designer connection and Set Output cannot both assign the same public output; publication review rejects the conflict.
 _Avoid_: Output alias, Inferred output
 
 **Activity Graph Variable**:

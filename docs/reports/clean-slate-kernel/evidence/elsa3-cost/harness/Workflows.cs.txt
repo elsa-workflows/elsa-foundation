@@ -1,0 +1,92 @@
+using Elsa.Expressions.Models;
+using Elsa.Http;
+using Elsa.Workflows;
+using Elsa.Workflows.Activities;
+using Elsa.Workflows.Models;
+using Elsa.Workflows.Runtime.Activities;
+
+namespace Elsa3Cost;
+
+/// <summary>writeline-sequence: a Sequence of ten WriteLine activities, started directly and run to completion.</summary>
+public sealed class WriteLineSequenceWorkflow : WorkflowBase
+{
+    public const string DefinitionId = "writeline-sequence";
+
+    protected override void Build(IWorkflowBuilder builder)
+    {
+        builder.WithDefinitionId(DefinitionId);
+        var sequence = new Sequence();
+        for (var line = 1; line <= 10; line++)
+            sequence.Activities.Add(new WriteLine($"line {line}"));
+        builder.Root = sequence;
+    }
+}
+
+/// <summary>
+/// http-reference: a Sequence of a POST HttpEndpoint that can start the workflow and captures the parsed body and
+/// route data into variables, a SetVariable computing a name from the body in JavaScript, and a WriteHttpResponse
+/// (200, text/plain) whose body is a JavaScript expression returning that variable.
+/// </summary>
+public sealed class HttpReferenceWorkflow : WorkflowBase
+{
+    public const string DefinitionId = "http-reference";
+    public const string Path = "budget/http-reference";
+
+    protected override void Build(IWorkflowBuilder builder)
+    {
+        builder.WithDefinitionId(DefinitionId);
+        var route = builder.WithVariable<object>("route", null!);
+        var content = builder.WithVariable<object>("content", null!);
+        var referenceText = builder.WithVariable<string>("referenceText", "");
+
+        builder.Root = new Sequence
+        {
+            Activities =
+            {
+                new HttpEndpoint
+                {
+                    Path = new(Path),
+                    SupportedMethods = new(new[] { "POST" }),
+                    CanStartWorkflow = true,
+                    Authorize = new(false),
+                    RouteData = new(route),
+                    ParsedContent = new(content)
+                },
+                new SetVariable
+                {
+                    Variable = referenceText,
+                    Value = new(new Expression("JavaScript", "getVariable('content').firstName + ' ' + getVariable('content').lastName"))
+                },
+                new WriteHttpResponse
+                {
+                    StatusCode = new(System.Net.HttpStatusCode.OK),
+                    ContentType = new("text/plain"),
+                    Content = new(new Expression("JavaScript", "getVariable('referenceText')"))
+                }
+            }
+        };
+    }
+}
+
+/// <summary>
+/// fork-join-resume: a Parallel whose WriteLine branch completes and whose Event branch suspends on a bookmark until
+/// the event is resumed.
+/// </summary>
+public sealed class ForkJoinResumeWorkflow : WorkflowBase
+{
+    public const string DefinitionId = "fork-join-resume";
+    public const string EventName = "budget-resume";
+
+    protected override void Build(IWorkflowBuilder builder)
+    {
+        builder.WithDefinitionId(DefinitionId);
+        builder.Root = new Elsa.Workflows.Activities.Parallel
+        {
+            Activities =
+            {
+                new WriteLine("forked"),
+                new Event(EventName)
+            }
+        };
+    }
+}

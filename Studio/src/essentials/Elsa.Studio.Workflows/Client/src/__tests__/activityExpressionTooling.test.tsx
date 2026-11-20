@@ -432,3 +432,22 @@ describe("expression tooling validation presentation", () => {
     window.removeEventListener("elsa:expression-tooling-authorization-restored", restored);
   });
 });
+
+it("invalidates tooling on a parameters-only owner replacement with unchanged source", async () => {
+  const tooling = { getAuthoringContext: vi.fn(async () => incompatibleAuthoringContext()), validate: vi.fn() } as unknown as StudioExpressionToolingClient;
+  const portable = (producerNodeId: string) => {
+    const node = activity("args.customer");
+    node.text = { typeName: "System.String", expression: { type: "JavaScript", value: { language: "JavaScript", source: "args.customer",
+      resultType: { alias: "String", collectionKind: "Single" }, parameters: { customer: { kind: "ActivityResult", producerNodeId, projectionKey: "$result" } }, options: {}, capabilityProfile: "binding-pure-v1" } } };
+    return node;
+  };
+  renderPanel(portable("fetch-a"), tooling);
+  container.querySelector<HTMLInputElement>("[aria-label='Expression source']")!.focus();
+  await vi.advanceTimersByTimeAsync(180);
+  await vi.waitFor(() => expect(tooling.getAuthoringContext).toHaveBeenCalledOnce());
+  renderPanel(portable("fetch-b"), tooling);
+  await vi.advanceTimersByTimeAsync(180);
+  await vi.waitFor(() => expect(tooling.getAuthoringContext).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(tooling.getAuthoringContext).mock.calls.map(([document]) => ({ source: document.source, version: document.sourceVersion })))
+    .toEqual([{ source: "args.customer", version: 0 }, { source: "args.customer", version: 1 }]);
+});

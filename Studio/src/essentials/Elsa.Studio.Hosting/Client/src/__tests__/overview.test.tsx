@@ -4,7 +4,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath, ShellFrame } from "../app/App";
-import { filterAccessibleNavigation, moreToolsStorageKey, type NavigationAccess } from "../app/navigation/placement";
+import { filterAccessibleNavigation, navigationGroupsStorageKey, type NavigationAccess } from "../app/navigation/placement";
 import { ThemeProvider } from "../app/components/ThemeProvider";
 import { createEndpointContext, createHttpClient, type StudioDashboardWidgetContribution, type ElsaStudioModuleApi, type StudioBackendManagementStatus, type StudioDiagnosticsWidgetContribution, type StudioDiagnosticsWidgetProps, type StudioNavigationContribution } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
@@ -13,7 +13,7 @@ const mountedTestRoots = new Set<() => void>();
 
 afterEach(() => {
   for (const unmount of [...mountedTestRoots]) unmount();
-  window.localStorage.removeItem(moreToolsStorageKey);
+  window.localStorage.removeItem(navigationGroupsStorageKey);
   vi.unstubAllGlobals();
 });
 
@@ -38,7 +38,7 @@ describe("diagnostics", () => {
     };
     const filtered = filterAccessibleNavigation(navigation, access);
     const onNavigate = vi.fn();
-    window.localStorage.setItem(moreToolsStorageKey, "true");
+    window.localStorage.setItem(navigationGroupsStorageKey, JSON.stringify({ build: true }));
     const { container, unmount } = await renderDiagnosticsWithShell(stubApi(), filtered, onNavigate);
 
     const links = Array.from(container.querySelectorAll<HTMLAnchorElement>(".diagnostics-view a[href]"));
@@ -62,13 +62,13 @@ describe("diagnostics", () => {
     expect(visibleText(container)).not.toContain("Private traces");
     expect(container.querySelector(".diagnostics-view")?.textContent).not.toContain("Unrelated activity");
     const sidebarPaths = new Set(Array.from(container.querySelectorAll<HTMLAnchorElement>("nav a[href]"), link => link.getAttribute("href")));
-    expect(links.every(link => sidebarPaths.has(link.getAttribute("href")))).toBe(true);
+    expect(links.some(link => sidebarPaths.has(link.getAttribute("href")))).toBe(false);
 
     links[0].dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
     expect(onNavigate).toHaveBeenCalledWith("/diagnostics/open-telemetry");
 
     await unmount();
-    window.localStorage.removeItem(moreToolsStorageKey);
+    window.localStorage.removeItem(navigationGroupsStorageKey);
   });
 
   it("allows anonymous navigation through role and permission gates but still respects registered features", async () => {
@@ -301,7 +301,7 @@ describe("navigation sections", () => {
     expect(container.querySelector('nav.nav-section[aria-label="Main"]')?.textContent ?? "").not.toContain("Tools");
     expect(container.querySelector('nav.nav-section[aria-label="Administration"]')).toBeNull();
 
-    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
     flushSync(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
       setter.call(search, "tools");
@@ -315,11 +315,11 @@ describe("navigation sections", () => {
   });
 
   it("renders a child with a different placement under that placement instead of hiding it", async () => {
-    window.localStorage.setItem(moreToolsStorageKey, "true");
+    window.localStorage.setItem(navigationGroupsStorageKey, JSON.stringify({ build: true }));
     const navigation: StudioNavigationContribution[] = [
       { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main" },
       { id: "definitions", label: "Definitions", path: "/workflows/definitions/list", parentId: "workflows" },
-      { id: "executables", label: "Executables", path: "/workflows/executables", parentId: "workflows", placement: "more" }
+      { id: "executables", label: "Executables", path: "/workflows/executables", parentId: "workflows", placement: "build" }
     ];
     const { container, unmount } = await renderComponent(
       <ThemeProvider>
@@ -330,13 +330,13 @@ describe("navigation sections", () => {
     );
 
     const main = container.querySelector('nav.nav-section[aria-label="Main"]');
-    const more = container.querySelector('nav.nav-section[aria-label="More tools"]');
+    const more = container.querySelector('nav.nav-section[aria-label="Build"]');
     expect(main?.textContent).toContain("Workflows");
     expect(main?.textContent).toContain("Definitions");
     expect(main?.textContent).not.toContain("Executables");
     expect(more?.textContent).toContain("Executables");
 
-    window.localStorage.removeItem(moreToolsStorageKey);
+    window.localStorage.removeItem(navigationGroupsStorageKey);
     await unmount();
   });
 

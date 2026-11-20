@@ -1,3 +1,4 @@
+import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import {
@@ -102,7 +103,7 @@ export function ActivityDefinitionContractProposalReview({
   const selectedChangeIds = reviews
     .filter(review => review.supported && decisions[review.changeId])
     .map(review => review.changeId);
-  const hasErrors = proposal?.diagnostics.some(diagnostic => diagnostic.severity === "Error") ?? false;
+  const hasErrors = proposal?.diagnostics.some(diagnostic => activityDiagnosticSeverity(diagnostic.severity) === "Error") ?? false;
 
   const apply = async () => {
     if (!proposal || phase !== "ready" || !proposalMatchesBinding(proposal, binding) || selectedChangeIds.length === 0 || hasErrors) return;

@@ -1,0 +1,89 @@
+using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Design.Core.Models;
+
+namespace Elsa.Workflows.Design.Core.Contracts;
+
+public interface IActivityStructureService
+{
+    IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
+
+    /// <summary>
+    /// Projects real physically owned activity roots for authoring-metadata retention and structural
+    /// source/admission validation. Additional node IDs are presentation identities only. The default
+    /// keeps custom services compatible by deriving ownership from their existing lexical child
+    /// projection; physical ownership does not widen lexical scope or establish execution facts.
+    /// </summary>
+    ActivityOwnershipProjection ProjectOwnership(ActivityNode activity) =>
+        new(ProjectChildren(activity).SelectMany(slot => slot.Activities).ToArray(), []);
+
+    /// <summary>
+    /// Projects public-contract members referenced by structure-owned relationships.
+    /// </summary>
+    IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];
+
+    /// <summary>Projects the owning handler's structure inputs and consumed ordinary-input keys.</summary>
+    ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => ActivityStructureInputProjection.Empty;
+
+    ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
+
+    /// <summary>
+    /// The direct children of <paramref name="activity"/> whose results its structure handler guarantees are
+    /// committed before the direct child <paramref name="childNodeId"/> runs, most relevant first; see
+    /// <see cref="IActivityStructureHandler.ChildrenCompletedBefore"/>.
+    /// </summary>
+    IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) => null;
+
+    /// <summary>Returns the owning structure's facts for a producer/consumer pair of direct children.</summary>
+    /// <remarks>
+    /// The default preserves custom services' <see cref="ChildrenCompletedBefore"/> declarations without
+    /// inferring unavailability from an omitted child. Unknown facts can be refined by an owning structure.
+    /// </remarks>
+    ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(producerChildNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumerChildNodeId);
+        return ActivityChildResultFacts.FromCompletedBefore(ChildrenCompletedBefore(activity, consumerChildNodeId), producerChildNodeId);
+    }
+
+    ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity);
+
+    /// <summary>
+    /// Rewrites activity-owned references in a compiled structure from authored child node IDs to
+    /// their placement-specific executable node IDs.
+    /// </summary>
+    ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+        ArgumentNullException.ThrowIfNull(authoredToExecutableNodeIds);
+        if (authoredToExecutableNodeIds.Count == 0)
+            return structure;
+
+        throw new NotSupportedException("The activity structure service does not support executable child-node remapping.");
+    }
+
+    /// <summary>
+    /// Whether a structure handler is registered for <paramref name="structure"/>'s kind and schema
+    /// version. Lets publish-time guards distinguish a legitimately opaque structure (unknown
+    /// kinds are copied as opaque non-composite structure) from a composite
+    /// structure whose owning feature is missing from the shell. Defaults to <see langword="true"/>
+    /// (assume handled) so custom/stub implementations that always project their children never
+    /// trip the guard.
+    /// </summary>
+    bool HasHandler(ActivityNodeStructure structure) => true;
+
+    /// <summary>
+    /// Projects the container-scoped variables declared by <paramref name="activity"/>. Returns an
+    /// empty collection when the node has no structure handler or declares no container variables.
+    /// </summary>
+    IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity);
+
+    /// <summary>
+    /// Whether <paramref name="activity"/> is a container scope that can own container-scoped
+    /// variable declarations. Used by authoring tooling to discover which activities can
+    /// declare container variables.
+    /// </summary>
+    bool SupportsScopedVariables(ActivityNode activity);
+}

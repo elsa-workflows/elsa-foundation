@@ -167,3 +167,10 @@
 .studio-code-editor-rich .cm-cursor {
   border-left-color: var(--studio-text);
 }
+
+.studio-code-editor-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}

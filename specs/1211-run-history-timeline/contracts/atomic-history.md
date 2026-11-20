@@ -45,3 +45,5 @@ An ingress observation transaction shares the same scoped head CAS/immutable-eve
 ## Retention and compatibility
 
 Additive Runtime migrations preserve the historical Initial chain on all four providers. Old no-history markers remain replay-compatible. Run deletion removes all owned projections in its existing transaction. Explicit earlier purge retains an honest lower/coverage boundary. Sensitive policy applies before either semantic events or recoverable responsibility is persisted.
+
+Provider read/observation/retention failures cross this boundary as `RuntimeHistoryUnavailableException`, retaining the original cause plus run and operation identifiers. Keep hard retained-history inconsistency as `RuntimeHistoryIntegrityException`. Neither an unavailability exception nor a timed-out write proves rollback; callers reconcile stable write identities before retrying. Raw infrastructure exceptions are not the public provider contract.

@@ -43,6 +43,7 @@ export interface ExecutableGraphNodeFacts {
   authoredInputs: WorkflowExecutableAuthoredInput[];
   authoredInputsAccess: string | null;
   presentation?: ActivityPresentationRecord;
+  structureDiagnostics?: { code: string; wireSlot: string; message: string }[];
 }
 
 export interface ExecutableActivityGraph {

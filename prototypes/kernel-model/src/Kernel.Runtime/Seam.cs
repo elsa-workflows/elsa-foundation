@@ -26,6 +26,16 @@ public interface IScopeHost
 }
 
 /// <summary>
+/// K1 slice 7: a host that checks, when the runtime starts it, that the runtime's scopes, its workers' placement count
+/// and its store's partitions agree. The count is fixed when the database is created; a runtime or a worker at another
+/// count would place work on partitions with no row, or leave some unserved. A mismatch refuses the start.
+/// </summary>
+public interface IScopeCount
+{
+    ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// One scope while layer 2 holds its fence. The runtime calls <see cref="RunAsync"/> one pass at a time and never on two
 /// nodes at once as far as it knows; disposing gives the scope up.
 /// </summary>
@@ -76,8 +86,12 @@ public sealed class InProcessWakeSignal : IWakeSignal
     }
 }
 
-/// <summary>What a heartbeat sees: how many nodes were heard from within the window, and which partitions nobody holds.</summary>
-public sealed record Cluster(int Nodes, IReadOnlyList<int> Free, long Now);
+/// <summary>
+/// What a heartbeat sees: how many nodes were heard from within the window, and which partitions nobody holds.
+/// <paramref name="Rank"/> is this node's place among them in name order, where the membership knows it (0 otherwise);
+/// only the <see cref="Flaw.ContiguousOnlyBalancer"/> mutation reads it.
+/// </summary>
+public sealed record Cluster(int Nodes, IReadOnlyList<int> Free, long Now, int Rank = 0);
 
 /// <summary>The built-in runtime's view of the cluster, kept by the store: a node's heartbeat and the partitions nobody holds.</summary>
 public interface IMembership

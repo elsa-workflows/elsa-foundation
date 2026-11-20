@@ -1,5 +1,5 @@
 import { StudioField } from "../forms/Field";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import type { StudioDialogRequest } from "../../../sdk";
 import { dialogController } from "../../dialogs";
@@ -7,10 +7,21 @@ import { dialogController } from "../../dialogs";
 /**
  * Single host-rendered surface for `api.dialogs.confirm/prompt/alert`. Subscribes to the
  * shared dialog controller and renders the head request with Radix (focus trap, Esc,
- * scroll-lock, ARIA, focus restore), styled with Studio design tokens.
+ * scroll-lock, ARIA), restoring the imperative caller's opener and using Studio design tokens.
  */
 export function DialogHost() {
   const request = useSyncExternalStore(dialogController.subscribe, dialogController.getCurrent, dialogController.getCurrent);
+  const opener = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  if (request && !wasOpen.current && typeof document !== "undefined") {
+    const focused = document.activeElement;
+    // Imperative dialogs have no Radix Trigger. Preserve the original opener across a queued dialog
+    // or a replacement that arrives while the previous content is still animating closed.
+    if (!(focused instanceof HTMLElement) || !focused.closest(".studio-dialog")) {
+      opener.current = focused instanceof HTMLElement && focused !== document.body && focused !== document.documentElement ? focused : null;
+    }
+  }
+  wasOpen.current = request != null;
 
   // If this surface tears down while dialogs are pending, settle them as cancelled so no caller hangs.
   useEffect(() => () => dialogController.cancelAll(), []);
@@ -26,7 +37,15 @@ export function DialogHost() {
     <Dialog.Root open={request != null} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="studio-dialog-overlay" />
-        <Dialog.Content className="studio-dialog" data-tone={request?.tone ?? "default"}>
+        <Dialog.Content className="studio-dialog" data-tone={request?.tone ?? "default"} onCloseAutoFocus={event => {
+          event.preventDefault();
+          if (dialogController.getCurrent()) return;
+          const target = opener.current;
+          opener.current = null;
+          const focused = document.activeElement;
+          const needsRestoration = !focused || focused === document.body || focused === document.documentElement || focused.closest(".studio-dialog");
+          if (needsRestoration && target?.isConnected && !target.matches(":disabled, [aria-disabled='true']")) target.focus();
+        }}>
           {request ? <DialogBody key={request.id} request={request} /> : null}
         </Dialog.Content>
       </Dialog.Portal>

@@ -322,6 +322,9 @@ public sealed class Fragile(Action die) : Model<FragileState>
 
 public sealed class HttpState
 {
+    internal bool NewInstance;
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal List<Message>? AppliedCancellations;
     public string Mode { get; set; } = "";
     public bool Started { get; set; }
     public int Turns { get; set; }
@@ -340,16 +343,21 @@ public sealed class Http(int actor, Func<IJob, CancellationToken, ValueTask<obje
 {
     public const string Respond = "respond", Early = "early", Timer = "timer", Work = "job", Wait = "wait";
     public static readonly string[] Starts = [Respond, Early, Timer, Work];
+    internal Action<ITurn, HttpState>? ObserveAmbient { get; init; }
     public override string Key => "http";
 
+    internal static string StarterAmbient(InstanceRef target, long creation, int actor) => $"amb:{CreationProtocol.Origin(target.Id, creation)}@{actor}";
     public static StartSpec Spec(string mode, bool ephemeral = false) => new("http", "h", Json.Write(new HttpInput(mode)), Ephemeral: ephemeral);
-    public override object CreateState(StartSpec start) => new HttpState { Mode = Json.Read<HttpInput>(start.Input!).Mode };
+    public override object CreateState(StartSpec start) => new HttpState { Mode = Json.Read<HttpInput>(start.Input!).Mode, NewInstance = true };
     public override ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken) => work(job, cancellationToken);
 
     protected override void Turn(ITurn turn, HttpState state)
     {
+        state.AppliedCancellations = null;
+        ObserveAmbient?.Invoke(turn, state);
+        state.NewInstance = false;
         state.Turns++;
-        if (turn.Ambient is { } ambient) state.Ambient.Add(Equals(ambient, "amb:" + turn.Instance.Ref.Id) ? $"seen@{actor}" : $"wrong {ambient}@{actor}");
+        if (turn.Ambient is { } ambient) state.Ambient.Add(Equals(ambient, StarterAmbient(turn.Instance.Ref, turn.Instance.Creation, actor)) ? $"seen@{actor}" : $"wrong {ambient}@{actor}");
         foreach (var message in turn.Inbox)
             switch (message.Kind)
             {
@@ -370,6 +378,7 @@ public sealed class Http(int actor, Func<IJob, CancellationToken, ValueTask<obje
                     break;
                 case "cancel":
                     turn.SetStatus(InstanceStatus.Cancelled);
+                    (state.AppliedCancellations ??= []).Add(message);
                     break;
             }
     }

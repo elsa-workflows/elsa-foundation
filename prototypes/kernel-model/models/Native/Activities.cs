@@ -44,6 +44,47 @@ public sealed class SendNotification : Activity
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) => new(Complete());
 }
 
+/// <summary>
+/// An outbound HTTP request (round 5 C). Not replay-safe, so External; the host sends it. The activity puts its effect key
+/// in the <c>Idempotency-Key</c> header, the convention of the IETF idempotency-key draft and of Stripe and the like: a
+/// receiver that keeps the keys it has seen drops a repeat. The kernel sends it at least once and drops nothing itself.
+/// </summary>
+[External]
+public sealed class SendHttpRequest : Activity
+{
+    public const string IdempotencyKeyHeader = "Idempotency-Key";
+
+    [Input] public string Url { get; set; } = "";
+    [Input] public string Method { get; set; } = "POST";
+    [Input] public JsonNode? Body { get; set; }
+
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
+    {
+        var request = new OutboundHttpRequest(Method, Url, Body, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [IdempotencyKeyHeader] = context.EffectKey });
+        return new(Complete().With(new HttpSendEffect(request)));
+    }
+}
+
+/// <summary>
+/// An outbound email (round 5 C). Not replay-safe, so External; the host sends it. The effect key is the local part of the
+/// message's <c>Message-ID</c>, so a mail server or client that deduplicates by it keeps one copy of a repeat. The
+/// domain is the prototype's constant; in a product it is the sending host's.
+/// </summary>
+[External]
+public sealed class SendEmail : Activity
+{
+    public const string MessageIdDomain = "workflows.elsa.invalid";
+
+    [Input] public string To { get; set; } = "";
+    [Input] public string Subject { get; set; } = "";
+    [Input] public string Body { get; set; } = "";
+
+    public static string MessageId(string effectKey) => $"<{effectKey}@{MessageIdDomain}>";
+
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) =>
+        new(Complete().With(new EmailSendEffect(new OutboundEmail(To, Subject, Body, MessageId(context.EffectKey)))));
+}
+
 /// <summary>Slow external work. Background: it runs as the kernel's background job, so the instance still takes a cancel or a timer meanwhile.</summary>
 [Background]
 public sealed class CallService : Activity<string>
@@ -190,6 +231,10 @@ public sealed class ForEach : CompositeActivity, IInterventionParent
     }
     [Input] public JsonArray? Items { get; set; }
 
+    /// <summary>The body's iteration is its committed scope's CurrentIndex (round 5 C).</summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
+        childScope is not null && childScope.TryGetValue("CurrentIndex", out var index) && index is JsonValue v && v.TryGetValue<int>(out var i) ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+
     protected internal override void Execute(CompositeContext context)
     {
         var state = new ForEachState { Items = Items ?? [] };
@@ -225,21 +270,35 @@ public sealed class ForEach : CompositeActivity, IInterventionParent
     }
 }
 
+public sealed record WhileState
+{
+    /// <summary>The pass of the body that runs, from 1. Committed with the instance, so a replay re-derives it (round 5 C).</summary>
+    public int Iteration { get; set; }
+}
+
 /// <summary>Composite inputs are evaluated at every activation, so the condition is read again after each pass without a marker.</summary>
 public sealed class While : CompositeActivity
 {
     [Input] public bool Condition { get; set; }
 
-    protected internal override void Execute(CompositeContext context)
-    {
-        if (Condition && context.Children.Count > 0) context.Schedule(context.Children[0]);
-        else context.Complete();
-    }
+    /// <summary>The body's iteration is this loop's committed pass count (round 5 C).</summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
+        (Values.To<WhileState>(state)?.Iteration ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    protected internal override void Execute(CompositeContext context) => Next(context, new WhileState());
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
-        if (child.Outcome != "Break" && Condition) context.Schedule(context.Children[0]);
-        else context.Complete();
+        if (child.Outcome == "Break") { context.Complete(); return; }
+        Next(context, context.GetState<WhileState>());
+    }
+
+    private void Next(CompositeContext context, WhileState state)
+    {
+        if (!Condition || context.Children.Count == 0) { context.Complete(); return; }
+        state.Iteration++;
+        context.SetState(state);
+        context.Schedule(context.Children[0]);
     }
 }
 
@@ -261,30 +320,36 @@ public sealed class Flowchart : CompositeActivity
     // A run started by a trigger that is a child of this Flowchart begins there (main's SelectEntryNode), so that the
     // trigger is delivered; otherwise at the start node.
     protected internal override void Execute(CompositeContext context) =>
-        Step(context, null, (engine, run) => engine.Start(GraphOf(context.Node), run), context.PendingTrigger);
+        Step(context, null, new(StringComparer.Ordinal), (engine, run) => engine.Start(GraphOf(context.Node), run), context.PendingTrigger);
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
-        var (path, scope) = Decode(child.Tag);
-        if (!TryReadState(context, out var before)) return;
-        Step(context, before, (engine, run) => engine.OnChildCompleted(GraphOf(context.Node), run, before,
-            new FlowchartChildCompletion(child.Node, child.Frame, [child.Outcome], path, scope)));
+        var (path, scope, _, _) = Decode(child.Tag);
+        if (!TryReadState(context, out var before, out var firings)) return;
+        Step(context, before, firings, (engine, run) => engine.OnChildCompleted(GraphOf(context.Node), run, before,
+            new FlowchartChildCompletion(child.Node, child.Frame, [child.Outcome], path, scope)), source: child);
     }
 
     // The engine faults the Flowchart when a child faults (main, #308); the fault the instance carries is the child's
     // own, as the other native composites pass it on, not the engine's generic flowchart.child.faulted.
     protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child)
     {
-        if (!TryReadState(context, out var before)) return;
-        Step(context, before, (engine, run) => engine.OnChildFaulted(GraphOf(context.Node), run, before, child.Node), fault: child.Fault);
+        if (!TryReadState(context, out var before, out var firings)) return;
+        Step(context, before, firings, (engine, run) => engine.OnChildFaulted(GraphOf(context.Node), run, before, child.Node), fault: child.Fault);
     }
 
-    /// <summary>The engine's state before this callback; corrupt state faults the Flowchart.</summary>
-    private static bool TryReadState(CompositeContext context, out FlowchartExecutionState? state)
+    /// <summary>
+    /// The frame's state before this callback: the engine's state and this host's own join firing counts (round 5 C),
+    /// committed together; corrupt state faults the Flowchart.
+    /// </summary>
+    private static bool TryReadState(CompositeContext context, out FlowchartExecutionState? state, out Dictionary<string, int> firings)
     {
+        firings = new(StringComparer.Ordinal);
         try
         {
-            state = ReadEngineState(context.ReadState<JsonNode>());
+            var node = context.ReadState<JsonNode>();
+            state = ReadEngineState(node);
+            firings = ReadFirings(node);
             return true;
         }
         catch (JsonException exception)
@@ -295,7 +360,7 @@ public sealed class Flowchart : CompositeActivity
         }
     }
 
-    private static void Step(CompositeContext context, FlowchartExecutionState? before, Func<FlowchartExecutionEngine, FlowchartRun, FlowchartStep> call, string? trigger = null, ActivityFault? fault = null)
+    private static void Step(CompositeContext context, FlowchartExecutionState? before, Dictionary<string, int> firings, Func<FlowchartExecutionEngine, FlowchartRun, FlowchartStep> call, string? trigger = null, ActivityFault? fault = null, ChildCompleted? source = null)
     {
         FlowchartStep step;
         try
@@ -308,10 +373,9 @@ public sealed class Flowchart : CompositeActivity
             return;
         }
 
-        // Diagnostics are main's audit trail and the engine never reads them back; here the journal is the trail, so
-        // they are not kept in the instance's state (the rest is the state main stages).
-        context.SetState(JsonSerializer.SerializeToNode(step.State with { Diagnostics = [] }, Compact));
         foreach (var entry in Trace(context.FrameId, context.Node.Id, before, step)) context.Record(entry);
+        if (context.Flawed(NativeFlaw.TurnLocalJoinOrdinal)) firings = new(StringComparer.Ordinal);   // MUTATION: the count restarts every turn and is never committed
+        var scheduling = new List<(Node Child, string Tag)>();
         foreach (var scheduled in step.Scheduled)
         {
             // A join fires once per scheduling id the engine gives the firing (the releasing completion, or the producer
@@ -322,8 +386,14 @@ public sealed class Flowchart : CompositeActivity
             if (scheduled.SchedulingCause is "join" or "continuation" && context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge
                 && context.Node.Connections.Count(c => c.Target == scheduled.NodeId) > 1)     // as the engine counts them
                 context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}:{scheduled.SchedulingActivityExecutionId}");
-            context.Schedule(context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId));
+            scheduling.Add((context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId, scheduled.IterationKey, Token(context, scheduled, source, firings))));
         }
+        // Diagnostics are main's audit trail and the engine never reads them back; here the journal is the trail, so
+        // they are not kept in the instance's state (the rest is the state main stages). The join firing counts ride
+        // beside the engine's state when there are any; a Flowchart without a join keeps the engine's state alone.
+        var engine = JsonSerializer.SerializeToNode(step.State with { Diagnostics = [] }, Compact);
+        context.SetState(firings.Count == 0 || context.Flawed(NativeFlaw.TurnLocalJoinOrdinal) ? engine : new JsonObject { ["engine"] = engine, ["firings"] = new JsonObject(firings.Select(f => KeyValuePair.Create(f.Key, (JsonNode?)f.Value))) });
+        foreach (var (child, tag) in scheduling) context.Schedule(child, tag);
         switch (step.Kind)
         {
             case FlowchartStepKind.Complete:
@@ -381,8 +451,15 @@ public sealed class Flowchart : CompositeActivity
         return Engines.GetOrAdd(flaws, static f => FlowchartEngines.Create(new FlowchartOptions { Flaws = f }));
     }
 
-    /// <summary>The engine's state as a Flowchart frame keeps it (for the simulation's checks too).</summary>
-    public static FlowchartExecutionState? ReadEngineState(JsonNode? state) => state?.Deserialize<FlowchartExecutionState>(Compact);
+    /// <summary>The engine's state as a Flowchart frame keeps it (for the simulation's checks too): alone, or beside the host's join firing counts.</summary>
+    public static FlowchartExecutionState? ReadEngineState(JsonNode? state) =>
+        (state is JsonObject o && o.ContainsKey("engine") ? o["engine"] : state)?.Deserialize<FlowchartExecutionState>(Compact);
+
+    /// <summary>How often each join has fired in each round (<c>node|round</c>), from the frame's committed state (round 5 C).</summary>
+    private static Dictionary<string, int> ReadFirings(JsonNode? state) =>
+        state is JsonObject o && o["firings"] is JsonObject firings
+            ? firings.ToDictionary(f => f.Key, f => f.Value!.GetValue<int>(), StringComparer.Ordinal)
+            : new(StringComparer.Ordinal);
 
     /// <summary>The path a child of a Flowchart frame runs on, from its tag.</summary>
     public static string? PathOf(string? tag) => Decode(tag).Path;
@@ -405,10 +482,53 @@ public sealed class Flowchart : CompositeActivity
         _ => throw new ArgumentOutOfRangeException(nameof(gateway), gateway, null),
     };
 
-    private static string Encode(string path, string scope) => path + "|" + scope;
+    /// <summary>
+    /// The child's iteration for the effect key (round 5 C): the engine's iteration key of the round it was scheduled in
+    /// (<c>head:2</c>: the loop head and the round, from the engine's committed state) and the token it rides
+    /// (<see cref="Token"/>), both carried on the tag. A node outside a loop, not forward of a merge and not a join has
+    /// none: it fires once per instance.
+    /// </summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope)
+    {
+        var (_, _, round, token) = Decode(childTag);
+        return round is null && token is null ? null : (round?.Replace(':', '-') ?? "") + (token ?? "");
+    }
 
-    private static (string? Path, string? Scope) Decode(string? tag) =>
-        tag?.Split('|') is [var path, var scope] ? (path, scope) : (null, null);
+    /// <summary>
+    /// What tells two firings of one node in one round apart (the owner's decision of 16 November: the node plus its
+    /// iteration numbers, which replay cannot reorder, and different activations always get different keys), from
+    /// committed facts only. A node with one inbound connection fires once per token: it inherits the token of the
+    /// completing child that reached it, and a Merge appends <c>^merge-source</c> (each arrival identified by its source).
+    /// A join (several inbound connections, not a Merge) fires once per round unless it lies forward of a merge, where
+    /// it fires once per token under whichever arrival releases it; it gets its firing ordinal in the round from this
+    /// host's committed count, <c>^join#n</c>: the nth firing is the nth in the lost turn and in its replay, whatever
+    /// arrivals made it up. Nodes after the join inherit that token. A new round starts afresh. The engine's path ids are
+    /// not used: they are minted in mutation order.
+    /// </summary>
+    private static string? Token(CompositeContext context, FlowchartScheduledNode scheduled, ChildCompleted? source, Dictionary<string, int> firings)
+    {
+        if (context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge && context.Node.Connections.Count(c => c.Target == scheduled.NodeId) > 1)
+        {
+            var round = $"{scheduled.NodeId}|{scheduled.IterationKey ?? "-"}";
+            var ordinal = firings[round] = firings.GetValueOrDefault(round) + 1;
+            return $"^{scheduled.NodeId}#{ordinal}";
+        }
+        if (source is null) return null;
+        var (_, _, sourceRound, token) = Decode(source.Tag);
+        var inherited = sourceRound == scheduled.IterationKey ? token : null;
+        return context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) == Gateway.Merge ? $"{inherited}^{scheduled.NodeId}-{source.Node}" : inherited;
+    }
+
+    private static string Encode(string path, string scope, string? iteration, string? token) =>
+        iteration is null && token is null ? path + "|" + scope : path + "|" + scope + "|" + iteration + "|" + token;
+
+    private static (string? Path, string? Scope, string? Iteration, string? Token) Decode(string? tag) => tag?.Split('|') switch
+    {
+        [var path, var scope] => (path, scope, null, null),
+        [var path, var scope, var iteration] => (path, scope, iteration is "" ? null : iteration, null),
+        [var path, var scope, var iteration, var token] => (path, scope, iteration is "" ? null : iteration, token is "" ? null : token),
+        _ => (null, null, null, null),
+    };
 }
 
 // ---- waiting ---------------------------------------------------------------------------------------------------------

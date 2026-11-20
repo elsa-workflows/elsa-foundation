@@ -104,6 +104,8 @@ The dispatcher looks up the executable. It checks that the executable is still t
 
 Where do executables come from? Publishing compiles a definition version and saves the result to the executable store. That store is in memory by default. With database persistence switched on, it is a database store with a cache in front.
 
+> **Limitation:** Native publish (including Studio's **Review & publish**) and direct BPMN publish save the compiled material before the publication that retains it is committed. Until that publication exists, the saved material is not guaranteed to be kept. After the artifact-creation grace period (5 minutes by default), garbage collection may remove it. An interrupted publish can be retried. The default Workbench does not run the garbage-collection pump, so the local demo does not exercise this path.
+
 ### 3. The mailbox makes sure only one writer touches the run
 
 The dispatcher doesn't run anything itself. It drops the command into the run's **mailbox**. There is one mailbox per execution, and it handles one command at a time (ADR 0031, the single-writer rule).
@@ -216,8 +218,10 @@ The EF command budgets file records what each reference workflow costs on the ru
 
 | Reference workflow | Durable | Balanced |
 |---|---:|---:|
-| Ten WriteLine activities | 221 commands | 64 commands |
-| 4-activity HTTP workflow | 149 commands | 83 commands |
+| Ten WriteLine activities | 233 commands | 65 commands |
+| 4-activity HTTP workflow | 155 commands | 85 commands |
+
+Since [#4651](https://github.com/elsa-workflows/elsa-foundation/pull/4651) (16 November 2026) every checkpoint commit reads the execution's admitted history policy inside the EF checkpoint transaction, one extra command per commit; that read added these commands ([#4685](https://github.com/elsa-workflows/elsa-foundation/issues/4685)). Checkpoints that capture history, or carry history contributions, also write it; the reference workflows write none.
 
 SQLite allows one writer, and at its default `synchronous=FULL` each commit is an fsync, so requests queue behind each other's fsyncs. When *Durable* still committed every scheduler hop (about 106 commits per request of the HTTP reference workflow), that workflow plateaued at two concurrent clients on a cloud VM disk, about one request per second. This was measured, not inferred: fsyncs were counted per request, and injecting 5 ms into every fsync locally reproduced the plateau ([#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553#issuecomment-6102950881)). The plateau has not been measured again for the per-activity *Durable*. Reducing the commit count further is tracked in epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564).
 

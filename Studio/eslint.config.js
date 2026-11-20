@@ -88,7 +88,7 @@ export default tseslint.config(
       'Studio/src/**/scripts/**/*.mjs',
       'Studio/tests/**/scripts/**/*.mjs',
       'Studio/examples/**/scripts/**/*.mjs',
-      'Extensions/*/studio/**/scripts/**/*.mjs',
+      'extensions/*/studio/**/scripts/**/*.mjs',
     ],
     languageOptions: {
       globals: {

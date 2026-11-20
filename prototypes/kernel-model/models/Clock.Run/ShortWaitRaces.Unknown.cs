@@ -6,11 +6,12 @@ internal static partial class ShortWaitRaces
 {
     private static async Task UnknownJobCuts(Func<string, Func<Task>, Task> check)
     {
+        foreach (var legacyError in new[] { false, true })
         foreach (var applied in new[] { false, true })
         foreach (var post in new[] { false, true })
         foreach (var terminalTimer in new[] { false, true })
         foreach (var fresh in new[] { false, true })
-            await check($"uncertain recovery checkpoint: applied={applied}, post={post}, terminal timer={terminalTimer}, fresh={fresh}", async () =>
+            await check($"{(legacyError ? "legacy-flaw" : "default-Park")}: uncertain recovery checkpoint: applied={applied}, post={post}, terminal timer={terminalTimer}, fresh={fresh}", async () =>
             {
                 var model = new Spawner(finish: false, wait: true, finishOnTimer: terminalTimer);
                 var f = new JobCut(model);
@@ -31,7 +32,7 @@ internal static partial class ShortWaitRaces
                 var faults = new CutFaultStore(f.Wire);
                 Worker Replacement() => new("uncertain", 0, faults, new WorkflowInstance([model]), new()
                 {
-                    Monotonic = () => f.Clock, MaxAttempts = 1, Horizon = TimeSpan.FromMilliseconds(100)
+                    Monotonic = () => f.Clock, MaxAttempts = 1, Flaws = legacyError ? Flaw.JobPoisonAsError : Flaw.None, Horizon = TimeSpan.FromMilliseconds(100)
                 });
                 await using var owner = Replacement();
                 await new DurableHost([owner]).ActivateAsync(0);
@@ -53,7 +54,7 @@ internal static partial class ShortWaitRaces
                     {
                         await f.Wire.Landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
                         Need(!flight.IsCompleted && !f.Store.Messages.ContainsKey(ticket)
-                            && Json.Read<List<string>>(f.Store.Instances[f.Actor.Id].State).SequenceEqual(["spawn", Kinds.JobFinished]),
+                            && Json.Read<List<string>>(f.Store.Instances[f.Actor.Id].State).SequenceEqual(legacyError ? ["spawn", Kinds.JobFinished] : ["spawn"]),
                             "error checkpoint did not land before its answer was lost");
                         f.Clock = 230;
                     }
@@ -72,7 +73,8 @@ internal static partial class ShortWaitRaces
                 await new DurableHost([recovered]).ActivateAsync(0);
                 Need(recovered.Epoch > epoch && f.Store.Messages["later"].Attempts == 0, "same-node retake charged the timer");
                 await f.Drain(recovered);
-                if (post)
+                if (!legacyError) f.Expect(recovered, InstanceStatus.Faulted, "spawn");
+                else if (post)
                     f.Expect(recovered, terminalTimer ? InstanceStatus.Finished : InstanceStatus.Running, "spawn", Kinds.JobFinished, "later");
                 else
                     f.Expect(recovered, InstanceStatus.Cancelled, applied ? ["spawn", Kinds.JobFinished] : ["spawn"]);

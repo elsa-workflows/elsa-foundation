@@ -62,10 +62,10 @@ import { ActivityVersionChangeDialog } from "../../src/essentials/Elsa.Studio.Wo
 import { PublicationReviewDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PublicationReviewDialog";
 import { createPublicationReview, type PublicationReviewState, type PublicationVersionSelection } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/publicationReview";
 import type { PublicationIntent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/publishing";
-import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
-import { LiquidExpandedEditor, LiquidInlineEditor } from "../../../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client/src/module";
-import { ConnectionPickerEditor } from "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionPickerEditor";
-import { SecretPickerEditor } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretPickerEditor";
+import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
+import { LiquidExpandedEditor, LiquidInlineEditor } from "../../../extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client/src/module";
+import { ConnectionPickerEditor } from "../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionPickerEditor";
+import { SecretPickerEditor } from "../../../extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretPickerEditor";
 import {
   applyActivityVersionChange,
   findActivityOccurrence,
@@ -82,8 +82,8 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/tokens.css";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/forms/Field.css";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/disclosure/disclosure.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
-import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
-import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
+import "../../../extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
+import "../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
 import "./fixture.css";
 
 const searchParams = new URLSearchParams(window.location.search);

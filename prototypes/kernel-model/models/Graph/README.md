@@ -33,6 +33,19 @@ the rest (scope resolver, state mutator, diagnostics, pruning, the policies and 
 namespace changed, but for the MUTATION hooks of the table. Main's metadata-key and state-type constants on the engine are kept, unused, so that the file
 still reads as main's.
 
+The prototype additionally corrects same-target Decision joins (#4367): dead-path answers are matched by the
+existing source/normalized-port/target facts together with the unchanged wire connection ID, rather than only
+the source node or the potentially colliding wire ID. A target with two outcome edges from one source waits for
+both the live and dead answer and consumes them together. This correction is prototype-only; the product
+Flowchart fix remains tracked separately by #4367. No state schema, default policy or scope/iteration key changes. Selected/untaken
+bookkeeping carries actual graph edges on both routing paths, and built-in policy commands retain an ignored
+one-step edge hint so colliding wire IDs cannot lose the selected port. A command copy that redirects routing,
+or a command from a foreign graph, resolves through its public fields. A routing wave emits one dead arrival
+per distinct structural answer at both the decision and any all-dead successors. Legacy custom commands with only an ID
+or target keep their existing first-match resolution; the resolved edge is then accounted for exactly.
+Untaken alternatives to a selected target use that live arrival's actual scope and iteration, including when
+a public policy routes different targets into different scopes. Other untaken targets keep the continuation partition.
+
 ## The corpus
 
 `models/Graph.Tests` runs main's conformance corpus and join tests against this engine through `GraphHarness`, a

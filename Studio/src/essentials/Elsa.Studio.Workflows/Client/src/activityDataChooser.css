@@ -17,6 +17,14 @@
   padding: 0;
 }
 
+.wf-choose-data-trigger.wf-expression-insert-data {
+  width: auto;
+  height: auto;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.5rem;
+  white-space: nowrap;
+}
+
 .wf-choose-data-trigger:hover,
 .wf-choose-data-trigger:focus-visible,
 .wf-choose-data-trigger.open {
@@ -348,5 +356,14 @@
 
 .wf-data-members .wf-data-chooser-note {
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wf-expression-reference-fix {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  font-size: 0.75rem;
   overflow-wrap: anywhere;
 }

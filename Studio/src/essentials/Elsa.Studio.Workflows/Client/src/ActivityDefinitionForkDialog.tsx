@@ -1,3 +1,4 @@
+import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
 import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -155,7 +156,7 @@ export function ActivityDefinitionForkDialog({
   };
   const canApply = Boolean(
     preview?.contractComparison.isCompatible &&
-    !preview.providerMigration.diagnostics.some(diagnostic => diagnostic.severity === "Error")
+    !preview.providerMigration.diagnostics.some(diagnostic => activityDiagnosticSeverity(diagnostic.severity) === "Error")
   );
 
   return <ActivityDefinitionManagementDialogShell

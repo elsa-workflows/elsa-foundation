@@ -1,5 +1,12 @@
 namespace Kernel.Durable;
 
+/// <summary>Observation of existing actor commit facts; no opt-in, capture or release.</summary>
+public interface ICommitClockObservation
+{
+    bool Available { get; }
+    long? Resolve(string reference);
+}
+
 /// <summary>Generic facts about this actor's commits; resolving never creates or restamps one.</summary>
 public interface ICommitClock
 {

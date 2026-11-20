@@ -143,7 +143,7 @@ def main():
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False)
     root = Path(tempfile.mkdtemp(prefix="elsa-etl-http-recovery-"))
     for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
-        shutil.copyfile(REPO / "Essentials/apps/Elsa.Workbench" / name, root / name)
+        shutil.copyfile(REPO / "apps/Elsa.Workbench" / name, root / name)
     for name in ("packages", "etl-snapshots", "errors"): (root / name).mkdir()
     processes = []; children = []; logs = []; host = None; retry_input_unavailable = None; auth_accounts = None
 

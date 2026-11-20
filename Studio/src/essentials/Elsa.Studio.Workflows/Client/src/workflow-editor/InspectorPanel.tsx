@@ -1,3 +1,4 @@
+import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { AlertTriangle, Flag, Repeat2, Send } from "lucide-react";
 import { CopyableIdentifier, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
@@ -97,7 +98,7 @@ interface InspectorPanelProps {
   activityDataSelection?: ActivityDataSelectionHost | null;
   activeTabId?: ActivityInspectorTabId;
   onActiveTabChange?(tabId: ActivityInspectorTabId): void;
-  onSelectedActivityChange(activity: ActivityNode): void;
+  onSelectedActivityChange(activity: ActivityNode, edit?: StudioExpressionEditorEdit): void;
   /** Discrete collection operations end the previous property-edit history group. */
   onSelectedStructureChange?(activity: ActivityNode): void;
   onSelectedPresentationChange?(presentation: Pick<ActivityPresentationRecord, "displayName" | "description">): void;

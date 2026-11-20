@@ -55,9 +55,8 @@ html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime:not(.
 html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime.is-selected:not(.faulted) { border-color: var(--studio-selection-mark); box-shadow: 0 0 0 1px var(--studio-selection-mark); }
 
 .wf-sequence-heading {
-  position: sticky;
-  z-index: 2;
-  top: 0;
+  /* Keep the caption in the scrolling flow so compact cards cannot pass under it. */
+  position: relative;
   display: flex;
   justify-content: flex-start;
   padding: .75rem 1rem 0;

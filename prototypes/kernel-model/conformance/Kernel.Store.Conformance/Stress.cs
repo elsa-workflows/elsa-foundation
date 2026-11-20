@@ -45,7 +45,7 @@ public static class Stress
         long turns = 0, kills = 0, stalls = 0, releases = 0, takes = 0;
         var options = new WorkerOptions
         {
-            Lease = o.Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000,
+            Lease = o.Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000, Partitions = o.Partitions,
             OnTurn = (_, _, _) => Interlocked.Increment(ref turns),
         };
 

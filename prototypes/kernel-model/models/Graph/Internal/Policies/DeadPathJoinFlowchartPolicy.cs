@@ -24,10 +24,12 @@ public sealed class DeadPathJoinFlowchartPolicy()
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var answeredSourceIds = context.Arrivals
-            .Select(arrival => arrival.SourceNodeId)
-            .ToHashSet(StringComparer.Ordinal);
+        // Two outcome edges may share a source and target. The live answer must wait
+        // for the other edge's dead answer, so both are consumed by one firing.
+        var answeredConnections = context.Arrivals
+            .Select(arrival => arrival.GetAnswerKey())
+            .ToHashSet();
 
-        return context.InboundConnections.Any(inbound => !answeredSourceIds.Contains(inbound.Source.NodeId));
+        return context.InboundConnections.Any(inbound => !answeredConnections.Contains(inbound.GetAnswerKey()));
     }
 }

@@ -28,7 +28,7 @@ it("registers independent BPMN navigation for a selected Runtime-only backend", 
   await vi.waitFor(() => expect(page.container.textContent).toContain("New starts are disabled"), { timeout: 5000 });
   const area = page.api.featureAreas.list().find(item => item.id === "workflows")!;
   const navigation = "items" in area.nav ? area.nav.items.filter(item => item.path.startsWith("/workflows/bpmn")) : [];
-  expect(navigation).toHaveLength(2); expect(navigation.every(item => item.placement === "main")).toBe(true);
+  expect(navigation).toHaveLength(2); expect(navigation.map(item => item.placement)).toEqual(["build", "operate"]);
   expect(navigation.every(item => item.requiresBackend?.every(requirement => requirement.id === "elsa.api.bpmn-catalog"))).toBe(true);
   const runs = page.container.querySelector<HTMLAnchorElement>("nav[aria-label='BPMN views'] a[href*='/runs']")!;
   flushSync(() => runs.click());

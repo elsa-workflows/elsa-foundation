@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "kernel.durable": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Runtime": "[1.0.0, )"
+        }
+      },
+      "kernel.runtime": {
+        "type": "Project"
+      },
+      "kernel.runtime.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Runtime": "[1.0.0, )"
+        }
+      },
+      "kernel.store.conformance": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Workflows": "[1.0.0, )"
+        }
+      },
+      "kernel.workflows": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Durable": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

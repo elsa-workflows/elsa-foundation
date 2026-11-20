@@ -5,7 +5,7 @@ export * from "./moduleHost";
 export * from "./notifications";
 import type {StudioConnectionController, StudioModuleHostContext, StudioModuleInstance, StudioShellContribution} from "./moduleHost";
 import type { StudioBackendAwareContribution, StudioBackendSession } from "./backends";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { StudioActivityIconComponent } from "./activityIcons";
 import type { StudioNotificationApi } from "./notifications";
 
@@ -212,16 +212,11 @@ export type StudioNavigationSection = "workspace" | "settings";
 
 /**
  * Where a nav contribution appears in the Studio sidebar.
- * Unset defaults to `more` at the top level (extensions land under More tools). A child with no
- * placement inherits its parent's resolved placement so it stays visible; a child that declares a
- * different placement is listed there instead of vanishing. `section: "settings"` still maps to
- * `admin` so older modules keep their Settings grouping until they declare `placement`.
- * `admin` and `settings` stay visible to anonymous/demo users because the server allows admin
- * calls when sign-in is off; authenticated users need host-control read.
+ * Top-level workspace destinations declare a named placement; there is no catch-all default.
+ * Children inherit their parent's placement. `admin` requires host-control read when signed in;
+ * authoring/runtime settings retain their own contributed role/permission requirements.
  */
-export type StudioNavigationPlacement = "main" | "more" | "settings" | "admin";
-
-export const defaultStudioNavigationPlacement: StudioNavigationPlacement = "more";
+export type StudioNavigationPlacement = "main" | "build" | "operate" | "integrations" | "settings" | "authoring" | "runtime" | "admin";
 export const defaultStudioNavigationOrder = 1000;
 
 export type StudioNavigationRequirement = string | readonly string[];
@@ -234,6 +229,10 @@ export interface StudioNavigationContribution extends StudioBackendAwareContribu
   order?: number;
   iconColor?: string;
   parentId?: string;
+  /** Render children as local route views instead of nested sidebar links. */
+  childDisplay?: "views";
+  /** Include the parent's own route as a local view, such as Definitions or Overview. */
+  viewLabel?: string;
   /**
    * The sidebar section the item is listed under. When omitted the host infers it: its own settings-style paths
    * (modules, feeds, features, themes) land under Settings and everything else under Workspace.
@@ -241,11 +240,9 @@ export interface StudioNavigationContribution extends StudioBackendAwareContribu
    */
   section?: StudioNavigationSection;
   /**
-   * Sidebar placement. `main` is the curated Home / Workflows / Runs / Tasks list; `more` is More tools;
-   * `settings` is a Settings shell section (Appearance; available to every session); `admin` is
-   * Settings › Administration and uses the host-control read gate. Unset defaults to `more` at the
-   * top level, or to the parent placement when this item is a child. The sidebar keeps one Settings
-   * entry.
+   * `main` contains direct workspace links such as Home. Named groups are `build`, `operate` and
+   * `integrations`. Settings groups are `settings` (Studio), `authoring`, `runtime` and `admin`.
+   * Omit only for children inheriting a parent's placement or route-only contributions.
    */
   placement?: StudioNavigationPlacement;
   /** Hide the item when any listed feature is disabled. The contributing module's own gate still applies. */
@@ -475,6 +472,9 @@ export interface StudioFeatureAreaNavLeaf extends StudioBackendAwareContribution
   icon?: StudioNavigationContribution["icon"];
   placeholder?: boolean;
   placement?: StudioNavigationPlacement;
+  parentId?: string;
+  childDisplay?: StudioNavigationContribution["childDisplay"];
+  viewLabel?: string;
   order?: number;
   requiresFeature?: StudioNavigationRequirement;
   requiresRole?: StudioNavigationRequirement;
@@ -490,6 +490,9 @@ export interface StudioFeatureAreaNavParent extends StudioBackendAwareContributi
   icon?: StudioNavigationContribution["icon"];
   items: StudioFeatureAreaNavLeaf[];
   placement?: StudioNavigationPlacement;
+  parentId?: string;
+  childDisplay?: StudioNavigationContribution["childDisplay"];
+  viewLabel?: string;
   order?: number;
   requiresFeature?: StudioNavigationRequirement;
   requiresRole?: StudioNavigationRequirement;
@@ -1148,14 +1151,54 @@ export interface StudioExpressionEditorContext {
   onBlur?(): void;
 }
 
+/** Optional installed syntax adapter. The workflow host does not parse member-access syntax. */
+export interface StudioExpressionReferenceFix {
+  from: number;
+  to: number;
+  current: string;
+  replacement: string;
+}
+
+export interface StudioExpressionSourceInsertion {
+  render(request: { namespace?: "args" | "variables"; alias: string; memberPath: readonly string[]; source: string; selection: { anchor: number; head: number } }):
+    { supported: true; insert: string; /** UTF-16 positions relative to the inserted text. */ selection?: { anchor: number; head: number } } | { supported: false; reason: string };
+  /** Finds direct argument references for which the host can supply an unambiguous replacement. */
+  findArgumentFixes?(source: string, resolve: (name: string) => { namespace: "args" | "variables"; name: string } | undefined):
+    StudioExpressionReferenceFix[];
+}
+/** Ephemeral editor state never enters the authored workflow document. */
+export interface StudioExpressionEditorBookmark { restore(): void }
+export interface StudioExpressionEditorSnapshot {
+  readonly source: string;
+  readonly selection: Readonly<{ anchor: number; head: number }>;
+}
+export interface StudioExpressionEditorController {
+  capture(): StudioExpressionEditorSnapshot | null;
+  apply(edit: { expected: StudioExpressionEditorSnapshot; range?: { from: number; to: number }; insert: string; historyValue: unknown; selection?: { anchor: number; head: number } }): boolean;
+}
+export interface StudioExpressionEditorEdit {
+  historyValue: unknown;
+  origin: "input" | "insertion" | "undo" | "redo";
+  before: StudioExpressionEditorBookmark;
+  after: StudioExpressionEditorBookmark;
+}
+export interface StudioExpressionDocumentEditing {
+  interactionActive?: boolean;
+  /** Immutable JSON owner data apart from source text. */
+  historyValue: unknown;
+  onController(controller: StudioExpressionEditorController | null): void;
+}
+
 export interface StudioExpressionEditorProps {
+  actions?: ReactNode;
   descriptor: StudioActivityInputDescriptor;
   syntax: string;
   value: unknown;
   disabled?: boolean;
   initialFocus?: boolean;
   context: StudioExpressionEditorContext;
-  onChange(value: unknown): void;
+  documentEditing?: StudioExpressionDocumentEditing;
+  onChange(value: unknown, edit?: StudioExpressionEditorEdit): void;
   /** Requests the host to reveal the same document in its expanded editor surface. */
   onExpand?(): void;
   /** Reports only whether this mounted editor currently has a local blocking error. */
@@ -1204,8 +1247,43 @@ export interface StudioExpressionSourceRenderer {
   expanded: ComponentType<StudioExpressionSourceRendererProps>;
 }
 
+export interface StudioExpressionResultType {
+  alias: string;
+  collectionKind?: string | null;
+}
+
+export interface StudioExpressionResultDiagnostic {
+  message: string;
+  /** A source-only edit with UTF-16 offsets into the analyzed source. */
+  fix?: { from: number; to: number; replacement: string; label: string };
+}
+
+/** The editor host offers type facts for bound parameters. The language owns result inference and edits. */
+export interface StudioExpressionResultCheck {
+  check(request: {
+    source: string;
+    expectedType: StudioExpressionResultType;
+    resolveParameterType(name: string, memberPath: readonly string[]): Promise<StudioExpressionResultType | undefined>;
+  }): Promise<StudioExpressionResultDiagnostic | undefined>;
+}
+
 export interface StudioExpressionEditorContribution extends StudioBackendAwareContribution {
+  sourceInsertion?: StudioExpressionSourceInsertion;
+  resultCheck?: StudioExpressionResultCheck;
   id: string;
+  /** Language-owned proof that adding an unrelated lexical variable preserves this authored expression. */
+  variableAdditionPreservation?: {
+    language: string;
+    revision: string;
+    allows(expression: Readonly<Record<string, unknown>>): boolean;
+  };
+
+  /** Language-owned proof that all reads use explicit parameters and survive a closed reusable boundary. */
+  reusableBoundaryPreservation?: {
+    language: string;
+    revision: string;
+    allows(expression: Readonly<Record<string, unknown>>): boolean;
+  };
   /** The inline editor presents its descriptor caption in its own shared field. */
   presentsField?: boolean;
   order?: number;
@@ -1632,6 +1710,7 @@ export const studioSlotIds = {
   workflowRunInputEditors: "workflow.run-input.editors",
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
   workflowRunRelatedLinks: "workflow.run.related-links",
+  incidentRootCauseProviders: "workflow.incident.root-cause-providers",
   settingEditors: "studio.setting-editors",
   weaverContextProviders: "studio.weaver.context-providers",
   weaverPromptStarters: "studio.weaver.prompt-starters",
@@ -1726,6 +1805,7 @@ export const studioSlots = {
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
   workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
   workflowRunRelatedLinks: defineStudioSlot({ id: studioSlotIds.workflowRunRelatedLinks, kind: "workflow-run-related-link", title: "Workflow run related links", owner: hostSlotOwner() }),
+  incidentRootCauseProviders: defineStudioSlot({ id: studioSlotIds.incidentRootCauseProviders, kind: "incident-root-cause-provider", title: "Incident root cause providers", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
   weaverContextProviders: defineStudioSlot({ id: studioSlotIds.weaverContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
   weaverPromptStarters: defineStudioSlot({ id: studioSlotIds.weaverPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
@@ -1969,6 +2049,12 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   value: StudioActivityDefinitionImplementationState;
   readOnly: boolean;
   onChange(value: StudioActivityDefinitionImplementationState): void;
+  /**
+   * Optional synchronous parent admission. Return true only after admitting this value against its
+   * exact baseline, or false without changing canonical state. Controlled editors require literal
+   * true before updating history; the legacy onChange notification is not an acknowledgement.
+   */
+  tryChange?(value: StudioActivityDefinitionImplementationState, expectedValue: StudioActivityDefinitionImplementationState): boolean;
 }
 
 export interface StudioActivityDefinitionImplementationEditorContribution extends StudioBackendAwareContribution {
@@ -1999,6 +2085,29 @@ export interface StudioWorkflowRunRelatedLink {
   label: string;
   /** A Studio-relative route. The host rejects foreign origins/backends and preserves the selected backend. */
   path: string;
+}
+
+/** Minimal incident shape passed to root cause providers so they don't depend on the full Workflows module types. */
+export interface StudioIncidentStateSummary {
+  incidentId: string;
+  failureType: string;
+  message: string;
+  metadata?: Record<string, string>;
+  severity: string;
+  status: string;
+  isBlocking: boolean;
+  createdAt: string;
+}
+
+export interface StudioIncidentRootCauseProviderContribution extends StudioBackendAwareContribution {
+  id: string;
+  order?: number;
+  /** Failure types this provider handles; empty or absent means all. */
+  failureTypes?: readonly string[];
+  /** Metadata key prefixes this provider cares about. */
+  metadataKeyPrefixes?: readonly string[];
+  /** Returns a tailored root cause message, or null to decline. */
+  getRootCause(incident: StudioIncidentStateSummary): string | null;
 }
 
 export interface StudioWorkflowRunRelatedLinkContribution extends StudioBackendAwareContribution {
@@ -2043,6 +2152,8 @@ export interface ElsaStudioModuleApi {
   readonly workflowTestStimulusEditors?: StudioContributionRegistry<StudioTestStimulusEditorContribution>;
   /** Optional on older hosts. Only authorized matching public state views are supplied to contributors. */
   readonly workflowRunRelatedLinks?: StudioContributionRegistry<StudioWorkflowRunRelatedLinkContribution>;
+  /** Optional on older hosts. Modules register tailored root cause messages for specific incident types. */
+  readonly incidentRootCauseProviders?: StudioContributionRegistry<StudioIncidentRootCauseProviderContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly weaver: StudioWeaverRegistry;
   readonly workflowDesigner: {

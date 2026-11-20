@@ -1,0 +1,170 @@
+using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Design.Api.Models;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Models;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Discard;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Get;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Promote;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.PromotionPreflight;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Replace;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Validations;
+using Elsa.Workflows.Design.Api.Endpoints.Versions.Add;
+using Elsa.Workflows.Design.Api.Endpoints.Versions.Get;
+using Elsa.Workflows.Design.Api.Endpoints.Versions.List;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Delete;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Get;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Submit;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Update;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.UpdateMetadata;
+
+namespace Elsa.Workflows.Design.Api;
+
+internal static class WorkflowsDesignJsonOptions
+{
+    /// <summary>The owner context bound to the effective Workflows Design wire options.</summary>
+    internal static WorkflowsDesignJsonContext WireContext { get; } = new(Create());
+
+    private static JsonSerializerOptions Create()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        // The schema emits these authored enums as camel-case strings. Shared type-attributed
+        // enums keep their own existing converters and response casing for current Studio clients.
+        options.Converters.Add(new JsonStringEnumConverter<AuthoredWorkflowIntrinsicKind>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<AuthoredValueConversionMode>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<Elsa.Activities.Design.Core.Models.ActivitySerializedValueKind>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<Elsa.Activities.Design.Core.Models.ActivitySerializedPresence>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<ActivityChildResultAvailability>(JsonNamingPolicy.CamelCase));
+        return options;
+    }
+}
+
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSerializable(typeof(ListWorkflowFolders))]
+[JsonSerializable(typeof(GetWorkflowFolder))]
+[JsonSerializable(typeof(CreateWorkflowFolder))]
+[JsonSerializable(typeof(RenameWorkflowFolder))]
+[JsonSerializable(typeof(MoveWorkflowFolder))]
+[JsonSerializable(typeof(DeleteEmptyWorkflowFolder))]
+[JsonSerializable(typeof(GetFolderDeletionPreview))]
+[JsonSerializable(typeof(DeleteWorkflowFolder))]
+[JsonSerializable(typeof(FolderDeletionView))]
+[JsonSerializable(typeof(MoveWorkflowDefinitions))]
+[JsonSerializable(typeof(ListWorkflowLibrary))]
+[JsonSerializable(typeof(GetWorkflowOrganization))]
+[JsonSerializable(typeof(ReplaceWorkflowTags))]
+[JsonSerializable(typeof(ListWorkflowTags))]
+[JsonSerializable(typeof(GetWorkflowTag))]
+[JsonSerializable(typeof(SaveWorkflowTag))]
+[JsonSerializable(typeof(ListWorkflowViews))]
+[JsonSerializable(typeof(SaveWorkflowView))]
+[JsonSerializable(typeof(CreateWorkflowView))]
+[JsonSerializable(typeof(CreateWorkflowTag))]
+[JsonSerializable(typeof(DeleteWorkflowView))]
+[JsonSerializable(typeof(SetWorkflowFavorite))]
+[JsonSerializable(typeof(WorkflowFolder))]
+[JsonSerializable(typeof(WorkflowFolderDetail))]
+[JsonSerializable(typeof(WorkflowFolderPage))]
+[JsonSerializable(typeof(WorkflowTag))]
+[JsonSerializable(typeof(WorkflowTagInput))]
+[JsonSerializable(typeof(WorkflowTagBulkEdit))]
+[JsonSerializable(typeof(IReadOnlyList<WorkflowTagEditOutcome>))]
+[JsonSerializable(typeof(IReadOnlyList<WorkflowTagFilter>))]
+[JsonSerializable(typeof(WorkflowLibraryViewInput))]
+[JsonSerializable(typeof(WorkflowLibraryView))]
+[JsonSerializable(typeof(WorkflowLibraryViewView))]
+[JsonSerializable(typeof(WorkflowOrganizationView))]
+[JsonSerializable(typeof(WorkflowLibraryPageView))]
+[JsonSerializable(typeof(WorkflowTagPageView))]
+[JsonSerializable(typeof(WorkflowLibraryViewsView))]
+[JsonSerializable(typeof(ListWorkflowTemplates))]
+[JsonSerializable(typeof(GetWorkflowTemplate))]
+[JsonSerializable(typeof(SaveWorkflowTemplate))]
+[JsonSerializable(typeof(DeleteWorkflowTemplate))]
+[JsonSerializable(typeof(WorkflowTemplateView))]
+[JsonSerializable(typeof(IReadOnlyCollection<WorkflowTemplateView>))]
+[JsonSerializable(typeof(AddDefinition))]
+[JsonSerializable(typeof(AddVersion))]
+[JsonSerializable(typeof(DeleteDefinition))]
+[JsonSerializable(typeof(DeleteDefinitionPermanently))]
+[JsonSerializable(typeof(DiscardDraft))]
+[JsonSerializable(typeof(PromoteDraft))]
+[JsonSerializable(typeof(ReplaceDraft))]
+[JsonSerializable(typeof(RestoreDefinition))]
+[JsonSerializable(typeof(SoftDeleteDefinition))]
+[JsonSerializable(typeof(SubmitDefinition))]
+[JsonSerializable(typeof(UpdateDefinition))]
+[JsonSerializable(typeof(UpdateDefinitionMetadata))]
+[JsonSerializable(typeof(ListDefinitions))]
+[JsonSerializable(typeof(GetDefinition))]
+[JsonSerializable(typeof(ListDefinitionVersions))]
+[JsonSerializable(typeof(GetDraft))]
+[JsonSerializable(typeof(GetDraftValidations))]
+[JsonSerializable(typeof(GetVersion))]
+[JsonSerializable(typeof(AnalyzeScopedVariablesRequest))]
+[JsonSerializable(typeof(ActivityInputOptionsRequest))]
+[JsonSerializable(typeof(ExpressionToolingContextRequest))]
+[JsonSerializable(typeof(ExpressionToolingCompletionRequest))]
+[JsonSerializable(typeof(ExpressionToolingHoverRequest))]
+[JsonSerializable(typeof(ExpressionToolingSourceRequest))]
+[JsonSerializable(typeof(WorkflowDefinitionView))]
+[JsonSerializable(typeof(WorkflowDefinitionDetailsView))]
+[JsonSerializable(typeof(WorkflowDefinitionListView))]
+[JsonSerializable(typeof(WorkflowDefinitionVersionDetailsView))]
+[JsonSerializable(typeof(SubmittedWorkflowDefinitionView))]
+[JsonSerializable(typeof(WorkflowDefinitionSubmitSchemaView))]
+[JsonSerializable(typeof(WorkflowDraftView))]
+[JsonSerializable(typeof(WorkflowDefinitionStateView))]
+[JsonSerializable(typeof(ExpressionDefinition))]
+[JsonSerializable(typeof(VariableReference))]
+[JsonSerializable(typeof(ActivityDataContextRequest))]
+[JsonSerializable(typeof(ActivityDataContextResponse))]
+[JsonSerializable(typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionAnalysis))]
+[JsonSerializable(typeof(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding))]
+[JsonSerializable(typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionQuery))]
+[JsonSerializable(typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionSourceFacts))]
+[JsonSerializable(typeof(PromotionPreflightAssessmentView))]
+[JsonSerializable(typeof(DraftValidationsView))]
+[JsonSerializable(typeof(ValidateWorkflowCandidate))]
+[JsonSerializable(typeof(Elsa.Workflows.Design.Api.Endpoints.Templates.ValidateCandidate.ValidateTemplateCandidate))]
+[JsonSerializable(typeof(WorkflowCandidateValidationView))]
+[JsonSerializable(typeof(ActivityStructuresResponse))]
+[JsonSerializable(typeof(ScopedVariableAnalysisResponse))]
+[JsonSerializable(typeof(ActivityInputOptionsResponse))]
+[JsonSerializable(typeof(ExpressionToolingContextResponse))]
+[JsonSerializable(typeof(ExpressionToolingDescriptorsResponse))]
+[JsonSerializable(typeof(ExpressionToolingOperationResponse<ExpressionToolingItems>))]
+[JsonSerializable(typeof(ExpressionToolingOperationResponse<ExpressionHover>))]
+[JsonSerializable(typeof(ExpressionToolingOperationResponse<ExpressionDiagnosticSet>))]
+[JsonSerializable(typeof(IEnumerable<WorkflowDefinitionVersionSummary>))]
+[JsonSerializable(typeof(PreflightDraftPromotion))]
+[JsonSerializable(typeof(WorkflowDesignError))]
+internal partial class WorkflowsDesignJsonContext : JsonSerializerContext
+{
+}
+
+/// <summary>
+/// Resolves Workflows Design metadata against the host's serializer options.
+/// A new generated context is required for each resolution because OpenAPI adds
+/// modifiers to the returned metadata and therefore freezes it in place.
+/// </summary>
+internal sealed class WorkflowsDesignJsonTypeInfoResolver : IJsonTypeInfoResolver
+{
+    public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
+    {
+        // The generated context's explicit resolver implementation dispatches to
+        // its private Create_* factories with the caller's exact options. The
+        // context instance only supplies those generated factories; its own
+        // options are deliberately not used for the returned metadata.
+        return ((IJsonTypeInfoResolver)new WorkflowsDesignJsonContext(new JsonSerializerOptions(JsonSerializerDefaults.Web)))
+            .GetTypeInfo(type, options);
+    }
+}

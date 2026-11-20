@@ -10,7 +10,7 @@ import { AuthContext } from "../../src/essentials/Elsa.Studio.Hosting/Client/src
 import { AppearancePage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/AppearancePage";
 import { SettingsShell } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/SettingsShell";
 import { WorkflowInstancesPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages";
-import { StructuredLogsPage, StructuredLogsPanel, register as registerLogs } from "../../../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
+import { StructuredLogsPage, StructuredLogsPanel, register as registerLogs } from "../../../extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
 import { WorkflowDefinitionBrowseFixture } from "./workflowDefinitionBrowseFixture";
 import { ActivityDuplicateEditorFixture } from "./activityDuplicateEditorFixture";
 import { WorkflowTemplatesFixture } from "./workflowTemplatesFixture";
@@ -20,12 +20,13 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/setting
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearance.css";
 import "./workspaceAppearanceFixture.css";
 
+// Theme/layout fixture: Workflows and Runs stay direct `main` links so the selected-nav accent is always rendered; this is not the product grouping (see Studio/docs/module-ui.md#navigation).
 const navigation = getStudioNavigation([
   { id: "home", label: "Home", path: "/dashboard", placement: "main", order: 10 },
   { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main", order: 20 },
   { id: "runs", label: "Runs", path: "/workflows/instances", placement: "main", order: 30 },
-  { id: "templates", label: "Templates", path: "/workflows/templates", placement: "more" },
-  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", placement: "more" }
+  { id: "templates", label: "Templates", path: "/workflows/templates", placement: "build" },
+  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", placement: "build" }
 ], { includeThemeBuilder: false });
 
 registerLogs({

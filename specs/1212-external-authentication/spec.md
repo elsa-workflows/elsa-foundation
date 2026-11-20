@@ -1,16 +1,24 @@
 # Feature Specification: External authentication and OIDC connections
 
-**Feature Branch**: `agent/codex/3579-01-scope` (first source slice of the #3579 stack)
+**Feature Branch**: `agent/codex/3579-19-delivery` (final delivery slice of the #3579 stack)
 
 **Created**: 2026-11-04
 
-**Status**: In progress
+**Status**: Implemented
 
 **Input**: [#3579](https://github.com/elsa-workflows/elsa-foundation/issues/3579), authorized for end-to-end delivery by Sipke on 4 November 2026. Program: [Elsa 3 parity #2771](https://github.com/elsa-workflows/elsa-foundation/issues/2771). Decisions: [ADR 0085](../../docs/adr/0085-elsa-3-parity-identity-administration-and-scope.md), with the explicit override amendment authorized in #3579. The token-isolation prerequisite [#2848](https://github.com/elsa-workflows/elsa-foundation/issues/2848) was delivered separately in [#4018](https://github.com/elsa-workflows/elsa-foundation/pull/4018); this stack adapts its residual integration to current main.
 
 ## Delivery state
 
-Source preparation resumed on 12 November 2026. The owner closed the original whole-feature PR #3806 for resubmission as reviewable spec slices. This first slice carries decisions/specification only; no backend, API or Studio implementation is installed by it. The original preparation phase excluded execution and publication. On 14 November the owner authorized latest-main reconciliation, reviewable sizing, stack publication, reviews, CI, merge and resulting-main verification; cloud infrastructure remains excluded. The parent feature stays open until final-source and resulting-main qualification; historical implementation evidence is not current-stack acceptance.
+Source preparation resumed on 12 November 2026 after the owner closed carrier #3806 for resubmission as
+reviewable slices. The owner authorized publication, reviews, CI, merge and resulting-main verification on
+14 November, excluding cloud infrastructure. The first slices carried specification and backend prerequisites;
+this final delivery slice completes their integration, operator documentation and qualification tooling.
+
+The terminal status in this PR takes effect when the implementation merges, as the
+[spec lifecycle](../../docs/reference/spec-lifecycle.md#transition-rule) requires. Current-source acceptance is a
+separate merge gate, and actual [resulting-main qualification](resulting-main-qualification.md) remains required
+before the parent feature is completed. Historical source evidence is not a current-main pass.
 
 ## User Scenarios & Testing
 

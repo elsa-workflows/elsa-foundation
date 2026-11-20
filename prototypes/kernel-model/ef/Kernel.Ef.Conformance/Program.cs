@@ -13,10 +13,12 @@ using Npgsql;
 //   dotnet ... postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel" [--fence-in-batch|--checked-fence] [--m5] semantic|stress|cost ...
 //   dotnet ... sqlserver "Server=localhost,<port>;User Id=sa;Password=...;TrustServerCertificate=True" [--fence-in-batch|--checked-fence] [--rcsi-off] semantic ...
 //   dotnet ... mysql "server=localhost;port=<port>;uid=root;pwd=kernel" [--fence-in-batch|--checked-fence] [--rc] semantic ...
-// Without a fence flag the engine's default: the fence in the batch, but the checked fence on SQL Server (ENGINES.md E9).
+// Without a fence flag the engine's default: the fence in the batch on every engine (SQL Server since 16 November, for the owned commit; with --ef-commit it keeps the checked fence, ENGINES.md E9).
+// --ef-commit | --owned-commit: who writes the commit, EF's SaveChanges or the store's own SQL (COMMIT-SQL.md); no flag: the engine's default.
 // --m5: the mutation that lets a definite error beat a fence that did not match (ENGINES.md E1, MONGO.md M5).
+// --fence-ignores-count: the mutation that lets the owned fence pass whatever it matched (COMMIT-SQL.md); semantic-broken must fail with it.
 
-string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc"];
+string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc", "--ef-commit", "--owned-commit", "--fence-ignores-count"];
 switch (args)
 {
     case ["sqlite", .. var rest]:
@@ -24,7 +26,7 @@ switch (args)
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, .. var rest]:
         return await Cli.RunAsync(new EfProvider(engine, connection, rest), rest.Where(a => !flags.Contains(a)).ToArray());
     default:
-        Console.Error.WriteLine("sqlite <suite command> | postgres|sqlserver|mysql <connection> [--fence-in-batch|--checked-fence] [--m5] [--rcsi-off] [--rc] <suite command>");
+        Console.Error.WriteLine("sqlite <suite command> | postgres|sqlserver|mysql <connection> [--fence-in-batch|--checked-fence] [--ef-commit|--owned-commit] [--m5] [--fence-ignores-count] [--rcsi-off] [--rc] <suite command>");
         return 2;
 }
 
@@ -32,10 +34,12 @@ switch (args)
 sealed class EfProvider(string engine, string? server, string[] flags) : IStoreProvider
 {
     // The fence flag, else the engine's default (EfStore.FenceInBatch).
-    private bool FenceInBatch => flags.Contains("--fence-in-batch") || !flags.Contains("--checked-fence") && (Dialect()?.FenceInBatchByDefault ?? true);
+    private bool FenceInBatch => flags.Contains("--fence-in-batch") || !flags.Contains("--checked-fence") && (Dialect()?.FenceInBatchByDefault(Commit != CommitSql.EntityFramework) ?? true);
 
-    public string Name => $"entity framework, {engine}, {(FenceInBatch ? "fence in batch" : "checked fence")}"
-        + (flags.Contains("--m5") ? ", M5 MUTATION" : "") + (engine == "sqlserver" ? flags.Contains("--rcsi-off") ? ", locking" : ", RCSI" : "")
+    private CommitSql? Commit => flags.Contains("--owned-commit") ? CommitSql.Owned : flags.Contains("--ef-commit") ? CommitSql.EntityFramework : null;
+
+    public string Name => $"entity framework, {engine}, {(FenceInBatch ? "fence in batch" : "checked fence")}, {(Store(() => null!, FenceInBatch).OwnedCommit ? "owned SQL" : "EF SaveChanges")}"
+        + (flags.Contains("--m5") ? ", M5 MUTATION" : "") + (flags.Contains("--fence-ignores-count") ? ", FENCE-COUNT MUTATION" : "") + (engine == "sqlserver" ? flags.Contains("--rcsi-off") ? ", locking" : ", RCSI" : "")
         + (engine == "mysql" ? flags.Contains("--rc") ? ", READ COMMITTED" : ", REPEATABLE READ" : "");
 
     private bool CaseEquivalentTopic => engine is "mysql" or "sqlserver";
@@ -56,10 +60,13 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         return () => new KernelDb(options);
     }
 
-    private EfStore Store(Func<KernelDb> create, bool fenceInBatch, bool unfenced = false) => new(create, engine != "sqlite", fenceInBatch)
+    private EfStore Store(Func<KernelDb> create, bool fenceInBatch, bool unfenced = false, bool nodeLease = false) => new(create, engine != "sqlite", fenceInBatch)
     {
         Unfenced = unfenced,
+        NodeLease = nodeLease,
         DefiniteBeatsFence = flags.Contains("--m5"),
+        FenceIgnoresCount = flags.Contains("--fence-ignores-count"),
+        CommitSql = Commit,
         Engine = Dialect(),
     };
 
@@ -100,8 +107,8 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
                 break;
         }
         await Store(Factory(admin), false).CreateAsync(partitions);
-        var store = Store(Factory(worker, interceptors), FenceInBatch, setup.BrokenFence);
-        return new Provided(this, store, Store(Factory(outside), FenceInBatch), admin, file, counter);
+        var store = Store(Factory(worker, interceptors), FenceInBatch, setup.BrokenFence, setup.NodeLease);
+        return new Provided(this, store, Store(Factory(outside), FenceInBatch, nodeLease: setup.NodeLease), admin, file, counter);
     }
 
     private sealed class Provided(EfProvider provider, EfStore store, EfStore outside, string admin, string? file, Counting? counter) : ProvidedStore
@@ -119,6 +126,7 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         public override string MissingConsumeOutcome => "not landed";
         public override IKernelStore NewClient() => outside;
         public override ICostCounter? Counter => counter;
+        public override Func<int, Task>? Reopen => partitions => outside.CreateAsync(partitions);
 
         // PostgreSQL refuses a NUL in text (22021), every time. SQLite, SQL Server and MySQL store any string the
         // instance row can hold: no refused row (the case is skipped).
@@ -130,6 +138,19 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
             "sqlserver" => new SqlConnection(admin),
             "mysql" => new MySqlConnection(admin),
             _ => new SqliteConnection(admin),
+        };
+
+        /// <summary>K1b: a partition row whose owner has no node record, for the missing-record case.</summary>
+        public override Func<string, Task>? DeleteNodeRecord => async node =>
+        {
+            await using var connection = Connect();
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = provider.Engine == "mysql" ? "DELETE FROM `Nodes` WHERE `Id` = @node" : "DELETE FROM \"Nodes\" WHERE \"Id\" = @node";
+            var parameter = command.CreateParameter();
+            (parameter.ParameterName, parameter.Value) = ("@node", node);
+            command.Parameters.Add(parameter);
+            await command.ExecuteNonQueryAsync();
         };
 
         public override async Task<IAsyncDisposable?> HoldPartitionAsync(int partition)

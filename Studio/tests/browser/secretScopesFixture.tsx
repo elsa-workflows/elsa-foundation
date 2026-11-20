@@ -1,12 +1,12 @@
 import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { SecretEditorPage } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretEditorPage";
-import { SecretsPage } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretsPage";
-import type { CreateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/secretTypes";
+import { SecretEditorPage } from "../../../extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretEditorPage";
+import { SecretsPage } from "../../../extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretsPage";
+import type { CreateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "../../../extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/secretTypes";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
+import "../../../extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
 
 const scenario = new URLSearchParams(window.location.search).get("scenario") ?? "default";
 

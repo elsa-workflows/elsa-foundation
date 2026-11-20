@@ -157,6 +157,12 @@ export async function executionNavigationJourney(page: Page, info: TestInfo, cap
   await capture(page, info, "completed-while-observation-paused");
   const collapse = page.getByRole("button", { name: "Collapse activities panel", exact: true });
   if (await collapse.isVisible()) await collapse.click();
+  // Phone panels are alternative workspaces. Return to the canvas before selecting a step;
+  // selecting the running step must reopen its Inspector with the exact execution evidence.
+  if ((page.viewportSize()?.width ?? 1000) <= 600) {
+    const collapseInspector = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
+    if (await collapseInspector.isVisible()) await collapseInspector.click();
+  }
   await page.getByRole("button", { name: "Open Body, 1 activity", exact: true }).click();
   await page.getByRole("button", { name: "1. Show current item", exact: true }).click();
   await page.getByRole("tab", { name: "Inspector", exact: true }).click();

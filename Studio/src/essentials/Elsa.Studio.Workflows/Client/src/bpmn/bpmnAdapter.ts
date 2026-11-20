@@ -419,7 +419,7 @@ function isContainerCatalogItem(catalogItem: ActivityCatalogItem) {
   return !!readStructureDesignFacet(catalogItem);
 }
 
-function defaultBpmnPosition(index: number): XYPosition {
+export function defaultBpmnPosition(index: number): XYPosition {
   return { x: (index % 5) * 220, y: Math.floor(index / 5) * 140 };
 }
 

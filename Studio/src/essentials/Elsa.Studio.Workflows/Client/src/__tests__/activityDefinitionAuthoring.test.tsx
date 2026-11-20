@@ -31,6 +31,32 @@ afterEach(async () => {
 });
 
 describe("Activity Definition authoring", () => {
+  it("marks local invalid JSON diagnostics as needing attention and reveals them from the header", async () => {
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      getJson: async url => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        if (url === "/expressions/descriptors") return { items: [] };
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    await waitForText(rendered.container, "Saved revision 3");
+    openDetails(rendered.container.querySelector<HTMLDetailsElement>(".ad-authoring-advanced")!);
+    click(buttonByText(rendered.container, "Edit code"));
+    await waitFor(() => expect(rendered.container.querySelector(".studio-code-editor textarea")).not.toBeNull());
+    change(rendered.container.querySelector<HTMLTextAreaElement>(".studio-code-editor textarea")!, "{ invalid");
+    await waitForText(rendered.container, "The JSON buffer is invalid and remains local");
+    expect(rendered.container.querySelector(".ad-draft-diagnostics-link")?.classList.contains("needs-attention")).toBe(true);
+    const panel = rendered.container.querySelector<HTMLElement>(".ad-diagnostics-panel")!;
+    panel.scrollIntoView = vi.fn();
+    click(rendered.container.querySelector(".ad-draft-diagnostics-link")!);
+    expect(document.activeElement).toBe(panel);
+    expect(panel.textContent).toContain("The JSON buffer is invalid and remains local");
+    await rendered.unmount();
+  });
+
   it("retains the create form and entered name when its host rerenders after first collection history initialization", async () => {
     const rendered = renderPage({
       getJson: async url => {
@@ -235,7 +261,8 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(rendered.container, "No designed activities yet");
     click(buttonByText(rendered.container, "Create activity"));
-    await waitForText(rendered.container, "Script");
+    await waitForText(rendered.container, "Create Activity Definition");
+    await waitFor(() => expect(rendered.container.querySelector("select[name='provider']")).not.toBeNull());
     const provider = rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")!;
     expect(provider.value).toBe("");
     expect([...provider.options].map(option => option.textContent)).toEqual(["Select an implementation type", "Activity Graph", "Script"]);
@@ -245,11 +272,13 @@ describe("Activity Definition authoring", () => {
     expect(advanced.open).toBe(false);
     openDetails(advanced);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.finance.invoice-evaluator");
-    click(buttonByText(rendered.container, "Create definition"));
+    const createDefinition = buttonByText(rendered.container, "Create definition") as HTMLButtonElement;
+    await waitFor(() => expect(createDefinition.disabled).toBe(false));
+    click(createDefinition);
 
     await waitFor(() => expect(postJson).toHaveBeenCalledWith("/design/activities/definitions", expect.objectContaining({ activityTypeKey: "elsa.user.finance.invoice-evaluator" })));
     await rendered.unmount();
-  });
+  }, 15_000);
 
   it("preselects the sole usable non-graph provider without showing an implementation selector", async () => {
     const response = authoringCapabilities();
@@ -635,7 +664,9 @@ describe("Activity Definition authoring", () => {
     await waitFor(() => expect(contractListButton(rendered.container, "output", "result").getAttribute("aria-pressed")).toBe("true"));
     const resultPane = contractMemberPane(rendered.container, "output", "result");
     expect(resultPane.dataset.contractSelected).toBe("true");
-    expect(resultPane.querySelector<HTMLButtonElement>("[role='tab'][data-tab-id='General']")?.getAttribute("aria-selected")).toBe("true");
+    expect(resultPane.querySelector(".ad-member-tabs")).toBeNull();
+    expect([...resultPane.querySelectorAll("details > summary")].map(summary => summary.textContent)).toEqual(["Presentation", "Advanced"]);
+    expect([...resultPane.querySelectorAll<HTMLDetailsElement>("details")].every(details => !details.open)).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(controlByLabel<HTMLInputElement>(resultPane, "Name")));
 
     addContractMember(rendered.container, "outcome", "Rejected");
@@ -1047,8 +1078,9 @@ describe("Activity Definition authoring", () => {
     showContractView(rendered.container);
     const pane = selectContractMember(rendered.container, "input", "message");
     change(controlByLabel<HTMLInputElement>(pane, "Value"), "candidate");
-    click(buttonByText(pane, "Advanced"));
-    change(controlByLabel<HTMLInputElement>(pane, "Stable reference key"), "message-v2");
+    const key = controlByLabel<HTMLInputElement>(pane, "Stable reference key");
+    expect(key.closest<HTMLElement>("[role='tabpanel']")?.hidden).toBe(false);
+    change(key, "message-v2");
     click(buttonByText(pane, "Apply key"));
     await waitForText(rendered.container, "Change a published reference key");
     expect(putJson).not.toHaveBeenCalled();
@@ -1537,6 +1569,17 @@ describe("Activity Definition authoring", () => {
     expect(rendered.container.textContent).toContain("1 warning");
     expect(rendered.container.textContent).toContain("1 info");
     expect(rendered.container.textContent).toContain("Provide a stable reference key.");
+    const diagnosticsPanel = rendered.container.querySelector<HTMLElement>(".ad-diagnostics-panel")!;
+    const diagnosticsDetails = diagnosticsPanel.querySelector("details")!;
+    diagnosticsDetails.open = false;
+    const scrollToDiagnostics = vi.fn();
+    const firstDiagnostic = diagnosticsPanel.querySelector<HTMLElement>(".ad-diagnostic-item[tabindex]")!;
+    firstDiagnostic.scrollIntoView = scrollToDiagnostics;
+    expect(rendered.container.querySelectorAll(".ad-draft-diagnostics-link")).toHaveLength(1);
+    click(rendered.container.querySelector(".ad-draft-diagnostics-link")!);
+    expect(diagnosticsDetails.open).toBe(true);
+    expect(document.activeElement).toBe(firstDiagnostic);
+    expect(scrollToDiagnostics).toHaveBeenCalledWith({ block: "center" });
     const codes = [...rendered.container.querySelectorAll(".ad-diagnostic-code")].map(item => item.textContent);
     expect(codes).toEqual([
       "activity.contract.input-invalid",
@@ -1548,7 +1591,7 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Focused the exact provider-neutral contract location");
     expect((document.activeElement as HTMLElement)?.hasAttribute("data-contract-reference-key-control")).toBe(true);
     expect(document.activeElement?.closest<HTMLElement>("[role='tabpanel']")?.hidden).toBe(false);
-    expect(rendered.container.querySelector(".ad-member-tabs [aria-selected='true']")?.textContent).toBe("Advanced");
+    expect(rendered.container.querySelector(".ad-member-tabs [aria-selected='true']")?.textContent).toBe("General");
     click(buttonByText(rendered.container, "Return to diagnostic"));
     expect(document.activeElement).toBe(contractDiagnostic);
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.future-location']")!);

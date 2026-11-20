@@ -226,6 +226,17 @@ These are expected semantics to test, not executed test results.
 
 ## Required qualification before adoption
 
+The private compiled selector now has explicit Event/Automatic/Completion categories and a pure serializable
+internal-progress protocol. Its [runner](../../../prototypes/kernel-model/models/Statecharts.Run/README.md#internal-progress-protocol)
+distinguishes entered-configuration and phase-acknowledgement fixtures from actual native execution. It exercises
+local completion once per visit, automatic-first/ready ordering, fixed phase gates and a sticky causal counter.
+The explicit limit is experimental; no product default or supported recovery action is adopted. Native structural
+hydration refuses both internal categories before authored work without the explicit opt-in execution profile.
+The separate bounded [native internal driver](../../../prototypes/kernel-model/models/Statecharts.Run/README.md#native-internal-driver-private-b7b-profile)
+exercises ordinary guard/loop incidents, phase/admission boundaries and model-store restart under that profile.
+Pure JSON/acknowledgement fixtures do not supply that execution evidence. Neither profile supplies provider
+durability, ordinary trigger/rearming proof, source-wave closure or product approval. This leaves Q1/M0 open.
+
 1. Validate every boundary shape above with nested compound/parallel charts, including multiple active leaf
    paths to one ancestor candidate and an action-without-exit conflicting with a containing exit.
 2. Exercise alternative regional arrival orders for one shared input and for distinct inputs; prove exact

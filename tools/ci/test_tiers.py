@@ -386,7 +386,8 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
             problems.append(f"{CI}: Studio verdict must precede the docs-only fast path")
         for key, source in {"STUDIO_SELECTED": "needs.plan-scope.outputs.studio", "STUDIO_FRONTEND": "needs.studio-lint-and-test.result",
                             "STUDIO_BROWSER": "needs.studio-browser-tests.result", "STUDIO_DOTNET": "needs.studio-dotnet-build-and-test.result",
-                            "STUDIO_UX": "needs.studio-ux-acceptance.result"}.items():
+                            "STUDIO_UX": "needs.studio-ux-acceptance.result",
+                            "STUDIO_UX_SELECTED": "needs.plan-scope.outputs.studio-ux"}.items():
             if f"{key}: ${{{{ {source} }}}}" not in block:
                 problems.append(f"{CI}: Studio verdict must consume {key} from {source}")
     full = [block for block in _jobs(ci_full).values() if "'Full tier'" in _job_name(block) or _job_name(block) == FULL_TIER_CONTEXT]
@@ -638,6 +639,7 @@ def self_test() -> int:
                 "          STUDIO_BROWSER: ${{ needs.studio-browser-tests.result }}\n"
                 "          STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}\n"
                 "          STUDIO_UX: ${{ needs.studio-ux-acceptance.result }}\n"
+                "          STUDIO_UX_SELECTED: ${{ needs.plan-scope.outputs.studio-ux }}\n"
                 "        run: python3 tools/ci/studio_gate.py\n")
     good_full = ("on:\n  pull_request:\n    types: [opened, reopened, synchronize, ready_for_review]\n"
                  "  merge_group:\n    types: [checks_requested]\njobs:\n  full-tier:\n"

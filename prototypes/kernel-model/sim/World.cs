@@ -3,7 +3,13 @@ using Kernel.Native;
 namespace Kernel.Sim;
 
 // Native and NativeFlaws: native workflow instances in the mix (sim/NativeSim.cs), and the model broken on purpose.
-public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None, AdmissionFlaw AdmissionFlaws = AdmissionFlaw.None);
+// K1 slice 7: Count is the store's virtual partitions, a fence row and a journal each (0: Partitions); the world places
+// and addresses the first Partitions of them. Set: each node runs one worker for its owned set (DurableHost.ForNode);
+// otherwise a worker per partition, as on a store without owned sets.
+public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None, AdmissionFlaw AdmissionFlaws = AdmissionFlaw.None, int Count = 0, bool Set = false)
+{
+    public int Rows => Count > 0 ? Count : Partitions;
+}
 
 /// <summary>One thing that happens. Concrete, so that a list of them replays without the random generator.</summary>
 public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Message? M = null, bool Flag = false)
@@ -21,10 +27,13 @@ public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Messa
         "tick" => $"{A} ms pass",
         "skew" => $"the wall clock of node {A} jumps {B} ms",
         "crash" => $"node {A} crashes and restarts{(Flag ? "; the old process lives on" : "")}",
+        "take" when S != "" => $"actor {A} takes {S}",
+        "release" when S != "" => $"actor {A} gives {S} up",
         "release" => $"actor {A} releases its partition",
         "balance" => $"node {A} balances: heartbeat, release the surplus, take up to its share",
         "pause" => $"node {A} pauses",
         "resume" => $"node {A} resumes",
+        "project" when S != "" => $"the projector of {S} on actor {A} runs a round",
         "project" => $"the projector of actor {A} runs a round",
         "sweep" => "the sweep runs",
         "register" => $"an outsider registers start subscription {S} for key {M!.Kind}",
@@ -74,9 +83,14 @@ public sealed class Actor(int id, int node, int partition)
 {
     public int Id => id;
     public int Node => node;
+    /// <summary>The worker's one partition; -1 for a node's one worker in a set world, which owns a set.</summary>
     public int Partition => partition;
+    public bool Set => partition < 0;
     public Worker Worker = null!;
+    public DurableHost? Host;           // a set world's node host (ForNode), whose worker this is
     public Projector Projector = null!;
+    public Projector[] Projectors = [];     // a set world: a projector per partition of the world, on every node
+    public Projector ProjectorOf(int partition) => Set ? Projectors[partition] : Projector;
     public TrialGate Gate = null!;
     public PartitionRuntime Runtime = null!;    // layer 1 of this actor's process: its takes and releases go through it
     public bool Dead, Zombie;
@@ -85,6 +99,11 @@ public sealed class Actor(int id, int node, int partition)
     public readonly Dictionary<string, TaskCompletionSource<object?>> Jobs = new(StringComparer.Ordinal);
     public readonly Dictionary<string, bool> ObservedHistory = new(StringComparer.Ordinal);
     public readonly Dictionary<string, bool> TurnHistoryHint = new(StringComparer.Ordinal);
+    /// <summary>Round 5 C (N7): the outbound effects this actor's turns sent since its last commit call; they ride on the next one.</summary>
+    public readonly List<(string Instance, string Key)> PendingSendings = [];
+    /// <summary>Bumped by every take of a partition: a commit call from before it belongs to memory the take discarded there, and gives nothing of that partition back to the pending list.</summary>
+    public readonly Dictionary<int, int> TakeGenerations = [];
+    public void Took(int partition) => TakeGenerations[partition] = TakeGenerations.GetValueOrDefault(partition) + 1;
 }
 
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
@@ -92,7 +111,10 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
 {
     public bool SupportsCommitWindow => world.Store.SupportsCommitWindow;
     public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => world.Store.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => world.Store.CommitClockAvailable;
+    public bool OwnedSetsAvailable => world.Store.OwnedSetsAvailable;     // the set operations go through this wire's own calls
+    public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => world.Store.PartitionCountAsync(cancellationToken);
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
     {
         if (world.Auto)
@@ -114,25 +136,99 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         return new ValueTask<T>(answer.Task);
     }
 
-    public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) =>
-        Send("take", $"take p{partition}", () => world.Take(partition, node, lease));
+    public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        // A take starts the partition from its rows: whatever this worker had in memory for it, sendings included, is gone.
+        actor.PendingSendings.RemoveAll(s => new InstanceRef(s.Instance).Partition == partition);
+        actor.Took(partition);
+        return Send("take", $"take p{partition}", () => world.Take(partition, node, lease));
+    }
+
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        actor.PendingSendings.RemoveAll(s => new InstanceRef(s.Instance).Partition == partition);
+        actor.Took(partition);
+        return Send("take", $"retake p{partition} e{epoch}", () => world.Store.RetakeAsync(partition, node, epoch, lease));
+    }
+
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default)
+    {
+        if (!countDeaths) return RetakeAsync(partition, node, epoch, lease, cancellationToken);
+        actor.PendingSendings.RemoveAll(s => new InstanceRef(s.Instance).Partition == partition);
+        actor.Took(partition);
+        return Send("take", $"retake p{partition} e{epoch}, counting deaths", () => world.Store.RetakeAsync(partition, node, epoch, lease, countDeaths: true));
+    }
+
+    public bool NodeLeaseAvailable => world.Store.NodeLeaseAvailable;
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.NodeHeartbeatAsync(node, lease, window);
 
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(partition, epoch);
+    public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(owned);
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.HeartbeatAsync(node, window);
 
-    public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
-        Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Turns.Select(Describe))}]"
-            + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : "") + (batch.Trial.Count > 0 ? $" on trial [{string.Join(", ", batch.Trial)}]" : ""),
-            () => world.Store.CommitAsync(batch) is var landed && landed.Result.Landed && batch.Trial.Count > 0 ? Counted(landed, batch.Trial.Count) : landed);
-
-    private static ValueTask<Committed> Counted(ValueTask<Committed> landed, int trials)
+    public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        World.Count("put on trial", trials);
+        // Round 5 C (N7): the outbound effects of the turns this batch writes ride on it (a turn kept in memory folds into
+        // the commit that writes its instance later; an instance that ends without a write never lands here). The store
+        // records them the moment the commit lands (Commit below), whatever becomes of the answer: their turns are committed
+        // truth, and a key that leaves in two such turns is two activations, not a redelivery. A refused fence resets the
+        // worker, and the take that follows drops everything pending with it (the take is the one place that discards this
+        // memory: a refusal's answer may be stale, from a call that outlived a take, and must touch nothing). A failed call
+        // leaves the sendings pending for the retried batch, unless the store already landed them (an answer lost on the wire
+        // after the commit executed) or a take has happened since (the worker ignores a completion from before its take).
+        var written = batch.Turns.Select(t => t.Instance).ToHashSet(StringComparer.Ordinal);
+        var sendings = actor.PendingSendings.Where(s => written.Contains(s.Instance)).ToArray();
+        actor.PendingSendings.RemoveAll(s => written.Contains(s.Instance));
+        int Partition((string Instance, string Key) s) => new InstanceRef(s.Instance).Partition;
+        var generations = sendings.Select(Partition).Distinct().ToDictionary(p => p, p => actor.TakeGenerations.GetValueOrDefault(p));
+        var recorded = new System.Runtime.CompilerServices.StrongBox<bool>(false);
+        Committed committed;
+        try
+        {
+            committed = await Send("commit", $"commit {string.Join(" ", batch.Fenced.Select(f => $"p{f.Partition} e{f.Epoch} @{f.Position}"))} [{string.Join(", ", batch.Turns.Select(Describe))}]"
+                + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : "") + (batch.Trial.Count > 0 ? $" on trial [{string.Join(", ", batch.Trial)}]" : ""),
+                () => Commit(batch, sendings, recorded));
+        }
+        catch
+        {
+            if (!recorded.Value) actor.PendingSendings.AddRange(sendings.Where(s => generations[Partition(s)] == actor.TakeGenerations.GetValueOrDefault(Partition(s))));
+            throw;
+        }
+        return committed;
+    }
+
+    private ValueTask<Committed> Commit(CommitBatch batch, (string Instance, string Key)[] sendings, System.Runtime.CompilerServices.StrongBox<bool> recorded)
+    {
+        var current = batch.Fenced.Count(f => world.Store.Partitions[f.Partition] is var row && row.Epoch == f.Epoch && row.Position == f.Position);
+        var fenced = current == batch.Fenced.Count;
+        if (batch.Fenced.Count > 1)
+            World.Count(fenced ? "commit over several partitions, fenced" : current > 0 ? "commit over several partitions, part of its fences stale" : "commit over several partitions, every fence stale");
+        var before = batch.Fenced.Select(f => world.Store.Partitions[f.Partition].Position).ToList();
+        var landed = world.Store.CommitAsync(batch);
+        // W1 (K1, the decisive witness in the random sim): a flush with one stale fence of its set does not land. This
+        // checks the landed flag and the fenced partitions' positions only. The store conformance case "the K1 witness" is
+        // the full witness: rows, journal rows, positions, marks, the retake, the read-back and the continuation.
+        if (!fenced && current > 0 && (landed.Result.Landed || batch.Fenced.Where((f, i) => world.Store.Partitions[f.Partition].Position != before[i]).Any()))
+            world.Faults.Add($"W1 a flush over {string.Join(", ", batch.Fenced.Select(f => $"p{f.Partition} e{f.Epoch}"))} landed in part, with {batch.Fenced.Count - current} of its fences stale");
+        if (landed.Result.Landed && fenced) world.ChildIssued(batch);
+        if (landed.Result.Landed)
+        {
+            world.Landed(sendings);     // the store's truth, before the answer can be lost on the wire
+            recorded.Value = true;
+            if (fenced)
+            {
+                world.ObserveAmbientCommit(batch);
+                world.ReadLifecycleChanges();
+            }
+            if (batch.Trial.Count > 0) World.Count("put on trial", batch.Trial.Count);
+        }
         return landed;
     }
 
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) =>
         Send("poll", $"poll p{partition} e{epoch}", () => world.Store.PollAsync(partition, epoch, horizon, limit));
+    public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) =>
+        Send("poll", $"poll {string.Join(" ", owned.Select(f => $"p{f.Partition} e{f.Epoch}"))}", () => world.Store.PollAsync(owned, horizon, limit));
 
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
         Send("load", $"load [{string.Join(", ", ids)}]", () => world.Store.LoadAsync(ids));
@@ -194,6 +290,58 @@ public sealed partial class World
     public readonly PartitionRuntime[] Runtimes;    // layer 1, one per process: the built-in runtime the simulation drives
     public readonly Dictionary<string, Requests> Processes = new(StringComparer.Ordinal);   // by process name: the requests open there
     public readonly List<(string Process, Request Request, string Instance)> Asked = [];
+    private readonly Dictionary<Request, long> _requestedCreations = [];
+    private sealed record Emission(Request Recipient, long Revision, ReplyRelease Release);
+    private System.Runtime.CompilerServices.ConditionalWeakTable<Reply, Emission>? _emissions;
+    private sealed record CallerCheckpoint(Message Input, Task<InMemoryStore.DeletedCheckpoint> Deletion);
+    private Dictionary<Request, CallerCheckpoint>? _callerCheckpoints;
+
+    private void ObserveEmission(string node, Reply reply, long revision, ReplyRelease release)
+    {
+        if (reply.Channel != Request.Response || reply.Item is not string) return;
+        var caller = Asked.FindLast(c => c.Process == node && c.Request.Registration == reply.Request);
+        if (caller.Request is null) return;
+        var generation = _requestedCreations.GetValueOrDefault(caller.Request);
+        var split = reply.Key.LastIndexOf('#');
+        if (split < 0 || reply.Key[..split] != CreationProtocol.Origin(caller.Instance, generation)) return;
+        if (release == ReplyRelease.WriteFree) return;
+        if (release == ReplyRelease.EphemeralWriteFree && (generation != 0 || Store.Instances.ContainsKey(caller.Instance))) return;
+        // Reference identity follows this carrier through local delivery, a delayed hop and replay.
+        // A value-equal injection, even for a future genuine send, has no such issuance.
+        (_emissions ??= new()).Add(reply, new(caller.Request, revision, release));
+    }
+
+    private bool AdmitCaller(string process, Request caller, Func<bool> admit)
+    {
+        try { if (admit()) return true; }
+        catch { Processes[process].Disconnect(caller); throw; }
+        Processes[process].Disconnect(caller);
+        return false;
+    }
+
+    private Message AddDistinct(Message stimulus)
+    {
+        for (long suffix = 0; ; suffix = checked(suffix + 1))
+        {
+            var proposed = suffix == 0 ? stimulus : stimulus with { Id = stimulus.Id + "." + suffix };
+            if (Store.AddAsync(proposed).Result) return proposed;
+        }
+    }
+
+    private (string Process, Request Request, string Instance)? OpenCaller(string name)
+    {
+        (string Process, Request Request, string Instance)? byName = null;
+        var ambiguous = false;
+        foreach (var caller in Asked)
+        {
+            if (caller.Request.Done || !Running(caller.Process) || !Processes[caller.Process].IsOpen(caller.Request)) continue;
+            if (caller.Request.Registration == name) return caller;
+            if (caller.Request.Id != name) continue;
+            ambiguous |= byName is not null;
+            byName = caller;
+        }
+        return ambiguous ? null : byName;
+    }
 
     /// <summary>
     /// A request's deadline, which its reply address carries (decision 6): the route's timeout, 30 s; one request in four
@@ -208,17 +356,31 @@ public sealed partial class World
     private readonly List<Task> _watched = [];
     public long Time = 1_000_000;
     public bool Auto, Deployed;
-    private int? _dying;
+    private readonly List<Actor> _dying = [];
     private CancellationTokenSource? _pass;     // the settling pass under way: a process that dies stops it at a turn boundary
 
     public int? Dying
     {
-        get => _dying;
-        set
+        get => _dying.Count == 0 ? null : _dying[0].Node;
+        set { if (value is { } node) MarkDying(Of(node, 0)); else _dying.Clear(); }
+    }
+
+    private void MarkDying(Actor actor)
+    {
+        if (actor.Dead || _dying.Exists(prior => prior.Runtime == actor.Runtime)) return;
+        _dying.Add(actor);
+        _pass?.Cancel();
+    }
+
+    private void FinishDeaths()
+    {
+        foreach (var actor in _dying)
         {
-            _dying = value;
-            if (value is not null) _pass?.Cancel();
+            if (actor.Dead) continue;
+            if (Runtimes[actor.Node] == actor.Runtime) Crash(actor.Node, zombie: false);
+            else foreach (var sibling in Actors.Where(a => a.Runtime == actor.Runtime)) sibling.Dead = true;
         }
+        _dying.Clear();
     }
     public Action<string>? Log;
 
@@ -227,8 +389,11 @@ public sealed partial class World
     {
         _extraModel = extraModel;
         Config = config;
+        if (config.Partitions > config.Rows) throw new ArgumentOutOfRangeException(nameof(config), "A world places at most the store's partitions.");
         Native = new NativeOracle(config.Partitions);
-        Store = new InMemoryStore(config.Partitions, () => Time, config.Flaws) { Refuses = row => row.State.Contains(Fragile.Sour) };
+        Store = new InMemoryStore(config.Rows, () => Time, config.Flaws) { ObserveLifecycles = true, Refuses = row => row.State.Contains(Fragile.Sour) };
+        Store.Lifecycle!.AppliedCancellation = (state, consumed) => state is HttpState { AppliedCancellations: { } applied }
+            ? applied.Find(cancel => _httpCancelInputs?.TryGetValue(cancel, out _) == true && consumed.Any(d => ReferenceEquals(d.Message, cancel))) : null;
         Current = new int[config.Nodes, config.Partitions];
         Skew = new long[config.Nodes];
         Paused = new bool[config.Nodes];
@@ -238,8 +403,10 @@ public sealed partial class World
         _gates = Enumerable.Range(0, config.Nodes).Select(_ => new TrialGate()).ToArray();
         for (var node = 0; node < config.Nodes; node++)
         {
-            for (var partition = 0; partition < config.Partitions; partition++)
-                Spawn(node, partition);
+            if (config.Set) Spawn(node, -1);
+            else
+                for (var partition = 0; partition < config.Partitions; partition++)
+                    Spawn(node, partition);
             Balance(node);
         }
     }
@@ -247,9 +414,12 @@ public sealed partial class World
     // One balancer per process: the workers of the node's current incarnation. Its heartbeat window spans two rounds of the settling loop.
     private void Balance(int node)
     {
-        Processes[Of(node, 0).Worker.Node] = new Requests(Config.Flaws);
-        var runtime = Runtimes[node] = new PartitionRuntime(Of(node, 0).Worker.Node, Store, Config.Partitions, TimeSpan.FromSeconds(25), flaws: Config.Flaws);
-        runtime.StartAsync(new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker))).AsTask().Wait();
+        var first = Of(node, 0);
+        Processes[first.Worker.Node] = new Requests($"node{node}.{Incarnation[node]}", Config.Flaws);
+        IMembership membership = Config.Rows > Config.Partitions ? new Placed(Store, Config.Partitions) : Store;
+        var runtime = Runtimes[node] = new PartitionRuntime(first.Worker.Node, membership, Config.Partitions, TimeSpan.FromSeconds(25), flaws: Config.Flaws);
+        IScopeHost host = first.Set ? new SerialHost(first.Host!) : new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker));
+        runtime.StartAsync(host).AsTask().Wait();
         for (var partition = 0; partition < Config.Partitions; partition++) Of(node, partition).Runtime = runtime;
     }
 
@@ -261,36 +431,53 @@ public sealed partial class World
     {
         public void Send(string node, Reply reply)
         {
-            if (node == self) world.Processes[node].Receive(reply);
+            world.ObserveHostEnd(node, reply);
+            if (node == self) world.DeliverTo(world.Processes[node], reply);
             else world.Deliveries.Add((node, reply));
         }
     }
 
     public Actor Of(int node, int partition) => Actors[Current[node, partition]];
+
+    /// <summary>A partition of an actor's: its one, or in a set world one it holds (any of the world's when it holds none).</summary>
+    public int Place(Actor actor, Random r)
+    {
+        if (!actor.Set) return actor.Partition;
+        var held = actor.Worker.Fences;
+        return held.Count > 0 ? held[r.Next(held.Count)].Partition : r.Next(Config.Partitions);
+    }
     public IEnumerable<Actor> Alive => Actors.Where(a => !a.Dead);
     private Actor? Live(int id) => id >= 0 && id < Actors.Count && Actors[id] is { Dead: false } actor && !Paused[actor.Node] ? actor : null;
 
+    // A worker of one partition, or (partition -1, a set world) the node's one worker, through the node's host.
     private void Spawn(int node, int partition)
     {
         var actor = new Actor(Actors.Count, node, partition);
         var wire = new Wire(this, actor);
         actor.Version = Versions[node];
-        actor.Projector = new Projector(wire, partition, take: 5, Config.Flaws);    // a projector runs on every node, whoever owns the partition
+        // A projector runs on every node, whoever owns the partition.
+        if (actor.Set) actor.Projectors = [.. Enumerable.Range(0, Config.Partitions).Select(p => new Projector(wire, p, take: 5, Config.Flaws))];
+        else actor.Projector = new Projector(wire, partition, take: 5, Config.Flaws);
         IExecutionModel[] models =
         [
             new Counter(Versions[node]), new Parent(Config.Flaws.HasFlag(Flaw.CancelKnownChildren)), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
-            new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)),
+            new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => MarkDying(actor)), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)) { ObserveAmbient = (turn, state) => ObserveHttpTurn(actor, turn, state) },
             new Tree((job, cancel) => Work(actor, job, cancel)), new OnEvent(), NativeModelFor(actor),
             .. _extraModel is null ? Array.Empty<IExecutionModel>() : new[] { _extraModel(node) },
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
-        actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, new WorkflowInstance(models), new WorkerOptions
+        var name = Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}";
+        var options = new WorkerOptions
         {
             Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.FromSeconds(2), PollLimit = 3, MaxBatch = 4, MaxAttempts = Config.Attempts, TrialGroup = Config.Group, Gate = _gates[node],
             Monotonic = () => Time + node * 7919,       // every node counts at the database's rate from its own zero
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
+            OnEmittedReply = ObserveEmission,
+            OnPreparedCheckpoint = PrepareCheckpoint,
+            OnCreationRefused = ObserveCreationRefusal,
+            Lifecycle = Store.Lifecycle,
             OnKeptInMemory = (instance, revision) => Oracle.InMemory[instance] = revision,
             OnLeftMemory = (instance, status) => { if (status is InstanceStatus.Running or null) Faults.Add($"I9 {instance} left memory without a row while it was {status?.ToString() ?? "missing"}"); },
             OnObservedDelivery = row => actor.ObservedHistory[row.Message.Id] = row.Seen > 0 || row.Trial > 0,
@@ -300,14 +487,41 @@ public sealed partial class World
                 Log?.Invoke($"        actor {actor.Id} turns {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
                 Alone(actor, instance.Id, "a turn of " + instance);
                 // I16: while its committed row says suspended, the current owner gives an instance nothing.
-                if (actor.Worker.Epoch == Store.Partitions[actor.Partition].Epoch && Store.Instances.GetValueOrDefault(instance.Id) is { Suspended: true })
+                if (actor.Worker.EpochOf(instance.Partition) == Store.Partitions[instance.Partition].Epoch && Store.Instances.GetValueOrDefault(instance.Id) is { Suspended: true })
                     Faults.Add($"I16 actor {actor.Id} ran a turn of {instance} while it was suspended: [{string.Join(", ", inbox.Select(m => m.Id))}]");
                 foreach (var message in inbox)
                     if (message.Due > Time) Faults.Add($"I5 {message.Id} was delivered to {instance} {message.Due - Time} ms before it was due");
             },
-        });
+        };
+        if (actor.Set)
+        {
+            actor.Host = DurableHost.ForNode(name, wire, new WorkflowInstance(models), Config.Partitions, options, placesPart: Config.Rows > Config.Partitions);
+            actor.Worker = actor.Host.NodeWorker ?? throw new InvalidOperationException("A set world needs a store with owned sets.");
+        }
+        else actor.Worker = new Worker(name, partition, wire, new WorkflowInstance(models), options);
         Actors.Add(actor);
-        Current[node, partition] = actor.Id;
+        for (var p = 0; p < Config.Partitions; p++)
+            if (actor.Set || p == partition) Current[node, p] = actor.Id;
+    }
+
+    /// <summary>
+    /// C2 (K1 slice 2b's rule): a child's address names the (partition, epoch) its parent's commit is fenced at: the parent's
+    /// own partition, at the epoch the batch fences it. Only that take's issuer ever publishes ids under it, so two owners
+    /// can never mint one id.
+    /// </summary>
+    public void ChildIssued(CommitBatch batch)
+    {
+        var fences = batch.Fenced.ToDictionary(f => f.Partition, f => f.Epoch);
+        foreach (var turn in batch.Turns)
+            foreach (var sent in turn.Sent)
+            {
+                var at = sent.Target.Id.IndexOf("/child/", StringComparison.Ordinal);
+                if (sent.Kind != Kinds.Start || sent.Sender != turn.Instance || !sent.Target.ChildAddress || at < 0) continue;
+                var issued = sent.Target.Id[(at + 7)..].Split('.');
+                var (partition, epoch) = (batch.PartitionOf(turn), fences.GetValueOrDefault(batch.PartitionOf(turn)));
+                if (issued.Length != 3 || issued[0] != partition.ToString(System.Globalization.CultureInfo.InvariantCulture) || issued[1] != epoch.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    Faults.Add($"C2 {turn.Instance} started child {sent.Target}, and its commit is fenced at partition {partition}, epoch {epoch}");
+            }
     }
 
     /// <summary>The take, watched: taking from another owner means that owner was lost, the only thing that may raise attempts.</summary>
@@ -330,16 +544,17 @@ public sealed partial class World
     }
 
     // Invariant 14, the "alone" half: while rows are on trial at the current epoch of a partition this process owns, the
-    // process starts nothing but them. A death kills every worker of the process, so alone means alone in the process.
+    // process starts nothing but them. A death kills every worker of the process, and every partition of a worker's set,
+    // so alone means alone in the process; a trial group of a set may span its partitions.
     private void Alone(Actor actor, string instance, string what)
     {
+        var trial = new List<InMemoryStore.MessageRow>();
         foreach (var sibling in Actors.Where(a => !a.Dead && a.Worker.Node == actor.Worker.Node))
-        {
-            var partition = Store.Partitions[sibling.Partition];
-            if (!sibling.Worker.Owns || sibling.Worker.Epoch != partition.Epoch) continue;
-            var trial = Store.Messages.Values.Where(m => !m.Done && m.Trial == partition.Epoch && m.Message.Target.Partition == sibling.Partition).ToList();
-            if (trial.Count > 0 && !trial.Exists(m => m.Message.Target.Id == instance)) Faults.Add($"I14 {what} started on actor {actor.Id} while {trial[0].Message.Id} was on trial in partition {sibling.Partition} of the same process");
-        }
+            foreach (var fence in sibling.Worker.Fences)
+                if (fence.Epoch == Store.Partitions[fence.Partition].Epoch)
+                    trial.AddRange(Store.Messages.Values.Where(m => !m.Done && m.Trial == fence.Epoch && m.Message.Target.Partition == fence.Partition));
+        if (trial.Count > 0 && !trial.Exists(m => m.Message.Target.Id == instance))
+            Faults.Add($"I14 {what} started on actor {actor.Id} while {trial[0].Message.Id} was on trial in partition {trial[0].Message.Target.Partition} of the same process");
     }
 
     private ValueTask<object?> Work(Actor actor, IJob job, CancellationToken cancel)
@@ -362,7 +577,7 @@ public sealed partial class World
             // The old process is gone, or (zombie) lives on with its memory beside the new one under the same name.
             if (actor.Zombie || !zombie) actor.Dead = true;
             else actor.Zombie = true;
-            if (Current[node, actor.Partition] == actor.Id) Spawn(node, actor.Partition);
+            if (Current[node, Math.Max(actor.Partition, 0)] == actor.Id) Spawn(node, actor.Partition);
         }
         Balance(node);
     }
@@ -376,12 +591,13 @@ public sealed partial class World
     /// <summary>Do it if it can be done now. Null means it was not enabled and nothing happened.</summary>
     public string? Apply(Act act)
     {
+        if (_dying.Count != 0) FinishDeaths();
         var outcome = Do(act);
         foreach (var requests in Processes.Values) requests.Expire(Time);     // a caller's own deadline
-        if (outcome is null || Dying is not { } node) return outcome;
-        Dying = null;
-        Crash(node, zombie: false);
-        return outcome + $"; the turn killed node {node}";
+        if (_dying.Count == 0) return outcome;
+        var nodes = string.Join(", ", _dying.Select(a => a.Node));
+        FinishDeaths();
+        return outcome is null ? null : outcome + $"; the turn killed node {nodes}";
     }
 
     private string? Do(Act act)
@@ -394,13 +610,16 @@ public sealed partial class World
                 var (worker, calls) = (actor.Worker, actor.Calls.Count);
                 switch (act.Kind)
                 {
-                    case "take" when !worker.Owns && !worker.Taking: Watch(actor.Runtime.ActivateAsync(actor.Partition)); break;
+                    // A set world's take and give-up name the partition; they go through the node's host, one at a time.
+                    case "take" when actor.Set && act.B < Config.Partitions && !worker.Holds(act.B) && !actor.Runtime.Activating(act.B): Watch(actor.Runtime.ActivateAsync(act.B)); break;
+                    case "take" when !actor.Set && !worker.Owns && !worker.Taking: Watch(actor.Runtime.ActivateAsync(actor.Partition)); break;
                     case "poll" when worker.Owns && !worker.Polling: Watch(worker.PollAsync()); break;
                     case "load" when worker.Owns && !worker.Loading && worker.NeedsLoad: Watch(worker.LoadAsync()); break;
                     case "flush" when worker.Owns && !worker.Flushing && worker.NeedsFlush: Watch(worker.FlushAsync()); break;
                     case "beat" when worker.Owns && !worker.Flushing: Watch(worker.BeatAsync()); break;
                     case "meet" when worker.Owns && !worker.Meeting && worker.NeedsMeet: Watch(worker.MeetAsync()); break;
-                    case "release" when worker.Owns: Watch(actor.Runtime.DeactivateAsync(actor.Partition)); break;
+                    case "release" when actor.Set && act.B < Config.Partitions && actor.Runtime.Owns(act.B): Watch(actor.Runtime.DeactivateAsync(act.B)); break;
+                    case "release" when !actor.Set && worker.Owns: Watch(actor.Runtime.DeactivateAsync(actor.Partition)); break;
                     default: return null;
                 }
                 return actor.Calls.Count > calls ? $"call {actor.Calls.Count - 1}: {actor.Calls[^1].Text}" : "nothing to send";
@@ -435,7 +654,7 @@ public sealed partial class World
             }
             case "add":
             {
-                var message = act.M!;
+                var message = act.M!.AsOrdinary();
                 if (Oracle.Sent.Contains(message.Id) && message.KeepUntil <= Time) return null;    // a client retries only within the window
                 if (!Oracle.Accepts(message)) return null;
                 var added = Store.AddAsync(message).Result;
@@ -444,8 +663,9 @@ public sealed partial class World
             }
             case "post":
             {
-                if (Live(act.A) is not { } actor || Oracle.Sequences.ContainsKey(act.M!.Target.Id) || !actor.Worker.Post(act.M, fresh: true)) return null;
-                Oracle.Note(act.M, posted: true);
+                var posted = act.M!.AsOrdinary();
+                if (Live(act.A) is not { } actor || Oracle.Sequences.ContainsKey(posted.Target.Id) || !actor.Worker.Post(posted, fresh: true)) return null;
+                Oracle.Note(posted, posted: true);
                 return "";
             }
             case "publish":
@@ -490,20 +710,28 @@ public sealed partial class World
                 return "";
             case "project":
             {
-                if (Live(act.A) is not { } actor) return null;
+                if (Live(act.A) is not { } actor || act.B >= Config.Partitions) return null;
                 var calls = actor.Calls.Count;
-                Watch(actor.Projector.RoundAsync());
+                Watch(actor.ProjectorOf(act.B).RoundAsync());
                 return actor.Calls.Count > calls ? $"call {calls}: {actor.Calls[calls].Text}" : "nothing to send";
             }
             case "sweep":
                 return $"{Store.SweepAsync().Result} rows deleted";
             case "request":
             {
-                if (Live(act.A) is not { } actor || !actor.Worker.Owns) return null;
-                var request = act.M!.ReplyTo![(act.M.ReplyTo.IndexOf('|') + 1)..];
-                var asked = act.M with { ReplyTo = ReplyTo.Of(actor.Worker.Node, request, Deadline(request)) };
-                if (!actor.Worker.Post(asked, fresh: true, ambient: "amb:" + asked.Target.Id)) return null;
-                Asked.Add((actor.Worker.Node, Processes[actor.Worker.Node].Open(request, Deadline(request)), asked.Target.Id));
+                if (Live(act.A) is not { } actor || act.M is not { ReplyTo: { } reply, Start: not null } message || !actor.Worker.Holds(message.Target.Partition)) return null;
+                var request = reply[(reply.IndexOf('|') + 1)..];
+                var process = actor.Worker.Node;
+                var caller = Processes[process].Open(request, Deadline(request));
+                var asked = message.AsOrdinary() with { ReplyTo = caller.ReplyAddress(process) };
+                var generation = asked.Start?.Creation?.Generation ?? 0;
+                var ambient = Http.StarterAmbient(asked.Target, generation, actor.Id);
+                if (!AdmitCaller(process, caller, () => actor.Worker.Post(asked, fresh: true, ambient: ambient))) return null;
+                Asked.Add((process, caller, asked.Target.Id));
+                if (asked.Start?.Model == "http") Oracle.ExpectHttp(asked);
+                (_postedHttpStarts ??= new()).Add(asked, new(ambient, actor.Id, actor.Worker.EpochOf(asked.Target.Partition)));
+                (_callerCheckpoints ??= [])[caller] = new(asked, Store.WatchDeletion(new(asked.Target.Id, generation)));
+                if ((asked.TargetCreation ?? asked.Start?.Creation?.Generation) is { } creation) _requestedCreations[caller] = creation;
                 Oracle.Https[asked.Target.Id] = (act.S, asked.Start!.Ephemeral, actor.Id, false);
                 return "";
             }
@@ -512,25 +740,33 @@ public sealed partial class World
                 if (Paused[act.A] || !Oracle.Https.ContainsKey(act.M!.Target.Id)) return null;
                 var process = Of(act.A, 0).Worker.Node;
                 var request = act.M.ReplyTo!;
-                var asked = act.M with { ReplyTo = ReplyTo.Of(process, request, Deadline(request)) };
-                var added = Store.AddAsync(asked).Result;
-                Asked.Add((process, Processes[process].Open(request, Deadline(request)), asked.Target.Id));
-                return added ? "added" : "duplicate key";
+                var caller = Processes[process].Open(request, Deadline(request));
+                var asked = act.M.AsOrdinary() with { ReplyTo = caller.ReplyAddress(process) };
+                if (!AdmitCaller(process, caller, () => Store.AddAsync(asked).Result)) return "duplicate key";
+                Asked.Add((process, caller, asked.Target.Id));
+                var addressed = asked.TargetCreation ?? asked.Start?.Creation?.Generation;
+                (_callerCheckpoints ??= [])[caller] = new(asked, Store.WatchDeletion(new(asked.Target.Id, addressed ?? 0)));
+                if (addressed is { } creation) _requestedCreations[caller] = creation;
+                return "added";
             }
             case "disconnect":
             {
-                if (Asked.Find(a => a.Request.Id == act.S) is not { Request: not null } asked || asked.Request.Done || !Running(asked.Process)) return null;
-                Processes[asked.Process].Disconnect(act.S);
+                if (OpenCaller(act.S) is not { } asked) return null;
+                Processes[asked.Process].Disconnect(asked.Request);
                 if (!act.Flag) return "";
+                var command = new Message("cancel-" + asked.Request.Registration, new InstanceRef(asked.Instance), "cancel", KeepUntil: Time + 3_600_000,
+                    TargetCreation: _requestedCreations.TryGetValue(asked.Request, out var generation) ? generation : null);
+                var admitted = AddDistinct(command);
+                (_httpCancelInputs ??= new()).Add(admitted, asked.Request);
                 Oracle.Https[asked.Instance] = Oracle.Https[asked.Instance] with { Cancel = true };
-                return Store.AddAsync(new Message("cancel-" + act.S, new InstanceRef(asked.Instance), "cancel", KeepUntil: Time + 3_600_000)).Result ? "cancel added" : "duplicate key";
+                return "cancel added";
             }
             case "deliver" or "drop":
             {
                 if (act.B >= Deliveries.Count) return null;
                 var (node, reply) = Deliveries[act.B];
                 if (act.Kind == "drop" || !act.Flag) Deliveries.RemoveAt(act.B);
-                if (act.Kind == "deliver" && Processes.TryGetValue(node, out var requests) && Running(node)) requests.Receive(reply);
+                if (act.Kind == "deliver" && Processes.TryGetValue(node, out var requests) && Running(node)) DeliverTo(requests, reply);
                 return $"{reply.Key} for {node}|{reply.Request}";
             }
             default:
@@ -562,7 +798,7 @@ public sealed class Generator(int seed, World world)
         var roll = r.Next(108);
         switch (roll)
         {
-            case < 3: return new Act("take", actor.Id);
+            case < 3: return actor.Set ? OnPartition("take", actor, r.Next(world.Config.Partitions)) : new Act("take", actor.Id);
             case < 6: return new Act("balance", r.Next(world.Config.Nodes));
             case < 16: return new Act("poll", actor.Id);
             case < 22: return new Act("load", actor.Id);
@@ -574,7 +810,7 @@ public sealed class Generator(int seed, World world)
                 return new Act("turn", pick.Id, S: pick.id);
             }
             case < 46: return new Act("flush", actor.Id);
-            case < 47: return new Act("release", actor.Id);
+            case < 47: return actor.Set ? OnPartition("release", actor, world.Place(actor, r)) : new Act("release", actor.Id);
             case < 48: return new Act("beat", actor.Id);
             case < 52: return new Act("meet", actor.Id);
             case < 82:
@@ -600,7 +836,7 @@ public sealed class Generator(int seed, World world)
                 var pick = running[r.Next(running.Count)];
                 return new Act("finish", pick.Id, S: pick.key);
             }
-            case < 99: return new Act("project", actor.Id);
+            case < 99: return actor.Set ? OnPartition("project", actor, r.Next(world.Config.Partitions)) : new Act("project", actor.Id);
             case < 100: return new Act("sweep");
             case < 103: return Asking(r, alive);
             case < 105: return Control(r);
@@ -648,7 +884,7 @@ public sealed class Generator(int seed, World world)
             case < 84:
             {
                 var owner = alive[r.Next(alive.Count)];
-                return new Act("post", owner.Id, M: new Message($"x{n}", InstanceRef.In(owner.Partition, "v" + n), Kinds.Start, Start: Sequence.Spec(r.Next(1, 6), Mode(r))));
+                return new Act("post", owner.Id, M: new Message($"x{n}", InstanceRef.In(world.Place(owner, r), "v" + n), Kinds.Start, Start: Sequence.Spec(r.Next(1, 6), Mode(r))));
             }
             case < 92:
                 return new Act("add", M: To("r" + r.Next(2), "go", "k" + n, Runner.Spec));
@@ -675,7 +911,7 @@ public sealed class Generator(int seed, World world)
             var owner = owners[r.Next(owners.Count)];
             var mode = Http.Starts[r.Next(Http.Starts.Length)];
             var spec = Http.Spec(mode, ephemeral: mode != Http.Early && r.Next(2) == 0);     // decision 4: a timer or a job may wait in memory
-            return new Act("request", owner.Id, S: mode, M: new Message($"x{n}", InstanceRef.In(owner.Partition, "h" + n), Kinds.Start, Start: spec, ReplyTo: "|q" + n));
+            return new Act("request", owner.Id, S: mode, M: new Message($"x{n}", InstanceRef.In(world.Place(owner, r), "h" + n), Kinds.Start, Start: spec, ReplyTo: "|q" + n));
         }
         if (roll < 60)
             return new Act("add", M: new Message($"x{n}", InstanceRef.In(r.Next(world.Config.Partitions), "hw" + n), Kinds.Start, Start: Http.Spec(Http.Wait), KeepUntil: world.Time + 3_600_000));
@@ -685,7 +921,7 @@ public sealed class Generator(int seed, World world)
             if (waiting.Count == 0) return new Act("tick", r.Next(50));
             return new Act("resume-request", r.Next(world.Config.Nodes), M: new Message($"x{n}", new InstanceRef(waiting[r.Next(waiting.Count)]), "resume", KeepUntil: world.Time + 3_600_000, ReplyTo: "q" + n));
         }
-        var open = world.Asked.Where(a => !a.Request.Done).Select(a => a.Request.Id).ToList();
+        var open = world.Asked.Where(a => !a.Request.Done && world.Running(a.Process) && world.Processes[a.Process].IsOpen(a.Request)).Select(a => a.Request.Registration).ToList();
         return open.Count == 0 ? new Act("tick", r.Next(50)) : new Act("disconnect", S: open[r.Next(open.Count)], Flag: r.Next(2) == 0);
     }
 
@@ -735,6 +971,8 @@ public sealed class Generator(int seed, World world)
     }
 
     private static string Mode(Random r) => r.Next(3) switch { 0 => Sequence.Ephemeral, 1 => Sequence.Balanced, _ => Sequence.Durable };
+
+    private static Act OnPartition(string kind, Actor actor, int partition) => new(kind, actor.Id, partition, S: $"p{partition}");
 
     /// <summary>Remember what was really sent, so that later choices (a retry, a cancel) can refer to it.</summary>
     public void Applied(Act act)

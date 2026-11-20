@@ -18,7 +18,7 @@ const navigation = getStudioNavigation([
   { id: "home", label: "Home", path: "/dashboard", placement: "main", order: 10 },
   { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main", order: 20 },
   { id: "workflows-runs", label: "Runs", path: "/workflows/instances", placement: "main", order: 30 },
-  { id: "executables", label: "Executables", path: "/workflows/executables", placement: "more" }
+  { id: "executables", label: "Executables", path: "/workflows/executables", placement: "build" }
 ], { includeThemeBuilder: false });
 
 const panels = new URLSearchParams(location.search).has("bottom-panel")
@@ -35,6 +35,12 @@ function Fixture() {
       {view === "availability" ? <ActivityAvailabilityFixture /> : view === "appearance" ? <AppearancePage onNavigate={() => {}} /> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "publication" ? <WorkflowPublishChoiceFixture /> : view === "dialogs" ? <>
         <button onClick={() => void dialogs.confirm({ title: "Delete workflow", message: "Delete this workflow?", tone: "danger" })}>Delete workflow</button>
         <button onClick={() => void dialogs.confirm({ title: "Publish workflow", message: "Publish this workflow?" })}>Publish workflow</button>
+        <button onClick={() => void dialogs.confirm({
+          title: "Remove external link",
+          message: `Remove the external sign-in link for external-${"a".repeat(64)}?\nIssuer: https://identity.example/${"tenant".repeat(24)}\nSubject: ${"subject".repeat(24)}`,
+          confirmLabel: "Remove link",
+          tone: "danger"
+        })}>Remove external link</button>
         <DialogHost />
       </> : <ActivityDuplicateEditorFixture />}
     </ShellFrame>

@@ -97,7 +97,7 @@ test("edits a reusable activity interface without losing unapplied defaults or s
   await page.goto("/?mode=activity-authoring&theme=dark");
   await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await expect(page.getByText("Advanced interface details", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Stable reference key" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Stable reference key" })).toHaveValue("subtotal");
   await page.getByRole("button", { name: "Add input", exact: true }).click();
   await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Discount");
   await page.getByRole("textbox", { name: "Input name", exact: true }).press("Enter");
@@ -205,5 +205,25 @@ for (const theme of ["light", "dark"]) {
     await add.click();
     await expect(variables.getByRole("textbox", { name: "Variable name", exact: true })).toHaveCount(1);
     await page.screenshot({ path: `/tmp/workflow-argument-button-${theme}.png` });
+  });
+}
+
+
+for (const theme of ["light", "dark"]) for (const width of [1440, 360]) {
+  test(`activity tabs keep their spacing (${theme}, ${width})`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-authoring&theme=${theme}`);
+    const tabs = page.getByRole("tablist", { name: "Activity Definition authoring views" });
+    await expect(tabs.getByRole("tab", { name: "Designer", exact: true })).toBeVisible();
+    const geometry = () => tabs.evaluate(element => {
+      const box = element.getBoundingClientRect(), style = getComputedStyle(element);
+      return { x: box.x, y: box.y, width: box.width, height: box.height, padding: style.padding, margin: style.margin };
+    });
+    const original = await geometry();
+    for (const id of ["inputs", "outputs", "outcomes", "variables", "designer"]) {
+      await tabs.locator(`[data-tab-id="${id}"]`).click();
+      expect(await geometry()).toEqual(original);
+    }
+    await page.screenshot({ path: info.outputPath("consistent-tabs.png") });
   });
 }

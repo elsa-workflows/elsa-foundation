@@ -47,6 +47,31 @@ public interface IModelMetadata
     bool ProtectsDeletion(object state, long now, ICommitClock clock);
 }
 
+/// <summary>Explicit opt-in: return false if future terminal metadata needs any model checkpoint.
+/// The state-free callbacks own deletion protection and future metadata without reconstructing StateType.</summary>
+public interface IStateFreeTerminalMetadata : IModelMetadata
+{
+    bool CanUseIdentityOnly(object state, InstanceStatus status, ICommitClock clock);
+    /// <summary>Observation-only protection predicate. Metadata-message turns own clock changes.</summary>
+    bool ProtectsIdentityDeletion(TerminalIdentity identity, long now, ICommitClockObservation clock);
+    ValueTask IdentityMetadataAsync(IIdentityMetadataTurn turn, CancellationToken cancellationToken);
+}
+
+public sealed record TerminalIdentity(string Actor,string Model,string Definition,InstanceStatus Status,long Revision,int StateVersion)
+{
+    public static TerminalIdentity From(InstanceRow row)=>new(row.Id,row.Model,row.Definition,row.Status,row.Revision,row.StateVersion);
+}
+public sealed record IdentityMetadataUnavailable(string Actor,string Model,int StateVersion);
+public interface IIdentityMetadataTurn
+{
+    TerminalIdentity Identity {get;}
+    long Now {get;}
+    ICommitClock Clock {get;}
+    IReadOnlyList<Message> Inbox {get;}
+    void Reply(Message message,object? value);
+    void Refuse(Message message);
+}
+
 public interface ITurn
 {
     InstanceInfo Instance { get; }

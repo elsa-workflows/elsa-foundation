@@ -179,7 +179,7 @@ describe("IntrinsicInspector", () => {
       workflowState={{ outputs }} onChange={onChange} />;
     const container = render(renderState([]));
     expect(container.querySelector<HTMLSelectElement>(".wf-property-row select")!.disabled).toBe(true);
-    expect(container.textContent).toContain("Add a workflow output");
+    expect(container.textContent).toContain("Add an output");
     flushSync(() => active!.root.render(renderState([{ name: "ReviewData" }])));
     let picker = container.querySelector<HTMLSelectElement>(".wf-property-row select")!;
     expect(picker.disabled).toBe(false);
@@ -193,8 +193,21 @@ describe("IntrinsicInspector", () => {
     flushSync(() => active!.root.render(renderState([], changed)));
     expect(container.querySelector<HTMLSelectElement>(".wf-property-row select")!.disabled).toBe(true);
     expect(container.textContent).toContain("This output is no longer defined.");
-    expect(container.textContent).toContain("Add a workflow output in the editor's Outputs tab");
+    expect(container.textContent).toContain("Add an output in this editor's Outputs tab");
     expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a populated output target read-only", () => {
+    const node = { ...createActivityNode(setOutputActivity, "readonly-output"), name: { typeName: "String", expression: { type: "Literal", value: "Sum" } } };
+    const onChange = vi.fn();
+    const container = render(<IntrinsicInspector intrinsic={readIntrinsicDescriptor(setOutputActivity)!} activity={node}
+      descriptor={descriptorFor(setOutputActivity)} editors={builtInPropertyEditors} expressionEditors={[]}
+      expressionDescriptors={[literalDescriptor]} expressionDescriptorStatus="ready" descriptorStatus="ready"
+      visibleVariables={[]} scopeStatus="ready" workflowState={{ outputs: [{ name: "Sum", type: { alias: "Double", collectionKind: "Single" } }] }} readOnly onChange={onChange} />);
+    const picker = container.querySelector<HTMLSelectElement>(".wf-property-row select")!;
+    expect(picker.value).toBe("Sum"); expect(picker.disabled).toBe(true);
+    expect(container.querySelector(".wf-property-row-header-meta")?.textContent).toContain("Double");
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("shows no variable picker for Set Output and renders its name + value inputs", () => {

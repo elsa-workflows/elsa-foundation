@@ -11,5 +11,6 @@ export default defineConfig({
   outputDir: `${evidence}/results`,
   reporter: [["line"], ["json", { outputFile: `${evidence}/playwright.json` }], ["html", { outputFolder: `${evidence}/html`, open: "never" }]],
   use: { baseURL, viewport: { width: 1100, height: 1000 }, trace: "retain-on-failure" },
-  webServer: { command: `pnpm exec vite --config vite.config.ts --port ${port} --strictPort`, url: baseURL, reuseExistingServer: false }
+  // HTML can respond before the fixture and its dependencies have finished cold compilation.
+  webServer: { command: `pnpm exec vite --config vite.config.ts --port ${port} --strictPort`, url: `${baseURL}/outlinedFieldsFixture.tsx`, reuseExistingServer: false }
 });

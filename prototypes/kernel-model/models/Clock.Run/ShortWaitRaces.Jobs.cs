@@ -47,12 +47,12 @@ internal static partial class ShortWaitRaces
 
         public async Task Add(string kind, long? due = null) => await Store.AddAsync(new(kind, Actor, kind, Due: due));
 
-        public async Task<Worker> Activate(string name, int group = 1, int attempts = 3, int lease = 5000)
+        public async Task<Worker> Activate(string name, int group = 1, int attempts = 3, int lease = 5000, Flaw flaws = Flaw.None)
         {
             var owner = new Worker(name, 0, Wire, new WorkflowInstance([_model]), new()
             {
                 Monotonic = () => Clock, Horizon = TimeSpan.FromMilliseconds(100), TrialGroup = group,
-                MaxAttempts = attempts, Lease = TimeSpan.FromMilliseconds(lease)
+                MaxAttempts = attempts, Lease = TimeSpan.FromMilliseconds(lease), Flaws = flaws
             });
             await new DurableHost([owner]).ActivateAsync(0);
             await owner.PollAsync();
@@ -180,10 +180,11 @@ internal static partial class ShortWaitRaces
 
         // Retain the original nonterminal sibling controls and exercise a terminal result
         // handler with and without another inherited input to hold the recovery boundary.
+        foreach (var legacyError in new[] { false, true })
         foreach (var (finish, sibling) in new[] { (false, true), (true, false), (true, true) })
         foreach (var post in new[] { false, true })
         foreach (var due in new[] { 205, 215 })
-            await Check($"an exhausted ticket's error becomes ready on poll, due={due}, post={post}, finish={finish}, sibling={sibling}", async () =>
+            await Check($"{(legacyError ? "legacy-flaw" : "default-Park")}: an exhausted ticket's error becomes ready on poll, due={due}, post={post}, finish={finish}, sibling={sibling}", async () =>
             {
                 var model = new Spawner(finish, wait: true);
                 var f = new JobCut(model);
@@ -207,24 +208,26 @@ internal static partial class ShortWaitRaces
                 f.ExpectTrial(lost, ticket);
                 if (!post) await f.Add(Kinds.Terminate, due);
                 f.Clock = 210;
-                await using var owner = await f.Activate("replacement", attempts: 1);
+                await using var owner = await f.Activate("replacement", attempts: 1, flaws: legacyError ? Flaw.JobPoisonAsError : Flaw.None);
                 Need(owner.Epoch > lost.Epoch && f.Store.Messages[ticket].Attempts == 1
                     && (!sibling || f.Store.Messages["sibling"].Attempts == 0), "takeover did not charge the isolated trial");
                 if (post) Need(owner.Post(new("stop", f.Actor, Kinds.Terminate, Due: due)), "post refused");
                 await owner.FlushAsync();
-                bool siblingBefore = sibling && (!post || due > 210);
+                bool siblingBefore = legacyError && sibling && (!post || due > 210);
                 Need(siblingBefore ? owner.Trial.SequenceEqual(["sibling"]) : !owner.Trial.Any(), "wrong sibling admission");
                 f.Clock = 220;
                 await f.Drain(owner);
                 var expected = new List<string> { "spawn" };
-                if (due > 210) expected.Add(Kinds.JobFinished);
+                if (legacyError && due > 210) expected.Add(Kinds.JobFinished);
                 if (siblingBefore) expected.Add("sibling");
-                f.Expect(owner, finish && due > 210 ? InstanceStatus.Finished : InstanceStatus.Cancelled, [.. expected]);
+                f.Expect(owner, legacyError ? finish && due > 210 ? InstanceStatus.Finished : InstanceStatus.Cancelled
+                    : post && due <= 210 ? InstanceStatus.Cancelled : InstanceStatus.Faulted, [.. expected]);
                 Need(model.Starts == 2, "exhausted ticket restarted a driver");
             });
 
+        foreach (var legacyError in new[] { false, true })
         foreach (var post in new[] { false, true })
-            await Check($"command matures during the last exhausted result acknowledgement, post={post}", async () =>
+            await Check($"{(legacyError ? "legacy-flaw" : "default-Park")}: command matures during the last exhausted result acknowledgement, post={post}", async () =>
             {
                 var model = new Spawner(finish: false, wait: true);
                 var f = new JobCut(model);
@@ -241,7 +244,7 @@ internal static partial class ShortWaitRaces
                 await f.Add("later", 220);
                 if (!post) await f.Add(Kinds.Terminate, 215);
                 f.Clock = 210;
-                await using var owner = await f.Activate("replacement", attempts: 1);
+                await using var owner = await f.Activate("replacement", attempts: 1, flaws: legacyError ? Flaw.JobPoisonAsError : Flaw.None);
                 if (post) Need(owner.Post(new("stop", f.Actor, Kinds.Terminate, Due: 215)), "post refused");
                 await owner.FlushAsync();
                 Need(!owner.Trial.Any() && f.Store.Messages[ticket].Attempts == 1, "expected an exhausted ticket without a trial");
@@ -256,7 +259,7 @@ internal static partial class ShortWaitRaces
                 finally { f.Wire.Reply.TrySetResult(); }
                 await flight;
                 await f.Drain(owner);
-                f.Expect(owner, InstanceStatus.Cancelled, "spawn", Kinds.JobFinished);
+                f.Expect(owner, legacyError ? InstanceStatus.Cancelled : InstanceStatus.Faulted, legacyError ? ["spawn", Kinds.JobFinished] : ["spawn"]);
                 Need(model.Starts == 2, "exhausted ticket restarted a driver");
             });
 

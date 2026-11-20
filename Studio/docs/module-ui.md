@@ -263,3 +263,28 @@ mappings; retain mounted default editors so tab changes never discard unapplied
 text. Diagnostic links select the matching collection before focusing the exact
 member or field. Provider boundary editors can use the optional `contractSection`
 prop to show the corresponding output or outcome mappings.
+
+## Navigation
+
+Declare a purposeful `placement` for every top-level destination: `build`, `operate` or `integrations`. `main` is reserved for direct shell destinations such as Home. There is no default catch-all: an undeclared top-level workspace contribution is route-only. Children may omit placement to inherit their parent; explicit placement in a different group lifts the child into that group. Feature-area navigation forwards `parentId`, `childDisplay` and `viewLabel`.
+
+Migrating from earlier Studio builds: the `more` placement and `defaultStudioNavigationPlacement` are removed. A contribution that still declares `placement: "more"`, or none, is route-only and no longer appears in navigation; give it `build`, `operate` or `integrations`.
+
+Use `parentId` to join an existing resource surface. A parent with `childDisplay: "views"` presents its children as local route links instead of nested sidebar entries. Its optional `viewLabel` includes the parent's own route, such as Diagnostics' Overview. A parent without `viewLabel` links to its first accessible child and disappears when it has none. Modules still own their routes, components and backend requirements; navigation is discoverability, not an authorization boundary.
+
+The built-in homes are:
+
+- Build: Workflows (Definitions, Executables and available BPMN authoring), Agents, Decisions, Library (Activity definitions, Templates), and installed authoring modules such as ETL.
+- Operate: Runs, User tasks, Diagnostics (Overview, Console, Structured logs, OpenTelemetry), and installed operational modules such as saved Dashboards and Questions when their Dashboard API is available.
+- Integrations: Connections and Secrets.
+- Settings: `settings` for Studio preferences, `authoring` for Workflow authoring, `runtime` for Runtime, and `admin` for Administration. Only `admin` adds the host-control read gate; preserve each module's existing permission/backend gates.
+
+Sidebar groups start open and remember explicit choices in `elsa-studio.ui.nav.groups`; Appearance Reset clears them. Active destinations and search results reveal their group. Search can expose local view links without permanently duplicating them in the sidebar. Icon rail and top navigation use the same authorized contributions; top menus close on Escape, focus leaving, outside clicks and navigation. Keep links backend-qualified and preserve native/workspace new-tab intent.
+
+Use the shared page spacing tokens and restrained navigation surfaces in every theme. The default page gap is 24px; collection row density and domain workbench canvases retain their existing layout contracts. Do not introduce competing palette literals or module-local chrome scales.
+
+## Expression preservation contributions
+
+`StudioExpressionEditorContribution.variableAdditionPreservation` proves only the existing variable-addition operation. Promotion into a reusable graph asks the language owner separately through optional `reusableBoundaryPreservation` (`language`, `revision`, `allows`). Its verdict must prove that the unchanged source observes only explicit parameters and survives a closed value boundary. Workflows rewrites owned parameter identities, never language source. Missing, duplicate, faulting or unproved contributions refuse promotion; the revision and contribution identities participate in preview freshness.
+
+The JavaScript module currently admits the same finite direct `args.<declared parameter>`/numeric-operand grammar used by its existing preservation implementation. The separate contribution names the stronger closed-dependency guarantee explicitly. It does not authorize arbitrary scripts or replace ordinary backend validation/publication. T006 composes this contribution in both resource editors.

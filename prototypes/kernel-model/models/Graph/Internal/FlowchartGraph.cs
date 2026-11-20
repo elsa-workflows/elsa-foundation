@@ -258,7 +258,7 @@ public sealed class FlowchartGraph
     public string GetConnectionId(FlowchartConnection connection)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        return connection.Id ?? $"{connection.Source.NodeId}:{connection.Source.Port}->{connection.Target.NodeId}";
+        return connection.GetId();
     }
 
     public FlowchartNodeMetadata GetNodeMetadata(string nodeId)

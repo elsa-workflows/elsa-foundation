@@ -27,35 +27,36 @@ COPY Studio/Elsa.Studio.slnx ./Studio/
 # Hosting and its optional administration package use these lightweight Foundation libraries.
 # Their shared build/version inputs and compile-only naming analyzer are required in this context too.
 COPY Directory.Build.props Directory.Packages.props VersionLines.props PackageVersioning.props PackageRanges.targets .editorconfig ./
-COPY Essentials/build/Analyzers/ ./Essentials/build/Analyzers/
-COPY Essentials/src/Modularity/Core/ ./Essentials/src/Modularity/Core/
-COPY Essentials/src/Modularity/Nuplane/ ./Essentials/src/Modularity/Nuplane/
-COPY Essentials/src/Studio/Preferences/Core/ ./Essentials/src/Studio/Preferences/Core/
-COPY Essentials/src/Events/ ./Essentials/src/Events/
-COPY Essentials/src/Pipelines/Core/ ./Essentials/src/Pipelines/Core/
-COPY Essentials/src/Primitives/Primitives/ ./Essentials/src/Primitives/Primitives/
-COPY Essentials/src/Tasks/Core/ ./Essentials/src/Tasks/Core/
+COPY essentials/build/Analyzers/ ./essentials/build/Analyzers/
+COPY essentials/src/Modularity/Core/ ./essentials/src/Modularity/Core/
+COPY essentials/src/Modularity/Nuplane/ ./essentials/src/Modularity/Nuplane/
+COPY essentials/src/Studio/Preferences/Core/ ./essentials/src/Studio/Preferences/Core/
+COPY essentials/src/Events/ ./essentials/src/Events/
+COPY essentials/src/Pipelines/Core/ ./essentials/src/Pipelines/Core/
+COPY essentials/src/Primitives/Primitives/ ./essentials/src/Primitives/Primitives/
+COPY essentials/src/Tasks/Core/ ./essentials/src/Tasks/Core/
 
 # Copy the Studio host and shared modules.
 COPY Studio/src/ ./Studio/src/
 
 # Copy only the optional Studio modules consumed by the host, not every Foundation extension.
-COPY Extensions/Agent/studio/ ./Extensions/Agent/studio/
-COPY Extensions/Attention/studio/ ./Extensions/Attention/studio/
-COPY Extensions/ConsoleStream/studio/ ./Extensions/ConsoleStream/studio/
-COPY Extensions/Connections/studio/ ./Extensions/Connections/studio/
-COPY Extensions/Decisions/studio/ ./Extensions/Decisions/studio/
-COPY Extensions/Diagnostics.OpenTelemetry/studio/ ./Extensions/Diagnostics.OpenTelemetry/studio/
-COPY Extensions/Diagnostics.StructuredLogs/studio/ ./Extensions/Diagnostics.StructuredLogs/studio/
-COPY Extensions/Etl/studio/ ./Extensions/Etl/studio/
-COPY Extensions/ExpressionEditors.JavaScript/studio/ ./Extensions/ExpressionEditors.JavaScript/studio/
-COPY Extensions/ExpressionEditors.Liquid/studio/ ./Extensions/ExpressionEditors.Liquid/studio/
-COPY Extensions/ExtensionBuilder/studio/ ./Extensions/ExtensionBuilder/studio/
-COPY Extensions/FeatureManagement/studio/ ./Extensions/FeatureManagement/studio/
-COPY Extensions/Secrets/studio/ ./Extensions/Secrets/studio/
-COPY Extensions/UserTasks/studio/ ./Extensions/UserTasks/studio/
-COPY Extensions/Weaver/studio/ ./Extensions/Weaver/studio/
-COPY Extensions/Workflows.Dashboard/studio/ ./Extensions/Workflows.Dashboard/studio/
+COPY extensions/Agent/studio/ ./extensions/Agent/studio/
+COPY extensions/Attention/studio/ ./extensions/Attention/studio/
+COPY extensions/ConsoleStream/studio/ ./extensions/ConsoleStream/studio/
+COPY extensions/Connections/studio/ ./extensions/Connections/studio/
+COPY extensions/Decisions/studio/ ./extensions/Decisions/studio/
+COPY extensions/Diagnostics.OpenTelemetry/studio/ ./extensions/Diagnostics.OpenTelemetry/studio/
+COPY extensions/Diagnostics.StructuredLogs/studio/ ./extensions/Diagnostics.StructuredLogs/studio/
+COPY extensions/Etl/studio/ ./extensions/Etl/studio/
+COPY extensions/ExpressionEditors.JavaScript/studio/ ./extensions/ExpressionEditors.JavaScript/studio/
+COPY extensions/ExpressionEditors.Liquid/studio/ ./extensions/ExpressionEditors.Liquid/studio/
+COPY extensions/ExtensionBuilder/studio/ ./extensions/ExtensionBuilder/studio/
+COPY extensions/FeatureManagement/studio/ ./extensions/FeatureManagement/studio/
+COPY extensions/Identity/studio/ ./extensions/Identity/studio/
+COPY extensions/Secrets/studio/ ./extensions/Secrets/studio/
+COPY extensions/UserTasks/studio/ ./extensions/UserTasks/studio/
+COPY extensions/Weaver/studio/ ./extensions/Weaver/studio/
+COPY extensions/Workflows.Dashboard/studio/ ./extensions/Workflows.Dashboard/studio/
 
 # Fail the image build clearly if the frontend build was skipped. The generated
 # wwwroot files are intentionally ignored by Git, so this protects both CI and

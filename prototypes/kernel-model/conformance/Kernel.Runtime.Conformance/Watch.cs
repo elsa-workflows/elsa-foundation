@@ -68,7 +68,11 @@ public sealed class Watcher
     public IReadOnlyList<string>[] Holders(int partitions)
     {
         lock (_lock)
-            return Enumerable.Range(0, partitions).Select(scope => (IReadOnlyList<string>)Live(scope).Select(w => w.Node).Distinct().ToList()).ToArray();
+        {
+            // One pass over the watched activations, grouped by scope: Live per scope would read them all once per scope.
+            var live = Live().ToLookup(w => w.Scope);
+            return Enumerable.Range(0, partitions).Select(scope => (IReadOnlyList<string>)live[scope].Select(w => w.Node).Distinct().ToList()).ToArray();
+        }
     }
 
     /// <summary>Passes that started holding the scope and ended without it: the fence (a refused commit or beat) told a stale owner, or a commit's outcome was unknown.</summary>
@@ -79,8 +83,11 @@ public sealed class Watcher
         lock (_lock) return _fenced.Count(n => n == node);
     }
 
-    private IEnumerable<Watched> Live(int scope) =>
-        _all.Where(w => w.Scope == scope && !w.Disposed && !_gone.ContainsKey(w.Node) && w.Inner.Active).GroupBy(w => w.Inner, ReferenceEqualityComparer.Instance).Select(g => g.Last());
+    private IEnumerable<Watched> Live(int scope) => Live(_all.Where(w => w.Scope == scope));
+
+    // An activation serves one scope, so grouping by activation over every scope gives each scope's groups, in the same order.
+    private IEnumerable<Watched> Live(IEnumerable<Watched>? watched = null) =>
+        (watched ?? _all).Where(w => !w.Disposed && !_gone.ContainsKey(w.Node) && w.Inner.Active).GroupBy(w => w.Inner, ReferenceEqualityComparer.Instance).Select(g => g.Last());
 
     private void Overlap(int scope)
     {
@@ -110,8 +117,12 @@ public sealed class Watcher
             if (_busy.TryGetValue((node, scope), out var now) && now == what) _busy.Remove((node, scope));
     }
 
-    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost
+    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount
     {
+        // The start's count check is layer 2's: the watcher passes it through, so a mismatch refuses the node here too.
+        public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) =>
+            inner is IScopeCount counted ? counted.CheckScopesAsync(scopes, cancellationToken) : ValueTask.CompletedTask;
+
         public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
         {
             lock (watcher._lock)

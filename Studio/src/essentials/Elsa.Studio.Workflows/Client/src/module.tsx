@@ -20,6 +20,7 @@ import { registerWorkflowWeaver } from "./workflowWeaver";
 import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
 
 const WorkflowTagsRoute = lazy(() => import("./workflow-editor/WorkflowTagsPage").then(module => ({ default: module.WorkflowTagsRoute })));
+const WorkflowViewsRoute = lazy(() => import("./workflow-editor/WorkflowViewsPage").then(module => ({ default: module.WorkflowViewsRoute })));
 const BpmnWorkflowsPage = lazy(() => import("./bpmn/BpmnWorkflowsPage").then(module => ({ default: module.BpmnWorkflowsPage })));
 const WorkflowTemplatesPage = lazy(() => import("./workflow-editor/WorkflowTemplatesPage").then(module => ({ default: module.WorkflowTemplatesRoute })));
 const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowManagementPage })));
@@ -102,6 +103,7 @@ export function register(api: ElsaStudioModuleApi) {
   }
   const runInputEditors = () => api.workflowRunInputEditors?.list() ?? [];
   const runRelatedLinks = () => api.workflowRunRelatedLinks?.list() ?? [];
+  const incidentRootCauseProviders = () => api.incidentRootCauseProviders?.list() ?? [];
   const deferred = (label: string, content: ReactNode) =>
     <WorkflowLazyBoundary label={label}>{content}</WorkflowLazyBoundary>;
   api.featureAreas.add({
@@ -115,23 +117,23 @@ export function register(api: ElsaStudioModuleApi) {
     order: 20,
     nav: {
       title: "Workflows",
-      requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}],
       path: "/workflows/definitions",
       iconColor: "#0ea5e9",
-      placement: "main",
+      placement: "build",
+      childDisplay: "views",
       order: 20,
       items: [
-        { id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}], title: "Workflows", path: "/workflows/definitions", iconColor: "#0ea5e9", placement: "main", order: 20 },
+        { id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}], title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9", placement: "build", parentId: "workflows", order: 10 },
         ...(api.backendSession ? [
-          { id: "workflows-bpmn-processes", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-publications"]}], title: "BPMN processes", path: "/workflows/bpmn", placement: "main" as const, order: 25 },
-          { id: "workflows-bpmn-runs", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-executions"]}], title: "BPMN runs", path: "/workflows/bpmn/runs", placement: "main" as const, order: 35 }
+          { id: "workflows-bpmn-processes", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-publications"]}], title: "BPMN processes", path: "/workflows/bpmn", placement: "build" as const, parentId: "workflows", order: 25 },
+          { id: "workflows-bpmn-runs", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-executions"]}], title: "BPMN runs", path: "/workflows/bpmn/runs", placement: "operate" as const, order: 35 }
         ] : []),
-        { id: "workflows-runs", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9", placement: "main", order: 30 },
-        { id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "more", order: 10 },
-        { id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "more", order: 20 },
-        { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "#0ea5e9", placement: "more", order: 25 },
-        { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "more", order: 40 },
-        { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "more", order: 50 }
+        { id: "workflows-runs", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9", placement: "operate", order: 30 },
+        { id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "build", parentId: "workflows", order: 20 },
+        { id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "build", parentId: "library", order: 20 },
+        { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "#0ea5e9", placement: "build", parentId: "library", order: 25 },
+        { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "runtime", order: 40 },
+        { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "authoring", order: 50 }
       ]
     },
     routes: [
@@ -141,6 +143,13 @@ export function register(api: ElsaStudioModuleApi) {
         path, label,
         component: ({ navigate }: { navigate(path: string): void }) => deferred("workflow tags", <WorkflowTagsRoute key={view} context={api.backend} view={view} navigate={navigate} />)
       })),
+      {
+        id: "workflows-views",
+        requiresBackend: [{ id: "elsa.api.workflow-design", contractVersion: "1", relations: ["workflow-views", "workflow-view"] }],
+        path: "/workflows/views",
+        label: "Saved views",
+        component: ({ navigate }: { navigate(path: string): void }) => deferred("saved views", <WorkflowViewsRoute context={api.backend} view="list" navigate={navigate} />)
+      },
       ...(api.backendSession ? [
         { id: "workflows-bpmn-processes", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-publications"]}], path: "/workflows/bpmn", label: "BPMN processes",
           component: ({ navigate }: { navigate(path: string): void }) => deferred("BPMN processes", <BpmnWorkflowsPage session={api.backendSession!} view="processes" navigate={navigate} />) },
@@ -201,7 +210,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-instance-detail", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/instances/:workflowExecutionId",
         label: "Workflow run",
-        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} backendSession={api.backendSession} runRelatedLinks={runRelatedLinks()} ai={api.weaver} weaver={weaver} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
+        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} backendSession={api.backendSession} runRelatedLinks={runRelatedLinks()} incidentRootCauseProviders={incidentRootCauseProviders()} ai={api.weaver} weaver={weaver} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
       },
       {
         id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],

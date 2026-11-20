@@ -775,7 +775,8 @@ Branch `agent/claude/kernel-model-merged`: round 3 (`0f09246d32`) as the base, t
   same partition is not handed over in memory), F-N11 (two places say "ephemeral").
 - The owner's defaults of 12 November (run): events are not kept for a wait unless it asks (`Subscribe(..., keep:
   true)`; the simulation's waiter asks, so invariant 13 is checked as before; F-N9 is gone); lease 10 s
-  (`Defaults.Lease`); 64 partitions on server stores and 1 on SQLite (`CreateAsync()`); a response released after the
+  (`Defaults.Lease`); 64 partitions on server stores and 1 on SQLite (`CreateAsync()`; since K1 slice 7, 1,024 virtual
+  partitions on every store, PARTITIONS.md); a response released after the
   commit of the step that wrote it, opt-out per route. The simulation and stress tests keep their short leases.
 
 ### The gates
@@ -957,7 +958,7 @@ only by the `jobs` rename).
 The items the owner decided on 12 and 13 November (the sketch's "Decisions taken so far"), built one pull request
 each. Each subsection says what changed, what was run, and what it did not change.
 
-### 25.1 SQL Server's default fence (E9, decided 13 November). Run
+### 25.1 SQL Server's default fence (E9, decided 13 November; superseded 16 November, see ENGINES.md E9 and section 29). Run
 
 **What changed.** The EF store's fence mode is the engine's default when it is not told: the fence in the batch on
 PostgreSQL, SQLite and MySQL, the checked fence on SQL Server (`Engine.FenceInBatchByDefault`, false only in
@@ -1595,10 +1596,19 @@ plan's aims at it), so that it bites is not shown.
 - **Park subscriptions, resolved 13 November:** this round initially kept them and exempted parked instances in I8.
   The owner subsequently chose atomic removal of active subscriptions while retaining the checkpoint and fault
   evidence. Section 25.9 records the new behavior and checks; the old exemption is removed.
-- **Main's engine, possibly:** a decision with both outcomes connected to one node schedules that node on the live
-  arrival and then carries the dead arrival from the same source through it as well, which could fire a later join
-  twice. Found by reading (a reviewer), not run; it is main's behaviour and no workflow in the mix has that shape. A
-  corpus case on main would settle it.
+- **Same-target Decision join, confirmed and corrected in the prototype:** #4367 records the product defect.
+  A targeted run of the extracted Graph engine also confirmed the duplicate downstream join: source-only accounting
+  fired the shared target on its live edge before its dead edge arrived, then carried false deadness through it.
+  Graph now matches answers by source/normalized-port/target and the unchanged wire ID, so accepted string-ID
+  collisions do not alias distinct inbound answers, and consumes both together. The permanent
+  `FlowchartSameTargetDecisionTests` cover both outcomes, edge orders, gateway metadata, explicit IDs, all-dead
+  propagation, loop iterations and invalid duplicate taken targets. `FlowchartConnectionAnswerTests` also cover
+  accepted derived/authored ID collisions for live forks and Merge deadness before a downstream barrier.
+  Selected/untaken accounting also retains actual graph edges, including a nonserialized built-in command hint;
+  `FlowchartSelectedEdgeTests` check immediate scheduling while a sibling is active, real live/dead port facts,
+  same-source colliding IDs, and the preserved custom-command first-match fallback. `FlowchartRoutingBoundaryTests`
+  cover public command redirection, copied contexts, repeated dead-path waves and the coordinator's wire-ID entry point.
+  The product fix remains separate; this does not expand the simulation mix or certify the product runtime.
 - **State size** of a Flowchart, above. Paths and arrivals by reference, or a smaller encoding, are the levers.
 - **Not covered by the mix:** merges, inclusive gateways, a race inside a loop, a trigger inside a Flowchart under
   the faults (smoke covers the trigger entry). The BPMN spike (its own session) does not use this engine; comparing
@@ -1629,7 +1639,8 @@ in-memory transport: no socket was open during a run, and nothing ran in a cloud
 ### How the suite works
 
 The suite builds layer 2 itself and meets the runtime only at the seam. For each node the runtime starts, it asks the
-suite for that node's layer 2 by name: a worker per partition over one fresh store, behind a `Watcher` that wraps the
+suite for that node's layer 2 by name: a worker per partition over one fresh store (since K1 slice 5a, one worker for
+the node's owned set, `DurableHost.ForNode`), behind a `Watcher` that wraps the
 node's `IScopeHost` and every activation it returns. Every commit that lands is recorded, and invariant 1 is checked
 on them from outside the store, as in the store suite. The watcher fails a case when a runtime:
 
@@ -1723,6 +1734,7 @@ not refused, and the store's count check is what stopped it.
   time; Orleans runs a silo's grains in parallel. The suite gives every worker its own gate under both runtimes, so F11
   does not hold there: a crash during a trial may count against a message in another partition's trial. The stress
   tests set the attempts high enough that nothing is parked. A lock in `TrialGate` is a small layer 2 change (leak L8).
+  Superseded by K1 D1 and D2: the gate is now the node worker's on both runtimes (`Worker.cs` 180), so F11 holds there.
 - **R7. A split costs takes.** Every partition grain on the side that does not hold the fence asks again every
   `RetryEvery`, and each ask is a take: a store round trip on the holder's partition row, declined. In one Orleans
   stress run (four partitions, `RetryEvery` 150 ms, 20 s of load and its settling) 355 activations were asked for
@@ -1825,3 +1837,112 @@ The next idle wake also includes the earliest held caller deadline. The witness 
 initially, then 1 ms at time 99), rather than forcing an externally scheduled deadline pass; this scheduling control
 failed before the wake calculation changed. Existing Admission.Run callers now supply their request-start clock plus
 30 seconds, and its schedule/control suite is included in the affected-build check.
+
+## 28. Round 5 A: virtual partitions, the two fence granularities. Run
+
+The owner's experiment of 15 November, measured and modelled: 1,024 and 4,096 virtual partitions, ranges owned by
+nodes, the fence per virtual partition or per owned range. The code is `src/Kernel.Runtime/VirtualPartitions.cs`
+(addressing and placement, witnessed by `sim --placement-check`) and `experiments/VirtualPartitions` (the two variants
+as EF stores, the measurement harness, the ownership simulation and its mutations); no default changed and the kernel's
+gates ran unchanged on 64 partitions. The results, the findings F-A1 to F-A7, the recommendation and the owner's
+decisions are in [PARTITIONS.md](PARTITIONS.md). In one line: with the fence in the batch both variants cost 2 round
+trips per flush and the per-range variant one statement more; with the checked fence the per-virtual-partition variant
+as built costs *k* + 2 round trips against 3, a commit-SQL shape for round 5 B; the per-range variant still writes a
+position row per virtual partition, needs an epoch counter, split, merge and carve, and stales a whole range at a
+split. The recommendation was the fence per virtual partition, conditional on a one-statement multi-row checked fence.
+**Decided by the owner on 16 November 2026: (i) the fence per virtual partition, the multi-row checked fence in round
+5 B's scope, and 1,024 virtual partitions** (the provisional 4,096 constant stayed in code until the Worker refactor;
+K1 slice 7 set it to 1,024, and section 30 has K1).
+
+## 29. Round 5 B: the owned commit, hand-written commit SQL on four engines. Run
+
+The owner's decision of 16 November: the EF store writes its commit with its own statements on PostgreSQL, SQL Server,
+SQLite and MySQL; EF keeps the schema, the migrations and the cold paths. The commit's semantics are unchanged and the
+whole commit edge is replaced per engine, never a piece of it; nothing above the store changed. The design, the
+per-engine shapes, the defaults and the evidence are in [COMMIT-SQL.md](COMMIT-SQL.md); ENGINES.md's "Round 5 B" section
+says what it does to the engine findings. In one line: the same 87 or 88 conformance cases pass per engine and fence
+mode as before, every round-trip budget of the cost runs holds or drops (PostgreSQL, 1,000 instances arriving by poll,
+fence in the batch: 13 → 8 round trips; SQL Server 22 → 13; MySQL 24 → 18; SQLite 4,008 → 8 engine calls), statements
+fall from 3n to a handful per flush (2,001 → 3 for 1,000 new instances), bytes per commit do not move, the fence is one
+multi-row statement shaped for k virtual partitions (`EfStore.FenceAsync`, probe `x fence`, all four engines), and on
+SQL Server the in-batch fence is the first lock of the batch, so the E9 take deadlocks are gone: EF in the batch 74 take deadlocks and the run did not drain, owned in the batch 0 deadlocks and holds (40 s, 5,000 messages, RCSI). On that evidence the owner moved SQL Server's default fence to the batch on 16 November (the checked fence stays selectable); the flip and its gates are their own pull request (ENGINES.md E9).
+
+Delivered as five pull requests on branches `agent/claude/4229-r5b-1` to `-5`: the seam and PostgreSQL (`2c5d0f5fa`),
+SQL Server (`e308e8a34`), SQLite (`def75ba81`), MySQL (`3e7169f14`, and `8c5e944a5` for the mutation of F-B7), and this
+documentation.
+
+What this round found, beyond COMMIT-SQL.md:
+
+- **F-B1. The stress harnesses had stopped starting children in partition 1.** Since #4532 (14 November) a child
+  start checks its destination against `WorkerOptions.Partitions`, which `EngineRun`'s stress and cost runs and the
+  store conformance suite's stress left at its default of 1, so every parent in partition 1 of a two-partition run
+  faulted at its first turn (`ArgumentOutOfRangeException: destination`), on the EF path as on the owned one: 301
+  parents of a 40 s run ended Faulted, the same 301 on every engine and fence. Fixed in the harnesses (B1). The
+  ENGINES.md stress results recorded before 14 November predate the check.
+- **F-B2. The broken-fence stress no longer breaks on PostgreSQL.** With the fence broken on purpose (`unfenced=1`),
+  40 s and 5,000 messages hold on PostgreSQL on both commit paths and in both fence modes (fenced commits: 0 to 3 per
+  run). The Worker's local lease check (LEASE.md: a late acknowledgement cannot revive an old deadline) keeps a stale
+  owner from committing at all on an engine this fast, so the fence is never asked. The semantic suite's three fence
+  cases are the pin that holds (`semantic-broken fence`: 3 of 3 fail with the checked fence on every engine; with the
+  fence in the batch 1 of 3, "a take beside a commit in flight", fails on the owned path, 0 of 3 on EF's, where the
+  journal's primary key is the backstop). On SQLite the stress still fences (128 to 283 fenced commits per clean run: stalls, no
+  kills) and the broken fence is caught in both modes (2,110 and 2,135 violations); on SQL Server with the fence in the
+  batch (2,017 violations), where commits are slow enough for a stale owner to reach the fence; on MySQL it holds as on
+  PostgreSQL.
+- **F-B3. E1 does not arise in the owned commit.** The fence is the first statement, and its result is the first the
+  client reads (SQL Server: the server stops the batch at the fence's THROW). A stale owner's key violation on a later
+  statement is consumed with the reader, never classified; `--m5`/`m5=1` changes nothing (3 of 3 fence cases pass with
+  it on every engine; `KeyViolationsAsFence` 0 in the stress). The partition-row read after a failure (`HoldsAsync`)
+  stays for the failures that remain.
+- **F-B4. The fence-count mutation.** `FenceIgnoresCount` (the owned fence does not compare its matched rows with the
+  rows it fenced; `--fence-ignores-count`, `fencecount=0`) is caught by the semantic fence cases exactly as the broken
+  fence is (3 of 3 checked, 1 of 3 in the batch, on every engine): **`semantic fence --fence-ignores-count` must exit 1**,
+  and that is the gate. The stress is a pin on SQLite and SQL Server (both modes fail). On PostgreSQL and MySQL the
+  recorded in-batch runs failed once (PostgreSQL I6 on both partitions, I3/I4, 1,708 violations, 58,206 definite errors
+  after 17 stale commits reached the fence; MySQL 686 violations) and the reviewers' reruns held with 0 fenced commits
+  (F-B2: a stale commit rarely reaches the fence there), so those are single-run results, not pins.
+- **F-B5. Connector/NET steps over the statements that return no rows.** A MySQL command of many statements yields one
+  result set per SELECT; the owned commit follows every statement with a `SELECT ROW_COUNT()` and registers exactly
+  those. Found when the k-row fence probe read "fewer result sets than statements".
+- **F-B6. Grouping rows removes the proxy's extra read.** With one statement per row (the first shape of B1), a
+  1,000-instance flush on PostgreSQL read one TCP round trip more than EF's (5 against 4): the server answers each small
+  statement as it arrives and the client is still sending, which the proxy counts as a second trip. With the rows of one
+  kind as one multi-row statement the server has nothing to answer until the statement is complete: 3 round trips. The
+  same mechanism makes the PostgreSQL cells of the 1,000-instance rows vary by one or two between runs on both paths
+  (the tables carry a note); the Execute-frame and command columns do not vary.
+- **F-B7. A server-side check masks a client-side mutation.** On SQL Server the fence's count is checked by the server
+  (`THROW 51010`) and read back by the client; `FenceIgnoresCount` skipped the client's check only, and 3 of 3 fence
+  cases passed with it. The mutation now drops both (`8c5e944a5`), and the cases fail as on the other engines. A
+  mutation must switch off every copy of the rule it names.
+- **F-B8. With the lease check off, the stress pins the fence on every engine.** `stalelease=1` in `EngineRun` passes
+  `Flaw.IgnoreLeaseDeadline` (the simulation's mutation) to the stress workers, so a stalled owner commits past its local
+  deadline and the fence is asked (F-B2's gap). Clean, the stress holds in both modes on every engine with hundreds of
+  fenced commits; with the fence broken (`unfenced=1`) and with the fence count ignored (`fencecount=0`) it fails in both
+  modes on every engine: every cell but one fails (PostgreSQL 1,712 to 2,211 violations, MySQL 1,745 to 2,255, SQLite 33 to 2,133, SQL Server 1,154 to 2,281; the one run of SQL Server with the checked fence broken held, 449 fenced and 255 definite errors without a violated property in 40 s). One run per cell; COMMIT-SQL.md has the table. The tooling branch `agent/claude/4229-r5b-7` adds the option and these runs.
+
+Not done, unverified: COMMIT-SQL.md's last section.
+
+## 30. K1: range ownership in the integrated Worker. Run
+
+The Worker refactor of PARTITIONS.md's owner decisions, in slices 0 to 8 (#4809 to #4820 and #4821): a node's
+one worker owns a set of the 1,024 virtual partitions, each with its own fence row, epoch, position and journal; a
+flush lands whole or not at all under a k-row fence locked in ascending id; the balancer moves the fewest partitions,
+so sets may be scattered; Seen and Trial marks, suspects and child ids are per partition epoch. The record of each
+slice, the decisive witness, the mutations (the pin at 48) and the measured costs for scattered and contiguous sets
+are in [PARTITIONS.md](PARTITIONS.md) ("K1 slice 0" to "K1 costs").
+
+- **F-K1. The runtime moves partitions one row at a time.** Layer 1 activates one scope per virtual partition, so the
+  per-node host turns a join, a takeover through the runtime and a start-up into one-row takes and give-ups: about 800
+  round trips for a join at 1,024 on PostgreSQL, where the store's set take is 2. Correct, and under a second locally
+  at 4,096; a batched gain is the recorded option.
+- **F-K2. The idle beat is WAL.** 161 MB an hour on an idle four-node PostgreSQL cluster at 1,024, nearly all of it the
+  partition rows, 41 % of that lock records. Measured for D3; a node-level beat is not built.
+- **F-K3. Each Orleans grain's tick can cost a set poll.** 107 to 117 set polls a second per idle silo at 1,024, against one for
+  the built-in loop, on a quiet machine. The silo-level poll needs a seam decision.
+- **F-K4. A test's own bookkeeping can be the slow part.** The runtime suite's crash case took minutes at 4,096: it read
+  its holders in time cubic in the count, before the kill. Read once, in one pass, the case takes 14 s at every count
+  and its takeover 6.2 to 7.5 s, the lease (built-in runtime).
+- **F-K5. A wrapper that leaves a set operation to the interface's default changes its cost.** The suites' store
+  wrappers sent a set poll as one poll per partition, each a scan of the in-memory inbox, so a burst over 4,096
+  partitions took 21.0 s. Forwarded as one call, it takes 0.92 s. `FaultyStore` then has one chance to inject a fault
+  per set poll, where it had one per partition, so set polls see fewer injected faults.

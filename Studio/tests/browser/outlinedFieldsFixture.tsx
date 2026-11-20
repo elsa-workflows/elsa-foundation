@@ -1,4 +1,4 @@
-import { BasicTaskForm } from "../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TaskForm";
+import { BasicTaskForm } from "../../../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TaskForm";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { StudioField, StudioFormField, StudioFieldAdornmentProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/forms/Field";
@@ -6,13 +6,13 @@ import { applyThemeStyleVariables } from "../../src/essentials/Elsa.Studio.Hosti
 import { getTheme, getThemeColorScheme, getThemeModeDefinition, isThemeMode, themeTokenNames } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
 import { applyWorkspaceStyle, isWorkspaceStyle } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/workspaceStyles";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/styles.css";
-import "../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/styles.css";
-import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
-import "../../../Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/src/styles.css";
-import "../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/styles.css";
-import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
-import "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/styles.css";
+import "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/styles.css";
+import "../../../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/styles.css";
+import "../../../extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
+import "../../../extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/src/styles.css";
+import "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/styles.css";
+import "../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
+import "../../../extensions/Etl/studio/Elsa.Studio.Etl/Client/src/styles.css";
 
 const params = new URLSearchParams(location.search);
 const theme = getTheme(params.get("theme") ?? "classic")!;

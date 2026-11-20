@@ -49,7 +49,7 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
         where phase == "transition" || p.Name is not ("internal" or "internal-preempts-container")
         from reverse in new[] { false, true } select (m, n, phase, reverse, p);
     private static string Name(string m, bool n, string p, bool r, Profile profile) => $"native-graph:{profile.Name},{m},nested={n},{p},reverse={r}";
-    private static string[] Refusals => ["missing-profile", "both-profiles", "unknown-entry", "unknown-exit", "unknown-action", "dynamic-profile"];
+    private static string[] Refusals => ["missing-profile", "both-profiles", "unknown-entry", "unknown-exit", "unknown-action", "dynamic-profile", "automatic-profile", "completion-profile"];
     internal static IEnumerable<string> Names => Cases().Select(c => Name(c.Mode, c.Nested, c.Phase, c.Reverse, c.Profile))
         .Concat(Refusals.Select(n => "native-refusal:" + n)).Concat(NativeGraphReaders.Names)
         .Concat(from m in new[] { Modes.Balanced, Modes.Durable } from v in new[] { 1, 2 } select $"identity-consumption:literal-v{v},{m}");
@@ -232,9 +232,13 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
     private void Refuse(string name)
     {
         _expectedRefusal = name switch { "missing-profile" or "both-profiles" => "Exactly one statechart definition profile",
-            "dynamic-profile" => "Statechart definition must be literal", _ => "Unknown statechart activity reference: absent" };
+            "dynamic-profile" => "Statechart definition must be literal",
+            "automatic-profile" or "completion-profile" => "Native internal-progress integration is not qualified.",
+            _ => "Unknown statechart activity reference: absent" };
         var nodes = Simple().Select(n => n.Id == "Review" ? n with { Entry = "proof" } : n).ToArray();
         var rules = new[] { R("rule", 0, "Checking", "Changes") };
+        if (name is "automatic-profile" or "completion-profile") rules = [new("internal", 0, "Review", "Done", VisitMode.Reenter, "",
+            Kind: name == "automatic-profile" ? TriggerKind.Automatic : TriggerKind.Completion)];
         if (name == "unknown-entry") nodes = nodes.Select(n => n.Id == "Changes" ? n with { Entry = "absent" } : n).ToArray();
         if (name == "unknown-exit") nodes = nodes.Select(n => n.Id == "Changes" ? n with { Exit = "absent" } : n).ToArray();
         if (name == "unknown-action") rules[0] = rules[0] with { Action = "absent" };

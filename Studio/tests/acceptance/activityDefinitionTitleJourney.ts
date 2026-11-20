@@ -23,6 +23,32 @@ export async function activityDefinitionTitleJourney(page: Page, info: TestInfo,
   expect(definitionId).toBeTruthy(); expect(draftId).toBeTruthy();
   await capture(page, info, "activity-created");
 
+  const views = page.getByRole("tablist", { name: "Activity Definition authoring views" });
+  const geometry = () => views.evaluate(element => {
+    const box = element.getBoundingClientRect(), style = getComputedStyle(element);
+    return { x: box.x, y: box.y, width: box.width, height: box.height, padding: style.padding, margin: style.margin,
+      buttons: Array.from(element.querySelectorAll("button"), button => {
+        const bounds = button.getBoundingClientRect();
+        return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+      }) };
+  });
+  const designerGeometry = await geometry();
+  for (const id of ["designer", "inputs", "outputs", "outcomes", "variables", "designer"]) {
+    const target = views.locator(`[data-tab-id="${id}"]`);
+    await target.click();
+    await expect(target).toHaveAttribute("aria-selected", "true");
+    expect(await geometry()).toEqual(designerGeometry);
+    await capture(page, info, `activity-tabs-${id}`);
+  }
+  // Arrow navigation must preserve focus and geometry too.
+  await views.locator('[data-tab-id="designer"]').focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(views.locator('[data-tab-id="inputs"]')).toBeFocused();
+  expect(await geometry()).toEqual(designerGeometry);
+  await views.locator('[data-tab-id="designer"]').click();
+  await expect(page.getByRole("region", { name: "Provider implementation editor", exact: true })).toBeVisible();
+
+
   for (const state of ["activity-reloaded", "activity-reopened"]) {
     if (state === "activity-reloaded") await page.reload();
     else {

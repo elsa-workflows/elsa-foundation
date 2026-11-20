@@ -3,12 +3,12 @@ import { createRoot } from "react-dom/client";
 import { StudioHttpError, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
-import { TasksPage } from "../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TasksPage";
-import { TaskDetailPage } from "../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TaskDetailPage";
-import { FormsPage } from "../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/FormsPage";
-import { BasicTaskForm } from "../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TaskForm";
+import { TasksPage } from "../../../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TasksPage";
+import { TaskDetailPage } from "../../../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TaskDetailPage";
+import { FormsPage } from "../../../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/FormsPage";
+import { BasicTaskForm } from "../../../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TaskForm";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/styles.css";
+import "../../../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/styles.css";
 
 const params = new URLSearchParams(location.search);
 const requests: unknown[] = [];

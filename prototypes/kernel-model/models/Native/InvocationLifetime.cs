@@ -34,7 +34,7 @@ internal static class InvocationLifetime
             foreach (var (id, receipt) in inbox.Receipts.ToArray())
                 if (receipt.Status == "Completed") inbox.Receipts[id] = receipt with { Clock = reference };
         foreach (var (id, receipt) in inbox.Receipts.ToArray())
-            if (receipt.Status is "Queued" or "Selected")
+            if (receipt.Status is "Queued" or "Evaluating" or "Selected")
                 inbox.Receipts[id] = Final(receipt, receipt.Status == "Selected" ? "Interrupted" : "NotProcessed", reason, reference);
         if (!keepPayload) inbox.Pending.Clear();
     }

@@ -1,6 +1,6 @@
 # Elsa 3.8/3.9 parity: identity administration and scope
 
-Status: accepted (owner decisions 2026-10-15). Sipke Schoorstra approved D1–D11 below exactly as recommended:
+Status: accepted (owner decisions 2026-10-15; external-authentication amendments 2026-11-04). Sipke Schoorstra approved D1–D11 below exactly as recommended:
 [owner decision on valence-works/strategy#8](https://github.com/valence-works/strategy/issues/8#issuecomment-6183509892)
 (maintainers only). Some details in D2, D8 and D9 come from rows 1.8, 3.3 and 1.4 of the same approved plan.
 
@@ -70,7 +70,8 @@ deterministic.
 
 ### D4: Provisioning policies assign existing Elsa roles
 
-Owner amendment, 4 November 2026 (#3579): an integrator's provisioning policy can assign saved existing Elsa roles
+Owner amendment, 4 November 2026 ([recorded owner choice](https://github.com/elsa-workflows/elsa-foundation/issues/3579#issuecomment-6883622002)):
+an integrator's provisioning policy can assign saved existing Elsa roles
 when creating an external user. Later managed sign-ins use saved Elsa memberships and preserve manual assignments.
 Omit external group-to-role mappings for now, including session-only grants and recurring provider-managed saved
 memberships. Provider role/group names confer no automatic authority and never define Elsa permissions.

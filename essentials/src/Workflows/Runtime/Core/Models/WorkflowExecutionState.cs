@@ -1,0 +1,117 @@
+using System.Text.Json.Serialization;
+
+namespace Elsa.Workflows.Runtime.Core.Models;
+
+/// <summary>
+/// Continuation state for one workflow execution pinned to an exact executable artifact snapshot.
+/// </summary>
+public sealed record WorkflowExecutionState(
+    string WorkflowExecutionId,
+    WorkflowExecutableIdentity PinnedExecutable,
+    WorkflowExecutionStatus Status,
+    string? SubStatus,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? UpdatedAt,
+    DateTimeOffset? CompletedAt,
+    string? CorrelationId,
+    string? ParentWorkflowExecutionId,
+    string? TenantId,
+    IReadOnlyDictionary<string, string> SystemMetadata)
+{
+    private int _dispatchNestingDepth;
+
+    /// <summary>Capture policy pinned at admission; null retains legacy uncaptured execution.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCapturePolicy? HistoryCapturePolicy { get; init; }
+
+    /// <summary>Known admission capture choice; null means legacy or unknown, not today's host setting.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? HistoryCaptureEnabledAtAdmission { get; init; }
+
+    /// <summary>
+    /// The durable classification pinned when this execution starts. States written before run-kind tracking
+    /// deserialize to <see cref="WorkflowRunKind.Unknown"/> and remain distinguishable as legacy history.
+    /// </summary>
+    public WorkflowRunKind RunKind { get; init; } = WorkflowRunKind.Unknown;
+
+    /// <summary>
+    /// Immutable source attribution selected when this execution started. Null only for legacy state.
+    /// </summary>
+    public WorkflowExecutableSourceProvenance? PinnedSource { get; init; }
+
+    /// <summary>Partition selected when the execution was dispatched. Null only for legacy state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutionPartition? Partition { get; init; }
+
+    /// <summary>Immutable runtime-owned authority and root-initiator attribution. Null only for legacy state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutionAuthoritySnapshot? Authority { get; init; }
+
+    /// <summary>Actual model invocation that owns this native worker; it does not create a native parent.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeModelNativeWorkOrigin? ModelWorkOrigin { get; init; }
+
+    /// <summary>Immutable accepted standalone source, copied at the first physical checkpoint.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeIngressCommandOrigin? IngressOrigin { get; init; }
+
+    /// <summary>Retained scope authority for an ordinary saved-cohort start from an ingress-owned publisher.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeStimulusDeliveryOrigin? StimulusDeliveryOrigin { get; init; }
+
+    /// <summary>
+    /// Number of cross-workflow dispatch edges from the root execution. Root and legacy states default to zero.
+    /// </summary>
+    public int DispatchNestingDepth
+    {
+        get => _dispatchNestingDepth;
+        init
+        {
+            if (value < 0)
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Dispatch nesting depth cannot be negative.");
+            _dispatchNestingDepth = value;
+        }
+    }
+
+    /// <summary>Authoritative finite test-run scope. Null for non-test and legacy execution state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestScope? TestScope { get; init; }
+
+    /// <summary>
+    /// The workflow activation's lexical variable frame. Null only for legacy states that predate
+    /// role-owned variable frames.
+    /// </summary>
+    public VariableFrameState? RootVariableFrame { get; init; }
+}
+
+public enum WorkflowRunKind
+{
+    Unknown = 0,
+    TestRun = 1,
+    PublishedRun = 2,
+    BackgroundWeaverRun = 3
+}
+
+public enum WorkflowExecutionStatus
+{
+    Pending,
+    Running,
+    Suspended,
+    Completed,
+    Faulted,
+    Cancelled
+}
+
+public static class WorkflowExecutionStatusExtensions
+{
+    /// <summary>
+    /// Returns <see langword="true"/> when the workflow execution has reached a terminal status
+    /// (<see cref="WorkflowExecutionStatus.Completed"/>, <see cref="WorkflowExecutionStatus.Faulted"/>,
+    /// or <see cref="WorkflowExecutionStatus.Cancelled"/>) after which no further scheduler work may run.
+    /// </summary>
+    public static bool IsTerminal(this WorkflowExecutionStatus status) =>
+        status is WorkflowExecutionStatus.Completed
+            or WorkflowExecutionStatus.Faulted
+            or WorkflowExecutionStatus.Cancelled;
+}

@@ -61,6 +61,20 @@ export function readNodeIntrinsic(node: ActivityNode | null | undefined): Author
   return intrinsic && typeof intrinsic === "object" && typeof intrinsic.kind === "string" ? intrinsic : null;
 }
 
+// Built-in wire inputs remain known when a loaded Set/SetOutput has no catalog descriptor.
+// This is a closed argument contract; arbitrary wrapped properties are not intrinsic inputs.
+export function readNodeIntrinsicDescriptor(node: ActivityNode, item?: ActivityCatalogItem): ActivityAuthoringIntrinsic | null {
+  const intrinsic = readNodeIntrinsic(node);
+  if (!intrinsic) return null;
+  const descriptor = readIntrinsicDescriptor(item);
+  if (descriptor) return descriptor.kind.toLowerCase() === intrinsic.kind.toLowerCase() ? descriptor : null;
+  switch (intrinsic.kind.toLowerCase()) {
+    case "set": return { kind: "Set", valueInputKey: "value", variableInputKey: "variable" };
+    case "setoutput": return { kind: "SetOutput", valueInputKey: "value", outputNameInputKey: "name" };
+    default: return null;
+  }
+}
+
 // Builds the seed intrinsic block for a freshly placed node. Variable-writing kinds (those whose
 // descriptor names a variable input) must carry a non-null variable target for the backend's
 // AuthoredWorkflowIntrinsic constructor to accept the draft on save, so an unset target is seeded as an
