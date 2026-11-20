@@ -31,8 +31,8 @@ Nothing throws for input or catalog content. Every cause is a diagnostic:
 - `ELS3-ACTIVITY-*` errors make the item unconvertible;
 - `ELS3-BEHAVIOUR-*` warnings mean it converts, but Elsa 4 behaves differently at run time;
 - `VF-IMP-*` are value-flow errors;
-- `ELS3-UNTYPED-RESULT` (an error) and `ELS3-SCRIPT-OUTCOME-*` are about a script's result and its outcomes: a result
-  bound to a typed input whose kind the script does not show (spec 1228 US6), and a script's computed outcomes.
+- `ELS3-UNTYPED-RESULT` (an error) is an untyped activity result bound to a typed input whose kind is not known to match
+  (spec 1228 US6, #4898); `ELS3-SCRIPT-OUTCOME-*` are about a script's computed outcomes.
 
 The codes are constants in `Elsa3.Models.Elsa3ActivityDiagnosticCodes` and `Elsa3ImportDiagnosticCodes`.
 
@@ -130,8 +130,17 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   and its top-level returns (literals, comparisons, `!`, template strings, `Boolean(…)`, `String(…)`, `Number(…)`,
   `Math.round(…)`, …) and keeps the binding only when it matches the input (for an integral input, an integer; for a decimal input, an integer or
   a fraction literal, since Elsa 3 converted a computed fraction at 15 significant digits). Any
-  other or unknown kind is `ELS3-UNTYPED-RESULT`, with guidance to state the kind in the script. Other untyped
-  producers (a loop item, an event payload) are not checked: nothing in the definition shows their kind.
+  other or unknown kind is `ELS3-UNTYPED-RESULT`, with guidance to state the kind in the script.
+- **Other untyped results into typed inputs** (#4898). The same check covers every untyped activity result, read
+  directly or through an untyped (`Object`) workflow variable the result is captured into: a ForEach's current item,
+  an Event's payload, HTTP request or response data, any other `Object` output. Nothing in the definition shows their
+  kind, so a binding to a boolean, string or number input is `ELS3-UNTYPED-RESULT`, with guidance to convert the value
+  in a JavaScript expression (`String(…)`, `Boolean(…)`, …). A For loop's current value is its index, an `Int32` in
+  Elsa 4: it is kept for an `Int32`, `Int64` or `Decimal` input and refused for any other (Elsa 3 converted it into any input).
+  A typed output, a typed variable, or a variable only Set Variable writes is not an untyped result; a loop's value
+  captured into a typed variable still is, since Elsa 4 reads the loop's own variable there. A loop value
+  captured into a variable and read outside its loop keeps its own refusal. Not yet checked: a JavaScript or Liquid expression that reads such a
+  value, and Elsa 3's `Variable` expression form, which is not lowered yet (#3201).
 - **Literal lists.** A literal bound to a collection input whose text is a JSON array (`["Approved","Rejected"]`,
   `[200,404]`) converts to that JSON array, as Elsa 3 converted the text. Elsa 4 reads literal text for a collection
   as a comma-separated list, so the brackets and quotes would otherwise become part of the items.
