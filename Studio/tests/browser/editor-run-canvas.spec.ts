@@ -36,8 +36,12 @@ for (const theme of ["light", "dark"]) {
     await expect(node).toHaveAccessibleName(/Run state: Completed/);
     await expect(previous).toHaveCount(0);
     await expect(page.getByRole("group", { name: "Execution controls", exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "Inspector", exact: true }).click();
+    await page.getByRole("tab", { name: "Run data", exact: true }).click();
     await node.click();
-    await expect(page.getByLabel("Inspector panel", { exact: true }).getByText("Current: 1", { exact: true })).toBeVisible();
+    const inspector = page.getByLabel("Inspector panel", { exact: true });
+    await inspector.getByRole("tablist", { name: "Activity execution details" }).getByRole("tab", { name: "Inputs", exact: true }).click();
+    await expect(inspector.getByText("Current: 1", { exact: true })).toBeVisible();
   });
 
   test(`keeps the existing canvas and viewport when attaching and detaching a run (${theme})`, async ({ page }) => {
@@ -131,6 +135,8 @@ for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
     await expect(page.getByText(/Some activities ran more than once/)).toBeVisible();
+    await page.getByRole("tab", { name: "Inspector", exact: true }).click();
+    await page.getByRole("tab", { name: "Run data", exact: true }).click();
     const viewport = await canvas.locator(".react-flow__viewport").getAttribute("style");
     const route = page.url();
     await node.click();
@@ -139,10 +145,12 @@ for (const theme of ["light", "dark"]) {
     await expect(inspector.getByText("Choose a recorded execution to inspect its evidence.")).toBeVisible();
     await inspector.getByRole("button", { name: "10 recorded executions", exact: false }).click();
     await inspector.getByRole("list", { name: "Recorded activity executions" }).getByRole("button", { name: /^Execution 4 Completed/ }).click();
+    await inspector.getByRole("tablist", { name: "Activity execution details" }).getByRole("tab", { name: "Inputs", exact: true }).click();
     await expect(inspector.getByText("Current: 4", { exact: true })).toBeVisible();
     await expect(node).toHaveAccessibleName(/Run state: Completed\. Selected/);
     await inspector.getByRole("tab", { name: "Configuration", exact: true }).click();
     await inspector.getByRole("tab", { name: "Run data", exact: true }).click();
+    await inspector.getByRole("tablist", { name: "Activity execution details" }).getByRole("tab", { name: "Inputs", exact: true }).click();
     await expect(inspector.getByText("Current: 4", { exact: true })).toBeVisible();
     await inspector.getByRole("button", { name: "Execution 4 of 10", exact: false }).click();
     await inspector.getByRole("list", { name: "Recorded activity executions" }).getByRole("button", { name: /^Execution 10 Completed/ }).click();
@@ -176,18 +184,25 @@ for (const theme of ["light", "dark"]) {
     const node = page.getByLabel("Workflow canvas", { exact: true }).getByRole("button", { name: /^Notify buyer\. Node ID:/ });
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+    await page.getByRole("tab", { name: "Inspector", exact: true }).click();
+    await page.getByRole("tab", { name: "Run data", exact: true }).click();
+    await page.getByRole("tab", { name: "Inspector", exact: true }).click();
     await node.click();
     const inspector = page.getByLabel("Inspector panel", { exact: true });
     await inspector.getByRole("button", { name: "10 recorded executions", exact: false }).click();
     await inspector.getByRole("list", { name: "Recorded activity executions" }).getByRole("button", { name: /^Execution 4 Completed/ }).click();
+    const activityDetailsTabs = inspector.getByRole("tablist", { name: "Activity execution details" });
+    await activityDetailsTabs.getByRole("tab", { name: "Inputs", exact: true }).click();
     await expect(inspector.getByText("Current: 4", { exact: true })).toBeVisible();
     const overview = await inspector.locator(".wf-activity-overview").elementHandle();
+    await activityDetailsTabs.getByRole("tab", { name: "Overview", exact: true }).click();
     const details = inspector.getByText("Execution details", { exact: true });
     await details.click();
+    await activityDetailsTabs.getByRole("tab", { name: "Inputs", exact: true }).click();
     const previous = inspector.locator(".wf-activity-overview + .wf-execution-browser").getByRole("button", { name: "Previous activity execution", exact: true });
     await previous.click();
     await expect(inspector.locator(".wf-execution-content")).toHaveAttribute("aria-busy", "true");
-    await expect(inspector.getByText("Loading requested execution… Showing the previous execution.")).toBeVisible();
+    await expect(inspector.locator(".wf-execution-loading")).toBeVisible();
     await expect(inspector.getByText("Current: 4", { exact: true })).toBeVisible();
     await expect(inspector.getByRole("button", { name: "Execution 4 of 10", exact: false })).toBeVisible();
     await expect(previous).toBeFocused();

@@ -95,6 +95,67 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Contains("actual workflow candidate", exception.Message);
     }
 
+    [Fact]
+    public async Task Declared_input_literal_default_and_nullability_are_projected_into_the_executable_contract()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        version.State = version.State! with
+        {
+            Inputs = [new InputDefinition(
+                "input-1",
+                "Greeting",
+                new TypeReference("String"),
+                null,
+                "Greeting",
+                null,
+                IsNullable: true,
+                IsRequired: true,
+                DefaultValue: JsonSerializer.SerializeToElement("hello"),
+                DefaultSyntax: "Literal")]
+        };
+        var versions = new FakeActivityVersionStore([_writeLineActivity]);
+        var compiler = TestCompiler.Create(new FakeVersionStore(version), versions, _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var input = Assert.Single(executable.InputContract!.Inputs);
+        Assert.True(input.IsNullable);
+        Assert.True(input.IsRequired);
+        Assert.Equal("hello", input.DefaultValue!.Value.GetString());
+    }
+
+    [Theory]
+    [InlineData("Int32", "10", "0", false)]
+    [InlineData("Boolean", "true", "false", false)]
+    [InlineData("String", "\"hello\"", "\"\"", false)]
+    [InlineData("Int32", "null", "0", true)]
+    public async Task Persisted_literal_defaults_survive_compilation_reload_and_runtime_resolution(string alias, string defaultJson, string overrideJson, bool isNullable)
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var declaration = new InputDefinition("input-1", "value", new TypeReference(alias), null, "Value", null,
+            IsNullable: isNullable, IsRequired: !isNullable,
+            DefaultValue: JsonSerializer.Deserialize<JsonElement>(defaultJson), DefaultSyntax: "Literal");
+        var savedDeclaration = JsonSerializer.Deserialize<InputDefinition>(JsonSerializer.Serialize(declaration, options), options)!;
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        version.State = version.State! with { Inputs = [savedDeclaration] };
+        var versions = new FakeActivityVersionStore([_writeLineActivity]);
+        var registry = TestWellKnownTypeRegistry.Create();
+        var compiler = TestCompiler.Create(new FakeVersionStore(version), versions, _activityStructureService, registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var contract = JsonSerializer.Deserialize<WorkflowExecutableInputContract>(JsonSerializer.Serialize(executable.InputContract, options), options)!;
+        var validator = new WorkflowExecutableInputValidator(registry);
+        var omitted = validator.Validate(contract, []);
+        var overridden = validator.Validate(contract,
+            [new KeyValuePair<string, JsonElement>("value", JsonSerializer.Deserialize<JsonElement>(overrideJson))]);
+
+        Assert.True(omitted.IsValid);
+        Assert.Equal(defaultJson, omitted.NormalizedInputs["value"].GetRawText());
+        Assert.True(overridden.IsValid);
+        Assert.Equal(overrideJson, overridden.NormalizedInputs["value"].GetRawText());
+    }
+
     private sealed class ObservingDataAuthority(IActivityDataSelectionAnalyzer inner) : IActivityDataSelectionAnalyzer
     {
         internal List<string> Revisions { get; } = [];

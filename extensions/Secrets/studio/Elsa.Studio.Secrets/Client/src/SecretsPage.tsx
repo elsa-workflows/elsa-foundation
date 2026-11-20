@@ -385,15 +385,14 @@ function SecretNotification({ message, onDismiss }: { message: string; onDismiss
 
 function FilterSelect({ label, value, options, helpText, description, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; helpText?: string; description?: string; onChange(value: string): void }) {
   const id = useId();
-  const helpId = helpText ? `${id}-help` : undefined;
-  const descriptionId = description ? `${id}-description` : undefined;
+  const combinedDescription = helpText ? (description ? `${helpText}. ${description}` : helpText) : description;
+  const descriptionId = combinedDescription ? `${id}-description` : undefined;
   return (
-    <StudioField className="secrets-filter" controlId={id} label={label} meta={helpText ? <small className="secrets-filter-hint" id={helpId}>{helpText}</small> : null}>
-      <select id={id} value={value} aria-describedby={[helpId, descriptionId].filter(Boolean).join(" ") || undefined} onChange={event => onChange(event.target.value)}>
+    <StudioField className="secrets-filter" controlId={id} label={label} description={combinedDescription ? <small id={descriptionId}>{combinedDescription}</small> : undefined}>
+      <select id={id} value={value} aria-describedby={descriptionId} onChange={event => onChange(event.target.value)}>
         <option value="">All</option>
         {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
-      {description ? <span className="secrets-visually-hidden" id={descriptionId}>{description}</span> : null}
     </StudioField>
   );
 }

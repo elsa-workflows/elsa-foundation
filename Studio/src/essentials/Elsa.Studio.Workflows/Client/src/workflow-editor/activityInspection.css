@@ -59,6 +59,47 @@
   color: var(--studio-text-muted);
 }
 
+.wf-input-inspection-authored-fallback {
+  display: grid;
+  gap: 4px;
+  font-family: var(--studio-font-mono);
+  font-size: 13px;
+}
+
+.wf-input-inspection-authored-fallback small {
+  color: var(--studio-text-muted);
+  font-family: var(--studio-font-sans);
+  font-size: 11px;
+}
+
+.wf-input-inspection-authored-fallback :is(code, pre) {
+  margin: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.wf-input-inspection-authored-fallback pre {
+  max-height: 220px;
+}
+
+.wf-activity-inspection-tabs {
+  min-width: 0;
+  margin-bottom: var(--studio-space-2);
+  overflow-x: auto;
+}
+
+.wf-activity-inspection-tabs > button {
+  flex: 0 0 auto;
+}
+
+.wf-activity-inspection-tab-panel {
+  min-width: 0;
+}
+
+.wf-activity-inspection-tab-panel[hidden] {
+  display: none;
+}
+
 .wf-input-inspection-info.studio-button {
   width: 30px;
   min-height: 30px;

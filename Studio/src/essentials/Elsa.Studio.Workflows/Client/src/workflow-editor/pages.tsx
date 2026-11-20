@@ -1,4 +1,4 @@
-import { StudioPageHeader } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
 import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioWeaverRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution, StudioIncidentRootCauseProviderContribution } from "@elsa-workflows/studio-sdk";
@@ -196,10 +196,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
       title={runTitle}
       workbench
       context={workflowExecutionId ? (
-        <div className="wf-page-context">
-          <span>Workflow Instance ID</span>
-          <code title={workflowExecutionId}>{workflowExecutionId}</code>
-        </div>
+        <CopyableIdentifier label="Workflow Instance ID" value={workflowExecutionId} />
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">

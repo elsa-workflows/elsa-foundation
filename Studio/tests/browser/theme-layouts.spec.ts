@@ -83,9 +83,10 @@ test("classic layout keeps the block toolbar on one row until a block is selecte
   await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
   const toolbar = page.getByRole("group", { name: "Named block commands", exact: true });
   await expect(toolbar).toBeVisible();
-  // Promote acts on one named block, so it only joins the toolbar then (#4712).
-  await expect(toolbar.getByRole("button", { name: "Promote to reusable activity…", exact: true })).toHaveCount(0);
-  // A command that wraps the toolbar onto a second row takes that row from the docked canvas.
+  await toolbar.getByRole("button", { name: "Blocks", exact: true }).click();
+  // Promote acts on one named block, so it only joins the menu when a block is selected.
+  await expect(page.getByRole("menuitem", { name: "Promote to reusable activity…", exact: true })).toHaveCount(0);
+  // The compact trigger keeps the toolbar to one row and preserves the docked canvas space.
   const rows = await toolbar.evaluate(element =>
     new Set([...element.querySelectorAll<HTMLElement>(":scope > button")].filter(button => button.offsetWidth > 0)
       .map(button => Math.round(button.getBoundingClientRect().top))).size);

@@ -323,6 +323,7 @@ export function ActivityGraphImplementationEditor({
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [diagnosticFocusVersion, setDiagnosticFocusVersion] = useState(0);
+  const [canvasToolsHost, setCanvasToolsHost] = useState<HTMLElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const pendingDiagnosticFocusRef = useRef<{
     target: "root" | string;
@@ -1049,6 +1050,7 @@ export function ActivityGraphImplementationEditor({
           }}
         />
         <NativeBlockCommands
+          toolbarHost={canvasToolsHost}
           endpoint={context}
           promotion={blockPromotion}
           context={{
@@ -1073,7 +1075,7 @@ export function ActivityGraphImplementationEditor({
             if (node && child) enterChildSlot(nodeId, child, slotCrumbLabel(resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(nodeId), catalogByVersion.get(node.activityVersionId), nodeId), child));
           }}
         />
-        <div className="ad-graph-scope-label"><span>{resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(owner.nodeId), ownerCatalogItem, "Root")}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || isSequenceSlot || !interactions.canAutoLayout}><Network size={16} /></button></div></div>
+        <div className="ad-graph-scope-label"><span>{resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(owner.nodeId), ownerCatalogItem, "Root")}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || isSequenceSlot || !interactions.canAutoLayout}><Network size={16} /></button><span ref={setCanvasToolsHost} className="wf-canvas-tools-slot" /></div></div>
         {isSequenceSlot ? <SequenceDesigner
           nodes={nodes.filter(node => node.type !== "bpmnElement")}
           selectedNodeId={selectedNodeId}

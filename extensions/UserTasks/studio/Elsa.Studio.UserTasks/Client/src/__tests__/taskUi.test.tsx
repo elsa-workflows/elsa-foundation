@@ -97,8 +97,27 @@ it("takes forms-only users directly to their permitted form workspace without re
   await act(async () => {});
   expect(container.textContent).toContain("Reusable task forms");
   await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("No reusable forms yet"); });
-  await click("Create form version"); expect(container.textContent).toContain("Publish a basic form version");
+  await click("Create form version"); expect(container.textContent).toContain("Design the form");
   expect(get.mock.calls.some(([path]) => path.startsWith("/runtime/user-tasks?"))).toBe(false);
+});
+
+it("keeps recipient preview responses out of the published form definition", async () => {
+  const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true } : { items: [] });
+  const post = vi.fn().mockResolvedValue({});
+  await act(async () => root.render(<FormsPage api={api(get, post)} />));
+  await click("Create form version");
+  const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
+  await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
+  await click("Text input"); await click("Preview form");
+  await input(container.querySelector<HTMLInputElement>(".user-task-designer__recipient-preview input")!, "preview-only response");
+  await click("Edit fields"); await click("Publish form version");
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(post.mock.calls[0][1]).toMatchObject({
+    id: "purchase",
+    name: "Purchase response",
+    fields: [{ key: "text1", label: "Text field 1", kind: "text", required: false, readOnly: false }]
+  });
+  expect(JSON.stringify(post.mock.calls[0][1])).not.toContain("preview-only response");
 });
 
 it("makes an unanswered boolean explicit and submits a selected No as false", async () => {
@@ -158,7 +177,7 @@ it("publishes a reusable basic form through the structured field editor", async 
   await click("Create form version");
   const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
   await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
-  await click("Add field"); await input(field("Key"), "AccountID"); await input(field("Label"), "Account");
+  await click("Text input"); await input(field("Key"), "AccountID"); await input(field("Label"), "Account");
   await click("Publish form version");
   expect(post.mock.calls[0][1]).toMatchObject({ id: "purchase", version: "1", name: "Purchase response", fields: [{ key: "AccountID", kind: "text" }] });
   expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Form version published.", message: "The immutable form version is available to new tasks." });

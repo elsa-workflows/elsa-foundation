@@ -246,16 +246,22 @@ public sealed class WorkflowExecutableCompilerGoldenTests
                     version = executable.InputContract.Version,
                     inputs = executable.InputContract.Inputs
                         .OrderBy(input => input.Name, StringComparer.Ordinal)
-                        .Select(input => new
+                        .Select(input =>
                         {
-                            name = input.Name,
-                            type = new
+                            var declaration = new Dictionary<string, object?>
                             {
-                                alias = input.Type.Alias,
-                                collectionKind = input.Type.CollectionKind.ToString()
-                            },
-                            isRequired = input.IsRequired,
-                            defaultValue = input.DefaultValue
+                                ["name"] = input.Name,
+                                ["type"] = new
+                                {
+                                    alias = input.Type.Alias,
+                                    collectionKind = input.Type.CollectionKind.ToString()
+                                },
+                                ["isRequired"] = input.IsRequired,
+                                ["defaultValue"] = input.DefaultValue
+                            };
+                            if (input.IsNullable)
+                                declaration["isNullable"] = true;
+                            return declaration;
                         })
                 },
             dependencies = executable.Dependencies

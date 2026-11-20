@@ -1,4 +1,5 @@
 import React from "react";
+import { flushSync } from "react-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DecisionsPage } from "../DecisionsPage";
 import { CasePanel } from "../CasePanel";
@@ -10,6 +11,14 @@ import { asset, button, click, render, select, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
 function mount(content: React.ReactNode) { const result = render(content); disposals.push(result.dispose); return result; }
+function gridCell(host: HTMLElement, label: string) { return Array.from(host.querySelectorAll<HTMLElement>('[role="gridcell"]')).find(cell => cell.getAttribute("aria-label") === label)!; }
+function editGridCell(host: HTMLElement, label: string, value: string) {
+  const cell = gridCell(host, label); click(cell);
+  flushSync(() => cell.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
+  const editor = host.querySelector<HTMLInputElement>('[aria-label="Edit selected cell"]')!; type(editor, value);
+  flushSync(() => editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
+  return gridCell(host, label);
+}
 describe("Decisions Studio journeys", () => {
   it("does not redirect entry from Description when delayed initial focus finally runs", async () => {
     const frames: FrameRequestCallback[] = [];
@@ -66,7 +75,7 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(); api.backend.http.postJson.mockResolvedValue(asset as never);
     const navigate = (path: string) => update(<DecisionsPage api={api} navigate={navigate} assetId={new URL(path, "https://studio.test").searchParams.get("decision") ?? undefined} />);
     const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!, asset.name);
     click(button(host, "Save decision"));
     await vi.waitFor(() => expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Saved draft"));
@@ -90,7 +99,7 @@ describe("Decisions Studio journeys", () => {
   it("creates a decision through the authenticated API and navigates after the write settles", async () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
     api.backend.http.postJson.mockResolvedValue(asset as never);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Unsaved decision"); expect(host.querySelector(".decision-draft-bar")?.textContent).not.toContain("Saved draft");
     const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
     type(name, "Purchase approval"); click(button(host, "Save decision"));
@@ -101,7 +110,7 @@ describe("Decisions Studio journeys", () => {
   });
   it.each(["description", "sensitivity"])("guards a new decision's %s-only edit before its name is entered", async field => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     if (field === "description") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Only unsaved metadata");
     else click(host.querySelector<HTMLInputElement>('.decision-metadata input[type="checkbox"]')!);
     const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(probe); expect(probe.defaultPrevented).toBe(true);
@@ -112,14 +121,15 @@ describe("Decisions Studio journeys", () => {
   });
   it("preserves unsaved table work after a conflicting save and supports explicit reload", async () => {
     const api = stubApi(), { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    const condition = host.querySelector<HTMLInputElement>('[aria-label="Rule 1, input amount"]')!; type(condition, "<= 1000");
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+    editGridCell(host, "Rule 1, input amount", "<= 1000");
+    expect(gridCell(host, "Rule 1, input amount").innerHTML).toContain("<= 1000");
     const failure = Object.assign(new Error("The draft changed."), { status: 409 }); api.backend.http.putJson.mockRejectedValue(failure as never);
     click(button(host, "Save decision"));
     await vi.waitFor(() => expect(host.textContent).toContain("Your unsaved work is still here"));
-    expect(condition.value).toBe("<= 1000");
+    expect(gridCell(host, "Rule 1, input amount").innerHTML).toContain("<= 1000");
     click(button(host, "Reload server draft"));
-    await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>('[aria-label="Rule 1, input amount"]')?.value).toBe("-"));
+    await vi.waitFor(() => expect(gridCell(host, "Rule 1, input amount").innerHTML).toContain("-"));
   });
   it("does not render protected source or enable writes for a read-only principal", async () => {
     const api = stubApi(["read"]); api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [] } : { ...asset, xml: null } as never);
@@ -184,8 +194,8 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(), published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
     api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? published : asset);
     api.backend.http.postJson.mockResolvedValue(asset as never); const navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId="v1" />);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    expect(host.querySelector<HTMLInputElement>('[aria-label="Rule 1, input amount"]')!.disabled).toBe(true);
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+    expect(host.querySelector('[role="grid"]')?.getAttribute("aria-readonly")).toBe("true");
     click(button(host, "Clone to draft"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
     expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/clone-to-draft", expect.objectContaining({ expectedRevision: "r1", versionId: "v1" }));
@@ -196,7 +206,7 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(), navigate = vi.fn();
     api.backend.http.postJson.mockImplementation(async path => path.endsWith("/validate") ? { success: true, diagnostics: [] } : { id: "v1", number: 1 });
     const { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} />);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     click(button(host, "Validate"));
     await vi.waitFor(() => expect(host.textContent).toContain("The saved draft is valid for the supported DMN profile."));
     expect(api.notifications.notify).not.toHaveBeenCalled();
@@ -209,7 +219,7 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi();
     api.backend.http.putJson.mockRejectedValueOnce(new Error("Save unavailable")).mockResolvedValueOnce({ ...asset, description: "Updated", revision: "r2" } as never);
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     const description = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!;
     type(description, "Updated"); click(button(host, "Save decision"));
     await vi.waitFor(() => expect(host.textContent).toContain("Save unavailable"));
@@ -223,7 +233,7 @@ describe("Decisions Studio journeys", () => {
     api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? published : asset);
     api.dialogs.confirm.mockResolvedValue(false);
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} versionId="v1" />);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     click(button(host, "Clone to draft")); await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled());
     expect(api.backend.http.postJson).not.toHaveBeenCalled(); expect(api.notifications.notify).not.toHaveBeenCalled();
   });
@@ -237,7 +247,7 @@ describe("Decisions Studio journeys", () => {
     const request = operation === "save" ? api.backend.http.putJson : api.backend.http.postJson;
     request.mockImplementation(() => pending);
     const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId={operation === "clone" ? "v1" : undefined} />);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     if (operation === "save") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Updated");
     click(button(host, operation === "save" ? "Save decision" : operation === "clone" ? "Clone to draft" : "Publish"));
     await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
@@ -303,8 +313,8 @@ describe("Decisions Studio journeys", () => {
   });
   it("blocks dirty navigation probes without showing a dialog and confirms an actual leave", async () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    type(host.querySelector<HTMLInputElement>('[aria-label="Rule 1, input amount"]')!, "<= 1000");
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+    editGridCell(host, "Rule 1, input amount", "<= 1000");
     const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(probe);
     expect(probe.defaultPrevented).toBe(true); expect(api.dialogs.confirm).not.toHaveBeenCalled();
     window.dispatchEvent(new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "navigate" } }));
@@ -366,8 +376,8 @@ describe("Decisions Studio journeys", () => {
   });
   it("keeps a dirty workspace tab open on close intent without navigating to another screen", async () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    type(host.querySelector<HTMLInputElement>('[aria-label="Rule 1, input amount"]')!, "<= 1000");
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+    editGridCell(host, "Rule 1, input amount", "<= 1000");
     const close = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "close" } }); window.dispatchEvent(close);
     expect(close.defaultPrevented).toBe(true); await new Promise(resolve => setTimeout(resolve, 0)); expect(navigate).not.toHaveBeenCalled(); expect(api.dialogs.confirm).not.toHaveBeenCalled();
   });
