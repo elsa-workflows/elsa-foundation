@@ -18,24 +18,26 @@ R-1 to R-14):
 - **Conversions derive from it.** Every data-to-.NET conversion on the value path uses the target type's conversion
   contract (default or scoped), in both directions. The default is camelCase with exact matching; a scoped contract is
   an attribute on the type or input member, with nothing stamped into executables (Q9). A contract-aware pre-scan
-  warns about unmatched keys, and a date/time value without an offset needs an explicit interpretation in the
-  contract, else it is refused; there is no host-wide run-time date setting (Q10).
-- **Hash inputs stay frozen.** They keep their own options as register entries; changing one is a separate decision.
-  Equality checks of serialized values move to one canonical-form comparison (ADR 0091 decision 3), which the
-  ADR 0092 value digest (`VariableValueDigest`) shares with every digest unchanged.
-- **Git files keep data text.** The Git hash keeps its current, registered input.
+  warns about unmatched keys, and a date/time value without an offset is refused; there is no date interpretation
+  setting for run-time values (Q10). Elsa's own APIs accept dates only with `Z` or an offset.
+- **One hash input.** Every hash over JSON moves once to `JsonHashInput`: explicit settings, SHA-256 over the
+  canonical form, a golden test per hash, and a guard that fails on a hash that bypasses it (Q11). Equality checks of
+  serialized values use the same canonical form (ADR 0091 decision 3), which the ADR 0092 value digest
+  (`VariableValueDigest`) shares with every digest unchanged.
+- **Git files keep data text.** The Git hash is `JsonHashInput` over the file.
 - **The runtime store gets the baseline writer.** It gains a byte-level golden fixture. There is no version bump and
   no migration if fixed examples show old and new code read old and new rows the same; otherwise a stamped change.
 - **A guard reports deviations.** An architecture test combines a source scan with reflection, and reads the register
   in `docs/serialization.md` plus a legacy list (ratchet file) for option-less calls on Elsa's own contracts.
 - **The Elsa 3 converter** rewrites literal keys that differ only in case, and gives date literals their offset from
   S-1's one date interpretation setting.
-- **Studio's Run dialog** sends date inputs with the browser's offset.
+- **Studio has a time zone setting** (default: the browser's zone). Every date it shows or sends uses that zone with
+  a visible offset; the engine stays in UTC.
 
 ## Technical Context
 
-**Language/Version**: C# / .NET 10 (`global.json` SDK 10.0.300); Studio TypeScript (the Run dialog's date input,
-FR-016b; no other change, R-3).
+**Language/Version**: C# / .NET 10 (`global.json` SDK 10.0.300); Studio TypeScript (the time zone setting, a shared
+date formatter and the Run dialog's date input, FR-016b; no other change, R-3).
 
 **Primary Dependencies**: System.Text.Json, NativeEndpoints 1.0.0-preview.6, EF Core (four providers), CShells
 features.
@@ -55,7 +57,7 @@ ExtensionBuilder extensions.
 than today. The unmatched-key pre-scan is one pass over the keys of each converted object.
 
 **Constraints**:
-- No ADR 0038 artifact hash and no stored activity-definition hash changes (preimages frozen, R-1).
+- Hashes change once, to `JsonHashInput` (Q11), with fixtures and goldens regenerated; after that a golden test pins each one.
 - Stored rows stay readable by old and new code (R-9).
 - Elsa 3 knowledge stays in `Extensions/Elsa3` (§E2.7).
 
@@ -78,7 +80,7 @@ spec. The remaining option-less calls on Elsa's own contracts are listed in the 
 | §E7 CI tiers | PASS | The architecture guard runs in the Fast tier, as the other baseline guards do. |
 | §2.22 docs | ACTION | `docs/serialization.md` gains the baseline, the data rule, the register and the ratchet. Its FastEndpoints wording goes. The glossary gains *baseline* and *baseline deviation*. |
 | §2.23.1–§2.23.2 tests | PASS | One test per acceptance scenario, the guard's negative tests, and hash-stability tests. |
-| ADR 0038, spec 180 FR-028 | PASS | Identity-hashed formats are untouched; preimages are register entries. |
+| ADR 0038, spec 180 FR-028 | PASS | Artifact hashes change once, in this spec, as the explicit hash-input decision ADR 0091 decision 1 allows (Q11). Before the first stable release that costs regenerated fixtures and goldens, not an in-place format change for stored releases. |
 | ADR 0091, ADR 0046 *Adapter rules* and *Dates* | PASS | Both merged into the initiative branch (`771ba6679f`; #3422 on 16 Nov). Findings F-1 to F-6 are in ADR 0091. |
 | Compatibility from first stable | PASS | No shim, upcaster or format-version check; stored fixtures and migrations are regenerated in place (FR-022a, FR-023). |
 
@@ -88,16 +90,17 @@ spec. The remaining option-less calls on Elsa's own contracts are listed in the 
 |---|---|---|
 | P-1 | `JsonBaseline` in `Elsa.Serialization.Core` | FR-001 to FR-003, FR-007, FR-009. The baseline is built once and `MakeReadOnly()`; `JsonBaseline.CreateCopy()` returns a mutable copy. Its `RawJsonElementConverter` uses `WriteRawValue(GetRawText(), skipInputValidation: true)`. |
 | P-2 | API contexts derive from it | FR-002, FR-006, FR-017. Owner `WireContext`s and every `MapEndpointGroup` context get a constructed instance from a copy (R-5). Generated `.Default` instances are replaced by constructed ones. The `ConfigureHttpJsonOptions` calls insert resolvers only (R-6). |
-| P-3 | Conversion contracts | FR-004, FR-004a, FR-012 to FR-014, FR-016. `JsonConversionContract` (default and scoped) builds a baseline copy with the contract's naming, matching, mappings and date/time interpretation, and is used at every R-10 site, in both directions. The default is camelCase with exact matching and no date interpretation. A scoped contract is read from one attribute, `[JsonConversion]`, on the type or the input member, plus `[JsonPropertyName]`; it is not stamped into the executable or checked at run time (Q9). Contracts are cached per type and member. The date/time converter uses the value's offset or the contract's declared source time zone or assume-UTC policy, and refuses otherwise (Q10). |
+| P-3 | Conversion contracts | FR-004, FR-004a, FR-012 to FR-014, FR-016. `JsonConversionContract` (default and scoped) builds a baseline copy with the contract's naming, matching and mappings, and is used at every R-10 site, in both directions. The default is camelCase with exact matching. A scoped contract is read from one attribute, `[JsonConversion]`, on the type or the input member, plus `[JsonPropertyName]`; it is not stamped into the executable or checked at run time (Q9). Contracts are cached per type and member. Dates go through `StrictDateTimeConverters`: an offset or `Z` is required, a `DateTime` is normalized to UTC, a `DateTimeOffset` keeps its offset; otherwise `json-datetime-offset-missing` (Q10). |
 | P-4 | Unmatched-key pre-scan | FR-005, Q1, R-13. `UnmatchedMemberScanner` runs against the effective contract (naming, case sensitivity, mappings, dictionaries, extension data); a custom converter supplies matching information or the type is reported as not covered. Codes: `json-unmatched-member` (warning), `json-unmatched-member-refused` (strict contract), `json-unmatched-coverage-unavailable` (info). |
-| P-5 | Hash inputs frozen | FR-021, FR-022a, Q4, R-1. Each existing hash input keeps its options and preimage and gets a register entry with its input contract. Equality checks that compare serialized text move to `JsonCanonicalForm` (FR-021a). Direct-text hashes are listed and stay as they are; changing one is a separate decision. The Git content hash and the design fingerprint keep their functions; fixtures whose `IPayloadSerializer` text gains null members are regenerated in place. |
+| P-5 | One hash input | FR-021, FR-022, FR-022a, Q11, R-1, R-14. `JsonHashInput.Hash<T>(value)` serializes with its own explicit options (camelCase, nulls kept, string enums, max depth 1000; no reference to `Web`, `.Default` or the baseline) and hashes the canonical form with SHA-256; `Hash(JsonElement)` skips the serialization. Every hash over JSON moves to it, including `WorkflowExecutableHasher` and its context, `ActivityContract`, `DefaultActivityDefinitionHasher`, `ExecutableActivityTemplateBehaviorHasher`, the design-store and library fingerprints, `GitCanonicalJson`, `EtlArtifactJson`; hand-written writers hash their output through it. `LegacyFingerprint` is deleted. Each hash gets a golden test; fixtures and goldens are regenerated once. Equality checks move to `JsonCanonicalForm.Equals`. |
 | P-5a | One canonical form | FR-021a. `JsonCanonicalForm` in `Serialization/Core/` writes the canonical form (members ordered by unescaped UTF-8 name, strings unescaped, numbers as coefficient and exponent, arrays in order, `null` members kept) and offers `Equals(JsonElement, JsonElement)`. The writer moves from `VariableValueDigest`, which then calls it; a test pins every existing digest. |
-| P-6 | Git files keep data text | FR-008, FR-022, Q5, R-7. The exporter indents with a writer that writes `JsonElement` raw. `GitCanonicalJson.HashFile` keeps its current input and is registered. |
+| P-6 | Git files keep data text | FR-008, FR-022, Q5, R-7. The exporter indents with a writer that writes `JsonElement` raw. `GitCanonicalJson.HashFile` becomes `JsonHashInput` over the parsed file. |
 | P-7 | Runtime durable writers | FR-023, Q7, R-9. `RuntimeArtifactJson` and the five store option sets derive from the baseline and register their frozen converters. Fixed serialized examples and compatibility checks show old and new code read old and new rows with the same meaning; then no migration, otherwise regenerated migrations and fixtures in place. A byte-level golden pins one stored value. |
 | P-8 | Content type | FR-010, Q6, R-12. Elsa's JSON APIs send `application/json` and `nosniff`. A workflow-authored response uses its author's content type; with none, text is `text/plain`, anything else `application/json`. |
 | P-9 | Guard and register | FR-019, FR-020, Q2, Q3. `JsonBaselineArchitectureTests` scans every source root and reads the register table in `docs/serialization.md` and the legacy list `Baselines/json-optionless-calls.txt` (may only shrink, never a workflow-data path; a new unlisted call fails). |
 | P-10 | Elsa 3 literals | FR-015, FR-016a. Both rewrites happen at literal lowering in `Extensions/Elsa3` (`Elsa3ValueFlowLowerer`, which already parses literals bound to date members). Case-only keys: the ambiguous case is refused with `ELS3-LITERAL-KEY-AMBIGUOUS`. Dates: the lowerer reads `Elsa3ConversionOptions.DateInterpretation` and `SourceTimeZone` (S-1) and writes the offset, `Z`, or refuses. |
-| P-10a | Studio Run dialog | FR-016b. `workflowRunInputs.ts` turns the `datetime-local` text into ISO 8601 with the browser's offset for that date; `WorkflowRunInputDialog.tsx` shows the zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`). Vitest covers the conversion, including a daylight-saving date. |
+| P-10a | Studio time zone | FR-016b. A `timeZone` appearance preference (`"browser"` by default, `"UTC"` or an IANA ID), on Settings › Appearance with the other preferences. One shared formatter in `workflowFormatting.tsx` (`Intl.DateTimeFormat` with `timeZone` and `timeZoneName: "longOffset"`) shows every date with its offset; the `toLocaleString()` date displays move to it. `workflowRunInputs.ts` turns `datetime-local` text into ISO 8601 with that zone's offset on that date; the dialog shows the zone. Vitest covers winter and summer dates and the UTC setting; the composed host is checked per Studio UX acceptance. |
+| P-10b | API date rule | FR-016c. The baseline carries `StrictDateTimeConverters` for Elsa's own contracts; an offset-less value fails binding with a 400 problem response carrying `json-datetime-offset-missing` and the path. Instants Elsa produces are written in UTC. |
 | P-11 | Diagnostics | [contracts/json-baseline.md](contracts/json-baseline.md). |
 
 ## Project Structure
@@ -123,6 +126,8 @@ Essentials/src/Serialization/Core/
   ├── JsonBaseline.cs                      # new: baseline, CreateCopy
   ├── RawJsonElementConverter.cs           # new
   ├── JsonCanonicalForm.cs                 # new: canonical form (moved from VariableValueDigest)
+  ├── JsonHashInput.cs                     # new: the one hash input over JSON
+  ├── StrictDateTimeConverters.cs          # new: offset required (own contracts and conversions)
   ├── JsonConversionAttribute.cs           # new: scoped conversion contract
   └── UnmatchedMemberScanner.cs            # new
 Essentials/src/Serialization/SystemText/Services/JsonPayloadSerializer.cs   # derive, keep nulls
@@ -142,7 +147,9 @@ Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/
 Essentials/src/Workflows/Design/Reconciliation/Git/Services/{GitCanonicalJson,GitWorkflowExporter}.cs
 Essentials/src/Workflows/Runtime/Core/Models/VariableValueDigest.cs       # uses JsonCanonicalForm
 Extensions/Elsa3/src/Mapping/Services/Elsa3ValueFlowLowerer.cs             # case-only keys, date literals
-Studio/src/essentials/Elsa.Studio.Workflows/Client/src/{workflowRunInputs.ts,workflow-editor/WorkflowRunInputDialog.tsx}
+Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/{settings/AppearancePage.tsx,themes/appearance.ts}  # time zone setting
+Studio/src/essentials/Elsa.Studio.Workflows/Client/src/{workflowFormatting.tsx,workflowRunInputs.ts,workflow-editor/WorkflowRunInputDialog.tsx}
+Studio/src/**/  # the ~30 `toLocaleString()` date displays move to the shared formatter
 Extensions/Etl/src/Core/EtlArtifactJson.cs                 # canonical or registered
 Essentials/tests/Architecture/Tests/JsonBaselineArchitectureTests.cs       # new
 Essentials/tests/Architecture/Tests/Baselines/json-optionless-calls.txt    # new
@@ -150,7 +157,7 @@ docs/serialization.md
 Essentials/apps/Elsa.Workbench/Constants/JsonSerializerOptionsCache.cs     # delete
 ```
 
-**Structure Decision**: existing projects only. There are five new files in `Elsa.Serialization.Core`, one new test
+**Structure Decision**: existing projects only. There are seven new files in `Elsa.Serialization.Core`, one new test
 class and one ratchet file.
 
 ## Complexity Tracking

@@ -24,10 +24,9 @@ shows each new test failing without the change.
   landed
 - [ ] T002 Confirm that the shared-baseline pattern passed the framework §2.24.3 gate with ADR 0091 and is listed in
   §2.24.2 (`.specify/memory/constitution-framework.md`). If not, stop and raise it
-- [ ] T003 Record the current hashes as a baseline for SC-004 and US4 scenario 3: every ADR 0038 artifact hash in the
-  workflow fixtures (`Essentials/tests/Workflows/Fixtures/legacy-set-v1.json`, `WorkflowExecutableCompilerGoldenTests`),
-  every `ActivityContract.SchemaFingerprint` in them, and the output of every other registered hash input (R-1, R-14)
-  for a fixed input
+- [ ] T003 List every hash or fingerprint whose input is JSON (research R-1 and R-14, then a search for every
+  `SHA256`, `IncrementalHash` and `XxHash` call fed by serialized JSON) as the T023 checklist, with the fixtures and
+  goldens that pin each one
 
 ## Phase 2: Foundational (blocks every story)
 
@@ -99,11 +98,14 @@ shows each new test failing without the change.
   case-insensitive contract, explicit mappings, dictionaries, extension data (not reported), a custom converter
   (coverage unavailable, no false warnings), a strict contract (refused), a missing required member (fails)
 - [ ] T015 [US3] Add `JsonConversionContract` (default and scoped) and `JsonConversionAttribute` in
-  `Serialization/Core/`. The default is camelCase, exact, warn, no date interpretation; the attribute on a type or
-  input member selects naming, matching, unmatched-member handling and date interpretation (FR-004, FR-004a); cache
-  per type and member; nothing is stamped into the executable. Its date/time converter: offset used as given; no
-  offset → the declared source time zone or explicit assume-UTC policy, else `json-datetime-interpretation-missing`;
-  never server-local or implicit UTC (FR-016, Q8, Q10)
+  `Serialization/Core/`. The default is camelCase, exact, warn; the attribute on a type or input member selects
+  naming, matching and unmatched-member handling (FR-004, FR-004a); cache per type and member; nothing is stamped into
+  the executable. Add `StrictDateTimeConverters` (also used by the baseline): `Z` or an offset required, else
+  `json-datetime-offset-missing`; a `DateTime` normalized to UTC, a `DateTimeOffset` keeps its offset; `DateOnly` and
+  `TimeOnly` as FR-016 states (FR-016, FR-016c, Q8, Q10)
+- [ ] T015a [US3] FR-016c: test that a start request with an offset-less `DateTime` input, and an own-contract
+  `DateTimeOffset` field without an offset, get 400 with `json-datetime-offset-missing` and the path (US3 scenario
+  12), and that instants Elsa returns are UTC
 - [ ] T016 [US3] Move every value-path conversion of research R-10 to the target type's conversion contract, calling
   the scanner on reads (FR-012 to FR-014a, FR-025 codes from the contract):
   - `ActivityValueJson.Options` (used by `ActivityCompletionProjector.cs` L61 and `ActivityInputHydrator.cs` L109):
@@ -127,11 +129,16 @@ shows each new test failing without the change.
   an offset, and with no interpretation, a source time zone and an explicit assume-UTC policy, plus the UTC
   normalization and `DateOnly` cases. Scenario 6 covers FR-014a (`Boolean`, `Int32`, GUID case, `TimeSpan`). Scenario 2 pins the
   camelCase default (`customerName` fills `CustomerName`)
-- [ ] T017a [US3] Studio Run dialog (FR-016b, scenario 11): in
-  `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowRunInputs.ts` turn `datetime-local` text into ISO
-  8601 with the browser's offset for that date; in `workflow-editor/WorkflowRunInputDialog.tsx` show the zone next to
-  the control. Vitest: a winter and a summer Amsterdam date get `+01:00` and `+02:00`. Verify in the composed host
-  per Studio UX acceptance, with a screenshot in the PR
+- [ ] T017a [US3] Studio time zone setting (FR-016b, scenario 11): add a `timeZone` appearance preference
+  (`"browser"` default, `"UTC"`, or an IANA ID) to `Elsa.Studio.Hosting/Client/src/app/themes/appearance.ts` and a
+  picker to `settings/AppearancePage.tsx`; add one shared formatter to
+  `Elsa.Studio.Workflows/Client/src/workflowFormatting.tsx` that shows a date in that zone with its offset
+- [ ] T017b [US3] Move every Studio date display (`toLocaleString()` and similar on a date, about 30 files) to the
+  shared formatter, so every date shows its offset
+- [ ] T017c [US3] Run dialog: `workflowRunInputs.ts` turns `datetime-local` text into ISO 8601 with the setting's
+  offset for that date, and `WorkflowRunInputDialog.tsx` shows the zone. Vitest: a winter and a summer Amsterdam date
+  get `+01:00` and `+02:00`, and the UTC setting gives `+00:00`. Verify in the composed host per Studio UX acceptance,
+  with screenshots in the PR
 
 ## Phase 5: User Story 2 - Data comes back as sent (P1)
 
@@ -139,8 +146,8 @@ shows each new test failing without the change.
   L103–137) from the baseline, keeping `DeterministicDictionaryConverter` and `SortObjectMembers` as register entries
 - [ ] T019 [US2] Derive `EfDesignSupport.Json` / `ReadJson`
   (`Workflows/Design/Persistence/EntityFrameworkCore/Stores/EfDesignSupport.cs`) from the baseline for data reads and
-  writes, and give `Fingerprint`, `LegacyFingerprint` and `EfWorkflowLibraryStore.Fingerprint` their own frozen
-  `JsonSerializerOptions.Web` copy, registered as hash inputs, so existing markers still replay (FR-021, FR-022a)
+  writes; `Fingerprint` and `EfWorkflowLibraryStore.Fingerprint` move to `JsonHashInput` in T023, and
+  `LegacyFingerprint` is deleted (FR-021)
 - [ ] T019a [US2] Add the FR-024a test: every stored-format fixture and seed JSON read through `IPayloadSerializer`
   in the repository uses the camelCase names it writes (exact reads lose nothing)
 - [ ] T020 [US2] Derive `RuntimeArtifactJson`, `EfBookmarkStateStore.CreateJsonOptions` and the five other runtime
@@ -156,29 +163,33 @@ shows each new test failing without the change.
 
 ## Phase 6: User Story 4 - Content hashes stay stable (P2)
 
-- [ ] T023 [US4] Make every R-1 hash preimage a register entry with its frozen options, and add a guard assertion
-  that none derives from the baseline (FR-021, Q4)
-- [ ] T024 [US4] List every direct-text hash and every check that compares serialized text (research R-1). Move each
-  equality check to `JsonCanonicalForm`; keep each direct-text hash as it is, registered with its input contract (changing
-  one is a separate decision, FR-021):
+- [ ] T023 [US4] Add `JsonHashInput` in `Serialization/Core/` (explicit options, SHA-256 over `JsonCanonicalForm`) and
+  move every hash on the T003 checklist to it, including `WorkflowExecutableHasher` and its context,
+  `ActivityContract`'s fingerprint, `DefaultActivityDefinitionHasher`, `ExecutableActivityTemplateBehaviorHasher`,
+  `EfDesignSupport.Fingerprint`, `EfWorkflowLibraryStore.Fingerprint`, `GitCanonicalJson`, `EtlArtifactJson`,
+  `ActivityForkMaterialFingerprint` and `AuthoringSchemaExporter.ComputeFingerprint`; delete
+  `EfDesignSupport.LegacyFingerprint` (FR-021, Q11)
+- [ ] T023a [US4] Add a golden test per hash (fixed input → pinned value) and the guard rule: any hash call whose input
+  is serialized JSON and does not go through `JsonHashInput` fails the architecture test (US4 scenario 2)
+- [ ] T024 [US4] Move every check that compares serialized text to decide equality (research R-1) to
+  `JsonCanonicalForm.Equals` (FR-021):
   - `EfWorkflowTriggerBindingStore.cs` L44, L68;
-  - `EfWorkflowLibraryStore.cs` (operation fingerprint, Web text, compared `Ordinal`): frozen and registered;
   - `EfDesignAtomicWrite.cs` L257;
   - `ActivitiesDesignDbContext.cs` L548;
   - `EfClusterMembershipStore.cs` L182;
   - `Extensions/Etl/src/Core/EtlArtifactJson.cs` L38–39 and its `GetRawText` comparisons;
   - `EfEtlRuntimeStore.cs`;
   - `EfRuleRunStore.Delivery.cs` L183;
-  - `Elsa3ImportRecordCodec.cs` L199;
-  - `ActivityForkMaterialFingerprint.cs`;
-  - `AuthoringSchemaExporter.ComputeFingerprint`.
+  - `Elsa3ImportRecordCodec.cs` L199.
 - [ ] T025 [US4] Git: the exporter (`GitWorkflowExporter.cs` L153) indents with a writer that writes `JsonElement`
-  raw; `GitCanonicalJson.HashFile` keeps its current input and is registered. Add a round trip (write files, read them
+  raw; `GitCanonicalJson.HashFile` is `JsonHashInput` over the parsed file. Add a round trip (write files, read them
   back, compare hashes) that also asserts the data text in the file (FR-022, Q5)
-- [ ] T026 [US4] Compare every hash recorded in T003 after the change (SC-004, US4 scenario 3)
+- [ ] T026 [US4] Regenerate in place every fixture and golden whose hash moved (for example
+  `Essentials/tests/Workflows/Fixtures/legacy-set-v1.json`, `WorkflowExecutableCompilerGoldenTests`, the response-replay
+  manifests), list them in the PR, and test that equal inputs with other escaping, whitespace, member order or number
+  notation hash the same (SC-004, US4 scenario 3)
 - [ ] T026a [US4] FR-022a: test that an unchanged definition exported before and after differs only by kept null
-  members and that each file's hash is stable on re-read (US4 scenario 5); regenerate in place the Git and
-  design-store fixtures whose `IPayloadSerializer` text gains null members, and list them in the PR
+  members (US4 scenario 5), and regenerate the Git fixtures with them
 
 ## Phase 7: User Story 5 - Explicit nulls are kept (P2)
 
@@ -240,7 +251,7 @@ shows each new test failing without the change.
   - US6 is independent after T004.
   - US7 needs every earlier story.
   - US8 is independent; T032a needs S-1's `Elsa3ConversionOptions` on the initiative branch (#4855).
-  - T017a needs T015 (the refusal it avoids).
+  - T017c needs T015 (the refusal it avoids) and T017a. T023 needs T008.
 - **Within US3**: T013 runs with T016.
 - **Parallel**: T009 with T014 and T032; T034 to T036 together.
 
