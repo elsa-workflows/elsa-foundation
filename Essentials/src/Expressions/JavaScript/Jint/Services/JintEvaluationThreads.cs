@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using Jint;
@@ -7,8 +9,8 @@ using Jint.Runtime;
 namespace Elsa.Expressions.JavaScript.Jint.Services;
 
 /// <summary>
-/// Runs every Jint evaluation on a dedicated thread with a large stack, so a script cannot exhaust the stack and take
-/// the host process down (issue #4901).
+/// Runs every Jint evaluation on a dedicated thread with a large stack, so deep script calls fail the evaluation instead
+/// of exhausting the stack and taking the host process down (issue #4901).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,12 +22,22 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// just to unwind, more than a 1 MB or 1.5 MB thread-pool thread has, whatever the configured recursion limit.
 /// </para>
 /// <para>
-/// Two measures bound that cost together. The script may use at most <see cref="StackBudget"/> bytes of stack while
-/// running; past that, the next statement fails with a JavaScript <c>RangeError</c>, which Jint unwinds as an
-/// ordinary script error (no nested throws). The evaluation thread has <see cref="StackSize"/> bytes, enough to unwind
-/// a limit exception from anywhere within that budget with room to spare. Threads are reused across evaluations and retire
-/// after <see cref="IdleTimeout"/> idle; an evaluation started from inside another (on an evaluation thread) runs
-/// inline and shares the outer evaluation's budget.
+/// The measures bound that cost together:
+/// <list type="bullet">
+/// <item>The script may use at most <see cref="StackBudget"/> bytes of stack while running statements; past that, the
+/// next statement fails with a JavaScript <c>RangeError</c>, which Jint unwinds as an ordinary script error (no nested
+/// throws). The same check runs first, before the other limits, and at a host function's entry, so no limit exception
+/// and no host function error is thrown deeper than the budget.</item>
+/// <item>Calls that run no statement (in default parameters) are stopped by Jint's stack guard, also with a
+/// <c>RangeError</c>, once the thread is nearly out of stack. Jint's own recursion limit, which can fire at any depth,
+/// is replaced by the same check on the total call depth.</item>
+/// <item>The evaluation thread has <see cref="StackSize"/> bytes, enough to unwind a limit exception from anywhere
+/// within the budget with room to spare.</item>
+/// </list>
+/// Threads are reused across evaluations and retire after <see cref="IdleTimeout"/> idle; an evaluation started from
+/// inside another (on an evaluation thread) runs inline and shares the outer evaluation's budget. Recursion inside
+/// Jint's native code over deeply nested data (a very deep array or Proxy chain) runs no statement and no call, and is
+/// not bounded here.
 /// </para>
 /// </remarks>
 internal static class JintEvaluationThreads
@@ -103,24 +115,61 @@ internal static class JintEvaluationThreads
     }
 
     /// <summary>
-    /// Fails the next statement with a JavaScript <c>RangeError</c> once the evaluation is over its stack budget. It
-    /// checks nothing until it is attached to its engine, and nothing off an evaluation thread.
+    /// The stack and call-depth limits, checked before every statement and before any other constraint, so that no other
+    /// limit fires deeper than the budget. Over the stack budget (on an evaluation thread) the statement fails with a
+    /// JavaScript <c>RangeError</c>. Over <c>MaxRecursionDepth</c> calls in all, it fails with Jint's
+    /// <see cref="RecursionDepthOverflowException"/>. Jint's own recursion limit is not used: it counts each function
+    /// separately and is checked on every call, so a chain of calls that runs no statement (calls in default
+    /// parameters) can trip it at any depth. Nothing is checked until the constraint is attached to its engine.
     /// </summary>
-    internal sealed class StackBudgetConstraint : Constraint
+    internal sealed class StackBudgetConstraint(int? maxCallDepth) : Constraint
     {
+        // Jint keeps its call stack internal; the depth limit needs its size. A Jint upgrade that moves it fails the
+        // tests (JintStackExhaustionTests), not a host.
+        private static readonly FieldInfo CallStackField =
+            typeof(Engine).GetField("CallStack", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Jint's Engine.CallStack field was not found.");
+        // Compiled once: this runs before every statement.
+        private static readonly Func<object, int> CallStackCount = CompileCount();
+        private static readonly ConstructorInfo RecursionOverflow =
+            typeof(RecursionDepthOverflowException).GetConstructor(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, [CallStackField.FieldType, typeof(string)])
+            ?? throw new InvalidOperationException("Jint's RecursionDepthOverflowException constructor was not found.");
+
         private ErrorConstructor? _rangeError;
+        private object? _callStack;
 
         /// <summary>Attaches the engine before any script runs, so a script cannot replace the error it throws.</summary>
-        public void Attach(Engine engine) => _rangeError = (ErrorConstructor)engine.Global.Get("RangeError");
+        public void Attach(Engine engine)
+        {
+            _rangeError = (ErrorConstructor)engine.Global.Get("RangeError");
+            _callStack = CallStackField.GetValue(engine);
+        }
+
+        /// <summary>Checks the limits of <paramref name="engine"/> now, outside a statement (a host function's entry).</summary>
+        public static void CheckNow(Engine engine) => engine.Constraints.Find<StackBudgetConstraint>()?.Check();
 
         public override void Check()
         {
-            if (_rangeError is { } rangeError && UsedStack() > StackBudget)
+            if (_rangeError is not { } rangeError)
+                return;
+            if (UsedStack() > StackBudget)
                 throw new JavaScriptException(rangeError, StackBudgetExceededMessage);
+            if (maxCallDepth is { } max && CallStackCount(_callStack!) > max)
+                throw (Exception)RecursionOverflow.Invoke([_callStack, string.Empty]);
         }
 
         public override void Reset()
         {
+        }
+
+        private static Func<object, int> CompileCount()
+        {
+            var count = CallStackField.FieldType.GetProperty("Count", BindingFlags.Instance | BindingFlags.Public)
+                ?? throw new InvalidOperationException("Jint's call stack Count was not found.");
+            var callStack = Expression.Parameter(typeof(object));
+            return Expression.Lambda<Func<object, int>>(
+                Expression.Property(Expression.Convert(callStack, CallStackField.FieldType), count), callStack).Compile();
         }
     }
 

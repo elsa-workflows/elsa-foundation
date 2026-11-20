@@ -35,6 +35,14 @@ internal static class IsolatedJintEngine
         // Intl and Temporal take their default zone from the Temporal zone provider, not TimeZone: UTC there too.
         options.Temporal.TimeZoneProvider = UtcDefaultTimeZoneProvider.Instance;
 
+        // Issue #4901: the stack and call-depth limits come first, so no other limit fires deeper than the stack budget
+        // (see JintEvaluationThreads). Code that runs no statement (calls in default parameters) is stopped by Jint's
+        // own guard instead: a RangeError once the thread is nearly out of stack, never a hop to another thread.
+        var stackBudget = new JintEvaluationThreads.StackBudgetConstraint(
+            configured.MaxRecursionDepth is { } maxRecursionDepth && maxRecursionDepth > 0 ? maxRecursionDepth : null);
+        options.Constraint(stackBudget);
+        options.Constraints.MaxExecutionStackCount = 0;
+
         // Counted across the script: Jint's own limits restart on every call from .NET back into the engine, which every
         // host function makes. The evaluator starts the count (EvaluationLimits.Start).
         var timeout = configured.ExecutionTimeout is { } interval && interval > TimeSpan.Zero ? interval : (TimeSpan?)null;
@@ -42,15 +50,10 @@ internal static class IsolatedJintEngine
         var maxMemoryBytes = configured.MaxMemoryBytes is { } bytes && bytes > 0 ? bytes : (long?)null;
         if (timeout is not null || maxStatements is not null || maxMemoryBytes is not null)
             options.Constraint(new EvaluationLimits(timeout, maxStatements, maxMemoryBytes));
-        if (configured.MaxRecursionDepth is { } maxRecursionDepth && maxRecursionDepth > 0)
-            options.LimitRecursion(maxRecursionDepth);
         if (configured.MaxArrayLength is { } maxArrayLength && maxArrayLength > 0)
             options.Constraints.MaxArraySize = maxArrayLength;
         if (cancellationToken.CanBeCanceled)
             options.CancellationToken(cancellationToken);
-        // Issue #4901: bounds the stack a script may use on its evaluation thread (see JintEvaluationThreads).
-        var stackBudget = new JintEvaluationThreads.StackBudgetConstraint();
-        options.Constraint(stackBudget);
 
         var engine = new Engine(options);
         stackBudget.Attach(engine);

@@ -31,7 +31,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
         ArgumentNullException.ThrowIfNull(request);
         request.CancellationToken.ThrowIfCancellationRequested();
 
-        // Issue #4901: run on a large-stack evaluation thread, so no script can overflow the host's stack.
+        // Issue #4901: run on a large-stack evaluation thread, so deep script calls cannot overflow the host's stack.
         var prepared = PreparedJavaScript.Script(request.Source);
         return ValueTask.FromResult(JintEvaluationThreads.Run(() => Evaluate(request, prepared)));
     }

@@ -38,7 +38,7 @@ internal sealed class JintPortableJavaScriptEvaluator(
 
         var prepared = PreparedJavaScript.Binding(definition.Source);
 
-        // Issue #4901: run on a large-stack evaluation thread, so no expression can overflow the host's stack.
+        // Issue #4901: run on a large-stack evaluation thread, so deep calls in an expression cannot overflow the host's stack.
         return ValueTask.FromResult(JintEvaluationThreads.Run(() => Evaluate(request, prepared)));
     }
 

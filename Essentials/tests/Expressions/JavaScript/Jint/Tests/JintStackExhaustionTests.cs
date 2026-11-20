@@ -12,7 +12,8 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 /// <summary>
 /// Issue #4901: a script that goes deep must fail its evaluation, not overflow the stack and end the host process.
-/// Every case here ended the test host with "Stack overflow." before the fix, under default options. Each evaluation is
+/// Every case that evaluates a deep script here ended the process with "Stack overflow." before the fix, under default
+/// options (the nested-blocks cases with a short timeout). Each evaluation is
 /// started from a thread with a 1 MB stack, so the outcome cannot depend on how much stack the caller has.
 /// </summary>
 public sealed class JintStackExhaustionTests
@@ -86,7 +87,43 @@ public sealed class JintStackExhaustionTests
 
         var exception = await EvaluateScriptFromSmallStackAsync(source);
 
+        AssertRangeError(exception);
+    }
+
+    [Fact]
+    public async Task A_call_cycle_through_default_parameters_fails_with_a_range_error()
+    {
+        // No statement runs in the cycle, so only the stack guard on calls stops it: 30 functions, each under the
+        // recursion limit on its own, used to fill the evaluation thread's stack.
+        var functions = string.Concat(Enumerable.Range(0, 30).Select(i => $"function f{i}(x, y = f{(i + 1) % 30}(x + 1)) {{ }} "));
+
+        var exception = await EvaluateScriptFromSmallStackAsync(functions + "return f0(0);");
+
+        AssertRangeError(exception);
+    }
+
+    [Fact]
+    public async Task A_default_parameter_cycle_on_top_of_nested_statements_fails_the_evaluation()
+    {
+        // Statement lists low on the stack, then a deep chain that runs no statement: any limit exception thrown at the
+        // end of the chain has to unwind through all of those statement lists.
+        var functions = string.Concat(Enumerable.Range(0, 20).Select(i => $"function g{i}(a = g{(i + 1) % 20}()) {{ }} "));
+        var source = functions + "function f(n) { { if (n >= 250) return g0(); return f(n + 1); } } return f(0);";
+
+        var exception = await EvaluateScriptFromSmallStackAsync(source);
+
         AssertStackLimitError(exception);
+    }
+
+    [Fact]
+    public async Task The_recursion_limit_counts_every_call_on_the_stack()
+    {
+        // Jint's own limit counted each function apart, so a cycle of functions went that deep per function.
+        var exception = await EvaluateScriptFromSmallStackAsync(
+            "function a(n) { return b(n + 1); } function b(n) { return a(n + 1); } return a(0);",
+            feature => feature.MaxRecursionDepth = 50);
+
+        Assert.IsType<RecursionDepthOverflowException>(exception);
     }
 
     [Fact]
@@ -172,6 +209,12 @@ public sealed class JintStackExhaustionTests
         var exception = Assert.Throws<InvalidOperationException>(() =>
             JintEvaluationThreads.Run<int>(() => throw new InvalidOperationException("from the evaluation")));
         Assert.Equal("from the evaluation", exception.Message);
+    }
+
+    private static void AssertRangeError(Exception? exception)
+    {
+        var javaScript = Assert.IsType<JavaScriptException>(exception);
+        Assert.Equal(JintEvaluationThreads.StackBudgetExceededMessage, javaScript.Message);
     }
 
     private static void AssertStackLimitError(Exception? exception)
