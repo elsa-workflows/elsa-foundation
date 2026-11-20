@@ -34,5 +34,8 @@ describe("activity icon host override", () => {
     expect(nodePresentationStyles).toMatch(/html:not\(\[data-theme-material\]\) \.wf-node\[data-tone\] \.wf-node-icon[\s\S]*?border:\s*0[;\s]*[\s\S]*?background:\s*color-mix\(in srgb, currentColor/);
     expect(nodePresentationStyles).toMatch(/html:not\(\[data-theme-material\]\) \.wf-activity-icon\[data-tone\][\s\S]*?border-color:\s*transparent[;\s]*[\s\S]*?background:\s*color-mix\(in srgb, currentColor/);
     expect(nodePresentationStyles).toMatch(/\.wf-node-context-action:focus-visible[\s\S]*?outline:\s*2px solid var\(--studio-focus\)/);
+    expect(nodePresentationStyles).toMatch(/\.wf-node-context-toolbar-host,\s*\.wf-node-context-toolbar\s*\{[\s\S]*?pointer-events:\s*none/);
+    expect(nodePresentationStyles).toMatch(/\.wf-node-context-action,\s*\.wf-node-outcomes-popover\s*\{[\s\S]*?pointer-events:\s*auto/);
+    expect(nodePresentationStyles).toMatch(/\.wf-node-context-toolbar-host\.is-connecting \.wf-node-context-action[\s\S]*?pointer-events:\s*none/);
   });
 });

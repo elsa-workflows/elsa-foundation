@@ -22,6 +22,11 @@ html:not([data-theme-material]) .wf-activity-icon[data-tone] {
   background: color-mix(in srgb, currentColor 11%, transparent);
 }
 
+.wf-node-context-toolbar-host,
+.wf-node-context-toolbar {
+  pointer-events: none;
+}
+
 .wf-node-context-toolbar {
   display: inline-flex;
   align-items: center;
@@ -31,6 +36,20 @@ html:not([data-theme-material]) .wf-activity-icon[data-tone] {
   border-radius: var(--studio-radius);
   background: var(--studio-surface);
   box-shadow: var(--studio-shadow-sm);
+}
+
+.wf-node-context-action,
+.wf-node-outcomes-popover {
+  pointer-events: auto;
+}
+
+.wf-node-context-toolbar-host.is-connecting .wf-node-context-action,
+.wf-node-context-toolbar-host.is-connecting .wf-node-outcomes-popover {
+  pointer-events: none;
+}
+
+.wf-node-context-toolbar-host.is-connecting .wf-node-context-toolbar {
+  opacity: 0.35;
 }
 
 .wf-node-context-action {

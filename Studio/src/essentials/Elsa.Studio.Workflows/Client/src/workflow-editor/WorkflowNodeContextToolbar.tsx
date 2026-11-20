@@ -1,4 +1,4 @@
-import { NodeToolbar, Position } from "@xyflow/react";
+import { NodeToolbar, Position, useConnection } from "@xyflow/react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
 import { Copy, Plus, Power, Trash2 } from "lucide-react";
 import React from "react";
@@ -16,6 +16,7 @@ export function WorkflowNodeContextToolbar({ nodeId, data, selected, position = 
   offset?: number;
 }) {
   const actions = React.useContext(WorkflowNodeActionsContext);
+  const connecting = useConnection(connection => connection.inProgress);
   const [outcomesOpen, setOutcomesOpen] = React.useState(false);
   const [focusedActionIndex, setFocusedActionIndex] = React.useState(0);
   const toolbarRef = React.useRef<HTMLDivElement>(null);
@@ -103,7 +104,13 @@ export function WorkflowNodeContextToolbar({ nodeId, data, selected, position = 
   };
 
   return (
-    <NodeToolbar nodeId={nodeId} isVisible position={position} offset={offset}>
+    <NodeToolbar
+      nodeId={nodeId}
+      isVisible
+      position={position}
+      offset={offset}
+      className={["wf-node-context-toolbar-host", connecting ? "is-connecting" : ""].filter(Boolean).join(" ")}
+    >
       <div ref={toolbarRef} className="wf-node-context-toolbar" role="toolbar" aria-label={`Actions for ${data.label}`} aria-orientation="horizontal" onKeyDown={handleToolbarKeyDown}>
         {outcomes.length === 1 ? (
           <button
