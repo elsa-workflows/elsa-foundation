@@ -8,10 +8,11 @@ test("opens purpose groups and moves domain destinations into local views", asyn
   await expect(page.getByRole("link", { name: "User tasks", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "More tools" })).toHaveCount(0);
   const sidebar = page.locator(".sidebar");
-  for (const name of ["Activity definitions", "Templates", "Executables", "Console", "Runtime evidence settings", "Activity availability"]) await expect(sidebar.getByRole("link", { name, exact: true })).toHaveCount(0);
-  await sidebar.getByRole("link", { name: "Library", exact: true }).click();
-  await page.getByRole("navigation", { name: "Library views" }).getByRole("link", { name: "Templates", exact: true }).click();
-  await expect(sidebar.getByRole("link", { name: "Library", exact: true })).toHaveAttribute("aria-current", "page");
+  for (const name of ["Executables", "Console", "Runtime evidence settings", "Activity availability"]) await expect(sidebar.getByRole("link", { name, exact: true })).toHaveCount(0);
+  // #4903 keeps Library as a sidebar parent with child links instead of local "Library views".
+  await sidebar.getByRole("link", { name: "Templates", exact: true }).click();
+  await expect(sidebar.getByRole("link", { name: "Templates", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Library views" })).toHaveCount(0);
   await sidebar.getByRole("link", { name: "Workflows", exact: true }).click();
   await page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true }).click();
   await expect(sidebar.getByRole("link", { name: "Workflows", exact: true })).toHaveAttribute("aria-current", "page");
@@ -88,7 +89,9 @@ test("top search uses one results surface and Escape dismisses it with focus res
   await search.fill("templates");
   await results.getByRole("link", { name: "Templates", exact: true }).click();
   await expect(search).toHaveValue("");
-  await expect(page.getByRole("navigation", { name: "Library views" })).toBeVisible();
+  // Library no longer renders local "Library views" (#4903); the search result lands on Templates.
+  await expect(page.locator(".studio-page").getByRole("heading", { name: "Templates", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Library views" })).toHaveCount(0);
 });
 
 test("a saved desktop rail preference does not lock narrow disclosure controls open", async ({ page }) => {
@@ -139,7 +142,9 @@ for (const width of [360, 390]) for (const appearance of ["light", "dark"]) test
   await search.fill("");
   await search.fill("templates");
   await target.click();
-  await expect(page.getByRole("navigation", { name: "Library views" })).toBeVisible();
+  // Library no longer renders local "Library views" (#4903); the search result lands on Templates.
+  await expect(page.locator(".studio-page").getByRole("heading", { name: "Templates", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Library views" })).toHaveCount(0);
 });
 
 

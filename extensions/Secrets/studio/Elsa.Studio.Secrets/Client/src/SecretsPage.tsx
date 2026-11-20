@@ -1,4 +1,4 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, KeyRound, Plus, RefreshCw, X } from "lucide-react";
 import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, useStudioRouteLocation, useStudioWorkspaceTab, type StudioDialogApi, type StudioNotificationApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -315,10 +315,10 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
                 </td></tr>
               ) : null}
               {!loading && filteredSecrets.map(secret => (
-                <tr key={secret.name}>
+                <tr key={secret.name} {...studioRowInteraction<HTMLTableRowElement>(() => openEditor(secret.name))}>
                   <td className="secrets-name-cell">
                     <div className="secrets-name-heading">
-                      <a className="secrets-row-link" data-secret-open={secret.name} href={secretPath(browse, secret.name, undefined, undefined, location.href)} onClick={event => { const path = secretPath(browse, secret.name, undefined, undefined, location.href); if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(path)) { event.preventDefault(); return; } if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !navigate) return; event.preventDefault(); openEditor(secret.name); }}><strong>{secret.displayName || secret.name}</strong></a>
+                      <a className="secrets-row-link studio-row-link" data-secret-open={secret.name} href={secretPath(browse, secret.name, undefined, undefined, location.href)} onClick={event => { const path = secretPath(browse, secret.name, undefined, undefined, location.href); if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(path)) { event.preventDefault(); return; } if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !navigate) return; event.preventDefault(); openEditor(secret.name); }}><strong>{secret.displayName || secret.name}</strong></a>
                       {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton name={secret.name} notifications={notifications} scope={context} /> : null}
                     </div>
                     {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} notifications={notifications} scope={context} /></div> : null}

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openExecutionInputs, openRunData } from "./executionDetails";
 import axe from "axe-core";
 
 for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
@@ -14,6 +15,7 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ }).click();
     const details = host === "instance" ? page.getByRole("complementary", { name: "Run details panel", exact: true })
       : page.getByRole("complementary", { name: "Inspector panel", exact: true });
+    if (host === "editor") await openRunData(page);
     if (host === "editor") await expect(details).toContainText("Choose a recorded execution");
     // No iteration provenance is present: repeated executions must keep execution terminology.
     const chooser = details.locator(".wf-execution-choice");
@@ -21,11 +23,13 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await chooser.press("Enter");
     const list = details.getByRole("list", { name: "Recorded activity executions", exact: true });
     await list.getByRole("button", { name: /^Execution 1 (Completed|Running)/ }).press("Enter");
-    await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     await expect(list).toBeHidden();
     await expect(chooser).toBeFocused();
     await expect(chooser).toContainText("Execution 1 of 10");
+    await openExecutionInputs(details);
+    await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     await details.getByRole("button", { name: "Next activity execution", exact: true }).press("Enter");
+    await openExecutionInputs(details);
     await expect(page.getByText("Current: 2", { exact: true })).toBeVisible();
     await expect(chooser).toContainText("Execution 2 of 10");
     await expect(details.getByText(/Iteration \d/)).toHaveCount(0);
@@ -39,6 +43,7 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
       }
     }
     await writeLine.click();
+    await openExecutionInputs(details);
     await expect(details.getByText("Current: 1", { exact: true })).toBeVisible();
     await expect(details.locator(".wf-execution-navigator")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
@@ -59,6 +64,7 @@ for (const host of ["editor", "instance"]) test(`keeps the occurrence chooser sc
   if (host === "editor") {
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+    await openRunData(page);
   }
   if (host === "editor") await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
   const canvas = host === "instance" ? page.getByRole("region", { name: "Workflow run canvas", exact: true }) : page.getByLabel("Workflow canvas", { exact: true });
@@ -66,6 +72,7 @@ for (const host of ["editor", "instance"]) test(`keeps the occurrence chooser sc
   const chooser = page.locator(".wf-execution-choice");
   await chooser.press("Enter");
   await page.getByRole("list", { name: "Recorded activity executions", exact: true }).getByRole("button", { name: /^Iteration 1 / }).press("Enter");
+  await openExecutionInputs(page);
   await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
   await chooser.press("Enter");
   const popup = page.locator(".wf-execution-list-container");
@@ -75,6 +82,7 @@ for (const host of ["editor", "instance"]) test(`keeps the occurrence chooser sc
   const [outer, row] = await Promise.all([popup.boundingBox(), last.boundingBox()]);
   expect(row!.y + row!.height).toBeLessThanOrEqual(outer!.y + outer!.height + 1);
   await last.press("Enter");
+  await openExecutionInputs(page);
   await expect(page.getByText("Current: 10", { exact: true })).toBeVisible();
   await page.addScriptTag({ content: axe.source });
   const violations = await page.evaluate(async () => {
