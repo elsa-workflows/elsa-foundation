@@ -109,12 +109,25 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 var changed = new List<string>();
                 var losses = new List<JavaScriptPrecisionLoss>();
                 var buffer = new ArrayBufferWriter<byte>();
-                using (var writer = NewWriter(buffer))
+                // Plain .NET over JSON: no script code runs here, so its memory is not the script's.
+                JsonElement patched;
+                try
                 {
-                    Patch(entry.Element, marked.Root, key, writer, changed, losses, marked.Markers);
+                    using (EvaluationLimits.ExcludeHostWork(_engine))
+                    {
+                        using (var writer = NewWriter(buffer))
+                        {
+                            Patch(entry.Element, marked.Root, key, writer, changed, losses, marked.Markers);
+                        }
+
+                        patched = JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
+                    }
+                }
+                finally
+                {
+                    Forget(marked.Markers);
                 }
 
-                var patched = JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
                 _bytes += buffer.WrittenCount;
                 return new ScriptValueChange(key, ScriptValueChangeKind.MemberChange, patched, changed, losses);
             }
@@ -122,6 +135,32 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             {
                 _collectTicks += Stopwatch.GetTimestamp() - started;
             }
+        }
+
+        public ScriptValueChange Preview(string key, JsValue current, bool assigned)
+        {
+            // Collect itself, remembering nothing: a later change by the script, or the real Collect, judges afresh.
+            // Restored, not cleared: a toJSON met while previewing can call a host function that previews again.
+            var outer = _previewing;
+            _previewing = true;
+            try
+            {
+                return Collect(key, current, assigned);
+            }
+            finally
+            {
+                _previewing = outer;
+            }
+        }
+
+        private bool _previewing;
+        private int _markerCount;
+
+        // Lossy numbers written from their original JSON; a preview writes nothing, so it records none.
+        private void WroteExactly(string path)
+        {
+            if (!_previewing)
+                _exact.AddRange(_lossy.Where(number => IsWithin(number.Path, path)));
         }
 
         public ScriptValueWrite Write(JsValue value, string path)
@@ -166,16 +205,29 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             var losses = new List<JavaScriptPrecisionLoss>();
             var buffer = new ArrayBufferWriter<byte>();
             _wroteInfinity = false;
-            using (var writer = NewWriter(buffer))
+            // Plain .NET over JSON: no script code runs here, so its memory is not the script's.
+            JsonElement json;
+            try
             {
-                WriteMarked(marked.Root, path, arrayPath: null, writer, losses, marked.Markers);
+                using (EvaluationLimits.ExcludeHostWork(_engine))
+                {
+                    using (var writer = NewWriter(buffer))
+                    {
+                        WriteMarked(marked.Root, path, arrayPath: null, writer, losses, marked.Markers);
+                    }
+
+                    // The serialized value is returned as is only when nothing in it was replaced: no marker, no loss and
+                    // no Infinity, which is written as null even when no lossy entered number has its sign.
+                    json = marked.Markers.Count == 0 && losses.Count == 0 && !_wroteInfinity
+                        ? marked.Root
+                        : JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
+                }
+            }
+            finally
+            {
+                Forget(marked.Markers);
             }
 
-            // The serialized value is returned as is only when nothing in it was replaced: no marker, no loss and no
-            // Infinity, which is written as null even when no lossy entered number has its sign.
-            var json = marked.Markers.Count == 0 && losses.Count == 0 && !_wroteInfinity
-                ? marked.Root
-                : JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
             _bytes += buffer.WrittenCount;
             return new ScriptValueWrite(json, losses);
         }
@@ -191,23 +243,112 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             // an entered number became Infinity, which JSON writes as null and so must be marked to be found.
             if (!_enteredInfinity && (value is not ObjectInstance || _origins.Count == 0))
             {
-                var plain = JintResultMaterializer.Stringify(_engine, value)
+                var plain = Serialize(value, infinity: false, markers: null)
                     ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
-                return (JintResultMaterializer.ParseResult(plain, _options), markers);
+                using (EvaluationLimits.ExcludeHostWork(_engine))
+                    return (JintResultMaterializer.ParseResult(plain, _options), markers);
             }
 
-            _replacer ??= NewReplacer();
+            // Restored, not cleared: a toJSON can call a host function whose variable read previews another value.
+            var outer = _currentMarkers;
             _currentMarkers = markers;
             try
             {
-                var text = JintResultMaterializer.Stringify(_engine, value, _replacer)
+                var text = Serialize(value, infinity: true, markers)
                     ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
-                return (JintResultMaterializer.ParseResult(text, _options), markers);
+                using (EvaluationLimits.ExcludeHostWork(_engine))
+                    return (JintResultMaterializer.ParseResult(text, _options), markers);
+            }
+            catch
+            {
+                Forget(markers);
+                throw;
             }
             finally
             {
-                _currentMarkers = null;
+                _currentMarkers = outer;
             }
+        }
+
+        /// <summary>
+        /// <c>JSON.stringify</c> of a script value, marking infinite numbers and, given <paramref name="markers"/>, each
+        /// unchanged entered object. Plain data is serialized in .NET (<see cref="PlainJson"/>), which runs no script code:
+        /// host work, not counted against the script. Anything else goes through the engine's <c>JSON.stringify</c>, which
+        /// can run the script's toJSON, getters or Proxy traps: counted, even inside host work.
+        /// </summary>
+        private string? Serialize(JsValue value, bool infinity, Dictionary<string, JsonElement>? markers)
+        {
+            // Inside a .NET serialization, comparing a nested value that is not plain would run the script's code in the
+            // middle of it: instead the whole serialization gives up before any script code runs, and the engine does it
+            // all, in its own order.
+            var outerPlainOnly = _plainOnly;
+            bool serialized;
+            string? plain;
+            try
+            {
+                _plainOnly = true;
+                using (EvaluationLimits.ExcludeHostWork(_engine))
+                    serialized = PlainJson.TryStringify(_engine, value, infinity ? InfinityMarkerText : null, markers is null ? null : MarkerFor, out plain);
+            }
+            catch (NotPlainInside) when (!outerPlainOnly)
+            {
+                serialized = false;
+                plain = null;
+            }
+            finally
+            {
+                _plainOnly = outerPlainOnly;
+            }
+
+            if (serialized)
+                return plain;
+            if (outerPlainOnly)
+                throw NotPlainInside.Instance;
+
+            // Markers taken before the serializer gave up are not in any text: start again.
+            if (markers is not null)
+            {
+                Forget(markers);
+                markers.Clear();
+            }
+
+            using (EvaluationLimits.CountScriptWork(_engine))
+            {
+                if (markers is not null)
+                    return JintResultMaterializer.Stringify(_engine, value, _replacer ??= NewReplacer());
+                return infinity
+                    ? JintResultMaterializer.Stringify(_engine, value, InfinityOnlyReplacer())
+                    : JintResultMaterializer.Stringify(_engine, value);
+            }
+        }
+
+        // Whether a .NET serialization is running, which must not run the script's code.
+        private bool _plainOnly;
+
+        // Thrown up to the outermost .NET serialization when a value inside it is not plain.
+        private sealed class NotPlainInside : Exception
+        {
+            public static readonly NotPlainInside Instance = new();
+        }
+
+        // A Mark's markers, once written: their origin paths are needed no longer, and every preview makes new ones.
+        private void Forget(Dictionary<string, JsonElement> markers)
+        {
+            foreach (var marker in markers.Keys)
+                _markerPaths.Remove(marker);
+        }
+
+        // The marker standing for an unchanged entered object, or null to serialize it.
+        private string? MarkerFor(ObjectInstance instance)
+        {
+            if (_currentMarkers is null || !_origins.TryGetValue(instance, out var origin) || !IsUnchanged(instance))
+                return null;
+            // Numbered across the evaluation, not per Mark: a nested Mark (a toJSON calling a host function that reads
+            // a variable) must not reuse a marker whose origin path the outer Mark still needs.
+            var marker = _markerPrefix + (_markerCount++).ToString(CultureInfo.InvariantCulture);
+            _currentMarkers[marker] = origin;
+            _markerPaths[marker] = _originPaths[instance];
+            return marker;
         }
 
         private Dictionary<string, JsonElement>? _currentMarkers;
@@ -217,22 +358,18 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             var lookup = new ClrFunction(_engine, "lookup", (_, arguments) =>
             {
                 var candidate = arguments.At(0);
-                if (_currentMarkers is null ||
-                    candidate is not ObjectInstance instance ||
-                    !_origins.TryGetValue(instance, out var origin) ||
-                    !IsUnchanged(instance))
-                    return candidate;
-                var marker = _markerPrefix + _currentMarkers.Count.ToString(CultureInfo.InvariantCulture);
-                _currentMarkers[marker] = origin;
-                _markerPaths[marker] = _originPaths[instance];
-                return new JsString(marker);
+                return candidate is ObjectInstance instance && MarkerFor(instance) is { } marker ? new JsString(marker) : candidate;
             });
-            // Plain operators only, so nothing the script changed on the prototypes can intercept the replacer.
-            var factory = _engine.Evaluate(
-                "(function (lookup, infinity) { return function (key, value) {" +
-                " if (value === Infinity || value === -Infinity) return infinity(value);" +
-                " return value !== null && typeof value === 'object' ? lookup(value) : value; }; })");
-            return _engine.Invoke(factory, lookup, InfinityMarker());
+            var infinity = InfinityMarker();
+            // .NET, not JavaScript: nothing the script changed on the prototypes can intercept it, and it runs no script
+            // statement, so the bridge's work stays apart from the script's in the evaluation limits.
+            return new ClrFunction(_engine, "replacer", (_, arguments) =>
+            {
+                var value = arguments.At(1);
+                if (value.IsNumber() && double.IsInfinity(value.AsNumber()))
+                    return infinity.Call(JsValue.Undefined, [value]);
+                return value is ObjectInstance ? lookup.Call(JsValue.Undefined, [value]) : value;
+            });
         }
 
         /// <summary>
@@ -260,31 +397,47 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             return true;
         }
 
-        private JsValue InfinityOnlyReplacer() =>
-            _infinityReplacer ??= _engine.Invoke(
-                _engine.Evaluate("(function (infinity) { return function (key, value) { return value === Infinity || value === -Infinity ? infinity(value) : value; }; })"),
-                InfinityMarker());
+        private JsValue InfinityOnlyReplacer()
+        {
+            if (_infinityReplacer is not null)
+                return _infinityReplacer;
+            var infinity = InfinityMarker();
+            return _infinityReplacer = new ClrFunction(_engine, "replacer", (_, arguments) =>
+            {
+                var value = arguments.At(1);
+                return value.IsNumber() && double.IsInfinity(value.AsNumber()) ? infinity.Call(JsValue.Undefined, [value]) : value;
+            });
+        }
 
         private bool IsUnchanged(ObjectInstance instance)
         {
-            if (!_origins.TryGetValue(instance, out var origin))
-                return false;
+            if (_previewing)
+                return ComputeUnchanged(instance);
             if (_unchanged.TryGetValue(instance, out var known))
                 return known;
 
-            var text = _enteredInfinity
-                ? JintResultMaterializer.Stringify(_engine, instance, InfinityOnlyReplacer())
-                : JintResultMaterializer.Stringify(_engine, instance);
+            var unchanged = ComputeUnchanged(instance);
+            if (_origins.ContainsKey(instance))
+                _unchanged[instance] = unchanged;
+            return unchanged;
+        }
+
+        private bool ComputeUnchanged(ObjectInstance instance)
+        {
+            if (!_origins.TryGetValue(instance, out var origin))
+                return false;
+
+            var text = Serialize(instance, _enteredInfinity, markers: null);
             bool unchanged;
             if (text is null)
                 unchanged = false;
             else
             {
+                using var hostWork = EvaluationLimits.ExcludeHostWork(_engine);
                 using var document = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = Math.Max(_options.MaxResultDepth, _options.MaxInputDepth) + 1 });
                 unchanged = SameJavaScriptValue(origin, document.RootElement, null);
             }
 
-            _unchanged[instance] = unchanged;
             return unchanged;
         }
 
@@ -365,7 +518,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     origin.WriteTo(writer);
                     // Written from its original JSON: its lossy numbers keep every digit.
                     if (_markerPaths.TryGetValue(element.GetString()!, out var originPath))
-                        _exact.AddRange(_lossy.Where(number => IsWithin(number.Path, originPath)));
+                        WroteExactly(originPath);
                     break;
                 case JsonValueKind.Number:
                     var text = element.GetRawText();
@@ -413,7 +566,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             {
                 // Kept as stored: its lossy numbers keep every digit, so they were not read and lost (FR-015).
                 original.WriteTo(writer);
-                _exact.AddRange(_lossy.Where(number => IsWithin(number.Path, path)));
+                WroteExactly(path);
                 return;
             }
 

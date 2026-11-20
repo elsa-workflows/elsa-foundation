@@ -25,7 +25,7 @@ public sealed class ExpressionDefinitionContractTests
             new TypeReference("Decimal"),
             parameters,
             optionsDocument.RootElement,
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
 
         parameters.Clear();
         optionsDocument.Dispose();
@@ -99,13 +99,14 @@ public sealed class ExpressionDefinitionContractTests
             new Dictionary<string, JsonElement>(),
             CancellationToken.None);
 
-        Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, request.Capabilities.Profile);
-        Assert.True(request.Capabilities.IsBindingPure);
+        Assert.Equal(ExpressionCapabilityProfiles.BindingReadonlyV1, request.Capabilities.Profile);
+        Assert.True(request.Capabilities.IsBindingReadonly);
         Assert.True(request.Capabilities.AllowsDeterministicTransforms);
         Assert.False(request.Capabilities.AllowsAmbientWorkflowState);
         Assert.False(request.Capabilities.AllowsMutation);
         Assert.False(request.Capabilities.AllowsServiceLocation);
-        Assert.False(request.Capabilities.AllowsNondeterminism);
+        // Spec 1223 FR-001: binding-readonly-v1 admits the clock, randomness and GUIDs.
+        Assert.True(request.Capabilities.AllowsNondeterminism);
     }
 
     [Fact]
@@ -146,7 +147,7 @@ public sealed class ExpressionDefinitionContractTests
             new TypeReference("Int32"),
             parameters,
             JsonSerializer.SerializeToElement(new { strict = true }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
 
     private static IEnumerable<Type> FlattenType(Type type)
     {

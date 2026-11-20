@@ -16,7 +16,7 @@ descriptors are metadata only; they do not carry runtime handler factories.
   `WorkflowInstance` parameter value, never as ambient state.
 
 Shipped implementations are `PortableJavaScriptExpressionHandler` and
-`PortableLiquidExpressionHandler`, both restricted to `binding-pure-v1`.
+`PortableLiquidExpressionHandler`, both restricted to `binding-readonly-v1`.
 
 ### `IExpressionDescriptorProvider` *(Core — `Elsa.Expressions.Core`)*
 

@@ -38,6 +38,14 @@ public interface IScriptValueEvaluation : IDisposable
     ScriptValueChange Collect(string key, JsValue current, bool assigned);
 
     /// <summary>
+    /// During the run, the change <see cref="Collect"/> would report now, so a host function reading a variable gets the
+    /// value the session will hold (spec 1222 FR-034): the stored JSON when unchanged, untouched members keeping their
+    /// stored text. Nothing is remembered, since the script can still change the value: no unchanged judgement is cached
+    /// and nothing counts as written exactly.
+    /// </summary>
+    ScriptValueChange Preview(string key, JsValue current, bool assigned);
+
+    /// <summary>
     /// Converts a value leaving the evaluation, such as a result, to JSON. An entered value that is unchanged is written
     /// from its original JSON. Reports the lossy entered numbers the written JSON carries (FR-011a).
     /// </summary>

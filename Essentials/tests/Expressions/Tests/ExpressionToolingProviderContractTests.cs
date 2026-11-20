@@ -1,5 +1,6 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Services;
 using Elsa.Expressions.Liquid.Services;
 using Elsa.Expressions.Services;
@@ -262,6 +263,55 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Equal("JavaScript/ReservedName", diagnostic.Code);
         Assert.Equal(ExpressionDiagnosticSeverity.Error, diagnostic.Severity);
         Assert.NotNull(diagnostic.Range);
+    }
+
+    // Spec 1223 FR-017, FR-018: .NET types and PascalCase invocations are refused under the default JSON-only strategy.
+    [Theory]
+    [InlineData("TimeSpan.FromHours(1)", "TimeSpan.FromHours(1)")]
+    [InlineData("args.items.Where(x => x)", "args.items.Where(x => x)")]
+    public async Task JavaScript_validation_refuses_dotnet_usage(string source, string quoted)
+    {
+        var provider = new JavaScriptExpressionToolingProvider(new JavaScriptDotNetUsageAnalyzer());
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        var diagnostic = Assert.Single(result.Payload!.Diagnostics);
+        Assert.Equal("JavaScript/DotNetMemberUsage", diagnostic.Code);
+        Assert.Equal(ExpressionDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains($"'{quoted}'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.NotNull(diagnostic.Range);
+    }
+
+    // Spec 1223 FR-027: a declaration that hides a built-in, a namespace root or an unused read root warns.
+    [Theory]
+    [InlineData("const newGuid = 1; return newGuid;", "newGuid")]
+    [InlineData("const input = 1; return input;", "input")]
+    [InlineData("const acme = 1; return acme;", "acme")]
+    public async Task JavaScript_validation_warns_on_a_shadowed_platform_name(string source, string name)
+    {
+        var provider = new JavaScriptExpressionToolingProvider(
+            new JavaScriptDotNetUsageAnalyzer(),
+            [new JavaScriptHostFunctionDeclaration("acme.lookup", _ => default)]);
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        var diagnostic = Assert.Single(result.Payload!.Diagnostics);
+        Assert.Equal("JavaScript/ShadowedFunction", diagnostic.Code);
+        Assert.Equal(ExpressionDiagnosticSeverity.Warning, diagnostic.Severity);
+        Assert.Contains($"'{name}'", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("args.order.OrderId")]
+    [InlineData("new Intl.DateTimeFormat('en-GB').format(new Date())")]
+    [InlineData("newGuid()")]
+    public async Task JavaScript_validation_accepts_json_reads_and_native_calls(string source)
+    {
+        var provider = new JavaScriptExpressionToolingProvider(new JavaScriptDotNetUsageAnalyzer());
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        Assert.Empty(result.Payload!.Diagnostics);
     }
 
     [Theory]

@@ -4,6 +4,7 @@ using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Elsa.Expressions.JavaScript.Jint.Services;
+using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -77,6 +78,14 @@ public class JintFeature : IShellFeature
             options.MaxResultDepth = MaxResultDepth;
             options.MaxResultNodes = MaxResultNodes;
         });
+
+        // The built-in functions are part of every JavaScript surface (spec 1223 FR-003, FR-006, FR-007, FR-026); host
+        // functions are registered beside them. The naming rule is checked at shell activation (FR-027).
+        foreach (var builtIn in JavaScriptBuiltIns.Declarations)
+            services.AddSingleton(builtIn);
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<JavaScriptHostFunctions>();
+        services.AddSingleton<IShellInitializer, JavaScriptHostFunctionCheck>();
 
         services
             .AddScoped<IPortableJavaScriptEvaluator, JintPortableJavaScriptEvaluator>()

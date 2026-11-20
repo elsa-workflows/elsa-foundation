@@ -34,7 +34,7 @@ public sealed class PortableLiquidInvalidTemplateTests
             new TypeReference("String"),
             new Dictionary<string, ExpressionParameterBinding>(),
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         return new ExpressionEvaluationRequest(
             definition,
             new Dictionary<string, JsonElement>(),

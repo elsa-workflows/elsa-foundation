@@ -390,7 +390,7 @@ public sealed class ActivityLibraryAcceptanceTests
                     [parameterName] = new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, variableKey)
                 },
                 options: JsonSerializer.SerializeToElement(new { }),
-                capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1));
+                capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1));
     }
 
     private sealed record ForEachDescriptor;

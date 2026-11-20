@@ -100,7 +100,7 @@ public sealed class PreparedJavaScriptReuseTests(ITestOutputHelper output)
                 source, JsonSerializer.SerializeToElement(new { value }), default))).Value;
         var definition = new ExpressionDefinition("JavaScript", source, new TypeReference("Object"),
             new Dictionary<string, ExpressionParameterBinding> { ["value"] = new LiteralExpressionParameterBinding(JsonSerializer.SerializeToElement(value)) },
-            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         return await scope.ServiceProvider.GetRequiredService<IPortableJavaScriptEvaluator>().EvaluateAsync(
             new ExpressionEvaluationRequest(definition, new Dictionary<string, JsonElement> { ["value"] = JsonSerializer.SerializeToElement(value) }, null, default));
     }

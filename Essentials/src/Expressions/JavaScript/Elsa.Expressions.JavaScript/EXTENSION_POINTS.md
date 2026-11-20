@@ -5,10 +5,14 @@ The JavaScript binding surface is intentionally closed. `JavaScriptFeature` cont
 binding receives only its serialized source, options, capability profile, and immutable declared
 parameters.
 
+Under `binding-readonly-v1` (ADR 0083, spec 1223) every expression and script has the native `Date`, `Temporal`, `Intl`
+and `Math` (including `Math.random`). The clock is the host's `TimeProvider`, and every evaluation runs in UTC with the
+invariant culture. Every expression and script also has the registered .NET-implemented functions. Both surfaces get the
+same capabilities. Values cross as JSON: no live .NET object reaches a script (ADR 0046 V10).
+
 There are no binding-time script pre/post-processors, events, library injectors, configuration host
 functions, workflow contexts, raw Jint engine factories, mutable JavaScript execution contexts,
-delegate-backed host functions, or service-location seams. Extending the binding language requires
-a separately reviewed capability profile; a global registration cannot join `binding-pure-v1`.
+or service-location seams. The one way to add a function is a `JavaScriptHostFunctionDeclaration` (below).
 
 Jint reuses immutable prepared syntax under weak source-string ownership, with separate preparation for value
 bindings and script activities. A bounded, hash-only weak index also reuses script preparation across freshly
@@ -50,7 +54,52 @@ with portable expression evaluation.
   binding, through any destructuring, default or rest pattern) is refused at design time with
   `JavaScript/ReservedName`.
 
+## Extension points
+
+### JavaScriptHostFunctionDeclaration *(Core — Elsa.Expressions.JavaScript.Core)*
+
+- **Kind:** contribution (fan-in): one singleton registration per function.
+- **Contract:** `JavaScriptHostFunctionDeclaration(name, implementation, ReadsVariables)` (spec 1223 FR-011, FR-027,
+  FR-029). The implementation is a `JavaScriptHostFunction`: JSON values in, a JSON value out, with the evaluation's
+  `IExpressionVariableReader` and cancellation on the call. A script `Date` argument arrives as ISO 8601 UTC text, and
+  `undefined` as `null`. A thrown exception fails the call with a JavaScript error.
+- **Names:** a host function is namespaced (`acme.lookup`) and is installed as a member of a read-only global object
+  `acme`. The built-ins (`JavaScriptBuiltInFunctions`: `newGuid`, `newGuidString`, `getGuidString`, `newShortGuid`,
+  `getShortGuid`, `parseGuid`, `stringToBase64`, `stringFromBase64`) are the only unprefixed functions; the Jint
+  feature registers them. Shell activation fails, naming the function, on a duplicate, an unprefixed host function, a
+  malformed name or a reserved namespace root: a read root (`variables`, `input`, `activities`, `workflow`, `args`), a
+  built-in name, `complete`, `getVariable` or a JavaScript global.
+- **Effects:** none. Every function is effect-free under ADR 0045 §5 D-6, and a call adds no commit boundary. The
+  effectful declaration ships with its boundary (#4831).
+- **Reads:** `ReadsVariables: true` makes publish treat a call as an opaque read and set the fallback marker; the
+  function reads through the call's `Variables`.
+- **Registration:** `services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookup", call => ...))`.
+- **Aggregation:** `JavaScriptHostFunctions` (Jint, internal) collects every declaration, checks the naming rule at shell
+  activation (`JavaScriptHostFunctionCheck`) and installs the functions into each evaluation. The analyzers and the
+  expression tooling read the same registrations.
+- **Known implementations:** the eight built-ins, registered by `JintFeature` (intra-domain, `JavaScriptBuiltIns`).
+- **Publish:** a script that declares `variables` gets the error `Scripts/ReservedName`. A script that declares `input`,
+  `activities`, `workflow`, a built-in name or a namespace root gets the warning `Scripts/ShadowedFunction`, and an
+  input expression the warning `JavaScript/ShadowedFunction`.
+
 ## Overridable contracts
+
+### IJavaScriptDotNetUsageAnalyzer *(Core — Elsa.Expressions.JavaScript.Core)*
+
+- **Kind:** replacement contract (framework §2.6.2): one per host, part of the default JSON-only engine strategy (spec
+  1223 FR-030). A second registration fails shell activation (`JavaScriptDotNetUsageAnalyzerCheck`).
+- **Contract:** `Analyze(source, scriptBody, context)` refuses, quoting the expression:
+  - a reference to a catalogued .NET type (`new Uri(s)`, `Enumerable.Range(…)`);
+  - an invocation of a PascalCase member on a value the script did not define (`items.Where(f)`);
+  - with a `JavaScriptDotNetUsageContext` (the Elsa 3 converter), member use on a value that was a live .NET object.
+
+  It allows JSON property reads of any casing, calls on JavaScript globals and registered namespaces, members and names
+  the script defines, and computed access.
+- **Implementation:** `JavaScriptDotNetUsageAnalyzer` (internal, Acornima), registered with `TryAdd` by `JavaScriptFeature`.
+- **Consumers:** `ScriptOutcomeValidator` (`Scripts/DotNetMemberUsage`), the expression tooling
+  (`JavaScript/DotNetMemberUsage`) and the Elsa 3 converter (`VF-IMP-012`).
+- **Override when:** the opt-in .NET interop strategy (#4103) replaces the default strategy and decides whether this
+  analysis applies under it.
 
 ### IJavaScriptScriptOutcomeAnalyzer *(Core — Elsa.Expressions.JavaScript.Core)*
 
@@ -91,11 +140,9 @@ with portable expression evaluation.
   `ScriptVariableReadValidator` for the draft diagnostics and by the rename planner.
 - **Override when:** a host uses another JavaScript parser or dialect. Replace the default registration (remove it and
   register its own): two analyzers of different types for one language fail the shell at start, so none wins silently.
-- **Host functions:** a host function that reads workflow variables is declared with
-  `JavaScriptHostFunctionDeclaration(name, ReadsVariables: true)` (`Elsa.Expressions.JavaScript.Core`), registered in the
-  service collection as a singleton; the analyzer then treats a call to it as an opaque read, so publish sets the
-  fallback marker. The isolated engine has no way to install host functions yet, so a declaration only affects publish
-  until one exists; such a function would read through the request's `IExpressionVariableReader`.
+- **Host functions:** a call to a function declared with `ReadsVariables: true` (by its name, or as
+  `namespace.member`) is an opaque read, so publish sets the fallback marker. See `JavaScriptHostFunctionDeclaration`
+  above.
 
 ### IScriptValueBridge *(Jint — Elsa.Expressions.JavaScript.Jint)*
 
@@ -103,7 +150,9 @@ with portable expression evaluation.
 - **Contract:** `Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge` — `Begin(engine)` starts the values of
   one evaluation (`IScriptValueEvaluation`): `Enter(key, json)` puts a value in as a plain, changeable JavaScript value
   and records its lossy numbers; `Collect(key, current, assigned)` reports, after the run, unchanged, a member change
-  (untouched members keep their stored text) or a whole assignment (a changed array is written whole); `Write(value,
+  (untouched members keep their stored text) or a whole assignment (a changed array is written whole);
+  `Preview(key, current, assigned)` gives what `Collect` would report during the run, remembering nothing, for host
+  functions reading a variable (spec 1222 FR-034); `Write(value,
   path)` converts a value leaving the evaluation, writing an unchanged entered value from its original JSON and
   reporting the lossy entered numbers the written JSON carries; `TryFindLoss(double)` serves host-function argument
   checks. Script activities and JavaScript input expressions use the same bridge (D-15).
@@ -126,7 +175,7 @@ with portable expression evaluation.
   number with its stored text, the written text, and the array written whole when there is one), and returns allow or
   refuse with one `JavaScriptPrecisionDiagnostic` per loss. A refusal faults the step with `VF-PREC-001`
   (`JavaScriptPrecisionException`); nothing of the step is written. Only writes that carry a loss reach the policy;
-  computing with a lossy value warns (`VF-PREC-002`), and so will passing one to a host function once S-1 adds them.
+  computing with a lossy value warns (`VF-PREC-002`), and so does passing one to a host function (spec 1223 FR-028): the warning names the function and the argument path, and the call runs.
 - **Implementation:** `RefusingPrecisionPolicy` in `Elsa.Expressions.JavaScript.Jint` (public, no options), registered
   with `TryAddSingleton` by `JintFeature`.
 - **Consumer:** `JavaScriptValueWrites.Apply`, called by `JintJavaScriptScriptEvaluator` and

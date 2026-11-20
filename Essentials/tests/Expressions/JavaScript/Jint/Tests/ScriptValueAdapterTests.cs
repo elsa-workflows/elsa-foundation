@@ -219,7 +219,7 @@ public sealed class ScriptValueAdapterTests
             values["order"] = order;
         }
 
-        var definition = new ExpressionDefinition("JavaScript", source, new TypeReference("Any"), parameters, JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+        var definition = new ExpressionDefinition("JavaScript", source, new TypeReference("Any"), parameters, JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         return await evaluator.EvaluateAsync(new ExpressionEvaluationRequest(definition, values, CancellationToken.None) { Warnings = sink });
     }
 
