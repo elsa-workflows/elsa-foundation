@@ -4,7 +4,9 @@ Status: accepted (2026-11-16), as amended below (*Amendment*). Sipke Schoorstra,
 design in a brainstorming session on 2026-10-24, started from the review of spec 266. It overturns parts of an accepted ADR (0045 §4,
 §5 and §6) and changes what spec 266 analyses, so it needed agreement with Joey Barten and Frans van Ek. The three
 architects agreed the amended text; Joey Barten recorded the agreement as coordinator. Decision 3 was amended on
-2026-11-17 (computed and opaque writes in scripts, from spec 1231 Q5), approved by Joey Barten as coordinator.
+2026-11-17 (computed and opaque writes in scripts, from spec 1231 Q5), approved by Joey Barten as coordinator. C3's
+precision sentence was clarified on 2026-11-20 to match ADR 0046 V9, decision unchanged: a loss is accepted only by the
+host's precision policy, not per workflow.
 
 Part of epic #3052. Implementing it needs an active program whose scope covers runtime value flow
 ([program-goal registry](../program-goals/README.md#registry)). It amends
@@ -314,7 +316,8 @@ saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (d
   back, its formatting (whitespace, property order, escape spellings) may change, in its untouched members too, while
   its data semantics are kept: property names and their casing, string contents, value types, array order, and a
   missing member versus `null`. A known loss of numeric precision is not formatting: a value that lost precision and
-  reaches a write is refused unless the published conversion contract explicitly accepts the loss (ADR 0046 V9).
+  reaches a write is refused unless the host's precision policy allows the loss; no workflow accepts it on its own
+  (ADR 0046 V9).
   - **The array exception.** A changed array is written as a whole, so its untouched elements are rewritten from the
     script's values as well. When that would lose precision, the write is refused with ADR 0046's whole-array
     diagnostic, which names the array path, the elements that lost precision with their stored and written values,
@@ -481,8 +484,8 @@ variable. Rejected for now: array patches by index land in the wrong place after
 - Serialization cost is measured against a large payload.
 - Under the amendment (reconciliation row 11d): the chosen mechanism finds nested changes, including through an
   alias; a variable the step did not change keeps its exact stored text; a changed value keeps the data semantics of
-  its untouched members; a lost digit that reaches a write is refused unless the published conversion contract
-  accepts it, and a changed array that would lose precision is refused with the whole-array diagnostic; an explicit
+  its untouched members; a lost digit that reaches a write is refused unless the host's precision policy
+  allows it, and a changed array that would lose precision is refused with the whole-array diagnostic; an explicit
   whole assignment of `…992` over `…993` writes, while an equal-looking member change does not; publication lists each
   script step's written variables; a change without assignment is warned about; a narrower C# type written back warns
   about the members it drops; a conflicted write that would be a no-op is still reported as a lost update.
