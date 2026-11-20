@@ -52,7 +52,7 @@ Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge
 Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation
 Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Enter(string! key, System.Text.Json.JsonElement value) -> Jint.Native.JsValue!
 Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Collect(string! key, Jint.Native.JsValue! current, bool assigned) -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange!
-Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.IsUnchanged(string! key, Jint.Native.JsValue! current) -> bool
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Preview(string! key, Jint.Native.JsValue! current, bool assigned) -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange!
 Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Write(Jint.Native.JsValue! value, string! path) -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite!
 Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge.Begin(Jint.Engine! engine) -> Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation!
 Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.TryFindLoss(double value, out Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber? number) -> bool

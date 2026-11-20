@@ -309,8 +309,8 @@ internal static class IsolatedJintEngine
         /// <summary>Whether the script assigned the variable itself (<c>variables.x = v</c>), rather than only changing what it read.</summary>
         public bool WasAssigned(string name) => _assigned.Contains(name);
 
-        /// <summary>During the run, whether a variable the script read and did not assign still holds what entered.</summary>
-        public bool IsUnchanged(string name) => !_assigned.Contains(name) && values.IsUnchanged(Key(name), _current[name]);
+        /// <summary>During the run, the change the script has made to a variable so far, as it would be collected now.</summary>
+        public ScriptValueChange Preview(string name) => values.Preview(Key(name), _current[name], _assigned.Contains(name));
 
         // A value the script made unserializable (a cycle, a BigInt) or grew past the JSON limits (depth, size) was
         // changed: it is reported as changed as a whole, so an input expression fails with its write diagnostic rather

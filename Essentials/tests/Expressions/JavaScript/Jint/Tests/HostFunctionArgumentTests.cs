@@ -140,6 +140,27 @@ public sealed class HostFunctionArgumentTests
         Assert.Equal("9007199254740993", result!.Value.GetString());
     }
 
+    // A changed variable reaches the function as the bridge will write it: untouched members keep their stored digits.
+    [Theory]
+    [InlineData("variables.order.price = 11; return acme.readOrderIdText();", "\"9007199254740993\"")]
+    [InlineData("variables.order = [variables.order]; return acme.readOrderText();", "\"[{\\\"id\\\":9007199254740993,\\\"price\\\":10.50}]\"")]
+    public async Task A_changed_variable_reaches_the_function_as_the_bridge_will_write_it(string source, string expected)
+    {
+        var (result, _) = await RunAsync(source);
+
+        Assert.Equal(expected, result!.Value.GetRawText());
+    }
+
+    // A preview remembers nothing: a later change after the function read is still written.
+    [Fact]
+    public async Task A_change_after_a_function_read_is_still_collected()
+    {
+        var session = new Session(Order);
+        await RunAsync("var o = variables.order; acme.readOrder(); o.price = 12; return 1;", session: session);
+
+        Assert.Contains("\"price\":12", session.Written!.Value.GetRawText(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {
@@ -194,8 +215,8 @@ public sealed class HostFunctionArgumentTests
             return name == "order" ? ExpressionVariableRead.Present(JsonSerializer.Deserialize<JsonElement>(order)) : ExpressionVariableRead.Missing;
         }
 
-        public void Write(string name, JsonElement? value)
-        {
-        }
+        public JsonElement? Written { get; private set; }
+
+        public void Write(string name, JsonElement? value) => Written = value;
     }
 }

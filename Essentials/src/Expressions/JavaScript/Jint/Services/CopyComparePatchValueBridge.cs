@@ -124,11 +124,27 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             }
         }
 
-        public bool IsUnchanged(string key, JsValue current)
+        public ScriptValueChange Preview(string key, JsValue current, bool assigned)
         {
-            ArgumentException.ThrowIfNullOrEmpty(key);
-            // As Collect: a primitive only an assignment can change; an object compared with its original, not cached.
-            return _entries.ContainsKey(key) && (current is not ObjectInstance instance || ComputeUnchanged(instance));
+            // Collect itself, remembering nothing: a later change by the script, or the real Collect, judges afresh.
+            _previewing = true;
+            try
+            {
+                return Collect(key, current, assigned);
+            }
+            finally
+            {
+                _previewing = false;
+            }
+        }
+
+        private bool _previewing;
+
+        // Lossy numbers written from their original JSON; a preview writes nothing, so it records none.
+        private void WroteExactly(string path)
+        {
+            if (!_previewing)
+                _exact.AddRange(_lossy.Where(number => IsWithin(number.Path, path)));
         }
 
         public ScriptValueWrite Write(JsValue value, string path)
@@ -204,6 +220,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             }
 
             _replacer ??= NewReplacer();
+            // Restored, not cleared: a toJSON can call a host function whose variable read previews another value.
+            var outer = _currentMarkers;
             _currentMarkers = markers;
             try
             {
@@ -213,7 +231,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             }
             finally
             {
-                _currentMarkers = null;
+                _currentMarkers = outer;
             }
         }
 
@@ -274,6 +292,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
 
         private bool IsUnchanged(ObjectInstance instance)
         {
+            if (_previewing)
+                return ComputeUnchanged(instance);
             if (_unchanged.TryGetValue(instance, out var known))
                 return known;
 
@@ -380,7 +400,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     origin.WriteTo(writer);
                     // Written from its original JSON: its lossy numbers keep every digit.
                     if (_markerPaths.TryGetValue(element.GetString()!, out var originPath))
-                        _exact.AddRange(_lossy.Where(number => IsWithin(number.Path, originPath)));
+                        WroteExactly(originPath);
                     break;
                 case JsonValueKind.Number:
                     var text = element.GetRawText();
@@ -428,7 +448,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             {
                 // Kept as stored: its lossy numbers keep every digit, so they were not read and lost (FR-015).
                 original.WriteTo(writer);
-                _exact.AddRange(_lossy.Where(number => IsWithin(number.Path, path)));
+                WroteExactly(path);
                 return;
             }
 

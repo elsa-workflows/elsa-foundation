@@ -151,8 +151,8 @@ with portable expression evaluation.
   one evaluation (`IScriptValueEvaluation`): `Enter(key, json)` puts a value in as a plain, changeable JavaScript value
   and records its lossy numbers; `Collect(key, current, assigned)` reports, after the run, unchanged, a member change
   (untouched members keep their stored text) or a whole assignment (a changed array is written whole);
-  `IsUnchanged(key, current)` gives the same unchanged judgement during the run, uncached, for host functions reading
-  a variable (spec 1222 FR-034); `Write(value,
+  `Preview(key, current, assigned)` gives what `Collect` would report during the run, remembering nothing, for host
+  functions reading a variable (spec 1222 FR-034); `Write(value,
   path)` converts a value leaving the evaluation, writing an unchanged entered value from its original JSON and
   reporting the lossy entered numbers the written JSON carries; `TryFindLoss(double)` serves host-function argument
   checks. Script activities and JavaScript input expressions use the same bridge (D-15).
