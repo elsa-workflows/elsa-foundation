@@ -90,7 +90,7 @@ record.
 
 - **Version**: a per-variable counter. Each applied write that changes the variable's value increments it. The
   variable's value digest is computed once per applied write and stored beside the version. The digest is taken over
-  ADR 0091's canonical form (decision 7 there), so it compares meaning, not the stored text: two writers that write
+  ADR 0091's canonical form (decision 3 there), so it compares meaning, not the stored text: two writers that write
   the same value with different escaping or notation produce the same digest.
 - **Read set**: the variables an invocation actually read, each with the version it saw, and, for a node that opts in
   to `Fault` (decision 6), also the stored digest it saw. It has two parts:
