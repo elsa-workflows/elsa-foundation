@@ -1508,7 +1508,7 @@ public sealed class GraphActivityProvider(
             descriptorPayload,
             inputs,
             new ActivityResultContract(
-                new ValueTypeDescriptor("Object"),
+                new ValueTypeDescriptor(TypeAliasConvention.AnyAlias),
                 isRequired: true,
                 resultPolicy,
                 projections,

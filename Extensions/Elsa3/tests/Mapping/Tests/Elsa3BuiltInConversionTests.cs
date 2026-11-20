@@ -64,7 +64,7 @@ public sealed class Elsa3BuiltInConversionTests
     [Fact]
     public async Task A_captured_script_result_is_read_from_the_elsa4_result_output()
     {
-        var script = Activity("script", "Elsa.RunJavaScript", ("script", Literal("1")), ("result", Captured("script-result")));
+        var script = Activity("script", "Elsa.RunJavaScript", ("script", Literal("'one'")), ("result", Captured("script-result")));
         var write = Activity("write", "Elsa.WriteLine", ("text", Captured("script-result")));
 
         var state = await ConvertAsync(RealActivityCatalog.Create(), Sequence("root", script, write));

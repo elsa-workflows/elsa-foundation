@@ -25,8 +25,8 @@ internal static class Elsa3IntrinsicContracts
     private static readonly IReadOnlyDictionary<string, (AuthoredWorkflowIntrinsicKind Kind, (string Key, string Type)[] Inputs)> Contracts =
         new Dictionary<string, (AuthoredWorkflowIntrinsicKind, (string, string)[])>(StringComparer.Ordinal)
         {
-            [Set] = (AuthoredWorkflowIntrinsicKind.Set, [(ValueKey, "Object")]),
-            [SetOutput] = (AuthoredWorkflowIntrinsicKind.SetOutput, [(NameKey, "String"), (ValueKey, "Object")]),
+            [Set] = (AuthoredWorkflowIntrinsicKind.Set, [(ValueKey, TypeAliasConvention.AnyAlias)]),
+            [SetOutput] = (AuthoredWorkflowIntrinsicKind.SetOutput, [(NameKey, "String"), (ValueKey, TypeAliasConvention.AnyAlias)]),
             [SetCorrelationId] = (AuthoredWorkflowIntrinsicKind.SetCorrelationId, [(ValueKey, "String")]),
             [SetInstanceName] = (AuthoredWorkflowIntrinsicKind.SetInstanceName, [(ValueKey, "String")]),
             [Finish] = (AuthoredWorkflowIntrinsicKind.Finish, [(OutcomeKey, "String")]),

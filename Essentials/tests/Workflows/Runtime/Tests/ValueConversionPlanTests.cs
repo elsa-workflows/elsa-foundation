@@ -171,7 +171,7 @@ public sealed class ValueConversionPlanTests
     public void Canonical_any_projection_returns_json_not_an_arbitrary_clr_identity()
     {
         var sourceType = new ValueTypeDescriptor("Acme.Customer");
-        var targetType = new ValueTypeDescriptor("Elsa.Any");
+        var targetType = new ValueTypeDescriptor("Any");
         var plan = Plan(sourceType, targetType, ValueRepresentation.TypedValue, ValueConversionOperation.CanonicalAny);
         using var document = JsonDocument.Parse("{\"z\":1,\"address\":{\"postal\":\"1000\",\"city\":\"Brussels\"},\"name\":\"Ada\"}");
 
@@ -186,7 +186,7 @@ public sealed class ValueConversionPlanTests
     [Fact]
     public void Json_profile_decodes_formatted_object_content_to_canonical_any()
     {
-        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var plan = JsonPlan(new ValueTypeDescriptor("Any"));
         var converted = new RuntimeValueConversionExecutor().Convert(
             ValueEnvelope.Inline(
                 new ValueTypeDescriptor("String"),
@@ -200,7 +200,7 @@ public sealed class ValueConversionPlanTests
     [Fact]
     public void Json_profile_decodes_formatted_array_content_to_canonical_any()
     {
-        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var plan = JsonPlan(new ValueTypeDescriptor("Any"));
         var converted = new RuntimeValueConversionExecutor().Convert(
             ValueEnvelope.Inline(
                 new ValueTypeDescriptor("String"),
@@ -229,7 +229,7 @@ public sealed class ValueConversionPlanTests
     [Fact]
     public void Explicit_json_reports_malformed_formatted_content()
     {
-        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"), ValueConversionMode.Json);
+        var plan = JsonPlan(new ValueTypeDescriptor("Any"), ValueConversionMode.Json);
 
         var exception = Assert.Throws<RuntimeValueConversionException>(() => new RuntimeValueConversionExecutor().Convert(
             ValueEnvelope.Inline(
@@ -245,7 +245,7 @@ public sealed class ValueConversionPlanTests
     public void Text_value_to_any_remains_a_json_string_under_auto_without_json_sniffing()
     {
         var sourceType = new ValueTypeDescriptor("String");
-        var targetType = new ValueTypeDescriptor("Elsa.Any");
+        var targetType = new ValueTypeDescriptor("Any");
         var plan = Plan(sourceType, targetType, ValueRepresentation.TextValue, ValueConversionOperation.CanonicalAny);
 
         var converted = new RuntimeValueConversionExecutor().Convert(
@@ -259,9 +259,9 @@ public sealed class ValueConversionPlanTests
     [Fact]
     public void Json_profile_enforces_payload_depth_and_node_limits()
     {
-        var smallPayload = JsonPlan(new ValueTypeDescriptor("Elsa.Any"), limits: new ValueConversionLimits(8, 10, 4));
-        var shallow = JsonPlan(new ValueTypeDescriptor("Elsa.Any"), limits: new ValueConversionLimits(1, 10, 1_024));
-        var fewNodes = JsonPlan(new ValueTypeDescriptor("Elsa.Any"), limits: new ValueConversionLimits(8, 2, 1_024));
+        var smallPayload = JsonPlan(new ValueTypeDescriptor("Any"), limits: new ValueConversionLimits(8, 10, 4));
+        var shallow = JsonPlan(new ValueTypeDescriptor("Any"), limits: new ValueConversionLimits(1, 10, 1_024));
+        var fewNodes = JsonPlan(new ValueTypeDescriptor("Any"), limits: new ValueConversionLimits(8, 2, 1_024));
         var executor = new RuntimeValueConversionExecutor();
 
         Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
@@ -403,7 +403,7 @@ public sealed class ValueConversionPlanTests
     [Fact]
     public void Xml_profile_rejects_any_targets_without_a_named_xml_to_json_profile()
     {
-        var plan = XmlPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var plan = XmlPlan(new ValueTypeDescriptor("Any"));
 
         var exception = Assert.Throws<RuntimeValueConversionException>(() => new RuntimeValueConversionExecutor().Convert(
             XmlSource("<customer><name>Ada</name></customer>"),
@@ -545,6 +545,39 @@ public sealed class ValueConversionPlanTests
             new ValueTypeDescriptor("String"),
             JsonSerializer.SerializeToElement(xml),
             ValueProtectionPolicy.InstanceInline);
+
+    [Theory]
+    [InlineData("Boolean", "true", true)]
+    [InlineData("Boolean", "false", true)]
+    [InlineData("Boolean", "\"true\"", false)]
+    [InlineData("Boolean", "1", false)]
+    [InlineData("String", "\"order-1\"", true)]
+    [InlineData("String", "true", false)]
+    [InlineData("String", "42", false)]
+    [InlineData("Int32", "42", true)]
+    [InlineData("Int32", "42.5", false)]
+    [InlineData("Int32", "\"42\"", false)]
+    [InlineData("Int32", "true", false)]
+    [InlineData("Double", "42.5", true)]
+    [InlineData("Double", "\"42.5\"", false)]
+    public void A_dynamic_value_converts_into_a_scalar_only_from_the_matching_json_kind(string target, string json, bool converts)
+    {
+        // Spec 1228 FR-025 (D-12): a JSON value whose kind matches the scalar target converts; text is never parsed into a
+        // boolean or a number, and a number that does not fit an integral target is refused.
+        var source = new ValueTypeDescriptor("Any");
+        var plan = new ValueConversionPlan(1, ValueRepresentation.StructuredValue, source, new ValueTypeDescriptor(target),
+            ValueConversionMode.Auto, ValueConversionOperation.Profile, new ValueConversionProfileReference("elsa.json", "1"), null, null);
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Boolean"] = typeof(bool), ["String"] = typeof(string), ["Int32"] = typeof(int), ["Double"] = typeof(double)
+        }));
+        var value = ValueEnvelope.Inline(source, JsonSerializer.Deserialize<JsonElement>(json), ValueProtectionPolicy.InstanceInline);
+
+        if (converts)
+            Assert.Equal(json, executor.Convert(value, plan).InlineValue!.Value.GetRawText());
+        else
+            Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(value, plan));
+    }
 
     private static RuntimeValueConversionExecutor TypedExecutor() => new(new TestTypeRegistry(
         new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)

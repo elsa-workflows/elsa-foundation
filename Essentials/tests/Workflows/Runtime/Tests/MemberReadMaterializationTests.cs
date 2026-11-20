@@ -201,8 +201,8 @@ public sealed class MemberReadMaterializationTests
         Assert.Equal(RuntimeInputBindingSource.WorkflowRequest, seen.Source);
         Assert.Null(seen.Selection);
         Assert.Null(seen.WorkflowRequest!.Path);
-        // The derived whole-value read is of the source, so it carries the neutral Elsa.Any, not the member's type.
-        Assert.Equal(new ValueTypeDescriptor("Elsa.Any"), seen.TargetType);
+        // The derived whole-value read is of the source, so it carries the neutral Any, not the member's type.
+        Assert.Equal(new ValueTypeDescriptor("Any"), seen.TargetType);
     }
 
     [Theory]
@@ -211,7 +211,7 @@ public sealed class MemberReadMaterializationTests
     [InlineData(new[] { "address" }, "VF-SEL-004")]
     public async Task A_member_read_into_an_Elsa_Any_collection_is_fitted_before_the_snapshot(string[] segments, string? code)
     {
-        var anyList = new ValueTypeDescriptor("Elsa.Any", CollectionKind.List);
+        var anyList = new ValueTypeDescriptor("Any", CollectionKind.List);
         var binding = Member("variable", segments, inputType: anyList);
 
         if (code is null)
@@ -239,7 +239,7 @@ public sealed class MemberReadMaterializationTests
     [Fact]
     public async Task A_member_read_into_a_single_Elsa_Any_accepts_any_member()
     {
-        var any = new ValueTypeDescriptor("Elsa.Any");
+        var any = new ValueTypeDescriptor("Any");
 
         var snapshot = await MaterializeAsync(Member("variable", ["address"], inputType: any), Context("variable", external: false), Store(), inputType: any);
 
@@ -509,7 +509,7 @@ public sealed class MemberReadMaterializationTests
     {
         private static readonly Dictionary<string, Type> Types = new(StringComparer.Ordinal)
         {
-            ["String"] = typeof(string), ["Int32"] = typeof(int), ["Object"] = typeof(object), ["Customer"] = typeof(object)
+            ["String"] = typeof(string), ["Int32"] = typeof(int), ["Any"] = typeof(System.Text.Json.JsonElement), ["Customer"] = typeof(object)
         };
 
         public void RegisterType(Type type, string alias) => throw new NotSupportedException();

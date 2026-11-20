@@ -222,6 +222,11 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
 
         var alias = TypeAliasConvention.CanonicalAlias(elementType);
 
+        // A .NET object input or output is the dynamic kind, Any, whose CLR type is JsonElement, seeded by the type
+        // descriptors. object itself is never registered (spec 1228 FR-018).
+        if (TypeAliasConvention.IsAny(alias))
+            return;
+
         // Already mapped to this exact type (e.g. a primitive seeded earlier, or a re-run): nothing to do.
         if (_wellKnownTypeRegistry.TryGetType(alias, out _))
             return;

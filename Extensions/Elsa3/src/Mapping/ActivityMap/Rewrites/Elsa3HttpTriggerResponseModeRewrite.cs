@@ -98,7 +98,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
         var expression = new ExpressionDefinition(
             "JavaScript",
             source,
-            new TypeReference("Object"),
+            new TypeReference(TypeAliasConvention.AnyAlias),
             new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal)
             {
                 ["request"] = new ActivityResultExpressionParameterBinding(Elsa3ConversionDiagnostics.NodeId(endpoint), RequestOutput)
@@ -127,7 +127,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
             SynthesizedFrom = (endpoint, suffix == "query" ? "QueryStringData" : "Headers"),
             Intrinsic = new AuthoredWorkflowIntrinsic(
                 AuthoredWorkflowIntrinsicKind.Set,
-                new TypeReference("Object"),
+                new TypeReference(TypeAliasConvention.AnyAlias),
                 new VariableReference(variableKey, VariableReference.WorkflowScopeId))
         };
         context.Plan.Nodes[setNode] = setPlan;

@@ -13,7 +13,8 @@ least one lossy path.
 
 ## Input
 
-- The node and the value key being written.
+- The target being written: `result`, or the value key such as `variables.order`. The node and the input are not
+  passed: a refusal faults the step, or blocks it for an input, and the fault or incident names them.
 - Each lossy path: stored text, written text.
 - Whether the write is a whole-array write.
 

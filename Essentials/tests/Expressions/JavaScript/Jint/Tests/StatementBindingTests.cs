@@ -53,16 +53,17 @@ public sealed class StatementBindingTests
     }
 
     [Fact]
-    public async Task Statement_body_cannot_mutate_its_read_only_args_snapshot()
+    public async Task Statement_body_changes_its_args_locally_and_never_the_request_snapshot()
     {
+        // Spec 1228: args are plain, changeable values; a change is local to the evaluation and is never a write.
         var values = new Dictionary<string, JsonElement>
         {
             ["order"] = JsonSerializer.SerializeToElement(new { total = 42 })
         };
 
-        await Assert.ThrowsAsync<JavaScriptException>(() =>
-            EvaluateAsync("args.order.total = 0; return args.order.total;", values));
+        var result = await EvaluateAsync("args.order.total = 0; return args.order.total;", values);
 
+        Assert.Equal(0, result.GetInt32());
         Assert.Equal(42, values["order"].GetProperty("total").GetInt32());
     }
 

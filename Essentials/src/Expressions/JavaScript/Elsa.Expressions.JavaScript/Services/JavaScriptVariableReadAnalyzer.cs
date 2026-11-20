@@ -49,7 +49,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
 
         var walker = new Walker(_readingFunctions);
         walker.Visit(parsed);
-        return new ScriptVariableReadAnalysis(walker.LiteralNames, walker.HasComputedRead, walker.LiteralReads);
+        return new ScriptVariableReadAnalysis(walker.LiteralNames, walker.HasComputedRead, walker.LiteralReads) { Writes = walker.Writes };
     }
 
     private static bool DeclaresRoot(Node node)
@@ -104,6 +104,54 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         public List<string> LiteralNames { get; } = [];
         public List<ScriptVariableLiteralRead> LiteralReads { get; } = [];
         public bool HasComputedRead { get; private set; }
+        public List<ScriptVariableWrite> Writes { get; } = [];
+
+        /// <summary>
+        /// Records a write whose target is rooted at a variable named literally (spec 1228 FR-006a): <c>variables.X…</c>,
+        /// <c>variables['X']…</c> or <c>getVariable('X')…</c>.
+        /// </summary>
+        private void RecordWrite(Node target)
+        {
+            var segments = new List<string>();
+            var node = target;
+            while (node is MemberExpression member)
+            {
+                if (member.Object is Identifier { Name: VariablesRoot })
+                {
+                    var name = !member.Computed && member.Property is Identifier identifier ? identifier.Name
+                        : member.Computed && member.Property is Literal { Value: string literal } ? literal
+                        : null;
+                    if (name is not null)
+                    {
+                        segments.Add(Segment(name));
+                        segments.Reverse();
+                        Writes.Add(new ScriptVariableWrite(name, VariablesRoot + string.Concat(segments)));
+                    }
+
+                    return;
+                }
+
+                segments.Add(!member.Computed && member.Property is Identifier property ? Segment(property.Name)
+                    : member.Property is Literal { Value: string key } ? Segment(key)
+                    : member.Property is Literal { Value: double index } ? $"[{index.ToString(System.Globalization.CultureInfo.InvariantCulture)}]"
+                    : "[…]");
+                if (member.Object is CallExpression { Callee: Identifier { Name: GetVariable } } call &&
+                    call.Arguments.Count >= 1 && call.Arguments[0] is Literal { Value: string variable })
+                {
+                    segments.Add(Segment(variable));
+                    segments.Reverse();
+                    Writes.Add(new ScriptVariableWrite(variable, VariablesRoot + string.Concat(segments)));
+                    return;
+                }
+
+                node = member.Object;
+            }
+        }
+
+        private static string Segment(string name) =>
+            name.Length > 0 && (char.IsLetter(name[0]) || name[0] is '_' or '$') && name.All(character => char.IsLetterOrDigit(character) || character is '_' or '$')
+                ? "." + name
+                : "[" + System.Text.Json.JsonSerializer.Serialize(name) + "]";
 
         private void AddLiteral(string name, Node token, bool isMemberName)
         {
@@ -117,6 +165,15 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
             {
                 case null:
                     return;
+                case AssignmentExpression assignment:
+                    RecordWrite(assignment.Left);
+                    break;
+                case UpdateExpression update:
+                    RecordWrite(update.Argument);
+                    break;
+                case UnaryExpression { Operator: Operator.Delete } deletion:
+                    RecordWrite(deletion.Argument);
+                    break;
                 case MemberExpression { Object: Identifier { Name: VariablesRoot } } member:
                     if (!member.Computed && member.Property is Identifier name)
                         AddLiteral(name.Name, name, isMemberName: true);

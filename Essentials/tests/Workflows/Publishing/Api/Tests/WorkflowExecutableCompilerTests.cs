@@ -2979,9 +2979,9 @@ public sealed partial class WorkflowExecutableCompilerTests
     }
 
     [Theory]
-    [InlineData("Literal", "Elsa.Any")]
-    [InlineData("JavaScript", "Elsa.Any")]
-    [InlineData("Variable", "Elsa.Any")]
+    [InlineData("Literal", "Any")]
+    [InlineData("JavaScript", "Any")]
+    [InlineData("Variable", "Any")]
     [InlineData("Literal", "Int64")]
     public async Task Set_compiles_against_the_selected_variable_declaration(string syntax, string authoredAlias)
     {
@@ -3093,13 +3093,17 @@ public sealed partial class WorkflowExecutableCompilerTests
         Assert.Equal(ValueConversionOperation.NumericWidening, plan.Operation);
     }
 
-    [Fact]
-    public async Task Set_defers_projected_request_type_validation_to_runtime()
+    // Object and Elsa.Any read as Any, the dynamic kind: no static source contract (spec 1228 FR-018).
+    [Theory]
+    [InlineData("Any")]
+    [InlineData("Elsa.Any")]
+    [InlineData("Object")]
+    public async Task Set_defers_projected_request_type_validation_to_runtime(string sourceAlias)
     {
         var counter = new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null);
         var set = DynamicSetIntrinsicNode("set-counter", "counter", new { memberKey = "source", path = "count" }, "WorkflowRequest");
         var executable = await Compiler(WorkflowVersion(SequenceNode("root", [set]),
-            inputs: [WorkflowInput("source", new TypeReference("Elsa.Any"), true)], variables: [counter]))
+            inputs: [WorkflowInput("source", new TypeReference(sourceAlias), true)], variables: [counter]))
             .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
 
         var plan = executable.NodesById["set-counter"].InputBindings[WorkflowIntrinsicInputKeys.Value].ConversionPlan;
@@ -3111,7 +3115,6 @@ public sealed partial class WorkflowExecutableCompilerTests
     [InlineData("Guid")]
     [InlineData("DateTime")]
     [InlineData("TimeSpan")]
-    [InlineData("Object")]
     public async Task Set_preserves_matching_request_contracts_for_registered_non_numeric_types(string alias)
     {
         var target = new Elsa.Expressions.Core.Models.VariableDefinition("target", "Target", new TypeReference(alias), null, null);
@@ -3132,7 +3135,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         object value,
         string syntax,
         string scope = "workflow",
-        string authoredAlias = "Elsa.Any") =>
+        string authoredAlias = "Any") =>
         new(nodeId, "elsa.intrinsic.set@1",
             [new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Value, new ArgumentValue(JsonSerializer.SerializeToElement(value), syntax), null, null, null, null)], [])
         {

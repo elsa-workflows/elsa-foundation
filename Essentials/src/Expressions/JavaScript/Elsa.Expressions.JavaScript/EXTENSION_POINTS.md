@@ -20,12 +20,28 @@ hydrated equal source strings; dead source/preparation is not kept alive by that
 limits, cancellation and engine state remain per evaluation;
 discarding executable source also releases its preparation. No engine or evaluated result is cached.
 
+Values enter scripts and bindings alike as plain, changeable JavaScript values through `IScriptValueBridge` (spec 1228);
+a JavaScript input expression only reads, so any change the bridge reports fails its evaluation with `VF-BIND-001`, and
+one the source shows is refused at publish.
+
 `IJavaScriptScriptEvaluator` is a separate typed activity-script contract used by `RunJavaScript`.
 It accepts one explicit JSON argument document and returns a `JavaScriptScriptEvaluationResult`: the
 script's JSON result and, on a separate channel, its outcome selection (`Unspecified`, `Named` with
 the selected names in order, or `Empty`). It is not registered as an expression handler, cannot
 evaluate canonical input bindings, and shares only the closed `IsolatedJintEngine` implementation
 with portable expression evaluation.
+
+- **Variables** (spec 1222 FR-033, spec 1228 FR-006, FR-007): the request's `Variables`
+  (`IScriptVariableSession`, `Elsa.Expressions.JavaScript.Core`) gives the body the `variables` root and
+  `getVariable`, read through the host's session (each read recorded; the committed value plus the step's own
+  writes). After the run, each change the bridge reports goes through the precision policy and then back through
+  `Write` as a whole value (a member change patched into the stored value); every change is checked before any is
+  written. A change made without assigning the variable is still written and raises `VF-WRITE-001` (ADR 0090 C2).
+  When `HasReadProtectedValue` is set, the evaluator reports warnings in their protected form. A variable
+  `IsReadOnly` reports (a loop's item or index) enters deep-frozen, and assigning it throws, so a change fails where
+  the script makes it (spec 1231 FR-006). The implementation
+  is `StepScriptVariables` in `Elsa.Activities.Scripting`, over the step's `IStepVariableSession`; without a session
+  the body has no `variables` root.
 
 - **Built-in `complete(result, outcomes)`** (spec 1208 FR-007): installed for script activities only.
   A script selects outcomes solely by *returning* `complete(result, outcomes)`, where `outcomes` is
@@ -114,17 +130,56 @@ with portable expression evaluation.
   `Analyze(source, scriptBody)` parses a script (never evaluates it) and returns a `ScriptVariableReadAnalysis`, or
   `null` when it does not parse: `LiteralNames` read as `variables.X`, `variables['X']` or `getVariable('X')`, and
   `HasComputedRead` when it also reads variables it does not name (`variables[expr]`, `getVariable(expr)`, `variables`
-  or `getVariable` used as a value or declared by the script).
+  or `getVariable` used as a value or declared by the script). `Writes` lists each variable, or member of one, that
+  the script visibly assigns, updates or deletes (spec 1228 FR-006a); an analyzer that does not report them leaves
+  only the run-time `VF-BIND-001` check.
 - **Implementation:** `JavaScriptVariableReadAnalyzer` (internal, Acornima), registered as a singleton by
   `JavaScriptFeature`. One analyzer per language; the Liquid feature registers its own.
 - **Consumer:** `ScriptVariableReadResolver` in `Elsa.Workflows.Design.Validations`, used by the publish compiler to
-  pin literal reads and set the fallback marker, by `ScriptVariableReadValidator` for the draft diagnostics and by the
-  rename planner.
+  pin literal reads and set the fallback marker and to refuse an input expression that writes (`VF-BIND-001`), by
+  `ScriptVariableReadValidator` for the draft diagnostics and by the rename planner.
 - **Override when:** a host uses another JavaScript parser or dialect. Replace the default registration (remove it and
   register its own): two analyzers of different types for one language fail the shell at start, so none wins silently.
 - **Host functions:** a call to a function declared with `ReadsVariables: true` (by its name, or as
   `namespace.member`) is an opaque read, so publish sets the fallback marker. See `JavaScriptHostFunctionDeclaration`
   above.
+
+### IScriptValueBridge *(Jint — Elsa.Expressions.JavaScript.Jint)*
+
+- **Kind:** replacement contract: exactly one implementation is active per host (spec 1228 FR-009, ADR 0046 V12).
+- **Contract:** `Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge` — `Begin(engine)` starts the values of
+  one evaluation (`IScriptValueEvaluation`): `Enter(key, json)` puts a value in as a plain, changeable JavaScript value
+  and records its lossy numbers; `Collect(key, current, assigned)` reports, after the run, unchanged, a member change
+  (untouched members keep their stored text) or a whole assignment (a changed array is written whole); `Write(value,
+  path)` converts a value leaving the evaluation, writing an unchanged entered value from its original JSON and
+  reporting the lossy entered numbers the written JSON carries; `TryFindLoss(double)` serves host-function argument
+  checks. Script activities and JavaScript input expressions use the same bridge (D-15).
+- **Implementation:** `CopyComparePatchValueBridge` (internal), registered with `TryAddSingleton` by `JintFeature`.
+  It compares JavaScript with JavaScript (ADR 0090 C2) and records its cost per evaluation on the
+  `Elsa.Expressions.JavaScript` meter (`elsa.javascript.value_bridge.enter.duration`, `…collect.duration`, `…bytes`).
+- **Consumer:** `JintJavaScriptScriptEvaluator` (script activities) and `JintPortableJavaScriptEvaluator` (input
+  expressions), through `IsolatedJintEngine` and `JavaScriptValueWrites`.
+- **Override when:** a faster bridge (for example one built on proxies) behaves identically; replace the registration
+  from a host feature (`services.Replace(...)`). One that behaves differently is a new JSON profile, so a new adapter
+  version of the contract in `docs/reference/value-adapters.md` (FR-028).
+- **Contract text:** [`docs/reference/value-adapters.md`](../../../../../docs/reference/value-adapters.md).
+
+### IJavaScriptPrecisionPolicy *(Core — Elsa.Expressions.JavaScript.Core)*
+
+- **Kind:** replacement contract: exactly one policy is active per host, host-wide, with no per-workflow or per-node
+  override (D-17, spec 1228 FR-012).
+- **Contract:** `Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptPrecisionPolicy` — `Decide(context)` gets the
+  target being written (`result` or `variables.<name>`) and each `JavaScriptPrecisionLoss` (path, the lossy entered
+  number with its stored text, the written text, and the array written whole when there is one), and returns allow or
+  refuse with one `JavaScriptPrecisionDiagnostic` per loss. A refusal faults the step with `VF-PREC-001`
+  (`JavaScriptPrecisionException`); nothing of the step is written. Only writes that carry a loss reach the policy;
+  computing with a lossy value warns (`VF-PREC-002`), and so does passing one to a host function (spec 1223 FR-028): the warning names the function and the argument path, and the call runs.
+- **Implementation:** `RefusingPrecisionPolicy` (public, no options), registered with `TryAddSingleton` by `JintFeature`.
+- **Consumer:** `JavaScriptValueWrites.Apply`, called by `JintJavaScriptScriptEvaluator` and
+  `JintPortableJavaScriptEvaluator` for each write that carries a loss.
+- **Override when:** a host wants other handling of a loss. Replace the registration from a host feature
+  (`services.Replace(ServiceDescriptor.Singleton<IJavaScriptPrecisionPolicy, MyPolicy>())`); Elsa's default then does
+  not run.
 
 ## Cross-references
 

@@ -1,12 +1,13 @@
 # Contract: JavaScript adapter (JSON profile)
 
-Version: the first pinned version of the JSON profile (ADR 0046 V12). Any change ships as a new version.
+Version: the first version of the JSON profile, `json-1` (ADR 0046 V12). A rule never changes in place; a change after
+4.0 comes with its own plan for executables already published (FR-028). Nothing is stamped into an executable.
 
 ## Into JavaScript
 
 | Core value | JavaScript value | Loss |
 |---|---|---|
-| Object | Plain, changeable object; key order and casing kept | none |
+| Object | Plain, changeable object; key order and casing kept while it is unchanged or changes in a member | none |
 | Array | Real, changeable array | none |
 | String (dates included) | String | none |
 | Boolean, null | Boolean, null | none |
@@ -27,6 +28,7 @@ The same contract applies to script activities and JavaScript input expressions 
 | Assigned a whole value | Whole assignment | Step write replaces (equality by meaning, ADR 0090 C4) |
 | Changed an array | Whole array | Step write replaces the array |
 | Set a member equal, as JavaScript, to what it read | Unchanged | Nothing (accepted gap; a string forces the write) |
+| Added a member JSON cannot hold (a function, a Symbol, `undefined`) | Unchanged | Nothing: JSON drops such a member, so the stored value is what it was (an input expression is not refused for it) |
 | Returned a value | Result | The result, as JSON |
 
 A script activity's changes go to the step write path (S-7). An input expression never writes: an assignment visible
@@ -40,7 +42,7 @@ Notation may change (`2.0` → `2`, `1e21` → `1e+21`); values do not.
 |---|---|---|
 | A lossy number reaches a write | Refused (policy) | Path, stored, written; integer: "exceeds 9007199254740991"; decimal: "has more digits than a JavaScript number holds"; remedy: hold it as a string |
 | A lossy element in a written array | Refused (policy) | Array path, "written as a whole", each lossy element with both values, remedy |
-| A lossy number read but not written | One warning per evaluation (instance diagnostic) | Lossy paths and stored values |
+| A lossy number read but not written | One warning per evaluation (instance diagnostic) | Lossy paths and why; never a value (spec 1229 FR-006) |
 | A value returned or written unchanged | Written from the original JSON | No diagnostic |
 | A lossy number passed to a host function | Logged warning | Function, argument path |
 | An input expression assigns a variable or a member of one | Refused at publish | Node, input, variable, path; "input expressions only read"; use a script activity |

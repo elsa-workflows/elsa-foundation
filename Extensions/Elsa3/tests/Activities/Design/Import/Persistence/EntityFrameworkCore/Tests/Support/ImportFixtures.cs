@@ -90,7 +90,7 @@ internal static class ImportFixtures
     {
         var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
-        registry.RegisterType(typeof(object), "Object");
+        registry.RegisterType(typeof(System.Text.Json.JsonElement), "Any");
         // The conversion as the Elsa3Mapping feature registers it, over a catalog whose one activity every type maps to.
         var services = new ServiceCollection();
         services.AddSingleton<IActivityDefinitionLookup>(new BuiltInActivityLookup());

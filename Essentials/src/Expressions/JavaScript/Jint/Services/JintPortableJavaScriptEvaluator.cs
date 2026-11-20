@@ -1,8 +1,12 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Exceptions;
+using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services;
@@ -14,8 +18,11 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// </summary>
 internal sealed class JintPortableJavaScriptEvaluator(
     IOptions<FeatureOptions> featureOptions,
+    IScriptValueBridge valueBridge,
+    IJavaScriptPrecisionPolicy precisionPolicy,
     JavaScriptHostFunctions hostFunctions,
-    TimeProvider? timeProvider = null) : IPortableJavaScriptEvaluator
+    TimeProvider? timeProvider = null,
+    ILogger<JintPortableJavaScriptEvaluator>? logger = null) : IPortableJavaScriptEvaluator
 {
     public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
     {
@@ -32,14 +39,32 @@ internal sealed class JintPortableJavaScriptEvaluator(
         var prepared = PreparedJavaScript.Binding(definition.Source);
 
         var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken, timeProvider);
-        hostFunctions.Install(engine, featureOptions.Value, request.VariableReader, request.CancellationToken);
-        IsolatedJintEngine.SetReadOnlyArgs(engine, request.ArgumentValues(), featureOptions.Value);
-        IsolatedJintEngine.SetReadOnlyVariables(engine, request.PinnedVariableValues(), request.VariableReader, featureOptions.Value);
+        using var values = valueBridge.Begin(engine);
+        var functions = new JavaScriptHostFunctionContext(values, request.VariableReader, logger);
+        hostFunctions.Install(engine, featureOptions.Value, functions, request.CancellationToken);
+        IsolatedJintEngine.SetArgs(engine, values, request.ArgumentValues(), featureOptions.Value);
+        var variables = IsolatedJintEngine.SetVariables(engine, values, request.PinnedVariableValues(), request.VariableReader, featureOptions.Value);
 
         var result = engine.Evaluate(prepared);
+
+        // Spec 1228 FR-006a, ADR 0083 binding-readonly-v1: an input expression only reads. Any change the bridge finds
+        // fails the evaluation, so nothing is written and nothing is dropped silently.
+        if (variables is not null)
+        {
+            foreach (var (name, change) in variables.CollectForRefusal())
+            {
+                if (change.Kind != ScriptValueChangeKind.Unchanged)
+                    throw new InputExpressionWriteException(name, change.ChangedPaths.Count > 0 ? change.ChangedPaths[0] : change.Key, variables.IsDeclared(name));
+            }
+        }
+
         if (result.IsUndefined())
             throw new InvalidOperationException("A JavaScript binding must produce a value. Use an expression or return a value from the statement block; undefined is not supported.");
 
-        return ValueTask.FromResult(JintResultMaterializer.Materialize(engine, result, featureOptions.Value));
+        foreach (var warning in functions.Warnings)
+            request.Warnings?.Report(warning);
+        var written = JavaScriptValueWrites.Apply(values.Write(result, "result"), "result", precisionPolicy);
+        JavaScriptValueWrites.WarnLossyReads(values, written.Losses, request.Warnings, logger);
+        return ValueTask.FromResult(written.Value!.Value);
     }
 }

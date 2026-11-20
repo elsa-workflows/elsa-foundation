@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-09
 
-**Status**: Approved — by @j03y-nxxbz (the approval plan) on 2026-11-17, with all six open questions answered as recommended. Every ADR it applies is accepted and merged into the initiative branch.
+**Status**: Implemented — PR #4762 (input expressions, publish pinning, the converter) and PR #4838 (Phase 8: the `RunJavaScript` body's `variables` root over S-7's variable session). Approved by @j03y-nxxbz (the approval plan) on 2026-11-17, with all six open questions answered as recommended.
 
 **Spec number**: 1222
 

@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// </summary>
 public sealed class ScriptVariableReadMaterializationTests
 {
-    private static readonly ValueTypeDescriptor Any = new("Elsa.Any");
+    private static readonly ValueTypeDescriptor Any = new("Any");
     private static readonly DurableValueExternalReference LargeReference = new("blob", "payloads/large", new Dictionary<string, string>());
 
     private static readonly ValueEnvelope Order = Inline(new { total = 3 });

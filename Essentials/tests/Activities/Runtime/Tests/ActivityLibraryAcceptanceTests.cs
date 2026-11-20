@@ -358,7 +358,7 @@ public sealed class ActivityLibraryAcceptanceTests
 
     private static RuntimeInputBinding CollectionBinding(IReadOnlyCollection<string> collection)
     {
-        var type = new ValueTypeDescriptor("Elsa.Any", CollectionKind.List);
+        var type = new ValueTypeDescriptor("Any", CollectionKind.List);
         var policy = ValueProtectionPolicy.InstanceInline;
         return new RuntimeInputBinding(
             nameof(ForEachActivity.Collection),

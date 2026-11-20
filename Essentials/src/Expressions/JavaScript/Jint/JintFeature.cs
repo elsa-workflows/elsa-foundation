@@ -1,6 +1,8 @@
 ﻿using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Services;
+using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Elsa.Expressions.JavaScript.Jint.Services;
 using CShells.Lifecycle;
@@ -89,5 +91,13 @@ public class JintFeature : IShellFeature
         services
             .AddScoped<IPortableJavaScriptEvaluator, JintPortableJavaScriptEvaluator>()
             .AddScoped<IJavaScriptScriptEvaluator, JintJavaScriptScriptEvaluator>();
+
+        // Replacement contracts (spec 1228 FR-009, FR-012): one of each is active per host. A host feature replaces the
+        // default with services.Replace(...); there is no per-workflow or per-node override, and a second registration
+        // fails shell activation. Both are singletons on purpose: they hold no state and no scoped dependency; the
+        // per-evaluation state lives in the IScriptValueEvaluation each evaluation begins (framework §2.5.1).
+        services.TryAddSingleton<IScriptValueBridge, CopyComparePatchValueBridge>();
+        services.TryAddSingleton<IJavaScriptPrecisionPolicy, RefusingPrecisionPolicy>();
+        JavaScriptValueCompositionValidator.Register(services);
     }
 }

@@ -205,6 +205,9 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("new Date('2026\\u002D10\\u002D28T09:15:00').getHours()", "9")]
     [InlineData("new Date(`2026-10-28T09:15:00`).getHours()", "9")]
     [InlineData("(new Date(Date.UTC(2026, 9, 28, 8, 15)) /* x) */ ) . getHours()", "9")]
+    [InlineData("new Date(Date.UTC(2026, 9, 28, 8, 15)).getHours <!-- c(\n()", "9")]
+    [InlineData("new Date(Date.UTC(2026, 9, 28, 8, 15)).getHours\n--> c(\n()", "9")]
+    [InlineData("new Date(Date.UTC(2026, 9, 28, 8, 15)).getHours\uFEFF()", "9")]
     // Zone-independent usage is untouched.
     [InlineData("new Date(Date.UTC(2026, 9, 28, 8, 15)).getUTCHours()", "8")]
     public async Task Under_source_time_zone_the_zone_is_written_in_the_code_and_matches_elsa3(string expression, string expected)
@@ -251,6 +254,17 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var converted = Text(Input(Node(result.Value!.State, "node"), "script"));
         Assert.Equal("Due <2026-10-28T08:15:00.000Z> & 9", (await PortableJavaScript.RunScriptAsync(converted))!.Value.GetString());
+    }
+
+    // An HTML-like comment that stays in the converted code (here inside a parenthesized receiver) is refused: Elsa 4
+    // reads an input expression in a form that has no HTML-like comments. The rewrite around it stays valid.
+    [Fact]
+    public async Task An_html_like_comment_left_in_an_expression_is_refused_not_broken()
+    {
+        var result = await ConvertAsync("(new Date(Date.UTC(2026, 9, 28, 8, 15)) <!-- )\n).getHours()", Elsa3DateInterpretation.SourceTimeZone, "Europe/Amsterdam");
+
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.UnsupportedShape, refusal.Code);
     }
 
     [Fact]

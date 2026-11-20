@@ -74,7 +74,7 @@ public sealed partial class ActivityResultConversionPlanLinkerTests
     {
         var exception = Assert.Throws<ValueConversionPublicationException>(() =>
             new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver()).Link(
-                Tree(Producer("String"), MemberConsumer("Elsa.Any", Deferred(), new RuntimeValueConversionRequest(ValueConversionMode.Json)))));
+                Tree(Producer("String"), MemberConsumer("Any", Deferred(), new RuntimeValueConversionRequest(ValueConversionMode.Json)))));
 
         Assert.Equal(ValueConversionRejectionReason.SelectedMemberContractUnknown, exception.ReasonCode);
         Assert.StartsWith("VF-COER-001", exception.Message, StringComparison.Ordinal);

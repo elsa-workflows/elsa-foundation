@@ -40,7 +40,7 @@
 - [x] T013 [US4] Register `stringToBase64`, `stringFromBase64` (invalid Base64 fails, invalid UTF-8 → U+FFFD) as built-ins (FR-007); no `toJson` global (FR-009); map other script arguments as a script result is mapped (FR-011).
 - [x] T014 [US4] Enforce the naming rule at startup: reserved names (`variables`, `input`, `activities`, `workflow`, `args`, the built-ins, namespace roots), namespace prefix for host functions, duplicate detection; failure names the function. Install a namespace as a read-only global object holding its functions (FR-027).
 - [x] T015 [US4] Extend the publish check (`JavaScriptReservedNames`): declaring `variables` → the existing error `Scripts/ReservedName`; `args` unchanged (spec 1222); `complete` unchanged (spec 1208); declaring `input`, `activities`, `workflow`, a built-in name or a namespace root → the new warning `Scripts/ShadowedFunction` (FR-027).
-- [ ] T016 [US4] Warn on a number argument that carries spec 1228's loss information, naming the function and the argument path; never refuse, never stringify (FR-028).
+- [x] T016 [US4] Warn on a number argument that carries spec 1228's loss information, naming the function and the argument path; never refuse, never stringify (FR-028).
 - [x] T017 [P] [US4] xUnit: Base64 round trip and Elsa 3 parity; no `toJson` global; no live .NET object in or out — quickstart B8–B10, SC-005, SC-008.
 - [x] T018 [P] [US4] xUnit: naming failures, reserved-name warning, no fallback read marker for built-ins, no effectful option on the registration, V9 warning — quickstart B11–B11b.
 - [x] T019 [P] [US4] xUnit: surface parity — each intrinsic and built-in identical in an input binding and a `RunJavaScript` script (FR-003) — quickstart A5, SC-004.

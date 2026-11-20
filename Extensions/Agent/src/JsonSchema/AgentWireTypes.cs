@@ -45,7 +45,7 @@ internal static class AgentWireTypes
             "String" => typeof(string), "Boolean" => typeof(bool), "Int32" => typeof(int), "Int64" => typeof(long),
             "Double" => typeof(double), "Decimal" => typeof(decimal), "DateTime" => typeof(DateTime),
             "DateTimeOffset" => typeof(DateTimeOffset), "TimeSpan" => typeof(TimeSpan), "Guid" => typeof(Guid),
-            "Object" or "JsonElement" or "System.Text.Json.JsonElement" => typeof(JsonElement), _ => null
+            TypeAliasConvention.AnyAlias or "JsonElement" or "System.Text.Json.JsonElement" => typeof(JsonElement), _ => null
         };
         if (type is null) return false;
         try
@@ -60,6 +60,6 @@ internal static class AgentWireTypes
 
     private static bool CanConvertItem(JsonElement item, string alias) =>
         item.ValueKind == JsonValueKind.Null
-            ? alias is "Object" or "JsonElement" or "System.Text.Json.JsonElement"
+            ? alias is TypeAliasConvention.AnyAlias or "JsonElement" or "System.Text.Json.JsonElement"
             : CanConvert(item, alias, CollectionKind.Single);
 }

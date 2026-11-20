@@ -257,7 +257,7 @@ internal sealed class Elsa3DefinitionConverter(
             return new Elsa3NodeContract(resolved.Inputs, resolved.Outputs);
 
         var loopOutputs = nodePlan.LoopVariables.Select(item => new Elsa.Activities.Design.Core.Models.OutputDefinition(
-            item.Value, item.Key, new Elsa.Primitives.Models.TypeReference("Object"), null, item.Value, null, true));
+            item.Value, item.Key, new Elsa.Primitives.Models.TypeReference(Elsa.Primitives.Models.TypeAliasConvention.AnyAlias), null, item.Value, null, true));
         return new Elsa3NodeContract(resolved.Inputs, resolved.Outputs.Concat(loopOutputs).ToArray());
     }
 

@@ -28,6 +28,7 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
         var inputMaterializer = serviceProvider.GetService<IRuntimeActivityInputMaterializer>()
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an input snapshot materializer.");
         cancellationToken.ThrowIfCancellationRequested();
+
         // The built-in literal and secret-reference paths need no execution state. Secret values
         // remain withheld here and are resolved only at activation. Custom implementations keep
         // their complete context, including custom binding resolvers inside the default materializer.
@@ -61,6 +62,7 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             ? RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable)
             : projections.WorkflowInputEnvelopes;
         var readRecorder = new RuntimeVariableReadRecorder();
+        var warnings = new Elsa.Expressions.Core.Models.ExecutionWarningCollector();
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: state.Execution.WorkflowExecutionId,
             activityExecutionId: state.InvocationId,
@@ -73,7 +75,10 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             // carries the fallback marker loads and reads them.
             visibleVariables: RuntimeContainerScopeService.ProjectReadableVariables(executable, visibleFrames.Frames, visibleFrames.RootVariableNames),
             correlationId: projections.CorrelationId,
-            variableReadRecorder: readRecorder);
+            variableReadRecorder: readRecorder)
+        {
+            Warnings = warnings
+        };
 
         var snapshot = await inputMaterializer.MaterializeSnapshotAsync(
             executableNode,
@@ -86,6 +91,9 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
         // invocation's input read set. Its capture writes are judged against these bases.
         // Spec 1222 FR-010: the reads input expressions made by a computed name are part of the snapshot too, absent ones
         // with their warning.
+        // Spec 1228: the input expressions' warnings are recorded with the snapshot, so inspection shows them.
+        if (warnings.Warnings is { Count: > 0 } raised)
+            snapshot = snapshot with { Warnings = raised };
         var computedReads = readRecorder.ToComputedReads(visibleFrames.Frames);
         if (computedReads is not null)
             snapshot = snapshot with { ComputedVariableReads = computedReads };

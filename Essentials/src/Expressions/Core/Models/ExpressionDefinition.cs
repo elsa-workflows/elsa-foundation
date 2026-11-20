@@ -387,6 +387,12 @@ public sealed record ExpressionEvaluationRequest
     /// </summary>
     public IExpressionVariableReader? VariableReader { get; }
 
+    /// <summary>
+    /// Where the evaluator reports warnings (spec 1228, the shared run-time warning channel); <see langword="null"/>
+    /// when the caller records none. The runtime records them on the activity execution.
+    /// </summary>
+    public IExecutionWarningSink? Warnings { get; init; }
+
     public CancellationToken CancellationToken { get; }
 
     /// <summary>The pinned <c>variables</c>-root values, by variable name.</summary>

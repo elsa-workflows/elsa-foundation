@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Liquid.Helpers;
+using Elsa.Primitives.Models;
 using Fluid;
 
 namespace Elsa.Expressions.Liquid.Services;
@@ -88,7 +89,7 @@ internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPor
             return number;
         }
 
-        if ((StringComparer.Ordinal.Equals(resultTypeAlias, "Object") || StringComparer.Ordinal.Equals(resultTypeAlias, "Any"))
+        if (TypeAliasConvention.IsAny(resultTypeAlias)
             && TryParseJson(rendered, out var structuredValue))
             return structuredValue;
 

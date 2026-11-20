@@ -56,7 +56,7 @@ public sealed partial class AgentPublicationTests
         var source = (await fixture.Sources.FindAsync(publication.SourceReferenceId))!;
         var types = fixture.Services.GetRequiredService<IWellKnownTypeRegistry>();
         types.RegisterType(typeof(string), "String");
-        types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
+        types.RegisterType(typeof(JsonElement), "Any"); // The host seeds JSON as Any; the full name resolves by convention.
         var placer = new ActivityTemplatePlacer(fixture.Publications, fixture.Templates, fixture.Sources, new Sha256ActivityPlacementHasher(),
             new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers), types);
         var placement = await placer.PlaceAsync(new(publication, template, source,
@@ -83,7 +83,7 @@ public sealed partial class AgentPublicationTests
         var source = (await fixture.Sources.FindAsync(publication.SourceReferenceId))!;
         var types = fixture.Services.GetRequiredService<IWellKnownTypeRegistry>();
         types.RegisterType(typeof(string), "String");
-        types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
+        types.RegisterType(typeof(JsonElement), "Any"); // The host seeds JSON as Any; the full name resolves by convention.
         var placer = new ActivityTemplatePlacer(fixture.Publications, fixture.Templates, fixture.Sources, new Sha256ActivityPlacementHasher(),
             new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers), types);
         var placement = await placer.PlaceAsync(new(publication, template, source,

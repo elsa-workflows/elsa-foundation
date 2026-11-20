@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using System.Text.Json;
 
@@ -113,6 +114,46 @@ public sealed record ActivityExecutionContext
         "No variable session is available here: only a step body (a leaf activity's execute or resume, run inline) reads and writes " +
         "workflow variables through context.Variables. Input bindings, structural evaluations and background workers have no session.");
 
+    /// <summary>
+    /// Where this step reports a warning (the shared run-time warning channel, spec 1228): the runtime records each one on
+    /// the activity execution, and inspection shows it. A warning never carries a value. Outside a step body (a background
+    /// worker, a test that builds the context by hand) reports are dropped.
+    /// </summary>
+    public IExecutionWarningSink Warnings => _warnings;
+
+    private IExecutionWarningSink _warnings = DroppedWarnings.Instance;
+
+    /// <summary>Returns a copy whose <see cref="Warnings"/> is <paramref name="warnings"/>: the runtime hands a step its sink this way.</summary>
+    public ActivityExecutionContext WithWarnings(IExecutionWarningSink warnings)
+    {
+        ArgumentNullException.ThrowIfNull(warnings);
+        var copy = this with { };
+        copy._warnings = warnings;
+        return copy;
+    }
+
+    /// <summary>
+    /// Whether an input of this step holds a protected value (sensitive, encrypted or redacted). A step's diagnostics then
+    /// use their value-free form: a member path or a number from that value is not shown (spec 1229 FR-006).
+    /// </summary>
+    public bool HasProtectedInputs => _hasProtectedInputs;
+
+    private bool _hasProtectedInputs;
+
+    /// <summary>Returns a copy whose <see cref="HasProtectedInputs"/> is <paramref name="hasProtectedInputs"/>; the runtime sets it.</summary>
+    public ActivityExecutionContext WithProtectedInputs(bool hasProtectedInputs)
+    {
+        var copy = this with { };
+        copy._hasProtectedInputs = hasProtectedInputs;
+        return copy;
+    }
+
+    private sealed class DroppedWarnings : IExecutionWarningSink
+    {
+        public static DroppedWarnings Instance { get; } = new();
+        public void Report(Elsa.Expressions.Core.Models.ExecutionWarning warning) { }
+    }
+
     /// <summary>Returns a copy whose <see cref="Variables"/> is <paramref name="variables"/>: the runtime hands a step its session this way.</summary>
     public ActivityExecutionContext WithVariables(IStepVariables variables)
     {
@@ -137,7 +178,12 @@ public sealed record ActivityExecutionContext
             TriggerNodeId,
             operationKey,
             targetOperationKey,
-            logicalInvocationId ?? LogicalInvocationId) { _variables = _variables };
+            logicalInvocationId ?? LogicalInvocationId)
+        {
+            _variables = _variables,
+            _warnings = _warnings,
+            _hasProtectedInputs = _hasProtectedInputs
+        };
 }
 
 /// <summary>Author-facing base for a transient activity that returns one atomic typed result.</summary>

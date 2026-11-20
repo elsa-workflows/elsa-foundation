@@ -198,7 +198,7 @@ internal sealed class Elsa3ActivityResolver(
             replacement.Inputs.ToArray(),
             replacement.OutputNames
                 .Order(StringComparer.Ordinal)
-                .Select(name => new OutputDefinition(name, name, new TypeReference("Object"), null, name, null, true))
+                .Select(name => new OutputDefinition(name, name, new TypeReference(TypeAliasConvention.AnyAlias), null, name, null, true))
                 .ToArray(),
             null)
         {

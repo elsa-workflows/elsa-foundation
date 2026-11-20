@@ -29,22 +29,29 @@ internal static class JintResultMaterializer
                 configurable: false));
     }
 
-    public static JsonElement Materialize(Engine engine, JsValue result, FeatureOptions options)
+    /// <summary>
+    /// Serializes <paramref name="value"/> with the engine's intrinsic <c>JSON.stringify</c>, captured before user code
+    /// ran, optionally with a <paramref name="replacer"/>. Returns <see langword="null"/> when the value has no JSON form.
+    /// </summary>
+    public static string? Stringify(Engine engine, JsValue value, JsValue? replacer = null)
     {
         ArgumentNullException.ThrowIfNull(engine);
+        var serialized = engine.Invoke(
+            engine.GetValue(StringifySlot),
+            JsValue.Undefined,
+            replacer is null ? [value] : [value, replacer]);
+        return serialized.IsString() ? serialized.AsString() : null;
+    }
+
+    /// <summary>Parses result JSON and checks it against the configured result limits.</summary>
+    public static JsonElement ParseResult(string json, FeatureOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(json);
         ArgumentNullException.ThrowIfNull(options);
         ValidatePositive(options.MaxResultBytes, nameof(options.MaxResultBytes));
         ValidatePositive(options.MaxResultDepth, nameof(options.MaxResultDepth));
         ValidatePositive(options.MaxResultNodes, nameof(options.MaxResultNodes));
 
-        var serialized = engine.Invoke(
-            engine.GetValue(StringifySlot),
-            JsValue.Undefined,
-            [result]);
-        if (!serialized.IsString())
-            throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
-
-        var json = serialized.AsString();
         var byteCount = Encoding.UTF8.GetByteCount(json);
         if (byteCount > options.MaxResultBytes)
         {

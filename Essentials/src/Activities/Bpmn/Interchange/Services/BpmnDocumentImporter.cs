@@ -293,7 +293,7 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 pools: collaboration?.PoolsFor(definition.ProcessId) ?? [],
                 lanes: definition.Lanes.Select(lane => new BpmnLane(lane.LaneId, lane.PoolId, lane.Name)).ToArray(),
                 variables: definition.Variables
-                    .Select(variable => new VariableDefinition(variable.Name, variable.Name, new TypeReference("Object"), StorageDriverType: null, Default: null))
+                    .Select(variable => new VariableDefinition(variable.Name, variable.Name, new TypeReference(TypeAliasConvention.AnyAlias), StorageDriverType: null, Default: null))
                     .ToArray(),
                 diagram: diagram,
                 isTransaction: definition.IsTransaction,

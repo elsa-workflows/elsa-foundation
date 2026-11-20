@@ -53,7 +53,7 @@ internal sealed class LoopStructureHandler(LoopKind loop) : IActivityStructureHa
             names = names.Where(name => !StringComparer.Ordinal.Equals(name, loop.SwitchedIndexVariableName)).ToArray();
 
         return names
-            .Select(name => new VariableDefinition(name, name, new TypeReference("Any"), null, null))
+            .Select(name => new VariableDefinition(name, name, new TypeReference(TypeAliasConvention.AnyAlias), null, null))
             .ToArray();
     }
 

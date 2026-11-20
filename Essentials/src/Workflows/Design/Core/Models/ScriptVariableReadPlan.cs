@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Models;
@@ -9,6 +10,9 @@ public sealed record ScriptVariableReadPlan(
     IReadOnlyList<ResolvedScriptVariableRead>? Candidates)
 {
     public static ScriptVariableReadPlan Empty { get; } = new([], [], null);
+
+    /// <summary>The writes to literally named variables the source shows (spec 1228 FR-006a).</summary>
+    public IReadOnlyList<ScriptVariableWrite> Writes { get; init; } = [];
 
     /// <summary>Whether the script has a computed or opaque read and needs the run-time fallback.</summary>
     public bool NeedsFallback => Candidates is not null;

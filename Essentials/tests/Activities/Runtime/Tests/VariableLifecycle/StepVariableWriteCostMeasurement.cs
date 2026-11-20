@@ -21,7 +21,7 @@ public sealed class StepVariableWriteCostMeasurement(ITestOutputHelper output)
 {
     private const string Key = "var-order";
     private static readonly bool Enabled = Environment.GetEnvironmentVariable("ELSA_MEASURE_VARIABLE_LIFECYCLE") == "1";
-    private static readonly ValueTypeDescriptor AnyType = new("Elsa.Any");
+    private static readonly ValueTypeDescriptor AnyType = new("Any");
 
     [Fact]
     public void Measure_read_write_and_commit_of_a_large_value_and_a_hot_loop()

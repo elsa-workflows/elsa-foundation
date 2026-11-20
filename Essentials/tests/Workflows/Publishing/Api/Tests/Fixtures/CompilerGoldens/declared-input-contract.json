@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:2f1a010e13351bd15ad46564dce28f631fab05ca7896819f2ad9c4c324380252",
-    "artifactId": "artifact-2f1a010e1335",
+    "artifactHash": "sha256:1fa441cb6b6708a0751a135a626c48d62cc1b03c0b73dd52a398691453a51c78",
+    "artifactId": "artifact-1fa441cb6b67",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -19,7 +19,7 @@
         "isRequired": true,
         "name": "alpha",
         "type": {
-          "alias": "Object",
+          "alias": "Any",
           "collectionKind": "Single"
         }
       },

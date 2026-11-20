@@ -653,13 +653,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         public bool AllowsOutcomeSetters { get; init; }
 
         /// <summary>
-        /// Expression mode reads variables through the Elsa 4 <c>variables</c> root (spec 1222 FR-026, FR-027). Script
-        /// mode, a RunJavaScript body, keeps lowering them to <c>args</c> until the body has its <c>variables</c> root
-        /// (FR-026a, task T047), and still refuses computed reads, which the body cannot serve yet.
+        /// Both modes read variables through the Elsa 4 <c>variables</c> root (spec 1222 FR-026, FR-027): an input
+        /// expression from its input snapshot, a RunJavaScript body over its variable session (FR-026a, FR-033). A
+        /// computed read keeps its form and is served by the run-time lookup.
         /// </summary>
         public Elsa3JavaScriptMode Mode { get; init; }
-
-        private bool ReadsVariablesRoot => Mode == Elsa3JavaScriptMode.Expression;
 
         /// <summary>The source being converted, for quoting the offending expression in a diagnostic.</summary>
         public string Source { get; init; } = string.Empty;
@@ -1219,7 +1217,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     {
                         // Spec 1222 FR-027: an Elsa 3 computed variable read keeps its form, getVariable(expr), and is
                         // served by the Elsa 4 run-time lookup, which resolves the name nearest scope first.
-                        if (kind == Elsa3AmbientReferenceKind.Variable && ReadsVariablesRoot && call.Arguments.Count == 1 &&
+                        if (kind == Elsa3AmbientReferenceKind.Variable && call.Arguments.Count == 1 &&
                             call.Arguments[0] is not SpreadElement)
                         {
                             if (!EnsureRootFree("getVariable", call))
@@ -1535,7 +1533,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 if (member.Computed || member.Property is not Identifier property)
                 {
                     // Spec 1222 FR-027: variables[expr] keeps its form and is served by the run-time lookup.
-                    if (member.Computed && ReadsVariablesRoot)
+                    if (member.Computed)
                     {
                         HasComputedVariableRead = true;
                         Visit(member.Property);
@@ -1562,13 +1560,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             {
                 // Spec 1222 FR-008, FR-027: the variables root used as a value (enumerated, passed, aliased) is an opaque
                 // read the run-time lookup serves.
-                if (ReadsVariablesRoot)
-                {
-                    HasComputedVariableRead = true;
-                    return;
-                }
-
-                Issues.Add(DynamicIssue($"JavaScript ambient root '{bareIdentifier.Name}' is not followed by a static member name."));
+                HasComputedVariableRead = true;
                 return;
             }
 
@@ -1619,9 +1611,13 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             // Spec 1222 FR-026: a variable read becomes variables.<name>, spelled as the variable is declared, and is
             // pinned at publish to its nearest declaring scope. The parameter added here is what the converter resolved;
             // publish derives the pins again.
-            if (ReadsVariablesRoot &&
-                resolution.VariableName is { } variableName &&
-                resolution.Binding is VariableExpressionParameterBinding variable)
+            // A RunJavaScript body reads a loop's item or index through args, as a copy: Elsa 4 freezes a loop value in a
+            // body (spec 1231 FR-006), and an Elsa 3 body that changed its item would fault where Elsa 3 ran.
+            if (resolution.VariableName is { } variableName &&
+                resolution.Binding is VariableExpressionParameterBinding variable &&
+                !(Mode == Elsa3JavaScriptMode.Script &&
+                  !StringComparer.Ordinal.Equals(variable.DeclaringScopeNodeId, Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId) &&
+                  Elsa3.Mapping.ActivityMap.Rewrites.Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(variable.VariableKey)))
             {
                 if (!EnsureRootFree(ExpressionParameterSurfaces.Variables, node))
                     return;
@@ -2053,20 +2049,34 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// </summary>
         private int SkipTrivia(int position, bool skipClosingParentheses)
         {
+            // Called right after a token, so a line has started only once a line terminator is passed: an HTML-like
+            // closing comment (-->) counts only at the start of a line (ECMAScript Annex B, which a script parse allows).
+            var lineStart = false;
             while (position < Source.Length)
             {
                 var character = Source[position];
-                if (char.IsWhiteSpace(character) || skipClosingParentheses && character == ')')
+                var span = Source.AsSpan(position);
+                if (IsLineTerminator(character))
+                {
+                    lineStart = true;
                     position++;
-                else if (Source.AsSpan(position).StartsWith("//"))
+                }
+                // U+FEFF is JavaScript whitespace, which char.IsWhiteSpace does not count.
+                else if (char.IsWhiteSpace(character) || character == '\uFEFF' || skipClosingParentheses && character == ')')
+                    position++;
+                else if (span.StartsWith("//") || span.StartsWith("<!--") || lineStart && span.StartsWith("-->"))
                 {
                     var end = Source.IndexOfAny(['\n', '\r', '\u2028', '\u2029'], position);
                     position = end < 0 ? Source.Length : end;
                 }
-                else if (Source.AsSpan(position).StartsWith("/*"))
+                else if (span.StartsWith("/*"))
                 {
                     var end = Source.IndexOf("*/", position + 2, StringComparison.Ordinal);
-                    position = end < 0 ? Source.Length : end + 2;
+                    if (end < 0)
+                        return Source.Length;
+                    if (Source.AsSpan(position, end - position).IndexOfAny(['\n', '\r', '\u2028', '\u2029']) >= 0)
+                        lineStart = true;
+                    position = end + 2;
                 }
                 else
                     return position;
@@ -2074,6 +2084,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
             return position;
         }
+
+        private static bool IsLineTerminator(char character) => character is '\n' or '\r' or '\u2028' or '\u2029';
 
         /// <summary>
         /// Whether the receiver contains an optional link (<c>a?.b</c>) of the same chain. A parenthesized chain ends there,
@@ -2496,4 +2508,10 @@ public static class Elsa3ImportDiagnosticCodes
 
     /// <summary>Info: a converted script selects a converter-declared catch-all for computed names outside its known set (spec 1208).</summary>
     public const string ScriptOutcomeCatchAll = "ELS3-SCRIPT-OUTCOME-CATCHALL";
+
+    /// <summary>
+    /// An untyped activity result is bound to a boolean, string or number input, and the import cannot show that Elsa 4
+    /// gives the value Elsa 3 did (spec 1228 FR-023, FR-024): refused, with guidance.
+    /// </summary>
+    public const string UntypedResultIntoTypedInput = "ELS3-UNTYPED-RESULT";
 }

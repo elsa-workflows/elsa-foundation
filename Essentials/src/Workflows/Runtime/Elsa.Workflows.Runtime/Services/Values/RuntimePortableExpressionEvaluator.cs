@@ -52,6 +52,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
         var activityResultPolicyResolved = !hasActivityResultDependency;
         ExpressionEvaluationRequest request;
         RuntimeVariableReadFallback? fallback = null;
+        // Spec 1228: an evaluation's warnings are kept only when it succeeds; a failed one reports its failure instead.
+        var warnings = new ExecutionWarningCollector();
         try
         {
             var dependencyPolicy = DetermineDependencyPolicy(expression, resolutionContext, nodeId, inputName);
@@ -71,7 +73,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
             fallback = expression.VariableReadFallback is null
                 ? null
                 : await RuntimeVariableReadFallback.LoadAsync(resolutionContext.VisibleVariables, externalPayloadStore, cancellationToken);
-            request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken);
+            request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken) { Warnings = warnings };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -139,7 +141,48 @@ internal sealed class RuntimePortableExpressionEvaluator(
             ThrowIfRefused(fallback, definition, expression, inputName, nodeId, effectivePolicy);
         }
 
+        // The diagnostic names the input and the two JSON kinds only, never the value, so it needs no redaction.
+        if (ShapeMismatch(targetType, value) is { } mismatch)
+        {
+            throw new ExpressionInputFailureException(
+                ExpressionInputFailureException.InputMaterializationFailed,
+                inputName,
+                expression.Language,
+                ExpressionInputFailureException.MaterializationPhase,
+                $"Input '{inputName}' on executable node '{nodeId}' is declared '{targetType.Alias}' and accepts only a JSON {mismatch.Expected}, but its expression returned a JSON {mismatch.Actual}.");
+        }
+
+        // A warning's member paths can name keys of a protected value it read: the protected form names roots only.
+        foreach (var warning in warnings.Warnings)
+            resolutionContext.Warnings?.Report(
+                ((Protects(effectivePolicy) ? warning.ProtectedForm : null) ?? warning).WithDetail("input", inputName));
         return new PortableExpressionEvaluation(value, effectivePolicy);
+    }
+
+    // A JsonObject or JsonArray input accepts the dynamic kind at publish; the shape is checked here, at run time
+    // (spec 1228 FR-021). Null is left to the input's own null rule.
+    private static (string Expected, string Actual)? ShapeMismatch(ValueTypeDescriptor targetType, JsonElement value)
+    {
+        if (targetType.CollectionKind != CollectionKind.Single ||
+            !TypeAliasConvention.IsShapedJson(targetType.Alias) ||
+            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return null;
+
+        var expected = targetType.Alias.TrimEnd('?').EndsWith("JsonArray", StringComparison.Ordinal)
+            ? JsonValueKind.Array
+            : JsonValueKind.Object;
+        return value.ValueKind == expected
+            ? null
+            : (Describe(expected), Describe(value.ValueKind));
+
+        static string Describe(JsonValueKind kind) => kind switch
+        {
+            JsonValueKind.Object => "object",
+            JsonValueKind.Array => "array",
+            JsonValueKind.String => "string",
+            JsonValueKind.Number => "number",
+            _ => "boolean"
+        };
     }
 
     private static void ThrowIfRefused(
@@ -168,6 +211,10 @@ internal sealed class RuntimePortableExpressionEvaluator(
         }
     }
 
+    // Spec 1229 FR-006: a sensitive, encrypted or redacted value is not shown, nor anything that can come from it.
+    private static bool Protects(ValueProtectionPolicy policy) =>
+        policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode);
+
     private static ExpressionInputFailureException NewInputFailure(
         string code,
         string phase,
@@ -180,12 +227,13 @@ internal sealed class RuntimePortableExpressionEvaluator(
         bool conservativelyRedact = false)
     {
         var message = $"Input '{inputName}' on executable node '{nodeId}' failed to materialize or evaluate its portable '{expression.Language}' expression with fingerprint '{definition.Fingerprint}'.";
-        var cause = conservativelyRedact ||
-                    effectivePolicy.IsSensitive ||
-                    effectivePolicy.RequiresEncryption ||
-                    !string.IsNullOrWhiteSpace(effectivePolicy.RedactionMode)
-            ? new RedactedPortableExpressionException(exception.GetType())
-            : exception;
+        // A protected failure is redacted; one with a value-free form keeps that form, which names no member path and no
+        // computed name, so the diagnostic still says what went wrong.
+        var cause = !(conservativelyRedact || Protects(effectivePolicy))
+            ? exception
+            : exception is IValueFreeExpressionFailure valueFree
+                ? new RedactedPortableExpressionException(exception.GetType(), valueFree.ValueFreeMessage)
+                : new RedactedPortableExpressionException(exception.GetType());
         return new ExpressionInputFailureException(code, inputName, expression.Language, phase, message, cause);
     }
 
@@ -466,8 +514,9 @@ internal sealed class RuntimePortableExpressionEvaluator(
         new($"Portable expression parameter '{parameterName}' for input '{inputName}' on executable node '{nodeId}' {reason}.");
 }
 
-internal sealed class RedactedPortableExpressionException(Type evaluatorExceptionType)
-    : Exception($"Portable expression evaluator failure of type '{evaluatorExceptionType.FullName ?? evaluatorExceptionType.Name}' was redacted by value-protection policy.");
+internal sealed class RedactedPortableExpressionException(Type evaluatorExceptionType, string? valueFreeMessage = null)
+    : Exception(valueFreeMessage ??
+                $"Portable expression evaluator failure of type '{evaluatorExceptionType.FullName ?? evaluatorExceptionType.Name}' was redacted by value-protection policy.");
 
 internal sealed record PortableExpressionEvaluation(JsonElement Value, ValueProtectionPolicy EffectivePolicy);
 

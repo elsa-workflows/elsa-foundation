@@ -1,7 +1,11 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Exceptions;
+using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
+using Microsoft.Extensions.Logging;
 using Jint;
 using Jint.Native;
 using Jint.Runtime;
@@ -9,6 +13,22 @@ using Jint.Runtime.Descriptors;
 using Jint.Runtime.Interop;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services;
+
+/// <summary>What the functions of one evaluation are called with.</summary>
+/// <param name="Values">The evaluation's values, which know the numbers that entered it lossy (spec 1228).</param>
+/// <param name="Variables">The evaluation's variable reader, for a function that reads variables; null when it has none.</param>
+/// <param name="Logger">Where a lossy argument is also logged.</param>
+internal sealed record JavaScriptHostFunctionContext(
+    IScriptValueEvaluation Values,
+    IExpressionVariableReader? Variables,
+    ILogger? Logger)
+{
+    /// <summary>
+    /// The warnings the calls raised, reported by the evaluator after the run with its other warnings, so a protected
+    /// read can still turn them into their protected form.
+    /// </summary>
+    public List<ExecutionWarning> Warnings { get; } = [];
+}
 
 /// <summary>
 /// The registered .NET-implemented functions, checked against the naming rule (spec 1223 FR-027, ADR 0045 §5 D-5) and
@@ -73,8 +93,9 @@ internal sealed class JavaScriptHostFunctions
     }
 
     /// <summary>Installs every function as a non-writable global of <paramref name="engine"/>.</summary>
-    public void Install(Engine engine, FeatureOptions options, IExpressionVariableReader? variables, CancellationToken cancellationToken)
+    public void Install(Engine engine, FeatureOptions options, JavaScriptHostFunctionContext context, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(options);
         if (_globals.Count == 0 && _namespaces.Count == 0)
@@ -84,7 +105,7 @@ internal sealed class JavaScriptHostFunctions
         var parse = engine.GetValue("JSON").AsObject().Get("parse");
         foreach (var declaration in _globals)
         {
-            Define(engine, declaration.Name, Function(engine, options, parse, declaration, declaration.Name, variables, cancellationToken));
+            Define(engine, declaration.Name, Function(engine, options, parse, declaration, declaration.Name, context, cancellationToken));
         }
 
         foreach (var (root, members) in _namespaces)
@@ -93,7 +114,7 @@ internal sealed class JavaScriptHostFunctions
             foreach (var (member, declaration) in members)
             {
                 target.DefineOwnProperty(member, new PropertyDescriptor(
-                    Function(engine, options, parse, declaration, member, variables, cancellationToken),
+                    Function(engine, options, parse, declaration, member, context, cancellationToken),
                     writable: false, enumerable: true, configurable: false));
             }
 
@@ -108,18 +129,19 @@ internal sealed class JavaScriptHostFunctions
         JsValue parse,
         JavaScriptHostFunctionDeclaration declaration,
         string name,
-        IExpressionVariableReader? variables,
+        JavaScriptHostFunctionContext context,
         CancellationToken cancellationToken) =>
         new(engine, name, (_, arguments) =>
         {
             var values = new JsonElement[arguments.Length];
             for (var index = 0; index < arguments.Length; index++)
                 values[index] = Argument(engine, options, declaration.Name, index, arguments[index]);
+            WarnLossyArguments(declaration.Name, values, context);
 
             JsonElement result;
             try
             {
-                result = declaration.Implementation(new JavaScriptHostFunctionCall(values, variables, cancellationToken));
+                result = declaration.Implementation(new JavaScriptHostFunctionCall(values, context.Variables, cancellationToken));
             }
             catch (Exception exception) when (exception is not (OperationCanceledException or JavaScriptException or OutOfMemoryException))
             {
@@ -131,6 +153,66 @@ internal sealed class JavaScriptHostFunctions
                 : engine.Invoke(parse, JsValue.Undefined, [result.GetRawText()]);
         });
 
+    /// <summary>
+    /// A number argument that lost precision when it entered JavaScript (spec 1223 FR-028, ADR 0046 V9): the call runs
+    /// with the nearest value JavaScript holds, and a warning names the function and the argument path, never a value.
+    /// The function does not turn the number into a string. One warning per function and set of paths in an evaluation.
+    /// </summary>
+    private static void WarnLossyArguments(string function, IReadOnlyList<JsonElement> arguments, JavaScriptHostFunctionContext context)
+    {
+        var paths = new List<string>();
+        for (var index = 0; index < arguments.Count; index++)
+            CollectLossy(arguments[index], $"argument {index}", context.Values, paths);
+        if (paths.Count == 0)
+            return;
+
+        var where = string.Join(", ", paths.Distinct(StringComparer.Ordinal));
+        if (context.Warnings.Any(warning => warning.Details is { } details &&
+                                            details.TryGetValue("function", out var known) && known == function &&
+                                            details.TryGetValue("paths", out var knownPaths) && knownPaths == where))
+            return;
+
+        // A member path can name keys of the value: the protected form names the arguments only.
+        var roots = string.Join(", ", paths.Select(path => path.Split('.')[0]).Distinct(StringComparer.Ordinal));
+        string Message(string at) =>
+            $"JavaScript passed numbers it cannot hold exactly to '{function}' ({at}); the function received the nearest value JavaScript holds. " +
+            "Hold such numbers as strings to keep every digit.";
+        context.Warnings.Add(new ExecutionWarning(
+            JavaScriptValueDiagnostics.PrecisionLossRead,
+            Message(where),
+            ExecutionWarningSeverity.Warning,
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["function"] = function, ["paths"] = where })
+        {
+            ProtectedForm = roots == where
+                ? null
+                : new ExecutionWarning(
+                    JavaScriptValueDiagnostics.PrecisionLossRead,
+                    Message(roots),
+                    ExecutionWarningSeverity.Warning,
+                    new Dictionary<string, string>(StringComparer.Ordinal) { ["function"] = function, ["paths"] = roots })
+        });
+        context.Logger?.LogWarning("{Code}: {Message}", JavaScriptValueDiagnostics.PrecisionLossRead, Message(roots));
+    }
+
+    private static void CollectLossy(JsonElement element, string path, IScriptValueEvaluation values, List<string> paths)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Number when element.TryGetDouble(out var number) && values.TryFindLoss(number, out _):
+                paths.Add(path);
+                break;
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                    CollectLossy(property.Value, $"{path}.{property.Name}", values, paths);
+                break;
+            case JsonValueKind.Array:
+                var index = 0;
+                foreach (var item in element.EnumerateArray())
+                    CollectLossy(item, $"{path}[{index++}]", values, paths);
+                break;
+        }
+    }
+
     // A script value maps to JSON as a script result does (FR-011): a Date becomes its ISO text, undefined null.
     private static JsonElement Argument(Engine engine, FeatureOptions options, string function, int index, JsValue value)
     {
@@ -138,7 +220,9 @@ internal sealed class JavaScriptHostFunctions
             return JsonSerializer.SerializeToElement<object?>(null);
         try
         {
-            return JintResultMaterializer.Materialize(engine, value, options);
+            return JintResultMaterializer.Stringify(engine, value) is { } json
+                ? JintResultMaterializer.ParseResult(json, options)
+                : throw new InvalidOperationException("It has no JSON form (a function or a symbol).");
         }
         catch (InvalidOperationException exception)
         {

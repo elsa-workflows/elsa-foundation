@@ -54,23 +54,24 @@ public sealed class Elsa3VariableStartingValueTests
         { "Boolean", false, "true", "Boolean", CollectionKind.Single, "true" },
         // The corpus names enums by their assembly-qualified CLR type; this host registers the enum.
         { "System.Net.HttpStatusCode, System.Net.Primitives", false, "OK", "System.Net.HttpStatusCode", CollectionKind.Single, "200" },
-        // Elsa 3 kept an Object variable's text as it was, JSON or not.
-        { "Object", false, """{"a":1}""", "Object", CollectionKind.Single, "\"{\\u0022a\\u0022:1}\"" },
+        // Elsa 3 kept an Object variable's text as it was, JSON or not: it becomes Any holding a JSON string with that text
+        // (spec 1228 FR-019).
+        { "Object", false, """{"a":1}""", "Any", CollectionKind.Single, "\"{\\u0022a\\u0022:1}\"" },
         // Elsa 3 writes a list as List<T> and an array as T[]: a known element type keeps its type in a collection.
         { "List<String>", false, """["a","b"]""", "String", CollectionKind.List, """["a","b"]""" },
         { "List<Int32>", false, "[1, 2]", "Int32", CollectionKind.List, "[1,2]" },
-        { "List<Object>", false, """[{"a":1}]""", "Object", CollectionKind.List, """[{"a":1}]""" },
+        { "List<Object>", false, """[{"a":1}]""", "Any", CollectionKind.List, """[{"a":1}]""" },
         { "String[]", false, """["x"]""", "String", CollectionKind.Array, """["x"]""" },
         { "String", true, """["x","y"]""", "String", CollectionKind.Array, """["x","y"]""" },
         // Items are read as Elsa 3 read them (enums by name) and written for Elsa 4 as plain JSON (the enum's number).
         { "List<System.Net.HttpStatusCode, System.Net.Primitives>", false, """["OK","NotFound"]""", "System.Net.HttpStatusCode", CollectionKind.List, "[200,404]" },
-        // Elsa 3's dictionaries: an Object holding the parsed object.
-        { "ObjectDictionary", false, """{"a":1}""", "Object", CollectionKind.Single, """{"a":1}""" },
-        { "HttpHeaders", false, """{"Accept":["application/json"]}""", "Object", CollectionKind.Single, """{"Accept":["application/json"]}""" },
-        // A type Elsa 4 does not know, a nested collection included, is an Object holding the parsed JSON.
-        { "List<List<String>>", false, """[["a"],["b"]]""", "Object", CollectionKind.Single, """[["a"],["b"]]""" },
-        { "ObjectDictionary[]", false, """[{"a":1}]""", "Object", CollectionKind.Single, """[{"a":1}]""" },
-        { "Acme.Orders.Order, Acme", false, """{"id":1}""", "Object", CollectionKind.Single, """{"id":1}""" }
+        // Elsa 3's dictionaries: Any holding the parsed object (spec 1228 FR-019).
+        { "ObjectDictionary", false, """{"a":1}""", "Any", CollectionKind.Single, """{"a":1}""" },
+        { "HttpHeaders", false, """{"Accept":["application/json"]}""", "Any", CollectionKind.Single, """{"Accept":["application/json"]}""" },
+        // A type Elsa 4 does not know, a nested collection included, is Any holding the parsed JSON.
+        { "List<List<String>>", false, """[["a"],["b"]]""", "Any", CollectionKind.Single, """[["a"],["b"]]""" },
+        { "ObjectDictionary[]", false, """[{"a":1}]""", "Any", CollectionKind.Single, """[{"a":1}]""" },
+        { "Acme.Orders.Order, Acme", false, """{"id":1}""", "Any", CollectionKind.Single, """{"id":1}""" }
     };
 
     [Theory]
@@ -90,16 +91,16 @@ public sealed class Elsa3VariableStartingValueTests
 
     [Theory]
     [InlineData("List<String>", "String", CollectionKind.List)]
-    [InlineData("List<Object>", "Object", CollectionKind.List)]
-    [InlineData("ObjectDictionary", "Object", CollectionKind.Single)]
-    [InlineData("HttpHeaders", "Object", CollectionKind.Single)]
-    [InlineData("List<List<String>>", "Object", CollectionKind.Single)]
-    [InlineData("ObjectDictionary[]", "Object", CollectionKind.Single)]
-    [InlineData("Acme.Orders.Order, Acme", "Object", CollectionKind.Single)]
-    [InlineData("System.DayOfWeek", "Object", CollectionKind.Single)]
+    [InlineData("List<Object>", "Any", CollectionKind.List)]
+    [InlineData("ObjectDictionary", "Any", CollectionKind.Single)]
+    [InlineData("HttpHeaders", "Any", CollectionKind.Single)]
+    [InlineData("List<List<String>>", "Any", CollectionKind.Single)]
+    [InlineData("ObjectDictionary[]", "Any", CollectionKind.Single)]
+    [InlineData("Acme.Orders.Order, Acme", "Any", CollectionKind.Single)]
+    [InlineData("System.DayOfWeek", "Any", CollectionKind.Single)]
     // A CLR generic name without a resource argument is not a resource: it resolves to its Elsa 4 type.
     [InlineData("System.Collections.Generic.List`1[System.String]", "String", CollectionKind.List)]
-    [InlineData("System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[System.Object, System.Private.CoreLib]]", "Object", CollectionKind.Dictionary)]
+    [InlineData("System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[System.Object, System.Private.CoreLib]]", "Any", CollectionKind.Dictionary)]
     public void A_variable_without_a_value_gets_the_same_Elsa_4_type(string typeName, string expectedAlias, CollectionKind expectedKind)
     {
         var source = new Elsa3Variable { Id = "v", Name = "v", TypeName = typeName };
@@ -234,6 +235,25 @@ public sealed class Elsa3VariableStartingValueTests
         Assert.Equal(Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible, refusal.Code);
         Assert.Contains("Variable 'local'", refusal.Message);
         Assert.Contains("JSON object", refusal.Guidance);
+    }
+
+    // Spec 1228 User Story 4, acceptance 3: an unknown JSON type, ObjectDictionary or HttpHeaders converts to Any, the
+    // dynamic kind; a JSON starting value stays that JSON, and an Object text starting value becomes a JSON string with
+    // the same text. The stored definition names Any.
+    [Theory]
+    [InlineData("Acme.Orders.Order, Acme", """{"id":1}""", """{"id":1}""")]
+    [InlineData("ObjectDictionary", """{"a":1}""", """{"a":1}""")]
+    [InlineData("HttpHeaders", """{"X-Test":["1"]}""", """{"X-Test":["1"]}""")]
+    [InlineData("Object", "hello", "\"hello\"")]
+    public async Task An_unknown_type_ObjectDictionary_HttpHeaders_or_Object_converts_to_Any(string typeName, string value, string expectedJson)
+    {
+        var result = await ConvertAsync(new Elsa3Variable { Id = "v", Name = "v", TypeName = typeName, Value = value });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var variable = Assert.Single(result.Value!.State.Variables);
+        var stored = JsonSerializer.SerializeToElement(variable.Type, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal("Any", stored.GetProperty("alias").GetString());
+        Assert.Equal(expectedJson, Assert.IsType<JsonElement>(variable.Default!.Value).GetRawText());
     }
 
     private static Task<Elsa3MigrationResult<Elsa3ConvertedDefinition>> ConvertAsync(params Elsa3Variable[] variables) =>

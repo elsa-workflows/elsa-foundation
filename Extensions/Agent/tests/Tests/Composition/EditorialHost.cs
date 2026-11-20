@@ -158,7 +158,7 @@ internal sealed class EditorialHost : IAsyncDisposable
         Harness.InitializeActivityTypes();
         var types = Harness.Services.GetRequiredService<IWellKnownTypeRegistry>();
         types.RegisterType(typeof(string), "String");
-        types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
+        types.RegisterType(typeof(JsonElement), "Any"); // The host seeds JSON as Any; the full name resolves by convention.
         await new Elsa.Agent.AgentTypesStartupTask(types).ExecuteAsync(CancellationToken.None);
         await new Elsa.Agent.Review.HumanReviewTypesStartupTask(types).ExecuteAsync(CancellationToken.None);
         types.RegisterType(typeof(EditorialRevisionGate), typeof(EditorialRevisionGate).FullName!);

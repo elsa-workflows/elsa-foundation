@@ -445,7 +445,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             .MatchesHash(LegacyWorkflowHashFixture.WithRoot(legacy, current.RootActivity)));
         var retained = await _store.FindAsync(legacy.Identity.ArtifactId);
         Assert.Equal(legacy.Identity.ArtifactHash, retained!.Identity.ArtifactHash);
-        Assert.Equal("Elsa.Any", retained.RootActivity.InputBindings["value"].TargetType.Alias);
+        // Elsa.Any reads as Any, the dynamic kind (spec 1228 FR-018).
+        Assert.Equal("Any", retained.RootActivity.InputBindings["value"].TargetType.Alias);
         Assert.Equal(legacy.CreatedAt, retained.CreatedAt);
         var historicalReference = await _referenceStore.FindAsync(legacyPublication.SourceReferenceId);
         Assert.NotNull(historicalReference);
