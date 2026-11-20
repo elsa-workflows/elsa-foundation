@@ -26,6 +26,13 @@ internal sealed class JintJavaScriptScriptEvaluator(
         ArgumentNullException.ThrowIfNull(request);
         request.CancellationToken.ThrowIfCancellationRequested();
 
+        // Issue #4901: on a large-stack evaluation thread, so no script can overflow the host's stack.
+        var prepared = PreparedJavaScript.Script(request.Source);
+        return ValueTask.FromResult(JintEvaluationThreads.Run(() => Evaluate(request, prepared)));
+    }
+
+    private JavaScriptScriptEvaluationResult Evaluate(JavaScriptScriptEvaluationRequest request, Prepared<Acornima.Ast.Script> prepared)
+    {
         var options = featureOptions.Value;
         var engine = IsolatedJintEngine.Create(options, request.CancellationToken);
         using var values = valueBridge.Begin(engine);
@@ -37,7 +44,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
             : null;
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
 
-        var returned = engine.Evaluate(PreparedJavaScript.Script(request.Source));
+        var returned = engine.Evaluate(prepared);
 
         // Only the script's own top-level returned value selects, wherever it was created (a `return f()` counts).
         JavaScriptScriptEvaluationResult result;
@@ -62,7 +69,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
         foreach (var warning in warnings)
             sink?.Report(warning);
         JavaScriptValueWrites.WarnLossyReads(values, losses, sink, logger);
-        return ValueTask.FromResult(result);
+        return result;
     }
 
     private static readonly IReadOnlyDictionary<string, JsonElement> NoPinnedValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);

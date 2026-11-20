@@ -36,8 +36,12 @@ internal static class IsolatedJintEngine
             options.Constraints.MaxArraySize = maxArrayLength;
         if (cancellationToken.CanBeCanceled)
             options.CancellationToken(cancellationToken);
+        // Issue #4901: bounds the stack a script may use on its evaluation thread (see JintEvaluationThreads).
+        var stackBudget = new JintEvaluationThreads.StackBudgetConstraint();
+        options.Constraint(stackBudget);
 
         var engine = new Engine(options);
+        stackBudget.Attach(engine);
         JintResultMaterializer.Initialize(engine);
         DisableAmbientCapabilities(engine);
         return engine;
