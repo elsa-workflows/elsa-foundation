@@ -52,20 +52,16 @@ shows each new test failing without the change.
   API, store or message contract that carries data is a dictionary, `ExpandoObject`, `object` or POCO; data members
   are `JsonElement` or `JsonNode`
 - [ ] T007 Add the "Baseline deviations" register to `docs/serialization.md`, with the ADR 0091 decision 7 rows and
-  every hash preimage from research R-1 and R-14 (Q4, FR-019). Generate `Baselines/json-optionless-calls.txt` from
+  one row for `JsonHashInput`'s option set, the only register entry for hashes (Q11, FR-019, FR-021). Generate `Baselines/json-optionless-calls.txt` from
   today's option-less calls, excluding the value-path sites of research R-10 (Q3, FR-002a)
 - [ ] T008 Add `JsonCanonicalForm` in `Serialization/Core/` (FR-021a): move the canonical writer out of
   `Workflows/Runtime/Core/Models/VariableValueDigest.cs` and add `Equals(JsonElement, JsonElement)`. Unit tests with
   ADR 0091's examples: `{"total":1.0,"name":"Ren\u00e9"}` equals `{"name":"René","total":1}`; `9007199254740993` is
-  not `9007199254740992`; `{}` is not `{"x":null}`; arrays in order. It is never used as an existing hash input
-  (FR-021)
-- [ ] T008a Make `VariableValueDigest` call `JsonCanonicalForm` and pin its output: a test computes digests of fixed
-  envelopes before the move (record them first) and asserts they are unchanged, and asserts the digest agrees with
+  not `9007199254740992`; `{}` is not `{"x":null}`; arrays in order (FR-021a)
+- [ ] T008a Make `VariableValueDigest` hash through `JsonHashInput` (after T023) instead of its own writer and
+  `SHA256` call; regenerate the digests its tests and fixtures pin, and assert the digest agrees with
   `JsonCanonicalForm.Equals` on every T008 pair. Assigning one T008 value over its equal partner writes nothing: use
   S-7's no-op write test (spec 1231 FR-012) if it exists on the branch, else add one
-
-## Phase 3: User Story 1 - Names keep their casing (P1) 🎯 MVP
-
 - [ ] T009 [P] [US1] Remove `DictionaryKeyPolicy` from:
   - `Workflows/Runtime/Api/WorkflowsRuntimeJsonContext.cs`;
   - `Workflows/Publishing/Api/WorkflowsPublishingJsonContext.cs`;
@@ -108,8 +104,9 @@ shows each new test failing without the change.
   12), and that instants Elsa returns are UTC
 - [ ] T016 [US3] Move every value-path conversion of research R-10 to the target type's conversion contract, calling
   the scanner on reads (FR-012 to FR-014a, FR-025 codes from the contract):
-  - `ActivityValueJson.Options` (used by `ActivityCompletionProjector.cs` L61 and `ActivityInputHydrator.cs` L109):
-    replace it with the default conversion contract, and delete it;
+  - `ActivityValueJson.Options` (used by `ActivityCompletionProjector.cs` L61, `ActivityInputHydrator.cs` L109 and
+    `StepVariableSession.cs` L266, L331): replace it with the default conversion contract, and delete it;
+  - `RuntimeActivityInputMaterializer.cs` L466 (`SelectedMemberFitOptions`, from `ActivityValueJsonProfile.CreateOptions()`);
   - `RuntimeActivityInputMaterializer.cs` L316, L679, L702;
   - `RuntimeInputBindingCompiler.cs` L719, L788–806, L1019, L1042;
   - `WorkflowExecutableInputValidator.cs` L119 (since #3731 the admission check of every start);
@@ -126,8 +123,8 @@ shows each new test failing without the change.
   Replace `Convert.ChangeType` at `RuntimeInputBindingCompiler.cs` L1044 with a conversion-contract read
 - [ ] T017 [US3] Add tests for US3 scenarios 1–10. Scenario 4 (numbers through ForEach) is a regression test for #3424.
   Scenario 5 (dates) runs under a non-UTC `TimeZoneInfo` at run time and in a publish-time literal, with and without
-  an offset, and with no interpretation, a source time zone and an explicit assume-UTC policy, plus the UTC
-  normalization and `DateOnly` cases. Scenario 6 covers FR-014a (`Boolean`, `Int32`, GUID case, `TimeSpan`). Scenario 2 pins the
+  an offset (the offset-less value refused with `json-datetime-offset-missing`), plus the UTC normalization and
+  `DateOnly` cases. Scenario 6 covers FR-014a (`Boolean`, `Int32`, GUID case, `TimeSpan`). Scenario 2 pins the
   camelCase default (`customerName` fills `CustomerName`)
 - [ ] T017a [US3] Studio time zone setting (FR-016b, scenario 11): add a `timeZone` appearance preference
   (`"browser"` default, `"UTC"`, or an IANA ID) to `Elsa.Studio.Hosting/Client/src/app/themes/appearance.ts` and a
@@ -167,8 +164,9 @@ shows each new test failing without the change.
   move every hash on the T003 checklist to it, including `WorkflowExecutableHasher` and its context,
   `ActivityContract`'s fingerprint, `DefaultActivityDefinitionHasher`, `ExecutableActivityTemplateBehaviorHasher`,
   `EfDesignSupport.Fingerprint`, `EfWorkflowLibraryStore.Fingerprint`, `GitCanonicalJson`, `EtlArtifactJson`,
-  `ActivityForkMaterialFingerprint` and `AuthoringSchemaExporter.ComputeFingerprint`; delete
-  `EfDesignSupport.LegacyFingerprint` (FR-021, Q11)
+  `ActivityForkMaterialFingerprint`, `AuthoringSchemaExporter.ComputeFingerprint` and `VariableValueDigest` (T008a);
+  delete `EfDesignSupport.LegacyFingerprint` and the V1 verification path of `WorkflowExecutableHasher.MatchesHash`
+  (FR-021, Q11)
 - [ ] T023a [US4] Add a golden test per hash (fixed input → pinned value), covering every variant the canonical form
   absorbs (escaping, whitespace, member order, number notation) and every one it keeps apart (missing versus `null`,
   array order, a different number). Each golden's failure message states the first-stable freeze rule of FR-021. Add
@@ -258,7 +256,7 @@ shows each new test failing without the change.
   - US6 is independent after T004.
   - US7 needs every earlier story.
   - US8 is independent; T032a needs S-1's `Elsa3ConversionOptions` on the initiative branch (#4855).
-  - T017c needs T015 (the refusal it avoids) and T017a. T023 needs T008.
+  - T017c needs T015 (the refusal it avoids) and T017a. T023 needs T008; T008a needs T023.
 - **Within US3**: T013 runs with T016.
 - **Parallel**: T009 with T014 and T032; T034 to T036 together.
 

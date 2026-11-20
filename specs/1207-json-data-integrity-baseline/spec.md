@@ -439,8 +439,9 @@ faithful-or-refuse.
   produces in UTC. That covers their own contract fields and the values of date-typed workflow inputs at a start.
   An offset-less value (`"2026-10-28T09:15:00"`) is refused with a 400 problem response carrying
   `json-datetime-offset-missing` and the field path. Today System.Text.Json reads such text into a `DateTimeOffset`
-  with the server's offset, so the baseline (FR-001) carries strict `DateTime` and `DateTimeOffset` converters for
-  Elsa's own contracts too. Studio (FR-016b) and every other client send offsets.
+  with the server's offset, so the API wire contexts and the conversion contracts carry strict `DateTime` and
+  `DateTimeOffset` converters, for Elsa's own contracts too. The store option sets do not: they read only what Elsa
+  wrote, so rows stored today keep reading as before (FR-023). Studio (FR-016b) and every other client send offsets.
 
 **Host options (decision 6)**
 - **FR-017**: A module MUST NOT change the host's naming, key policy, encoder, null handling or converters. It MAY add
@@ -475,8 +476,8 @@ faithful-or-refuse.
     Git content hash, the ETL artifact hash, the fork-material and authoring-schema fingerprints, and every other site
     research R-1 and R-14 list. Hand-written writers keep their writer and hash its output through it.
   - The values of those hashes change once. Before the first stable release that costs regenerated fixtures and
-    goldens in place, and no run-time shim; `EfDesignSupport.LegacyFingerprint`, kept only to replay older markers,
-    is deleted.
+    goldens in place, and no run-time shim. The paths kept only to verify older hashes go: `EfDesignSupport.LegacyFingerprint`
+    and the V1 ("historical") verification in `WorkflowExecutableHasher.MatchesHash`.
   - A golden test pins each hash for a fixed input, so any later change to `JsonHashInput` or to a hashed type shows
     up as a failing test, not as a silent mismatch. The goldens cover every variant the canonical form absorbs
     (escaping, whitespace, member order, number notation) and every one it keeps apart (missing versus `null`, array
@@ -501,10 +502,10 @@ faithful-or-refuse.
   - a missing member and a `null` member are different (`{}` is not `{"x":null}`).
 
   The canonical form defines equality, not an algorithm, and is never stored or sent: stored and returned data keeps
-  its received text. One implementation in `Elsa.Serialization.Core` serves every equality check of FR-021 and the
-  value digest of ADR 0092 (`VariableValueDigest`, spec 1221 FR-001), which already normalizes this way and moves
-  onto it with every digest unchanged. ADR 0090 C4's no-op test (spec 1231 FR-012) uses the same equality, and
-  `JsonHashInput` (FR-021) hashes it.
+  its received text. One implementation in `Elsa.Serialization.Core` serves every equality check of FR-021 and
+  `JsonHashInput`. ADR 0090 C4's no-op test (spec 1231 FR-012) uses the same equality. The value digest of ADR 0092
+  (`VariableValueDigest`, spec 1221 FR-001) already normalizes this way; it moves to `JsonHashInput` like every other
+  hash (FR-021), so its values change once with the rest.
 - **FR-022**: Git definition files MUST keep data text as received (Q5). The Git content hash is `JsonHashInput` over
   the file (FR-021), so a Git round trip keeps every hash whatever the file's indentation or escaping.
 - **FR-022a**: The Git file is written from `IPayloadSerializer` output. Once that keeps nulls (FR-018), an unchanged
@@ -537,11 +538,11 @@ faithful-or-refuse.
 - **Baseline**: the one read-only options instance; every serializer is a copy of it.
 - **Deviation**: a serializer whose protected settings differ from the baseline; listed in the register.
 - **Baseline deviation register**: the section in `docs/serialization.md` the architecture test reads.
-- **Conversion contract**: the naming, matching, member-mapping, unmatched-member and date/time-interpretation
-  settings for one user type or conversion boundary; a default one and scoped ones declared in code on the type or
+- **Conversion contract**: the naming, matching, member-mapping and unmatched-member settings for one user type or
+  conversion boundary; a default one and scoped ones declared in code on the type or
   input member (FR-004a).
 - **Canonical form**: the equality of FR-021a that decides whether two values are equal, independent of their stored
-  text. Never stored or sent, and never applied to an existing hash input.
+  text. Never stored or sent; `JsonHashInput` hashes it.
 - **Legacy list**: the ratchet file of option-less calls on Elsa's own contracts still to migrate; it may only shrink.
 
 ## Questions
@@ -566,10 +567,10 @@ answered Q9, Q10 and Q11 on 2026-11-20, as recommended.
 | Q2 | Which source roots does "every serializer" (decision 1) and the architecture test cover? | Every source root: Essentials, Extensions and Studio's C#, with staged enforcement (FR-002a, FR-020). Extension-internal options on their own contracts are register entries (R-10). | Agrees | Agrees ([card 11](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644185619)) |
 | Q3 | About 267 serializer calls pass neither options nor type info (R-10). ADR 0091 counts 32 constructions and does not count these. List each one in the register, or migrate them all? | Staged: every workflow-data path is fixed in S-9; option-less calls on Elsa's own contracts go on a legacy list that may only shrink and never holds a data path; a new unlisted call fails; justified deviations keep reasoned register entries (FR-002a). Finding F-5 on #3408. | Agrees | Agrees ([card 11](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644185619)) |
 | Q4 | Hash preimages: decision 1 makes every serializer derive from the baseline, but several hash preimages use other options, and the activity contract fingerprint feeds every ADR 0038 artifact hash (R-1). | Every existing hash input keeps its frozen options and is registered with its input contract; changing one is a separate decision with its identity, versioning and migration consequences assessed. Equality checks use the semantic comparison, never text (FR-021). Finding F-2 on #3408. Superseded by Q11. | Accepts (replaces "direct text hashes move to the canonical form") | Agrees with that qualification ([card 9](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644084116)) |
-| Q5 | Git files: ADR 0091 expects the Git hash to break, but it does not (R-7). Instead, Git files never hold data text as received, because the exporter re-emits them through `JsonNode`. | Git files keep carried data text; the Git hash keeps its current, registered input; any change to it is an explicit FR-021 decision (FR-022). Rejected: registering Git files as a normalized rendering (users diff them). Finding F-1 on #3408. | Agrees | Exact carried text until edited, exports included ([card 7](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6643745916)); Git/hash preimage changes need the explicit assessment |
+| Q5 | Git files: ADR 0091 expects the Git hash to break, but it does not (R-7). Instead, Git files never hold data text as received, because the exporter re-emits them through `JsonNode`. | Git files keep carried data text; the Git hash keeps its current, registered input; any change to it is an explicit FR-021 decision (FR-022). Rejected: registering Git files as a normalized rendering (users diff them). Finding F-1 on #3408. The hash part is superseded by Q11. | Agrees | Exact carried text until edited, exports included ([card 7](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6643745916)); Git/hash preimage changes need the explicit assessment |
 | Q6 | Decision 4 relies on "every Elsa response is `application/json`", but workflow HTTP responses use the content type the workflow chose, and `nosniff` is set nowhere (R-12). | `application/json` plus `nosniff` on Elsa's own JSON APIs; a workflow-authored response uses its author's content type; with none, text is `text/plain` and anything else `application/json` (FR-010). Finding F-3 on #3408. | Agrees | Agrees ([card 8](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644048963)) |
 | Q7 | The runtime durable state change (question 6): ADR 0091 says regenerated migrations and golden fixtures, but no model change and no runtime-row golden exist (R-9). | No format bump or migration if S-9 shows the writer change compatible and meaning-preserving with fixed serialized examples and compatibility checks; otherwise a stamped format change. A change to row meaning or compatibility always takes the stamped path (FR-023). Finding F-4 on #3408. | Accepts | Agrees ([card 10](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644124489)); @FransVanEk's condition on #3408 is the same |
-| Q8 | Who implements date/time conversion: S-9, at the JSON-to-.NET boundary, or S-8 with ADR 0046? | S-9 implements the agreed rule: an offset, or an explicit interpretation (source time zone or assume-UTC policy) in the conversion contract, else refused; never implicit UTC (FR-016). The Elsa 3 converter uses S-1's one date setting for literals (FR-016a). S-8 uses the same contract. | Accepts (replaces "a `DateTime` is read as UTC") | S-9 ([card 24](https://github.com/elsa-workflows/elsa-foundation/pull/3805#issuecomment-6645506583)) under the [card 14](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6644338442) rule |
+| Q8 | Who implements date/time conversion: S-9, at the JSON-to-.NET boundary, or S-8 with ADR 0046? | S-9 implements the agreed rule: an offset, or an explicit interpretation (source time zone or assume-UTC policy) in the conversion contract, else refused; never implicit UTC (FR-016). The Elsa 3 converter uses S-1's one date setting for literals (FR-016a). S-8 uses the same contract. The interpretation part is superseded by Q10. | Accepts (replaces "a `DateTime` is read as UTC") | S-9 ([card 24](https://github.com/elsa-workflows/elsa-foundation/pull/3805#issuecomment-6645506583)) under the [card 14](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6644338442) rule |
 | Q10 | Is there a host-wide date interpretation for run-time values? | No. Elsa works in UTC. Its APIs accept a date-time only with `Z` or an offset and refuse an offset-less one (FR-016c); clients such as Studio must send offsets, and Studio presents dates in a configurable time zone (FR-016b). Dates inside workflow data (scripts, HTTP bodies) follow ADR 0046 *Dates* and S-8. No source-time-zone or assume-UTC setting is built for run-time values (FR-016). | Answered 2026-11-20 | — |
 
 ## Success Criteria *(mandatory)*

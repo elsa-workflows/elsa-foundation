@@ -27,10 +27,10 @@
 
 - [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover ADR 0091's required evidence
-- [x] Provisional status and the ADR PRs it waits on are stated at the top
+- [x] Status and the ADRs it applies are stated at the top
 
 ## Notes
 
 - Rechecked 2026-11-20 against ADR 0091 (`771ba6679f`), the ADR 0046 amendment and specs 1221, 1222, 1223, 1228
-  and 1231. Q9 and Q10 are open for the coordinator.
+  and 1231. Q9 to Q11 answered by the coordinator on 2026-11-20.
 - Findings F-1 to F-6 are in ADR 0091.

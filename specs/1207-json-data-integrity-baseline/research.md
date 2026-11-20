@@ -95,6 +95,7 @@ Under FR-018 both sides are written by the same serializer, so they agree (infer
   - ~~Every direct text hash moves to a canonical form~~ (superseded, see *Reconciled* below). Every `Ordinal`
     comparison of serialized values that decides equality moves to the semantic comparison of FR-021, or gets a
     register entry explaining why text equality is meant.
+- **Superseded 2026-11-20 by Q11**: every hash over JSON moves once to `JsonHashInput` (spec FR-021).
 - **Reconciled 2026-11-11** (card 9): existing hash inputs, direct-text hashes included, stay frozen and registered;
   changing one is a separate decision with its identity, versioning and migration consequences assessed. Only the
   equality checks move, to a semantic comparison (FR-021).
@@ -439,7 +440,7 @@ System.Text.Json has no "warn on unmapped member" mode. It ignores unmapped memb
   and check nothing. → FR-004a, Q9.
 - **Hash inputs missed by R-1.** `EfWorkflowLibraryStore.Fingerprint` hashes `JsonSerializerOptions.Web` text and
   compares it `Ordinal` with the stored `OperationFingerprint`; `EfDesignSupport.Fingerprint` and `LegacyFingerprint`
-  serialize with `EfDesignSupport.Json` (Web), not `IPayloadSerializer`. Both stay frozen and registered.
+  serialize with `EfDesignSupport.Json` (Web), not `IPayloadSerializer`. Both move to `JsonHashInput` (Q11).
 - **#4832 and S-8.** `JsonElement`-backed aliases are `StructuredValue`, and `Any` is the one dynamic kind held as
   `JsonElement`; both fit decision 5. No change.
 - **Offset-less dates at the API (probed 2026-11-20, .NET 10, server zone W. Europe Standard Time).**
