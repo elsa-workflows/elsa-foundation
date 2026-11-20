@@ -2,6 +2,9 @@
 
 Status: proposed (2026-10-27)
 
+Amendment proposed (hash input): every hash over JSON goes through one hash input, hashed over the canonical form, and
+is frozen from Elsa 4's first stable release. It replaces the frozen per-hash options of decisions 1 and 7.
+
 It answers whether JSON property names keep their exact casing everywhere.
 
 Related:
@@ -124,9 +127,16 @@ transformed. The risk sits where data becomes a .NET type and back:
 - A source-generated context is constructed with such a copy. Its `[JsonSourceGenerationOptions]` attribute settings
   apply only to its `Default` instance, so owner code uses the constructed instance, not `Default`.
 - Any project that works with JSON may reference `Elsa.Serialization.Core`, as it would `System.Text.Json`.
-- **Existing hash inputs are the exception.** A serializer whose output feeds an existing hash or fingerprint keeps
-  its current options, frozen, and is listed in the deviation register (decision 7). A change to the baseline never
-  silently changes an artifact's identity or a stored hash.
+- **Hashes have one input of their own.** Every hash or fingerprint whose input is JSON goes through one hash input in
+  `Elsa.Serialization.Core`. It serializes with its own option set, every setting written out, never derived from the
+  baseline, `JsonSerializerOptions.Web` or `.Default`, and it hashes the canonical form of decision 3. So a change to
+  the baseline, or to a framework default, never changes a hash, and escaping, whitespace, member order and number
+  notation never move one.
+  - Before Elsa 4's first stable release, every existing hash over JSON moves to it once. Its value changes once, and
+    the fixtures and goldens that pin it are regenerated; nothing verifies the old values.
+  - From the first stable release on, the hash input and every hashed type are frozen. Changing either is an explicit
+    decision that assesses identity, versioning and migration; it is never done by regenerating a golden.
+  - A golden test pins each hash, and the architecture test fails on any hash over JSON that bypasses the hash input.
 
 ### 2. The baseline transforms no data
 
@@ -212,10 +222,9 @@ a re-parse per value.
   - A missing member and a `null` member are different.
 
   This defines what equal means, not an algorithm. The canonical form is never stored or sent: stored and returned
-  data keeps its received text. It is the equality of the ADR 0090 amendment's no-op test (C4), and the value digest
-  of ADR 0092 is taken over a form that respects it. It also covers the stores that today compare a fresh
-  serialization with stored text exactly. Existing hash inputs are separate: they keep their frozen options
-  (decision 7).
+  data keeps its received text. It is the equality of the ADR 0090 amendment's no-op test (C4), and every hash over
+  JSON, the value digest of ADR 0092 included, is taken over it through the hash input (decision 1). It also covers
+  the stores that today compare a fresh serialization with stored text exactly.
 
 ### 4. One default output format
 
@@ -295,7 +304,7 @@ type asks for it.
 | Deviation | Why it is legitimate | Condition |
 |---|---|---|
 | `IPayloadSerializer` sorts dictionary keys (`DeterministicDictionaryConverter`) and object members (`SortObjectMembers`) | Persisted output must be byte-stable for hashing, and neither a .NET dictionary nor reflection gives a meaningful order | Applies only to our own types and maps. By decision 5 no data is a .NET dictionary, and a `JsonElement` is written raw (decision 3). Keys are written verbatim |
-| Hash inputs: every existing serializer whose output feeds a hash or fingerprint, for example the artifact hash and the activity contract fingerprint it includes, `DefaultActivityDefinitionHasher`, `GitCanonicalJson` (Git reconciliation content hash), the design-store fingerprints (`EfDesignSupport.Fingerprint`) and hashes taken directly over serialized text | A baseline change must not silently change an artifact's identity or a stored hash | Each keeps its current options, frozen, and its input contract is recorded in the register. Never on the wire. Changing a hash input is a separate, explicit decision that assesses its identity, versioning and migration consequences |
+| The hash input (decision 1): one option set for every hash or fingerprint over JSON, for example the artifact hash and the activity contract fingerprint it includes, `DefaultActivityDefinitionHasher`, `GitCanonicalJson` (Git reconciliation content hash), the design-store fingerprints and the ADR 0092 value digest | A hash must not move when the baseline or a framework default changes | Its settings are written out and it hashes the canonical form. Never on the wire. Before the first stable release existing hashes move to it once; from that release on, it and every hashed type are frozen, and changing either is an explicit decision that assesses identity, versioning and migration |
 | Runtime EF Core durability options (frozen, see [serialization rule](../serialization.md)) | The durable format of suspended state changes only through compatible writer changes or migrations and golden fixtures | Decision 3 applies there too. A writer change that is shown to be compatible and to keep the meaning, so old and new code read old and new rows with the same meaning, needs no format-version bump or migration. S-9 shows that with fixed serialized examples and compatibility checks; if that proof fails, S-9 makes the change a stamped format change through migrations and golden fixtures. A change to the meaning of rows, or to reader and writer compatibility, always takes that stamped path. Before 4.0 a stamped change means regenerated migrations and updated golden fixtures, not an upcaster |
 | Secrets `json`/`jsonb` columns | The database normalizes the text, not our serializer | Secret payloads are not workflow data |
 
@@ -319,11 +328,13 @@ that representation to each store. This ADR only requires that the serializer ke
   Studio parses JSON and reads `errors` maps by value, so no Studio change is expected. Clients that compare text, or
   look up camelCased output names, see the difference.
 - **Hashes and fingerprints.**
-  - Existing hash inputs keep their frozen options and are listed in the register (decisions 1 and 7), so the
-    baseline moves no artifact identity, content hash or fingerprint, and no stored hash is recomputed.
+  - Every hash over JSON moves once to the hash input (decision 1). Artifact identities, content hashes, fingerprints
+    and value digests change once, before the first stable release, and their fixtures and goldens are regenerated;
+    no run-time path verifies the old values.
+  - After that, the baseline moves no hash: the hash input never derives from it.
   - Equality checks that compare serialized text move to a semantic comparison of values (decision 3).
-  - Changing a hash input later is a separate, explicit decision with its identity, versioning and migration
-    consequences assessed.
+  - From the first stable release, changing the hash input or a hashed type is a separate, explicit decision with
+    its identity, versioning and migration consequences assessed.
 - **Stored data.** Rows written today were normalized when first written and stay as they are. New rows keep the
   received text and explicit nulls. Readers are unaffected, because a missing member still reads as null.
   `IPayloadSerializer` reads member names case-insensitively today; deriving from the baseline makes its reads of
@@ -355,6 +366,11 @@ That is exactly how the host-wide leak happened. Rejected in favour of a read-on
 hashing. Rejected because it changes data the user sent. Canonicalization stays where it belongs: in comparisons
 and in new hashes over data (the canonical form, decision 3), never in data that is stored or sent.
 
+**Keep every existing hash input frozen with its own options.** No hash value changes. But about twenty hashes then
+depend on as many option sets, some of them framework defaults (`JsonSerializerOptions.Web`, or no options) that can
+change with a .NET upgrade, and the list of them is kept by hand, so the next hash can be missed and drift unnoticed.
+Rejected, because before the first stable release one move costs only regenerated fixtures.
+
 **A hard ban on deviations.** Clear, but some deviations are legitimate (decision 7), and a ban would push them into
 workarounds. Rejected in favour of a register: deviations stay possible, but each one is visible and justified.
 
@@ -372,10 +388,12 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
 - **Changed values.** A value a script changed is written in the default format of decision 4.
 - **Hash stability.**
   - A Git round trip (write files, read them back) keeps every content hash.
-  - Design-store fingerprints stay valid.
-  - Every registered hash input gives the same hash for the same input before and after the baseline is introduced.
-  - Each direct-text hash and each check that compares serialized text is listed, and each text comparison that
-    decides equality of values uses the canonical form.
+  - Every hash over JSON goes through the hash input, and a golden test pins each one. The goldens show that inputs
+    differing only in escaping, whitespace, member order or number notation hash the same, and that a missing member
+    versus `null`, a different array order or a different number does not.
+  - The architecture test fails on a hash over JSON that bypasses the hash input.
+  - Each check that compares serialized text is listed, and each one that decides equality of values uses the
+    canonical form.
 - **Equality.** `{"total":1.0,"name":"René"}` and `{"name":"René","total":1}` are equal, and assigning one over
   the other writes nothing. `9007199254740993` and `9007199254740992` are not equal. `{}` and `{"x":null}` are not
   equal. The value digest of ADR 0092 agrees with this equality on the same examples.
