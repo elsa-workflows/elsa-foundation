@@ -227,6 +227,23 @@ public sealed class HostFunctionArgumentTests
         Assert.Equal(1, result!.Value.GetInt32());
     }
 
+    // The memory limit is the script's: comparing and writing a large changed variable, and previewing it for each
+    // function read, is the bridge's work and does not add up against it.
+    [Fact]
+    public async Task Bridge_work_on_a_large_variable_does_not_count_against_the_memory_limit()
+    {
+        var members = string.Join(",", Enumerable.Range(0, 9_000).Select(i => $"\"m{i}\":{{\"id\":{i},\"name\":\"item{i}\",\"price\":{i}.5}}"));
+        var session = new Session("{" + members + "}");
+
+        var (result, _) = await RunAsync(
+            "variables.order.updatedAt = 1; for (var i = 0; i < 4; i++) acme.readOrderText(); return 1;",
+            session: session,
+            configure: feature => feature.MaxMemoryBytes = 64 * 1024 * 1024);
+
+        Assert.Equal(1, result!.Value.GetInt32());
+        Assert.Contains("\"updatedAt\":1", session.Written!.Value.GetRawText(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {

@@ -85,6 +85,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         public ScriptValueChange Collect(string key, JsValue current, bool assigned)
         {
             ArgumentException.ThrowIfNullOrEmpty(key);
+            // The bridge's own work, not the script's: limited per call, not counted against the script.
+            using var region = EvaluationLimits.Exclude(_engine);
             var started = Stopwatch.GetTimestamp();
             try
             {
@@ -153,6 +155,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         public ScriptValueWrite Write(JsValue value, string path)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
+            using var region = EvaluationLimits.Exclude(_engine);
             var started = Stopwatch.GetTimestamp();
             try
             {
