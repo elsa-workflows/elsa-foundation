@@ -22,7 +22,7 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 ### Studio UI
 
 - **Inner loop:** use the Node.js and pinned pnpm versions in the Studio contribution guide. Run `pnpm install --frozen-lockfile` from `Studio/`, then the affected package's existing test, typecheck, or build script; for example, `pnpm --filter @elsa-workflows/studio-workflows test`. See the [Studio guide](../../Studio/CONTRIBUTING.md#local-checks-and-hosted-checks) for root checks and Foundation [CI](../../.github/workflows/ci.yml) for browser-test setup.
-- **Evidence:** Foundation PR CI runs Studio lint, typecheck, workspace tests, bundle-budget checks, and Chromium tests when that suite is selected. The three extra shuffled Workflows test passes run nightly, on demand, and on PRs that change their workflow (`ci.yml`). For a visible paired source change, use the [Studio source quickstart](../../Studio/docs/contributing/studio-source-quickstart.md) and record the exact checkout revision and browser result.
+- **Evidence:** Foundation PR CI runs Studio lint, typecheck, workspace tests and bundle-budget checks when Studio changed, inside `Build & test`. The Chromium browser tests, Studio .NET build and composed UX acceptance run in `CI`'s nightly schedule and on `gh workflow run ci.yml --ref <branch> -f suite=studio`; dispatch them before merging a change that needs browser proof. The three extra shuffled Workflows test passes run nightly and on demand (`-f suite=studio-order`). For a visible paired source change, use the [Studio source quickstart](../../Studio/docs/contributing/studio-source-quickstart.md) and record the exact checkout revision and browser result.
 
 ### Persistence
 
