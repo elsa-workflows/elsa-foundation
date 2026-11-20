@@ -91,7 +91,7 @@ The `DeepEquals` comparisons ignore escaping and whitespace, but they do see an 
 Under FR-018 both sides are written by the same serializer, so they agree (inferred).
 
 - **Decision**:
-  - Every hash preimage keeps its own frozen options and is a register entry. It never derives from the baseline (Q4).
+  - ~~Every hash preimage keeps its own frozen options and is a register entry. It never derives from the baseline (Q4).~~
   - ~~Every direct text hash moves to a canonical form~~ (superseded, see *Reconciled* below). Every `Ordinal`
     comparison of serialized values that decides equality moves to the semantic comparison of FR-021, or gets a
     register entry explaining why text equality is meant.
@@ -239,6 +239,7 @@ in every store. → **Finding F-1**, **Q5**.
   - The test invariant is replaced by "a Git round trip keeps every hash".
   - `EfDesignSupport` keeps its canonical fingerprint, registered as a hash preimage. `EfDesignSupport.Json` derives
     from the baseline.
+- **Superseded 2026-11-20 by Q11**: `HashFile` and the `EfDesignSupport` fingerprint move to `JsonHashInput` (spec FR-021, FR-022).
 - **Reconciled 2026-11-11** (card 9): `HashFile` keeps its current input, registered. It already ignores escaping and
   whitespace, so the raw exporter does not move it; making it a sorted canonical preimage would be a hash-input change
   and needs its own explicit decision (FR-021, FR-022).

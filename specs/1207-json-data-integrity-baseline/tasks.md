@@ -18,7 +18,7 @@ shows each new test failing without the change.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm the spec is merged with Q9 and Q10 answered, and diff the initiative branch's ADR 0091, ADR 0046
+- [ ] T001 Confirm the spec is merged with Q9 to Q11 answered, and diff the initiative branch's ADR 0091, ADR 0046
   *Dates* and spec 1223 FR-034 against spec.md. Message the parent session before editing the serializer baseline
   files S-2 (spec 1216) also touches, and merge the initiative branch in first if S-8 (#4838) or S-1 (#4855) has
   landed
@@ -58,10 +58,9 @@ shows each new test failing without the change.
   `Workflows/Runtime/Core/Models/VariableValueDigest.cs` and add `Equals(JsonElement, JsonElement)`. Unit tests with
   ADR 0091's examples: `{"total":1.0,"name":"Ren\u00e9"}` equals `{"name":"René","total":1}`; `9007199254740993` is
   not `9007199254740992`; `{}` is not `{"x":null}`; arrays in order (FR-021a)
-- [ ] T008a Make `VariableValueDigest` hash through `JsonHashInput` (after T023) instead of its own writer and
-  `SHA256` call; regenerate the digests its tests and fixtures pin, and assert the digest agrees with
-  `JsonCanonicalForm.Equals` on every T008 pair. Assigning one T008 value over its equal partner writes nothing: use
-  S-7's no-op write test (spec 1231 FR-012) if it exists on the branch, else add one
+
+## Phase 3: User Story 1 - Names keep their casing (P1) 🎯 MVP
+
 - [ ] T009 [P] [US1] Remove `DictionaryKeyPolicy` from:
   - `Workflows/Runtime/Api/WorkflowsRuntimeJsonContext.cs`;
   - `Workflows/Publishing/Api/WorkflowsPublishingJsonContext.cs`;
@@ -164,7 +163,7 @@ shows each new test failing without the change.
   move every hash on the T003 checklist to it, including `WorkflowExecutableHasher` and its context,
   `ActivityContract`'s fingerprint, `DefaultActivityDefinitionHasher`, `ExecutableActivityTemplateBehaviorHasher`,
   `EfDesignSupport.Fingerprint`, `EfWorkflowLibraryStore.Fingerprint`, `GitCanonicalJson`, `EtlArtifactJson`,
-  `ActivityForkMaterialFingerprint`, `AuthoringSchemaExporter.ComputeFingerprint` and `VariableValueDigest` (T008a);
+  `ActivityForkMaterialFingerprint`, `AuthoringSchemaExporter.ComputeFingerprint` and `VariableValueDigest` (T023b);
   delete `EfDesignSupport.LegacyFingerprint` and the V1 verification path of `WorkflowExecutableHasher.MatchesHash`
   (FR-021, Q11)
 - [ ] T023a [US4] Add a golden test per hash (fixed input → pinned value), covering every variant the canonical form
@@ -172,6 +171,10 @@ shows each new test failing without the change.
   array order, a different number). Each golden's failure message states the first-stable freeze rule of FR-021. Add
   the guard rule: any hash call whose input is serialized JSON and does not go through `JsonHashInput` fails the
   architecture test (US4 scenario 2)
+- [ ] T023b [US4] Make `VariableValueDigest` hash through `JsonHashInput` instead of its own writer and
+  `SHA256` call; regenerate the digests its tests and fixtures pin, and assert the digest agrees with
+  `JsonCanonicalForm.Equals` on every T008 pair. Assigning one T008 value over its equal partner writes nothing: use
+  S-7's no-op write test (spec 1231 FR-012) if it exists on the branch, else add one
 - [ ] T024 [US4] Move every check that compares serialized text to decide equality (research R-1) to
   `JsonCanonicalForm.Equals` (FR-021):
   - `EfWorkflowTriggerBindingStore.cs` L44, L68;
@@ -256,7 +259,7 @@ shows each new test failing without the change.
   - US6 is independent after T004.
   - US7 needs every earlier story.
   - US8 is independent; T032a needs S-1's `Elsa3ConversionOptions` on the initiative branch (#4855).
-  - T017c needs T015 (the refusal it avoids) and T017a. T023 needs T008; T008a needs T023.
+  - T017c needs T015 (the refusal it avoids) and T017a. T023 needs T008; T023b needs T023.
 - **Within US3**: T013 runs with T016.
 - **Parallel**: T009 with T014 and T032; T034 to T036 together.
 
