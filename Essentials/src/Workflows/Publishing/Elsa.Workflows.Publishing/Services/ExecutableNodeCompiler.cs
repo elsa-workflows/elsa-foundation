@@ -205,7 +205,7 @@ public sealed class ExecutableNodeCompiler(
                     activityContract,
                     workflowVariables,
                     bodyWritePlan,
-                    clrActivityType?.GetCustomAttribute<AccessesUndeclaredVariablesAttribute>(inherit: true) is not null),
+                    clrActivityType is not null && VariableReferenceTypes.DeclaresAccessesUndeclaredVariables(clrActivityType)),
                 bodyReadPlan),
             childSlots: childSlots,
             structure: structure,

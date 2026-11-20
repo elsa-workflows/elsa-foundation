@@ -430,7 +430,10 @@ This answers A-3's question: writing from scripts is a general capability, not c
 - **Converter (spec 247 follow-up).** Inside RunJavaScript, Elsa 3 `setVariable`, generated `set<Name>()` and
   mutation of a read value (`getVariable('o').x = 1`) become convertible. In expressions they stay refused. A
   computed `setVariable` name stays refused by the converter: Elsa 3 created a missing variable on write, where
-  Elsa 4 faults (decision 5), so the conversion would not be faithful.
+  Elsa 4 faults (decision 5), so the conversion would not be faithful. *Amended 2026-11-20 by the coordinator
+  (@j03y-nxxbz, #4899, applied in spec 1231 FR-033 by #4912): a computed `setVariable` name converts to
+  `variables[k] = v`, a computed write (decision 3 as amended): a declared name is written as in Elsa 3, and an
+  undeclared name faults the step loudly at run time instead of creating the variable.*
 - **Inspection.** Each commit records which variables a step changed, which is the data #3290 (variable write
   history and the winning write) needs.
 - **Cost.** One serialization per tracked variable per commit, and one more comparison per conflict-checked variable.

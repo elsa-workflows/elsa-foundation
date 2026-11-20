@@ -1371,8 +1371,8 @@ public sealed class Elsa3ExpressionRewriter
         /// <summary>
         /// <c>setVariable(k, v)</c> with a computed name becomes <c>variables[k] = v</c> (spec 1231 FR-033 as amended on
         /// 2026-11-20, #4899): the name resolves when the script runs, nearest scope first; a declared variable is written,
-        /// and an undeclared name faults the step (FR-020a) where Elsa 3 created the variable. Like a computed read, it may
-        /// reach a loop's value or a shadowed name, so the same import checks apply.
+        /// and an undeclared name faults the step (FR-020a) where Elsa 3 created the variable. It is marked as a computed
+        /// read too, so the conversion reports it as a script that reaches variables by computed names.
         /// </summary>
         private void ConvertComputedSetVariable(CallExpression call)
         {

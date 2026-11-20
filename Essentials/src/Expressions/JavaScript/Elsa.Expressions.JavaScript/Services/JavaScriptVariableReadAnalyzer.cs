@@ -157,6 +157,20 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                         continue;
                 }
 
+                // A wrapper yielded getVariable(…) itself: (getVariable('o') || {}).m = v changes o.
+                if (node is CallExpression { Callee: Identifier { Name: GetVariable } } wrapped && segments.Count > 0)
+                {
+                    if (wrapped.Arguments.Count >= 1 && wrapped.Arguments[0] is Literal { Value: string named })
+                    {
+                        segments.Add(Segment(named));
+                        segments.Reverse();
+                        Writes.Add(new ScriptVariableWrite(named, VariablesRoot + string.Concat(segments)) { Start = target.Start });
+                    }
+                    else
+                        HasComputedWrite = true;
+                    return;
+                }
+
                 if (node is not MemberExpression member)
                     return;
 

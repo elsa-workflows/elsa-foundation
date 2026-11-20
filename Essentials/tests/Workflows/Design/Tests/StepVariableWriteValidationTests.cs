@@ -25,6 +25,7 @@ public sealed class StepVariableWriteValidationTests
     private const string ReaderVersion = "test.reader@1";
     private const string MarkedVersion = "test.marked@1";
     private const string ScriptVersion = "test.script@1";
+    private const string DeclaredScriptVersion = "test.declared-script@1";
 
     [Fact]
     public async Task An_unbound_variable_reference_is_refused_naming_the_input()
@@ -184,6 +185,17 @@ public sealed class StepVariableWriteValidationTests
     }
 
     [Fact]
+    public async Task A_script_activity_type_that_declares_the_marker_itself_writes_every_visible_variable()
+    {
+        // FR-028: its C# code may write any visible variable, whatever its body writes.
+        var node = Script("script", "return 1;") with { ActivityVersionId = DeclaredScriptVersion };
+
+        var warning = Assert.Single(await Validate(Sequence("root", Parallel(("left", node), ("right", Capture("capture", "total"))))),
+            item => item.Type == "ValueFlow/ConcurrentWrite");
+        Assert.Contains("may write any visible variable", warning.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_script_that_writes_a_variable_it_also_captures_into_warns_that_the_capture_wins()
     {
         var node = Script("script", "setVariable('total', 2); return 1;") with { Outputs = [VariableOutput("result", "total")] };
@@ -227,6 +239,16 @@ public sealed class StepVariableWriteValidationTests
                 new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new { ports = Array.Empty<object>(), scriptInput = "script" })),
                 new ActivityDesignFacet(VariableAccessDesignFacet.Kind, VariableAccessDesignFacet.SchemaVersion,
                     JsonSerializer.SerializeToElement(new Dictionary<string, bool> { [VariableAccessDesignFacet.AccessesUndeclaredVariablesMember] = true }))
+            ])
+            .Add(DeclaredScriptVersion, designFacets:
+            [
+                new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new { ports = Array.Empty<object>(), scriptInput = "script" })),
+                new ActivityDesignFacet(VariableAccessDesignFacet.Kind, VariableAccessDesignFacet.SchemaVersion,
+                    JsonSerializer.SerializeToElement(new Dictionary<string, bool>
+                    {
+                        [VariableAccessDesignFacet.AccessesUndeclaredVariablesMember] = true,
+                        [VariableAccessDesignFacet.DeclaredMember] = true
+                    }))
             ]);
         using var services = ActivityDataSelectionTestSupport.Provider(catalog,
             configure: collection => new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(collection));

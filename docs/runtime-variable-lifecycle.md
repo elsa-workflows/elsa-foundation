@@ -231,7 +231,7 @@ are still the variable's).
   (from the scoped-variable analysis). Run JavaScript, an engine script activity, carries the type-level free-name
   marker as well (its computed names resolve at run time, and C9 refuses it in the background), but its analyzed body,
   not the marker, decides its may-write set. A script activity type that declares `[AccessesUndeclaredVariables]`
-  itself is counted as writing every visible variable once published (draft validation cannot tell the two apart). A
+  itself still counts as writing every visible variable (its catalog facet says `declared`). A
   script that is not a literal (bound to an expression) cannot be analyzed, so it counts as writing every visible
   variable. Destructuring (`[variables.a, variables.b] = …`), loop heads (`for (variables.k in o)`) and writes through a
   parenthesized value (`(variables.o || {}).x = 1`) count like plain assignments.

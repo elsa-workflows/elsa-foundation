@@ -133,6 +133,10 @@ public sealed class ScriptVariableWriteAnalyzerTests
     [InlineData("for (variables.order of list) {}", "order")]
     [InlineData("for (variables.order in o) {}", "order")]
     [InlineData("for (variables.order.key in o) {}", "order")]
+    [InlineData("(getVariable('order') || {}).total = 5;", "order")]
+    [InlineData("(0, getVariable('order')).total = 1;", "order")]
+    [InlineData("(flag ? getVariable('order') : getVariable('order')).n++;", "order")]
+    [InlineData("delete (getVariable('order') ?? {}).note;", "order")]
     public void A_write_through_a_wrapper_a_pattern_or_a_loop_head_is_reported(string source, string name)
     {
         // Review of #4912: these write at run time, so publication must see them.
@@ -144,6 +148,7 @@ public sealed class ScriptVariableWriteAnalyzerTests
     [Theory]
     [InlineData("(variables[k] || {}).x = 1;")]
     [InlineData("[variables[k]] = [1];")]
+    [InlineData("(getVariable(k) || {}).x = 1;")]
     public void A_computed_write_through_a_wrapper_or_a_pattern_is_reported(string source)
     {
         Assert.True(_analyzer.Analyze(source, scriptBody: true)!.HasComputedWrite);
