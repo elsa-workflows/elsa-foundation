@@ -27,6 +27,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
 
         var options = featureOptions.Value;
         var engine = IsolatedJintEngine.Create(options, request.CancellationToken, timeProvider);
+        // A body has no variable reader yet: spec 1222 T047 adds one and passes it here too.
         hostFunctions.Install(engine, options, variables: null, request.CancellationToken);
         IsolatedJintEngine.SetReadOnlyArgs(engine, request.Arguments, options);
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
