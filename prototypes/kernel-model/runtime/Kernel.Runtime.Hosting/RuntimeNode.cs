@@ -150,7 +150,13 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 LastError = e;
             }
             Signal();       // a scope taken gets its first pass at once
-            try { await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, (long)_options.BalanceEvery.TotalMilliseconds - (Now - started))), exit); }
+            var ms = Math.Max(0, (long)_options.BalanceEvery.TotalMilliseconds - (Now - started));
+            if (ms == 0)
+            {
+                await Task.Yield();     // CodeRabbit 4644811407: a round that used up its interval must not hold this exclusive scheduler: LoopAsync runs on it
+                continue;
+            }
+            try { await Task.Delay(TimeSpan.FromMilliseconds(ms), exit); }
             catch (OperationCanceledException) { break; }
         }
     }
