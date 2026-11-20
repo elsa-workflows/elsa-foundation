@@ -6,6 +6,7 @@ import {
   cloneThemeDefinition,
   getSupportedThemeModes,
   getThemeModeDefinition,
+  isSidebarBackdrop,
   isThemeMode,
   themeModeKeys,
   themeTokenNames,
@@ -183,6 +184,9 @@ export function validateThemeDefinition(theme: StudioThemeDefinition): ThemeVali
   if (theme.workspaceStyle !== undefined && theme.workspaceStyle !== null && !isWorkspaceStyle(theme.workspaceStyle)) {
     issues.push(error("workspaceStyle", "Workspace style must be a supported Studio workspace treatment."));
   }
+  if (theme.sidebarBackdrop !== undefined && theme.sidebarBackdrop !== null && !isSidebarBackdrop(theme.sidebarBackdrop)) {
+    issues.push(error("sidebarBackdrop", "Sidebar backdrop must be solid, gradient or starfield."));
+  }
 
   return { valid: issues.every(issue => issue.severity !== "error"), issues };
 }
@@ -359,6 +363,7 @@ function normalizeThemeDefinition(theme: Partial<StudioThemeDefinition> | null |
     shape: normalizeOptionalMembers(theme.shape),
     layout: isStudioThemeLayout(theme.layout) ? theme.layout : undefined,
     workspaceStyle: isWorkspaceStyle(theme.workspaceStyle) ? theme.workspaceStyle : undefined,
+    sidebarBackdrop: isSidebarBackdrop(theme.sidebarBackdrop) ? theme.sidebarBackdrop : undefined,
     material: theme.material
   };
 }

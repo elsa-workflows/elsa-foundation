@@ -50,19 +50,19 @@ Path to a directory or file containing custom themes. Supports:
 **Type:** `string`  
 **Default:** `"AddToBuiltIns"`  
 **Values:**
-- `"BuiltInsOnly"` - Use built-in themes (8 built-in themes)
+- `"BuiltInsOnly"` - Use built-in themes (13 built-in themes)
 - `"DirectoryOnly"` - Use only themes from the directory
 - `"AddToBuiltIns"` - Merge directory themes with built-ins (default)
 
 ### DefaultThemeId
 
 **Type:** `string` (nullable)  
-**Default:** `null` (first theme in list — Classic)
+**Default:** `null` (first theme in list — Linen)
 
 The theme ID to select on first load. Must match an available theme ID (either built-in or custom). An ID that no longer exists, such as a retired built-in theme, falls back to the first theme in the list.
 
-The eight signature themes offer all four modes (Light, Dark, Dim and High contrast):
-- `"classic"` - The Elsa 3 Studio look: sky-blue primary, pale tinted sidebar, hairline cards (the default)
+The nine signature themes offer all four modes (Light, Dark, Dim and High contrast):
+- `"classic"` - The Elsa 3 Studio look: sky-blue primary, pale tinted sidebar, hairline cards
 - `"meridian"` - Crisp, neutral precision with an indigo accent
 - `"drift"` - Soft, rounded floating surfaces with a jade accent
 - `"schematic"` - Engineering workbench: squared corners, blueprint neutrals, signal orange
@@ -70,12 +70,14 @@ The eight signature themes offer all four modes (Light, Dark, Dim and High contr
 - `"elsa-cloud"` - The Elsa Cloud console look: near-black surfaces, hot-pink accent, mono eyebrow labels
 - `"signal"` - Instrument panel: hairline borders, tight corners, mono legends, one phosphor-lime accent
 - `"dusk"` - Dim-first violet slate with an amber highlight, for long low-light sessions
+- `"space"` - Midnight blue with cool cyan accents and a starfield desktop sidebar
 
-These eight are the only built-in themes. Their IDs are reserved: a custom or directory theme
-that reuses one (`"classic"`, `"meridian"`, …) is rejected on save and skipped on load, with a
+These nine signature themes, Linen and the three minimal workspace presets make up the thirteen
+built-in themes. Their IDs are reserved: a custom or directory theme that reuses one (`"classic"`,
+`"meridian"`, `"space"`, …) is rejected on save and skipped on load, with a
 warning, so the built-in wins. Retired IDs — most recently `"black-glass"`, `"stone"`,
 `"blueprint"` and `"brass-instrument"` — are treated like any unknown ID: a configured or persisted
-default falls back to Classic, a user who had one selected lands on the default theme, and a
+default falls back to Linen, a user who had one selected lands on the default theme, and a
 hidden-theme entry for one is dropped. Custom themes duplicated from them earlier keep working
 with their own palette.
 
@@ -144,6 +146,7 @@ Custom themes must be JSON files containing a `themes` array with theme definiti
       "version": 1,
       "enabled": true,
       "published": true,
+      "sidebarBackdrop": "starfield",
       "modes": {
         "light": {
           "primary": "#0ea5e9",
@@ -224,6 +227,10 @@ Beyond the required `light` and `dark` palettes, a theme may add:
 - `layout` — `classic` (default), `floating`, `workbench` or `editorial`: how the shell and the
   workflow designer are arranged. The signature themes use Drift `floating`, Schematic `workbench`
   and Atelier `editorial`; Classic, Meridian, Elsa Cloud, Signal and Dusk use `classic`. Any theme may choose any layout.
+- `sidebarBackdrop` — `solid` (default), `gradient` or `starfield`. This decorative treatment belongs
+  to the theme/color scheme, follows palette changes, and paints only the desktop left navigation;
+  Top navigation and the narrow horizontal strip stay unchanged. It uses resolved navigation colors,
+  so a light sidebar remains light and readable, and High contrast always uses a solid surface.
 
 ```json
 {
@@ -231,6 +238,7 @@ Beyond the required `light` and `dark` palettes, a theme may add:
   "typography": { "sans": "\"Manrope Variable\", system-ui, sans-serif", "mono": "\"DM Mono\", monospace" },
   "shape": { "radiusSm": "6px", "radius": "10px", "radiusMd": "12px", "radiusLg": "16px", "radiusXl": "20px" },
   "layout": "floating",
+  "sidebarBackdrop": "starfield",
   "modes": { "light": { }, "dark": { }, "dim": { }, "highContrast": { } }
 }
 ```

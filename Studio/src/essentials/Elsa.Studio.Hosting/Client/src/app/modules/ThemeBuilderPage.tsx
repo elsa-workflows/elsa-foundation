@@ -10,6 +10,8 @@ import {
   cloneThemeDefinition,
   getSupportedThemeModes,
   getThemeModeDefinition,
+  isSidebarBackdrop,
+  sidebarBackdropOptions,
   themeModeKeys,
   themeModeLabels,
   themeTokenNames,
@@ -412,6 +414,16 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                   >
                     {studioThemeLayouts.map(layout => <option key={layout} value={layout}>{layout}</option>)}
                   </select></StudioField>
+                <StudioField className="theme-token-field" label={<><span>Sidebar backdrop</span></>}><select
+                    value={draft.sidebarBackdrop ?? "solid"}
+                    disabled={isReadOnly}
+                    onChange={event => {
+                      const backdrop = event.target.value;
+                      patchDraft({ sidebarBackdrop: isSidebarBackdrop(backdrop) && backdrop !== "solid" ? backdrop : undefined });
+                    }}
+                  >
+                    {sidebarBackdropOptions.map(backdrop => <option key={backdrop} value={backdrop}>{backdrop}</option>)}
+                  </select><small>Decorative paint for the desktop left navigation; High contrast always stays solid.</small></StudioField>
                 {typographyFields.map(field => (
                   <StudioField key={field.key} className="theme-token-field" label={<><span>{field.label}</span></>}><input value={draft.typography?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("typography", field.key, event.target.value)} /></StudioField>
                 ))}
@@ -573,13 +585,17 @@ function ThemePreview({
     "--preview-foreground": colors.foreground,
     "--preview-card": colors.card,
     "--preview-border": colors.border,
-    "--preview-muted": colors.muted
+    "--preview-muted": colors.muted,
+    "--preview-sidebar": colors.sidebar,
+    "--preview-sidebar-foreground": colors.sidebarForeground,
+    "--preview-sidebar-active": colors.sidebarActive,
+    "--preview-sidebar-active-foreground": colors.sidebarActiveForeground
   } as React.CSSProperties;
 
   return (
     <div className="theme-preview-panel">
       <div className="theme-preview-surface" style={previewStyle}>
-        <nav>
+        <nav data-sidebar-backdrop={theme.sidebarBackdrop ?? "solid"}>
           <span>Dashboard</span>
           <span>Workflows</span>
           <span>Weaver</span>
