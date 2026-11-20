@@ -105,13 +105,13 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
   | JSON kind of the result | `Boolean` | `String` | integral (`Int32`, `Int64`, …) | `Double`, `Decimal` |
   |---|---|---|---|---|
   | boolean | same (assignable) | Elsa 3: `"True"`/`"False"` (`BooleanConverter`); Elsa 4 refuses | Elsa 3: 1 or 0 (`Convert.ChangeType`); Elsa 4 refuses | Elsa 3: 1 or 0; Elsa 4 refuses |
-  | number | Elsa 3: non-zero is `true` (`Convert.ChangeType`); Elsa 4 refuses | Elsa 3: the number as text, current culture (`DoubleConverter`); Elsa 4 refuses | integer: same; a fraction: Elsa 3 rounds half to even, Elsa 4 refuses | `Double`: same; `Decimal`: an integer is the same, a fraction is not (Elsa 3 converted the double at 15 significant digits, Elsa 4 reads the JSON text exactly: `0.1 + 0.2` gives 0.3 against 0.30000000000000004) |
+  | number | Elsa 3: non-zero is `true` (`Convert.ChangeType`); Elsa 4 refuses | Elsa 3: the number as text, current culture (`DoubleConverter`); Elsa 4 refuses | integer: same; a fraction: Elsa 3 rounds half to even, Elsa 4 refuses | `Double`: same; `Decimal`: an integer, or a fraction literal of at most 15 significant digits, is the same; a computed fraction may not be (Elsa 3 converted the double at 15 significant digits, Elsa 4 reads the JSON text exactly: `0.1 + 0.2` gives 0.3 against 0.30000000000000004) |
   | string | Elsa 3: `bool.Parse` (`"true"` → `true`, other text fails); Elsa 4 refuses (no text parsing) | same | Elsa 3: parsed (`Int32Converter`); Elsa 4 refuses | Elsa 3: parsed; Elsa 4 refuses |
   | null | Elsa 3: `null` (the input's default); Elsa 4: no value of the kind | Elsa 3: `null` | Elsa 3: `null` | Elsa 3: `null` |
   | object, array | Elsa 3: fails (`InvalidCastException`); Elsa 4 refuses | Elsa 3: the JSON text (dictionary branch); Elsa 4 refuses | Elsa 3: fails; Elsa 4 refuses | Elsa 3: fails; Elsa 4 refuses |
 
 - **Result**: Elsa 4 gives the value Elsa 3 did exactly when the result's kind matches the target, and, for an integral
-  or decimal target, the number is an integer. The import therefore infers the kind from the script's source (decided by Joey
+  target, the number is an integer; for a decimal target, an integer or a fraction literal Elsa 3 kept exactly. The import therefore infers the kind from the script's source (decided by Joey
   2026-11-19: infer, refuse unknown) and keeps the binding only then; any other or unknown kind is refused at import
   with `ELS3-UNTYPED-RESULT` and guidance to state the kind (`Boolean(…)`, `String(…)`, `Number(…)`, `Math.round(…)`).
   Only a script's result is checked: other untyped producers (a loop item, an event payload) carry no source that

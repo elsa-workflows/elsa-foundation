@@ -1142,15 +1142,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         if (Elsa3ScriptResultKinds.Fits(kind, scalar))
             return null;
 
-        var expected = Elsa3ScriptResultKinds.Describe(scalar);
-        var producerName = producer.ActivityNodeId;
         var message =
-            $"Input '{consumer.PropertyName}' ({target.Alias}) of activity '{consumer.ActivityNodeId}' reads the untyped result of activity '{producerName}', " +
-            $"which returns {Elsa3ScriptResultKinds.Describe(kind)}. Elsa 3 converted any value into it; Elsa 4 converts only {expected}, so the result " +
-            "could take a different value or fail at run time.";
-        var guidance =
-            $"Make the script return {expected} explicitly, for example by wrapping its value in `{Elsa3ScriptResultKinds.Wrapper(scalar)}`, before import.";
-        return (message, guidance);
+            $"Input '{consumer.PropertyName}' ({target.Alias}) of activity '{consumer.ActivityNodeId}' reads the untyped result of activity '{producer.ActivityNodeId}', " +
+            $"which returns {Elsa3ScriptResultKinds.Describe(kind)}. {Elsa3ScriptResultKinds.Difference(scalar)}.";
+        return (message, Elsa3ScriptResultKinds.Guidance(scalar));
     }
 
     // The nested element of a collection of collections (spec 1228 FR-022), compared by simple name like the alias.

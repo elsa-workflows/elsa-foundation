@@ -14,6 +14,11 @@ internal enum Elsa3ScriptResultKind
     Number,
     /// <summary>A number the source shows is an integer: an integer literal, <c>Math.round(…)</c>, <c>parseInt(…)</c>.</summary>
     Integer,
+    /// <summary>
+    /// A fraction written as a literal with at most 15 significant digits (<c>12.5</c>): Elsa 3's double-to-decimal
+    /// conversion keeps it exactly, so a decimal input gets the same value in both.
+    /// </summary>
+    ExactFractionLiteral,
     Null,
     Object,
     Array
@@ -57,10 +62,11 @@ internal static class Elsa3ScriptResultKinds
         Elsa3ScalarTarget.String => kind == Elsa3ScriptResultKind.String,
         // Elsa 3 rounded a fraction into an integral target (Convert.ChangeType); Elsa 4 refuses it, so only an integer fits.
         Elsa3ScalarTarget.Integer => kind == Elsa3ScriptResultKind.Integer,
-        Elsa3ScalarTarget.Number => kind is Elsa3ScriptResultKind.Number or Elsa3ScriptResultKind.Integer,
+        Elsa3ScalarTarget.Number => IsNumber(kind),
         // Elsa 3 converted the double to decimal at 15 significant digits (Convert.ToDecimal(double)); Elsa 4 reads the
-        // JSON text exactly (0.1 + 0.2 is 0.3 in Elsa 3 and 0.30000000000000004 in Elsa 4). Only an integer is the same.
-        Elsa3ScalarTarget.Decimal => kind == Elsa3ScriptResultKind.Integer,
+        // JSON text exactly (0.1 + 0.2 is 0.3 in Elsa 3 and 0.30000000000000004 in Elsa 4). An integer and a literal
+        // fraction Elsa 3 kept exactly are the same; a computed fraction may not be.
+        Elsa3ScalarTarget.Decimal => kind is Elsa3ScriptResultKind.Integer or Elsa3ScriptResultKind.ExactFractionLiteral,
         _ => false
     };
 
@@ -81,27 +87,43 @@ internal static class Elsa3ScriptResultKinds
         Elsa3ScriptResultKind.String => "a string",
         Elsa3ScriptResultKind.Number => "a number that may have a fraction",
         Elsa3ScriptResultKind.Integer => "an integer",
+        Elsa3ScriptResultKind.ExactFractionLiteral => "a number literal",
         Elsa3ScriptResultKind.Null => "null",
         Elsa3ScriptResultKind.Object => "an object",
         Elsa3ScriptResultKind.Array => "an array",
         _ => "a value whose kind the script does not show"
     };
 
-    public static string Describe(Elsa3ScalarTarget target) => target switch
+    /// <summary>Why the result may not reach the input as Elsa 3 gave it, for the refusal's message.</summary>
+    public static string Difference(Elsa3ScalarTarget target) => target switch
+    {
+        Elsa3ScalarTarget.Decimal =>
+            "Elsa 3 converted a computed number into it at 15 significant digits; Elsa 4 reads the number exactly, so a fraction " +
+            "can take a different value",
+        Elsa3ScalarTarget.Integer =>
+            "Elsa 3 converted any value into it and rounded a fraction; Elsa 4 converts only an integer, so the result could take " +
+            "a different value or fail at run time",
+        _ => $"Elsa 3 converted any value into it; Elsa 4 converts only {Expected(target)}, so the result could take a different " +
+             "value or fail at run time"
+    };
+
+    /// <summary>What to change in the script, for the refusal's guidance.</summary>
+    public static string Guidance(Elsa3ScalarTarget target) => target switch
+    {
+        Elsa3ScalarTarget.Decimal =>
+            "Return an integer (for example an amount in cents) or a number literal, or bind the input to a value that is already " +
+            "a decimal, before import. Rounding the value would change it.",
+        Elsa3ScalarTarget.Integer => "Make the script return an integer explicitly, for example by wrapping its value in `Math.round(…)`, before import.",
+        Elsa3ScalarTarget.Boolean => "Make the script return a boolean explicitly, for example by wrapping its value in `Boolean(…)`, before import.",
+        Elsa3ScalarTarget.String => "Make the script return a string explicitly, for example by wrapping its value in `String(…)`, before import.",
+        _ => "Make the script return a number explicitly, for example by wrapping its value in `Number(…)`, before import."
+    };
+
+    private static string Expected(Elsa3ScalarTarget target) => target switch
     {
         Elsa3ScalarTarget.Boolean => "a boolean",
         Elsa3ScalarTarget.String => "a string",
-        Elsa3ScalarTarget.Integer or Elsa3ScalarTarget.Decimal => "an integer",
         _ => "a number"
-    };
-
-    /// <summary>How a script states the kind explicitly, for the refusal's guidance.</summary>
-    public static string Wrapper(Elsa3ScalarTarget target) => target switch
-    {
-        Elsa3ScalarTarget.Boolean => "Boolean(…)",
-        Elsa3ScalarTarget.String => "String(…)",
-        Elsa3ScalarTarget.Integer or Elsa3ScalarTarget.Decimal => "Math.round(…)",
-        _ => "Number(…)"
     };
 
     // The top-level returns: not those inside a function, which return from that function.
@@ -128,7 +150,7 @@ internal static class Elsa3ScriptResultKinds
         Literal { Kind: TokenKind.BooleanLiteral } => Elsa3ScriptResultKind.Boolean,
         Literal { Kind: TokenKind.StringLiteral } => Elsa3ScriptResultKind.String,
         Literal { Kind: TokenKind.NullLiteral } => Elsa3ScriptResultKind.Null,
-        Literal { Kind: TokenKind.NumericLiteral, Value: double number } => double.IsInteger(number) ? Elsa3ScriptResultKind.Integer : Elsa3ScriptResultKind.Number,
+        Literal { Kind: TokenKind.NumericLiteral, Value: double number } => NumberLiteral(number),
         TemplateLiteral => Elsa3ScriptResultKind.String,
         ObjectExpression => Elsa3ScriptResultKind.Object,
         ArrayExpression => Elsa3ScriptResultKind.Array,
@@ -138,7 +160,9 @@ internal static class Elsa3ScriptResultKinds
         {
             Operator.LogicalNot => Elsa3ScriptResultKind.Boolean,
             Operator.TypeOf => Elsa3ScriptResultKind.String,
-            Operator.UnaryNegation or Operator.UnaryPlus => Of(unary.Argument) == Elsa3ScriptResultKind.Integer ? Elsa3ScriptResultKind.Integer : Elsa3ScriptResultKind.Number,
+            Operator.UnaryNegation or Operator.UnaryPlus => Of(unary.Argument) is var operand && operand is Elsa3ScriptResultKind.Integer or Elsa3ScriptResultKind.ExactFractionLiteral
+                ? operand
+                : Elsa3ScriptResultKind.Number,
             _ => Elsa3ScriptResultKind.Unknown
         },
         LogicalExpression logical => logical.Operator is Operator.LogicalAnd or Operator.LogicalOr or Operator.NullishCoalescing
@@ -167,7 +191,12 @@ internal static class Elsa3ScriptResultKinds
                 var right = Of(binary.Right);
                 if (left == Elsa3ScriptResultKind.String || right == Elsa3ScriptResultKind.String)
                     return Elsa3ScriptResultKind.String;
-                return IsNumber(left) && IsNumber(right) ? Join([left, right]) : Elsa3ScriptResultKind.Unknown;
+                // A sum is computed: an integer only from two integers, otherwise a number (never an exact literal).
+                if (!IsNumber(left) || !IsNumber(right))
+                    return Elsa3ScriptResultKind.Unknown;
+                return left == Elsa3ScriptResultKind.Integer && right == Elsa3ScriptResultKind.Integer
+                    ? Elsa3ScriptResultKind.Integer
+                    : Elsa3ScriptResultKind.Number;
             case Operator.Subtraction or Operator.Multiplication or Operator.Remainder or Operator.Exponentiation:
                 var a = binary.Left is Expression x ? Of(x) : Elsa3ScriptResultKind.Unknown;
                 var b = Of(binary.Right);
@@ -183,7 +212,26 @@ internal static class Elsa3ScriptResultKinds
         }
     }
 
-    private static bool IsNumber(Elsa3ScriptResultKind kind) => kind is Elsa3ScriptResultKind.Number or Elsa3ScriptResultKind.Integer;
+    private static bool IsNumber(Elsa3ScriptResultKind kind) =>
+        kind is Elsa3ScriptResultKind.Number or Elsa3ScriptResultKind.Integer or Elsa3ScriptResultKind.ExactFractionLiteral;
+
+    // A literal fraction that Elsa 3's double-to-decimal conversion (15 significant digits) kept exactly.
+    private static Elsa3ScriptResultKind NumberLiteral(double number)
+    {
+        if (double.IsInteger(number))
+            return Elsa3ScriptResultKind.Integer;
+        try
+        {
+            var elsa3 = Convert.ToDecimal(number);
+            var elsa4 = decimal.Parse(number.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
+            return elsa3 == elsa4 ? Elsa3ScriptResultKind.ExactFractionLiteral : Elsa3ScriptResultKind.Number;
+        }
+        catch (OverflowException)
+        {
+            return Elsa3ScriptResultKind.Number;
+        }
+    }
 
     // Two kinds that agree are that kind; an integer and a number are a number; anything else is unknown.
     private static Elsa3ScriptResultKind Join(IReadOnlyCollection<Elsa3ScriptResultKind> kinds)

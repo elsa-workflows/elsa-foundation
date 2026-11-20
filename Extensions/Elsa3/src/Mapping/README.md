@@ -126,7 +126,8 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   into a boolean, string or number input whatever it was (`"true"` and `1` became `true`, a fraction was rounded);
   Elsa 4 converts only a JSON value of the matching kind. The import infers the kind from the script's completion value
   and its top-level returns (literals, comparisons, `!`, template strings, `Boolean(…)`, `String(…)`, `Number(…)`,
-  `Math.round(…)`, …) and keeps the binding only when it matches the input (for an integral or decimal input, an integer). Any
+  `Math.round(…)`, …) and keeps the binding only when it matches the input (for an integral input, an integer; for a decimal input, an integer or
+  a fraction literal, since Elsa 3 converted a computed fraction at 15 significant digits). Any
   other or unknown kind is `ELS3-UNTYPED-RESULT`, with guidance to state the kind in the script. Other untyped
   producers (a loop item, an event payload) are not checked: nothing in the definition shows their kind.
 - **Literal lists.** A literal bound to a collection input whose text is a JSON array (`["Approved","Rejected"]`,

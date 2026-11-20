@@ -47,7 +47,13 @@ public sealed class Elsa3ScriptResultIntoTypedInputTests
     [InlineData("x / 2", "Number", true)]
     [InlineData("'42'", "Number", false)]
     [InlineData("0.1 + 0.2", "Decimal", false)]
+    [InlineData("price * 1.21", "Decimal", false)]
     [InlineData("42", "Decimal", true)]
+    [InlineData("12.5", "Decimal", true)]
+    [InlineData("-0.1", "Decimal", true)]
+    [InlineData("0.1234567890123456", "Decimal", false)]
+    [InlineData("12.5", "Number", true)]
+    [InlineData("12.5", "Integer", false)]
     public void Each_kind_fits_only_the_target_elsa_4_converts_it_into(string script, string target, bool fits) =>
         Assert.Equal(fits, Elsa3ScriptResultKinds.Fits(Elsa3ScriptResultKinds.Infer(script), Enum.Parse<Elsa3ScalarTarget>(target)));
 
@@ -72,6 +78,14 @@ public sealed class Elsa3ScriptResultIntoTypedInputTests
         Assert.Contains("'calc'", diagnostic.Message);
         Assert.Contains(returns, diagnostic.Message);
         Assert.Contains("Boolean(…)", diagnostic.Guidance);
+    }
+
+    [Fact]
+    public void A_decimal_refusal_names_the_precision_difference_and_does_not_advise_rounding()
+    {
+        Assert.Contains("15 significant digits", Elsa3ScriptResultKinds.Difference(Elsa3ScalarTarget.Decimal));
+        Assert.DoesNotContain("Math.round", Elsa3ScriptResultKinds.Guidance(Elsa3ScalarTarget.Decimal));
+        Assert.Contains("Math.round", Elsa3ScriptResultKinds.Guidance(Elsa3ScalarTarget.Integer));
     }
 
     private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertAsync(string script)
