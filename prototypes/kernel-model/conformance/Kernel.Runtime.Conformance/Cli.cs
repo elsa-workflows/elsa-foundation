@@ -52,6 +52,11 @@ public static class Cli
                 if (!result.Exercised) return 1;
                 return options.BrokenFence ? result.Broken > 0 ? 0 : 1 : result.Violations == 0 ? 0 : 1;
             case ["cost", .. var rest]:
+                if (nodeLease)
+                {
+                    Console.Error.WriteLine(Usage);
+                    return 2;
+                }
                 int Arg(int i, int otherwise) => rest.Length > i ? int.Parse(rest[i], CultureInfo.InvariantCulture) : otherwise;
                 return await RuntimeCost.RunAsync(runtime, store, partitions: Arg(0, 16), seconds: Arg(1, 10), tokens: Arg(2, 400));
             default:
@@ -60,7 +65,7 @@ public static class Cli
         }
     }
 
-    private const string Usage = "semantic [filter] [--partitions N] | semantic-broken [filter] | stress [seconds] [messages] | stress-broken [seconds] [messages] | cost [partitions] [seconds] [tokens]; --node-lease with any";
+    private const string Usage = "semantic [filter] [--partitions N] | semantic-broken [filter] | stress [seconds] [messages] | stress-broken [seconds] [messages] | cost [partitions] [seconds] [tokens]; --node-lease with semantic, semantic-broken, stress, stress-broken";
 
     private static Func<RuntimeCase, bool>? Filter(string[] rest) => rest.Length == 0 ? null : c => c.Name.Contains(rest[0], StringComparison.OrdinalIgnoreCase);
 }

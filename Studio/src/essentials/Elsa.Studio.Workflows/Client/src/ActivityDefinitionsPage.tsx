@@ -173,28 +173,29 @@ export function ActivityDefinitionsPage({
     observeActivityDefinitions({ event: "route-view", surface: route.definitionId ? "workbench" : "collection" });
   }, [route.definitionId]);
 
-  const navigate = (next: RouteState, force = false) => whenActive(() => {
+  const navigate = (next: RouteState, force = false, replace = false) => whenActive(() => {
     if (navigationBlockedRef.current && !force) return;
     navigationBlockedRef.current = false;
-    writeRouteState(next, "push", routeCollectionContextRef.current);
+    writeRouteState(next, replace ? "replace" : "push", routeCollectionContextRef.current);
     window.dispatchEvent(new PopStateEvent("popstate"));
   });
 
   if (route.definitionId) {
-    if (route.section === "editor" && route.draftId) {
+    if (route.section === "editor" && (route.draftId || route.versionId)) {
       const extensions = graphExtensions();
-      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId} activityEditors={activityEditors()} propertyEditors={extensions.properties} expressionEditors={extensions.expressions} graphAuthoringPanels={extensions.panels} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
+      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId ?? undefined} versionId={route.versionId ?? undefined} allowStartEditing={!route.draftId && Boolean(route.versionId)} activityEditors={activityEditors()} propertyEditors={extensions.properties} expressionEditors={extensions.expressions} graphAuthoringPanels={extensions.panels} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
         if (route.returnPlanId) {
           navigationBlockedRef.current = false;
           navigateToStudioPath(`/workflows/activity-definitions/upgrades?plan=${encodeURIComponent(route.returnPlanId)}`);
           return;
         }
-        navigate({ definitionId: route.definitionId, section: null, draftId: null, versionId: null }, force);
-      }} onOpenDraft={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null, returnPlanId: route.returnPlanId }, true)} onOpenVersion={(definitionId, versionId) => navigate({ definitionId, section: "versions", draftId: null, versionId, returnPlanId: route.returnPlanId }, true)} onOpenStudioPath={navigateToStudioPath} /></WorkflowLazyBoundary>;
+        void queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionCollections });
+        navigate({ definitionId: null, section: null, draftId: null, versionId: null }, force);
+      }} onManage={section => navigate({ definitionId: route.definitionId, section, draftId: null, versionId: null, returnPlanId: route.returnPlanId })} onOpenDraft={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null, returnPlanId: route.returnPlanId }, true)} onOpenVersion={(definitionId, versionId) => navigate({ definitionId, section: "versions", draftId: null, versionId, returnPlanId: route.returnPlanId }, true)} onOpenStudioPath={navigateToStudioPath} /></WorkflowLazyBoundary>;
     }
     return (
       <WorkflowLazyBoundary label="activity definition workbench">
-        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} requestedDraftActionVersionId={route.draftActionVersionId} activityEditors={activityEditors()} onNavigate={navigate} onOpenWorkflows={() => navigateToStudioPath("/workflows/definitions")} onPlanUpgrade={(kind, id) => navigateToStudioPath(`/workflows/activity-definitions/upgrades?rootKind=${encodeURIComponent(kind)}&rootId=${encodeURIComponent(id)}`)} />
+        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} requestedDraftActionVersionId={route.draftActionVersionId} activityEditors={activityEditors()} onNavigate={(next, replace) => navigate(next, false, replace)} onOpenWorkflows={() => navigateToStudioPath("/workflows/definitions")} onPlanUpgrade={(kind, id) => navigateToStudioPath(`/workflows/activity-definitions/upgrades?rootKind=${encodeURIComponent(kind)}&rootId=${encodeURIComponent(id)}`)} />
       </WorkflowLazyBoundary>
     );
   }
@@ -397,12 +398,13 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
       /></div> : null}
       {data && data.items.length > 0 ? <>
         <div className="studio-table-container studio-collection-table ad-collection" role="table" aria-label="Activity Definitions" aria-rowcount={data.totalCount}>
-          <div className="ad-collection-head" role="row"><span role="columnheader">Activity</span><span role="columnheader">Definition ID</span><span role="columnheader">Identifiers</span><span role="columnheader">State</span><span role="columnheader">Updated</span></div>
+          <div className="ad-collection-head" role="row"><span role="columnheader">Activity</span><span role="columnheader">Definition ID</span><span role="columnheader">Provider</span><span role="columnheader">Identifiers</span><span role="columnheader">State</span><span role="columnheader">Updated</span></div>
           {data.items.map(definition => {
             const title = resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey);
             const recommendation = definition.lifecycle.recommendation;
             const recommendedVersion = recommendation ? formatActivityVersion(recommendation.version) : null;
             const providerKey = recommendation?.providerKey ?? definition.lifecycle.head?.providerKey;
+            const providerLabel = providerKey ?? "Not established";
             const authorityKind = definition.definition.contentAuthority.kind;
             const rowDetails = [
               `Activity Type Key: ${definition.definition.activityTypeKey}`,
@@ -417,6 +419,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
             return <div key={definition.definition.definitionId} className="ad-collection-row" role="row" tabIndex={0} aria-label={`Open Activity Definition ${title}`} title={rowDetails} onClick={event => { if ((event.target as HTMLElement).closest("button, input, label, a")) return; openDefinition(definition); }} onKeyDown={event => { if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); openDefinition(definition); }}>
             <span role="cell" data-label="Activity" className="ad-collection-activity"><strong title={title}>{title}</strong></span>
             <span role="cell" data-label="Definition ID" className="wf-list-primary-id ad-primary-identifier"><CopyableIdentifier label="Definition ID" value={definition.definition.definitionId} /></span>
+            <span role="cell" data-label="Provider" className="ad-collection-provider">{providerLabel}</span>
             <span role="cell" data-label="Identifiers"><WorkflowListIdentifiers kind="Activity Definition" name={title} identifiers={additionalIdentifiers} description={definition.definition.description}>
               <p>Category: {definition.definition.category || "Uncategorized"}</p>
               <p>{providerKey ? `Provider: ${providerKey} · ` : ""}Authority: {authorityKind}</p>

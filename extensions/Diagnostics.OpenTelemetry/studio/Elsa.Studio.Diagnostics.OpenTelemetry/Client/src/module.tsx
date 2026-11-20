@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useMemo, useState } from "react";
 import type { ElsaStudioModuleApi, StudioRouteComponentProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
@@ -465,20 +465,20 @@ function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState;
         <TraceToolbar state={state} />
         <div className="otel-trace-table" role="table" aria-label="Trace summaries">
           <div className="otel-trace-row header" role="row">
-            <span>Start</span><span>Service</span><span>Trace</span><span>Duration</span><span>Spans</span><span>Status</span>
+            <span role="columnheader">Start</span><span role="columnheader">Service</span><span role="columnheader">Trace</span><span role="columnheader">Duration</span><span role="columnheader">Spans</span><span role="columnheader">Status</span>
           </div>
           {state.traces.length === 0 ? <div className="otel-empty">{state.message}</div> : null}
           {state.traces.map(trace => {
             const serviceNames = getServiceNames(trace.resourceIds, state.resourcesById);
             return (
-              <button type="button" role="row" className={trace.traceId === state.selectedTraceId ? "otel-trace-row selected" : "otel-trace-row"} onClick={() => state.setSelectedTraceId(trace.traceId)} key={trace.traceId}>
-                <time title={trace.startTime}>{formatTime(trace.startTime)}</time>
-                <span title={serviceNames.join(", ")}>{serviceNames.join(", ")}</span>
-                <strong title={trace.name ?? trace.traceId}>{trace.name ?? trace.traceId}{trace.name ? <small>{trace.traceId}</small> : null}</strong>
-                <span>{formatDuration(trace.durationMs)}</span>
-                <span>{trace.spanCount}</span>
-                <StatusChip status={trace.status} />
-              </button>
+              <div role="row" aria-selected={trace.traceId === state.selectedTraceId} className={trace.traceId === state.selectedTraceId ? "otel-trace-row selected" : "otel-trace-row"} {...studioRowInteraction<HTMLDivElement>(() => state.setSelectedTraceId(trace.traceId))} key={trace.traceId}>
+                <time role="cell" title={trace.startTime}>{formatTime(trace.startTime)}</time>
+                <span role="cell" title={serviceNames.join(", ")}>{serviceNames.join(", ")}</span>
+                <strong role="cell" title={trace.name ?? trace.traceId}>{trace.name ?? trace.traceId}{trace.name ? <small>{trace.traceId}</small> : null}</strong>
+                <span role="cell">{formatDuration(trace.durationMs)}</span>
+                <span role="cell">{trace.spanCount}</span>
+                <span role="cell"><StatusChip status={trace.status} /></span>
+              </div>
             );
           })}
         </div>

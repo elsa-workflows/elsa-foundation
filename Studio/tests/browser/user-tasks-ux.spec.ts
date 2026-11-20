@@ -54,7 +54,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Create form version", exact: true }).first().press("Enter");
     await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
     await expect(page.getByRole("region", { name: "Reusable form versions" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Add field", exact: true }).click();
+    await page.getByRole("complementary", { name: "Field palette", exact: true }).getByRole("button", { name: "Text input", exact: true }).click();
     const checkbox = page.getByRole("checkbox", { name: "Required", exact: true });
     expect((await checkbox.boundingBox())!.width).toBeLessThanOrEqual(20);
     expect((await checkbox.boundingBox())!.height).toBeLessThanOrEqual(20);

@@ -1,7 +1,9 @@
 import { getIntrinsicActivityDisplay } from "./runtimeActivityDisplay";
 import { readIntrinsicDescriptor } from "./intrinsicActivities";
 import { compensationScopeStructureKind, compensationStepsFromExecutableSlots } from "./compensationScope";
-import { bpmnStructureKind, flowchartStructureKind, sequenceStructureKind, readStructureDesignFacet, type StructureDesignSlotDescriptor } from "./workflowAdapter";
+import { bpmnStructureKind, flowchartStructureKind, sequenceStructureKind, readStructureDesignFacet, type ChildSlot } from "./workflowAdapter";
+import { isCollectionStructureDesignSlot, matchStructureDesignSlots, type StructureDesignSlotMatchIssue } from "./structureDesign";
+import { createExecutableChildSlots, registerExecutableChildSlots } from "./executableStructure";
 import type {
   ActivityCatalogItem,
   ActivityNode,
@@ -43,7 +45,15 @@ export interface ExecutableGraphNodeFacts {
   authoredInputs: WorkflowExecutableAuthoredInput[];
   authoredInputsAccess: string | null;
   presentation?: ActivityPresentationRecord;
-  structureDiagnostics?: { code: string; wireSlot: string; message: string }[];
+  structureDiagnostics: ExecutableStructureDiagnostic[];
+}
+
+export interface ExecutableStructureDiagnostic {
+  executableNodeId: string;
+  authoredActivityId: string;
+  wireSlot: string;
+  code: StructureDesignSlotMatchIssue["code"] | "structure-kind-mismatch" | "structure-facet-unavailable" | "duplicate-compensation-slot";
+  message: string;
 }
 
 export interface ExecutableActivityGraph {
@@ -110,6 +120,7 @@ export function buildExecutableActivityGraph(
       ?? (node === root && nodeId === node.authoredActivityId ? authoredInputsByNodeId.get(node.authoredActivityId) : undefined)
       ?? [];
     const inputBindings = compiledInputsByNodeId.get(node.executableNodeId) ?? node.inputBindings ?? [];
+    const synthesizedStructure = synthesizeStructure(node, catalogItem, adapt, nodeIdsByExecutableId);
     factsByNodeId.set(nodeId, {
       executableNodeId: node.executableNodeId,
       authoredActivityId: node.authoredActivityId,
@@ -121,11 +132,12 @@ export function buildExecutableActivityGraph(
       outputCaptures: node.outputCaptures ?? [],
       authoredInputs: nodeAuthoredInputs,
       authoredInputsAccess,
-      presentation: adaptedNodePresentation
+      presentation: adaptedNodePresentation,
+      structureDiagnostics: synthesizedStructure.diagnostics
     });
     if (adaptedNodePresentation) adaptedPresentation.push(adaptedNodePresentation);
 
-    return {
+    const activity: ActivityNode = {
       nodeId,
       // A catalog miss gets a synthetic version id no catalog can resolve, so downstream lookups
       // treat the node as unknown; the canvas layer relabels it and marks it as a ghost.
@@ -139,8 +151,10 @@ export function buildExecutableActivityGraph(
       ).map(input => ({ referenceKey: input.inputKey, value: { expressionType: input.expressionType ?? "Literal", value: input.value } })),
       outputs: [],
       executableOutcomes: node.outcomes,
-      structure: synthesizeStructure(node, catalogItem, adapt, nodeIdsByExecutableId)
+      structure: synthesizedStructure.structure
     };
+    if (synthesizedStructure.fallbackSlots) registerExecutableChildSlots(activity, synthesizedStructure.fallbackSlots);
+    return activity;
   };
 
   return { root: adapt(root), factsByNodeId, activityPresentation: adaptedPresentation };
@@ -236,7 +250,7 @@ function ghostActivityVersionId(node: WorkflowExecutableNode) {
 }
 
 // Rebuilds an authored-style structure from the wire slots. When the environment catalog carries the
-// activity's structure design facet and every wire slot matches a plain facet slot by contract name,
+// activity's structure design facet and every wire slot matches a facet slot by contract name,
 // the payload is keyed by the facet's properties so getChildSlots resolves through the facet exactly
 // as it does for authored definitions. Otherwise a generic payload keyed by slot-derived property
 // names is used, which getChildSlots renders through its generic fallback.
@@ -245,31 +259,69 @@ function synthesizeStructure(
   catalogItem: ActivityCatalogItem | undefined,
   adapt: (child: WorkflowExecutableNode) => ActivityNode,
   nodeIdsByExecutableId: Map<string, string>
-): ActivityNodeStructure | null {
+): { structure: ActivityNodeStructure | null; fallbackSlots?: ChildSlot[]; diagnostics: ExecutableStructureDiagnostic[] } {
   const slots = node.childSlots ?? [];
-  if (slots.length === 0 && !node.structureKind) return null;
+  if (slots.length === 0 && !node.structureKind) return { structure: null, diagnostics: [] };
 
   if (node.structureKind === compensationScopeStructureKind) {
+    const diagnostics = compensationSlotDiagnostics(node, slots);
     return {
-      kind: compensationScopeStructureKind,
-      schemaVersion: "1.0.0",
-      payload: { steps: compensationStepsFromExecutableSlots(slots, adapt) }
+      structure: {
+        kind: compensationScopeStructureKind,
+        schemaVersion: "1.0.0",
+        payload: { steps: compensationStepsFromExecutableSlots(slots, adapt) }
+      },
+      ...(diagnostics.length ? { fallbackSlots: createExecutableChildSlots(slots, adapt, "compensation") } : {}),
+      diagnostics
     };
   }
 
   const facet = readStructureDesignFacet(catalogItem);
-  const facetMatch = facet && (!node.structureKind || facet.kind === node.structureKind)
-    ? matchFacetSlots(slots, facet.payload.slots)
-    : null;
+  const kindMismatch = !!facet && !!node.structureKind && facet.kind !== node.structureKind;
+  const facetMatch = facet && !kindMismatch ? matchStructureDesignSlots(slots, facet.payload.slots) : null;
 
-  if (facet && facetMatch) {
+  if (facet && facetMatch && facetMatch.issues.length === 0) {
     const payload: Record<string, unknown> = { ...facet.payload.initialPayload };
-    for (const { slot, descriptor } of facetMatch) {
+    for (const descriptor of facet.payload.slots) {
+      if (isCollectionStructureDesignSlot(descriptor)) payload[descriptor.collectionProperty] = [];
+      else payload[descriptor.property] = descriptor.cardinality === "many" ? [] : null;
+    }
+    for (const { slotIndex, match } of facetMatch.matches) {
+      const slot = slots[slotIndex];
+      const { descriptor, itemLabel } = match;
       const activities = slot.activities.map(adapt);
-      payload[descriptor.property] = descriptor.cardinality === "single" ? activities[0] ?? null : activities;
+      const value = descriptor.cardinality === "single" ? activities[0] ?? null : activities;
+      if (isCollectionStructureDesignSlot(descriptor)) {
+        const collection = payload[descriptor.collectionProperty] as Record<string, unknown>[];
+        const row = collection.find(item => item[descriptor.labelProperty] === itemLabel && !(descriptor.childProperty in item));
+        if (row) row[descriptor.childProperty] = value;
+        else collection.push({ [descriptor.labelProperty]: itemLabel, [descriptor.childProperty]: value });
+      } else {
+        payload[descriptor.property] = value;
+      }
     }
     copyExecutableTopology(facet.kind, node, payload, nodeIdsByExecutableId);
-    return { kind: facet.kind, schemaVersion: facet.schemaVersion, payload };
+    return { structure: { kind: facet.kind, schemaVersion: facet.schemaVersion, payload }, diagnostics: [] };
+  }
+
+  const matchIssues = facetMatch?.issues ?? [];
+  const diagnostics = matchIssues.map(issue => createStructureDiagnostic(node, issue));
+  if (kindMismatch) {
+    diagnostics.push(...slots.map(slot => ({
+      executableNodeId: node.executableNodeId,
+      authoredActivityId: node.authoredActivityId,
+      wireSlot: slot.name,
+      code: "structure-kind-mismatch" as const,
+      message: `Pinned structure '${node.structureKind}' does not match the live catalog structure '${facet!.kind}'.`
+    })));
+  } else if (!facet && catalogItem && slots.length > 0) {
+    diagnostics.push(...slots.map(slot => ({
+      executableNodeId: node.executableNodeId,
+      authoredActivityId: node.authoredActivityId,
+      wireSlot: slot.name,
+      code: "structure-facet-unavailable" as const,
+      message: "The current catalog has no valid structure declaration for this pinned child slot. Showing the executable slot without catalog mapping."
+    })));
   }
 
   const payload: Record<string, unknown> = {};
@@ -282,10 +334,50 @@ function synthesizeStructure(
   copyExecutableTopology(kind, node, payload, nodeIdsByExecutableId);
 
   return {
-    kind,
-    schemaVersion: "1.0.0",
-    payload
+    structure: { kind, schemaVersion: "1.0.0", payload },
+    ...(slots.length ? { fallbackSlots: createExecutableChildSlots(slots, adapt, modeForStructureKind(kind)) } : {}),
+    diagnostics
   };
+}
+
+function createStructureDiagnostic(node: WorkflowExecutableNode, issue: StructureDesignSlotMatchIssue): ExecutableStructureDiagnostic {
+  const messages: Record<StructureDesignSlotMatchIssue["code"], string> = {
+    unmatched: "This pinned child slot is not declared by the current catalog structure.",
+    ambiguous: "This pinned child slot matches multiple catalog declarations.",
+    "duplicate-fixed-slot": "The pinned executable contains the same fixed child slot more than once.",
+    "single-cardinality-overflow": "This pinned single child slot contains multiple activities."
+  };
+  return {
+    executableNodeId: node.executableNodeId,
+    authoredActivityId: node.authoredActivityId,
+    wireSlot: issue.slotName,
+    code: issue.code,
+    message: messages[issue.code]
+  };
+}
+
+function compensationSlotDiagnostics(node: WorkflowExecutableNode, slots: WorkflowExecutableChildSlot[]): ExecutableStructureDiagnostic[] {
+  const counts = new Map<string, number>();
+  for (const slot of slots) counts.set(slot.name, (counts.get(slot.name) ?? 0) + 1);
+  return slots.flatMap(slot => {
+    if (slot.activities.length > 1) return [createStructureDiagnostic(node, { slotName: slot.name, code: "single-cardinality-overflow" })];
+    if ((counts.get(slot.name) ?? 0) > 1) return [{
+      executableNodeId: node.executableNodeId,
+      authoredActivityId: node.authoredActivityId,
+      wireSlot: slot.name,
+      code: "duplicate-compensation-slot" as const,
+      message: "The pinned executable contains a duplicate compensation child slot."
+    }];
+    return [];
+  });
+}
+
+function modeForStructureKind(kind: string): ChildSlot["mode"] {
+  if (kind === sequenceStructureKind) return "sequence";
+  if (kind === flowchartStructureKind) return "flowchart";
+  if (kind === bpmnStructureKind) return "bpmn";
+  if (kind === compensationScopeStructureKind) return "compensation";
+  return "generic";
 }
 
 function copyExecutableTopology(
@@ -353,20 +445,6 @@ function cloneConnectionEndpoint(endpoint: WorkflowExecutableConnectionEndpoint)
     nodeId: endpoint.nodeId,
     ...(typeof endpoint.port === "string" ? { port: endpoint.port } : {})
   };
-}
-
-// Pairs every wire slot with the facet slot descriptor sharing its contract name. Collection-backed
-// descriptors (e.g. Switch cases) key their payload by item, which the wire slot name alone cannot
-// reconstruct — those fall back to the generic payload.
-function matchFacetSlots(slots: WorkflowExecutableChildSlot[], descriptors: StructureDesignSlotDescriptor[]) {
-  const matches: { slot: WorkflowExecutableChildSlot; descriptor: StructureDesignSlotDescriptor }[] = [];
-  for (const slot of slots) {
-    const descriptor = descriptors.find(candidate => candidate.name === slot.name);
-    if (!descriptor || descriptor.collectionProperty || descriptor.childProperty) return null;
-    matches.push({ slot, descriptor });
-  }
-
-  return matches;
 }
 
 // "Sequence.Activities" -> "activities", "ForEach.Body" -> "body": the camelCased last segment of the

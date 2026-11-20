@@ -49,6 +49,7 @@ public static class WorkbenchOpenIddictVendorRegistration
 
         services.AddOpenIddict()
             .AddCore(core => core.UseEntityFrameworkCore().UseDbContext<OpenIddictIdentityDbContext>());
+        services.AddScoped<IOpenIddictTokenStoreInfo, WorkbenchOpenIddictTokenStoreInfo>();
 
         // Root hosted services run once for the Workbench process. CShells copies these root descriptors into shell
         // providers, so registering this initializer again as an IShellInitializer would race durable migrations

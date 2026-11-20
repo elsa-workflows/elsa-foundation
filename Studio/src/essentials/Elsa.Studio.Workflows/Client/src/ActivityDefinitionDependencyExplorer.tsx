@@ -1,4 +1,4 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useRef, useState, type UIEvent } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowRight, RefreshCw } from "lucide-react";
@@ -263,7 +263,7 @@ function DependencyRow({
   onSelect(): void;
 }) {
   const sourceHref = exactOwnerHref(item);
-  return <tr className={selected ? "is-selected" : ""}>
+  return <tr className={selected ? "is-selected" : ""} aria-selected={selected} {...studioRowInteraction<HTMLTableRowElement>(onSelect)}>
     <td data-label={direction === "inbound" ? "Used in" : "Version"}><strong>{referenceLabel(item.owner)}</strong><code>{referenceIdentity(item.owner)}</code></td>
     <td data-label="Where"><strong>{item.occurrence.occurrenceId}</strong><span>{item.occurrence.nodeOrigin.length} origin steps</span></td>
     <td data-label={direction === "inbound" ? "Activity" : "Uses"}><strong>{referenceLabel(item.dependency)}</strong><code>{referenceIdentity(item.dependency)}</code></td>

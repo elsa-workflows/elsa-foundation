@@ -24,7 +24,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PlayCircle,
-  RefreshCw,
   Search,
   Server,
   Shield,
@@ -100,7 +99,7 @@ import {
   isSettingsSurfacePath,
   resolveSettingsSection
 } from "./settings/settingsSections";
-import { isDashboardPath, isNavigationItemActive } from "./navigation/active";
+import { isNavigationItemActive } from "./navigation/active";
 import elsaLogo from "../assets/images/icon.png";
 import { WeaverSurface } from "./weaver";
 import "./styles.css";
@@ -378,7 +377,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authManager, backendBaseUrl, backendSession, connections, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl, modules]);
 
-  const routes = useMemo(() => api?.routes.compose({includeUnavailable:true}).map(({contribution,availability}) => ({...contribution,availability})) ?? [], [api, state]);
+  const routes = useMemo(() => api?.routes.compose({includeUnavailable:true}).map(({contribution,availability}) => ({...contribution,availability})) ?? [], [api]);
   const enabledFeatures = useMemo(() => {
     const features = new Set<string>();
     for (const module of manifestQuery.data?.modules ?? []) {
@@ -391,15 +390,15 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   }, [manifestQuery.data]);
   const navigation = useMemo(
     () => getStudioNavigation(api?.navigation.list() ?? [], { includeThemeBuilder: themeCapabilities.managementEnabled }),
-    [api, state, themeCapabilities.managementEnabled]
+    [api, themeCapabilities.managementEnabled]
   );
   const panels = useMemo(
     () => (api?.panels.list() ?? []).sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
-    [api, state]
+    [api]
   );
   const featureAreas = useMemo(
     () => (api?.featureAreas.list() ?? []).sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
-    [api, state]
+    [api]
   );
   const access = useShellNavigationAccess(enabledFeatures);
   const settingsGroups = getSettingsSectionGroups(navigation, access);
@@ -1618,7 +1617,7 @@ export function getStudioNavigation(moduleNavigation: StudioNavigationContributi
     appearanceNavigation,
     ...(options.includeThemeBuilder ? [themeBuilderNavigation] : []),
     ...builtInNavigation,
-    ...(moduleNavigation.some(item => item.parentId === "library") ? [{ id: "library", label: "Library", path: "/library", placement: "build" as const, childDisplay: "views" as const, order: 35 }] : [])
+    ...(moduleNavigation.some(item => item.parentId === "library") ? [{ id: "library", label: "Library", path: "/library", placement: "build" as const, order: 35 }] : [])
   ];
   return [...hostNavigation, ...moduleNavigation]
     .filter((item, index, items) => items.findIndex(candidate => candidate.id === item.id) === index)

@@ -314,6 +314,18 @@ export function WorkflowTestDrivePanel({
                   disabled={busy || isStale}
                   onEditorFailure={() => setInputErrors(current => ({ ...current, [input.referenceKey]: "The input editor failed. Enter a standard value instead." }))}
                   onChange={value => setInputDrafts(current => ({ ...current, [input.referenceKey]: value }))}
+                  onOmit={Object.prototype.hasOwnProperty.call(inputDrafts, input.referenceKey) ? () => {
+                    setInputDrafts(current => {
+                      const next = { ...current };
+                      delete next[input.referenceKey];
+                      return next;
+                    });
+                    setInputErrors(current => {
+                      const next = { ...current };
+                      delete next[input.referenceKey];
+                      return next;
+                    });
+                  } : undefined}
                 />
               ))}
             </div>
@@ -348,8 +360,10 @@ function readWorkflowInputsForTestRun(snapshot: TestDriveSnapshot, contract: Wor
         displayName: authored?.displayName || input.name,
         description: authored?.description ?? "",
         type: readArgumentType({ type: input.type }),
-        isRequired: input.isRequired && (input.defaultValue === undefined || input.defaultValue === null),
-        isNullable: authored?.isNullable ?? false,
+        isRequired: input.isRequired,
+        isNullable: input.isNullable ?? authored?.isNullable ?? false,
+        defaultValue: input.defaultValue,
+        defaultSyntax: input.defaultValue === undefined ? undefined : "Literal",
         category: authored?.category ?? "",
         uiHint: authored?.uiHint ?? "",
         storageDriverType: authored?.storageDriverType ?? null

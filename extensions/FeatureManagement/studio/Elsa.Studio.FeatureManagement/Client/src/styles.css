@@ -748,7 +748,7 @@
 
 .feature-management-settings {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .feature-management-setting-group {
@@ -765,23 +765,26 @@
 
 .feature-management-setting-group > div {
   display: grid;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
+  gap: 14px;
+  min-width: 0;
 }
 
 .feature-management-setting {
   display: grid;
   grid-template-columns: 1fr;
   gap: 7px;
+  min-width: 0;
   background: color-mix(in srgb, var(--studio-surface, var(--card)) 96%, var(--muted));
-  border-bottom: 1px solid var(--border);
+  border: 1px solid var(--studio-border, var(--border));
+  border-radius: var(--studio-radius, 6px);
   padding: 12px;
 }
 
-.feature-management-setting:last-child {
-  border-bottom: 0;
+.feature-management-setting.boolean {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .feature-management-setting-main {
@@ -825,11 +828,11 @@
   flex: 0 0 auto;
 }
 
-.feature-management-setting input[type="text"],
-.feature-management-setting input[type="password"],
-.feature-management-setting input[type="number"],
-.feature-management-setting select,
-.feature-management-setting textarea {
+.feature-management-setting:not(.outlined) input[type="text"],
+.feature-management-setting:not(.outlined) input[type="password"],
+.feature-management-setting:not(.outlined) input[type="number"],
+.feature-management-setting:not(.outlined) select,
+.feature-management-setting:not(.outlined) textarea {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -839,7 +842,7 @@
   font: inherit;
 }
 
-.feature-management-setting input[type="checkbox"]:not(.feature-management-setting-switch-input) {
+.feature-management-setting:not(.outlined) input[type="checkbox"]:not(.feature-management-setting-switch-input) {
   justify-self: start;
   width: 16px;
   height: 16px;
@@ -909,8 +912,9 @@
 .feature-management-settings-dialog {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(900px, calc(100vw - 48px));
-  max-height: min(760px, calc(100vh - 48px));
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(760px, calc(100dvh - 48px));
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--studio-surface, var(--card));
@@ -942,11 +946,13 @@
 .feature-management-dialog-heading h3 {
   margin: 2px 0 0;
   font-size: 18px;
+  overflow-wrap: anywhere;
 }
 
 .feature-management-dialog-body {
+  min-height: 0;
   overflow: auto;
-  padding: 16px;
+  padding: 18px 20px;
 }
 
 .feature-management-impact-intro {
@@ -1098,6 +1104,12 @@
   justify-content: flex-end;
 }
 
+.feature-management-dialog-actions > span {
+  flex: 1 1 280px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .feature-management-inspector-badges {
   display: flex;
   gap: 6px;
@@ -1121,6 +1133,222 @@
   color: var(--studio-text-muted, var(--muted-foreground));
 }
 
+.feature-management-layout.overview {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.feature-management-browse-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+}
+
+.feature-management-browse-nav button {
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--studio-text-muted, var(--muted-foreground));
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 5px 9px;
+}
+
+.feature-management-browse-nav button[aria-pressed="true"] {
+  border-color: var(--studio-border, var(--border));
+  background: var(--studio-surface, var(--card));
+  color: var(--studio-text, var(--foreground));
+}
+
+.feature-management-browse-nav button:focus-visible,
+.feature-management-capability-card:focus-visible,
+.feature-management-relationship-link:focus-visible {
+  outline: 2px solid var(--studio-focus, var(--studio-accent, var(--primary)));
+  outline-offset: 2px;
+}
+
+.feature-management-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  align-items: stretch;
+  gap: 12px;
+  padding: 14px;
+}
+
+.feature-management-capability-card {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+  min-height: 164px;
+  border: 1px solid var(--studio-border, var(--border));
+  border-radius: 8px;
+  background: var(--studio-surface, var(--card));
+  color: var(--studio-text, var(--foreground));
+  cursor: pointer;
+  padding: 14px;
+  text-align: left;
+}
+
+.feature-management-capability-card:hover {
+  border-color: color-mix(in srgb, var(--studio-accent, var(--primary)) 48%, var(--studio-border, var(--border)));
+  background: color-mix(in srgb, var(--studio-accent, var(--primary)) 5%, var(--studio-surface, var(--card)));
+}
+
+.feature-management-capability-card-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feature-management-capability-card-heading strong {
+  font-size: 15px;
+}
+
+.feature-management-capability-card-heading > span,
+.feature-management-capability-description,
+.feature-management-capability-alerts {
+  color: var(--studio-text-muted, var(--muted-foreground));
+  font-size: 12px;
+}
+
+.feature-management-capability-description {
+  line-height: 1.45;
+}
+
+.feature-management-capability-summary {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.feature-management-capability-alerts {
+  color: var(--studio-warning, var(--warning));
+}
+
+.feature-management-capability-action {
+  align-self: end;
+  margin-top: 2px;
+  color: var(--studio-accent, var(--primary));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feature-management-list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+}
+
+.feature-management-list-filters > label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--studio-text-muted, var(--muted-foreground));
+  font-size: 12px;
+}
+
+.feature-management-list-filters select {
+  min-height: 30px;
+  border: 1px solid var(--studio-border, var(--border));
+  border-radius: 5px;
+  background: var(--studio-surface, var(--card));
+  color: var(--studio-text, var(--foreground));
+  padding: 4px 8px;
+}
+
+.feature-management-advanced-filter input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--studio-accent, var(--primary));
+}
+
+.feature-management-relationships {
+  gap: 12px;
+}
+
+.feature-management-relationship-group {
+  display: grid;
+  gap: 6px;
+}
+
+.feature-management-relationship-group h5 {
+  margin: 0;
+  color: var(--studio-text, var(--foreground));
+  font-size: 12px;
+}
+
+.feature-management-relationship-label {
+  color: var(--studio-text-muted, var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.feature-management-relationship-group ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feature-management-relationship-group details summary,
+.feature-management-metadata summary {
+  color: var(--studio-text-muted, var(--muted-foreground));
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.feature-management-relationship-group details ul {
+  margin-top: 7px;
+}
+
+.feature-management-relationship-link,
+.feature-management-relationship-missing {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.feature-management-relationship-link {
+  border: 0;
+  background: transparent;
+  color: var(--studio-accent, var(--primary));
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 2px 0;
+  text-align: left;
+}
+
+.feature-management-relationship-link > span:first-child,
+.feature-management-relationship-missing code {
+  overflow-wrap: anywhere;
+}
+
+.feature-management-technical-section {
+  padding-block: 9px;
+}
+
+.feature-management-metadata summary {
+  color: var(--studio-text, var(--foreground));
+}
+
+.feature-management-metadata[open] summary {
+  margin-bottom: 10px;
+}
+
 @media (max-width: 1024px) {
   .feature-management-layout {
     grid-template-columns: 1fr;
@@ -1133,6 +1361,16 @@
 }
 
 @media (max-width: 860px) {
+  .feature-management-dialog-backdrop {
+    padding: 12px;
+  }
+
+  .feature-management-settings-dialog,
+  .feature-management-impact-dialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+
   .feature-management-list-toolbar {
     flex-wrap: wrap;
   }
@@ -1154,6 +1392,10 @@
     justify-content: stretch;
   }
 
+  .feature-management-dialog-actions > span {
+    flex: 0 1 auto;
+  }
+
   .feature-management-dialog-actions button {
     flex: 1;
   }
@@ -1172,5 +1414,10 @@
   gap: var(--studio-page-gap);
 }
 
-/* Outlined editors own their field surface; retain the technical key below it. */
-.feature-management-setting.outlined { background: transparent; padding: 8px 0; }
+.feature-management-setting.outlined {
+  display: grid;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}

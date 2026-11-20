@@ -1023,11 +1023,6 @@
   border-bottom: 0;
 }
 
-.wf-executable-grid > .wf-grid-row:focus-visible {
-  outline: 2px solid var(--studio-accent);
-  outline-offset: -2px;
-}
-
 .wf-executable-actions-header {
   text-align: right;
 }
@@ -1054,14 +1049,18 @@
 
 .wf-executable-workflow-name {
   display: block;
+  width: fit-content;
   min-width: 0;
+  min-height: var(--studio-control-height);
   max-width: 100%;
   overflow: hidden;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--studio-text);
+  cursor: pointer;
   text-align: left;
+  font-family: inherit;
   font-size: 13px;
   font-weight: 650;
   text-overflow: ellipsis;
@@ -1209,6 +1208,7 @@
 
 .wf-run-inspect {
   display: grid;
+  width: fit-content;
   min-width: 0;
   border: 0;
   background: transparent;
@@ -1223,6 +1223,14 @@
   outline: 2px solid var(--studio-focus);
   outline-offset: 2px;
 }
+
+.wf-run-inspect:hover {
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wf-run-inspect:hover strong { color: var(--studio-accent); }
 
 
 .wf-run-inspect strong {
@@ -1479,6 +1487,7 @@
   gap: 10px;
   flex: 0 0 auto;
   border-bottom: 1px solid var(--studio-border);
+  padding: 12px;
 }
 
 .wf-executable-identity h3 {
@@ -3138,11 +3147,6 @@
   color: var(--wf-warning-text);
 }
 
-.wf-grid-row:focus-visible {
-  outline: 2px solid var(--wf-accent);
-  outline-offset: -2px;
-}
-
 .wf-grid-row[aria-selected="true"] {
   /* The row's --wf-row-bg-size list is laid out for the row recipe, not this panel stack. */
 }
@@ -3704,6 +3708,14 @@
 .wf-editor-body.inspector-collapsed .wf-inspector-content,
 .wf-editor-body.inspector-collapsed .wf-inspector > .wf-muted {
   display: none;
+}
+
+.wf-editor-body.inspector-collapsed .wf-inspector {
+  pointer-events: none;
+}
+
+.wf-editor-body.inspector-collapsed .wf-inspector > .wf-panel-title {
+  pointer-events: auto;
 }
 
 .wf-side-resize-handle,
@@ -4896,24 +4908,21 @@
   gap: .6rem;
 }
 
-.wf-runtime-heading {
-  display: flex;
-  flex-wrap: wrap;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.wf-runtime-heading h3,
 .wf-runtime-card > p {
   margin: 0;
 }
 
-.wf-runtime-heading h3 {
+/* Compact status + outcome merge — replaces the old heading + standalone outcome layout */
+.wf-runtime-status-outcome {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.wf-runtime-status-outcome .wf-runtime-outcome {
   color: var(--studio-text);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .wf-runtime-outcome {
@@ -5023,16 +5032,26 @@
   overflow-wrap: anywhere;
 }
 
-.wf-runtime-heading .wf-status-badge[data-status="waiting"],
-.wf-runtime-heading .wf-status-badge[data-status="stopping"],
-.wf-runtime-heading .wf-status-badge[data-status="needs attention"] {
+.wf-runtime-status-outcome .wf-status-badge[data-status="waiting"],
+.wf-runtime-status-outcome .wf-status-badge[data-status="stopping"],
+.wf-runtime-status-outcome .wf-status-badge[data-status="needs attention"] {
   background: color-mix(in srgb, var(--studio-warning) 12%, var(--studio-surface));
   color: var(--studio-warning-fg);
 }
 
-.wf-runtime-heading .wf-status-badge[data-status="rejected"] {
+.wf-runtime-status-outcome .wf-status-badge[data-status="rejected"] {
   background: color-mix(in srgb, var(--studio-danger) 12%, var(--studio-surface));
   color: var(--studio-danger-fg);
+}
+
+/* Borderless disclosure inside the runtime card — removes the card-within-a-card appearance */
+.wf-runtime-card .wf-runtime-details {
+  border: none;
+  border-radius: 0;
+}
+
+.wf-runtime-card .wf-runtime-details .studio-disclosure-fold-body {
+  padding: 12px 0 0;
 }
 
 @media (max-width: 480px) {
@@ -5043,6 +5062,11 @@
   .wf-runtime-meta > div {
     grid-template-columns: minmax(0, 1fr);
     gap: 3px;
+  }
+
+  .wf-runtime-status-outcome {
+    flex-direction: column;
+    gap: 6px;
   }
 }
 
@@ -5406,7 +5430,7 @@ button.wf-reference-select {
 .wf-property-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 7px;
+  gap: 5px;
   container-type: inline-size;
 }
 
@@ -5415,7 +5439,7 @@ button.wf-reference-select {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
 }
 
 .wf-property-row-caption {
@@ -5440,8 +5464,8 @@ button.wf-reference-select {
 .wf-property-row p {
   margin: 0;
   color: var(--wf-muted-text);
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .wf-js-input-bindings {
@@ -5463,7 +5487,7 @@ button.wf-reference-select {
   font: inherit;
   font-size: 12px;
   outline: none;
-  padding: 8px 9px;
+  padding: 5px 8px;
 }
 
 .wf-property-row select:not([multiple]):not([size]),
@@ -5497,13 +5521,13 @@ button.wf-reference-select {
 
 .wf-expression-field--toggle {
   display: flex;
-  min-height: 38px;
+  min-height: 32px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius);
   background: var(--studio-surface-muted);
-  padding: 3px 4px 3px 9px;
+  padding: 2px 3px 2px 6px;
 }
 
 .wf-expression-field--toggle .wf-expression-editor {
@@ -5618,6 +5642,33 @@ button.wf-reference-select {
 
 .wf-expression-field:not(.wf-expression-field--control) .wf-expression-editor > input[type="text"] {
   padding-right: 78px;
+}
+
+.wf-expression-editor-diagnostics {
+  display: grid;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.wf-expression-editor-diagnostic {
+  margin: 0;
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.wf-expression-editor-diagnostic.warning,
+.wf-expression-editor-diagnostic.error {
+  color: var(--studio-warning-fg);
+}
+
+.wf-expression-editor-diagnostic.error {
+  color: var(--studio-danger-fg);
+}
+
+.wf-expression-editor-diagnostic > span {
+  margin-right: 4px;
+  font-weight: 600;
 }
 
 .wf-syntax-picker {

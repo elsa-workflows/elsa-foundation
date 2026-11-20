@@ -15,7 +15,7 @@ export function studioRowInteraction<T extends HTMLElement>(activate?: () => voi
       if (event.defaultPrevented || !(target instanceof Element) || !row.contains(target)) return;
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const control = target.closest(embeddedControl);
-      if (control && control !== row) return;
+      if (control && control !== row && row.contains(control)) return;
       const selection = row.ownerDocument.getSelection();
       if (selection?.toString()) {
         for (let index = 0; index < selection.rangeCount; index++) {

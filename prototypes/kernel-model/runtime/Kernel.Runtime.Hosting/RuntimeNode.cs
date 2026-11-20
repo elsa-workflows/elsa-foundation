@@ -73,6 +73,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 
     public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
+        if (host is INodeLeaseHost { NodeLease: { } lease }) _heartbeatEvery = Cadence(lease, _options);
         await _runtime.StartAsync(host, cancellationToken);
         _runtime.Wake.Listen(actor =>
         {
@@ -81,7 +82,6 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             Volatile.Write(ref _due[scope], 0);
             Signal();
         });
-        if (_runtime.NodeLease is { } lease) _heartbeatEvery = Cadence(lease, _options);
         lock (_halting)
             if (_halted is null)     // a stop or kill that came first leaves the node unstarted
                 _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync), _heartbeatEvery is { } every ? Task.Run(() => HeartbeatLoopAsync(every)) : Task.CompletedTask,
@@ -273,7 +273,11 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             for (var scope = 0; scope < partitions; scope++)
                 if (_runtime.Owns(scope)) wait = Math.Min(wait, Volatile.Read(ref _due[scope]));
             var ms = Math.Clamp(wait - Now, 0, int.MaxValue);
-            if (ms == 0) continue;
+            if (ms == 0)
+            {
+                await Task.Yield();     // a Zero-delay pass must not hold this exclusive scheduler: BalanceLoopAsync runs on it
+                continue;
+            }
             try { await _signal.WaitAsync(TimeSpan.FromMilliseconds(ms), exit); }
             catch (OperationCanceledException) { break; }
         }

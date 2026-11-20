@@ -709,10 +709,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             lock (_turnSync)
             {
                 // A Worker that holds nothing counts only when nothing is on its way back either: no gain in flight, and no
-                // reset's retake (CodeRabbit 5984758539) or take (CodeRabbit 4636945436) in flight for a lease or more. One that
-                // hangs keeps the gate closed, as a hung pass does. One still within the lease leaves the gate open: a retake
-                // must not close the gate it checks at its own start, a fresh node heartbeats and takes, and its other
-                // Workers' takes go on beside it.
+                // reset's retake or take in flight for a lease or more. The take and retake terms are a backstop for a Worker
+                // that passes nothing; a recent pass still opens the gate.
                 var (now, lease) = (_options.Monotonic(), (long)_options.Lease.TotalMilliseconds);
                 var retakeHangs = _retaking && _retakeSet.Count > 0 && now - Volatile.Read(ref _retakeAt) >= lease;
                 var takeHangs = _taking && now - Volatile.Read(ref _takeAt) >= lease;
@@ -725,12 +723,29 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public Func<bool>? TakesOpen { get; set; }
     private bool TakesClosed => NodeLease && TakesOpen is { } open && !open();
 
+    public long ClaimsLookups { get; private set; }     // N1: one answer's judging, counted by the lease-check witness
     /// <summary>The partition is this Worker's: held, pending, or being taken. A host with several Workers divides an answer by it.</summary>
     public bool Claims(int partition)
     {
         lock (_turnSync)
+        {
+            ClaimsLookups++;
             return _held.ContainsKey(partition) || _pending.ContainsKey(partition) || _gaining == partition || (_taking && Assigned.Contains(partition))
                 || (_retaking && _retakeSet.Contains(partition));
+        }
+    }
+
+    /// <summary>The partitions <see cref="Claims"/> would accept, under the same lock. One answer builds a map from these.</summary>
+    internal IReadOnlyList<int> ClaimedPartitions()
+    {
+        lock (_turnSync)
+        {
+            HashSet<int> claimed = [.. _held.Keys, .. _pending.Keys];
+            if (_gaining >= 0) claimed.Add(_gaining);
+            if (_taking) claimed.UnionWith(Assigned);
+            if (_retaking) claimed.UnionWith(_retakeSet);
+            return [.. claimed];
+        }
     }
 
     // ---- ownership ---------------------------------------------------------------------------------------------
@@ -758,8 +773,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             await RetakePendingAsync(pending, cancellationToken);
             return;
         }
-        _taking = true;
         Volatile.Write(ref _takeAt, _options.Monotonic());
+        _taking = true;
         Interlocked.Increment(ref _takesStarted);
         if (partitions.Count > 1 && !_store.OwnedSetsAvailable)
         {

@@ -399,8 +399,13 @@ function step(container: HTMLElement, nodeId: string) {
 }
 
 function button(container: HTMLElement, label: string, attribute?: string) {
-  const element = [...container.querySelectorAll<HTMLButtonElement>("button")]
+  let element = [...container.querySelectorAll<HTMLButtonElement>("button")]
     .find(candidate => attribute ? candidate.getAttribute(attribute) === label : candidate.textContent?.trim() === label);
+  if (!element && !attribute) {
+    const trigger = container.querySelector<HTMLButtonElement>(".wf-block-menu-trigger");
+    if (trigger && trigger.getAttribute("aria-expanded") !== "true") flushSync(() => trigger.click());
+    element = [...document.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent?.trim() === label);
+  }
   if (!element) throw new Error(`Button not found: ${label}`);
   return element;
 }

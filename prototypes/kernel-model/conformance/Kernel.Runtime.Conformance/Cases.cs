@@ -100,6 +100,9 @@ public static class Cases
             That(h.Settled(), $"after an idle spell: {Holders(h)}");
             for (var p = 0; p < h.Partitions; p++)
                 That(await h.Outside.TakeAsync(p, "probe", h.Lease) is null, $"partition {p}'s lease ran out while it was held and idle: another node could take it");
+            if (h.Setup.NodeLease)
+                foreach (var n in h.Alive)
+                    That(n.Heartbeats.Renewed > 0, $"{n.Name} renewed {n.Heartbeats.Renewed} of {n.Heartbeats.Sent} heartbeats");
         }),
 
         new("placement: no activation comes or goes while the cluster is idle", Level.Reference, async h =>

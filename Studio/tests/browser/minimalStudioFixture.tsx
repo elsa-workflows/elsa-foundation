@@ -54,7 +54,7 @@ function Runs() {
     })), hasNext: false, nextCursor: null, count: 8, totalCount: 8 };
     throw new Error(`Unexpected minimal run read: ${path}`);
   } } } as unknown as StudioEndpointContext), []);
-  return <WorkflowInstancesPage context={context} navigate={() => undefined} />;
+  return <WorkflowInstancesPage context={context} navigate={path => { document.documentElement.dataset.rowDestination = path; }} />;
 }
 
 function Fixture() {
