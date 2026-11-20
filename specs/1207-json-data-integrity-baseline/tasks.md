@@ -4,8 +4,8 @@
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/json-baseline.md, quickstart.md
 
-**Provisional**: do not start any task before this spec is approved and #3052's specs are defined. That means its
-ADR PRs are agreed (see the spec's *Approval*). T001 is the gate.
+**Start**: once this spec is approved and merged, on a new branch cut from the initiative branch. ADR 0091 and the
+ADR 0046 amendment are already merged there. T001 is the gate.
 
 **Tests**: framework §2.23 requires them for every logic-bearing change, and SC-001 to SC-006 require them too. The
 application declares no TDD cadence, so within each story tests follow the implementation. One exception is written
@@ -18,8 +18,10 @@ shows each new test failing without the change.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm that #3408 and #3422 *Dates* are agreed (Q8). Diff their agreed text against
-  spec.md, and amend spec, plan and these tasks for any change before starting
+- [ ] T001 Confirm the spec is merged with Q9 and Q10 answered, and diff the initiative branch's ADR 0091, ADR 0046
+  *Dates* and spec 1223 FR-034 against spec.md. Message the parent session before editing the serializer baseline
+  files S-2 (spec 1216) also touches, and merge the initiative branch in first if S-8 (#4838) or S-1 (#4855) has
+  landed
 - [ ] T002 Confirm that the shared-baseline pattern passed the framework §2.24.3 gate with ADR 0091 and is listed in
   §2.24.2 (`.specify/memory/constitution-framework.md`). If not, stop and raise it
 - [ ] T003 Record the current hashes as a baseline for SC-004 and US4 scenario 3: every ADR 0038 artifact hash in the
@@ -47,9 +49,14 @@ shows each new test failing without the change.
 - [ ] T007 Add the "Baseline deviations" register to `docs/serialization.md`, with the ADR 0091 decision 7 rows and
   every hash preimage from research R-1 (Q4). Generate `Baselines/json-optionless-calls.txt` from today's option-less
   calls, excluding the value-path sites of research R-10 (Q3)
-- [ ] T008 Add `SemanticJson` (semantic value comparison: member order, escaping and whitespace ignored, numbers by
-  value) in `Serialization/Core/`, with unit tests that equal values with different escaping and whitespace compare
-  equal. It is never used as an existing hash input (FR-021)
+- [ ] T008 Add `JsonCanonicalForm` in `Serialization/Core/` (FR-021a): move the canonical writer out of
+  `Workflows/Runtime/Core/Models/VariableValueDigest.cs` and add `Equals(JsonElement, JsonElement)`. Unit tests with
+  ADR 0091's examples: `{"total":1.0,"name":"Ren\u00e9"}` equals `{"name":"René","total":1}`; `9007199254740993` is
+  not `9007199254740992`; `{}` is not `{"x":null}`; arrays in order. It is never used as an existing hash input
+  (FR-021)
+- [ ] T008a Make `VariableValueDigest` call `JsonCanonicalForm` and pin its output: a test computes digests of fixed
+  envelopes before the move (record them first) and asserts they are unchanged, and asserts the digest agrees with
+  `JsonCanonicalForm.Equals` on every T008 pair
 
 ## Phase 3: User Story 1 - Names keep their casing (P1) 🎯 MVP
 
@@ -84,10 +91,12 @@ shows each new test failing without the change.
   the FR-005 codes (contract). Unit tests: top-level and nested keys, arrays of objects, annotated names, a scoped
   case-insensitive contract, explicit mappings, dictionaries, extension data (not reported), a custom converter
   (coverage unavailable, no false warnings), a strict contract (refused), a missing required member (fails)
-- [ ] T015 [US3] Add `JsonConversionContract` (default and scoped) in `Serialization/Core/` with its date/time
-  converter: offset used as given; no offset → the declared source time zone or explicit assume-UTC policy, else
-  `json-datetime-interpretation-missing`; never server-local or implicit UTC (FR-004, FR-016, Q8). Record the
-  selected contract with a version in the published conversion contract
+- [ ] T015 [US3] Add `JsonConversionContract` (default and scoped) and `JsonConversionAttribute` in
+  `Serialization/Core/`. The default is camelCase, exact, warn, no date interpretation; the attribute on a type or
+  input member selects naming, matching, unmatched-member handling and date interpretation (FR-004, FR-004a); cache
+  per type and member; nothing is stamped into the executable. Its date/time converter: offset used as given; no
+  offset → the declared source time zone or explicit assume-UTC policy, else `json-datetime-interpretation-missing`;
+  never server-local or implicit UTC (FR-016, Q8, Q10)
 - [ ] T016 [US3] Move every value-path conversion of research R-10 to the target type's conversion contract, calling
   the scanner on reads:
   - `ActivityValueJson.Options` (used by `ActivityCompletionProjector.cs` L61 and `ActivityInputHydrator.cs` L109):
@@ -108,7 +117,13 @@ shows each new test failing without the change.
   Replace `Convert.ChangeType` at `RuntimeInputBindingCompiler.cs` L1044 with a conversion-contract read
 - [ ] T017 [US3] Add tests for US3 scenarios 1–10. Scenario 4 (numbers through ForEach) is a regression test for #3424.
   Scenario 5 (dates) runs under a non-UTC `TimeZoneInfo` at run time and in a publish-time literal, with and without
-  an offset, and with no interpretation, a source time zone and an explicit assume-UTC policy
+  an offset, and with no interpretation, a source time zone and an explicit assume-UTC policy. Scenario 2 pins the
+  camelCase default (`customerName` fills `CustomerName`)
+- [ ] T017a [US3] Studio Run dialog (FR-016b, scenario 11): in
+  `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowRunInputs.ts` turn `datetime-local` text into ISO
+  8601 with the browser's offset for that date; in `workflow-editor/WorkflowRunInputDialog.tsx` show the zone next to
+  the control. Vitest: a winter and a summer Amsterdam date get `+01:00` and `+02:00`. Verify in the composed host
+  per Studio UX acceptance, with a screenshot in the PR
 
 ## Phase 5: User Story 2 - Data comes back as sent (P1)
 
@@ -117,14 +132,16 @@ shows each new test failing without the change.
 - [ ] T019 [US2] Derive `EfDesignSupport.Json` / `ReadJson`
   (`Workflows/Design/Persistence/EntityFrameworkCore/Stores/EfDesignSupport.cs` L198–199) from the baseline, keeping
   `FingerprintJson` as a registered preimage
+- [ ] T019a [US2] Add the FR-024a test: every stored-format fixture and seed JSON read through `IPayloadSerializer`
+  in the repository uses the camelCase names it writes (exact reads lose nothing)
 - [ ] T020 [US2] Derive `RuntimeArtifactJson`, `EfBookmarkStateStore.CreateJsonOptions` and the five other runtime
   store option sets (research R-9) from the baseline, registering `JsonStringEnumConverter` and
   `LosslessUtf16StringConverter` (FR-023)
 - [ ] T021 [US2] Add the runtime store's first byte-level golden fixture. A stored data value with escapes, `1.0` and
-  inner whitespace keeps its text through write and read on every provider. Add fixed serialized examples of old and
-  new rows and compatibility checks that old and new code read both with the same meaning; if they fail, make the
-  change a stamped format change (regenerated migrations, updated golden fixtures). Document the rule of FR-023 in
-  `docs/serialization.md` next to the Distributed gate (Q7)
+  inner whitespace keeps its text through write and read on every provider. Add fixed serialized examples: new code
+  reads a row in today's format with the same meaning, and today's reader options read a new row with the same
+  meaning; if they fail, regenerate the migrations and golden fixtures in place (no upcaster, no family-version bump,
+  no run-time check). Document the rule of FR-023 in `docs/serialization.md` next to the Distributed gate (Q7)
 - [ ] T022 [US2] Add the round-trip tests of US2 scenarios 1, 2, 4 and 5, plus scenario 3 (suspend, restart, resume)
   on SQLite and PostgreSQL
 
@@ -133,7 +150,7 @@ shows each new test failing without the change.
 - [ ] T023 [US4] Make every R-1 hash preimage a register entry with its frozen options, and add a guard assertion
   that none derives from the baseline (FR-021, Q4)
 - [ ] T024 [US4] List every direct-text hash and every check that compares serialized text (research R-1). Move each
-  equality check to `SemanticJson`; keep each direct-text hash as it is, registered with its input contract (changing
+  equality check to `JsonCanonicalForm`; keep each direct-text hash as it is, registered with its input contract (changing
   one is a separate decision, FR-021):
   - `EfWorkflowTriggerBindingStore.cs` L44, L68;
   - `EfDesignAtomicWrite.cs` L257;
@@ -149,6 +166,9 @@ shows each new test failing without the change.
   raw; `GitCanonicalJson.HashFile` keeps its current input and is registered. Add a round trip (write files, read them
   back, compare hashes) that also asserts the data text in the file (FR-022, Q5)
 - [ ] T026 [US4] Compare every hash recorded in T003 after the change (SC-004, US4 scenario 3)
+- [ ] T026a [US4] FR-022a: test that an unchanged definition exported before and after differs only by kept null
+  members and that each file's hash is stable on re-read (US4 scenario 5); regenerate in place the Git and
+  design-store fixtures whose `IPayloadSerializer` text gains null members, and list them in the PR
 
 ## Phase 7: User Story 5 - Explicit nulls are kept (P2)
 
@@ -178,17 +198,24 @@ shows each new test failing without the change.
 - [ ] T032 [US8] Rewrite case-only key differences in literal lowering in `Extensions/Elsa3/src/Mapping/`, refusing
   ambiguous ones with `ELS3-LITERAL-KEY-AMBIGUOUS` and reporting rewrites with `ELS3-LITERAL-KEY-REWRITTEN`. Align
   the codes with `Elsa3ActivityDiagnosticCodes.cs`
-- [ ] T033 [US8] Add converter tests for US8 scenarios 1 and 2, and re-run the #3052 JTest measurement (no definition
-  may stop converting)
+- [ ] T032a [US8] Date literals (FR-016a) in `Extensions/Elsa3/src/Mapping/Services/Elsa3ValueFlowLowerer.cs`: for a
+  literal or variable default bound to a `DateTime`, `DateTimeOffset` or `DateOnly` member, read
+  `Elsa3ConversionOptions.DateInterpretation` (S-1) and refuse (`ELS3-LITERAL-DATE-OFFSET-MISSING`), write the source
+  zone's offset for that date, or write `Z` with a warning (`ELS3-LITERAL-DATE-INTERPRETED`); add
+  `ELS3-LITERAL-DATE-WALL-CLOCK` for offset-carrying or non-literal values on `DateTime` and `DateOnly` members
+- [ ] T033 [US8] Add converter tests for US8 scenarios 1 to 3 (scenario 3 under all three interpretations, with a
+  winter and a summer date), and re-run the #3052 JTest measurement (no definition may stop converting)
 
 ## Phase 11: Polish
 
-- [ ] T034 [P] Update `docs/serialization.md`: the baseline and the data rule; "Why it matters" (no longer
-  case-insensitive); the "HTTP boundary" exception without FastEndpoints (FR-024)
+- [ ] T034 [P] Update `docs/serialization.md`: the baseline and the data rule; the canonical form; the default
+  conversion contract and `[JsonConversion]`; "camelCase, case-insensitive on read" → exact reads; the "HTTP boundary"
+  exception without FastEndpoints (FR-024)
 - [ ] T035 [P] Delete `Essentials/apps/Elsa.Workbench/Constants/JsonSerializerOptionsCache.cs` (unused, research R-11)
 - [ ] T036 [P] Add *baseline* and *baseline deviation* to the glossary, and update `EXTENSION_POINTS.md` if the
   baseline is listed as a contract
 - [ ] T037 Run quickstart.md by hand and record the result in the PR
+- [ ] T038 Set the spec's **Status** to Implemented in the implementation PR
 
 ## Dependencies
 
@@ -197,11 +224,12 @@ shows each new test failing without the change.
   - US1 needs only T004.
   - US3 needs T004 and T014.
   - US2 needs T004 and T008.
-  - US4 needs T008, and must land in the same change as T018 and T025 (FR-022).
+  - US4 needs T008, and must land in the same change as T018 and T025 (FR-022, FR-022a).
   - US5 is part of T018.
   - US6 is independent after T004.
   - US7 needs every earlier story.
-  - US8 is independent.
+  - US8 is independent; T032a needs S-1's `Elsa3ConversionOptions` on the initiative branch (#4855).
+  - T017a needs T015 (the refusal it avoids).
 - **Within US3**: T013 runs with T016.
 - **Parallel**: T009 with T014 and T032; T034 to T036 together.
 

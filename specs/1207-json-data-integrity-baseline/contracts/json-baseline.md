@@ -7,13 +7,16 @@
 | Runtime instance outputs, expression parameter keys | camelCased (`orderTotal`, `amount`) | as authored (`OrderTotal`, `Amount`) |
 | Publishing and Activities Design input-name keys | camelCased | as authored |
 | Secrets error keys from input names | camelCased | as authored |
-| A data value in any Runtime or Design response | re-escaped (`René`, `<`, `+`) | text as received |
+| A data value in any Runtime or Design response | re-escaped (`Ren\u00E9`, `\u003C`, `\u002B`) | text as received |
 | A changed value or Elsa's own strings | default encoder (Runtime, Design) or relaxed (Publishing) | relaxed everywhere |
 | `IPayloadSerializer` output | nulls dropped | nulls kept |
 | Git definition files | data re-escaped through `JsonNode` | data text as received |
 | Elsa API responses | no `X-Content-Type-Options` | `application/json` and `X-Content-Type-Options: nosniff` |
 | Workflow-authored HTTP responses | author's type, or inferred | author's type; with none, text → `text/plain`, anything else → `application/json` |
 | A date/time without an offset converted to an instant | System.Text.Json default or server offset | its contract's declared interpretation, else refused |
+| An activity input read from `{"CustomerName":…}` into `CustomerName` (default contract) | filled (case-insensitive since #3801) | not filled; `json-unmatched-member` warning |
+| Studio Run dialog, a `DateTime` or `DateTimeOffset` input | `datetime-local` text without an offset | ISO 8601 with the browser's offset |
+| Elsa 3 date literal or default without an offset | converted as written | refused, or written with the source zone's offset or `Z` (S-1's date interpretation) |
 
 Keys that start with a lowercase letter are byte-identical before and after.
 
@@ -27,6 +30,9 @@ Keys that start with a lowercase letter are byte-identical before and after.
 | `json-datetime-interpretation-missing` | refusal | A date/time value without an offset is converted to an instant and the contract declares no source time zone or assume-UTC policy (FR-016) | path, target type |
 | `ELS3-LITERAL-KEY-AMBIGUOUS` | refusal | An Elsa 3 literal has keys that differ only in case and both fit one member (FR-015) | node, input, the keys |
 | `ELS3-LITERAL-KEY-REWRITTEN` | info | An Elsa 3 literal key was rewritten to the exact JSON name (FR-015) | node, input, old and new key |
+| `ELS3-LITERAL-DATE-OFFSET-MISSING` | refusal | An Elsa 3 date literal or default has no offset and the date interpretation is `Refuse` (FR-016a) | node, input or variable, the value |
+| `ELS3-LITERAL-DATE-INTERPRETED` | warning (`AssumeUtc`) or info (`SourceTimeZone`) | An offset was written into an Elsa 3 date literal (FR-016a) | node, input or variable, old and new text |
+| `ELS3-LITERAL-DATE-WALL-CLOCK` | warning | An Elsa 3 date literal with `Z` or an offset, or a non-literal expression, is bound to a `DateTime` or `DateOnly` member, so the hour or date may differ from what Elsa 3 showed (FR-016a) | node, input or variable |
 
 ## Baseline deviation register (format)
 

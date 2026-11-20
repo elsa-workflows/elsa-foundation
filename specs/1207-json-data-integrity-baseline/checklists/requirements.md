@@ -31,5 +31,6 @@
 
 ## Notes
 
-- Provisional: approval waits on #3408, and on #3422 *Dates* (Q8).
-- Findings F-1 to F-6 are raised on #3408; the spec follows #3408 if it decides otherwise.
+- Rechecked 2026-11-20 against ADR 0091 (`771ba6679f`), the ADR 0046 amendment and specs 1221, 1222, 1223, 1228
+  and 1231. Q9 and Q10 are open for the coordinator.
+- Findings F-1 to F-6 are in ADR 0091.

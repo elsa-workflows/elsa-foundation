@@ -1,6 +1,6 @@
 # Quickstart: check the baseline by hand
 
-1. Run a workflow whose output `OrderTotal` is the JSON `{"CustomerId":1,"Name":"René","N":1.0}`.
+1. Run a workflow whose output `OrderTotal` is the JSON `{"CustomerId":1,"Name":"Ren\u00e9","N":1.0}`.
 2. Read the instance through the Runtime API. The key is `OrderTotal`, and the value text is byte-identical
    (`é`, lowercase, and `1.0` kept).
 3. Save a workflow definition whose variable default has inner whitespace and `<`, read it back, and export it

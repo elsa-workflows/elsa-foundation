@@ -227,7 +227,7 @@ L207–279):
 fingerprint, so every definition read back from Git would hash as changed. In the code, neither moves.
 
 The code does show a different gap. Because the exporter re-emits through `JsonNode`, a Git file never holds data as
-it was received: `René` is written as `René` and inner whitespace is lost. Decision 3 promises byte-identical data
+it was received: `Ren\u00e9` is written as `Ren\u00E9` and inner whitespace is lost. Decision 3 promises byte-identical data
 in every store. → **Finding F-1**, **Q5**.
 
 - **Decision** (proposal Q5):
@@ -417,3 +417,23 @@ System.Text.Json has no "warn on unmapped member" mode. It ignores unmapped memb
     user types serialize.
   - Deserialize twice, once with `Disallow`, catching the exception. That costs two passes and finds only the first
     key.
+
+## R-14: Recheck against the merged ADRs and specs (2026-11-20)
+
+- **Hashes over `IPayloadSerializer` output.** Two: the Git content hash (`GitCanonicalJson.HashFile` over the file
+  `GitWorkflowExporter` writes from `IPayloadSerializer.Serialize(state)`) and the design-store operation fingerprint
+  (`EfDesignSupport.FingerprintJson`, which sorts members). Both re-encode strings, so escaping and whitespace do not
+  move them; neither drops null members. `DefaultActivityDefinitionHasher` uses its own options. → FR-022a.
+- **`IPayloadSerializer` reads** use `PropertyNameCaseInsensitive = true` (`JsonPayloadSerializer.cs`), so exact reads
+  depend on every stored file using camelCase names. → FR-024a.
+- **Canonical form.** `VariableValueDigest` (spec 1221) already orders members by unescaped UTF-8 name, unescapes
+  strings, writes numbers as coefficient and exponent and keeps `null` members; its remarks wait for ADR 0091's
+  definition. → FR-021a, one shared implementation.
+- **Dates.** S-1 (spec 1223 FR-034) added `Elsa3ConversionOptions.DateInterpretation` (`Refuse`, `AssumeUtc`,
+  `SourceTimeZone`) and applies it to scripts only; literal date lowering is not built. Studio's Run dialog
+  (`WorkflowRunInputDialog.tsx`) uses `datetime-local` and sends its text without an offset
+  (`workflowRunInputs.ts`). → FR-016a, FR-016b, Q10.
+- **Conversion contract record.** No code has a "published conversion contract"; S-8 FR-028 was amended to stamp
+  and check nothing. → FR-004a, Q9.
+- **#4832 and S-8.** `JsonElement`-backed aliases are `StructuredValue`, and `Any` is the one dynamic kind held as
+  `JsonElement`; both fit decision 5. No change.
