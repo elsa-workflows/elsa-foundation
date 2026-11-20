@@ -66,8 +66,9 @@ red without the change. xUnit only.
 - [ ] T008a Expose `strategyOptions.nullHandling` through the workflow definition API (read and write) and the
   exported JSON, with an API round-trip test (FR-024)
 - [ ] T009 Write `valuePolicies` in `WorkflowExecutableHasher.WriteBehavioralPayload` only when a policy is on, and an
-  input's nullability only when it is non-nullable (most workflow inputs are nullable); test that each one changes
-  the hash (ADR 0038, US5 scenario 3). Regenerate in place any stored fixture
+  input's nullability only when it is non-nullable (most workflow inputs are nullable). Tests: turning a policy on
+  changes the hash (ADR 0038, US5 scenario 3); a non-nullable input writes its pinned nullability, and changing an
+  input's type between a nullable and a non-nullable one (`String` to `Int32`) moves the hash. Regenerate in place any stored fixture
   whose hash moves
 
 ## Phase 3: User Story 1 - Set a variable or output to null (P1) 🎯 MVP

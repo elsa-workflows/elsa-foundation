@@ -358,7 +358,8 @@ input left unbound, and one workflow input supplied as `null`. After resume the 
   per-input setting is added only once a case needs it.
 - **FR-013**: Under the policy, a `null` for a non-nullable target MUST be replaced by the target type's default
   (`false` for `Boolean`, `0` for the number types, the zero value for enums: FR-001b) (Q2), independently of any declared default, and the
-  substitution MUST be recorded on the invocation record for an activity input (`VF-NULL-001`). A workflow input
+  substitution MUST be recorded on the invocation record (`VF-NULL-001`) for every substituting write: an activity
+  input, a `Set` / `SetOutput` value, a step write, an output capture. A workflow input
   substituted at admission is not recorded separately: the started instance's input holds the substituted value, and
   the policy is visible on the workflow. A literal `null` is substituted at run time, not pinned at publication, so it
   is recorded the same way. A target type without a type default (FR-001b) still fails with `VF-ACT-004` (at
