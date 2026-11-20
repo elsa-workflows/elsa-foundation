@@ -117,11 +117,12 @@ public sealed record ActivityExecutionContext
     /// <summary>
     /// Where this step reports a warning (the shared run-time warning channel, spec 1228): the runtime records each one on
     /// the activity execution, and inspection shows it. A warning never carries a value. Outside a step body (a background
-    /// worker, a test that builds the context by hand) reports are dropped.
+    /// worker, a test that builds the context by hand) it is <see langword="null"/>, and a step drops its reports:
+    /// <c>context.Warnings?.Report(warning)</c>.
     /// </summary>
-    public IExecutionWarningSink Warnings => _warnings;
+    public IExecutionWarningSink? Warnings => _warnings;
 
-    private IExecutionWarningSink _warnings = DroppedWarnings.Instance;
+    private IExecutionWarningSink? _warnings;
 
     /// <summary>Returns a copy whose <see cref="Warnings"/> is <paramref name="warnings"/>: the runtime hands a step its sink this way.</summary>
     public ActivityExecutionContext WithWarnings(IExecutionWarningSink warnings)
@@ -146,12 +147,6 @@ public sealed record ActivityExecutionContext
         var copy = this with { };
         copy._hasProtectedInputs = hasProtectedInputs;
         return copy;
-    }
-
-    private sealed class DroppedWarnings : IExecutionWarningSink
-    {
-        public static DroppedWarnings Instance { get; } = new();
-        public void Report(Elsa.Expressions.Core.Models.ExecutionWarning warning) { }
     }
 
     /// <summary>Returns a copy whose <see cref="Variables"/> is <paramref name="variables"/>: the runtime hands a step its session this way.</summary>
