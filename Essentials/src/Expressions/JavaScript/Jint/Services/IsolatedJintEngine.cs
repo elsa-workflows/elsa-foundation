@@ -309,6 +309,9 @@ internal static class IsolatedJintEngine
         /// <summary>Whether the script assigned the variable itself (<c>variables.x = v</c>), rather than only changing what it read.</summary>
         public bool WasAssigned(string name) => _assigned.Contains(name);
 
+        /// <summary>During the run, whether a variable the script read and did not assign still holds what entered.</summary>
+        public bool IsUnchanged(string name) => !_assigned.Contains(name) && values.IsUnchanged(Key(name), _current[name]);
+
         // A value the script made unserializable (a cycle, a BigInt) or grew past the JSON limits (depth, size) was
         // changed: it is reported as changed as a whole, so an input expression fails with its write diagnostic rather
         // than the engine's or the parser's error (spec 1228 FR-006a). The catch covers only the bridge's Collect, where an

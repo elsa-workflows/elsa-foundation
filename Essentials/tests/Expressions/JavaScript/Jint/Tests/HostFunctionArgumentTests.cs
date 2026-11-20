@@ -129,6 +129,17 @@ public sealed class HostFunctionArgumentTests
         Assert.Equal("""{"n":null}""", result!.Value.GetString());
     }
 
+    // What the value bridge counts as unchanged, the function gets as stored: every digit, as the session keeps it.
+    [Theory]
+    [InlineData("var o = variables.order; delete o.price; o.price = 10.5; return acme.readOrderIdText();")]
+    [InlineData("variables.order.price = new Number(10.5).valueOf(); return acme.readOrderIdText();")]
+    public async Task A_value_the_bridge_counts_unchanged_reaches_the_function_with_every_digit(string source)
+    {
+        var (result, _) = await RunAsync(source);
+
+        Assert.Equal("9007199254740993", result!.Value.GetString());
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {

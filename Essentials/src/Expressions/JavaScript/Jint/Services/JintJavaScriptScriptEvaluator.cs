@@ -85,8 +85,8 @@ internal sealed class JintJavaScriptScriptEvaluator(
     /// A host function's view of the body's variables (spec 1222 FR-034: one value per variable within the run). The
     /// session's value, read and recorded by the session, unless the script has changed a variable it holds: its changes
     /// reach the session only after the run, so the function then gets the script's value. Whether the script changed it
-    /// is decided by comparing the two as JavaScript sees them, so an unchanged value keeps its stored JSON exactly, with
-    /// every digit of a number JavaScript cannot hold.
+    /// is the value bridge's own judgement, so the function gets what the session will hold after the run, and an
+    /// unchanged value keeps its stored JSON exactly, with every digit of a number JavaScript cannot hold.
     /// </summary>
     private sealed class CurrentVariableReader(
         IScriptVariableSession session,
@@ -94,15 +94,6 @@ internal sealed class JintJavaScriptScriptEvaluator(
         Engine engine,
         FeatureOptions options) : Elsa.Expressions.Core.Contracts.IExpressionVariableReader
     {
-        // The intrinsic parser, captured before user code runs.
-        private readonly JsValue _parse = engine.GetValue("JSON").AsObject().Get("parse");
-
-        // JSON text tells Infinity and null apart only through a replacer; the value bridge does too, so a member set
-        // from Infinity to null counts as changed here as it does there. Strings are prefixed so no string can pass for
-        // an Infinity.
-        private readonly JsValue _exact = engine.Evaluate(
-            "(function (key, value) { return typeof value === 'string' ? 's' + value : value === Infinity ? 'i+' : value === -Infinity ? 'i-' : value; })");
-
         public IReadOnlyList<string> CandidateNames => session.CandidateNames;
 
         public Elsa.Expressions.Core.Contracts.ExpressionVariableRead Read(string name)
@@ -111,19 +102,13 @@ internal sealed class JintJavaScriptScriptEvaluator(
                 return session.Read(name);
             if (held.IsUndefined())
                 return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Missing;
+            // Unchanged, as the value bridge judges it after the run: the session keeps the stored JSON, so the function
+            // gets it too. The script read it to hold it unassigned, so this read is already recorded. A variable the
+            // script assigned is never read again here: that would record a read the script never made.
+            if (variables.IsUnchanged(name))
+                return session.Read(name);
             var heldJson = JintResultMaterializer.Stringify(engine, held)
                 ?? throw new JavaScriptException(engine.Intrinsics.TypeError, $"Variable '{name}' holds a value with no JSON form.");
-            // A variable the script assigned whole is the script's value: reading the session only to compare would
-            // record a read the script never made.
-            if (variables.WasAssigned(name))
-                return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Present(JintResultMaterializer.ParseResult(heldJson, options));
-            // Held without a whole assignment means the script read it, so this read is already recorded.
-            var stored = session.Read(name);
-            if (stored.Outcome == Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome.Present &&
-                StringComparer.Ordinal.Equals(
-                    JintResultMaterializer.Stringify(engine, engine.Invoke(_parse, JsValue.Undefined, [stored.Value.GetRawText()]), _exact),
-                    JintResultMaterializer.Stringify(engine, held, _exact)))
-                return stored;
             return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Present(JintResultMaterializer.ParseResult(heldJson, options));
         }
     }

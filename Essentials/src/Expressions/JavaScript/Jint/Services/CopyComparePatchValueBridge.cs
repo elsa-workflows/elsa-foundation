@@ -124,6 +124,13 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             }
         }
 
+        public bool IsUnchanged(string key, JsValue current)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(key);
+            // As Collect: a primitive only an assignment can change; an object compared with its original, not cached.
+            return _entries.ContainsKey(key) && (current is not ObjectInstance instance || ComputeUnchanged(instance));
+        }
+
         public ScriptValueWrite Write(JsValue value, string path)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
@@ -267,10 +274,19 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
 
         private bool IsUnchanged(ObjectInstance instance)
         {
-            if (!_origins.TryGetValue(instance, out var origin))
-                return false;
             if (_unchanged.TryGetValue(instance, out var known))
                 return known;
+
+            var unchanged = ComputeUnchanged(instance);
+            if (_origins.ContainsKey(instance))
+                _unchanged[instance] = unchanged;
+            return unchanged;
+        }
+
+        private bool ComputeUnchanged(ObjectInstance instance)
+        {
+            if (!_origins.TryGetValue(instance, out var origin))
+                return false;
 
             var text = _enteredInfinity
                 ? JintResultMaterializer.Stringify(_engine, instance, InfinityOnlyReplacer())
@@ -284,7 +300,6 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 unchanged = SameJavaScriptValue(origin, document.RootElement, null);
             }
 
-            _unchanged[instance] = unchanged;
             return unchanged;
         }
 

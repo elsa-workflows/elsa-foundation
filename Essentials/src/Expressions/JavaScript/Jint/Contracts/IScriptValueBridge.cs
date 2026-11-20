@@ -38,6 +38,14 @@ public interface IScriptValueEvaluation : IDisposable
     ScriptValueChange Collect(string key, JsValue current, bool assigned);
 
     /// <summary>
+    /// During the run, whether <paramref name="current"/>, what the script holds under <paramref name="key"/> without
+    /// having assigned it, is still the value that entered, judged as <see cref="Collect"/> judges it after the run. A
+    /// host function reading a variable gets the original JSON when it is (spec 1222 FR-034). Nothing is remembered: the
+    /// script can still change the value.
+    /// </summary>
+    bool IsUnchanged(string key, JsValue current);
+
+    /// <summary>
     /// Converts a value leaving the evaluation, such as a result, to JSON. An entered value that is unchanged is written
     /// from its original JSON. Reports the lossy entered numbers the written JSON carries (FR-011a).
     /// </summary>
