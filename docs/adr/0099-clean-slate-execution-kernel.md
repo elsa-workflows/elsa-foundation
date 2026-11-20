@@ -322,9 +322,9 @@ already superseded.
 
 | Part of 0049 | On the kernel |
 |---|---|
-| A sealed snapshot of the target cohort before dispatch | Replaced: a plan actor selects from the instance-list read model with a cursor and records each batch in its state; the plan runner, a layer 3 operator service, sends one `Migrate` per instance through ingress with a deterministic id (a coordinator design choice under FC-C3) ([migration](../architecture/migrating-running-instances.md#plans-and-bulk-migration)) |
+| A sealed snapshot of the target cohort before dispatch | Replaced: a plan actor selects from the instance-list read model with a cursor and records each batch in its state; the plan runner, a layer 3 operator service, sends one `Migrate` per instance with `SendAsync(ref, Kinds.Migrate, payload)` under the operator's bound scope, with a deterministic id (a coordinator design choice under FC-C3) ([migration](../architecture/migrating-running-instances.md#plans-and-bulk-migration)) |
 | One atomic job per target through the single-writer boundary | Replaced: the `Migrate` command runs alone in the instance's turn and lands in one fenced commit |
-| Wire envelopes (kind, schema version, payload) with registered handlers | Replaced for migration by a command kind (`IActorType.IsCommand`); open for other alteration kinds |
+| Wire envelopes (kind, schema version, payload) with registered handlers | Replaced for migration by `Migrate`, one of the foundation contract's closed `Kinds` commands; open for other alteration kinds |
 | Tenant-scoped idempotent submission | Replaced: operator messages are outside adds in the operator's bound scope, keyed by the tenant-qualified operation id `Q(t, operation)` with a `keep_until` ([observability](../architecture/observability.md#recover)) |
 | Permission and execution-authority scope, provenance | Replaced: separate operator permissions per tenant, audited with principal, reason and outcome; the owner's tenant check on load and consumption, so another tenant's instance answers not found ([tenancy](../architecture/tenancy.md#every-operation)) |
 | Durable per-target results | Replaced: outcome messages feed the plan-outcomes read model |
