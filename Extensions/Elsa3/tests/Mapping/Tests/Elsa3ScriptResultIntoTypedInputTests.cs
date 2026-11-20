@@ -54,6 +54,13 @@ public sealed class Elsa3ScriptResultIntoTypedInputTests
     [InlineData("0.1234567890123456", "Decimal", false)]
     [InlineData("12.5", "Number", true)]
     [InlineData("12.5", "Integer", false)]
+    [InlineData("12345", "Decimal", true)]
+    [InlineData("1234567890123456", "Decimal", false)]
+    [InlineData("1234567890123456", "Integer", true)]
+    [InlineData("9007199254740993", "Integer", false)]
+    [InlineData("Math.round(x)", "Decimal", false)]
+    [InlineData("Math.round(x)", "Integer", true)]
+    [InlineData("x ? 1 : 2", "Decimal", true)]
     public void Each_kind_fits_only_the_target_elsa_4_converts_it_into(string script, string target, bool fits) =>
         Assert.Equal(fits, Elsa3ScriptResultKinds.Fits(Elsa3ScriptResultKinds.Infer(script), Enum.Parse<Elsa3ScalarTarget>(target)));
 

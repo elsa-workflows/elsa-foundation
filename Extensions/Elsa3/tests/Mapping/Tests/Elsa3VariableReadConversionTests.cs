@@ -239,6 +239,24 @@ public sealed class Elsa3VariableReadConversionTests
     }
 
     [Fact]
+    public async Task A_run_javascript_body_reads_its_loop_value_through_args_as_a_copy()
+    {
+        // Elsa 4 freezes a loop's item in a body (spec 1231 FR-006); an Elsa 3 body that changes its item keeps working on
+        // a copy, as it did before the body had a variables root.
+        var loop = Activity("loop", "Elsa.ForEach", ("items", Literal("[{\"a\":1}]", "Object")), ("currentValue", Captured("item")));
+        loop.AdditionalProperties["body"] = Port(Activity("script", "Elsa.RunJavaScript", ("script", Literal("var o = getVariable('item'); o.done = true; o"))));
+
+        var result = await ConvertAsync(Sequence("root", loop), new Elsa3Variable { Id = "item", Name = "item", TypeName = "Object" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var node = Node(result.Value!.State, "script");
+        var script = Text(Input(node, "script"))!;
+        Assert.Contains("args.item", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("variables.", script, StringComparison.Ordinal);
+        Assert.Contains("args.item", Source(Input(node, "arguments")), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_run_javascript_body_keeps_a_computed_read()
     {
         // FR-027: the body serves a computed read through its session's run-time lookup.

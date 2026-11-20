@@ -42,7 +42,8 @@ is exact for any length and exponent. A number held as a string (`"9007199254740
 | Returned a value | Result | The result, as JSON |
 
 An entered value written unchanged, as a result or inside another value, is written from its original JSON, so it
-carries no loss. Any other written number that equals, as a double, a lossy entered number carries that loss
+carries no loss. Such a lossy number gets no read warning (`VF-PREC-002`), even when the script also computed with it:
+the bridge sees the values a script read and wrote, not the operations on them. Any other written number that equals, as a double, a lossy entered number carries that loss
 (FR-011a). Changing `args` is local to the evaluation and never a write.
 
 A script activity reads workflow variables through `variables` and `getVariable` over its step's variable session

@@ -30,7 +30,9 @@ A conversion clones the definition, so the caller's object is never changed, the
 Nothing throws for input or catalog content. Every cause is a diagnostic:
 - `ELS3-ACTIVITY-*` errors make the item unconvertible;
 - `ELS3-BEHAVIOUR-*` warnings mean it converts, but Elsa 4 behaves differently at run time;
-- `VF-IMP-*` are value-flow errors.
+- `VF-IMP-*` are value-flow errors;
+- `ELS3-UNTYPED-RESULT` (an error) and `ELS3-SCRIPT-OUTCOME-*` are about a script's result and its outcomes: a result
+  bound to a typed input whose kind the script does not show (spec 1228 US6), and a script's computed outcomes.
 
 The codes are constants in `Elsa3.Models.Elsa3ActivityDiagnosticCodes` and `Elsa3ImportDiagnosticCodes`.
 

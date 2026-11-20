@@ -112,6 +112,15 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
             return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code,
                 context.HasProtectedInputs || session?.HasReadProtectedValue == true ? exception.ValueFreeMessage : exception.Message));
         }
+        catch (Exception exception) when (exception is not OperationCanceledException &&
+                                          (context.HasProtectedInputs || session?.HasReadProtectedValue == true))
+        {
+            // Spec 1229 FR-006: a script error's text can quote what the script read (`throw new Error(variables.ssn)`,
+            // a JSON.parse error, a computed variable name). With a protected input or read it is not recorded; the type
+            // still says what failed.
+            throw new InvalidOperationException(
+                $"The script failed ({exception.GetType().Name}). Its message is withheld because a value it read is protected.");
+        }
 
         // Spec 1222 FR-011: a name no visible variable has read undefined; the warning names it unless a value the script
         // read is protected, since a computed name can come from that value.

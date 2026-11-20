@@ -249,7 +249,20 @@ public sealed class ScriptBodyVariablesRunTests
 
         var fault = run.State("node-js").Fault!.Message;
         Assert.DoesNotContain("k10.5", fault);
-        Assert.Contains("name is withheld", fault);
+        Assert.Contains("withheld", fault);
+    }
+
+    [Theory]
+    [InlineData("throw new Error('ssn ' + variables.order.price);")]
+    [InlineData("return JSON.parse('{' + variables.order.price);")]
+    public async Task A_script_error_after_a_sensitive_read_does_not_quote_it(string script)
+    {
+        // Spec 1229 FR-006: the error's text can carry what the script read.
+        var run = await RunAsync(script, sensitive: true);
+
+        var fault = run.State("node-js").Fault!.Message;
+        Assert.DoesNotContain("10.5", fault);
+        Assert.Contains("withheld", fault);
     }
 
     // ---- harness ----

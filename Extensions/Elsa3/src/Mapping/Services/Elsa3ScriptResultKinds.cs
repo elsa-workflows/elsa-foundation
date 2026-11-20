@@ -12,8 +12,16 @@ internal enum Elsa3ScriptResultKind
     String,
     /// <summary>A number that may have a fraction.</summary>
     Number,
-    /// <summary>A number the source shows is an integer: an integer literal, <c>Math.round(…)</c>, <c>parseInt(…)</c>.</summary>
+    /// <summary>
+    /// A number the source shows is an integer: <c>Math.round(…)</c>, <c>parseInt(…)</c>, integer arithmetic, or an integer
+    /// literal Elsa 3 held exactly (within ±(2^53 − 1)) but not to 15 significant digits.
+    /// </summary>
     Integer,
+    /// <summary>
+    /// An integer literal of at most 15 significant digits: Elsa 3's conversions keep it exactly into any integral or
+    /// decimal input, as Elsa 4's do.
+    /// </summary>
+    ExactIntegerLiteral,
     /// <summary>
     /// A fraction written as a literal with at most 15 significant digits (<c>12.5</c>): Elsa 3's double-to-decimal
     /// conversion keeps it exactly, so a decimal input gets the same value in both.
@@ -61,12 +69,12 @@ internal static class Elsa3ScriptResultKinds
         Elsa3ScalarTarget.Boolean => kind == Elsa3ScriptResultKind.Boolean,
         Elsa3ScalarTarget.String => kind == Elsa3ScriptResultKind.String,
         // Elsa 3 rounded a fraction into an integral target (Convert.ChangeType); Elsa 4 refuses it, so only an integer fits.
-        Elsa3ScalarTarget.Integer => kind == Elsa3ScriptResultKind.Integer,
+        Elsa3ScalarTarget.Integer => IsInteger(kind),
         Elsa3ScalarTarget.Number => IsNumber(kind),
         // Elsa 3 converted the double to decimal at 15 significant digits (Convert.ToDecimal(double)); Elsa 4 reads the
-        // JSON text exactly (0.1 + 0.2 is 0.3 in Elsa 3 and 0.30000000000000004 in Elsa 4). An integer and a literal
-        // fraction Elsa 3 kept exactly are the same; a computed fraction may not be.
-        Elsa3ScalarTarget.Decimal => kind is Elsa3ScriptResultKind.Integer or Elsa3ScriptResultKind.ExactFractionLiteral,
+        // JSON text exactly (0.1 + 0.2 is 0.3 in Elsa 3 and 0.30000000000000004 in Elsa 4). Only a literal Elsa 3 kept
+        // exactly is the same: a computed number, integer or not, may have more than 15 significant digits.
+        Elsa3ScalarTarget.Decimal => kind is Elsa3ScriptResultKind.ExactIntegerLiteral or Elsa3ScriptResultKind.ExactFractionLiteral,
         _ => false
     };
 
@@ -87,6 +95,7 @@ internal static class Elsa3ScriptResultKinds
         Elsa3ScriptResultKind.String => "a string",
         Elsa3ScriptResultKind.Number => "a number that may have a fraction",
         Elsa3ScriptResultKind.Integer => "an integer",
+        Elsa3ScriptResultKind.ExactIntegerLiteral => "an integer",
         Elsa3ScriptResultKind.ExactFractionLiteral => "a number literal",
         Elsa3ScriptResultKind.Null => "null",
         Elsa3ScriptResultKind.Object => "an object",
@@ -160,7 +169,8 @@ internal static class Elsa3ScriptResultKinds
         {
             Operator.LogicalNot => Elsa3ScriptResultKind.Boolean,
             Operator.TypeOf => Elsa3ScriptResultKind.String,
-            Operator.UnaryNegation or Operator.UnaryPlus => Of(unary.Argument) is var operand && operand is Elsa3ScriptResultKind.Integer or Elsa3ScriptResultKind.ExactFractionLiteral
+            Operator.UnaryNegation or Operator.UnaryPlus => Of(unary.Argument) is var operand &&
+                                                             operand is Elsa3ScriptResultKind.Integer or Elsa3ScriptResultKind.ExactIntegerLiteral or Elsa3ScriptResultKind.ExactFractionLiteral
                 ? operand
                 : Elsa3ScriptResultKind.Number,
             _ => Elsa3ScriptResultKind.Unknown
@@ -194,13 +204,11 @@ internal static class Elsa3ScriptResultKinds
                 // A sum is computed: an integer only from two integers, otherwise a number (never an exact literal).
                 if (!IsNumber(left) || !IsNumber(right))
                     return Elsa3ScriptResultKind.Unknown;
-                return left == Elsa3ScriptResultKind.Integer && right == Elsa3ScriptResultKind.Integer
-                    ? Elsa3ScriptResultKind.Integer
-                    : Elsa3ScriptResultKind.Number;
+                return IsInteger(left) && IsInteger(right) ? Elsa3ScriptResultKind.Integer : Elsa3ScriptResultKind.Number;
             case Operator.Subtraction or Operator.Multiplication or Operator.Remainder or Operator.Exponentiation:
                 var a = binary.Left is Expression x ? Of(x) : Elsa3ScriptResultKind.Unknown;
                 var b = Of(binary.Right);
-                return a == Elsa3ScriptResultKind.Integer && b == Elsa3ScriptResultKind.Integer && binary.Operator != Operator.Exponentiation
+                return IsInteger(a) && IsInteger(b) && binary.Operator != Operator.Exponentiation
                     ? Elsa3ScriptResultKind.Integer
                     : Elsa3ScriptResultKind.Number;
             case Operator.Division:
@@ -213,24 +221,39 @@ internal static class Elsa3ScriptResultKinds
     }
 
     private static bool IsNumber(Elsa3ScriptResultKind kind) =>
-        kind is Elsa3ScriptResultKind.Number or Elsa3ScriptResultKind.Integer or Elsa3ScriptResultKind.ExactFractionLiteral;
+        kind is Elsa3ScriptResultKind.Number or Elsa3ScriptResultKind.ExactFractionLiteral || IsInteger(kind);
 
-    // A literal fraction that Elsa 3's double-to-decimal conversion (15 significant digits) kept exactly.
+    private static bool IsInteger(Elsa3ScriptResultKind kind) =>
+        kind is Elsa3ScriptResultKind.Integer or Elsa3ScriptResultKind.ExactIntegerLiteral;
+
+    // A number literal: exact when Elsa 3's double-to-decimal conversion (15 significant digits) and Elsa 4's reading of
+    // the JSON text agree. An integer beyond ±(2^53 − 1) is not held exactly by a double at all (Elsa 3's conversion
+    // into an integral input and Elsa 4's JSON text differ), so it is a plain number.
     private static Elsa3ScriptResultKind NumberLiteral(double number)
     {
-        if (double.IsInteger(number))
-            return Elsa3ScriptResultKind.Integer;
+        var integer = double.IsInteger(number);
+        if (integer && Math.Abs(number) > 9007199254740991d)
+            return Elsa3ScriptResultKind.Number;
+        bool exact;
         try
         {
             var elsa3 = Convert.ToDecimal(number);
             var elsa4 = decimal.Parse(number.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
                 System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
-            return elsa3 == elsa4 ? Elsa3ScriptResultKind.ExactFractionLiteral : Elsa3ScriptResultKind.Number;
+            exact = elsa3 == elsa4;
         }
         catch (OverflowException)
         {
-            return Elsa3ScriptResultKind.Number;
+            exact = false;
         }
+
+        return (integer, exact) switch
+        {
+            (true, true) => Elsa3ScriptResultKind.ExactIntegerLiteral,
+            (true, false) => Elsa3ScriptResultKind.Integer,
+            (false, true) => Elsa3ScriptResultKind.ExactFractionLiteral,
+            _ => Elsa3ScriptResultKind.Number
+        };
     }
 
     // Two kinds that agree are that kind; an integer and a number are a number; anything else is unknown.
@@ -239,6 +262,8 @@ internal static class Elsa3ScriptResultKinds
         var distinct = kinds.Distinct().ToArray();
         if (distinct.Length == 1)
             return distinct[0];
+        if (distinct.All(IsInteger))
+            return Elsa3ScriptResultKind.Integer;
         return distinct.All(IsNumber) ? Elsa3ScriptResultKind.Number : Elsa3ScriptResultKind.Unknown;
     }
 }
@@ -250,6 +275,9 @@ internal enum Elsa3ScalarTarget
     String,
     Integer,
     Number,
-    /// <summary>A decimal input: only an integer converts to the value Elsa 3 gave.</summary>
+    /// <summary>
+    /// A decimal input: only an integer, or a fraction literal of at most 15 significant digits, converts to the value
+    /// Elsa 3 gave.
+    /// </summary>
     Decimal
 }

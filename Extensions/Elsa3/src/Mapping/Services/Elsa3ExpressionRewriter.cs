@@ -1303,8 +1303,11 @@ public sealed class Elsa3ExpressionRewriter
             // Spec 1222 FR-026: a variable read becomes variables.<name>, spelled as the variable is declared, and is
             // pinned at publish to its nearest declaring scope. The parameter added here is what the converter resolved;
             // publish derives the pins again.
+            // A RunJavaScript body reads a loop's item or index through args, as a copy: Elsa 4 freezes a loop value in a
+            // body (spec 1231 FR-006), and an Elsa 3 body that changed its item would fault where Elsa 3 ran.
             if (resolution.VariableName is { } variableName &&
-                resolution.Binding is VariableExpressionParameterBinding variable)
+                resolution.Binding is VariableExpressionParameterBinding variable &&
+                !(Mode == Elsa3JavaScriptMode.Script && Elsa3.Mapping.ActivityMap.Rewrites.Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(variable.VariableKey)))
             {
                 if (!EnsureRootFree(ExpressionParameterSurfaces.Variables, node))
                     return;
