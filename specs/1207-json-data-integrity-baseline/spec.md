@@ -204,9 +204,9 @@ test of every hash.
    **Then** they are equal and assigning one over the other writes nothing; `9007199254740993` and
    `9007199254740992` are not equal; `{}` and `{"x":null}` are not equal; and the value digest of ADR 0092 agrees on
    every pair (FR-021a).
-5. **Given** an unchanged definition exported to Git before and after this change, **When** both files are compared,
-   **Then** they differ only in the three ways FR-022a lists, and their content hashes differ only through the null
-   members.
+5. **Given** an unchanged definition exported to Git before and after this change, **When** both files are compared
+   and both are hashed with `JsonHashInput`, **Then** they differ only in the three ways FR-022a lists, and their
+   hashes differ only through the null members.
 
 ---
 
@@ -406,6 +406,10 @@ faithful-or-refuse.
     user asks for it. There is no host-wide run-time date setting (Q10);
   - once the instant is established, a `DateTime` is normalized to UTC and written with `Z`; a `DateTimeOffset` keeps
     its offset;
+  - on write, a `DateTime` of kind `Utc` is written with `Z` and one of kind `Local` is converted to UTC first. One of
+    kind `Unspecified` carries no instant: when it comes from a user type or an activity result, the write is refused
+    with `json-datetime-offset-missing` naming the path, so it never reaches storage without an offset; when it is a
+    timestamp in Elsa's own contract, it was produced by the engine's UTC clock and is written as UTC;
   - a `DateOnly` takes the date as written; a value with a time and an offset takes its date in UTC. A `TimeOnly`
     takes the time as written. Neither is made an instant;
   - a raw JSON date string is carried unchanged until a conversion is requested.
@@ -441,8 +445,10 @@ faithful-or-refuse.
   An offset-less value (`"2026-10-28T09:15:00"`) is refused with a 400 problem response carrying
   `json-datetime-offset-missing` and the field path. Today System.Text.Json reads such text into a `DateTimeOffset`
   with the server's offset, so the API wire contexts and the conversion contracts carry strict `DateTime` and
-  `DateTimeOffset` converters, for Elsa's own contracts too. The store option sets do not: they read only what Elsa
-  wrote, so rows stored today keep reading as before (FR-023). Studio (FR-016b) and every other client send offsets.
+  `DateTimeOffset` converters, for Elsa's own contracts too. The store option sets do not carry them. A value stored
+  today through a conversion (stateful activity state, durable values) may hold an offset-less `DateTime`; read back
+  through the strict conversion contract it is refused. Before the first stable release that is accepted, and FR-023's
+  fixed examples include such a row so the change is visible. Studio (FR-016b) and every other client send offsets.
 
 **Host options (decision 6)**
 - **FR-017**: A module MUST NOT change the host's naming, key policy, encoder, null handling or converters. It MAY add
@@ -512,8 +518,8 @@ faithful-or-refuse.
 - **FR-022a**: An unchanged definition re-exported to Git after S-9 differs from its earlier export in three ways,
   all intended: its null members are written (FR-018, for example `"description": null`), its carried data keeps the
   text it was received with (FR-007, FR-022), and Elsa's own strings use the relaxed encoder (FR-009, `René` instead
-  of `Ren\u00E9`). Only the null members change the content hash (missing and `null` differ); the other two do not,
-  because the hash is taken over the canonical form (FR-021). The repository's Git fixtures are regenerated with
+  of `Ren\u00E9`). Hashed with `JsonHashInput`, only the null members change the content hash (missing and `null` differ);
+  the other two do not, because the hash is taken over the canonical form (FR-021). The repository's Git fixtures are regenerated with
   this change.
 
 **Runtime durable state (decision 7, question 6)**

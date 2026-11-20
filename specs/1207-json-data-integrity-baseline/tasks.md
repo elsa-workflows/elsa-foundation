@@ -96,7 +96,9 @@ shows each new test failing without the change.
   `Serialization/Core/`. The default is camelCase, exact, warn; the attribute on a type or input member selects
   naming, matching and unmatched-member handling (FR-004, FR-004a); cache per type and member; nothing is stamped into
   the executable. Add `StrictDateTimeConverters` (used by the API wire contexts and the conversion contracts, not the baseline): `Z` or an offset required, else
-  `json-datetime-offset-missing`; a `DateTime` normalized to UTC, a `DateTimeOffset` keeps its offset; `DateOnly` and
+  `json-datetime-offset-missing`; a `DateTime` normalized to UTC, a `DateTimeOffset` keeps its offset; on write a
+  `Local` `DateTime` is converted to UTC, an `Unspecified` one from a user type or activity result is refused, and an
+  `Unspecified` timestamp in Elsa's own contract is written as UTC (FR-016); `DateOnly` and
   `TimeOnly` as FR-016 states (FR-016, FR-016c, Q8, Q10)
   Add the converters to every API wire context (the T009 contexts and every other owner and `MapEndpointGroup`
   context) and to every conversion contract
@@ -152,7 +154,9 @@ shows each new test failing without the change.
 - [ ] T020 [US2] Derive `RuntimeArtifactJson`, `EfBookmarkStateStore.CreateJsonOptions` and the five other runtime
   store option sets (research R-9) from the baseline, registering `JsonStringEnumConverter` and
   `LosslessUtf16StringConverter` (FR-023)
-- [ ] T021 [US2] Add the runtime store's first byte-level golden fixture. A stored data value with escapes, `1.0` and
+- [ ] T021 [US2] Add the runtime store's first byte-level golden fixture. Its fixed examples include a stored
+  offset-less `DateTime` in stateful activity state, which the strict conversion contract now refuses on read
+  (FR-016c; accepted before the first stable release, fixtures regenerated). A stored data value with escapes, `1.0` and
   inner whitespace keeps its text through write and read on every provider. Add fixed serialized examples: new code
   reads a row in today's format with the same meaning, and today's reader options read a new row with the same
   meaning; if they fail, regenerate the migrations and golden fixtures in place (no upcaster, no family-version bump,
@@ -201,7 +205,8 @@ shows each new test failing without the change.
   manifests), list them in the PR, and test that equal inputs with other escaping, whitespace, member order or number
   notation hash the same (SC-004, US4 scenario 3)
 - [ ] T026a [US4] FR-022a: test that an unchanged definition exported before and after differs only in the three
-  ways FR-022a lists and that only the null members move its hash (US4 scenario 5); regenerate the Git fixtures
+  ways FR-022a lists and that, with both hashed through `JsonHashInput`, only the null members move the hash (US4
+  scenario 5); regenerate the Git fixtures
 
 ## Phase 7: User Story 5 - Explicit nulls are kept (P2)
 
