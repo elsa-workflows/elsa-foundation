@@ -161,6 +161,21 @@ public sealed class HostFunctionArgumentTests
         Assert.Contains("\"price\":12", session.Written!.Value.GetRawText(), StringComparison.Ordinal);
     }
 
+    // A preview nested in a preview (a toJSON calling a function that reads a variable) leaves the outer one remembering
+    // nothing: a change made afterwards is still written.
+    [Fact]
+    public async Task A_nested_preview_leaves_a_later_change_collected()
+    {
+        var session = new Session("""{"c":{"n":1},"d":1}""");
+        await RunAsync(
+            "var o = variables.order; var depth = 0;" +
+            " o.t = { toJSON: function () { if (depth++ === 0) acme.readOrder(); return 0; } };" +
+            " acme.readOrder(); o.c.n = 5; return 1;",
+            session: session);
+
+        Assert.Contains("\"n\":5", session.Written!.Value.GetRawText(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {

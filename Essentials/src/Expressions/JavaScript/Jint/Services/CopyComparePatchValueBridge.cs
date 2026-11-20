@@ -127,6 +127,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         public ScriptValueChange Preview(string key, JsValue current, bool assigned)
         {
             // Collect itself, remembering nothing: a later change by the script, or the real Collect, judges afresh.
+            // Restored, not cleared: a toJSON met while previewing can call a host function that previews again.
+            var outer = _previewing;
             _previewing = true;
             try
             {
@@ -134,11 +136,12 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             }
             finally
             {
-                _previewing = false;
+                _previewing = outer;
             }
         }
 
         private bool _previewing;
+        private int _markerCount;
 
         // Lossy numbers written from their original JSON; a preview writes nothing, so it records none.
         private void WroteExactly(string path)
@@ -247,7 +250,9 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     !_origins.TryGetValue(instance, out var origin) ||
                     !IsUnchanged(instance))
                     return candidate;
-                var marker = _markerPrefix + _currentMarkers.Count.ToString(CultureInfo.InvariantCulture);
+                // Numbered across the evaluation, not per Mark: a nested Mark (a toJSON calling a host function that reads
+                // a variable) must not reuse a marker whose origin path the outer Mark still needs.
+                var marker = _markerPrefix + (_markerCount++).ToString(CultureInfo.InvariantCulture);
                 _currentMarkers[marker] = origin;
                 _markerPaths[marker] = _originPaths[instance];
                 return new JsString(marker);
