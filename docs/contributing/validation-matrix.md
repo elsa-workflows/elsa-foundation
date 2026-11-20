@@ -29,6 +29,11 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 - **Inner loop:** run the affected provider test project as a whole. The [solution-filter guide](../reference/developer-solution-filters.md) identifies the Testcontainers-backed profile; those tests need Docker. Use the E2E guide for persistence behavior exercised through a rebuilt Workbench.
 - **Evidence:** Foundation PR CI runs no Testcontainers suite. The EF container matrix and the Secrets/PostgreSQL composition job run in `CI`'s nightly schedule and on manual dispatch only (#2632), not as a required PR check. Run the affected provider suite locally, or dispatch `CI` on the branch, and record the result; do not use the nightly's existence as evidence for an affected suite that did not run.
 
+### Kernel prototype
+
+- **Inner loop:** build and run the standalone kernel model under `prototypes/kernel-model` as its README describes; it has its own projects and no server consumer.
+- **Evidence:** `Kernel prototype gate` (workflow `CI`, not a required check) runs on a non-draft PR that changes `prototypes/kernel-model/**`, `tools/ci/kernel_prototype_gate.py` or `.github/workflows/ci.yml`, and reports as skipped otherwise. The larger sizes run in the `Kernel prototype nightly` jobs of `CI`'s nightly schedule; dispatch `CI` with `suite=kernel-gate` or `suite=kernel-nightly` to run either on a branch.
+
 ### Cross-repository change
 
 - **Inner loop:** run the relevant checks in each changed repository. When the behavior depends on a Studio/Workbench pair, follow both source quickstarts and record both exact revisions.
