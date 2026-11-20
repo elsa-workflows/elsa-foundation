@@ -30,6 +30,70 @@ internal static class NodeLeaseChecks
         await SiblingTakeInFlight(check);
         await HungReleaseDrain(check);
         await GivenUpDuringItsRetake(check);
+        await DisposeOfAPendingPartition(check);
+        await HandOverOfAPendingPartition(check);
+        await HungResetRetakeClosesTheGate(check);
+    }
+
+    // Review round 2 of #4870, the coordinator's rule: a fixed Worker's pending partition, with a trial on it, is given up by
+    // its release. The release runs the counting retake now, then releases at the epoch it returns: the trial is counted.
+    private static async Task DisposeOfAPendingPartition(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(1, out _);
+        var worker = Owner(store, [0], clock);
+        await new DurableHost([worker]).ActivateAsync(0);
+        var trial = OnTrial(store, "t0", 0);
+        advance(11_000);
+        await worker.RunAsync();        // the guard has expired: 0 is pending
+        var pending = worker.Pending.ContainsKey(0);
+        await worker.DisposeAsync();
+        check(pending && trial.Attempts == 1 && store.Partitions[0].Owner is null && worker.Pending.Count == 0 && !worker.Holds(0),
+            $"a release of a pending partition retakes it counting the death, then releases it: attempts {trial.Attempts}, owner {store.Partitions[0].Owner ?? "none"}, pending {worker.Pending.Count}");
+    }
+
+    // The same rule for a hand-over: the node's Worker gives up pending 0 and keeps pending 1. 0 stays pending and given up;
+    // the next answer's retake counts its trial and releases it, and installs 1.
+    private static async Task HandOverOfAPendingPartition(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(2, out _);
+        var host = DurableHost.ForNode("p", store, new WorkflowInstance([new Counter()]), 2, new() { Monotonic = clock, Partitions = 2 });
+        var scope = (await host.ActivateAsync(0))!;
+        await host.ActivateAsync(1);
+        var worker = host.NodeWorker!;
+        var beat = new NodeHeartbeat("p", store, [worker], Lease, Window);
+        var trial = OnTrial(store, "t0", 0);
+        advance(11_000);
+        await worker.RunAsync();        // the guard has expired: 0 and 1 are pending
+        var pending = worker.Pending.Count == 2;
+        await scope.DisposeAsync();     // the host gives 0 up
+        var kept = worker.Pending.ContainsKey(0) && store.Partitions[0].Owner == "p";
+        await worker.RunAsync();
+        await beat.BeatAsync();
+        await worker.RunAsync();        // the answer's retakes
+        check(pending && kept && trial.Attempts == 1 && store.Partitions[0].Owner is null && worker.Holds(1) && !worker.Holds(0) && worker.Pending.Count == 0,
+            $"a hand-over of a pending partition leaves it pending until its counting retake, which releases it: kept {kept}, attempts {trial.Attempts}, owner of 0 {store.Partitions[0].Owner ?? "none"}, holds 1 {worker.Holds(1)}");
+    }
+
+    // CodeRabbit 5984758539: a refused fence over two partitions resets the Worker, and its retake hangs. The Worker holds
+    // nothing and nothing is pending, yet it is not live once a lease has passed: the host withholds its heartbeat.
+    private static async Task HungResetRetakeClosesTheGate(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(2, out _);
+        var wire = new DelayedCommit(store);
+        var worker = Owner(wire, [0, 1], clock);
+        await new DurableHost([worker]).ActivateAsync(0);
+        var beat = new NodeHeartbeat("p", wire, [worker], Lease, Window);
+        store.Partitions[0].Position++;     // the next flush is refused: a reset, then the retakes
+        await store.AddAsync(new Message("m", InstanceRef.In(0, "x"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
+        await worker.PollAsync();
+        wire.DelayRetake = true;
+        var flush = worker.FlushAsync();
+        await wire.Retaken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        advance(11_000);
+        var closed = !worker.Live && !beat.Open && await beat.BeatAsync() is null;
+        wire.RetakeReply.SetResult();
+        await flush;
+        check(closed, $"a reset's retake that hangs keeps the pass gate closed: live {worker.Live}, withheld {beat.Withheld}");
     }
 
     // Review A of #4870, item 2: a fixed host's w1 has taken 1 in the store and not yet installed it when w0 judges an answer
