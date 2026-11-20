@@ -2,7 +2,7 @@ import { qualifyStudioBackendPath, isStudioWorkspaceTabClick, openStudioWorkspac
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Inbox, RefreshCw } from "lucide-react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
 import { FormsPage } from "./FormsPage";
 import { actor, list, message, statusOf, type TaskActor, type TaskPage } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
@@ -63,8 +63,8 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
               description={filtered ? "Try a different search or clear it to see your inbox." : "Choose another inbox or refresh when new work arrives."}
               actions={filtered ? <StudioButton onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton> : cursor ? <StudioButton onClick={() => changeBrowse({ ...browse, cursor: null })}>First page</StudioButton> : undefined} /> : page ?
             <table className="studio-table user-task-table" aria-label="User Tasks"><thead><tr><th scope="col">Task</th><th scope="col">Status</th><th scope="col">Assignment</th></tr></thead>
-              <tbody>{page.items.map(task => <tr key={task.id}>
-                <td data-label="Task"><a data-task-id={task.id} className="user-task-link" href={taskDetailPath(task.id, browse)} onClick={event => {
+              <tbody>{page.items.map(task => <tr key={task.id} {...studioRowInteraction<HTMLTableRowElement>(() => { const path = taskDetailPath(task.id, browse); replaceTaskBrowseLocation(browse, task.id); if (navigate) navigate(path); else window.location.assign(path); })}>
+                <td data-label="Task"><a data-task-id={task.id} className="user-task-link studio-row-link" href={taskDetailPath(task.id, browse)} onClick={event => {
                   const path = taskDetailPath(task.id, browse);
                   if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(path)) { event.preventDefault(); return; }
                   if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;

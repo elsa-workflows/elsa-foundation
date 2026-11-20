@@ -400,7 +400,7 @@ describe("workflows module", () => {
     await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
       level: "success",
       title: "Deleted Hello World",
-      link: { label: "View deleted", path: "/workflows/definitions?state=deleted" },
+      link: { label: "Open Recycle bin", path: "/workflows/definitions?state=deleted" },
       action: expect.objectContaining({ label: "Restore" })
     })));
     expect(container.textContent).not.toContain("Deleted Hello World");
@@ -591,8 +591,13 @@ describe("workflows module", () => {
     const { api, container, unmount } = await renderRegisteredRoute();
 
     await waitForText(container, "No active workflow definitions");
-    await click(buttonByText(container, "Deleted"));
+    expect(buttonByText(container, "Recycle bin")).not.toBeNull();
+    expect(buttonByText(container, "Active")).toBeNull();
+    expect(buttonByText(container, "Deleted")).toBeNull();
+    expect(buttonByText(container, "All states")).toBeNull();
+    await click(buttonByText(container, "Recycle bin"));
     await waitForText(container, "Hello World");
+    expect(new URLSearchParams(window.location.search).get("state")).toBe("deleted");
     const row = rowByLabel(container, "Open workflow definition Hello World");
     expect(row).not.toBeNull();
     let menu = await openDefinitionActions(container, "Hello World");
@@ -626,6 +631,46 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("keeps Recycle bin navigation available without folder support and clears scoped browse filters", async () => {
+    const requestedUrls: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requestedUrls.push(url);
+      return response({ items: url.includes("state=deleted") ? [definition({ name: "Deleted workflow", deletedAt: "2026-06-18T01:00:00Z" })] : [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?folderId=folder-operations&state=all&search=approval&tagFilters=%5B%5D&favoritesOnly=true");
+
+    await vi.waitFor(() => expect(buttonByText(container, "Recycle bin")).not.toBeNull());
+    await click(buttonByText(container, "Recycle bin"));
+    await waitForText(container, "Deleted workflow");
+
+    const binLocation = new URL(window.location.href);
+    expect(binLocation.searchParams.get("state")).toBe("deleted");
+    for (const key of ["folderId", "search", "tagFilters", "favoritesOnly", "includeDescendants", "publicationState", "view"]) {
+      expect(binLocation.searchParams.has(key)).toBe(false);
+    }
+    expect(requestedUrls.some(url => url.includes("state=deleted") && !url.includes("folderId=") && !url.includes("searchTerm="))).toBe(true);
+
+    const allWorkflows = container.querySelector<HTMLElement>("[role='treeitem'][data-selection='all']");
+    await click(allWorkflows);
+    await waitForText(container, "No active workflow definitions");
+    expect(new URLSearchParams(window.location.search).has("state")).toBe(false);
+
+    await unmount();
+  });
+
+  it("explains recovery in an empty Recycle bin without offering workflow creation", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ items: [] })));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?state=deleted");
+
+    await waitForText(container, "No workflows in the Recycle bin");
+    expect(container.textContent).toContain("Deleted workflows you can restore will appear here.");
+    expect(buttonByText(container, "Create workflow")).toBeNull();
+
+    await unmount();
+  });
+
   it("shows lifecycle-correct menus and version semantics for mixed rows in All states", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response({
       items: [
@@ -636,6 +681,8 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?state=all");
 
     await waitForText(container, "Active workflow");
+    expect(container.textContent).toContain("All workflow states");
+    expect(buttonByText(container, "All states")).toBeNull();
     const activeRow = rowByLabel(container, "Open workflow definition Active workflow");
     const deletedRow = rowByLabel(container, "Open workflow definition Deleted workflow");
     expect(deletedRow).not.toBeNull();
@@ -908,7 +955,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("1 selected");
     expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
 
-    await click(buttonByText(container, "Deleted"));
+    await click(buttonByText(container, "Recycle bin"));
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("state=deleted"))).toBe(true));
     await vi.waitFor(() => expect(checkboxByLabel(container, "Select workflow definition Hello World")).not.toBeNull());
     expect(container.textContent).not.toContain("1 selected");
@@ -3274,7 +3321,7 @@ describe("workflows module", () => {
     await fill(inputByLabel(container, "Greeting"), "Hello from test run");
     await waitForEnabledButton(container, "Start Test Run");
     await click(buttonByText(container, "Start Test Run"));
-    await waitForText(container, "Latest test run");
+    await waitForText(container, "test-run-1");
     expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
       level: "success", title: "Test run started",
       link: { label: "Open run", path: "/workflows/instances/wfexec-1" }
@@ -3360,7 +3407,7 @@ describe("workflows module", () => {
     await waitForText(container, "Expression validation is unavailable");
     expect(testRunAttempts).toBe(1);
     await click(buttonByText(container, "Proceed with Test Run"));
-    await waitForText(container, "Latest test run");
+    await waitForText(container, "test-run-1");
 
     const requests = fetchMock.mock.calls
       .filter(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")
@@ -3421,7 +3468,7 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Test Run"));
     await waitForEnabledButton(container, "Start Test Run");
     await click(buttonByText(container, "Start Test Run"));
-    await waitForText(container, "Latest test run");
+    await waitForText(container, "test-run-1");
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "test-run-1");
     expect(container.textContent).toContain("artifact-transient-1");
@@ -3429,13 +3476,19 @@ describe("workflows module", () => {
 
     await click(buttonByText(container, "Inspector"));
     await click(container.querySelector(".wf-canvas .react-flow__node"));
+    const configurationTab = container.querySelector("[aria-label='Activity view'] [data-tab-id='configuration']");
+    const runDataTab = container.querySelector("[aria-label='Activity view'] [data-tab-id='run-data']");
+    expect(configurationTab).toBeTruthy();
+    expect(runDataTab).toBeTruthy();
+    expect(container.querySelector("[aria-label='Activity view'] [aria-selected='true']")?.textContent).toBe("Configuration");
+    await click(runDataTab);
     expect(container.querySelector("[aria-label='Activity view'] [aria-selected='true']")?.textContent).toBe("Run data");
-    await click(container.querySelector("[aria-label='Activity view'] [data-tab-id='configuration']"));
+    await click(configurationTab);
     await waitForText(container, "Text");
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Stale capsule clearing");
 
     await click(buttonByText(container, "Runtime"));
-    await waitForText(container, "Earlier test run");
+    await waitForText(container, "This result belongs to an earlier draft snapshot.");
     expect(container.textContent).toContain("test-run-1");
     expect(container.textContent).toContain("artifact-transient-1");
     expect(container.textContent).toContain("wfexec-1");
@@ -3688,7 +3741,7 @@ describe("workflows module", () => {
     expect(container.querySelector(".studio-page-header h2")?.textContent).toBe("Run · Order fulfillment");
     expect(container.querySelector(".studio-page-header h2")?.getAttribute("title")).toBe("Run · Order fulfillment");
     expect(container.textContent).toContain("Workflow Instance ID");
-    expect(container.querySelector(".studio-page-header .wf-page-context")?.textContent).toContain("wfexec-1");
+    expect(container.querySelector(".studio-page-header .studio-copyable-identifier__value")?.textContent).toContain("wfexec-1");
     const runInspector = container.querySelector(".wf-instance-inspector");
     expect(runInspector).not.toBeNull();
     expect(runInspector?.textContent).not.toContain("Workflow Instance ID");
@@ -4075,7 +4128,9 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
 
     await waitForText(container, "Hello World");
-    expect(container.querySelector("[role='tree']")).toBeNull();
+    expect(container.querySelector("[role='tree'] [data-selection='all']")).not.toBeNull();
+    expect(container.querySelectorAll("[role='tree'] [data-kind='folder']")).toHaveLength(0);
+    expect(buttonByText(container, "Recycle bin")).not.toBeNull();
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
     await unmount();
   });
@@ -4097,7 +4152,9 @@ describe("workflows module", () => {
     );
 
     await waitForText(container, "Some organization filters are unavailable");
-    expect(container.querySelector("[role='tree']")).toBeNull();
+    expect(container.querySelector("[role='tree'] [data-selection='all']")).not.toBeNull();
+    expect(container.querySelectorAll("[role='tree'] [data-kind='folder']")).toHaveLength(0);
+    expect(buttonByText(container, "Recycle bin")).not.toBeNull();
     expect(container.textContent).not.toContain("Legacy flat workflow");
     expect(fetchMock).not.toHaveBeenCalled();
     await click(buttonByText(container, "Clear unavailable organization filters"));
@@ -4230,7 +4287,8 @@ describe("workflows module", () => {
       "https://server.example/design/workflows/definition-pages?state=all&searchTerm=invoice+approval&pageSize=10&folderId=folder%2Fopaque"
     ]);
     expect(container.querySelector<HTMLInputElement>(".studio-search input")?.value).toBe("invoice approval");
-    expect(buttonByText(container, "All states")?.getAttribute("aria-pressed")).toBe("true");
+    expect(container.textContent).toContain("All workflow states");
+    expect(buttonByText(container, "All states")).toBeNull();
     expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Operations");
     await unmount();
   });
@@ -4326,7 +4384,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("switches an existing scoped search to All workflows without losing lifecycle or text", async () => {
+  it("switches an existing deleted scoped search to active All workflows without losing text", async () => {
     const folder = workflowFolder("folder-operations", "Operations");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -4361,7 +4419,7 @@ describe("workflows module", () => {
     const parameters = new URLSearchParams(window.location.search);
     expect(parameters.has("folderId")).toBe(false);
     expect(parameters.has("unfiled")).toBe(false);
-    expect(parameters.get("state")).toBe("deleted");
+    expect(parameters.has("state")).toBe(false);
     expect(parameters.get("search")).toBe("approval");
     expect(container.querySelector<HTMLInputElement>(".studio-search input")?.getAttribute("aria-label")).toBe("Search all workflows");
     await unmount();
@@ -4983,7 +5041,8 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Current B workflow");
     expect(container.textContent).not.toContain("Stale A workflow");
     expect(container.querySelector<HTMLInputElement>(".studio-search input")?.value).toBe("current");
-    expect(buttonByText(container, "All states")?.getAttribute("aria-pressed")).toBe("true");
+    expect(container.textContent).toContain("All workflow states");
+    expect(buttonByText(container, "All states")).toBeNull();
     expect(new URLSearchParams(window.location.search).get("folderId")).toBe("folder-b");
     await unmount();
   });
@@ -5340,8 +5399,8 @@ describe("workflows module", () => {
     function TwoNavigations() {
       const [secondSelection, setSecondSelection] = React.useState<WorkflowFolderSelection>({ id: child.id });
       return <>
-        <div data-testid="first-host"><WorkflowFolderNavigation context={context} selection="all" onSelect={() => {}} onAvailable={() => {}} /></div>
-        <div data-testid="second-host"><WorkflowFolderNavigation context={context} selection={secondSelection} onSelect={setSecondSelection} onAvailable={() => {}} /></div>
+        <div data-testid="first-host"><WorkflowFolderNavigation context={context} selection="all" onSelect={() => {}} onSelectRecycleBin={() => {}} recycleBinSelected={false} onAvailable={() => {}} /></div>
+        <div data-testid="second-host"><WorkflowFolderNavigation context={context} selection={secondSelection} onSelect={setSecondSelection} onSelectRecycleBin={() => {}} recycleBinSelected={false} onAvailable={() => {}} /></div>
       </>;
     }
 

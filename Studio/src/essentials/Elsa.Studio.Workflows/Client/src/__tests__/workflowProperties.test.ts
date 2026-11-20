@@ -10,11 +10,13 @@ import {
   isPersistenceMode,
   literalDefault,
   makeArgumentType,
+  parseWorkflowInputDefault,
   readArgumentType,
   readIncidentStrategyReference,
   readStoredPersistenceMode,
   readStringField,
   readVariableDefault,
+  readWorkflowInputDefault,
   shortenTypeName,
   updateInput,
   updateIncidentStrategyReference,
@@ -22,7 +24,7 @@ import {
   updatePersistenceMode,
   updateVariable
 } from "../workflowProperties";
-import type { VariableDefinition, VariableTypeDescriptor } from "../workflowTypes";
+import type { VariableDefinition, VariableTypeDescriptor, WorkflowInput } from "../workflowTypes";
 
 describe("incident strategy options", () => {
   it("updates an exact strategy reference without losing unknown strategy-option fields", () => {
@@ -134,6 +136,23 @@ describe("variable shape construction", () => {
     expect(readVariableDefault(null)).toBe("");
   });
 
+  it("parses typed literal workflow defaults without rounding or losing empty and false values", () => {
+    const numberInput = { ...createInput({ name: "Max", alias: "Int32" }), isRequired: true };
+    const booleanInput = createInput({ name: "Enabled", alias: "Boolean" });
+    const stringInput = createInput({ name: "Name" });
+    const collectionInput = { ...createInput({ name: "Values", alias: "Int32" }), type: { alias: "Int32", collectionKind: "Array" as const } };
+
+    expect(parseWorkflowInputDefault(numberInput, "10", "number")).toEqual({ value: 10 });
+    expect(parseWorkflowInputDefault(booleanInput, "false", "checkbox")).toEqual({ value: false });
+    expect(parseWorkflowInputDefault(stringInput, "", "text")).toEqual({ value: "" });
+    expect(parseWorkflowInputDefault(collectionInput, "[0, 10]", "json")).toEqual({ value: [0, 10] });
+    expect(parseWorkflowInputDefault({ ...numberInput, type: { alias: "Int64", collectionKind: "Single" } }, "9007199254740993", "number").error)
+      .toContain("safe range");
+    expect(parseWorkflowInputDefault(collectionInput, "{invalid", "json").error).toBe("Invalid JSON.");
+    expect(readWorkflowInputDefault(false)).toBe("false");
+    expect(readWorkflowInputDefault(null)).toBe("null");
+  });
+
   it("stores a storage driver as a bare alias string", () => {
     expect(createVariable({ name: "V", storageDriver: "Elsa.Memory.MemoryStorageDriver" }).storageDriverType).toBe(
       "Elsa.Memory.MemoryStorageDriver"
@@ -188,7 +207,7 @@ describe("input shape construction", () => {
     });
     expect(input.referenceKey).toBeTypeOf("string");
     expect(input.referenceKey.length).toBeGreaterThan(0);
-    // The backend InputDefinition has no default member; the Elsa-3 leftovers must not be emitted.
+    // Defaults are absent until an author enables one; Elsa-3 read-only and collection fields are unsupported.
     expect("defaultValue" in input).toBe(false);
     expect("defaultSyntax" in input).toBe(false);
     expect("isReadOnly" in input).toBe(false);
@@ -200,6 +219,47 @@ describe("input shape construction", () => {
     const updated = updateInput(existing, { isRequired: true });
     expect(updated.isRequired).toBe(true);
     expect((updated as Record<string, unknown>).legacyFlag).toBe(true);
+  });
+
+  it("updates the default display name when the input is renamed", () => {
+    const existing = { ...createInput({ name: "Input1" }), customMetadata: { preserve: true } };
+
+    const updated = updateInput(existing, { name: "Max" });
+
+    expect(updated).toMatchObject({
+      name: "Max",
+      displayName: "Max",
+      referenceKey: existing.referenceKey,
+      type: existing.type,
+      customMetadata: { preserve: true }
+    });
+  });
+
+  it("preserves a custom display name when the input is renamed", () => {
+    const existing = { ...createInput({ name: "Input1" }), displayName: "Maximum" };
+
+    expect(updateInput(existing, { name: "Max" }).displayName).toBe("Maximum");
+  });
+
+  it("uses an explicitly patched display name when renaming", () => {
+    const existing = createInput({ name: "Input1" });
+
+    expect(updateInput(existing, { name: "Max", displayName: "Maximum value" })).toMatchObject({
+      name: "Max",
+      displayName: "Maximum value"
+    });
+  });
+
+  it.each(["", undefined])("fills an empty or missing display name from the renamed input name", displayName => {
+    const existing = { ...createInput({ name: "Input1" }), displayName } as WorkflowInput;
+
+    expect(updateInput(existing, { name: "Max" }).displayName).toBe("Max");
+  });
+
+  it("does not change display-name metadata for a non-name edit", () => {
+    const existing = { ...createInput({ name: "Input1" }), displayName: "" };
+
+    expect(updateInput(existing, { isRequired: true }).displayName).toBe("");
   });
 });
 

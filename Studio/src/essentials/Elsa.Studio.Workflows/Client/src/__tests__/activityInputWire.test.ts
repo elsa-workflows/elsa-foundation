@@ -523,10 +523,10 @@ describe("argument collection wire adapter", () => {
     expect("storageDriverType" in (wire.outputs![0] as object)).toBe(false);
   });
 
-  it("backfills a referenceKey and drops the Elsa-3 input-default leftovers", () => {
+  it("backfills a referenceKey, preserves workflow input defaults, and drops unsupported legacy fields", () => {
     const state: WorkflowDefinitionState = {
       inputs: [{ name: "OrderId", type: { alias: "String", collectionKind: "Single" }, displayName: "OrderId", defaultValue: "x", defaultSyntax: "Literal", isReadOnly: true }] as unknown[],
-      outputs: [{ name: "Result", type: { alias: "Boolean", collectionKind: "Single" }, displayName: "Result" }] as unknown[]
+      outputs: [{ name: "Result", type: { alias: "Boolean", collectionKind: "Single" }, displayName: "Result", defaultValue: false, defaultSyntax: "Literal" }] as unknown[]
     };
 
     const wire = canonicalizeStateForWire(state);
@@ -536,9 +536,48 @@ describe("argument collection wire adapter", () => {
     expect(typeof input.referenceKey).toBe("string");
     expect((input.referenceKey as string).length).toBeGreaterThan(0);
     expect(typeof output.referenceKey).toBe("string");
-    expect("defaultValue" in input).toBe(false);
-    expect("defaultSyntax" in input).toBe(false);
+    expect(input.defaultValue).toBe("x");
+    expect(input.defaultSyntax).toBe("Literal");
+    expect("defaultValue" in output).toBe(false);
+    expect("defaultSyntax" in output).toBe(false);
     expect("isReadOnly" in input).toBe(false);
+  });
+
+  it("preserves false, zero, empty-string and null input defaults in canonical and expanded states", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [
+        { referenceKey: "count", name: "Count", type: { alias: "Int32", collectionKind: "Single" }, defaultValue: 0, defaultSyntax: "Literal" },
+        { referenceKey: "enabled", name: "Enabled", type: { alias: "Boolean", collectionKind: "Single" }, defaultValue: false, defaultSyntax: "Literal" },
+        { referenceKey: "name", name: "Name", type: { alias: "String", collectionKind: "Single" }, defaultValue: "", defaultSyntax: "Literal" },
+        { referenceKey: "value", name: "Value", type: { alias: "String", collectionKind: "Single" }, defaultValue: null, defaultSyntax: "Literal" }
+      ] as unknown[]
+    };
+
+    const wire = canonicalizeStateForWire(state);
+    const inputs = wire.inputs as Record<string, unknown>[];
+
+    expect(inputs.map(input => input.defaultValue)).toEqual([0, false, "", null]);
+    expect(inputs.map(input => input.defaultSyntax)).toEqual(["Literal", "Literal", "Literal", "Literal"]);
+    expect((expandStateFromWire(wire).inputs as Record<string, unknown>[]).map(input => input.defaultValue)).toEqual([0, false, "", null]);
+  });
+
+  it("keeps legacy null-without-syntax defaults absent when reopening and saving", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [
+        { name: "Legacy", type: { alias: "String", collectionKind: "Single" }, defaultValue: null, defaultSyntax: null },
+        { name: "LegacyCasing", type: { alias: "String", collectionKind: "Single" }, DefaultValue: null },
+        { name: "ExplicitNull", type: { alias: "String", collectionKind: "Single" }, defaultValue: null, defaultSyntax: "Literal" }
+      ]
+    };
+
+    for (const normalized of [canonicalizeStateForWire(state), expandStateFromWire(state)]) {
+      const inputs = normalized.inputs as Record<string, unknown>[];
+      expect(inputs[0]).not.toHaveProperty("defaultValue");
+      expect(inputs[0]).not.toHaveProperty("defaultSyntax");
+      expect(inputs[1]).not.toHaveProperty("defaultValue");
+      expect(inputs[1]).not.toHaveProperty("defaultSyntax");
+      expect(inputs[2]).toMatchObject({ defaultValue: null, defaultSyntax: "Literal" });
+    }
   });
 
   it("sends required output nullability for new, reopened and legacy definitions without changing explicit values", () => {

@@ -1,5 +1,55 @@
 import { expect, test } from "@playwright/test";
 
+for (const theme of ["light", "dark"]) {
+  test(`executable row hover and navigation remain consistent in ${theme}`, async ({ page }, info) => {
+    await page.goto(`/collection-ux.html?theme=${theme}`);
+    const table = page.getByRole("table", { name: "Workflow executables", exact: true });
+    const row = table.getByRole("row", { name: "Inspect executable hello-artifact", exact: true });
+    const source = row.getByRole("button", { name: "Open source definition hello: Hello World", exact: true });
+    const background = () => row.evaluate(element => getComputedStyle(element).backgroundColor);
+    await expect(source).toBeVisible();
+    const resting = await background();
+
+    await source.hover();
+    const hovered = await background();
+    expect(hovered).not.toBe(resting);
+    await expect(source).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    expect((await source.boundingBox())!.width).toBeLessThan((await row.locator(".wf-executable-name").boundingBox())!.width);
+    await page.screenshot({ path: info.outputPath("source-hover.png"), fullPage: true });
+
+    const identifiers = row.locator(".wf-executable-identifiers");
+    await identifiers.hover();
+    expect(await background()).toBe(hovered);
+    await page.screenshot({ path: info.outputPath("identifiers-hover.png"), fullPage: true });
+    await row.getByRole("button", { name: "Copy Artifact ID", exact: true }).click();
+    await expect(page).toHaveURL(/collection-ux\.html/);
+    await row.getByRole("button", { name: "Identifiers for Hello World", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Workflow executable identifiers for Hello World", exact: true })).toBeVisible();
+    await page.locator(".wf-definition-identifiers-popover").click({ position: { x: 2, y: 2 } });
+    await expect(page).toHaveURL(/collection-ux\.html/);
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/collection-ux\.html/);
+
+    await identifiers.click();
+    await expect(page).toHaveURL(/\/workflows\/executables\/hello-artifact$/);
+    await page.goBack();
+    await source.click();
+    await expect(page).toHaveURL(/\/workflows\/definitions\?definition=hello$/);
+    await page.goBack();
+    for (const key of ["Enter", "Space"]) {
+      await row.focus();
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Shift+Tab");
+      await page.mouse.move(0, 0);
+      await expect(row).toBeFocused();
+      expect(await background()).toBe(hovered);
+      await row.press(key);
+      await expect(page).toHaveURL(/\/workflows\/executables\/hello-artifact$/);
+      await page.goBack();
+    }
+  });
+}
+
 for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
   test(`collection spacing and evidence labels at ${width}px ${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
@@ -65,4 +115,16 @@ test("connection empty state creates and returns to populated list without anoth
   await expect(page.getByRole("button", { name: "Details for Example", exact: true })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Search connections", exact: true })).toBeFocused();
+
+  const row = page.getByRole("row", { name: /Example/ });
+  const service = row.getByRole("cell", { name: "HTTP", exact: true });
+  await service.hover();
+  await expect(row).toHaveCSS("cursor", "pointer");
+  await service.click();
+  const details = page.getByRole("dialog", { name: "Example", exact: true });
+  await expect(details).toBeVisible();
+  await details.getByRole("button", { name: "Close connection details" }).click();
+  await expect(details).toBeHidden();
+  await row.press("Enter");
+  await expect(details).toBeVisible();
 });
