@@ -29,9 +29,9 @@ reason codes of `WorkflowExecutableInputValidationReasonCodes` (`runtime.input.*
 | `VF-ACT-013` | error | A member declared both required and with a default: "a default is set but Required is on; set Required off" (Q9) | node or activity definition, member | new |
 | `VF-ACT-004` | error | `null` for a non-nullable target without `DefaultOnNull`, or whose type has no type default | node, input or target | yes |
 | `runtime.input.missing-required` | error | Admission: omitted required workflow input (#3731) | input | yes |
-| `runtime.input.null-not-allowed` | error | Admission: explicit `null` for a non-nullable workflow input without `DefaultOnNull`, refused like #3731's codes (category `Input`, `400`) | input | new |
-| `VF-NULL-001` | info | `DefaultOnNull` substituted a type default: recorded on the invocation for an activity input, or as a diagnostic of the started instance for a workflow input substituted at admission | node or workflow, input, default | new |
-| `VF-UNDEF-001` | error | A consumed result produced no value: a `Run JavaScript` body with a bound result and no `return` (publication), or a consumed result that is `undefined` at run time, or `undefined` assigned to a whole variable (FR-030), without `UndefinedAsNull` | activity, bound target or variable | new |
+| `runtime.input.null-not-allowed` | error | Admission: explicit `null` for a non-nullable workflow input without `DefaultOnNull` or whose type has no type default, refused like #3731's codes (category `Input`, `400`) | input | new |
+| `VF-NULL-001` | info | `DefaultOnNull` substituted a type default for an activity input, recorded on the invocation (a workflow input substituted at admission has no separate record, FR-013) | node, input, default | new |
+| `VF-UNDEF-001` | error | Publication, under either policy: a `Run JavaScript` body with a bound result and no `return`. Run time, without `UndefinedAsNull`: a consumed result that is `undefined`, or `undefined` assigned to a whole variable (FR-030) | activity, bound target or variable | new |
 | `VF-UNDEF-002` | warning | An `undefined` object property was dropped (no `UndefinedAsNull`) | node, input or variable, JSON path | new |
 | `VF-UNDEF-003` | warning | An `undefined` array element or sparse hole became a `null` placeholder (either policy) | node, input or variable, JSON path | new |
 | `VF-NUM-001` | warning | `NaN` or `±Infinity` the script computed became `null` (either policy) | node, input or variable, JSON path | new |

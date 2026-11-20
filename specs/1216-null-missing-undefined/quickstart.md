@@ -2,7 +2,7 @@
 
 Run after implementation.
 
-1. **Explicit null (US1)**: publish a workflow whose `Set` writes literal `null` into an `Object` variable; run it and
+1. **Explicit null (US1)**: publish a workflow whose `Set` writes literal `null` into an `Any` variable; run it and
    read the variable: explicit null. Repeat with an `Int32` variable: publication fails with `VF-ACT-004`.
 2. **Omitted inputs (US2)**: start `composition-bulk-dispatch-sub-workflow` (JTest corpus) with no input. It completes;
    no poisoned work item. Start a workflow with a non-nullable `Int32` input set to `null`: refused with `400` and

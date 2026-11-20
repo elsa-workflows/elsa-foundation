@@ -35,7 +35,7 @@ red without the change. xUnit only.
 - [ ] T005 [P] Add `NullPolicyDefaults.TryGetTypeDefault(alias)` in
   `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs` (FR-001b): a default for `Boolean`, the
   number types and enums only; unit tests including `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`,
-  `Guid`, `String` and `Any` having none
+  `Guid`, `String`, `Any` and a collection of `Int32` having none, and a collection accepting `null` (FR-001a)
 - [ ] T006 Add `NullHandling` (`DefaultOnNull`, `UndefinedAsNull`) to
   `Essentials/src/Workflows/Design/Core/Models/WorkflowStrategyOptions.cs`, `ValuePolicies` to
   `Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs`, and compile one into the other in
@@ -83,8 +83,8 @@ red without the change. xUnit only.
   `runtime.input.null-not-allowed`; accept an explicit `null` for a nullable input without running the type
   conversion, and leave that conversion as it is (S-9 owns it). In `WorkflowStartDispatcher.ApplyInputContract`, and
   in the early checks of `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow`, substitute the type default for
-  such a `null` before validating when the pinned `DefaultOnNull` is on. The start command carries the
-  substitutions, and the seed records them as `VF-NULL-001` through S-8's warning channel when the instance starts. One shared helper does the substitution; the early checks call it only because they refuse
+  such a `null` before validating when the pinned `DefaultOnNull` is on (no separate record, FR-013). One shared
+  helper does the substitution; the early checks call it only because they refuse
   before their own side effects (#3731), so all three give the same answer
 - [ ] T013a [US2] Q9 (FR-034): publication refuses a member declared both required and with a default with
   `VF-ACT-013` (activity inputs, authored activity definition inputs, workflow inputs); remove the validator's
@@ -176,16 +176,17 @@ red without the change. xUnit only.
   `activityContractComparison.ts` (a nullability change becomes a type change), the "Allows null" fact in
   `activityContractProposalModel.ts`, and the flag from `activityDefinitionTypes.ts` and `activityInputWire.ts`; the
   activity definition test run (`ActivityDefinitionTestRunDialog.tsx`, `activityDefinitionTestRuns.ts`), the
-  "Allows null" / "Non-null" labels in `ActivityDefinitionWorkbench.tsx` and the read in
-  `ActivityGraphImplementationEditor.tsx` take nullability from the type. On the backend, authored members stop carrying the flag; for .NET
+  "Allows null" / "Non-null" labels in `ActivityDefinitionWorkbench.tsx`, the read in
+  `ActivityGraphImplementationEditor.tsx` and the test-drive inputs in `workflow-editor/WorkflowTestDrivePanel.tsx`
+  take nullability from the type; the test-drive panel also drops its "required unless a default exists" rule (Q9). On the backend, authored members stop carrying the flag; for .NET
   activities the descriptor's nullability is derived from the C# type, not authored. Regenerate any stored fixture
   that carried it
 - [ ] T034 [P] Activity definition contract editor (`ActivityDefinitionContractEditor.tsx`): setting a default turns
   *Required* off, and *Required* is disabled while a default is set, with the hint "A member with a default is
   optional"; replace today's hint "A value must be available after the default is applied" (Q9). Client test
 
-- [ ] T035 Check that the `VF-UNDEF-*`, `VF-NUM-001` and `VF-NULL-001` warnings show in Studio's existing instance
-  diagnostics with no new surface (FR-033); a Studio client test if a mapping is missing
+- [ ] T035 Check that the `VF-UNDEF-*`, `VF-NUM-001` and `VF-NULL-001` warnings show in Studio's existing activity
+  execution warnings with no new surface (FR-033); a Studio client test if a mapping is missing
 
 ## Phase 10: User Story 6 - A computed variable name that matches nothing (P3)
 

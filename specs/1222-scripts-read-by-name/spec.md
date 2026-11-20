@@ -68,7 +68,7 @@ innermost-first.
 5. **Given** a Liquid template `{{ variables.order }}`, **When** published and run, **Then** it reads `order` from the
    nearest declaring scope.
 6. **Given** a declared variable `order` with no value set, **When** a script reads `variables.order`, **Then** it
-   reads JSON `null` (never `undefined`).
+   reads JSON `null` (never `undefined`); a `Boolean` or number variable reads its type default (spec 1216 FR-001c).
 
 ---
 

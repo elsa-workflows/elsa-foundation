@@ -185,10 +185,10 @@ properties become `null` too (#3170, #3172).
    an element already `null` needs no diagnostic.
 6. **Given** the policy, **When** a script returns a string from `JSON.stringify`, **Then** that string is not
    rewritten.
-7. **Given** no policy and a function-body script (a `Run JavaScript` activity: its result is only what `return` gives) whose result is bound to a
-   variable or output, **When** the script has no `return` statement, **Then** publication refuses it with a fix
-   instruction; **When** any script form with a bound result produces `undefined` at run time, **Then** the step faults
-   with the same instruction.
+7. **Given** a function-body script (a `Run JavaScript` activity: its result is only what `return` gives) whose
+   result is bound to a variable or output, **When** the script has no `return` statement, **Then** publication
+   refuses it with a fix instruction, under either policy; **Given** no policy, **When** any script form with a bound
+   result produces `undefined` at run time, **Then** the step faults with the same instruction.
 8. **Given** a script activity whose result is not bound, **When** it returns nothing, **Then** it completes and nothing
    is written.
 9. **Given** the policy and a bound result, **When** the script produces `undefined`, **Then** the result is `null` and
@@ -295,10 +295,12 @@ omitted; after resume, the first reads explicit null and the invocation record s
   outputs and the `value` of the `Set` / `SetOutput` intrinsics, whether it comes from a literal, a variable or an
   expression.
 - **FR-001a**: Whether a member accepts `null` comes from its type, as in .NET (Q8), and the *Allow null* flag is
-  retired everywhere it is authored: workflow inputs, workflow outputs and activity definition contracts (not read,
-  not shown, not written). For variables, workflow inputs and outputs and authored activity definitions, the type
-  registry's existing *supports null* column decides: `String` and `Any` (every JSON alias) accept `null`; `Boolean`,
-  the number types, `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan` and `Guid` do not. A .NET
+  retired everywhere it is authored: workflow inputs, workflow outputs and activity definition contracts. Studio
+  neither shows nor sends it, and the backend derives nullability from the type for these members instead of reading
+  it. For variables, workflow inputs and outputs and authored activity definitions, the type registry's existing
+  *supports null* column decides: `String` and `Any` (every JSON alias) accept `null`; `Boolean`, the number types,
+  `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan` and `Guid` do not. A collection (a list or
+  dictionary of any element type) accepts `null` and has no type default. A .NET
   activity's input follows its C# declaration (`TimeSpan` versus `TimeSpan?`, `string` versus `string?`).
 - **FR-001b**: Only `Boolean` (`false`), the number types (`0`) and enums (their zero value) have a type default
   (Q10). Dates, times, `TimeSpan` and `Guid` have none, because their zero value (`0001-01-01`, `00:00:00`, an empty
@@ -336,7 +338,7 @@ omitted; after resume, the first reads explicit null and the invocation record s
   activity inputs declared that way are fixed at their source: declared optional. Where Studio lets an author set a
   default (the activity definition contract editor), setting a default turns *Required* off.
 - **FR-008**: An omitted required workflow input, and an explicit `null` for a non-nullable workflow input without the
-  default-on-null policy, MUST be refused at admission, before the start checkpoint, with a diagnostic naming the
+  default-on-null policy or whose type has no type default, MUST be refused at admission, before the start checkpoint, with a diagnostic naming the
   member. No step runs and no work item is scheduled. This holds on every start path (API, triggers, BPMN, test runs,
   child workflows). #3731 already does this for the omitted required input; S-2 adds the explicit-null refusal at the
   same point.
@@ -354,8 +356,9 @@ omitted; after resume, the first reads explicit null and the invocation record s
   per-input setting is added only once a case needs it.
 - **FR-013**: Under the policy, a `null` for a non-nullable target MUST be replaced by the target type's default
   (`false` for `Boolean`, `0` for the number types, the zero value for enums: FR-001b) (Q2), independently of any declared default, and the
-  substitution MUST be recorded: on the invocation record for an activity input, and as a diagnostic of the started
-  instance for a workflow input substituted at admission. A target type without a non-null default (FR-006) still
+  substitution MUST be recorded on the invocation record for an activity input (`VF-NULL-001`). A workflow input
+  substituted at admission is not recorded separately: the started instance's input holds the substituted value, and
+  the policy is visible on the workflow. A target type without a non-null default (FR-006) still
   fails with `VF-ACT-004`. Requiredness is checked before any default applies (FR-008).
 - **FR-014**: The policy MUST never replace a `null` for a nullable target.
 
@@ -406,8 +409,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
   converter option and each policy: what it changes at run time, an example of a value with and without it, that it
   is recorded on each converted workflow, and that native workflows keep both off. Studio adds no control for the
   policies.
-- **FR-033**: The boundary warnings of FR-016 and FR-017 and the substitution of FR-013 MUST reach Studio through the
-  existing instance diagnostics; no new Studio surface is added for them.
+- **FR-033**: The boundary warnings of FR-016 and FR-017 and the activity-input substitution of FR-013 MUST reach
+  Studio through the existing activity execution warnings; no new Studio surface is added for them.
 
 **`undefined` written to a variable (Q7)**
 - **FR-030**: A script that assigns `undefined` as a variable's whole value MUST fault the step without
