@@ -18,10 +18,10 @@ namespace Kernel.Durable;
 /// </summary>
 public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
 {
-    private NodeHeartbeat? _beat;       // K1b: the node's heartbeat over this host's Workers, made at the first one
+    private NodeHeartbeat? _beat;       // K1b: the node's heartbeat over this host's Workers, made at the first heartbeat
     private (IKernelStore Store, int Placed, bool Part)? _counted;     // a node's host (ForNode): what its start checks
-    private string? _name;              // ForNode: the node, for the heartbeat before any Worker exists
-    private TimeSpan? _lease;           // ForNode: the lease, independent of Workers
+    private string? _name;              // ForNode and the constructor are the only writers; the node, for the heartbeat before any Worker exists
+    private TimeSpan? _lease;           // ForNode and the constructor are the only writers; independent of Workers
     private readonly Dictionary<int, Worker> _workers = [];
     private readonly Func<int, Worker?> _fixed;
     private readonly Worker? _node;

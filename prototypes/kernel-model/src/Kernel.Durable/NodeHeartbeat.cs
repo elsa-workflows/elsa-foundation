@@ -69,10 +69,15 @@ public sealed class NodeHeartbeat
             Missed++;       // a heartbeat that fails renews nothing, whatever the engine's error (a deadlock victim rolled back whole)
             return null;
         }
+        // After the store returns: the registry holds any Worker created before this read (F2). One map, O(total claims).
+        Dictionary<int, Worker> claimed = [];
+        foreach (var w in Workers)
+            foreach (var p in w.ClaimedPartitions())
+                claimed[p] = w;
         for (var i = 0; i < workers.Length; i++)
         {
             var self = workers[i];
-            self.HeartbeatAnswered(sent[i], answer, partition => Workers.Any(w => w != self && w.Claims(partition)));
+            self.HeartbeatAnswered(sent[i], answer, p => claimed.TryGetValue(p, out var owner) && owner != self);
         }
         return answer;
     }

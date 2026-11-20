@@ -37,6 +37,7 @@ internal static class NodeLeaseChecks
         await TimelyFirstTakeKeepsTheGateOpen(check);
         await FixedHostPassesAGivenUpPending(check);
         await LazyFixedHostHeartbeats(check);
+        await FixedHostAnswerJudgesOnce(check);
     }
 
     // CodeRabbit 4636945436 (review B of #4870): an empty Worker's first take hangs. Once it has been in flight for a lease
@@ -126,10 +127,27 @@ internal static class NodeLeaseChecks
         var mid = await host.HeartbeatAsync(Window) is not null;
         if (scope is not null) await scope.RunAsync();
         advance(6_000);
-        var renewed = await host.HeartbeatAsync(Window) is not null;
+        // Probe at t=11 s, before the last beat: the node record is valid to 15 s after the t=5 s renewal, expired at 10 s without it.
         var survived = scope is { Active: true } && await store.TakeAsync(0, "probe", Lease) is null;
+        var renewed = await host.HeartbeatAsync(Window) is not null;
         check(before && mid && renewed && survived,
             $"a lazy fixed host heartbeats before any Worker and keeps a scope past one lease: before {before}, mid {mid}, renewed {renewed}, survived {survived}");
+    }
+
+    // N1: a ForNode fixed host without owned sets, 256 Workers. One answer must not scan Claims per sibling candidate.
+    private static async Task FixedHostAnswerJudgesOnce(Action<bool, string> check)
+    {
+        const int n = 256;
+        var (store, clock, _) = World(n, out _);
+        var wire = new DelayedCommit(store) { WithoutOwnedSets = true };
+        var host = DurableHost.ForNode("n1", wire, new WorkflowInstance([new Counter()]), n, new() { Monotonic = clock, Partitions = n });
+        var workers = new Worker[n];
+        for (var p = 0; p < n; p++) workers[p] = (Worker)(await host.ActivateAsync(p))!;
+        await host.HeartbeatAsync(Window);
+        foreach (var w in workers) await w.RunAsync();
+        var claims = workers.Sum(w => w.ClaimsLookups);
+        check(claims < n && workers.All(w => w.Holds(w.Partition)),
+            $"one answer over {n} Workers judges with {claims} Claims calls (bound {n}), held {workers.Count(w => w.Holds(w.Partition))}");
     }
 
     // Review round 2 of #4870, the coordinator's rule: a fixed Worker's pending partition, with a trial on it, is given up by

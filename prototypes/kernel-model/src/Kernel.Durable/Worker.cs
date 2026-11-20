@@ -723,12 +723,29 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public Func<bool>? TakesOpen { get; set; }
     private bool TakesClosed => NodeLease && TakesOpen is { } open && !open();
 
+    public long ClaimsLookups { get; private set; }     // N1: one answer's judging, counted by the lease-check witness
     /// <summary>The partition is this Worker's: held, pending, or being taken. A host with several Workers divides an answer by it.</summary>
     public bool Claims(int partition)
     {
         lock (_turnSync)
+        {
+            ClaimsLookups++;
             return _held.ContainsKey(partition) || _pending.ContainsKey(partition) || _gaining == partition || (_taking && Assigned.Contains(partition))
                 || (_retaking && _retakeSet.Contains(partition));
+        }
+    }
+
+    /// <summary>The partitions <see cref="Claims"/> would accept, under the same lock. One answer builds a map from these.</summary>
+    internal IReadOnlyList<int> ClaimedPartitions()
+    {
+        lock (_turnSync)
+        {
+            HashSet<int> claimed = [.. _held.Keys, .. _pending.Keys];
+            if (_gaining >= 0) claimed.Add(_gaining);
+            if (_taking) claimed.UnionWith(Assigned);
+            if (_retaking) claimed.UnionWith(_retakeSet);
+            return [.. claimed];
+        }
     }
 
     // ---- ownership ---------------------------------------------------------------------------------------------
