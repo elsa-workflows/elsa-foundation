@@ -78,8 +78,10 @@ Each structure declares how its children relate in time; the warning has no list
 
 ## Limits
 
-The analysis sees only declared writes. It does not see a script's `setVariable`, a C# activity writing through its
-execution context, or writes inside sub-workflows and graph activities. No warning does not mean no write conflict.
+The analysis sees declared writes and step writers: captures, intrinsics, a C# activity's writable variable
+references, an activity marked `[AccessesUndeclaredVariables]`, and a script's may-write set (a script that writes by a
+computed name counts as writing every visible variable; spec 1231). It does not see writes inside sub-workflows and
+graph activities (#4805). No warning does not mean no write conflict.
 A BPMN process with link events, with a cycle that can be entered at more than one element, or with a cycle that only
 a boundary event leads into, declares nothing, so its writes are reported as undeclared.
 A `Break` that ends a Flowchart cancels the other paths' running activities, so they commit nothing afterwards.

@@ -53,6 +53,9 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.NotNull(scope.ServiceProvider.GetService<Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver>());
         Assert.IsType<Elsa.Workflows.Design.Validations.Services.ScriptVariableRenamePlanner>(
             scope.ServiceProvider.GetService<Elsa.Workflows.Design.Core.Contracts.IScriptVariableRenamePlanner>());
+        // Spec 1231 FR-036: the script body write analyzer Studio's may-write display reads.
+        Assert.IsType<Elsa.Workflows.Design.Validations.Services.ScriptBodyWriteAnalyzer>(
+            scope.ServiceProvider.GetService<Elsa.Workflows.Design.Core.Contracts.IScriptBodyWriteAnalyzer>());
     }
 
     // Kept beside the composition test: uniqueness, exactly one DraftValidating handler.
@@ -276,6 +279,17 @@ public sealed class ValidationsFeatureRegistrationTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(provider).InitializeAsync());
 
         Assert.Contains("IScriptVariableRenamePlanner", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_second_script_body_write_analyzer_fails_the_shell_at_start()
+    {
+        // Spec 1231 FR-036, framework 2.6.2: a replacement contract never wins silently.
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<Elsa.Workflows.Design.Core.Contracts.IScriptBodyWriteAnalyzer, Elsa.Workflows.Design.Validations.Services.ScriptBodyWriteAnalyzer>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(provider).InitializeAsync());
+
+        Assert.Contains("IScriptBodyWriteAnalyzer", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

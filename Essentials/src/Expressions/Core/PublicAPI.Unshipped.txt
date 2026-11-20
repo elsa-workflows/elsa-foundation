@@ -829,3 +829,10 @@ Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Warnings.get -> Elsa.Ex
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Warnings.init -> void
 Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure
 Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure.ValueFreeMessage.get -> string!
+Elsa.Expressions.Core.Contracts.ScriptVariableWrite.Start.get -> int
+Elsa.Expressions.Core.Contracts.ScriptVariableWrite.Start.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.Escapes.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.Escapes.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.HasComputedWrite.get -> bool
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.HasComputedWrite.init -> void
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.MayWriteNames.get -> System.Collections.Generic.IReadOnlyList<string!>!

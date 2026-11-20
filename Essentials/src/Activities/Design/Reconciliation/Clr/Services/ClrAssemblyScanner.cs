@@ -304,10 +304,15 @@ public sealed class ClrAssemblyScanner(
         // The marker (inherited) or an engine script activity: the same fact the runtime contract pins.
         if (VariableReferenceTypes.AccessesUndeclaredVariables(type))
         {
+            // A type that declares the marker itself says so, so an analyzed script body never narrows it (FR-028); the
+            // member is absent otherwise, which keeps an engine script activity's facet as it was.
+            var payload = new Dictionary<string, bool> { [VariableAccessDesignFacet.AccessesUndeclaredVariablesMember] = true };
+            if (VariableReferenceTypes.DeclaresAccessesUndeclaredVariables(type))
+                payload[VariableAccessDesignFacet.DeclaredMember] = true;
             facets.Add(new ActivityDesignFacet(
                 VariableAccessDesignFacet.Kind,
                 VariableAccessDesignFacet.SchemaVersion,
-                JsonSerializer.SerializeToElement(new Dictionary<string, bool> { [VariableAccessDesignFacet.AccessesUndeclaredVariablesMember] = true })));
+                JsonSerializer.SerializeToElement(payload)));
         }
 
         var iconFacet = BuildIconFacet(type);

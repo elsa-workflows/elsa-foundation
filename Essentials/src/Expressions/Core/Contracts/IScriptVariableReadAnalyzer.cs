@@ -55,6 +55,23 @@ public sealed record ScriptVariableReadAnalysis
     /// </summary>
     public IReadOnlyList<ScriptVariableWrite> Writes { get; init; } = [];
 
+    /// <summary>
+    /// The variables named literally whose value the source lets escape (spec 1231 FR-019): into a local, a function
+    /// argument, a closure, a returned function value, or a method call on it (<c>variables.items.push(1)</c>). A script
+    /// can change an object or array value that escaped, so such a variable may be written; a scalar value cannot be.
+    /// </summary>
+    public IReadOnlyList<string> Escapes { get; init; } = [];
+
+    /// <summary>
+    /// Whether the source writes variables it does not name literally (spec 1231 FR-020a): a computed write
+    /// (<c>variables[k] = v</c>, <c>setVariable(k, v)</c>), the value of a computed read escaping, or <c>variables</c>,
+    /// <c>getVariable</c> or <c>setVariable</c> used as a value. Such a node may write every visible variable.
+    /// </summary>
+    public bool HasComputedWrite { get; init; }
+
+    /// <summary>The variables the source may write by name: each written or escaped literal name, once, in source order.</summary>
+    public IReadOnlyList<string> MayWriteNames => Writes.Select(write => write.Name).Concat(Escapes).Distinct(StringComparer.Ordinal).ToArray();
+
     public static ScriptVariableReadAnalysis None { get; } = new([], false);
 }
 
@@ -67,4 +84,8 @@ public sealed record ScriptVariableReadAnalysis
 public sealed record ScriptVariableLiteralRead(string Name, int Start, int End, bool IsMemberName);
 
 /// <summary>One write to a variable the source shows: the variable's name and the path written, such as <c>variables.order.total</c>.</summary>
-public sealed record ScriptVariableWrite(string Name, string Path);
+public sealed record ScriptVariableWrite(string Name, string Path)
+{
+    /// <summary>The zero-based offset in the source where the write starts, or -1 when the parser gives none.</summary>
+    public int Start { get; init; } = -1;
+}

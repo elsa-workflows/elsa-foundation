@@ -160,7 +160,8 @@ public sealed class ExecutableNodeCompiler(
             inputBindingCompiler.CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States),
             projection,
             clrActivityType?.GetCustomAttribute<ActivityScriptOutcomesAttribute>(inherit: true)?.ScriptInputKey,
-            out var bodyReadPlan);
+            out var bodyReadPlan,
+            out var bodyWritePlan);
         var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs);
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
@@ -202,7 +203,9 @@ public sealed class ExecutableNodeCompiler(
                     projectedInputs.Definitions,
                     inputBindings,
                     activityContract,
-                    workflowVariables),
+                    workflowVariables,
+                    bodyWritePlan,
+                    clrActivityType is not null && VariableReferenceTypes.DeclaresAccessesUndeclaredVariables(clrActivityType)),
                 bodyReadPlan),
             childSlots: childSlots,
             structure: structure,
@@ -227,7 +230,7 @@ public sealed class ExecutableNodeCompiler(
         if (!ReadVisibility.TryGetValue(projection, out _))
             ReadVisibility.AddOrUpdate(projection, new ScopedVariableResolver(activityStructureService)
                 .Resolve(workflowVariables, rootActivity, ScopedVariablePicker.DefaultMaxDepth, includeIterationScopes: true));
-        return PinScriptReads(nodeId, bindings, projection, scriptBodyInputKey: null, out _);
+        return PinScriptReads(nodeId, bindings, projection, scriptBodyInputKey: null, out _, out _);
     }
 
     private static Dictionary<string, string> WithBodyReadPlan(Dictionary<string, string> metadata, ScriptBodyReadPlan? plan)
@@ -252,9 +255,11 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, RuntimeInputBinding> bindings,
         ActivityTreeProjection projection,
         string? scriptBodyInputKey,
-        out ScriptBodyReadPlan? bodyReadPlan)
+        out ScriptBodyReadPlan? bodyReadPlan,
+        out ScriptVariableReadPlan? bodyWritePlan)
     {
         bodyReadPlan = null;
+        bodyWritePlan = null;
         if (scriptVariableReadResolver is null || !ReadVisibility.TryGetValue(projection, out var visibility))
             return bindings;
 
@@ -268,7 +273,9 @@ public sealed class ExecutableNodeCompiler(
                 binding.Literal?.InlineValue is { ValueKind: JsonValueKind.String } script &&
                 scriptVariableReadResolver.Resolve("JavaScript", script.GetString()!, scopes, scriptBody: true) is { } bodyPlan)
             {
+                EnsureBodyWritesAllowed(nodeId, key, script.GetString()!, bodyPlan);
                 EnsureResolvable(nodeId, key, bodyPlan);
+                bodyWritePlan = bodyPlan;
                 if (bodyPlan.Pinned.Count > 0 || bodyPlan.NeedsFallback)
                     bodyReadPlan = new ScriptBodyReadPlan(key, "JavaScript", bodyPlan.PinnedParameters(), bodyPlan.Fallback());
                 pinned[key] = binding;
@@ -335,6 +342,24 @@ public sealed class ExecutableNodeCompiler(
             ScriptVariableReadDiagnostics.DescribeInputExpressionWrite(write.Name, write.Path));
     }
 
+    /// <summary>
+    /// Spec 1231 FR-020: a script body's literal writes name declared, durable, writable variables. Each refusal names the
+    /// position in the script and the target; a computed or opaque write publishes and is checked when it runs (FR-020a).
+    /// </summary>
+    private static void EnsureBodyWritesAllowed(string nodeId, string inputKey, string script, ScriptVariableReadPlan plan)
+    {
+        foreach (var (write, code) in plan.RefusedLiteralWrites(IsTransient))
+            throw new ArgumentException(ScriptVariableReadDiagnostics.DescribeLiteralWriteRefusal(code, inputKey, nodeId, script, write));
+    }
+
+    private static bool IsTransient(VariableDefinition variable)
+    {
+        var storageProfile = StringComparer.Ordinal.Equals(variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
+            ? null
+            : variable.StorageDriverType;
+        return ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(storageProfile)).Lifecycle == DurableValueLifecycle.None;
+    }
+
     private static void EnsureResolvable(string nodeId, string inputKey, ScriptVariableReadPlan plan)
     {
         if (plan.Unresolved.Count > 0)
@@ -349,10 +374,7 @@ public sealed class ExecutableNodeCompiler(
 
         foreach (var read in plan.Pinned.Where(read => !read.IsIterationValue))
         {
-            var storageProfile = StringComparer.Ordinal.Equals(read.Variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
-                ? null
-                : read.Variable.StorageDriverType;
-            if (ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(storageProfile)).Lifecycle == DurableValueLifecycle.None)
+            if (IsTransient(read.Variable))
                 throw new ArgumentException(
                     $"{ScriptVariableReadDiagnostics.TransientLiteralRead}: Input '{inputKey}' on activity node '{nodeId}' reads transient variable '{read.Name}' by name; " +
                     "its value cannot enter the step's input snapshot. Make the variable durable or stop reading it here.");
@@ -544,7 +566,7 @@ public sealed class ExecutableNodeCompiler(
                 authoredInputs[input.Key].Value),
             StringComparer.Ordinal);
         bindings = new Dictionary<string, RuntimeInputBinding>(
-            PinScriptReads(activity.NodeId, bindings, projection, scriptBodyInputKey: null, out _),
+            PinScriptReads(activity.NodeId, bindings, projection, scriptBodyInputKey: null, out _, out _),
             StringComparer.Ordinal);
         if (intrinsic.Variable is not null)
         {

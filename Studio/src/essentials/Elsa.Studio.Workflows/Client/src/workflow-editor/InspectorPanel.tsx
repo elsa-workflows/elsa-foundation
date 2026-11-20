@@ -245,6 +245,7 @@ export function InspectorPanel({
       visibleVariables={scopedVariableAnalysis.visibleVariables}
       scopeStatus={scopedVariableAnalysis.status}
       scopeRetry={scopedVariableAnalysis.retry}
+      scriptWrites={scopedVariableAnalysis.scriptWrites}
       showHeading={false}
       emptyLabel="This activity has no configurable inputs."
       onChange={onSelectedActivityChange}
@@ -268,6 +269,7 @@ export function InspectorPanel({
       visibleVariables={scopedVariableAnalysis.visibleVariables}
       scopeStatus={scopedVariableAnalysis.status}
       scopeRetry={scopedVariableAnalysis.retry}
+      scriptWrites={scopedVariableAnalysis.scriptWrites}
       showHeading={false}
       emptyLabel="This activity has no configurable inputs."
       activityDataSelection={activityDataSelection}

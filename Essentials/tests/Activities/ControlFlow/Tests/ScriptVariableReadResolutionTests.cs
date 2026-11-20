@@ -149,11 +149,88 @@ public sealed class ScriptVariableReadResolutionTests : IDisposable
         Assert.Equal(["missing"], Resolve("variables.missing", Body(), "script").Unresolved);
     }
 
-    private ScriptVariableReadPlan Resolve(string source, ActivityNode root, string nodeId, params VariableDefinition[] extraWorkflowVariables)
+    [Fact]
+    public void A_body_may_write_what_it_writes_and_the_object_values_that_escape()
+    {
+        // Spec 1231 FR-019: a written variable is in the may-write set whatever its type; an escaped scalar is not, since a
+        // script cannot change it in place; a loop item is frozen, so it is never written.
+        var plan = Resolve(
+            "variables.count = 1; const o = variables.order; const n = variables.name; helper(variables.currentItem);",
+            ForEach(Body()), "script", scriptBody: true,
+            new VariableDefinition("count-key", "count", new TypeReference("Int32"), null, null),
+            new VariableDefinition("name-key", "name", new TypeReference("String"), null, null));
+
+        Assert.Equal(["count", "order"], plan.MayWrite().Select(write => write.Name));
+        Assert.Equal((VariableReference.WorkflowScopeId, "order-key"), (plan.MayWrite()[1].ScopeId, plan.MayWrite()[1].Variable.ReferenceKey));
+        Assert.False(plan.HasComputedWrite);
+    }
+
+    [Fact]
+    public void A_write_to_a_loop_item_is_resolved_to_the_iteration_value()
+    {
+        var plan = Resolve("variables.currentItem.total = 1;", ForEach(Body()), "script", scriptBody: true);
+
+        Assert.Equal("currentItem", Assert.Single(plan.Writes).Name);
+        Assert.True(Assert.Single(plan.Pinned).IsIterationValue);
+        Assert.Empty(plan.MayWrite());
+    }
+
+    [Theory]
+    [InlineData("variables.currentItem.total = 1;")]
+    [InlineData("[variables.currentIndex] = [2];")]
+    [InlineData("for (variables.currentItem of [1]) {}")]
+    public void Publication_refuses_a_literal_write_to_a_loop_item_or_index(string script)
+    {
+        // Spec 1231 FR-020 (T029): the decision publish and draft validation share.
+        var plan = Resolve(script, ForEach(Body()), "script", scriptBody: true);
+
+        var (write, code) = Assert.Single(plan.RefusedLiteralWrites());
+        Assert.Equal(ScriptVariableReadDiagnostics.ReadOnlyLiteralWrite, code);
+        Assert.StartsWith("current", write.Name, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Publication_refuses_a_literal_write_to_a_transient_or_undeclared_variable()
+    {
+        // FR-020: transience is a runtime storage decision, which publish passes in.
+        var plan = Resolve("variables.order = 1; setVariable('missing', 2);", Body(), "script", scriptBody: true);
+
+        var refused = plan.RefusedLiteralWrites(variable => variable.ReferenceKey == "order-key").ToArray();
+
+        Assert.Equal(
+            [("order", ScriptVariableReadDiagnostics.TransientLiteralWrite), ("missing", ScriptVariableReadDiagnostics.UndeclaredLiteralWrite)],
+            refused.Select(item => (item.Write.Name, item.Code)));
+        Assert.Equal([("missing", ScriptVariableReadDiagnostics.UndeclaredLiteralWrite)], plan.RefusedLiteralWrites().Select(item => (item.Write.Name, item.Code)));
+    }
+
+    [Fact]
+    public void A_whole_write_by_destructuring_counts_a_scalar_variable_too()
+    {
+        // FR-019: destructuring and loop heads assign; only an escaped scalar is left out.
+        var plan = Resolve("[variables.count] = [5]; for (variables.name in {}) {}", Body(), "script", scriptBody: true,
+            new VariableDefinition("count-key", "count", new TypeReference("Int32"), null, null),
+            new VariableDefinition("name-key", "name", new TypeReference("String"), null, null));
+
+        Assert.Equal(["count", "name"], plan.MayWrite().Select(write => write.Name));
+    }
+
+    [Fact]
+    public void A_computed_write_without_any_read_is_still_reported()
+    {
+        var plan = Resolve("setVariable(k, 1);", Body(), "script", scriptBody: true);
+
+        Assert.True(plan.HasComputedWrite);
+        Assert.Empty(plan.MayWrite());
+    }
+
+    private ScriptVariableReadPlan Resolve(string source, ActivityNode root, string nodeId, params VariableDefinition[] extraWorkflowVariables) =>
+        Resolve(source, root, nodeId, scriptBody: false, extraWorkflowVariables);
+
+    private ScriptVariableReadPlan Resolve(string source, ActivityNode root, string nodeId, bool scriptBody, params VariableDefinition[] extraWorkflowVariables)
     {
         var visibility = new ScopedVariableResolver(_structures)
             .Resolve([Var("order", "order-key"), .. extraWorkflowVariables], root, 50, includeIterationScopes: true);
-        return _resolver.Resolve("JavaScript", source, visibility.GetVisibleScopes(nodeId))!;
+        return _resolver.Resolve("JavaScript", source, visibility.GetVisibleScopes(nodeId), scriptBody)!;
     }
 
     private static VariableDefinition Var(string name, string key) => new(key, name, new TypeReference("Any"), null, null);
