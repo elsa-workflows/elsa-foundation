@@ -265,9 +265,9 @@ feed and `--remote` at a scratch repository, which then holds the record.
 
 ## Repair
 
-[`.github/workflows/publish-repair.yml`](../../.github/workflows/publish-repair.yml) settles by hand what a publish
-cannot settle itself (spec 150 FR-019): a manually triggered run from `main` over `repair`, which takes a reason and
-exactly one of two modes.
+The publisher's `repair` command settles by hand what a publish cannot settle itself (spec 150 FR-019). It takes a
+reason and exactly one of two modes. Its manual workflow, `publish-repair.yml`, was deleted with the lean CI (20 Nov
+2026; its last run was on 30 Sep), so a repair now runs the command below from a checkout of `main`.
 
 ```bash
 dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- repair \
@@ -320,12 +320,13 @@ forward-only gate, and branch builds that never push. `NuGetFeedTests` pins how 
 it also holds a stray higher version and a prerelease alongside a stable one, refusing when the feed does not hold
 the colliding version, refusing to lower an entry, resetting `last_publish_commit` to a commit on `main` and refusing
 one that is not, and the end-to-end acceptance — a repair followed by a publish that succeeds at one past the feed's
-version. `PublishRepairWorkflowTests` holds `publish-repair.yml` to running from `main` only and joining the
-`publish-state` concurrency group without cancelling a run in progress (FR-020).
+version.
 
 ## Merge245 incident recovery
 
 The manual, default read-only exact20 recovery path for consolidation M4 is documented in
 [the recovery runbook](recovery/README.md). It uses original pinned artifacts and the shared
 `publish-state` workflow lock; installing the mechanism does not authorize publication or restart
-the normal publishers. This incident path does not change the normal computation/repair rules above.
+the normal publishers. This incident path does not change the normal computation/repair rules above. The incident is
+closed: its workflow, `publish-exact20-recovery.yml`, was deleted with the lean CI (20 Nov 2026), and `recover-exact20
+--execute` only runs from that workflow, so only the read-only preflight remains.
