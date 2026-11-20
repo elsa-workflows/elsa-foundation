@@ -137,6 +137,9 @@ input, and one workflow input supplied as `null`.
   and records `VF-NULL-001` like any other `null` (R-6)
 - [ ] T020 [US3] Run time: in `RuntimeActivityInputMaterializer.ValidatePresence`, substitute the type default for
   `ExplicitNull` under the policy and record `VF-NULL-001` on the invocation
+- [ ] T020a [US3] Graphs: in `GraphActivity.CoerceExpressionResult` (graph inner nodes skip the input materializer),
+  apply the host workflow's `DefaultOnNull` from the `ActivityExecutionContext`: substitute the type default and record
+  `VF-NULL-001`, otherwise refuse with `VF-ACT-004` instead of today's uncoded `InvalidOperationException`. Test
 - [ ] T021 [US3] Tests for each US3 acceptance scenario, including a non-nullable `String` that still fails, and
   update `ValueDurabilityPolicyTests.Snapshot_materialization_rejects_nullish_value_for_non_nullable_contract` to
   cover the policy off and on

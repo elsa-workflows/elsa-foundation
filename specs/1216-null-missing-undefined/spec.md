@@ -318,8 +318,8 @@ input left unbound, and one workflow input supplied as `null`. After resume the 
 - **FR-003**: Without the default-on-null policy, `null` for a non-nullable target MUST fail with `VF-ACT-004`: at
   publication for a literal, at run time otherwise.
 - **FR-004**: The Elsa 3 converter MUST emit a typed literal `null` for a null `SetVariable.Value` or
-  `SetOutput.OutputValue` whose target is nullable, and MUST keep refusing when the target is non-nullable and no
-  default-on-null policy is recorded.
+  `SetOutput.OutputValue` whose target is nullable, and MUST keep refusing when the target is non-nullable and either
+  no default-on-null policy is recorded or the target type has no type default (FR-001b).
 
 **Omitted members (D-10)**
 - **FR-005**: Requiredness and nullability MUST be separate properties of an activity input and of a workflow input:

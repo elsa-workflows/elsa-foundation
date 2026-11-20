@@ -36,7 +36,7 @@ reason codes of `WorkflowExecutableInputValidationReasonCodes` (`runtime.input.*
 | `VF-UNDEF-003` | warning | An `undefined` array element or sparse hole became a `null` placeholder (either policy) | node, input or variable, JSON path | new |
 | `VF-NUM-001` | warning | `NaN` or `±Infinity` the script computed became `null` (either policy) | node, input or variable, JSON path | new |
 | `VF-READ-001` | warning | A computed variable name matched nothing; read marked absent (built by S-4) | node, variable name | yes |
-| `ELS3-ACTIVITY-NULL-UNCONVERTIBLE` | error | Converter: null `SetVariable` / `SetOutput` value for a non-nullable target with no recorded `DefaultOnNull` (narrowed from spec 267) | activity, member | yes |
+| `ELS3-ACTIVITY-NULL-UNCONVERTIBLE` | error | Converter: null `SetVariable` / `SetOutput` value for a non-nullable target with no recorded `DefaultOnNull`, or whose type has no type default (narrowed from spec 267) | activity, member | yes |
 
 Run-time warnings go through S-8's `IExecutionWarningSink` (`ExecutionWarning(Code, Message, Severity, Details)`), so
 Studio shows them with the instance's other diagnostics. Under `UndefinedAsNull` an `undefined` property kept as `null`
