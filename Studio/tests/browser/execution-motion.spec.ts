@@ -98,7 +98,9 @@ for (const host of ["editor", "instance"]) {
       }).observe(document.body, { childList: true, subtree: true });
     });
     await page.getByRole("button", { name: "Disconnect fixture reads", exact: true }).click();
-    await expect(page.getByText(/Execution observation disconnected|Fixture connection dropped/).first()).toBeVisible();
+    if (host === "editor") await expect(page.getByText(/Execution observation disconnected|Fixture connection dropped/).first()).toBeVisible();
+    // The run instance workbench no longer shows a live observation notice (#4903); wait for a dropped read instead.
+    else await expect.poll(() => page.evaluate(() => (window as Window & { droppedFixtureReads?: number }).droppedFixtureReads ?? 0)).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
     await page.getByRole("button", { name: "Reconnect fixture reads", exact: true }).click();
     await expect(canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ })).toHaveAccessibleName(/Run state: Completed/);

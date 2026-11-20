@@ -13,19 +13,26 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     }
     const actions = host === "instance" ? page.getByRole("group", { name: "Run workspace actions", exact: true })
       : page.getByRole("group", { name: "Execution controls", exact: true });
-    const toggle = actions.getByRole("button", { name: "Pause live updates", exact: true });
-    await expect(toggle).toBeEnabled();
     const canvas = host === "instance" ? page.getByRole("region", { name: "Workflow run canvas", exact: true }) : page.getByLabel("Workflow canvas", { exact: true });
     await expect(canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ })).toHaveAccessibleName(/Run state: Completed/);
-    await toggle.press("Enter");
-    const resume = actions.getByRole("button", { name: "Resume live updates", exact: true });
-    await expect(resume).toBeFocused();
-    await expect(actions.getByText(/^Live updates paused/)).toBeVisible();
     const refresh = actions.getByRole("button", { name: "Refresh execution", exact: true });
-    await refresh.press("Enter");
-    await expect(resume).toHaveAttribute("aria-pressed", "false");
-    await resume.press("Enter");
-    await expect(toggle).toBeFocused();
+    if (host === "editor") {
+      const toggle = actions.getByRole("button", { name: "Pause live updates", exact: true });
+      await expect(toggle).toBeEnabled();
+      await toggle.press("Enter");
+      const resume = actions.getByRole("button", { name: "Resume live updates", exact: true });
+      await expect(resume).toBeFocused();
+      await expect(actions.getByText(/^Live updates paused/)).toBeVisible();
+      await refresh.press("Enter");
+      await expect(resume).toHaveAttribute("aria-pressed", "false");
+      await resume.press("Enter");
+      await expect(toggle).toBeFocused();
+    } else {
+      // #4903 replaced the run instance pause/resume controls with a single Refresh execution action.
+      await expect(actions.getByRole("button", { name: "Pause live updates", exact: true })).toHaveCount(0);
+      await refresh.press("Enter");
+      await expect(refresh).toBeEnabled();
+    }
     if (host === "instance") await expect(actions.getByRole("button", { name: "Open definition", exact: true })).toBeVisible();
     else {
       await expect(page.getByRole("region", { name: "Test run summary", exact: true }).getByRole("button", { name: "Open run", exact: true })).toBeVisible();
@@ -132,7 +139,7 @@ test.describe("touch targets", () => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto("/?mode=activity-duplicate-editor&host=instance&run-canvas=unique&toolbar-explain");
     const actions = page.getByRole("group", { name: "Run workspace actions", exact: true });
-    for (const label of ["Runs", "Open definition", "Refresh execution", "Pause live updates", "More run actions"]) {
+    for (const label of ["Runs", "Open definition", "Refresh execution", "More run actions"]) {
       const button = actions.getByRole("button", { name: label, exact: true });
       await expect(button).toBeEnabled();
       const box = (await button.boundingBox())!;
