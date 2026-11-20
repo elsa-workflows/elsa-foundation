@@ -1,6 +1,6 @@
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Models;
-using Elsa.Expressions.JavaScript.Core.Services;
+using Elsa.Expressions.JavaScript.Jint.Services;
 using Xunit;
 
 namespace Elsa.Expressions.JavaScript.Jint.Tests;

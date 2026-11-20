@@ -70,7 +70,7 @@ public sealed class ScriptValueAdapterTests
     public async Task Computing_with_a_lossy_value_warns_once_without_its_value_and_is_not_refused()
     {
         var logs = new List<string>();
-        var sink = new ExecutionWarningCollector();
+        var sink = new RecordingWarningSink();
 
         var result = await ExpressionAsync("variables.order.price * 2", logs, sink: sink);
 
@@ -89,7 +89,7 @@ public sealed class ScriptValueAdapterTests
     [Fact]
     public async Task Passing_a_value_with_a_lossy_number_through_unchanged_does_not_warn()
     {
-        var sink = new ExecutionWarningCollector();
+        var sink = new RecordingWarningSink();
 
         await ExpressionAsync("({ wrapped: variables.order })", sink: sink);
 
@@ -99,7 +99,7 @@ public sealed class ScriptValueAdapterTests
     [Fact]
     public async Task A_script_reports_its_warning_to_the_step()
     {
-        var sink = new ExecutionWarningCollector();
+        var sink = new RecordingWarningSink();
         await using var provider = Build(null);
         await using var scope = provider.CreateAsyncScope();
         var arguments = JsonSerializer.Deserialize<JsonElement>($$"""{"order":{{Order}}}""");
@@ -197,7 +197,7 @@ public sealed class ScriptValueAdapterTests
         Assert.Equal(expected, (await ExpressionAsync(expression, args: true)).GetString());
     }
 
-    private static async Task<JsonElement> ExpressionAsync(string source, List<string>? logs = null, bool args = false, ExecutionWarningCollector? sink = null)
+    private static async Task<JsonElement> ExpressionAsync(string source, List<string>? logs = null, bool args = false, RecordingWarningSink? sink = null)
     {
         await using var provider = Build(logs);
         await using var scope = provider.CreateAsyncScope();

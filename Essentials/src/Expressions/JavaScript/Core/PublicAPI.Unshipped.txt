@@ -195,8 +195,6 @@ Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Losses.init -> void
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Equals(Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite? other) -> bool
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite!
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Deconstruct(out System.Text.Json.JsonElement? Value, out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>! Losses) -> void
-Elsa.Expressions.JavaScript.Core.Services.RefusingPrecisionPolicy
-Elsa.Expressions.JavaScript.Core.Services.RefusingPrecisionPolicy.RefusingPrecisionPolicy() -> void
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Key.get -> string!
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange
 Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException
@@ -210,7 +208,6 @@ static Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.operator !=(Els
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.ChangedPaths.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.ChangedPaths.init -> void
 static Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.operator ==(Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange? left, Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange? right) -> bool
-const Elsa.Expressions.JavaScript.Core.Services.RefusingPrecisionPolicy.MaxSafeInteger = "9007199254740991" -> string!
 override Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.GetHashCode() -> int
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Losses.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>!
 override Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Equals(object? obj) -> bool
@@ -255,7 +252,6 @@ const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.Cha
 Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.Path.get -> string!
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.JavaScriptPrecisionDiagnostic(string! Path, string! Stored, string! Written, string! Reason, string! Remedy, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDiagnosticSeverity Severity) -> void
 Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.Code.get -> string!
-Elsa.Expressions.JavaScript.Core.Services.RefusingPrecisionPolicy.Decide(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext! context) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision!
 Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.Variable.get -> string!
 static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.Allow(System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!>? diagnostics = null) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision!
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.ScriptValueWrite(System.Text.Json.JsonElement? Value, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>! Losses) -> void
@@ -269,8 +265,6 @@ Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptPrecisionException.Target.
 Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptPrecisionException.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!>!
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.ScriptValueChange(string! Key, Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind Kind, System.Text.Json.JsonElement? Value, System.Collections.Generic.IReadOnlyList<string!>! ChangedPaths, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>! Losses) -> void
 static Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Unchanged(string! key) -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange!
-static Elsa.Expressions.JavaScript.Core.Services.RefusingPrecisionPolicy.Diagnose(Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss! loss) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!
-static Elsa.Expressions.JavaScript.Core.Services.RefusingPrecisionPolicy.Reason(Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber! number) -> string!
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Value.get -> System.Text.Json.JsonElement?
 Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Value.init -> void
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
