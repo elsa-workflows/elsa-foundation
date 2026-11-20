@@ -102,6 +102,19 @@ public sealed class DurableHost : IScopeHost, IScopeCount
         finally { _turn.Release(); }
     }
 
+    /// <summary>
+    /// K1b: one pass of the node's worker under the host's turn, whether or not a scope is active. A Worker whose partitions
+    /// are all pending still passes, so that the host's gate reopens and the last answer's retake runs. Null for a host of a
+    /// worker per scope.
+    /// </summary>
+    public async ValueTask<TimeSpan?> RunNodeAsync(CancellationToken cancellationToken = default)
+    {
+        if (_node is not { } node) return null;
+        await _turn.WaitAsync(CancellationToken.None);
+        try { return await node.RunAsync(cancellationToken); }
+        finally { _turn.Release(); }
+    }
+
     private async ValueTask<TimeSpan?> PassAsync(NodeScope scope, CancellationToken cancellationToken)
     {
         var node = _node!;
