@@ -51,8 +51,10 @@ internal sealed class JintJavaScriptScriptEvaluator(
             : null;
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
 
+        // Parsed before the count starts: a parse (on a cache miss) is not the script's work.
+        var script = PreparedJavaScript.Script(request.Source);
         EvaluationLimits.Start(engine);
-        var returned = engine.Evaluate(PreparedJavaScript.Script(request.Source));
+        var returned = engine.Evaluate(script);
         // Writing the result and the variables runs the script's own toJSON and getters: a phase of its own, as before.
         EvaluationLimits.Start(engine);
 
