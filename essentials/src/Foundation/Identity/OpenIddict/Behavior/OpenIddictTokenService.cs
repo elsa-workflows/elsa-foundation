@@ -44,8 +44,7 @@ public sealed class OpenIddictTokenService(
     IOptions<OpenIddictIdentityOptions> options,
     IUserTokenEligibility userEligibility,
     IAuthenticationSessionStore? sessions = null,
-    ICanonicalUserSignInService? canonical = null,
-    IOpenIddictTokenStoreInfo? storeInfo = null) : ITokenService
+    ICanonicalUserSignInService? canonical = null) : ITokenService
 {
     public async ValueTask<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default)
     {
@@ -175,12 +174,6 @@ public sealed class OpenIddictTokenService(
 
     private async ValueTask RevokeByKeyAsync(string subjectKey, CancellationToken cancellationToken)
     {
-        // The in-memory store (Workbench development/demo mode) cannot ExecuteUpdate, so bulk revocation fails.
-        // The store is discarded when the host stops, so skipping revocation is safe: no token survives shutdown.
-        // Skipping also avoids O(n) log spam when the store has accumulated tokens across many login sessions.
-        if (IsInMemoryStore())
-            return;
-
         // Entry by entry, not RevokeBySubjectAsync: that bulk path needs ExecuteUpdate, which the in-memory store
         // (Workbench development/demo mode) refuses. Materialized first so no reader stays open across the updates.
         var entries = new List<object>();
@@ -207,12 +200,6 @@ public sealed class OpenIddictTokenService(
         if (unrevoked > 0)
             throw new InvalidOperationException($"{unrevoked} of the subject's live tokens could not be revoked.");
     }
-
-    /// <summary>
-    /// Whether the OpenIddict store is in-memory and discarded on shutdown. The persistence adapter answers through
-    /// <see cref="IOpenIddictTokenStoreInfo"/>; without one the store is treated as durable.
-    /// </summary>
-    private bool IsInMemoryStore() => storeInfo?.IsInMemory == true;
 
     private string CreateAccessTokenJwt(TokenIssueRequest request, string subjectKey, string entryId, DateTimeOffset now, DateTimeOffset expiresAt)
     {
