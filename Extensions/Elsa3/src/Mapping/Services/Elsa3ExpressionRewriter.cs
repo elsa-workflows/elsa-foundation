@@ -695,39 +695,95 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// </summary>
         private readonly Dictionary<HashSet<string>, HashSet<string>> _dateAliases = new(ReferenceEqualityComparer.Instance);
 
-        /// <summary>The names the script assigns anywhere after declaring them (an assignment, an update, a for-in/of head).</summary>
-        private readonly HashSet<string> _reassigned = new(StringComparer.Ordinal);
+        /// <summary>
+        /// Per declaring scope, the names the script assigns again after declaring them: an assignment, an update, a
+        /// second initialized declaration of the same var (var d = new Date(); ... var d = 'x'), or a var loop head.
+        /// Keyed by the same scope sets the visit uses, so a name in another function or block is another variable.
+        /// </summary>
+        private readonly Dictionary<HashSet<string>, HashSet<string>> _reassigned = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>Each scope node's declared names, computed once, so the pre-scan and the visit share the same sets.</summary>
+        private readonly Dictionary<Node, HashSet<string>?> _scopeCache = new(ReferenceEqualityComparer.Instance);
+
+        private HashSet<string>? CachedScope(Node node)
+        {
+            if (!_scopeCache.TryGetValue(node, out var scope))
+                _scopeCache[node] = scope = ScopeOf(node);
+            return scope;
+        }
 
         public void CollectReassignedNames(Node root)
         {
-            var declared = new HashSet<string>(StringComparer.Ordinal);
+            var scopes = new List<HashSet<string>>();
+            var initialized = new Dictionary<HashSet<string>, HashSet<string>>(ReferenceEqualityComparer.Instance);
             Collect(root);
 
             void Collect(Node node)
             {
-                _reassigned.UnionWith(WrittenNames(node));
+                var scope = CachedScope(node);
+                if (scope is not null)
+                    scopes.Add(scope);
+                foreach (var name in WrittenNames(node))
+                    Mark(name);
                 switch (node)
                 {
-                    // A declaring loop head assigns on every iteration.
-                    case ForInStatement { Left: VariableDeclaration loopHead }:
-                        foreach (var head in loopHead.Declarations)
-                            CollectBindings(head.Id, _reassigned);
+                    // A var loop head assigns the function's var on every iteration.
+                    case ForInStatement { Left: VariableDeclaration { Kind: VariableDeclarationKind.Var } loopHead }:
+                        MarkBindings(loopHead);
                         break;
-                    case ForOfStatement { Left: VariableDeclaration loopHead }:
-                        foreach (var head in loopHead.Declarations)
-                            CollectBindings(head.Id, _reassigned);
+                    case ForOfStatement { Left: VariableDeclaration { Kind: VariableDeclarationKind.Var } loopHead }:
+                        MarkBindings(loopHead);
                         break;
-                    // A name declared twice (var d = new Date(); ... var d = 'x') is assigned again by the second declaration.
-                    case VariableDeclarator declarator:
+                    // A second initialized declaration of the same variable assigns it again.
+                    case VariableDeclarator { Init: not null } declarator:
                         var names = new HashSet<string>(StringComparer.Ordinal);
                         CollectBindings(declarator.Id, names);
-                        foreach (var name in names.Where(name => !declared.Add(name)))
-                            _reassigned.Add(name);
+                        foreach (var name in names)
+                        {
+                            if (Resolve(name) is not { } declaring)
+                                continue;
+                            if (!initialized.TryGetValue(declaring, out var seen))
+                                initialized[declaring] = seen = new HashSet<string>(StringComparer.Ordinal);
+                            if (!seen.Add(name))
+                                Mark(name);
+                        }
+
                         break;
                 }
 
                 foreach (var child in node.ChildNodes)
                     Collect(child);
+                if (scope is not null)
+                    scopes.RemoveAt(scopes.Count - 1);
+            }
+
+            HashSet<string>? Resolve(string name)
+            {
+                for (var index = scopes.Count - 1; index >= 0; index--)
+                {
+                    if (scopes[index].Contains(name))
+                        return scopes[index];
+                }
+
+                return null;
+            }
+
+            void Mark(string name)
+            {
+                if (Resolve(name) is not { } declaring)
+                    return;
+                if (!_reassigned.TryGetValue(declaring, out var names))
+                    _reassigned[declaring] = names = new HashSet<string>(StringComparer.Ordinal);
+                names.Add(name);
+            }
+
+            void MarkBindings(VariableDeclaration declaration)
+            {
+                var names = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var declarator in declaration.Declarations)
+                    CollectBindings(declarator.Id, names);
+                foreach (var name in names)
+                    Mark(name);
             }
         }
 
@@ -900,7 +956,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
         public void Visit(Node node)
         {
-            var scope = ScopeOf(node);
+            var scope = CachedScope(node);
             if (scope is not null)
             {
                 _scopes.Add(scope);
@@ -1400,7 +1456,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     // An alias of a known date that is never assigned again is a known date (FR-022). Elsa 3 scripts mostly
                     // declare with var, so var counts as well as const and let.
                     if (declarator.Id is Identifier alias && declarator.Init is { } init && IsKnownDate(init) &&
-                        !_reassigned.Contains(alias.Name) && DeclaringScope(alias.Name) is { } scope)
+                        DeclaringScope(alias.Name) is { } scope &&
+                        !(_reassigned.TryGetValue(scope, out var reassigned) && reassigned.Contains(alias.Name)))
                     {
                         if (!_dateAliases.TryGetValue(scope, out var aliases))
                             _dateAliases[scope] = aliases = new HashSet<string>(StringComparer.Ordinal);

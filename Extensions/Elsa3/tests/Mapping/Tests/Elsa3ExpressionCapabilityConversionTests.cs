@@ -44,6 +44,8 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("(function () { var d = new Date(); var stamp = d.toISOString(); var d = 'done'; return d + '!' + stamp; })()")]
     [InlineData("(function () { var d = new Date(); var t = d.getTime(); for (var d of ['a']) {} return d.toString() + t; })()")]
     [InlineData("(function () { var d = 'x'; class C { static { var d = new Date(); } } return d + '!'; })()")]
+    [InlineData("(function () { function a() { var d = new Date(); return new Date(d).toISOString(); } function b() { var d = 1; return d; } return a() + b(); })()")]
+    [InlineData("(function () { var d = new Date(); var d; return new Date(d).toISOString(); })()")]
     [InlineData("new Date(5000) - new Date(1000)")]
     [InlineData("Math.random()")]
     [InlineData("newGuid()")]
@@ -223,6 +225,15 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     }
 
     [Fact]
+    public async Task A_var_in_a_class_static_block_is_not_declared_outside_it()
+    {
+        var result = await ConvertAsync("(function () { class C { static { var e = 1; } } e = 2; return e; })()");
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape &&
+                                                          diagnostic.Message.Contains("'e'", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Under_source_time_zone_a_spread_construction_is_refused_with_field_guidance()
     {
         var result = await ConvertAsync("new Date(...[2026, 9, 28]).getUTCHours()", Elsa3DateInterpretation.SourceTimeZone, "Europe/Amsterdam");
@@ -255,6 +266,8 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("String(new Date())")]
     [InlineData("var d = new Date(); d.toString()")]
     [InlineData("(function () { const d = new Date(); function inner() { return 'at ' + d; } return inner(); })()")]
+    [InlineData("(function () { function a() { var d = new Date(); return 'at ' + d; } function b() { var d = 1; return d; } return a() + b(); })()")]
+    [InlineData("(function () { { let d = new Date(); var s = 'at ' + d; } { let d = 2; } return s; })()")]
     [InlineData("(function () { var d = new Date(0); var s = 'x'; s += d; return s; })()")]
     public async Task Local_text_is_refused_under_source_time_zone_and_warned_under_assume_utc(string expression)
     {
