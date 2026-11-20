@@ -199,8 +199,10 @@ public sealed partial class WorkflowExecutableCompilerTests
                 source.Contains("variables[", StringComparison.Ordinal))
             {
                 Writes = Regex.Matches(source, @"(variables\.([A-Za-z_]\w*)[\w.]*)\s*=[^=]")
-                    .Select(match => new ScriptVariableWrite(match.Groups[2].Value, match.Groups[1].Value))
-                    .ToArray()
+                    .Select(match => new ScriptVariableWrite(match.Groups[2].Value, match.Groups[1].Value) { Start = match.Index })
+                    .ToArray(),
+                Escapes = Regex.Matches(source, @"=\s*variables\.([A-Za-z_]\w*)\s*;").Select(match => match.Groups[1].Value).ToArray(),
+                HasComputedWrite = Regex.IsMatch(source, @"variables\[[^\]]*\]\s*=[^=]")
             };
     }
 

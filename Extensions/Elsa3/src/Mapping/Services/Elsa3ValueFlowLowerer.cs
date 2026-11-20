@@ -520,7 +520,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             new TypeReference(TypeAliasConvention.AnyAlias),
             ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient),
             Elsa3JavaScriptMode.Script,
-            new Elsa3ScriptOutcomeContext(possibleOutcomes is null ? [] : PossibleOutcomeItems(property.Activity.AdditionalProperties[possibleOutcomes])));
+            new Elsa3ScriptOutcomeContext(possibleOutcomes is null ? [] : PossibleOutcomeItems(property.Activity.AdditionalProperties[possibleOutcomes])),
+            scriptWritesVariables: !accessors.IsReusable);
         if (!rewrite.Succeeded)
         {
             foreach (var issue in rewrite.Issues)

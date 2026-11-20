@@ -128,6 +128,17 @@ public sealed class StepVariableSessionUnitTests
         Assert.NotNull(session.PendingFault);
     }
 
+    [Fact]
+    public void The_engine_surface_refuses_a_write_to_a_transient_variable_on_the_host_side()
+    {
+        // Spec 1231 FR-020a (T029a): a computed script write that resolves to a transient variable faults the step.
+        var session = Session(Root(("var-handle", ValueEnvelope.Transient(new ValueTypeDescriptor("Object"), new object()))), engineConsumer: true);
+
+        Assert.True(session.TryResolve("handle", out var target));
+        Assert.Throws<InvalidOperationException>(() => session.WriteJson(target, null));
+        Assert.NotNull(session.PendingFault);
+    }
+
     // FR-025, FR-026: the marker (also inherited) and the engine-consumer interface are one pinned fact, so the engine
     // surface is never a way around publication, the concurrent-write rule or background eligibility.
     [Theory]

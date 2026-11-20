@@ -12,7 +12,9 @@ namespace Elsa.Workflows.Publishing.Services;
 /// Pins a node's may-write set onto the published node (spec 1231 FR-019, FR-024, FR-026): the variables its writable
 /// <c>VariableReference&lt;T&gt;</c> inputs are bound to, as <see cref="RuntimeMetadataKeys.MayWriteVariables"/>, and
 /// <see cref="RuntimeMetadataKeys.MayWriteEveryVisibleVariable"/> for an activity type marked
-/// <c>[AccessesUndeclaredVariables]</c>. Inspection and Studio read them from the node.
+/// <c>[AccessesUndeclaredVariables]</c>. Inspection and Studio read them from the node. A script body adds the variables
+/// it may write (it writes them literally, or lets an object value escape), and a computed or opaque write marks it as
+/// possibly writing every visible variable (FR-020a).
 /// </summary>
 internal static class StepVariableWriteMetadata
 {
@@ -21,7 +23,8 @@ internal static class StepVariableWriteMetadata
         IReadOnlyCollection<InputDefinition> definitions,
         IReadOnlyDictionary<string, RuntimeInputBinding> bindings,
         RuntimeActivityContract? contract,
-        IReadOnlyCollection<VariableDefinition> workflowVariables)
+        IReadOnlyCollection<VariableDefinition> workflowVariables,
+        ScriptVariableReadPlan? scriptBody = null)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         var targets = new List<MayWriteTarget>();
@@ -39,9 +42,15 @@ internal static class StepVariableWriteMetadata
                 targets.Add(new MayWriteTarget(scopeId, key, name));
         }
 
+        foreach (var write in scriptBody?.MayWrite() ?? [])
+        {
+            if (!targets.Any(target => target.ScopeId == write.ScopeId && target.VariableKey == write.Variable.ReferenceKey))
+                targets.Add(new MayWriteTarget(write.ScopeId, write.Variable.ReferenceKey, write.Name));
+        }
+
         if (targets.Count > 0)
             metadata[RuntimeMetadataKeys.MayWriteVariables] = JsonSerializer.Serialize(targets, SerializerOptions);
-        if (contract?.AccessesUndeclaredVariables == true)
+        if (contract?.AccessesUndeclaredVariables == true || scriptBody?.HasComputedWrite == true)
             metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable] = "true";
         return metadata;
     }

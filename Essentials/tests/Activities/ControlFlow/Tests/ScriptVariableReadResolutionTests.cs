@@ -149,11 +149,49 @@ public sealed class ScriptVariableReadResolutionTests : IDisposable
         Assert.Equal(["missing"], Resolve("variables.missing", Body(), "script").Unresolved);
     }
 
-    private ScriptVariableReadPlan Resolve(string source, ActivityNode root, string nodeId, params VariableDefinition[] extraWorkflowVariables)
+    [Fact]
+    public void A_body_may_write_what_it_writes_and_the_object_values_that_escape()
+    {
+        // Spec 1231 FR-019: a written variable is in the may-write set whatever its type; an escaped scalar is not, since a
+        // script cannot change it in place; a loop item is frozen, so it is never written.
+        var plan = Resolve(
+            "variables.count = 1; const o = variables.order; const n = variables.name; helper(variables.currentItem);",
+            ForEach(Body()), "script", scriptBody: true,
+            new VariableDefinition("count-key", "count", new TypeReference("Int32"), null, null),
+            new VariableDefinition("name-key", "name", new TypeReference("String"), null, null));
+
+        Assert.Equal(["count", "order"], plan.MayWrite().Select(write => write.Name));
+        Assert.Equal((VariableReference.WorkflowScopeId, "order-key"), (plan.MayWrite()[1].ScopeId, plan.MayWrite()[1].Variable.ReferenceKey));
+        Assert.False(plan.HasComputedWrite);
+    }
+
+    [Fact]
+    public void A_write_to_a_loop_item_is_resolved_to_the_iteration_value()
+    {
+        var plan = Resolve("variables.currentItem.total = 1;", ForEach(Body()), "script", scriptBody: true);
+
+        Assert.Equal("currentItem", Assert.Single(plan.Writes).Name);
+        Assert.True(Assert.Single(plan.Pinned).IsIterationValue);
+        Assert.Empty(plan.MayWrite());
+    }
+
+    [Fact]
+    public void A_computed_write_without_any_read_is_still_reported()
+    {
+        var plan = Resolve("setVariable(k, 1);", Body(), "script", scriptBody: true);
+
+        Assert.True(plan.HasComputedWrite);
+        Assert.Empty(plan.MayWrite());
+    }
+
+    private ScriptVariableReadPlan Resolve(string source, ActivityNode root, string nodeId, params VariableDefinition[] extraWorkflowVariables) =>
+        Resolve(source, root, nodeId, scriptBody: false, extraWorkflowVariables);
+
+    private ScriptVariableReadPlan Resolve(string source, ActivityNode root, string nodeId, bool scriptBody, params VariableDefinition[] extraWorkflowVariables)
     {
         var visibility = new ScopedVariableResolver(_structures)
             .Resolve([Var("order", "order-key"), .. extraWorkflowVariables], root, 50, includeIterationScopes: true);
-        return _resolver.Resolve("JavaScript", source, visibility.GetVisibleScopes(nodeId))!;
+        return _resolver.Resolve("JavaScript", source, visibility.GetVisibleScopes(nodeId), scriptBody)!;
     }
 
     private static VariableDefinition Var(string name, string key) => new(key, name, new TypeReference("Any"), null, null);

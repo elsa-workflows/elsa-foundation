@@ -24,6 +24,7 @@ public sealed class StepVariableWriteValidationTests
     private const string WriterVersion = "test.writer@1";
     private const string ReaderVersion = "test.reader@1";
     private const string MarkedVersion = "test.marked@1";
+    private const string ScriptVersion = "test.script@1";
 
     [Fact]
     public async Task An_unbound_variable_reference_is_refused_naming_the_input()
@@ -143,6 +144,57 @@ public sealed class StepVariableWriteValidationTests
         Assert.Contains("the capture wins", warning.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task A_script_that_writes_a_variable_literally_is_a_writer_of_that_variable()
+    {
+        // Spec 1231 FR-019, FR-028: the may-write set of a script body joins the concurrent-write rule.
+        var errors = await Validate(Sequence("root", Parallel(
+            ("left", Script("script", "variables.total = variables.total + 1;")),
+            ("right", Capture("capture", "total")))));
+
+        var warning = Assert.Single(errors, item => item.Type == "ValueFlow/ConcurrentWrite");
+        Assert.Equal("$workflow/variables/total", warning.Path);
+        Assert.Contains("'script', 'capture'", warning.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_script_that_only_reads_or_lets_a_scalar_escape_is_not_a_writer()
+    {
+        var errors = await Validate(Sequence("root", Parallel(
+            ("left", Script("script", "const t = variables.total; return t + variables.balance;")),
+            ("right", Capture("capture", "total")))));
+
+        Assert.DoesNotContain(errors, item => item.Type == "ValueFlow/ConcurrentWrite");
+    }
+
+    [Theory]
+    [InlineData("variables[name] = 1;")]
+    [InlineData("setVariable(name, 1);")]
+    [InlineData("const v = variables; v.total = 1;")]
+    public async Task A_script_with_a_computed_or_opaque_write_counts_as_writing_every_visible_variable(string script)
+    {
+        // FR-020a, User Story 1 / T029a: counted against every visible variable.
+        var errors = await Validate(Sequence("root", Parallel(
+            ("left", Script("script", script)),
+            ("right", Capture("capture", "balance")))));
+
+        var warning = Assert.Single(errors, item => item.Type == "ValueFlow/ConcurrentWrite");
+        Assert.Contains("'script', 'capture'", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("may write any visible variable", warning.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_script_that_writes_a_variable_it_also_captures_into_warns_that_the_capture_wins()
+    {
+        var node = Script("script", "setVariable('total', 2); return 1;") with { Outputs = [VariableOutput("result", "total")] };
+
+        var warning = Assert.Single(await Validate(Sequence("root", node)), item => item.Type == "ValueFlow/StepWriteOverlapsCapture");
+        Assert.Equal("script/outputs/result", warning.Path);
+    }
+
+    private static ActivityNode Script(string nodeId, string script) =>
+        new(nodeId, ScriptVersion, [new ArgumentState("script", new ArgumentValue(script, "Literal"), null, null, null, null)], []);
+
     private static ActivityNode Writer(string nodeId, string variableKey, string scopeId = VariableReference.WorkflowScopeId) =>
         Reference(nodeId, WriterVersion, "Balance", variableKey, scopeId);
 
@@ -168,8 +220,13 @@ public sealed class StepVariableWriteValidationTests
             [
                 new ActivityDesignFacet(VariableAccessDesignFacet.Kind, VariableAccessDesignFacet.SchemaVersion,
                     JsonSerializer.SerializeToElement(new Dictionary<string, bool> { [VariableAccessDesignFacet.AccessesUndeclaredVariablesMember] = true }))
+            ])
+            .Add(ScriptVersion, designFacets:
+            [
+                new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new { ports = Array.Empty<object>(), scriptInput = "script" }))
             ]);
-        using var services = ActivityDataSelectionTestSupport.Provider(catalog);
+        using var services = ActivityDataSelectionTestSupport.Provider(catalog,
+            configure: collection => new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(collection));
         // Resolved as the feature registers it, so these tests also prove that DI hands the validator the activity
         // catalog: without it every step-write check is skipped (FR-024, FR-028).
         using var scope = services.CreateScope();
