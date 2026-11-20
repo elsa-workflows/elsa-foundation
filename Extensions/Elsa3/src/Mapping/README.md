@@ -215,10 +215,21 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
 ## Migrating Elsa 3 JavaScript
 
 Elsa 4 evaluates JavaScript in a sandbox. Each expression sees the parameters it declares (`args`) and the workflow
-variables it reads by name (`variables`, spec 1222), and the sandbox has no clock, no randomness and no host functions. The converter therefore converts an Elsa 3 construct only
-when Elsa 4 gives the same result. Anything else refuses the whole definition with a stable code. The guidance in each
-refusal says what to change in the Elsa 3 workflow so that it converts. Specs 236 and 247 hold the details (spec 247:
-`specs/247-elsa3-js-host-functions/contracts/javascript-conversion.md`).
+variables it reads by name (`variables`, spec 1222). It has the native `Date`, `Temporal`, `Intl` and `Math` (including
+`Math.random`) on the host clock, in UTC with the invariant culture, and the built-in functions of spec 1223; its values
+are JSON, so no live .NET object reaches a script. The converter therefore converts an Elsa 3 construct only when Elsa 4
+gives the same result. Anything else refuses the whole definition with a stable code. The guidance in each refusal says
+what to change in the Elsa 3 workflow so that it converts. Specs 236, 247 and 1223 hold the details (spec 247:
+`specs/247-elsa3-js-host-functions/contracts/javascript-conversion.md`; spec 1223:
+`specs/1223-expression-capabilities/contracts/conversion-and-diagnostics.md`).
+
+**Date interpretation.** Elsa 3 evaluated script dates in its server's time zone and culture. The `Elsa3Mapping` feature's
+`DateInterpretation` setting says how the converter reads Elsa 3 local time (spec 1223 FR-034): `Refuse` (the default)
+refuses zone-dependent date usage with guidance; `AssumeUtc` converts it as UTC with the warning
+`ELS3-BEHAVIOUR-DATE-ASSUMED-UTC` on each affected expression; `SourceTimeZone`, with `SourceTimeZone` set to the Elsa 3
+server's IANA zone (for example `Europe/Amsterdam`), rewrites each zone-dependent call into explicit `Temporal` code in
+that zone through one helper written into the converted expression. Every expression still evaluates in UTC. A
+workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATION`.
 
 ### What converts
 
@@ -231,6 +242,14 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 | `get{Name}()` generated for a variable (`get` + the name with its first letter upper-cased) or a workflow input (`get` + the name as written) | The same read as `getVariable`/`getInput`. Elsa 3's precedence applies: an activity output accessor `get{Output}From{Activity}()` shadows both and is refused; an input shadows a variable with the identical accessor name. In a reusable workflow, Elsa 3 declared inputs as variables, so only the variable-style name exists |
 | `getCorrelationId()`, `getWorkflowInstanceId()` | A `WorkflowInstance` parameter that reads the running instance's correlation ID (null when it has none) or instance ID |
 | `isNullOrEmpty(x)`, `isNullOrWhiteSpace(x)` | An inline function with .NET's semantics, including .NET's whitespace characters |
+| `newGuid()`, `newGuidString()`, `getGuidString()`, `newShortGuid()`, `getShortGuid()`, `parseGuid(s)` | The Elsa 4 built-ins of the same name, which return Elsa 3's text as a string: the canonical 36-character form, or Elsa 3's short form (Base64 of the GUID's bytes without `/`, `+`, `=`). A GUID used as text (`'id-' + newGuid()`, `newGuid().toString()`) gives the same text |
+| `stringToBase64(s)`, `stringFromBase64(s)` | The Elsa 4 built-ins of the same name: UTF-8 text and standard Base64, as in Elsa 3 |
+| `toJson(x)` | `JSON.stringify(x)`, with the warning `ELS3-BEHAVIOUR-TOJSON-STRINGIFY`: Elsa 3 escaped `<`, `>`, `&`, `'`, `+`, `` ` `` and characters outside the Basic Multilingual Plane, trimmed a `Date`'s fractional seconds, wrote `undefined` as `null` and failed on `NaN`. Elsa 4 has no `toJson` |
+| `Math.random()` | Native `Math.random()` |
+| `Date.now()`, `new Date()` as an instant, `getTime()`, epoch arithmetic, `new Date(number)`, `Date.UTC(…)`, `toISOString()`, the `getUTC*`/`setUTC*` methods, parsing text with `Z` or an offset, parsing a date-only text | Native `Date` on the host clock, under every date interpretation |
+| A read of a `DateTime` or `DateTimeOffset` variable or input | A `Date` of the same instant (`v == null ? v : new Date(v)`), because Elsa 3 handed scripts a `Date` and Elsa 4 hands over ISO 8601 text |
+| Local date and time: `getHours()` and the other local getters and setters, `new Date(y, m, …)`, parsing text without an offset, parsing a value that is not a literal | Under `AssumeUtc`: as written, in UTC, with a warning. Under `SourceTimeZone`: rewritten into `Temporal` code in the server's zone, with `Date`'s roll-over of out-of-range fields and its handling of skipped and repeated hours. Refused under `Refuse` (below) |
+| `toLocaleString(locale)`, `localeCompare(other, locale)`, an `Intl` constructor with a locale | As written. On a date, the text also needs an explicit `timeZone` (below) |
 | A top-level `return` | The body runs as a function. A trailing expression gets a `return`; a bare `return;` returns `null` |
 | A statement-form expression | A function that returns its last expression |
 | A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return`. A body whose last line is a `//` comment ends with a newline, so the comment cannot break Elsa 4's script wrapper (#3171) |
@@ -241,15 +260,17 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 
 | Elsa 3 construct | Code | Change in the Elsa 3 workflow |
 |---|---|---|
-| `newGuid()`, `newGuidString()`, `newShortGuid()`, `Guid`, `Math.random()` | `VF-IMP-005` | Use `getWorkflowInstanceId()` when one unique value per run is enough; otherwise pass the value in as a workflow input |
-| `new Date()`, `Date.now()`, `DateTime`, any use of `Date` | `VF-IMP-005` | Replace a wait loop with a Delay activity. Pass the current time or date values in as workflow inputs |
+| `Guid`, `Random`, `crypto.randomUUID()` | `VF-IMP-005` | Use `newGuid()` for a GUID, or `Math.random()` for a random number |
+| `DateTime`, `DateTimeOffset`, `TimeSpan` | `VF-IMP-005` | Use JavaScript's `Date` or `Temporal` |
+| Local date and time (see above) under the date interpretation `Refuse` | `VF-IMP-005` | Set the converter's date interpretation to `SourceTimeZone` with the Elsa 3 server's IANA zone, or to `AssumeUtc`; or use UTC methods or an explicit offset |
+| Local text on a date: `toString()`, `toDateString()`, `toTimeString()`, `Date()`, `toLocaleString(locale)` or `Intl.DateTimeFormat(locale)` without a `timeZone`, under `Refuse` or `SourceTimeZone` | `VF-IMP-005` | Use `toISOString()`, or pass an explicit `timeZone` and locale. Elsa 3's local text depended on the server's operating system. Under `AssumeUtc` it converts with a warning |
+| `toLocaleString()`, `toLocaleDateString()`, `toLocaleTimeString()`, `localeCompare` or an `Intl` constructor without an explicit locale | `VF-IMP-005` | Pass an explicit locale (for example `'nl-NL'`). Elsa 3 used the server's culture; Elsa 4 uses the invariant culture |
+| A member of a value that was a live .NET object in Elsa 3: the result of `newGuid()` or `parseGuid()` (other than `toString()`), a variable or input of a wrapped .NET type (`TimeSpan`, `Uri`, …), a .NET member of a list or dictionary (`Add`), or such a value passed to `toJson`; a .NET type (`new Uri(s)`, `Enumerable.Range(…)`); a PascalCase method on a value the script did not define (`items.Where(f)`) | `VF-IMP-012` | Rewrite it with JavaScript (the string and array methods, `Date`, `Intl`, `JSON`) or a built-in function. Elsa 4 values are JSON. The same check runs at publish (`Scripts/DotNetMemberUsage`) |
 | `setOutcome(…)`, `setOutcomes(…)` in an input expression | `VF-IMP-005` | Move the call into a RunJavaScript, or route with a Decision or Switch activity. Only a RunJavaScript script selects outcomes in Elsa 4 |
 | `setOutcome(…)`, `setOutcomes(…)` with a computed name in a RunJavaScript whose possible outcomes are empty | `VF-IMP-005` | List every outcome the script can set in the activity's possible outcomes |
 | A RunJavaScript body that calls `setOutcome` and declares its own `complete` | `VF-IMP-005` | Rename the script's `complete`. Elsa 4 reserves it for the returned completion form |
-| `toJson(x)` | `VF-IMP-005` | Use `JSON.stringify(x)`, or `JSON.parse(JSON.stringify(x))` to copy a value. Elsa 3's `toJson` escaped HTML characters and kept .NET casing |
-| `parseGuid(s)` | `VF-IMP-005` | Keep the GUID as a string |
-| Byte, stream and Base64 helpers | `VF-IMP-005` | Move the conversion into an activity |
-| `getConfig(…)`, definition and instance-name readers, `getLastResult()` | `VF-IMP-005` | Pass the value in as a workflow input, or capture the producing output into a variable |
+| Byte and stream helpers (`bytesToString`, `bytesToBase64`, `streamToBytes`, …) | `VF-IMP-005` | Move the conversion into an activity. Binary data is not a JSON value |
+| `getConfig(…)`, `getConfiguration(…)`, definition and instance-name readers, `getLastResult()` | `VF-IMP-005` | Pass the value in as a workflow input, or capture the producing output into a variable |
 | `setVariable`, `set{Name}(…)`, mutating a value read from the workflow | `VF-IMP-005` | Use a Set Variable activity |
 | `setCorrelationId`, `setWorkflowInstanceName` | `VF-IMP-005` | Use a Correlate or Set Name activity |
 | `get{Output}From{Activity}()`, `getOutputFrom`, a computed input or output name, a computed variable name in a RunJavaScript body | `VF-IMP-005` / `VF-IMP-006` | Capture the output into a variable and read the variable; name the variable literally in a body |

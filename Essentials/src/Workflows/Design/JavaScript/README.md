@@ -1,6 +1,6 @@
 # Elsa.Workflows.Design.JavaScript
 
-Bridges the workflow design surface and the JavaScript expression engine. Canonical input-binding expressions use the closed `binding-pure-v1` capability profile, so the editor exposes only the immutable `args` parameter map available to the isolated runtime evaluator.
+Bridges the workflow design surface and the JavaScript expression engine. Canonical input-binding expressions use the closed `binding-readonly-v1` capability profile: the immutable `args` parameter map and the variables they read by name, the native `Date`, `Intl`, `Temporal` and `Math`, and the built-in and host-registered .NET functions (spec 1223). This contributor declares `args`; the JavaScript expression tooling completes the variables and functions (see [the JavaScript extension points](../../../Expressions/JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md)).
 
 ## Cross-domain contributions
 

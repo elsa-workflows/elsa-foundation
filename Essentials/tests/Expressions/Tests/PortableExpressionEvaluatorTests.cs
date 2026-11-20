@@ -53,12 +53,12 @@ public sealed class PortableExpressionEvaluatorTests
                 new Dictionary<string, JsonElement>(),
                 unsupportedProfile)));
 
-        Assert.Contains(ExpressionCapabilityProfiles.BindingPureV1, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(ExpressionCapabilityProfiles.BindingReadonlyV1, exception.Message, StringComparison.Ordinal);
         Assert.Contains(unsupportedProfile, exception.Message, StringComparison.Ordinal);
         Assert.False(Request(
             "JavaScript",
             new Dictionary<string, JsonElement>(),
-            unsupportedProfile).Capabilities.IsBindingPure);
+            unsupportedProfile).Capabilities.IsBindingReadonly);
         Assert.Null(handler.Request);
     }
 
@@ -92,7 +92,7 @@ public sealed class PortableExpressionEvaluatorTests
     private static ExpressionEvaluationRequest Request(
         string language,
         IReadOnlyDictionary<string, JsonElement> values,
-        string capabilityProfile = ExpressionCapabilityProfiles.BindingPureV1)
+        string capabilityProfile = ExpressionCapabilityProfiles.BindingReadonlyV1)
     {
         var bindings = values.ToDictionary(
             item => item.Key,
