@@ -1,5 +1,5 @@
-import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, type OverflowMenuItem, StudioField } from "@elsa-workflows/studio-ui";
+import { qualifyStudioBackendPath, StudioHttpError, useStudioWorkspaceTab } from "@elsa-workflows/studio-sdk";
+import { studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, type OverflowMenuItem, StudioField } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -50,6 +50,8 @@ export function openExecutableInspector(artifactId: string, sourceReferenceId?: 
 
 export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange, canBrowseDefinitions = true }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void; canBrowseDefinitions?: boolean }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [refreshing, setRefreshing] = useState(false);
+  const workspaceTab = useStudioWorkspaceTab();
   const [definitionNamesLoading, setDefinitionNamesLoading] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -93,16 +95,17 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
     onFailed: message => { setStatus(""); setLastRun(null); setError(message); }
   });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (background = false) => {
     const generation = ++loadGeneration.current;
-    setState("loading");
+    if (!background) setState("loading");
+    setRefreshing(true);
     setDefinitionNamesLoading(false);
     setError("");
     try {
       const items = await listExecutables(context, { scope, includeRetired });
       if (generation !== loadGeneration.current) return;
       setExecutables(items);
-      setDefinitionNames(new Map());
+      if (!background) setDefinitionNames(new Map());
       setState("ready");
       const definitionIds = items.flatMap(getExecutableDefinitionIds);
       setDefinitionNamesLoading(definitionIds.length > 0);
@@ -115,7 +118,11 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
       if (generation !== loadGeneration.current) return;
       setDefinitionNamesLoading(false);
       setError(e instanceof Error ? e.message : String(e));
-      setState("failed");
+      const accessDenied = e instanceof StudioHttpError && (e.status === 401 || e.status === 403);
+      if (accessDenied) { setExecutables([]); setDefinitionNames(new Map()); }
+      setState(current => background && !accessDenied && current === "ready" ? current : "failed");
+    } finally {
+      if (generation === loadGeneration.current) setRefreshing(false);
     }
   }, [context, includeRetired, scope]);
 
@@ -166,7 +173,15 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
         />
       ) : null}
       <div className="wf-executables-list">
-      <StudioPageHeader title="Executables" headingLevel={2} description="Inspect and run immutable workflow executables." actions={<StudioButton onClick={() => void load()}>Refresh</StudioButton>} />
+      <StudioPageHeader title="Executables" headingLevel={2} description="Inspect and run immutable workflow executables." refresh={{
+        id: `workflow-executables:${context.baseUrl}`,
+        label: "Refresh executables",
+        onRefresh: () => load(true),
+        refreshing,
+        autoRefresh: true,
+        active: workspaceTab?.active ?? true,
+        disabled: !!executableRun.pending || !!executableRun.runningArtifactId || !!artifactExport.exportingArtifactId
+      }} />
       <StudioCollectionToolbar>
         <StudioSearchInput
           aria-label="Filter executables by workflow definition"
@@ -252,24 +267,13 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                   <div
                     className="wf-grid-row"
                     role="row"
-                    tabIndex={0}
+                    {...studioRowInteraction<HTMLDivElement>(() => openExecutableInspector(executable.artifactId))}
                     aria-label={`Inspect executable ${executable.artifactId}`}
-                    onClick={event => {
-                      if (event.target instanceof Element && event.target.closest("button, input, label, a")) return;
-                      openExecutableInspector(executable.artifactId);
-                    }}
-                    onKeyDown={event => {
-                      if (event.target !== event.currentTarget) return;
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        openExecutableInspector(executable.artifactId);
-                      }
-                    }}
                   >
                     <span className="wf-executable-name" role="cell">
                       <WorkflowExecutableOrigins executable={executable} definitionNames={definitionNames} />
                     </span>
-                    <span className="wf-executable-identifiers" role="cell" onClick={event => event.stopPropagation()}>
+                    <span className="wf-executable-identifiers" role="cell">
                       <span className="wf-list-primary-id">
                         <CopyableIdentifier label="Artifact ID" value={executable.artifactId} />
                       </span>
@@ -279,7 +283,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                       </WorkflowListIdentifiers>
                       {retired ? <span className="wf-chip wf-reference-retired">Retired</span> : null}
                     </span>
-                    <span className="wf-executable-version-cell" role="cell" onClick={event => event.stopPropagation()}>
+                    <span className="wf-executable-version-cell" role="cell">
                       <span className="wf-cell-line">
                         <span>{executable.artifactVersion}</span>
                       </span>
@@ -393,9 +397,9 @@ function WorkflowExecutableOrigins({ executable, definitionNames }: { executable
         return (
           <button
             type="button"
-            className="wf-link-button wf-executable-workflow-name"
+            className="wf-executable-workflow-name"
             key={definitionId}
-            title={name}
+            title={`Open source workflow: ${name}`}
             aria-label={`Open source definition ${definitionId}: ${name}`}
             onClick={() => openSourceDefinition(definitionId)}
           >

@@ -1,4 +1,5 @@
 import React from "react";
+import { studioRowInteraction } from "./rowInteraction";
 
 export interface StudioDataGridColumn<T> {
   id: string;
@@ -15,10 +16,9 @@ export interface StudioDataGridColumn<T> {
  * and paired `role="cell"` with a non-`grid` container.
  *
  * Rows are selectable, so each row is a `<div role="row">` that carries the activation affordance
- * itself: it is focusable via roving `tabIndex` (only the selected row, or the first row when nothing
- * is selected, is in the tab order), exposes `aria-selected`, and activates on Enter/Space as well as
- * click. This keeps valid table semantics while remaining fully keyboard-operable. When no rows are
- * present, the optional `emptyState` slot renders in place of the body.
+ * itself. Tab enters on the selected row or the first row. Up and Down move between rows, and Enter
+ * or Space selects the focused row. When no rows are present, the optional `emptyState` slot renders
+ * in place of the body.
  */
 export function StudioDataGrid<T>({
   columns,
@@ -38,14 +38,18 @@ export function StudioDataGrid<T>({
   emptyState?: React.ReactNode;
 }) {
   const selectable = Boolean(onSelect);
-  // Roving tabindex anchor: the selected row, or the first row if the selection isn't in view.
-  const rovingKey = items.some(item => getKey(item) === selectedKey) ? selectedKey : items.length > 0 ? getKey(items[0]) : undefined;
+  const [focusedKey, setFocusedKey] = React.useState<string>();
+  const keys = items.map(getKey);
+  const tabKey = [focusedKey, selectedKey].find(key => key !== undefined && keys.includes(key)) ?? keys[0];
 
   return (
     <div
       className="studio-data-grid"
       role="table"
       style={gridColumns ? { "--studio-grid-columns": gridColumns } as React.CSSProperties : undefined}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocusedKey(undefined);
+      }}
     >
       <div className="studio-data-grid-header" role="row">
         {columns.map(column => <span key={column.id} role="columnheader">{column.header}</span>)}
@@ -58,27 +62,29 @@ export function StudioDataGrid<T>({
       {items.map(item => {
         const key = getKey(item);
         const selected = key === selectedKey;
-        const activate = selectable ? () => onSelect?.(item) : undefined;
+        const interaction = studioRowInteraction<HTMLDivElement>(onSelect ? () => onSelect(item) : undefined);
         return (
           <div
             key={key}
             className={selected ? "studio-data-grid-row selected" : "studio-data-grid-row"}
             role="row"
             aria-selected={selectable ? selected : undefined}
-            tabIndex={selectable ? (key === rovingKey ? 0 : -1) : undefined}
-            onClick={selectable ? event => {
-              if (event.defaultPrevented) return;
-              const control = event.target instanceof Element ? event.target.closest("button, a, input, select, textarea, label, summary, [contenteditable='true'], [role='button'], [role='link']") : null;
-              if (control && control !== event.currentTarget && event.currentTarget.contains(control)) return;
-              activate?.();
+            {...interaction}
+            tabIndex={selectable ? (key === tabKey ? 0 : -1) : undefined}
+            onFocus={selectable ? event => {
+              if (event.target === event.currentTarget) setFocusedKey(key);
             } : undefined}
             onKeyDown={selectable ? event => {
-              // Nested controls keep their native keyboard activation.
-              if (event.target !== event.currentTarget || event.defaultPrevented) return;
-              if (event.key === "Enter" || event.key === " ") {
+              if (event.defaultPrevented || event.target !== event.currentTarget) return;
+              const row = event.currentTarget;
+              const next = event.key === "ArrowDown" ? row.nextElementSibling
+                : event.key === "ArrowUp" ? row.previousElementSibling : null;
+              if (next instanceof HTMLElement && next.hasAttribute("data-studio-row-interactive")) {
                 event.preventDefault();
-                activate?.();
+                next.focus();
+                return;
               }
+              interaction.onKeyDown?.(event);
             } : undefined}
           >
             {columns.map(column => <span key={column.id} role="cell">{column.render(item)}</span>)}

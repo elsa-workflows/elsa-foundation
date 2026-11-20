@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { StudioButton, StudioPageHeader } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, StudioButton, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { evaluateBackendRequirements, qualifyStudioBackendPath, type StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { createBpmnRuntimeClient, type BpmnPage, type BpmnExecution, type BpmnPublication } from "../api/bpmnRuntime";
 import { WorkflowListIdentifiers } from "../workflow-editor/WorkflowListIdentifiers";
@@ -61,7 +61,7 @@ function BpmnCatalog({ client, session, view, artifactId, open }: { client: Clie
           : <><th scope="col">Run started</th><th scope="col">State</th><th scope="col">Updated</th><th scope="col">Actions</th></>}</tr></thead>
         <tbody>{items.map(item => "sourceReferenceId" in item ? <ProcessRow key={item.sourceReferenceId} client={client} session={session} publication={item}
           canStart={runtimeAvailable && admission.data?.admitNewExecutions === true && !admission.isFetching} open={open} />
-          : <tr key={item.executionId}><td><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time>
+          : <tr key={item.executionId} {...studioRowInteraction<HTMLTableRowElement>(() => open(runPath(item.executionId)))}><td><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time>
             <WorkflowListIdentifiers name={`BPMN run ${new Date(item.createdAt).toLocaleString()}`} kind="BPMN run" identifiers={[{ label: "BPMN run", value: item.executionId }, { label: "Executable", value: item.executable.artifactId }]} /></td>
             <td>{bpmnRunState(item)}</td><td><time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleString()}</time></td>
             <td><StudioButton type="button" onClick={() => open(runPath(item.executionId))}>Open run</StudioButton></td></tr>)}</tbody>

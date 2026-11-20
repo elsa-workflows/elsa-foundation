@@ -1142,10 +1142,12 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 }
 
 .content {
+  --studio-content-padding-block: 28px;
+  --studio-content-padding-inline: clamp(16px, 2vw, 36px);
   flex: 1;
   min-height: 0;
   background: color-mix(in srgb, var(--background) 94%, var(--muted));
-  padding: 28px clamp(16px, 2vw, 36px);
+  padding: var(--studio-content-padding-block) var(--studio-content-padding-inline);
   overflow-y: auto;
 }
 
@@ -1157,9 +1159,10 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 /* Local route views share the shell cell with the full-bleed editor. Allocate the
    remaining height to the editor, including retained workspace screens and the dock. */
 .content:has(> .wf-editor, > .studio-workspace-panel:not([hidden]) > .wf-editor) {
+  --studio-content-padding-block: 0px;
+  --studio-content-padding-inline: 0px;
   display: flex;
   flex-direction: column;
-  padding: 0;
   overflow: hidden;
 }
 
@@ -1171,17 +1174,14 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   min-width: 0;
 }
 
-.content:has(> .wf-editor, > .studio-workspace-panel:not([hidden]) > .wf-editor) .studio-view-navigation {
-  flex-shrink: 0;
-}
-
 /* Run detail is a route-owned workbench. Keep list pages on the normal padded/scrolling
    surface while this one consumes the shell cell left above the bottom panel. */
 .content:has(> .wf-page--run-workbench, > .studio-workspace-panel:not([hidden]) > .wf-page--run-workbench) {
+  --studio-content-padding-block: 0px;
+  --studio-content-padding-inline: 0px;
   display: flex;
   min-height: 0;
   flex-direction: column;
-  padding: 0;
   overflow: hidden;
 }
 
@@ -3146,7 +3146,8 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   }
 
   .content {
-    padding: 24px;
+    --studio-content-padding-block: 24px;
+    --studio-content-padding-inline: 24px;
   }
 
   .modules-upload-dialog {
@@ -3213,7 +3214,8 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   }
 
   .content {
-    padding: 16px;
+    --studio-content-padding-block: 16px;
+    --studio-content-padding-inline: 16px;
   }
 
   .section-header {

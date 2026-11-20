@@ -43,6 +43,8 @@ Elsa.Serialization.Core.IWellKnownTypeRegistry.RegisterType(System.Type! type, s
 Elsa.Serialization.Core.IWellKnownTypeRegistry.TryGetAlias(System.Type! type, out string! alias) -> bool
 Elsa.Serialization.Core.IWellKnownTypeRegistry.TryGetType(string! alias, out System.Type! type) -> bool
 Elsa.Serialization.Core.IWellKnownTypeRegistry.TryGetTypeOrDefault(string! alias, out System.Type! type) -> bool
+Elsa.Serialization.Core.NullableJsonElementConverter
+Elsa.Serialization.Core.NullableJsonElementConverter.NullableJsonElementConverter() -> void
 Elsa.Serialization.Core.Options.ObjectConverterOptions
 Elsa.Serialization.Core.Options.ObjectConverterOptions.Deconstruct(out System.Text.Json.JsonSerializerOptions? SerializerOptions, out Elsa.Serialization.Core.IWellKnownTypeRegistry? WellKnownTypeRegistry, out bool DeserializeJsonObjectToObject, out bool? StrictMode) -> void
 Elsa.Serialization.Core.Options.ObjectConverterOptions.DeserializeJsonObjectToObject.get -> bool
@@ -56,6 +58,9 @@ Elsa.Serialization.Core.Options.ObjectConverterOptions.StrictMode.init -> void
 Elsa.Serialization.Core.Options.ObjectConverterOptions.WellKnownTypeRegistry.get -> Elsa.Serialization.Core.IWellKnownTypeRegistry?
 Elsa.Serialization.Core.Options.ObjectConverterOptions.WellKnownTypeRegistry.init -> void
 Elsa.Serialization.Core.PayloadCatalogFile
+override Elsa.Serialization.Core.NullableJsonElementConverter.HandleNull.get -> bool
+override Elsa.Serialization.Core.NullableJsonElementConverter.Read(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> System.Text.Json.JsonElement?
+override Elsa.Serialization.Core.NullableJsonElementConverter.Write(System.Text.Json.Utf8JsonWriter! writer, System.Text.Json.JsonElement? value, System.Text.Json.JsonSerializerOptions! options) -> void
 override Elsa.Serialization.Core.Options.ObjectConverterOptions.Equals(object? obj) -> bool
 override Elsa.Serialization.Core.Options.ObjectConverterOptions.GetHashCode() -> int
 override Elsa.Serialization.Core.Options.ObjectConverterOptions.ToString() -> string!

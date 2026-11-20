@@ -43,7 +43,7 @@ const picker = (host: HTMLElement) => host.querySelector<HTMLSelectElement>('[da
 const decisionTab = (host: HTMLElement) => host.querySelector<HTMLElement>('[data-tab="decision"]')!;
 
 async function saveNewDecision(host: HTMLElement) {
-  await vi.waitFor(() => expect(decisionTab(host)?.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+  await vi.waitFor(() => expect(decisionTab(host)?.querySelector('[role="grid"]')).not.toBeNull());
   const name = Array.from(decisionTab(host).querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
   type(name, created.name); click(button(decisionTab(host), "Save decision"));
 }

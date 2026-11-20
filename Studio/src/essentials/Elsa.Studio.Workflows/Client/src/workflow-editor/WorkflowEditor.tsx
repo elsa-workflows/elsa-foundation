@@ -214,6 +214,7 @@ export function WorkflowEditor({
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateNavigationPending, setTemplateNavigationPending] = useState(false);
   const [templatesAvailable, setTemplatesAvailable] = useState(false);
+  const [canvasToolsHost, setCanvasToolsHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
     let active = true;
     void import("../workflowTemplates").then(module => module.workflowTemplatesPath(context)).then(path => { if (active) setTemplatesAvailable(!!path); }).catch(() => { if (active) setTemplatesAvailable(false); });
@@ -323,7 +324,7 @@ export function WorkflowEditor({
   const { loadDraft, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
   // Debounced metadata saves still belong to the editable definition.
   const { updateDefinitionMeta: updateEditableDefinitionMeta, flushDefinitionMeta } = useDefinitionMetadata({ context, documentAdapter, details, setDetails, setStatus });
-  useStudioWorkspaceTitle(details?.definition.name, documentAdapter ? "Template" : "Draft");
+  useStudioWorkspaceTitle(details?.definition?.name, documentAdapter ? "Template" : "Draft");
   const updateDefinitionMeta: typeof updateEditableDefinitionMeta = (...args) => { if (editorDoc.canEdit()) updateEditableDefinitionMeta(...args); };
 
   // Resolve the current scope + selection (designer mode, selected activity, descriptor/availability,
@@ -560,11 +561,11 @@ export function WorkflowEditor({
   };
   const selectEditorNode = (nodeId: string | null) => {
     select(nodeId);
-    showEditorRunData();
+    if (inspectorView === "run-data") showEditorRunData();
   };
   const selectEditorNodes = (nodeIds: string[], primaryNodeId?: string | null) => {
     canvas.selectNodes(nodeIds, primaryNodeId);
-    if (nodeIds.length) showEditorRunData();
+    if (nodeIds.length && inspectorView === "run-data") showEditorRunData();
   };
   const selectedCanvasNodeIds = useMemo(() => {
     const selected = nodes.filter(node => node.selected).map(node => node.id);
@@ -622,30 +623,6 @@ export function WorkflowEditor({
     } : null);
   }, [canAddActivitiesToCanvas, catalogByVersion, editDraft]);
 
-  const nodeActions = useMemo<WorkflowNodeActions | null>(() => {
-    if (isUnsupportedDesigner || isBpmnDesigner || !canAddActivitiesToCanvas) return null;
-    return {
-      selectedNodeCount: selectedCanvasNodeIds.length,
-      canAddAfter: canCreateActivityFromPort,
-      addAfter: (nodeId, portName, anchor) => {
-        if (selectedCanvasNodeIds.length !== 1 || selectedCanvasNodeIds[0] !== nodeId) return;
-        openAddStepMenu(anchor, { nodeId, handleId: portName });
-      },
-      duplicate: nodeId => { duplicateSelectedActivities([nodeId]); },
-      delete: deleteCanvasNode,
-      setWorkflowStart
-    };
-  }, [
-    canAddActivitiesToCanvas,
-    canCreateActivityFromPort,
-    deleteCanvasNode,
-    duplicateSelectedActivities,
-    isBpmnDesigner,
-    isUnsupportedDesigner,
-    openAddStepMenu,
-    selectedCanvasNodeIds,
-    setWorkflowStart
-  ]);
 
   // Inside a slot (breadcrumb non-empty) whose resolved slot is empty, show a guided picker instead of a
   // blank grid. Root-level empty canvas keeps its own affordances (the flowchart "Add activity" button or
@@ -1031,6 +1008,34 @@ export function WorkflowEditor({
     });
     setStatus("Start node updated.");
   }, [catalogByVersion, editDraft, isFlowchartScope, scopeOwner?.nodeId, setStatus]);
+
+  const nodeActions = useMemo<WorkflowNodeActions | null>(() => {
+    if (isUnsupportedDesigner || isBpmnDesigner || !canAddActivitiesToCanvas) return null;
+    return {
+      selectedNodeCount: selectedCanvasNodeIds.length,
+      canAddAfter: canCreateActivityFromPort,
+      addAfter: (nodeId, portName, anchor) => {
+        if (selectedCanvasNodeIds.length !== 1 || selectedCanvasNodeIds[0] !== nodeId) return;
+        openAddStepMenu(anchor, { nodeId, handleId: portName });
+      },
+      duplicate: nodeId => { duplicateSelectedActivities([nodeId]); },
+      delete: deleteCanvasNode,
+      setWorkflowStart,
+      setAsStartNode: isFlowchartScope ? setStartNode : undefined
+    };
+  }, [
+    canAddActivitiesToCanvas,
+    canCreateActivityFromPort,
+    deleteCanvasNode,
+    duplicateSelectedActivities,
+    isBpmnDesigner,
+    isFlowchartScope,
+    isUnsupportedDesigner,
+    openAddStepMenu,
+    selectedCanvasNodeIds,
+    setStartNode,
+    setWorkflowStart
+  ]);
 
   const updateSelectedBpmnElement = useCallback((elementId: string, patch: Partial<BpmnElement>) =>
     updateScopeOwnerBpmnPayload(owner => updateBpmnElement(owner, elementId, patch)), [updateScopeOwnerBpmnPayload]);
@@ -1443,6 +1448,7 @@ export function WorkflowEditor({
         onUndo={() => { if (!editorDoc.pinned) undo(); }}
         onRedo={() => { if (!editorDoc.pinned) redo(); }}
         onAutoLayout={autoLayout}
+        canvasToolsSlot={setCanvasToolsHost}
         onBack={() => {
           if (!documentAdapter || !editableDraft) { onBack(); return; }
           if (templateNavigationPending) return;
@@ -1650,6 +1656,7 @@ export function WorkflowEditor({
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
           {draft.state.rootActivity ? <NativeBlockCommands
+            toolbarHost={canvasToolsHost}
             endpoint={context}
             bpmnImportFile={frames.length === 0 ? bpmnImportFile : null}
             onBpmnImportFileConsumed={() => setBpmnImportFile(null)}

@@ -24,7 +24,16 @@ beforeEach(() => {
 });
 afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
 function render() { flushSync(() => root.render(<NativeBlockCommands context={context} selectedNodeIds={selection} createPosition={{ x: 80, y: 100 }} validate={validate} apply={apply} open={open} />)); }
-function button(label: string) { const item = [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label); if (!item) throw new Error(label); return item; }
+function button(label: string) {
+  let item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === label);
+  if (!item) {
+    const trigger = container.querySelector<HTMLButtonElement>(".wf-block-menu-trigger");
+    if (trigger && trigger.getAttribute("aria-expanded") !== "true") flushSync(() => trigger.click());
+    item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === label);
+  }
+  if (!item) throw new Error(label);
+  return item;
+}
 function click(label: string) { flushSync(() => button(label).click()); }
 function name(value: string) {
   const input = container.querySelector<HTMLInputElement>("input")!;
@@ -36,8 +45,8 @@ async function preview() {
   await vi.waitFor(() => expect(button("Apply change").disabled).toBe(false));
 }
 it("offers a real BPMN subprocess and validates/commits the whole resource once using canvas element selection", async () => {
-  expect(container.textContent).toContain("Create BPMN subprocess");
-  expect(container.textContent).not.toContain("Create Sequence block");
+  expect(button("Create BPMN subprocess")).toBeTruthy();
+  expect(globalThis.document.body.textContent).not.toContain("Create Sequence block");
   const original = structuredClone(context.document);
   await preview();
   expect(container.querySelector(".wf-block-preview")?.textContent).toContain("BPMN subprocess");

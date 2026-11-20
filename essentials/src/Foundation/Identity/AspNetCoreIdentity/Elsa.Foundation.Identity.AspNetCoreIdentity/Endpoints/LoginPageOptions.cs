@@ -10,16 +10,16 @@ public sealed class LoginPageOptions
     public string? ImageUrl { get; set; }
     /// <summary>
     /// Bundled artwork: river-to-sea, open-architecture, flowing-ribbons, paper-landscape, creative-studio,
-    /// botanical-growth, constellation, miniature-world, glass-and-light, unfolding-map, parcel-room or pocket-orchestra (default).
+    /// botanical-growth, constellation, miniature-world, glass-and-light, unfolding-map, parcel-room or pocket-orchestra (default for illustrated layouts).
     /// The existing ember, tidal, daybreak and canopy choices remain available; field-guide provides the
-    /// brochure’s pencil/watercolor capability plate. ImageUrl takes precedence.
+    /// brochure’s pencil/watercolor capability plate. ImageUrl takes precedence in illustrated layouts.
     /// </summary>
     public string Artwork { get; set; } = LoginArtwork.Default;
-    /// <summary>parcel-room (default), split, reverse, immersive, editorial or field-guide. Illustrated layouts put the form first on mobile.</summary>
-    public string Layout { get; set; } = "parcel-room";
-    /// <summary>pocket-orchestra (default), parcel-room, linen, tidal, daybreak, canopy or field-guide; independent of layout and artwork. Illustrated palettes stay light.</summary>
+    /// <summary>orbital (default), parcel-room, split, reverse, immersive, editorial or field-guide. Illustrated layouts put the form first on mobile.</summary>
+    public string Layout { get; set; } = "orbital";
+    /// <summary>pocket-orchestra (default for illustrated layouts), parcel-room, linen, tidal, daybreak, canopy or field-guide. Orbital uses its own dark palette.</summary>
     public string Palette { get; set; } = "pocket-orchestra";
-    /// <summary>Horizontal/vertical focal coordinates from 0 to 100.</summary>
+    /// <summary>Horizontal/vertical focal coordinates from 0 to 100 for illustrated layouts.</summary>
     public double FocalX { get; set; } = 50;
     public double FocalY { get; set; } = 50;
     public string? HelpUrl { get; set; }

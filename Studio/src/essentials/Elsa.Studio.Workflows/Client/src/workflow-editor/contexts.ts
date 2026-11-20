@@ -21,6 +21,8 @@ export interface WorkflowNodeActions {
   duplicate(nodeId: string): void;
   delete(nodeId: string): void;
   setWorkflowStart?(nodeId: string, enabled: boolean): void;
+  /** Sets the Flowchart start node. Absent when the canvas is not a Flowchart. */
+  setAsStartNode?(nodeId: string): void;
 }
 
 export const WorkflowNodeActionsContext = React.createContext<WorkflowNodeActions | null>(null);

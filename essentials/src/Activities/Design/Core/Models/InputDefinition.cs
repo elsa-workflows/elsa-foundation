@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Activities.Design.Core.Models;
 
@@ -50,4 +51,16 @@ public sealed record InputDefinition(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsSensitive = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsCredential = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tier = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ConnectionType = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ConnectionType = null)
+{
+    private readonly JsonElement? _defaultValue = DefaultValue;
+
+    /// <summary>A literal default; legacy JSON null without a syntax denotes no default.</summary>
+    [JsonConverter(typeof(NullableJsonElementConverter))]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? DefaultValue
+    {
+        get => _defaultValue is { ValueKind: JsonValueKind.Null } && DefaultSyntax is null ? null : _defaultValue;
+        init => _defaultValue = value;
+    }
+}

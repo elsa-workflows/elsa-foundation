@@ -48,7 +48,7 @@ export default defineConfig({
       allow: [searchForWorkspaceRoot(__dirname), resolve(__dirname, "../../../extensions")]
     },
     host: "127.0.0.1",
-    port: 4179,
+    port: Number(process.env.STUDIO_BROWSER_PORT ?? 4179),
     strictPort: true
   }
 });

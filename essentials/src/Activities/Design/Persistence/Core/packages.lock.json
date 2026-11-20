@@ -6,7 +6,8 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )"
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.events.core": {
@@ -33,6 +34,13 @@
       },
       "elsa.primitives": {
         "type": "Project"
+      },
+      "elsa.serialization.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
       },
       "elsa.tasks.core": {
         "type": "Project",

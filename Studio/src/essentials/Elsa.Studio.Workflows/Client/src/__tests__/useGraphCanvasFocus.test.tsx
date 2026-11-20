@@ -207,7 +207,7 @@ describe("useGraphCanvasInteractions auto-layout", () => {
     fixture.result.current!.autoLayout();
     flushAnimationFrames();
 
-    expect(fitView).toHaveBeenCalledWith({ padding: 0.2, maxZoom: 1 });
+    expect(fitView).toHaveBeenCalledWith({ padding: 0.2, maxZoom: 1, alignCenter: true });
   });
 });
 
