@@ -25,13 +25,13 @@ red without the change. xUnit only.
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T004 Implement FR-001a in one helper beside `NullPolicyDefaults`: nullability and default by type for
-  variables, workflow inputs and workflow outputs (value types not nullable, default `false` / `0` / zero value;
-  every other type nullable, default `null`), checked against the alias registry; record the table in research.md
-  R-5. Workflow inputs and outputs no longer read their stored `isNullable` flag
+- [ ] T004 Implement FR-001a from the type registry's existing `supportsNull` (`DefaultVariableTypeDescriptorProvider`)
+  for variables, workflow inputs and outputs and authored activity definitions; .NET activities keep their C#
+  nullability. Nothing reads a stored `isNullable` flag for authored members any more
 - [ ] T005 [P] Add `NullPolicyDefaults.TryGetTypeDefault(alias)` in
-  `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs`, with unit tests for value types, enums and
-  types without a type default (`String`, `Any`, `JsonElement`)
+  `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs` (FR-001b): a default for `Boolean`, the
+  number types and enums only; unit tests including `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`,
+  `Guid`, `String` and `Any` having none
 - [ ] T006 Add `NullHandling` (`DefaultOnNull`, `UndefinedAsNull`) to
   `Essentials/src/Workflows/Design/Core/Models/WorkflowStrategyOptions.cs`, `ValuePolicies` to
   `Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs`, and compile one into the other in
@@ -160,10 +160,12 @@ red without the change. xUnit only.
 
 ## Phase 9: Studio (Q6: no policy controls; Q8, Q9)
 
-- [ ] T033 [P] Retire *Allow null* for workflow inputs and outputs (Q8): drop `isNullable` from `WorkflowInput` /
-  `WorkflowOutput` in `workflowTypes.ts` and from `createInput` / `createOutput` in `workflowProperties.ts`; the
-  backend stops reading it for workflow members (T004). The shared `InputDefinition` keeps the field for activity
-  definition contracts. Regenerate any stored fixture that carried it
+- [ ] T033 [P] Retire *Allow null* (Q8): drop `isNullable` from `WorkflowInput` / `WorkflowOutput`
+  (`workflowTypes.ts`, `createInput` / `createOutput`) and the *Allow null* checkbox and its rules from
+  `ActivityDefinitionContractEditor.tsx`, `activityContractAuthoring.ts` and `activityContractComparison.ts` (a
+  nullability change becomes a type change). On the backend, authored members stop carrying the flag; for .NET
+  activities the descriptor's nullability is derived from the C# type, not authored. Regenerate any stored fixture
+  that carried it
 - [ ] T034 [P] Activity definition contract editor (`ActivityDefinitionContractEditor.tsx`): setting a default turns
   *Required* off, and *Required* is disabled while a default is set, with the hint "A member with a default is
   optional"; replace today's hint "A value must be available after the default is applied" (Q9). Client test

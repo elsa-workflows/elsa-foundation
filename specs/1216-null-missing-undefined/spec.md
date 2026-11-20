@@ -294,14 +294,18 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-001**: The system MUST accept an explicit `null` for every nullable target: activity inputs, variables, workflow
   outputs and the `value` of the `Set` / `SetOutput` intrinsics, whether it comes from a literal, a variable or an
   expression.
-- **FR-001a**: Whether a variable, a workflow input or a workflow output accepts `null` comes from its type, as in
-  .NET (Q8): `Boolean`, the number types, enums and the other value types do not, and their type default is `false`,
-  `0` or the type's zero value; every other type (`String`, `Any`, every JSON alias, object types) does, and its type
-  default is `null`. The type default is what an omitted optional workflow input gets (FR-006) and what default-on-null
-  substitutes (FR-013). A declared variable that was never given a value still reads `null` (spec 1222 FR-006): it is
-  unset, not assigned. The *Allow null* flag is retired for these members: not read, not shown, not written (Q8).
-  Activity inputs keep their declared nullability: `DateTime?` versus `DateTime` in a .NET activity, and the *Allow
-  null* setting of an authored activity definition's contract.
+- **FR-001a**: Whether a member accepts `null` comes from its type, as in .NET (Q8), and the *Allow null* flag is
+  retired everywhere it is authored: workflow inputs, workflow outputs and activity definition contracts (not read,
+  not shown, not written). For variables, workflow inputs and outputs and authored activity definitions, the type
+  registry's existing *supports null* column decides: `String` and `Any` (every JSON alias) accept `null`; `Boolean`,
+  the number types, `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan` and `Guid` do not. A .NET
+  activity's input follows its C# declaration (`TimeSpan` versus `TimeSpan?`, `string` versus `string?`).
+- **FR-001b**: Only `Boolean` (`false`), the number types (`0`) and enums (their zero value) have a type default
+  (Q10). Dates, times, `TimeSpan` and `Guid` have none, because their zero value (`0001-01-01`, `00:00:00`, an empty
+  GUID) looks like a real value. For a type without a type default, `null` is refused under any policy
+  (`VF-ACT-004`), and an omitted optional member needs a declared default (`VF-ACT-003`). A value that cannot be
+  parsed into the type (for example the text `"tomorrow"` for a `DateTime`, which arrives as a string) is refused by
+  the normal conversion (ADR 0046).
 - **FR-002**: An intrinsic's `value` input MUST take the nullability of its target variable or output, instead of
   always being non-nullable.
 - **FR-003**: Without the default-on-null policy, `null` for a non-nullable target MUST fail with `VF-ACT-004`: at
@@ -316,9 +320,9 @@ omitted; after resume, the first reads explicit null and the invocation record s
   nullability MUST be pinned in the executable's input contract and its hash (today only requiredness and the
   default are).
 - **FR-006**: An omitted member MUST take its declared default; an optional member without one MUST materialize as
-  `null` when nullable, and otherwise as its type's default. A non-nullable type without a non-null default (for
-  example `String` or a JSON object) has no type default: such an optional member still needs a declared default, as
-  publication requires today (`VF-ACT-003`).
+  `null` when nullable, and otherwise as its type's default. A non-nullable type without a type default (FR-001b:
+  dates, times, `TimeSpan`, `Guid`, or a non-nullable `string` on a .NET activity) has none to give: such an optional
+  member needs a declared default, as publication requires today for activity inputs (`VF-ACT-003`).
 - **FR-007**: An omitted required activity input MUST fail publication (`VF-ACT-003`).
 - **FR-034**: A member declared both required and with a default (an activity input, an authored activity
   definition's input, a workflow input) MUST fail publication with `VF-ACT-013`, naming the member and saying to set
@@ -440,7 +444,7 @@ omitted; after resume, the first reads explicit null and the invocation record s
 
 These are about how this spec builds the settled decisions above. ADR 0045 §2 left Q1 to Q4 to this spec; Q5 came
 from the code survey; Q6 to Q9 came from the recheck against the merged specs and the code; Q10 came from the
-coordinator's review. Q1 to Q9 are accepted; Q10 waits for the coordinator. The requirements follow the answers.
+coordinator's review. Q1 to Q10 are accepted; Q11 waits for the coordinator. The requirements follow the answers.
 
 - **Q1 — Where is default-on-null set?** **Accepted: workflow only**, until a case needs per input.
 - **Q2 — Which default does it use?** **Accepted: the type default**, independently of declared defaults: it is what
@@ -467,10 +471,9 @@ coordinator's review. Q1 to Q9 are accepted; Q10 waits for the coordinator. The 
   naming the variable; `null` under undefined-as-null (FR-030). The rule judges the assigned value, so
   `variables.discount = order.discount` with no `order.discount` faults the same way. Rejected: writing nothing (the
   assignment silently keeps the old value) and always writing `null` (hides the bug in native workflows).
-- **Q8 — Where does nullability of variables, workflow inputs and workflow outputs come from?** **Accepted: from the
-  type, as in .NET** (FR-001a): `Boolean` defaults to `false`, numbers to `0`, other value types to their zero
-  value, and every other type can hold `null` and defaults to `null`. The *Allow null* flag is retired for these
-  members, `SetOutput` included: an output accepts `null` when its type does. Rejected: a per-member flag (Studio
+- **Q8 — Where does nullability come from?** **Accepted: from the type, as in .NET** (FR-001a), using the type
+  registry's *supports null* column. The *Allow null* flag is retired for workflow inputs, workflow outputs (so
+  `SetOutput` too) and activity definition contracts; a .NET activity follows its C# declaration. Rejected: a per-member flag (Studio
   stores `false` for it on every new input and output today, so trusting it would refuse `null` even for a `String`
   output).
 - **Q9 — A member declared both required and with a default.** **Accepted: refuse at publication** (`VF-ACT-013`):
@@ -479,16 +482,20 @@ coordinator's review. Q1 to Q9 are accepted; Q10 waits for the coordinator. The 
   that way become optional (FR-034). This is the strict form of ADR 0045 §2 (a declared default never satisfies a
   required member): the pair never reaches run time. Rejected: letting the default satisfy the requirement (what the
   code does today, so *required* means nothing).
-- **Q10 — Dates: what is the type default of `DateTime` and `DateTimeOffset`?** Both are registered workflow types and
-  .NET value types, so under Q8 they never accept `null`. Their .NET zero value is `0001-01-01T00:00:00`, which looks
-  like a real date. Problem: an optional workflow input `dueDate: DateTime`, omitted at start, would read
-  `0001-01-01`, and a decision `dueDate < now` would treat the order as overdue without any warning. No built-in
-  activity has a date input or output today; a .NET activity that declares `DateTime` refuses `null`, one that
-  declares `DateTime?` accepts it. *Recommended:* dates have no type default, like `String`: an optional date input
-  needs a declared default (`VF-ACT-003`), and `null` for a date is refused even under default-on-null (`VF-ACT-004`),
-  so no made-up date ever enters a run. Alternative: the zero value `0001-01-01` as the type default, which is what
-  Elsa 3 produced. A workflow that needs an optional date without a default uses a `String` or `Any` member until a
-  nullable date type is needed.
+- **Q10 — Which types have a type default?** **Accepted: only `Boolean`, numbers and enums** (FR-001b). Dates,
+  times, `TimeSpan` (`Delay.Duration` is one) and `Guid` have none: their zero value looks real (an omitted
+  `dueDate` reading `0001-01-01` makes `dueDate < now` true without a warning). So `null` for them is refused, even
+  under default-on-null, and an omitted optional one needs a declared default. Dates and times arrive as strings and
+  go through the normal parser; a string that does not parse is refused. Rejected: the zero value, which Elsa 3
+  produced.
+- **Q11 — A `Boolean` or number variable that was never assigned.** Problem: spec 1222 FR-006 says a declared variable
+  with no value reads `null`. Under Q8 a `Boolean` variable cannot hold `null`, so reading an unassigned one would
+  give a value its type does not allow. There is no `Boolean?` workflow type to opt into `null`. *Recommended:* the
+  variable starts at its type default, as a .NET field does (`false`, `0`); a variable of a type without a type
+  default (a date, `TimeSpan`, `Guid`) needs a declared default, refused at publication otherwise (`VF-ACT-003`). A
+  variable of a type that accepts `null` still reads `null` until assigned. This amends spec 1222 FR-006 for
+  value-type variables. Alternative: reading an unassigned value-type variable faults the step (the error then
+  appears at run time, possibly on a rarely taken path).
 
 ## Success Criteria *(mandatory)*
 
