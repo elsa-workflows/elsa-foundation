@@ -95,7 +95,7 @@ shows each new test failing without the change.
 - [ ] T015 [US3] Add `JsonConversionContract` (default and scoped) and `JsonConversionAttribute` in
   `Serialization/Core/`. The default is camelCase, exact, warn; the attribute on a type or input member selects
   naming, matching and unmatched-member handling (FR-004, FR-004a); cache per type and member; nothing is stamped into
-  the executable. Add `StrictDateTimeConverters` (also used by the baseline): `Z` or an offset required, else
+  the executable. Add `StrictDateTimeConverters` (used by the API wire contexts and the conversion contracts, not the baseline): `Z` or an offset required, else
   `json-datetime-offset-missing`; a `DateTime` normalized to UTC, a `DateTimeOffset` keeps its offset; `DateOnly` and
   `TimeOnly` as FR-016 states (FR-016, FR-016c, Q8, Q10)
 - [ ] T015a [US3] FR-016c: test that a start request with an offset-less `DateTime` input, and an own-contract
@@ -142,8 +142,8 @@ shows each new test failing without the change.
   L103–137) from the baseline, keeping `DeterministicDictionaryConverter` and `SortObjectMembers` as register entries
 - [ ] T019 [US2] Derive `EfDesignSupport.Json` / `ReadJson`
   (`Workflows/Design/Persistence/EntityFrameworkCore/Stores/EfDesignSupport.cs`) from the baseline for data reads and
-  writes; `Fingerprint` and `EfWorkflowLibraryStore.Fingerprint` move to `JsonHashInput` in T023, and
-  `LegacyFingerprint` is deleted (FR-021)
+  writes; `Fingerprint`, `LegacyFingerprint` and `EfWorkflowLibraryStore.Fingerprint` are handled in T023
+  (FR-021)
 - [ ] T019a [US2] Add the FR-024a test: every stored-format fixture and seed JSON read through `IPayloadSerializer`
   in the repository uses the camelCase names it writes (exact reads lose nothing)
 - [ ] T020 [US2] Derive `RuntimeArtifactJson`, `EfBookmarkStateStore.CreateJsonOptions` and the five other runtime
@@ -181,7 +181,8 @@ shows each new test failing without the change.
   - `EfDesignAtomicWrite.cs` L257;
   - `ActivitiesDesignDbContext.cs` L548;
   - `EfClusterMembershipStore.cs` L182;
-  - `Extensions/Etl/src/Core/EtlArtifactJson.cs` L38–39 and its `GetRawText` comparisons;
+  - `Extensions/Etl/src/Core/EtlDefinitionRecordCodec.cs` L84, L90, L234, L254, L262 and `EtlRuntimeRecordCodec.cs`
+    L125, L181 (`GetRawText` compared `Ordinal`);
   - `EfEtlRuntimeStore.cs`;
   - `EfRuleRunStore.Delivery.cs` L183;
   - `Elsa3ImportRecordCodec.cs` L199.
@@ -227,7 +228,8 @@ shows each new test failing without the change.
   literal or variable default bound to a `DateTime`, `DateTimeOffset` or `DateOnly` member, read
   `Elsa3ConversionOptions.DateInterpretation` (S-1) and refuse (`ELS3-LITERAL-DATE-OFFSET-MISSING`), write the source
   zone's offset for that date, or write `Z` with a warning (`ELS3-LITERAL-DATE-INTERPRETED`); add
-  `ELS3-LITERAL-DATE-WALL-CLOCK` for offset-carrying or non-literal values on `DateTime` and `DateOnly` members;
+  `ELS3-LITERAL-DATE-WALL-CLOCK` for offset-carrying literals on `DateTime` and `DateOnly` members and for
+  non-literal expressions on any date member;
   record the interpretation on the converted workflow with S-1's `DateInterpretationApplied` diagnostic
 - [ ] T033 [US8] Add converter tests for US8 scenarios 1 to 3 (scenario 3 under all three interpretations, with a
   winter and a summer date), and re-run the #3052 JTest measurement (no definition may stop converting)

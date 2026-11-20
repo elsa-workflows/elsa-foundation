@@ -332,6 +332,12 @@ Moved:
   (#3801, see below).
 - `RuntimeActivityInputMaterializer.cs` JSON sites are now L316, L618, L679 and L702.
 - `WorkflowExecutionStartDispatch.cs` serializes at L713.
+
+Added in the 2026-11-20 recheck (also value-path sites, never on the legacy list):
+
+- `ParentResumeExecutor.cs`, `RuntimeWorkflowStateSeed.cs`, `ActivitySecretInputResolver.cs`;
+- `StepVariableSession.cs` L266, L331 (uses `ActivityValueJson.Options`);
+- `RuntimeActivityInputMaterializer.cs` L466 (`SelectedMemberFitOptions`, from `ActivityValueJsonProfile.CreateOptions()`).
 - **ForEach no longer narrows numbers.** `ForEach.cs` keeps the collection as `JsonElement` (`ResolveJson` L261), and
   items become envelopes (L182–189). This was fixed in #3424. ADR 0091's Context still states the old behaviour.
   → **Finding F-6**.

@@ -75,8 +75,8 @@ spec. The remaining option-less calls on Elsa's own contracts are listed in the 
 | §2.24.2 / §2.24.3 sanctioned patterns | ACTION | A shared read-only baseline with a deviation register is a new cross-cutting pattern (ADR 0091 *Consequences*). It goes through the §2.24.3 gate together with ADR 0091. T002 checks that this happened before any code lands. |
 | §E2.2 Runtime takes no Design reference | PASS | The baseline is in `Elsa.Serialization.Core`, which Runtime.Core already references (R-11). |
 | §2.17 duplication beats dependency | PASS | The canonical helper and the pre-scan live once in `Elsa.Serialization.Core`; every caller already references it. |
-| §E2.6.1 executable-always-runs | PASS | An unmatched key is a warning, never a refusal (decision 2). Executable hashes move once, to `JsonHashInput` (Q11). |
-| §E5 / §4.2 versioning | PASS | Additive surface in `Elsa.Serialization.Core` (`JsonBaseline`, `JsonConversionContract`, `JsonConversionAttribute`, `JsonCanonicalForm`, `UnmatchedMemberScanner`). The wire changes are fixes under matrix row 21, before GA. |
+| §E2.6.1 executable-always-runs | PASS | An unmatched key is a warning by default; only a strict scoped contract refuses (decision 2). Executable hashes move once, to `JsonHashInput` (Q11). |
+| §E5 / §4.2 versioning | PASS | Additive surface in `Elsa.Serialization.Core` (`JsonBaseline`, `JsonConversionContract`, `JsonConversionAttribute`, `JsonCanonicalForm`, `JsonHashInput`, `StrictDateTimeConverters`, `UnmatchedMemberScanner`). The wire changes are fixes under matrix row 21, before GA. |
 | §E7 CI tiers | PASS | The architecture guard runs in the Fast tier, as the other baseline guards do. |
 | §2.22 docs | ACTION | `docs/serialization.md` gains the baseline, the data rule, the register and the ratchet. Its FastEndpoints wording goes. The glossary gains *baseline* and *baseline deviation*. |
 | §2.23.1–§2.23.2 tests | PASS | One test per acceptance scenario, the guard's negative tests, and hash-stability tests. |
@@ -127,6 +127,7 @@ Essentials/src/Serialization/Core/
   ├── RawJsonElementConverter.cs           # new
   ├── JsonCanonicalForm.cs                 # new: canonical form (moved from VariableValueDigest)
   ├── JsonHashInput.cs                     # new: the one hash input over JSON
+  ├── JsonConversionContract.cs            # new: default and scoped conversion contracts
   ├── StrictDateTimeConverters.cs          # new: offset required (own contracts and conversions)
   ├── JsonConversionAttribute.cs           # new: scoped conversion contract
   └── UnmatchedMemberScanner.cs            # new
@@ -157,7 +158,7 @@ docs/serialization.md
 Essentials/apps/Elsa.Workbench/Constants/JsonSerializerOptionsCache.cs     # delete
 ```
 
-**Structure Decision**: existing projects only. There are seven new files in `Elsa.Serialization.Core`, one new test
+**Structure Decision**: existing projects only. There are eight new files in `Elsa.Serialization.Core`, one new test
 class and one ratchet file.
 
 ## Complexity Tracking

@@ -15,7 +15,7 @@
 ## Requirement Completeness
 
 - [x] No [NEEDS CLARIFICATION] markers remain. The choices ADR 0091 leaves open, and the survey's findings, are
-  proposals (Q1–Q8)
+  answered (Q1–Q11)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] All acceptance scenarios are defined

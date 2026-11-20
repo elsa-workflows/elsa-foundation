@@ -35,7 +35,7 @@ Keys that start with a lowercase letter are byte-identical before and after.
 | `ELS3-LITERAL-KEY-REWRITTEN` | info | An Elsa 3 literal key was rewritten to the exact JSON name (FR-015) | node, input, old and new key |
 | `ELS3-LITERAL-DATE-OFFSET-MISSING` | refusal | An Elsa 3 date literal or default has no offset and the date interpretation is `Refuse` (FR-016a) | node, input or variable, the value |
 | `ELS3-LITERAL-DATE-INTERPRETED` | warning (`AssumeUtc`) or info (`SourceTimeZone`) | An offset was written into an Elsa 3 date literal (FR-016a) | node, input or variable, old and new text |
-| `ELS3-LITERAL-DATE-WALL-CLOCK` | warning | An Elsa 3 date literal with `Z` or an offset, or a non-literal expression, is bound to a `DateTime` or `DateOnly` member, so the hour or date may differ from what Elsa 3 showed (FR-016a) | node, input or variable |
+| `ELS3-LITERAL-DATE-WALL-CLOCK` | warning | An Elsa 3 date literal with `Z` or an offset is bound to a `DateTime` or `DateOnly` member, or a non-literal expression is bound to any date member, so the hour or date may differ from what Elsa 3 showed (FR-016a) | node, input or variable |
 
 ## Baseline deviation register (format)
 
