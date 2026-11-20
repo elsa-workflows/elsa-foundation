@@ -23,6 +23,12 @@ public sealed class FeatureOptions
     /// against unbounded recursion blowing the stack. <c>null</c> or a non-positive value disables the
     /// recursion constraint. Default 300.
     /// </summary>
+    /// <remarks>
+    /// Every call on the stack counts, whichever function it is (issue #4901). Whatever this is set to, an evaluation
+    /// also fails with a JavaScript <c>RangeError</c> ("Maximum call stack size exceeded") once it uses more stack than
+    /// its evaluation thread sets aside for running, so deep calls cannot overflow the host's stack. Recursion inside
+    /// Jint's own native code over deeply nested data (a very deep array or Proxy chain) is not bounded by either.
+    /// </remarks>
     public int? MaxRecursionDepth { get; set; } = 300;
 
     /// <summary>Maximum managed memory, in bytes, that Jint may allocate during one evaluation.</summary>
