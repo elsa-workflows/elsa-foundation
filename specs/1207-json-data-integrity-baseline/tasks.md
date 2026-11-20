@@ -97,8 +97,8 @@ shows each new test failing without the change.
   naming, matching and unmatched-member handling (FR-004, FR-004a); cache per type and member; nothing is stamped into
   the executable. Add `StrictDateTimeConverters` (used by the API wire contexts and the conversion contracts, not the baseline): `Z` or an offset required, else
   `json-datetime-offset-missing`; a `DateTime` normalized to UTC, a `DateTimeOffset` keeps its offset; on write a
-  `Local` `DateTime` is converted to UTC, an `Unspecified` one from a user type or activity result is refused, and an
-  `Unspecified` timestamp in Elsa's own contract is written as UTC (FR-016); `DateOnly` and
+  `Local` `DateTime` is converted to UTC, and an `Unspecified` one follows the converter's mode: refused in conversion
+  contracts, written as UTC in API wire contexts (FR-016); `DateOnly` and
   `TimeOnly` as FR-016 states (FR-016, FR-016c, Q8, Q10)
   Add the converters to every API wire context (the T009 contexts and every other owner and `MapEndpointGroup`
   context) and to every conversion contract
@@ -124,7 +124,8 @@ shows each new test failing without the change.
   - `RuntimeWorkflowStateSeed.cs`, `ActivitySecretInputResolver.cs`, `ParentResumeExecutor.cs`.
 
   Replace `Convert.ChangeType` at `RuntimeInputBindingCompiler.cs` L1044 with a conversion-contract read
-- [ ] T017 [US3] Add tests for US3 scenarios 1–10. Scenario 4 (numbers through ForEach) is a regression test for #3424.
+- [ ] T017 [US3] Add tests for US3 scenarios 1–10 and 13 (the write rule: `Local` → UTC, `Unspecified` refused in a
+  conversion contract, `Unspecified` written as UTC in an API wire context). Scenario 4 (numbers through ForEach) is a regression test for #3424.
   Scenario 5 (dates) runs under a non-UTC `TimeZoneInfo` at run time and in a publish-time literal, with and without
   an offset (the offset-less value refused with `json-datetime-offset-missing`), plus the UTC normalization and
   `DateOnly` cases. Scenario 6 covers FR-014a (`Boolean`, `Int32`, GUID case, `TimeSpan`). Scenario 2 pins the

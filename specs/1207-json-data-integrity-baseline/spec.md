@@ -177,6 +177,10 @@ set. #3801's `ActivityResultRoundTripTests` already covers this; it stays green.
     `28 Oct 2026, 09:15 +01:00`; with the setting on UTC it shows `08:15 +00:00` (FR-016b).
 12. **Given** a start request whose `DateTime` input is `"2026-10-28T09:15:00"`, **When** it reaches the API, **Then**
     it is refused with 400 and `json-datetime-offset-missing` naming the input (FR-016c).
+13. **Given** an activity result holding a `DateTime` of kind `Local`, **When** it is written, **Then** it is written
+    in UTC with `Z`; **given** one of kind `Unspecified`, **Then** the write is refused with
+    `json-datetime-offset-missing` naming the path; **given** an `Unspecified` timestamp in an Elsa API response,
+    **Then** it is written as UTC with `Z` (FR-016).
 
 ---
 
@@ -407,9 +411,10 @@ faithful-or-refuse.
   - once the instant is established, a `DateTime` is normalized to UTC and written with `Z`; a `DateTimeOffset` keeps
     its offset;
   - on write, a `DateTime` of kind `Utc` is written with `Z` and one of kind `Local` is converted to UTC first. One of
-    kind `Unspecified` carries no instant: when it comes from a user type or an activity result, the write is refused
-    with `json-datetime-offset-missing` naming the path, so it never reaches storage without an offset; when it is a
-    timestamp in Elsa's own contract, it was produced by the engine's UTC clock and is written as UTC;
+    kind `Unspecified` carries no instant, and the context decides: in a conversion contract (user types, activity
+    results) the write is refused with `json-datetime-offset-missing` naming the path, so it never reaches storage
+    without an offset; in an API wire context (Elsa's own contract, whose timestamps come from the engine's UTC clock)
+    it is written as UTC. The converter takes this as a mode set by the context that constructs it;
   - a `DateOnly` takes the date as written; a value with a time and an offset takes its date in UTC. A `TimeOnly`
     takes the time as written. Neither is made an instant;
   - a raw JSON date string is carried unchanged until a conversion is requested.
