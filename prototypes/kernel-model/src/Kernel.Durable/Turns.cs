@@ -130,7 +130,7 @@ public sealed class TurnInput
     internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec)
     {
         _worker = worker;
-        ChildIds = worker.ChildIds;
+        ChildIds = worker.ChildIdsFor(actor);
         _services = worker.ServicesFor(slot);
         Slot = slot;
         Actor = actor;

@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { activityDataSupport, attachActivityDataJson, wireIdentity, type Binding, type Capture, type Created, type Node, type State, resolvedFeatureClosure, optionalBackendFeatures, type FeatureFact } from "./activityDataJourneySupport";
@@ -17,8 +18,12 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
   const navigations: CopyNavigation[] = [];
   const sequencePairs = mode === "sequence-pairs";
   const servedAssets: { url: string; sha256: string }[] = [], assetReads: Promise<void>[] = [];
-  const builtAssets = JSON.parse(process.env.UX_WORKFLOW_ASSET_SHA256S ?? "{}") as Record<string, string>;
-  const copyImplementationAssets = JSON.parse(process.env.UX_COPY_IMPLEMENTATION_ASSETS ?? "{}") as Record<string, { sha256: string; sources: string[] }>;
+  const manifestPath = process.env.UX_WORKFLOW_ASSET_MANIFEST;
+  if (!manifestPath) throw new Error("Run through tools/ux-acceptance/run.py to provide the workflow asset manifest.");
+  const { workflowSourceAssets: builtAssets, copyImplementationAssets } = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    workflowSourceAssets: Record<string, string>;
+    copyImplementationAssets: Record<string, { sha256: string; sources: string[] }>;
+  };
   page.on("response", response => {
     if (response.request().resourceType() === "script" && response.ok()) assetReads.push((async () => {
       const hash = await crypto.subtle.digest("SHA-256", new Uint8Array(await response.body()));
@@ -95,6 +100,17 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     runtime.push({ definitionId: created.definition.id, workflowExecutionId: run.workflowExecutionId, consumerId, producerId, originalNeverRuns, expected, committed: payload.payload.preview, executions });
     expect((await s.saved(created)).state).toEqual(before);
   }
+  // #4693: a member reference card shows its type line when its own details answer arrives. Capture each
+  // copy only once that line is shown, so the copy is compared with its original on equal terms.
+  const typeLine = page.locator(".wf-data-reference .wf-data-chooser-note");
+  async function captureReference(role: "whole" | "member", name: string, copy = true) {
+    if (role === "member") {
+      // The card must be the copy's own, never a previous selection's.
+      if (copy) await expect(s.reference()).toContainText("(copy", { timeout: 30_000 });
+      await expect(typeLine).toHaveText(["String"], { timeout: 30_000 });
+    }
+    await capture(page, info, name);
+  }
   async function duplicateSelected() {
     if (sequencePairs) {
       await node("consumer").press("ControlOrMeta+d");
@@ -124,6 +140,20 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     navigations.push({ definitionId: created.definition.id, role, stage, consumerId, producerId, selectedNodeId: await selected.getAttribute("data-id") });
   }
 
+  /** Selects one Sequence step on the canvas (inspector folded away on narrow screens) and centres it in view. */
+  async function showSequence(nodeId: string) {
+    await s.canvas(); await node(nodeId).press("Enter");
+    await expect(page.locator('.wf-sequence-step[aria-pressed="true"]')).toHaveCount(1);
+    await expect(node(nodeId)).toHaveAttribute("aria-pressed", "true");
+    // Centre it so paste and redo frame alike, and nothing overlaid (such as the validation footer) covers it.
+    await node(nodeId).evaluate(step => step.scrollIntoView({ block: "center" }));
+    await expect(node(nodeId)).toBeInViewport();
+    await expect.poll(() => node(nodeId).evaluate(step => {
+      const box = step.getBoundingClientRect();
+      return step.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+    }), { message: "Selected Sequence is uncovered" }).toBe(true);
+  }
+
   if (mode === "pairs" || sequencePairs) {
     for (const role of ["whole", "member"] as const) {
       const producer: Node = role === "whole" ? echo() : { nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] };
@@ -137,7 +167,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
         await expect(s.chooser()).toHaveCount(0);
         await expect.poll(() => s.stored(created)).toEqual(whole);
       }
-      await capture(page, info, `${role}-original`);
+      await captureReference(role, `${role}-original`, false);
       const before = await s.saved(created);
       await selectPair(); await duplicateSelected(); await waitCount(created, 5);
       const duplicated = await savedNodes(created);
@@ -148,7 +178,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       receipts.push({ definitionId: created.definition.id, operation: `duplicate-${role}`, before: before.state, after: (await s.saved(created)).state,
         producerId: duplicatedProducer.nodeId, consumerId: duplicatedConsumer.nodeId });
       await s.select(duplicatedConsumer.nodeId); await expect(s.reference()).toContainText("(copy)");
-      await capture(page, info, `${role}-duplicated`);
+      await captureReference(role, `${role}-duplicated`);
       await page.getByRole("button", { name: "Undo", exact: true }).click(); await waitCount(created, 3);
       expect((await s.saved(created)).state).toEqual(before.state);
       await page.getByRole("button", { name: "Redo", exact: true }).click(); await waitCount(created, 5);
@@ -165,25 +195,25 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       receipts.push({ definitionId: created.definition.id, operation: `paste-${role}`, before: sequencePairs ? beforePaste : duplicated, after: (await s.saved(created)).state,
         producerId: pastedProducer.nodeId, consumerId: pastedConsumer.nodeId });
       const afterPaste = (await s.saved(created)).state;
-      await s.select(pastedConsumer.nodeId); await capture(page, info, `${role}-pasted`);
+      await s.select(pastedConsumer.nodeId); await captureReference(role, `${role}-pasted`);
       await page.getByRole("button", { name: "Undo", exact: true }).click(); await waitCount(created, 5);
       expect((await s.saved(created)).state).toEqual(beforePaste); await capture(page, info, `${role}-paste-undo`);
       await page.getByRole("button", { name: "Redo", exact: true }).click(); await waitCount(created, 7);
       expect((await s.saved(created)).state).toEqual(afterPaste); await s.select(pastedConsumer.nodeId);
-      await capture(page, info, `${role}-paste-redo`);
+      await captureReference(role, `${role}-paste-redo`);
       if (sequencePairs) {
         await navigateSequenceSource(created, role, "copied", pastedConsumer.nodeId, pastedProducer.nodeId);
         await capture(page, info, `${role}-copied-source`);
         await codeReopen(created, pastedConsumer.nodeId, pastedProducer.nodeId);
-        await capture(page, info, `${role}-reopened`);
+        await captureReference(role, `${role}-reopened`);
         await navigateSequenceSource(created, role, "reopened", pastedConsumer.nodeId, pastedProducer.nodeId);
         await capture(page, info, `${role}-reopened-source`);
         if (role === "member") {
           const viewport = page.viewportSize()!; await page.setViewportSize({ width: 320, height: 900 }); await s.select(pastedConsumer.nodeId);
-          await capture(page, info, "copy-reference-320"); await page.setViewportSize(viewport);
+          await captureReference("member", "copy-reference-320"); await page.setViewportSize(viewport);
         }
         await publishRun(created, pastedConsumer.nodeId, pastedProducer.nodeId, role === "whole" ? "00:00:01" : "cust-1042");
-        await s.select(pastedConsumer.nodeId); await capture(page, info, `${role}-runtime`);
+        await s.select(pastedConsumer.nodeId); await captureReference(role, `${role}-runtime`);
         continue;
       }
       await page.locator(".wf-data-reference").getByRole("button", role === "whole" ? { name: /^Go to / } : { name: "Go to", exact: true }).click();
@@ -220,13 +250,13 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       await page.getByRole("button", { name: "Set as start node", exact: true }).click();
       await expect.poll(async () => (await s.saved(created)).state.rootActivity.structure!.payload.startNodeId).toBe(pastedProducer.nodeId);
       await capture(page, info, `${role}-copied-start`);
-      await codeReopen(created, pastedConsumer.nodeId, pastedProducer.nodeId); await capture(page, info, `${role}-reopened`);
+      await codeReopen(created, pastedConsumer.nodeId, pastedProducer.nodeId); await captureReference(role, `${role}-reopened`);
       if (role === "member") {
         const viewport = page.viewportSize()!; await page.setViewportSize({ width: 320, height: 900 }); await s.select(pastedConsumer.nodeId);
-        await capture(page, info, "copy-reference-320"); await page.setViewportSize(viewport);
+        await captureReference("member", "copy-reference-320"); await page.setViewportSize(viewport);
       }
       await publishRun(created, pastedConsumer.nodeId, pastedProducer.nodeId, role === "whole" ? "00:00:01" : "cust-1042", true);
-      await s.select(pastedConsumer.nodeId); await capture(page, info, `${role}-runtime`);
+      await s.select(pastedConsumer.nodeId); await captureReference(role, `${role}-runtime`);
     }
     return;
   }
@@ -265,11 +295,15 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     await waitCount(created, 19);
     const pastedState = (await s.saved(created)).state;
     const copiedGroup = pastedState.rootActivity.structure!.payload.activities[2];
-    await capture(page, info, "scope-pasted");
+    await showSequence(copiedGroup.nodeId); await capture(page, info, "scope-pasted");
     await page.getByRole("button", { name: "Undo", exact: true }).click(); await waitCount(created, 13);
-    expect((await s.saved(created)).state).toEqual(duplicatedState); await capture(page, info, "scope-paste-undo");
+    expect((await s.saved(created)).state).toEqual(duplicatedState);
+    // The paste is gone: the last remaining Sequence is the duplicate, with nothing after it.
+    await expect(node(copiedGroup.nodeId)).toHaveCount(0); await showSequence(duplicatedGroup.nodeId);
+    await capture(page, info, "scope-paste-undo");
     await page.getByRole("button", { name: "Redo", exact: true }).click(); await waitCount(created, 19);
-    expect((await s.saved(created)).state).toEqual(pastedState); await capture(page, info, "scope-paste-redo");
+    expect((await s.saved(created)).state).toEqual(pastedState); await showSequence(copiedGroup.nodeId);
+    await capture(page, info, "scope-paste-redo");
     const [copiedProducer, copiedConsumer, copiedPortable, copiedSwitch] = copiedGroup.structure!.payload.activities;
     const copiedCase = (copiedSwitch.structure!.payload.cases as { activity: Node; condition: { value: Binding } }[])[0];
     expect(copiedCase.activity.nodeId).not.toBe("case-consumer");
@@ -282,8 +316,26 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     await s.canvas(); await node(copiedGroup.nodeId).locator("..").getByRole("button", { name: /^Open Activities/ }).click();
     await s.select(copiedConsumer.nodeId); await expect(s.reference()).toContainText('"a.b"'); await expect(s.reference()).toContainText('""');
     await capture(page, info, "scope-copied-reference");
-    await s.select(copiedSwitch.nodeId); await capture(page, info, "switch-copied-condition");
-    await s.select(copiedPortable.nodeId); await capture(page, info, "portable-copied-preserved");
+    // The case condition lives in the Slots tab; the Inputs tab only points there.
+    const sections = page.getByLabel("Activity inspector sections", { exact: true });
+    await s.select(copiedSwitch.nodeId); await sections.getByRole("tab", { name: "Slots", exact: true }).click();
+    const condition = page.locator(".wf-slot-list .wf-data-reference-source");
+    await expect(condition).toContainText("Payload"); await expect(condition).toContainText("enabled");
+    // Today this editor names the scope by its raw id (#4827); update this pin when it shows the scope's label.
+    await expect(condition).toContainText(copiedGroup.nodeId);
+    await condition.scrollIntoViewIfNeeded(); await capture(page, info, "switch-copied-condition");
+    await sections.getByRole("tab", { name: "Inputs", exact: true }).click();
+    // The preserved body reads args.customer. Beside a canvas, keep its remapped producer, the copied Get Customer,
+    // in view; narrow layouts cannot show the canvas beside the inspector, so give the inspector the full width.
+    await s.select(copiedPortable.nodeId);
+    const source = page.locator(".wf-inspector-content .studio-code-editor-preview code");
+    await expect(source).toHaveText("args.customer.customerId");
+    const narrow = page.viewportSize()!.width <= 600;
+    if (narrow) await page.getByRole("button", { name: "Maximize inspector panel", exact: true }).click();
+    else { await node(copiedProducer.nodeId).scrollIntoViewIfNeeded(); await expect(node(copiedProducer.nodeId)).toBeInViewport(); }
+    await expect.poll(() => source.evaluate(code => code.scrollWidth <= code.clientWidth), { message: "Portable source is not truncated" }).toBe(true);
+    await capture(page, info, "portable-copied-preserved");
+    if (narrow) await page.getByRole("button", { name: "Restore inspector panel", exact: true }).click();
     const minimal = process.env.UX_ACTIVITY_DATA_COMPOSITION === "minimal";
     if (minimal) {
       const descriptors = await s.api<{ items: { type: string }[] }>("/expressions/descriptors");

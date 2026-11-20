@@ -31,8 +31,14 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await expect(page.getByText("Current: 2", { exact: true })).toBeVisible();
     await expect(chooser).toContainText("Execution 2 of 10");
     await expect(details.getByText(/Iteration \d/)).toHaveCount(0);
+    const writeLine = canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ });
     if (width === 390) await page.getByRole("button", { name: host === "instance" ? "Back to workflow run canvas" : "Back to canvas", exact: true }).click();
-    await canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ }).click();
+    else if (host === "instance") {
+      // Occurrence navigation can zoom in around the previous node.
+      await canvas.getByRole("button", { name: "Fit View", exact: true }).click();
+      await expect(writeLine).toBeInViewport({ ratio: 0.99 });
+    }
+    await writeLine.click();
     await expect(details.getByText("Current: 1", { exact: true })).toBeVisible();
     await expect(details.locator(".wf-execution-navigator")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);

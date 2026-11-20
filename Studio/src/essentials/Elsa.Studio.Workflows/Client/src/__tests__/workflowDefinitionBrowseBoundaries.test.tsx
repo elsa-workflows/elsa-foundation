@@ -57,7 +57,7 @@ describe("workflow definition browse boundaries", () => {
       await waitForCondition(() => expect(container.querySelector("[data-folder-id='folder-target']")).not.toBeNull());
       await click(container.querySelector("[data-folder-id='folder-target']"));
     } else if (key === "lifecycle") {
-      await click(button(container, "Deleted"));
+      await click(button(container, "Recycle bin"));
     } else if (key === "page") {
       await click(button(container, "Next"));
     } else {

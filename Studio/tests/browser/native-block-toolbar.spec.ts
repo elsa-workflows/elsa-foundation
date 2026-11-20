@@ -12,7 +12,7 @@ for (const host of ["workflow", "activity"]) for (const width of [360, 390]) for
     await expandInspector.click();
     await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
     const canvas = page.locator(".wf-canvas-shell");
-    const commands = canvas.getByRole("group", { name: "Named block commands", exact: true });
+    const commands = page.getByRole("group", { name: "Named block commands", exact: true });
     // A phone-width inspector is a sheet (#4695): the canvas and its commands wait behind it rather
     // than being squeezed beside it, so no command can paint into the active inspector.
     await expect(canvas).toBeHidden();
@@ -23,7 +23,9 @@ for (const host of ["workflow", "activity"]) for (const width of [360, 390]) for
     await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
     const palette = page.getByRole("button", { name: "Collapse activities panel", exact: true });
     if (await palette.isVisible()) await palette.click();
-    const create = commands.getByRole("button", { name: "Create Sequence block", exact: true });
+    const trigger = commands.getByRole("button", { name: "Blocks", exact: true });
+    await trigger.click();
+    const create = page.getByRole("menuitem", { name: "Create Sequence block", exact: true });
     await expect(create).toBeVisible();
     // This isolated activity fixture has no resource candidate-validation endpoint.
     // Its commands must stay unavailable; editable activity drafts are covered on the composed host.
@@ -39,7 +41,7 @@ for (const host of ["workflow", "activity"]) for (const width of [360, 390]) for
     await expect(dialog).toBeVisible();
     await dialog.getByRole("textbox", { name: "Name", exact: true }).press("Escape");
     await expect(dialog).toHaveCount(0);
-    await expect(create).toBeFocused();
+    await expect(trigger).toBeFocused();
     await page.screenshot({ path: info.outputPath("canvas-returned.png"), fullPage: true });
   });
 }

@@ -75,7 +75,7 @@ public sealed partial class World
             if (r.Next(4) == 0)
             {
                 var owner = alive[r.Next(alive.Count)];
-                var posted = InstanceRef.In(owner.Partition, key);
+                var posted = InstanceRef.In(Place(owner, r), key);
                 Native.Started[posted.Id] = (workflow, mode, true);
                 if (events > 0) Native.Waiting.Add((posted.Id, [.. Enumerable.Range(1, events).Select(i => $"event:{key}-{i}")]));
                 return new Act("post", owner.Id, M: new Message($"x{n}", posted, Kinds.Start, Start: spec));
@@ -332,13 +332,14 @@ public sealed partial class World
     /// workflow whose key set depends on event or timer order (a join whose outside inbound may arrive last, a While whose
     /// limit a sibling raises, a ForEach over a collection a sibling grows) would be a false red here, as n-join2 and
     /// n-graph would be for N5; those two are excepted, and none of them sends. An instance without a row at the end (an
-    /// Ephemeral one that finished in memory) is not compared; the smoke's and the variants' Ephemeral runs cover it.
+    /// Ephemeral one that finished in memory) is not compared; the smoke's and the variants' Ephemeral runs cover it. Nor is
+    /// a parked one, whose row keeps no state to read the input from, as the other native end checks skip it.
     /// </summary>
     private string? NativeKeys()
     {
         foreach (var (id, sent) in Native.Sent)
         {
-            if (Store.Instances.GetValueOrDefault(id) is not { Model: NativeModel.ModelKey } row || row.Definition is "n-join2" or "n-graph") continue;
+            if (Store.Instances.GetValueOrDefault(id) is not { Model: NativeModel.ModelKey } row || row.Definition is "n-join2" or "n-graph" || Parked.Contains(id)) continue;
             var expected = NativeReference.Of(row.Definition, Json.Read<NativeState>(row.State).Variables.GetValueOrDefault("input"));
             if (expected.DuplicateKeys.Count > 0) return $"N7 {row.Definition}: a run without faults sends {expected.DuplicateKeys[0]} twice: two activations share one key";
             foreach (var local in sent)

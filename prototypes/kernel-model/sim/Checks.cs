@@ -115,6 +115,11 @@ public sealed partial class World
         // I14, the counting half: attempts change only in a take (see World.Take).
         foreach (var row in Store.Messages.Values)
             if (row.Attempts != _attempts.GetValueOrDefault(row.Message.Id)) return $"I14 the attempts of {row.Message.Id} changed to {row.Attempts} outside a take";
+        // M1 (K1 D4): a Seen or Trial mark records its own partition's epoch at the take, so none is above it. (The
+        // ownership model's S1 is the same rule with the stranded half, which I3 checks here.)
+        foreach (var row in Store.Messages.Values)
+            if (!row.Done && Store.Partitions[row.Message.Target.Partition].Epoch is var epoch && (row.Seen > epoch || row.Trial > epoch))
+                return $"M1 {row.Message.Id} is marked at seen {row.Seen}, trial {row.Trial}, above partition {row.Message.Target.Partition}'s epoch {epoch}";
         return Journal() ?? Memory() ?? Counters(waiting) ?? Trees(waiting) ?? Waits() ?? Sequences(waiting) ?? Jobs() ?? Correlated() ?? Answers();
     }
 
@@ -126,6 +131,7 @@ public sealed partial class World
         var commits = new Dictionary<string, List<long>>(StringComparer.Ordinal);
         foreach (var row in Store.Journal.Values)
         {
+            if (row.Partition >= Config.Partitions) return $"I6 partition {row.Partition} has a journal row, and the world places only {Config.Partitions}";
             count[row.Partition]++;
             top[row.Partition] = Math.Max(top[row.Partition], row.Position);
             if (row.Revision > 0) (commits.TryGetValue(row.Instance, out var list) ? list : commits[row.Instance] = []).Add(row.Revision);
@@ -252,20 +258,25 @@ public sealed partial class World
     {
         foreach (var actor in Alive)
         {
-            var (worker, partition) = (actor.Worker, Store.Partitions[actor.Partition]);
-            if (!worker.Owns || worker.Epoch != partition.Epoch) continue;
+            // The partitions the worker holds at their current epoch: what it holds of them is checked, the rest is stale.
+            var worker = actor.Worker;
+            var current = worker.Fences.Where(f => f.Epoch == Store.Partitions[f.Partition].Epoch).ToList();
+            if (current.Count == 0) continue;
+            bool Current(string id) => StoreBatchRules.AddressPartition(id) is { } p && current.Exists(f => f.Partition == p);
             // I21: no more idle instances in memory than the bound.
             if (worker.Idle > 2) return $"I21 actor {actor.Id} holds {worker.Idle} idle instances; the bound is 2";
-            if (!worker.Flushing && worker.Position != partition.Position)
-                return $"I9 actor {actor.Id} believes partition {actor.Partition} is at {worker.Position}; it is at {partition.Position}";
-            var unwritten = worker.Unwritten.ToHashSet(StringComparer.Ordinal);
+            if (!worker.Flushing)
+                foreach (var fence in current)
+                    if (fence.Position != Store.Partitions[fence.Partition].Position)
+                        return $"I9 actor {actor.Id} believes partition {fence.Partition} is at {fence.Position}; it is at {Store.Partitions[fence.Partition].Position}";
+            var unwritten = worker.Unwritten.Where(Current).ToHashSet(StringComparer.Ordinal);
             var busyNow = worker.Instances.Where(i => i.Busy).Select(i => i.Id).ToHashSet(StringComparer.Ordinal);
             foreach (var id in unwritten)       // decision 4: in memory only, so never a row (unless the commit that writes it is in flight)
                 if (Store.Instances.ContainsKey(id) && !busyNow.Contains(id))
                     return $"I9 actor {actor.Id} holds {id} in memory only, and it has a row";
             foreach (var (id, row, state, busy) in worker.Instances)
             {
-                if (unwritten.Contains(id)) continue;
+                if (unwritten.Contains(id) || !Current(id)) continue;
                 if (row is { Model: "counter", StateVersion: 2 } && actor.Version == 1) Count("a version-1 owner holds a counter row at version 2");
                 if (busy) continue;
                 if (row != Store.Instances.GetValueOrDefault(id))
@@ -273,15 +284,19 @@ public sealed partial class World
                 if (state is not null && state != row?.State) return $"I9 actor {actor.Id}: the live state of {id} is {state} and its row says {row?.State}";
             }
             var held = new HashSet<InboxKey>();
-            foreach (var (id, durable, taken) in worker.Messages)
+            foreach (var (id, durable, taken, target) in worker.Messages)
             {
                 held.Add(id);
-                if (durable && !taken && Store.Messages.GetValueOrDefault(id) is not { Done: false }) return $"I9 actor {actor.Id} holds message {id}, which is not a row any more";
+                if (durable && !taken && Current(target.Id) && Store.Messages.GetValueOrDefault(id) is not { Done: false }) return $"I9 actor {actor.Id} holds message {id}, which is not a row any more";
             }
             if (worker.Flushing) continue;
             foreach (var row in Store.Messages.Values)
-                if (row.Seen == partition.Epoch && !row.Done && row.Message.Target.Partition == actor.Partition && !held.Contains(row.Message.InboxKey))
-                    return $"I3 message {row.Message.Id} is marked seen at epoch {partition.Epoch} and its owner, actor {actor.Id}, does not hold it";
+            {
+                if (row.Done || row.Seen == 0 || held.Contains(row.Message.InboxKey)) continue;
+                var partition = row.Message.Target.Partition;
+                if (current.Exists(f => f.Partition == partition && f.Epoch == row.Seen))
+                    return $"I3 message {row.Message.Id} is marked seen at epoch {row.Seen} of partition {partition} and its owner, actor {actor.Id}, does not hold it";
+            }
         }
         return null;
     }
@@ -516,18 +531,32 @@ public sealed partial class World
                 }
         }
         Auto = true;
+        // A slot is a node's scope of a partition: in a set world the node's one worker serves every slot of its node.
         var slots = Enumerable.Range(0, Config.Nodes).SelectMany(n => Enumerable.Range(0, Config.Partitions).Select(p => (Node: n, Partition: p))).ToList();
         var published = false;
-        for (var round = 0; round < 150; round++)
+        // K1b: under the node lease a lost owner's partitions wait a lease of one-second rounds, so a poison message that
+        // kills process after process needs more rounds to be counted down.
+        var rounds = Config.NodeLease ? 600 : 150;
+        for (var round = 0; round < rounds; round++)
         {
             // Expire a missing owner's lease; while every partition has an owner, give healthy owners passes within
             // their lease. Advancing past every lease on every round would manufacture repeated owner loss.
-            var missing = Enumerable.Range(0, Config.Partitions).Any(p => !slots.Any(s => s.Partition == p && Of(s.Node, p).Worker.Owns));
-            Time += round == 0 || missing ? 11_000 : 1_000;
-            for (var p = 0; p < Config.Partitions; p++)
-            {
-                foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Owns))
+            var missing = Enumerable.Range(0, Config.Partitions).Any(p => !slots.Any(s => s.Partition == p && Of(s.Node, p).Worker.Holds(p)));
+            // K1b: one node lease covers every partition of a process, so a missing owner's lease runs out by itself while the
+            // live nodes beat every round; a long silence would expire every node at once.
+            Time += Config.NodeLease ? 1_000 : round == 0 || missing ? 11_000 : 1_000;
+            var beaten = new HashSet<Actor>();
+            if (Config.NodeLease)       // K1b: each node's heartbeat, which its pass gate may withhold
+                foreach (var beat in Beats.ToList())
                 {
+                    Watch(Heartbeat(beat));
+                    if (_dying.Count != 0) FinishDeaths();
+                }
+            else for (var p = 0; p < Config.Partitions; p++)
+            {
+                foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Holds(p)))
+                {
+                    if (!beaten.Add(Of(node, p))) continue;     // a worker beats once a round, for its whole set
                     Watch(Of(node, p).Worker.BeatAsync());   // even this acknowledgement can start a job that kills its process
                     if (_dying.Count != 0) FinishDeaths();
                 }
@@ -544,15 +573,27 @@ public sealed partial class World
                 {
                     var actor = Of(node, partition);
                     var worker = actor.Worker;
-                    if (!worker.Owns) continue;
-                    if (!actor.Runtime.Owns(partition)) Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it");
+                    // K1b: a Worker whose only partitions are pending keeps getting passes, so that its gate reopens, and one
+                    // that holds none gets a pass while a heartbeat answer waits for it (its release side).
+                    if (Config.NodeLease && !worker.Owns && (worker.Pending.ContainsKey(partition) || worker.AnswerWaiting) && !actor.Passing)
+                    {
+                        Watch(Adopting(actor, actor.Serial is { } host ? host.RunNodeAsync() : worker.RunAsync().AsTask()));
+                        if (_dying.Count != 0) FinishDeaths();
+                        continue;
+                    }
+                    if (!worker.Holds(partition)) continue;
+                    // K1b: a node-lease Worker brings partitions back by itself (a pending retake); the node, as their host,
+                    // adopts them first. One its runtime gave up since its last activation is not adopted: that is the bug.
+                    if (Config.NodeLease && Adoptable(actor, partition)) Watch(actor.Runtime.ActivateAsync(partition));
+                    if (!actor.Runtime.Owns(partition))
+                        Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it{(actor.GiveUps.GivenUp.Contains(partition) ? ": the runtime gave it up" : "")}");
                     // An eager host: every pass reads the inbox, and runs whatever is ready before it flushes. A process that
                     // dies (now, or before the pass) cancels it: no turn after that, and no flush.
                     using (_pass = new CancellationTokenSource())
                     {
                         if (Dying is not null) _pass.Cancel();
                         Watch(actor.Runtime.WakeAsync(InstanceRef.In(partition, "")).AsTask());     // over the runtime's wake signal
-                        Watch(actor.Runtime.PassAsync(partition, _pass.Token).AsTask());
+                        Watch(Adopting(actor, actor.Runtime.PassAsync(partition, _pass.Token).AsTask()));
                     }
                     _pass = null;
                     if (_dying.Count != 0)     // a turn or a background job killed its process
@@ -566,7 +607,7 @@ public sealed partial class World
             if (Check() is { } violation) return violation;
             // I15, decision 6: after a pass, an owner holds no caller past its deadline, so no expired caller pins an instance.
             foreach (var (node, partition) in slots)
-                if (Of(node, partition).Worker is { Owns: true } owner && owner.Callers.FirstOrDefault(c => ReplyTo.Parse(c).Deadline <= owner.Now) is { } late)
+                if (Of(node, partition).Worker is { } owner && owner.Holds(partition) && owner.Callers.FirstOrDefault(c => ReplyTo.Parse(c).Deadline <= owner.Now) is { } late)
                     return $"I15 actor {Of(node, partition).Id} still holds the reply address {late} past its deadline";
             if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Jobs.Count > 0))) continue;
             if (Unfair() is not null) continue;
@@ -581,7 +622,7 @@ public sealed partial class World
             published = true;
         }
         var left = Store.Messages.Values.Where(m => !m.Done).Select(m => $"{m.Message.Id} ({m.Message.Kind} to {m.Message.Target}, seen {m.Seen}, attempts {m.Attempts})").Take(5);
-        return $"IDLE not idle after 150 rounds without faults; waiting: {string.Join("; ", left)}{(Unfair() is { } unfair ? "; " + unfair : "")}";
+        return $"IDLE not idle after {rounds} rounds without faults; waiting: {string.Join("; ", left)}{(Unfair() is { } unfair ? "; " + unfair : "")}";
     }
 
     // Fair share, once faults stop: every partition has one owner at its current epoch, and no node holds more than its share.
@@ -591,7 +632,7 @@ public sealed partial class World
         var owned = new int[Config.Nodes];
         for (var p = 0; p < Config.Partitions; p++)
         {
-            var owners = Enumerable.Range(0, Config.Nodes).Where(n => Of(n, p).Worker.Owns && Of(n, p).Worker.Epoch == Store.Partitions[p].Epoch).ToList();
+            var owners = Enumerable.Range(0, Config.Nodes).Where(n => Of(n, p).Worker.Holds(p) && Of(n, p).Worker.EpochOf(p) == Store.Partitions[p].Epoch).ToList();
             if (owners.Count != 1) return $"partition {p} has {owners.Count} owners";
             owned[owners[0]]++;
         }
@@ -705,7 +746,7 @@ public sealed partial class World
             if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != (bad || Oracle.KillerJobs.Contains(id) ? InstanceStatus.Faulted : InstanceStatus.Running)) return $"I14 {id} ended as {Store.Instances.GetValueOrDefault(id)?.Status.ToString() ?? "no row"}";
         for (var p = 0; p < Config.Partitions; p++)
         {
-            for (var round = 0; round < 1000 && Store.Projection[p] < Store.Partitions[p].Position; round++) Watch(Of(round % Config.Nodes, p).Projector.RoundAsync());
+            for (var round = 0; round < 1000 && Store.Projection[p] < Store.Partitions[p].Position; round++) Watch(Of(round % Config.Nodes, p).ProjectorOf(p).RoundAsync());
             if (Store.Projection[p] != Store.Partitions[p].Position) return $"I6 the projector of partition {p} stopped at {Store.Projection[p]} of {Store.Partitions[p].Position}";
         }
         if (Config.Native && NativeEnd() is { } native) return native;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowTag, listWorkflowTags, workflowOrganizationSupport, type WorkflowTag, type WorkflowTagPage } from "../api/workflowOrganization";
 import { StudioLink } from "../StudioLink";
@@ -104,8 +104,8 @@ function WorkflowTagsPage({ context, initialPage, navigate }: { context: StudioE
     {busy && !page.items.length ? <SkeletonRows label="Loading workflow tags" /> : page.items.length ? <StudioTableContainer role="region" aria-label="Workflow tags table" tabIndex={0}>
       <table className="studio-table" aria-label="Workflow tags">
         <thead><tr><th scope="col">Name</th><th scope="col">Description</th><th scope="col">Kind</th><th scope="col">Status</th></tr></thead>
-        <tbody>{page.items.map(tag => <tr key={tag.id}>
-          <td>{canManage ? <StudioLink href={tagPath(tag.id)} navigateToStudioPath={navigate}>{tag.name}</StudioLink> : tag.name}</td>
+        <tbody>{page.items.map(tag => <tr key={tag.id} {...studioRowInteraction<HTMLTableRowElement>(canManage ? () => navigate(tagPath(tag.id)) : undefined)}>
+          <td>{canManage ? <StudioLink className="studio-row-link" href={tagPath(tag.id)} navigateToStudioPath={navigate}>{tag.name}</StudioLink> : tag.name}</td>
           <td>{tag.description || "—"}</td>
           <td>{tag.mode === "marker" ? "Simple label" : `Controlled values · ${tag.cardinality === "single" ? "One per workflow" : "Several per workflow"}`}</td>
           <td>{tag.deprecated ? "Retired" : "Active"}</td>

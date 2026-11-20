@@ -1,4 +1,100 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
+
+for (const theme of ["light", "dark"]) {
+  for (const width of [1440, 390]) {
+    test(`Activity editor opens directly with history disclosed on demand (${theme}, ${width})`, async ({ page }, testInfo) => {
+      const state = await mockActivityDefinitionAuthoring(page);
+      await mockEditorEntry(page, state);
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`/?mode=activity-definitions&theme=${theme}`);
+      const row = page.getByRole("row", { name: "Open Activity Definition Browser graph activity" });
+      await row.focus();
+      await row.press("Enter");
+      await expect(page.getByLabel("Activity Graph designer")).toBeVisible();
+      await expect(page.getByRole("tab", { name: "Overview", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Create parallel draft", exact: true })).toHaveCount(0);
+      const history = page.locator(".ad-authoring-history");
+      await expect(history).not.toHaveAttribute("open");
+      await expect(page.locator(".ad-authoring-advanced")).not.toHaveAttribute("open");
+      expect(state.draftCreationRequests).toHaveLength(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+      await page.screenshot({ path: testInfo.outputPath(`editor-${theme}-${width}.png`) });
+      await history.locator("summary").focus();
+      await page.keyboard.press("Enter");
+      await expect(history.getByRole("button", { name: "Versions", exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(history).not.toHaveAttribute("open");
+      await expect(history.locator("summary")).toBeFocused();
+      await history.locator("summary").click();
+      await history.getByRole("button", { name: "Drafts", exact: true }).click();
+      await expect(page.getByRole("tab", { name: "Drafts", exact: true })).toHaveAttribute("aria-selected", "true");
+      await page.getByRole("button", { name: "Open editor", exact: true }).click();
+      await expect(page.getByLabel("Activity Graph designer")).toBeVisible();
+      await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+      await expect(page.getByRole("row", { name: "Open Activity Definition Browser graph activity" })).toBeVisible();
+    });
+  }
+}
+
+test("Activity editor starts a draft only on the first change and keeps that change after reload", async ({ page }, testInfo) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  state.draft.status = "published";
+  state.headVersionId = "published-version";
+  state.recommendedVersionId = "published-version";
+  state.publishedVersions.push({ versionId: "published-version", version: "1.0.0", draft: structuredClone(state.draft) });
+  await mockEditorEntry(page, state);
+  await page.goto("/?mode=activity-definitions&definition=activity-def-browser&theme=light");
+  await expect(page.getByLabel("Activity Graph designer")).toBeVisible();
+  expect(state.draftCreationRequests).toHaveLength(0);
+  await page.screenshot({ path: testInfo.outputPath("published-editor.png") });
+  await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Inputs/ }).click();
+  await page.getByRole("button", { name: "Add input", exact: true }).click();
+  await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Customer note");
+  await page.getByRole("button", { name: "Add input", exact: true }).last().click();
+  await expectSavedRevision(page, 2);
+  expect(state.draftCreationRequests).toEqual([{ sourceVersionId: "published-version", presentationLabel: null }]);
+  await expect(page).toHaveURL(/draft=activity-draft-browser-follow-up/);
+  await page.reload();
+  await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Inputs/ }).click();
+  await expect(page.getByRole("region", { name: "Customer note", exact: true })).toBeVisible();
+  expect(state.draftCreationRequests).toHaveLength(1);
+  await page.screenshot({ path: testInfo.outputPath("first-change-persisted.png") });
+});
+
+test("Activity editor starts published block editing in place", async ({ page }, testInfo) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  await createBrowserActivity(page);
+  state.draft.status = "published";
+  state.headVersionId = "published-version";
+  state.recommendedVersionId = "published-version";
+  state.publishedVersions.push({ versionId: "published-version", version: "1.0.0", draft: structuredClone(state.draft) });
+  await mockEditorEntry(page, state);
+  await page.goto("/?mode=activity-definitions&definition=activity-def-browser&theme=dark");
+  await expect(page.getByLabel("Activity Graph designer")).toBeVisible();
+  const commands = page.getByRole("group", { name: "Named block commands", exact: true });
+  const blocksMenu = commands.getByRole("button", { name: "Blocks", exact: true });
+  const createSequence = page.getByRole("button", { name: "Create Sequence block", exact: true }).or(page.getByRole("menuitem", { name: "Create Sequence block", exact: true }));
+  if (await blocksMenu.isVisible()) await blocksMenu.click();
+  await expect(createSequence).toBeDisabled();
+  if (await blocksMenu.isVisible()) await page.keyboard.press("Escape");
+  expect(state.draftCreationRequests).toHaveLength(0);
+  await page.screenshot({ path: testInfo.outputPath("published-block-editing.png") });
+  await commands.getByRole("button", { name: "Start editing", exact: true }).click();
+  if (await blocksMenu.isVisible()) await blocksMenu.click();
+  await expect(createSequence).toBeEnabled();
+  await expect(page).toHaveURL(/draft=activity-draft-browser-follow-up/);
+  expect(state.draftCreationRequests).toEqual([{ sourceVersionId: "published-version", presentationLabel: null }]);
+  await createSequence.click();
+  await expect(page.getByRole("dialog", { name: "Create Sequence block", exact: true })).toBeVisible();
+  expect(state.draftCreationRequests).toHaveLength(1);
+});
+
+async function mockEditorEntry(page: Page, state: Awaited<ReturnType<typeof mockActivityDefinitionAuthoring>>) {
+  await page.route(/\/design\/activities\/definitions\?.*/, route => route.fulfill({ json: pageOf([authoringManagementDefinition(state)]) }));
+  await page.route(/\/design\/activities\/definitions\/activity-def-browser\/drafts\?.*/, route => route.fulfill({ json: pageOf([...state.draftsById.values()].map(item => ({
+    draft: { ...authoringDraftSummary(item), status: item.status }, actions: [{ action: "edit-draft", allowed: true }]
+  }))) }));
+}
 
 for (const theme of ["light", "dark"]) {
   for (const viewport of [
@@ -58,7 +154,7 @@ for (const theme of ["light", "dark"]) {
   });
 }
 
-test("Activity Definitions supports keyboard collection-to-workbench navigation and exact draft URLs", async ({ page }) => {
+test("Activity Definitions supports keyboard navigation from the editor into history and exact draft URLs", async ({ page }) => {
   await mockActivityDefinitions(page);
   await page.goto("/?mode=activity-definitions");
 
@@ -68,6 +164,7 @@ test("Activity Definitions supports keyboard collection-to-workbench navigation 
   await page.keyboard.press("Enter");
 
   await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await openEditorDetails(page);
   await openAdvancedDetails(page);
   await expect(page.getByText("Finance", { exact: true })).toBeVisible();
   await expect(page.getByText("Contoso.InvoiceEvaluator")).toBeVisible();
@@ -320,7 +417,7 @@ test("source-owned Activity Definition history stays exact and offers no denied 
 
 test("source-owned Activity Definition overview shows the recommended contract without draft management", async ({ page }) => {
   await mockActivityDraftManagement(page, { sourceOwned: true });
-  await page.goto("/workflows/activity-definitions?definition=definition-1");
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=overview");
 
   await expect(page.locator(".ad-source-overview")).toContainText("Finance");
   await expect(page.getByText("Inputs, outputs & outcomes")).toBeVisible();
@@ -344,6 +441,7 @@ test("source-owned Usage starts with inbound evidence for the recommended versio
 test("source-owned Activity Definition fork reviews and applies only the recommended active version", async ({ page }) => {
   const state = await mockActivityFork(page);
   await page.goto("/workflows/activity-definitions?definition=definition-1");
+  await openEditorDetails(page);
 
   await page.getByRole("button", { name: "Fork recommended version" }).click();
   const request = page.getByRole("dialog", { name: "Fork recommended activity version" });
@@ -372,6 +470,7 @@ test("source-owned Activity Definition fork reviews and applies only the recomme
 test("unsupported fork conversion and atomic collision preserve the source without opening a draft", async ({ page }) => {
   const unsupported = await mockActivityFork(page, "unsupported");
   await page.goto("/workflows/activity-definitions?definition=definition-1");
+  await openEditorDetails(page);
   await page.getByRole("button", { name: "Fork recommended version" }).click();
   const unsupportedDialog = page.getByRole("dialog", { name: "Fork recommended activity version" });
   await unsupportedDialog.getByRole("button", { name: "Create fork preview" }).click();
@@ -383,6 +482,7 @@ test("unsupported fork conversion and atomic collision preserve the source witho
   await page.unrouteAll({ behavior: "wait" });
   const collision = await mockActivityFork(page, "collision");
   await page.goto("/workflows/activity-definitions?definition=definition-1");
+  await openEditorDetails(page);
   await page.getByRole("button", { name: "Fork recommended version" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Create fork preview" }).click();
   await page.getByRole("dialog", { name: "Review activity fork" }).getByRole("button", { name: "Apply reviewed fork" }).click();
@@ -684,7 +784,9 @@ test("Activity Definition dependency explorer keeps exact snapshot pages, repeat
   await expect(page.getByText("AuthoritativeDirect")).toBeVisible();
   await expect(page.getByText("occurrence-a")).toBeVisible();
   await expect(page.getByText("occurrence-b")).toBeVisible();
-  await page.getByRole("button", { name: "View path" }).first().click();
+  const occurrence = page.getByRole("row", { name: /occurrence-a/ });
+  await occurrence.getByText("occurrence-a", { exact: true }).click();
+  await expect(occurrence.getByRole("button", { name: "View path" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("Complete cycle path")).toBeVisible();
   await expect(page.locator(".ad-dependency-path")).toHaveCount(1);
 
@@ -762,14 +864,15 @@ for (const theme of ["light", "dark"]) {
       expect(a.height).toBe(b.height);
       if (width > 760) expect(Math.abs(a.y - b.y)).toBeLessThanOrEqual(1);
       await page.screenshot({ path: info.outputPath("presentation.png"), fullPage: true });
-      await member.getByRole("tab", { name: "Advanced", exact: true }).click();
+      await general.click();
       const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
       await key.fill("writing-topic");
       const apply = member.getByRole("button", { name: "Apply key", exact: true });
       expect((await apply.boundingBox())!.x).toBeGreaterThan((await key.boundingBox())!.x);
-      await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
       await apply.click();
       await expect(apply).toBeDisabled();
+      await member.getByRole("tab", { name: "Advanced", exact: true }).click();
+      await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
       await page.screenshot({ path: info.outputPath("advanced.png"), fullPage: true });
       await general.click();
       await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A pending topic");
@@ -969,7 +1072,7 @@ test("Activity Graph diagnostics focus accessible root context while the exact c
 });
 
 for (const theme of ["light", "dark"]) {
-  for (const width of [320, 768, 1024, 1440]) {
+  for (const width of [320, 768, 1024, 1440, 2048]) {
     test(`keeps activity authoring actions stationary through publication status changes at ${width}px in ${theme}`, async ({ page }, testInfo) => {
       const state = await mockActivityDefinitionAuthoring(page);
       await page.setViewportSize({ width, height: 900 });
@@ -981,6 +1084,18 @@ for (const theme of ["light", "dark"]) {
       const initial = await Promise.all(actions.map(action => action.boundingBox()));
       expect(initial.every(Boolean)).toBe(true);
       const observations = [];
+      state.validationMode = "valid";
+      await openAdvancedDetails(page);
+      await page.getByRole("button", { name: "Validate saved revision", exact: true }).click();
+      const diagnostics = page.locator(".ad-draft-context").getByRole("button", { name: "View draft diagnostics", exact: true });
+      await expect(diagnostics).toBeVisible();
+      await expect(diagnostics).toHaveText("Saved");
+      await page.locator("details.ad-authoring-advanced > summary").click();
+      await expect(toolbar.locator(".ad-draft-diagnostics-link")).toHaveCount(0);
+      observations.push({ state: "validated", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      await diagnostics.focus();
+      await expect(diagnostics).toBeFocused();
+      await page.screenshot({ path: testInfo.outputPath("validated-toolbar.png"), fullPage: true });
       let releaseSave!: () => void;
       const savePending = new Promise<void>(resolve => { releaseSave = resolve; });
       const savePath = "**/design/activities/drafts/activity-draft-browser";
@@ -1041,6 +1156,20 @@ for (const theme of ["light", "dark"]) {
         expect(Math.abs(boxes[index]!.x - initial[index]!.x)).toBeLessThanOrEqual(1);
         expect(Math.abs(boxes[index]!.y - initial[index]!.y)).toBeLessThanOrEqual(1);
       }
+      if (width === 320 || width === 2048) {
+        state.validationMode = "invalid";
+        await openAdvancedDetails(page);
+        await page.getByRole("button", { name: "Validate saved revision", exact: true }).click();
+        const errors = page.locator(".ad-draft-context").getByRole("button", { name: /View \d+ draft errors?/ });
+        await expect(errors).toBeVisible();
+        await expect(errors).toContainText(/errors?/);
+        await page.locator("details.ad-authoring-advanced > summary").click();
+        await page.screenshot({ path: testInfo.outputPath("invalid-toolbar.png"), fullPage: true });
+        await errors.focus();
+        await page.keyboard.press("Enter");
+        await expect(page.locator(".ad-diagnostics-panel > details")).toHaveAttribute("open");
+        await expect(page.locator(".ad-diagnostics-panel .ad-diagnostic-item").first()).toBeFocused();
+      }
     });
   }
 }
@@ -1048,7 +1177,8 @@ for (const theme of ["light", "dark"]) {
 test("Activity Definition publication keeps first and later recommendation semantics while preserving exact versions", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
-  const changesRegion = page.getByRole("region", { name: "Changes", exact: true });
+  const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
+  const changesRegion = publicationDialog.getByRole("region", { name: "Changes", exact: true });
 
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("First publication", { exact: true })).toBeVisible();
@@ -1060,13 +1190,13 @@ test("Activity Definition publication keeps first and later recommendation seman
   await page.locator(".ad-impact-group details summary").first().click();
   await expect(page.getByText("Protected value redacted")).toBeVisible();
   await expect(page.getByText("raw-protected-provider-value")).toHaveCount(0);
-  await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
+  const firstVersion = await openPublicationVersion(publicationDialog);
+  await firstVersion.fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
   await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
   await expect(page.getByText("The server now recommends this first published version.", { exact: true })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
 
-  const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
   await expect(publicationDialog.getByText("Published immutable version 2.0.0")).toBeVisible();
   await publicationDialog.getByText("Publication review details", { exact: true }).click();
   await expect(publicationDialog.getByRole("button", { name: "Published 2.0.0" })).toBeDisabled();
@@ -1082,9 +1212,11 @@ test("Activity Definition publication keeps first and later recommendation seman
 
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("Compared with published head")).toBeVisible();
+  await publicationDialog.locator("summary").filter({ hasText: /^Changes$/ }).click();
   await expect(changesRegion).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Publication version" })).toHaveValue("2.1.0");
-  await page.getByRole("textbox", { name: "Publication version" }).fill("3.4.5");
+  const nextVersion = await openPublicationVersion(publicationDialog);
+  await expect(nextVersion).toHaveValue("2.1.0");
+  await nextVersion.fill("3.4.5");
   await page.getByRole("button", { name: "Publish 3.4.5" }).click();
   await expect(page.getByText("Published immutable version 3.4.5")).toBeVisible();
   await expect(page.getByText("The recommendation stayed unchanged. Publishing did not move it.", { exact: true })).toBeVisible();
@@ -1094,6 +1226,11 @@ test("Activity Definition publication keeps first and later recommendation seman
   expect(state.proposalApplies).toBe(0);
   expect(state.publishedDraftIds).toEqual(["activity-draft-browser", "activity-draft-browser-follow-up"]);
 });
+
+async function openPublicationVersion(dialog: Locator) {
+  await dialog.locator("summary").filter({ hasText: /^Version$/ }).click();
+  return dialog.getByRole("textbox", { name: "Publication version" });
+}
 
 test("published recommendation is placed exactly, dispatched once, and inspected as one reusable boundary", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
@@ -1105,7 +1242,8 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await page.locator(".ad-diagnostics-panel > details > summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await page.getByRole("button", { name: "Review & publish" }).click();
-  await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
+  const version = await openPublicationVersion(page.getByRole("dialog", { name: "Review & publish" }));
+  await version.fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
   await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
@@ -1147,9 +1285,13 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   const overview = runDetails.locator(".wf-activity-overview");
   await expect(overview).toContainText("Published browser activity");
   await expect(overview).toContainText("Completed");
-  await expect(runDetails.getByRole("heading", { name: "Inputs" })).toBeVisible();
-  await expect(runDetails.getByRole("heading", { name: "Outputs" })).toBeVisible();
-  await expect(runDetails.getByRole("heading", { name: "Outcomes" })).toBeVisible();
+  const evidenceTabs = runDetails.getByRole("tablist", { name: "Activity execution details" });
+  for (const tab of ["Inputs", "Outputs"]) {
+    await evidenceTabs.getByRole("tab", { name: tab, exact: true }).click();
+    await expect(runDetails.getByRole("heading", { name: tab, exact: true })).toBeVisible();
+  }
+  await evidenceTabs.getByRole("tab", { name: "Overview", exact: true }).click();
+  await expect(runDetails.getByRole("heading", { name: "Outcomes", exact: true })).toBeVisible();
   const boundaryDetails = runDetails.locator(".wf-activity-boundary-details > details");
   await expect(boundaryDetails).toBeVisible();
   await expect(boundaryDetails).not.toHaveAttribute("open");
@@ -1334,7 +1476,9 @@ test("Activity Definition publication reconciles an ambiguous response without d
   await createBrowserActivity(page);
 
   await page.getByRole("button", { name: "Review & publish" }).click();
-  await expect(page.getByText("Minimum valid version: 1.0.0")).toBeVisible();
+  const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
+  await openPublicationVersion(publicationDialog);
+  await expect(publicationDialog.getByText("Minimum valid version: 1.0.0")).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("Published immutable version 1.0.0")).toBeVisible();
   expect(state.publicationWrites).toBe(1);
@@ -1365,7 +1509,7 @@ async function mockActivityDefinitions(page: Page, collectionHandler?: Parameter
   await page.route("**/capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(capabilities()) }));
   await page.route(/\/design\/activities\/definitions\?.*/, collectionHandler ?? (route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(collectionPage()) })));
   await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(definition()) }));
-  await page.route(/\/design\/activities\/definitions\/definition-1\/drafts\?.*/, route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pageOf([draft()])) }));
+  await page.route(/\/design\/activities\/definitions\/definition-1\/drafts\?.*/, route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pageOf([{ ...draft(), actions: [{ action: "edit-draft", allowed: true }] }])) }));
   await page.route(/\/design\/activities\/definitions\/definition-1\/versions\?.*/, route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pageOf([version()])) }));
   await page.route("**/design/activities/drafts/draft-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(draftDetail()) }));
 }
@@ -1385,7 +1529,7 @@ function collectionPage() { return pageOf([definition()]); }
 function pageOf(items: unknown[]) { return { items, count: items.length, totalCount: items.length, hasMore: false, continuation: null, snapshot: { snapshotId: "snapshot-browser", asOf: "2026-07-17T10:00:00Z" } }; }
 function definition() { return { definition: { definitionId: "definition-1", activityTypeKey: "Contoso.InvoiceEvaluator", tenantId: null, category: "Finance", displayName: "Invoice evaluator", description: "Evaluates invoice policy.", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design", sourceId: null }, forkedFrom: null, headVersionId: "version-1", recommendedVersionId: "version-1" }, lifecycle: { draftCount: 1, versionCount: 1, head: { versionId: "version-1", version: "1.0.0", lifecycle: "Active", providerKey: "visual-graph", providerSchemaVersion: "1" }, recommendation: { versionId: "version-1", version: "1.0.0", lifecycle: "Active", providerKey: "visual-graph", providerSchemaVersion: "1" } }, actions: [], updatedAt: "2026-07-17T10:00:00Z" }; }
 function draft() { return { draft: { draftId: "draft-1", definitionId: "definition-1", revision: 3, sourceVersionId: "version-1", status: "Active", providerKey: "visual-graph", providerSchemaVersion: "1", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null }, actions: [] }; }
-function draftDetail() { return { draftId: "draft-1", definitionId: "definition-1", tenantId: null, revision: 3, sourceVersionId: "version-1", status: "Active", contract: {}, provider: { providerKey: "visual-graph", schemaVersion: "1", manifestFingerprint: "fingerprint", payload: {} }, layout: [], validation: null, createdAt: "2026-07-17T09:00:00Z", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null }; }
+function draftDetail() { return { draftId: "draft-1", definitionId: "definition-1", tenantId: null, revision: 3, sourceVersionId: "version-1", status: "Active", contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] }, provider: { providerKey: "visual-graph", schemaVersion: "1", manifestFingerprint: "fingerprint", payload: {} }, layout: [], validation: null, createdAt: "2026-07-17T09:00:00Z", updatedAt: "2026-07-17T10:00:00Z", presentationLabel: null }; }
 function version() { return { version: { versionId: "version-1", definitionId: "definition-1", version: "1.0.0", lifecycle: "Active", publishedAt: "2026-07-17T09:00:00Z" }, providerKey: "visual-graph", providerSchemaVersion: "1", isRecommended: true, actions: [] }; }
 
 async function mockActivityDraftManagement(page: Page, options: { sourceOwned?: boolean } = {}) {
@@ -1847,6 +1991,7 @@ async function mockActivityFork(page: Page, outcome: "success" | "unsupported" |
       { rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" },
       { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
       { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
+      { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
       { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true },
       { rel: "activity-definition-fork-preview", href: "design/activities/definitions/{definitionId}/fork-previews", templated: true },
       { rel: "activity-definition-fork-apply", href: "design/activities/fork-candidates/{candidateId}/apply", templated: true },
@@ -1854,6 +1999,7 @@ async function mockActivityFork(page: Page, outcome: "success" | "unsupported" |
     ] }] })
   }));
   await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(source) }));
+  await page.route(/\/design\/activities\/definitions\/definition-1\/versions\?.*/, route => route.fulfill({ json: pageOf([{ ...version(), providerKey: "elsa.activity-graph" }]) }));
   await page.route("**/design/activities/versions/version-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(sourceVersionDetail(true)) }));
   await page.route("**/design/activities/authoring-capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(browserAuthoringCapabilities()) }));
   await page.route("**/design/activities/definitions/definition-1/fork-previews", async route => {
@@ -3015,6 +3161,12 @@ async function createBrowserActivity(page: Page, theme = "light") {
   await openAdvancedDetails(page);
 }
 
+async function openEditorDetails(page: Page) {
+  const history = page.locator(".ad-authoring-history");
+  await history.locator("summary").click();
+  await history.getByRole("button", { name: "Details", exact: true }).click();
+}
+
 async function openAdvancedDetails(page: Page) {
   const details = page.locator("details.ad-authoring-advanced, details.ad-technical-disclosure").first();
   await expect(details).toBeVisible();
@@ -3146,7 +3298,7 @@ function initialGraphPayload() { return { rootActivity: { nodeId: "root", activi
 function catalogActivity(activityVersionId: string, displayName: string) { return { activityVersionId, activityTypeKey: `Elsa.${displayName.replaceAll(" ", "")}`, version: "1.0.0", category: "Primitives", displayName, description: null, executionType: "sync", inputs: [], outputs: [], designFacets: [], available: true, authoringTemplate: { nodeId: "template", activityVersionId, inputs: [], outputs: [], structure: null } }; }
 
 for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
-  test(`compact Activity Definitions disclose details without expanding the row (${theme}, ${width})`, async ({ page, context }) => {
+  test(`compact Activity Definitions disclose details without expanding the row (${theme}, ${width})`, async ({ page, context }, info) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await mockActivityDefinitions(page);
     await page.setViewportSize({ width, height: 900 });
@@ -3154,6 +3306,31 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     const row = page.getByRole("row", { name: "Open Activity Definition Invoice evaluator", exact: true });
     const bounds = (await row.boundingBox())!;
     expect(bounds.height).toBeLessThanOrEqual(64);
+    const header = page.locator(".ad-collection-head");
+    const alignment = await row.evaluate((element) => {
+      const heading = element.parentElement!.querySelector(".ad-collection-head")!;
+      const cells = [...element.children].map(cell => cell.getBoundingClientRect());
+      const columns = [...heading.children].map(cell => cell.getBoundingClientRect());
+      return cells.map((cell, index) => ({
+        leftGap: Math.abs(cell.left - columns[index].left),
+        rowTopGap: Math.abs(cell.top - cells[0].top),
+        headerBottom: columns[index].bottom,
+        rowTop: element.getBoundingClientRect().top
+      }));
+    });
+    await expect(header.getByRole("columnheader")).toHaveCount(6);
+    for (const column of alignment) {
+      expect(column.leftGap).toBeLessThanOrEqual(1);
+      expect(column.rowTopGap).toBeLessThanOrEqual(16);
+      expect(column.headerBottom).toBeLessThanOrEqual(column.rowTop);
+    }
+    await row.hover();
+    await page.screenshot({ path: info.outputPath("activity-row-hover.png") });
+    await row.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(row).toBeFocused();
+    await page.screenshot({ path: info.outputPath("activity-row-focus.png") });
     await expect(row.getByText("Finance", { exact: true })).toHaveCount(0);
     await expect(row.getByText("Evaluates invoice policy.", { exact: true })).toHaveCount(0);
     await row.getByRole("button", { name: "Copy Definition ID", exact: true }).click();

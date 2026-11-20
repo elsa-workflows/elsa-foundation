@@ -3,24 +3,161 @@ using Kernel.Runtime;
 namespace Kernel.Durable;
 
 /// <summary>
-/// Layer 2's side of the seam for one process: its workers, one per partition it may own. Activating a scope takes the
-/// partition's fence (a take that bumps the epoch, from empty memory), or declines when the store refuses. It does not
-/// trust the runtime: if a runtime activates a scope on two nodes at once, the fence lets one of them write.
+/// Layer 2's side of the seam for one process. Activating a scope takes its partition's fence, or declines when the
+/// store refuses. It does not trust the runtime: if a runtime activates a scope on two nodes at once, the fence lets one
+/// of them write. Two shapes:
+/// <list type="bullet">
+/// <item>Per node (<see cref="ForNode"/>, K1 D1): one worker serves every scope the node activates, as one owned set.
+/// Activating a scope adds its partition to the set (a take of that one fence row); giving it up removes it (a release of
+/// that one row). The set may be scattered. The worker polls the set in one query and flushes its partitions in one
+/// batch. The node's passes, activations and give-ups run one at a time, so the set changes only between passes, and
+/// one pass serves every scope: a scope that another scope's pass served since its own last call gets that answer.</item>
+/// <item>Fixed (the constructor): one worker per scope, given up front and activated by its lowest partition. The models
+/// and the simulation use it, and so does a node on a store without owned sets (<c>commit=ef</c>: one partition per worker).</item>
+/// </list>
 /// </summary>
-public sealed class DurableHost : IScopeHost
+public sealed class DurableHost : IScopeHost, IScopeCount
 {
-    private readonly Dictionary<int, Worker> _workers;
+    private (IKernelStore Store, int Placed, bool Part)? _counted;     // a node's host (ForNode): what its start checks
+    private readonly Dictionary<int, Worker> _workers = [];
+    private readonly Func<int, Worker?> _fixed;
+    private readonly Worker? _node;
+    private readonly Dictionary<int, NodeScope> _scopes = [];
+    private readonly SemaphoreSlim _turn = new(1, 1);     // a pass, a gain and a loss of the node's worker never overlap
+    private long _passes, _lastAt, _calls;
+    private TimeSpan? _last;
 
-    public DurableHost(IEnumerable<Worker> workers) => _workers = workers.ToDictionary(w => w.Partition);
+    public DurableHost(IEnumerable<Worker> workers)
+    {
+        _workers = workers.ToDictionary(w => w.Partition);
+        _fixed = scope => _workers.GetValueOrDefault(scope);
+    }
 
-    public IReadOnlyCollection<Worker> Workers => _workers.Values;
+    private DurableHost(Worker node) => (_node, _fixed) = (node, _ => null);
 
-    public Worker this[int scope] => _workers[scope];
+    private DurableHost(Func<int, Worker> create) => _fixed = scope =>
+    {
+        lock (_workers) return _workers.TryGetValue(scope, out var worker) ? worker : _workers[scope] = create(scope);
+    };
+
+    /// <summary>
+    /// The host of one node (D1): one worker for the node's owned set. On a store without owned sets, a worker per scope,
+    /// created when the scope is first activated. With a <paramref name="projection"/>, the node's commits and takes nudge
+    /// its rounds, per virtual partition.
+    /// </summary>
+    /// <param name="partitions">The count the node places, explicit: the runtime's scopes, the store's partitions and
+    /// <see cref="WorkerOptions.Partitions"/>, which spread placement hashes over. Options that say another count are refused.</param>
+    /// <param name="placesPart">The simulation's worlds only: the node places the first of the store's partitions, fewer
+    /// than it has, and the rest are left unserved on purpose. A database-backed node places every one.</param>
+    public static DurableHost ForNode(string node, IKernelStore store, IActorType type, int partitions, WorkerOptions? options = null, NodeProjection? projection = null, bool placesPart = false)
+    {
+        if (partitions <= 0) throw new ArgumentException("A node's host needs the partition count it places.", nameof(partitions));
+        if (options is not null && options.Partitions != partitions)
+            throw new ArgumentException($"WorkerOptions.Partitions is {options.Partitions} and the node places {partitions}: spread placement must hash over the node's count.", nameof(options));
+        options = (options ?? new()) with { Partitions = partitions };
+        if (projection is not null)
+            options = options with { OnJournal = options.OnJournal is { } earlier ? moved => { earlier(moved); projection.Nudge(moved); } : projection.Nudge };
+        var host = store.OwnedSetsAvailable ? new DurableHost(Worker.ForNode(node, store, type, options)) : new DurableHost(scope => new Worker(node, scope, store, type, options));
+        host._counted = (store, partitions, placesPart);
+        return host;
+    }
+
+    /// <summary>
+    /// K1 slice 7, a node's host when the runtime starts it: the runtime's scopes, the workers' placement count
+    /// (<see cref="WorkerOptions.Partitions"/>, which spread placement hashes over) and the store's partitions must be
+    /// equal. Fewer would leave partitions with rows, and perhaps work, unserved; more would address partitions with no
+    /// row. A mismatch refuses the start, naming the three counts. Only a node built with <c>placesPart</c> (the
+    /// simulation's worlds) may place fewer than the store has. The fixed host is not checked.
+    /// </summary>
+    public async ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default)
+    {
+        if (_counted is not { } counted) return;
+        var stored = await counted.Store.PartitionCountAsync(cancellationToken);
+        // A store that does not say its count is refused too, unless the node places part of it (the simulation's).
+        if (counted.Placed != scopes || (counted.Part ? stored < scopes : stored != scopes))
+            throw new InvalidOperationException($"The partition counts disagree: the runtime places {scopes} scopes, the workers place over {counted.Placed} partitions, and the store has {stored?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "an unknown number of"} partitions. Configure one count, the one the database was created with.");
+    }
+
+    /// <summary>Calls to a scope's pass, and the worker passes they ran; the rest were answered by the one-pass rule.</summary>
+    public (long Calls, long Passes) PassCounts => (Interlocked.Read(ref _calls), Interlocked.Read(ref _passes));
+
+    /// <summary>The node's one worker, or null for a host of a worker per scope.</summary>
+    public Worker? NodeWorker => _node;
 
     public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
     {
-        if (!_workers.TryGetValue(scope, out var worker)) return null;
-        await worker.TakeAsync(cancellationToken);
-        return worker.Owns ? worker : null;
+        if (_node is not { } node)
+        {
+            if (_fixed(scope) is not { } worker) return null;
+            await worker.TakeAsync(cancellationToken);
+            return worker.Owns ? worker : null;
+        }
+        await _turn.WaitAsync(CancellationToken.None);
+        try
+        {
+            if (!await node.GainAsync(scope, cancellationToken)) return null;
+            // The same activation each time: layer 1 holds the one it got, and gives up the one it holds.
+            return _scopes.TryGetValue(scope, out var known) ? known : _scopes[scope] = new NodeScope(this, scope);
+        }
+        finally { _turn.Release(); }
+    }
+
+    /// <summary>
+    /// K1b: one pass of the node's worker under the host's turn, whether or not a scope is active. A Worker whose partitions
+    /// are all pending still passes, so that the host's gate reopens and the last answer's retake runs. Null for a host of a
+    /// worker per scope.
+    /// </summary>
+    public async ValueTask<TimeSpan?> RunNodeAsync(CancellationToken cancellationToken = default)
+    {
+        if (_node is not { } node) return null;
+        await _turn.WaitAsync(CancellationToken.None);
+        try { return await node.RunAsync(cancellationToken); }
+        finally { _turn.Release(); }
+    }
+
+    private async ValueTask<TimeSpan?> PassAsync(NodeScope scope, CancellationToken cancellationToken)
+    {
+        var node = _node!;
+        await _turn.WaitAsync(CancellationToken.None);
+        try
+        {
+            if (!node.Holds(scope.Scope)) return null;
+            _calls++;
+            // Another scope's pass ran since this scope's last call, and no wake or job result came since: that pass
+            // served this scope too. Its answer stands, less the time gone since; once that has run out (a timer is due,
+            // or a beat), this call runs the pass, whichever scope ran the last one and whether it is still held.
+            if (scope.Seen < _passes && !node.PassWanted && _last is { } last)
+            {
+                var left = last - TimeSpan.FromMilliseconds(node.Monotonic - _lastAt);
+                if (last == TimeSpan.Zero || left > TimeSpan.Zero)
+                {
+                    scope.Seen = _passes;
+                    return last == TimeSpan.Zero ? last : left;
+                }
+            }
+            scope.Seen = ++_passes;
+            _last = await node.RunAsync(cancellationToken);
+            _lastAt = node.Monotonic;
+            return node.Holds(scope.Scope) ? _last : null;
+        }
+        finally { _turn.Release(); }
+    }
+
+    private async ValueTask LoseAsync(int scope)
+    {
+        await _turn.WaitAsync(CancellationToken.None);
+        try { await _node!.LoseAsync([scope]); }
+        finally { _turn.Release(); }
+    }
+
+    /// <summary>One scope of the node's set: active while the node's worker holds its partition.</summary>
+    private sealed class NodeScope(DurableHost host, int scope) : IScopeActivation
+    {
+        public long Seen = -1;
+        public int Scope => scope;
+        public bool Active => host._node!.Holds(scope);
+        public ValueTask WokenAsync(InstanceRef? actor, CancellationToken cancellationToken = default) => host._node!.WokenAsync(actor, cancellationToken);
+        public ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default) => host.PassAsync(this, cancellationToken);
+        public ValueTask DisposeAsync() => host.LoseAsync(scope);
     }
 }

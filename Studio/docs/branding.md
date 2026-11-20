@@ -82,11 +82,7 @@ binds `Identity:Login` without a dependency on Studio:
       "LogoUrl": "/branding/logo.svg",
       "Tagline": "Make room for possibility.",
       "Description": "Thoughtful automation for the work that matters.",
-      "Layout": "split",
-      "Palette": "linen",
-      "Artwork": "unfolding-map",
-      "FocalX": 50,
-      "FocalY": 45,
+      "Layout": "orbital",
       "HelpUrl": "https://help.example.com",
       "PrivacyUrl": "/privacy"
     }
@@ -94,19 +90,22 @@ binds `Identity:Login` without a dependency on Studio:
 }
 ```
 
-An unconfigured identity host uses **Pocket Orchestra (P5)**: a small Elsa mark and clear credential form on
-warm white paper, beside a colored-pencil music room with instruments and floating musical phrases. Its palette stays
-light under an OS dark preference. The illustration is decorative; the real form retains the
-provider's username/password fields and supported actions.
+An unconfigured identity host uses **Orbital**: a dark deep-space field, fine star and orbital details,
+an illuminated planetary horizon, and a centered glass credential panel with Elsa branding. The scene
+is decorative and works without external assets or scripts; the real form retains the provider's
+username/password fields, CSRF protection and supported sign-in methods. A configured `ImageUrl` adds
+a subtle image layer behind the space details.
 
-To select P5 explicitly, set `Layout` to `parcel-room`, and `Palette` and `Artwork` to
-`pocket-orchestra`. Set all three to `parcel-room` to use the earlier M2 marker illustration. Existing explicit host choices continue to win. Layout, palette and artwork are independent:
+Set `Layout` to `orbital` to select the new design explicitly. To restore Pocket Orchestra (P5), set
+`Layout` to `parcel-room`, and `Palette` and `Artwork` to `pocket-orchestra`. Set all three to `parcel-room`
+to use the earlier M2 marker illustration. Existing explicit host choices continue to win. Orbital uses
+its own dark palette and CSS scene; layout, palette and artwork remain independent for illustrated layouts.
 
 | Setting | Choices |
 |---|---|
-| Layout | `parcel-room` (default; form left, full illustration right), `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image), `field-guide` (form left, contained illustration right) |
-| Palette | `pocket-orchestra` (default; warm paper and teal, light only), `parcel-room` (white and teal, light only), `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green), `field-guide` (paper and sage, light only) |
-| Artwork | `pocket-orchestra` (default); see the choices below |
+| Layout | `orbital` (default; deep-space scene and glass sign-in panel), `parcel-room` (form left, full illustration right), `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image), `field-guide` (form left, contained illustration right) |
+| Palette | `pocket-orchestra` (default for illustrated layouts; warm paper and teal, light only), `parcel-room` (white and teal, light only), `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green), `field-guide` (paper and sage, light only) |
+| Artwork | `pocket-orchestra` (default for illustrated layouts); see the choices below |
 
 The bundled artwork directions are available independently of the selected layout and palette:
 
@@ -126,8 +125,14 @@ The bundled artwork directions are available independently of the selected layou
 | `unfolding-map` | Illustrated landscape with connecting paths and settlements |
 
 The earlier `ember`, `tidal`, `daybreak` and `canopy` artwork values remain supported. Omitted,
-empty or unrecognized artwork values use `pocket-orchestra`. A valid `ImageUrl` takes precedence over
-`Artwork`; remove an existing `ImageUrl` override to activate bundled artwork.
+empty or unrecognized artwork values use `pocket-orchestra` in illustrated layouts. A valid
+`ImageUrl` takes precedence over bundled artwork there; Orbital instead layers the configured image
+subtly behind its CSS space scene.
+
+After changing login defaults or renderer code, rebuild and restart the **identity backend host**
+(Workbench at `https://localhost:7243` in the default development profile), then reload the sign-in page.
+Restarting only Studio does not update this backend-served page. Remove any existing
+`Identity:Login:Layout` override or set it to `orbital` if the host still selects an illustrated layout.
 
 Configure the **identity backend host** using appsettings JSON as above, an environment variable such
 as `Identity__Login__Artwork=flowing-ribbons`, or a command-line setting
@@ -138,14 +143,16 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 
 builder.Services.PostConfigure<LoginPageOptions>(options =>
 {
+    options.Layout = "parcel-room";
     options.Artwork = "flowing-ribbons";
     options.ImageUrl = null;
 });
 ```
 
 Artwork ships locally at `/_elsa/identity/login-assets/<artwork>.jpg`; there is no
-CDN dependency. Set ImageUrl to your own asset to replace the image. FocalX/FocalY are percentages
-clamped to 0–100. Use a portrait source for split/editorial and a larger landscape source for immersive;
+CDN dependency. Set ImageUrl to your own asset to replace the image in illustrated layouts or add a
+subtle background layer to Orbital. FocalX/FocalY are percentages clamped to 0–100 for illustrated
+layouts. Use a portrait source for split/editorial and a larger landscape source for immersive;
 check the crop at desktop, tablet and 320px. Artwork is decorative (`alt=""`), so essential instructions
 belong in real text. A failed image leaves readable copy on a solid surface and a usable form.
 Parcel Room contains the complete illustration without cropping or story-copy overlays. On narrow
@@ -155,7 +162,8 @@ screens it places the form before the artwork. Its small brand uses the standard
 Names/copy/URLs are encoded. Asset and resource URLs accept root-relative paths or HTTPS; HTTP loopback
 is available for local development. Executable/data/protocol-relative URLs are rejected. Rejected configured Studio resource links are hidden; an omitted setting keeps the default product resource link. Serve SVG only
 from a trusted deployment source. Supply your own privacy/help endpoint if you configure a local link.
-Dark appearance follows the OS except for the light-only Field Guide palette, and high contrast removes the artwork; the form needs no JavaScript.
+Orbital stays dark; other palettes follow the OS except for the light-only Field Guide, Parcel Room
+and Pocket Orchestra palettes. High contrast removes decorative imagery and effects; the form needs no JavaScript.
 External OIDC login pages remain owned and themed by their identity provider.
 
 ## Field Guide login theme

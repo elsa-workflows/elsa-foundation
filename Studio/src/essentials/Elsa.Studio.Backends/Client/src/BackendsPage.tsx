@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeft, ChevronDown, Plus, Server } from "lucide-react";
 import { studioNavigationRequestedEvent, useStudioRouteLocation, type StudioApiCapabilityDocument, type StudioNavigationRequest, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
-import { AnchoredPopover, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, AnchoredPopover, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField } from "@elsa-workflows/studio-ui";
 import { BackendConnections, backendConnectionNonce, canonicalBackendUrl, connectionError } from "./connections";
 import "./backends.css";
 
@@ -66,7 +66,7 @@ export function BackendsPage({connections,navigate,path:explicitPath,featureMana
     <div className="backends-heading"><div><h2>Backends</h2><p>Choose where you design and run workflows.</p></div>{connections.allowPersonal ? <StudioButton variant="primary" type="button" onClick={() => navigate("/settings/backends/new")}><Plus size={16} aria-hidden="true" />Add backend</StudioButton> : null}</div>
     {snapshot.profileError ? <StudioAlert tone="warning">{snapshot.profileError}</StudioAlert> : null}
     <table className="backends-list"><thead><tr><th scope="col">Backend</th><th scope="col">Environment</th><th scope="col">Managed by</th><th scope="col">Connection</th></tr></thead><tbody>
-      {snapshot.profiles.map(item => <tr key={item.id}><td><StudioButton type="button" className="backend-name-link" onClick={() => navigate(`/settings/backends/${encodeURIComponent(item.id)}`)}><strong>{item.name}</strong><small>{new URL(item.baseUrl).host}</small></StudioButton></td><td><span className={item.environment === "Production" ? "backend-production" : "backend-environment"}>{item.environment}</span></td><td>{item.source === "configuration" ? "Configuration" : "You"}</td><td>{snapshot.active?.profile.id === item.id ? "Active" : "Inactive"}</td></tr>)}
+      {snapshot.profiles.map(item => <tr key={item.id} {...studioRowInteraction<HTMLTableRowElement>(() => navigate(`/settings/backends/${encodeURIComponent(item.id)}`))}><td><button type="button" className="backend-name-link studio-row-link" onClick={() => navigate(`/settings/backends/${encodeURIComponent(item.id)}`)}><strong>{item.name}</strong><small>{new URL(item.baseUrl).host}</small></button></td><td><span className={item.environment === "Production" ? "backend-production" : "backend-environment"}>{item.environment}</span></td><td>{item.source === "configuration" ? "Configuration" : "You"}</td><td>{snapshot.active?.profile.id === item.id ? "Active" : "Inactive"}</td></tr>)}
     </tbody></table>
     {snapshot.loading ? <p role="status">Loading connections…</p> : null}
   </section>;

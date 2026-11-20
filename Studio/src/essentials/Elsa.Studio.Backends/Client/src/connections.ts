@@ -39,7 +39,7 @@ export function validatePersonalProfiles(value: unknown): StudioBackendProfile[]
     if (!entry || typeof entry !== "object") throw new Error("Invalid backend profile.");
     const item = entry as Record<string, unknown>;
     if (Object.keys(item).some(key => !["id","name","baseUrl","environment","authenticationProfile"].includes(key))
-      || typeof item.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(item.id) || item.id === "legacy" || ids.has(item.id)
+      || typeof item.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(item.id) || item.id === "default" || ids.has(item.id)
       || typeof item.name !== "string" || !item.name.trim() || item.name.length > 80
       || typeof item.baseUrl !== "string" || !/^https?:\/\//.test(item.baseUrl)
       || !["Development","Test","Production"].includes(item.environment as string)
@@ -86,7 +86,7 @@ export class BackendConnections {
     readonly hostIdentity: AuthSession, private readonly commitNavigation: (url:string) => void = url => window.location.assign(url)) {
     const declared = config.backends?.profiles ?? [];
     this.configured = declared.length ? declared.map(item => ({...item,baseUrl:canonicalBackendUrl(item.baseUrl),source:"configuration" as const})) : [
-      {id:"legacy",name:"Default backend",baseUrl:canonicalBackendUrl(config.backendBaseUrl ?? ""),environment:"Development",source:"configuration"}
+      {id:"default",name:"Default backend",baseUrl:canonicalBackendUrl(config.backendBaseUrl ?? ""),environment:"Development",source:"configuration"}
     ];
     this.defaultId = config.backends?.defaultId ?? this.configured[0].id;
     this.allowPersonal = config.backends?.allowPersonalProfiles !== false;

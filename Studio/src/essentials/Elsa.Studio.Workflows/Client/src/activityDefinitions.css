@@ -49,9 +49,7 @@
 
 .ad-collection { overflow: hidden; }
 .ad-collection-head,
-.ad-collection-row { display: grid; grid-template-columns: minmax(15rem, 2fr) minmax(8rem, .8fr) minmax(9rem, 1fr) minmax(10rem, 1fr) minmax(7rem, .7fr); align-items: center; gap: .75rem; }
-.ad-collection-row { cursor: pointer; }
-.ad-collection-row:focus-visible { background: var(--studio-accent-soft); }
+.ad-collection-row { display: grid; grid-template-columns: minmax(15rem, 2fr) minmax(6rem, .6fr) minmax(8rem, .8fr) minmax(9rem, 1fr) minmax(10rem, 1fr) minmax(7rem, .7fr); align-items: center; gap: .75rem; }
 .ad-collection-row > span { min-width: 0; overflow-wrap: anywhere; }
 .ad-collection-row > span:first-child { display: grid; gap: .2rem; }
 .ad-collection-row small { color: var(--studio-text-muted); font-family: var(--studio-font-mono); }
@@ -325,9 +323,10 @@
 /* Stand-in canvas shown before a composition is chosen. It carries .wf-canvas so it is the same drop
    target geometry the shared interaction layer measures against. */
 .ad-graph-canvas-placeholder { display: grid; place-items: center; }
-.ad-graph-scope-label { display: flex; min-height: 2.7rem; flex: 0 0 auto; align-items: center; gap: .55rem; margin: 0; padding-inline: .75rem; border-bottom: 1px solid var(--studio-border); }
-.ad-graph-scope-label .wf-canvas-tools { margin-left: auto; }
-.ad-graph-scope-label span { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.ad-graph-scope-label { display: flex; min-width: 0; min-height: 2.7rem; flex: 0 0 auto; align-items: center; gap: .55rem; margin: 0; padding-inline: .75rem; border-bottom: 1px solid var(--studio-border); }
+.ad-graph-scope-label .wf-canvas-tools { flex: 0 0 auto; margin-left: auto; }
+.ad-graph-scope-label > span, .ad-graph-scope-label > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-graph-scope-label > span { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .ad-graph-empty { display: grid; place-self: center; gap: .4rem; max-width: 25rem; padding: 1.5rem; border: 2px dashed var(--studio-border); border-radius: var(--studio-radius-md); color: var(--studio-text-muted); text-align: center; background: var(--studio-surface); }
 .ad-graph-public-interface { display: grid; gap: .9rem; margin-top: .9rem; }
 .ad-graph-output-mappings, .ad-graph-outcome-mappings { display: grid; gap: .7rem; padding: .85rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); }

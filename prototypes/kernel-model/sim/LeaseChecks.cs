@@ -7,6 +7,8 @@ public static class LeaseChecks
     {
         int failures = 0;
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
+        await WorkerSetChecks.Run(Check);
+        await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
         await StarterContextChecks.Run(Check, CaseInsensitive);
@@ -744,7 +746,12 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
-    public bool DelayNext, DelayTake;
+    public bool OwnedSetsAvailable => !WithoutOwnedSets && inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
+    public bool DelayNext, DelayTake, LoseNext, WithoutOwnedSets, DelayRetake;
+    public int FailJournalReads, JournalReadsFailed;     // the next reads of the journal throw, as a broken connection would
+    public TaskCompletionSource Retaken = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource RetakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public List<CommitBatch> Batches { get; } = [];
     public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
     public int PollCalls, LoadCalls, CommitCalls;
     public TaskCompletionSource Taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -754,8 +761,10 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         CommitCalls++;
+        Batches.Add(batch);
         var result = await inner.CommitAsync(batch, cancellationToken);
         if (DelayNext) { DelayNext = false; Landed.TrySetResult(); await Reply.Task; }
+        if (LoseNext) { LoseNext = false; throw new IOException("the commit executed and its answer was lost"); }
         return result;
     }
     public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken ct = default)
@@ -764,8 +773,34 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
         if (DelayTake) { DelayTake = false; Taken.TrySetResult(); await TakeReply.Task; }
         return result;
     }
+    public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken ct = default)
+    {
+        var result = await inner.RetakeAsync(partition, node, epoch, lease, ct);
+        if (DelayRetake) { DelayRetake = false; Retaken.TrySetResult(); await RetakeReply.Task; }
+        return result;
+    }
+    public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken ct = default)
+    {
+        if (!countDeaths) return await RetakeAsync(partition, node, epoch, lease, ct);
+        var result = await inner.RetakeAsync(partition, node, epoch, lease, countDeaths, ct);
+        if (DelayRetake) { DelayRetake = false; Retaken.TrySetResult(); await RetakeReply.Task; }      // K1b: a counting retake's reply waits too
+        return result;
+    }
+    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
+    public Func<NodeBeat, Task<NodeBeat>>? HeartbeatReply;      // K1b: the answer as the wire delivers it (delayed or altered)
+    public async ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken ct = default)
+    {
+        var answer = await inner.NodeHeartbeatAsync(node, lease, window, ct);
+        return HeartbeatReply is { } reply ? await reply(answer) : answer;
+    }
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken ct = default) => inner.HeartbeatAsync(node, window, ct);
-    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken ct = default) => inner.ReleaseAsync(partition, epoch, ct);
+    public bool FailRelease;      // K1b: the next release fails before it reaches the store
+    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken ct = default)
+    {
+        if (!FailRelease) return inner.ReleaseAsync(partition, epoch, ct);
+        FailRelease = false;
+        throw new IOException("the release never reached the store");
+    }
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken ct = default)
     {
         PollCalls++;
@@ -790,7 +825,9 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken ct = default) => inner.FindEventsAsync(keys, ct);
     public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken ct = default) => inner.PublishedMatchesAsync(published, ct);
     public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken ct = default) => inner.KeptMatchesAsync(waits, ct);
-    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken ct = default) => inner.ReadJournalAsync(partition, after, take, ct);
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken ct = default) =>
+        Interlocked.Decrement(ref FailJournalReads) >= 0 && Interlocked.Increment(ref JournalReadsFailed) > 0 ? throw new IOException("injected: the journal read failed")
+            : inner.ReadJournalAsync(partition, after, take, ct);
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken ct = default) => inner.ReadJournalOfAsync(partition, instance, after, ct);
     public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken ct = default) => inner.ProjectedAsync(partition, ct);
     public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken ct = default) => inner.ProjectAsync(partition, from, to, rows, ct);

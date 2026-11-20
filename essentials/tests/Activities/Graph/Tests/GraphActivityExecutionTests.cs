@@ -8,8 +8,8 @@ using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions;
-using Elsa.Expressions.JavaScript;
-using Elsa.Expressions.JavaScript.Jint;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Primitives.Models;
@@ -479,7 +479,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
     }
 
     [Fact]
-    public async Task PrepareCompletion_EvaluatesPortableJavaScriptAgainstCapturedPublicInputs()
+    public async Task PrepareCompletion_EvaluatesPortableExpressionsAgainstCapturedPublicInputs()
     {
         var descriptor = Descriptor(
             inputs:
@@ -490,7 +490,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
             outputs: [new GraphActivityOutputDescriptor("sum", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
             outputMappings:
             [
-                Mapping("sum", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("args.A + args.B")))
+                Mapping("sum", new GraphActivityExpression(TestExpressionHandler.Syntax, JsonSerializer.SerializeToElement("sum-public-inputs")))
             ],
             requiredOutputReferenceKeys: ["sum"],
             outcomeMappings: [new("Calculated", "Calculated")]);
@@ -503,6 +503,66 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(completion.Result);
         Assert.Equal(42, Assert.IsType<JsonElement>(result["sum"]).GetInt32());
         Assert.Equal("Calculated", completion.Outcome);
+    }
+
+    [Fact]
+    public async Task PrepareCompletion_UsesStableInputKeysAcrossRenames()
+    {
+        const string source = "sum-reference-key-inputs";
+        foreach (var inputName in new[] { "Numbers", "Values" })
+        {
+            var descriptor = Descriptor(
+                inputs:
+                [
+                    Input("numbers", name: inputName) with { Type = JsonSerializer.SerializeToElement(new { alias = "Int32", collectionKind = "Array" }) },
+                    Input("other", name: "numbers") with { Type = Type("Int32") },
+                    Input("offset-value", name: "Offset") with { Type = Type("Int32") }
+                ],
+                outputs: [Output("sum") with { Type = Type("Int32") }],
+                outputMappings: [Mapping("sum", new GraphActivityExpression(TestExpressionHandler.Syntax, JsonSerializer.SerializeToElement(new { source, inputBinding = "referenceKey" })))],
+                requiredOutputReferenceKeys: ["sum"]);
+            var preparation = await PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>
+            {
+                [inputName] = new[] { 1, 2, 3, 4 },
+                ["numbers"] = 100,
+                ["Offset"] = 2
+            });
+
+            var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+                Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+            Assert.Equal(12, Assert.IsType<JsonElement>(result["sum"]).GetInt32());
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PrepareCompletion_BindsEachInputOnceWithoutChangingLegacyCollisions(bool useReferenceKeys)
+    {
+        const int payloadLength = 600 * 1024;
+        const string source = "count-distinct-inputs";
+        var value = useReferenceKeys
+            ? JsonSerializer.SerializeToElement(new { source, inputBinding = "referenceKey" })
+            : JsonSerializer.SerializeToElement(source);
+        var descriptor = Descriptor(
+            inputs:
+            [
+                Input("numbers", name: "Count") with { Type = Type("Int32") },
+                Input("other", name: "numbers") with { Type = Type("Int32") },
+                Input("payload", name: "Payload")
+            ],
+            outputs: [Output("result") with { Type = Type("Int32") }],
+            outputMappings: [Mapping("result", new GraphActivityExpression(TestExpressionHandler.Syntax, value))],
+            requiredOutputReferenceKeys: ["result"]);
+        var preparation = await PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>
+        {
+            ["Count"] = 7,
+            ["numbers"] = 11,
+            ["Payload"] = new string('x', payloadLength)
+        });
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+        Assert.Equal(payloadLength + 3 + (useReferenceKeys ? 7 : 11), Assert.IsType<JsonElement>(result["result"]).GetInt32());
     }
 
     [Fact]
@@ -628,7 +688,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var descriptor = Descriptor(
             inputs: [Input("optional", name: "Optional")],
             outputs: [new GraphActivityOutputDescriptor("result", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
-            outputMappings: [Mapping("result", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("40 + 2")))],
+            outputMappings: [Mapping("result", new GraphActivityExpression(TestExpressionHandler.Syntax, JsonSerializer.SerializeToElement("constant")))],
             requiredOutputReferenceKeys: ["result"]);
         var preparation = await PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>());
 
@@ -638,7 +698,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
     }
 
     [Fact]
-    public async Task PrepareCompletion_ExposesCapturedGraphVariablesToPortableJavaScript()
+    public async Task PrepareCompletion_ExposesCapturedGraphVariablesToPortableExpressions()
     {
         var descriptor = Descriptor(
             variables: [new GraphActivityVariableDescriptor(
@@ -648,7 +708,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
                 WellKnownRuntimeDurableValueStorageDrivers.Json,
                 new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(40)))],
             outputs: [new GraphActivityOutputDescriptor("result", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
-            outputMappings: [Mapping("result", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("variables.RunningTotal + 2")))],
+            outputMappings: [Mapping("result", new GraphActivityExpression(TestExpressionHandler.Syntax, JsonSerializer.SerializeToElement("read-variable")))],
             requiredOutputReferenceKeys: ["result"]);
         var preparation = await PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>());
 
@@ -663,7 +723,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var duplicateNameDescriptor = Descriptor(
             inputs: [Input("a", name: "A"), Input("b", name: "A")],
             outputs: [new GraphActivityOutputDescriptor("result", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
-            outputMappings: [Mapping("result", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("args.A")))],
+            outputMappings: [Mapping("result", new GraphActivityExpression(TestExpressionHandler.Syntax, JsonSerializer.SerializeToElement("read-a")))],
             requiredOutputReferenceKeys: ["result"]);
         var duplicateException = await Assert.ThrowsAsync<InvalidOperationException>(() => PrepareGraphCompletionAsync(
             duplicateNameDescriptor,
@@ -676,7 +736,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
     {
         var mismatchDescriptor = Descriptor(
             outputs: [new GraphActivityOutputDescriptor("result", Type("Int32"), WellKnownRuntimeDurableValueStorageDrivers.Json)],
-            outputMappings: [Mapping("result", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("'not-an-int'")))],
+            outputMappings: [Mapping("result", new GraphActivityExpression(TestExpressionHandler.Syntax, JsonSerializer.SerializeToElement("wrong-type")))],
             requiredOutputReferenceKeys: ["result"]);
         var typeException = await Assert.ThrowsAsync<InvalidOperationException>(() => PrepareGraphCompletionAsync(
             mismatchDescriptor,
@@ -797,12 +857,36 @@ public sealed class GraphActivityExecutionTests : IDisposable
         services.AddWorkflowRuntime();
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
         new ExpressionsFeature().ConfigureServices(services);
-        new JavaScriptFeature().ConfigureServices(services);
-        new JintFeature().ConfigureServices(services);
+        services.AddSingleton<IPortableExpressionHandler, TestExpressionHandler>();
         new SerializationFeature().ConfigureServices(services);
         var provider = services.BuildServiceProvider();
         provider.GetRequiredService<IWellKnownTypeRegistry>().RegisterType(typeof(int), "Int32");
         return provider;
+    }
+
+
+    private sealed class TestExpressionHandler : IPortableExpressionHandler
+    {
+        public const string Syntax = "TestExpression";
+        public string Language => Syntax;
+
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
+        {
+            var parameters = request.ParameterValues;
+            Assert.Equal(request.Definition.Parameters.Keys.Order(), parameters.Keys.Order());
+            object result = request.Definition.Source switch
+            {
+                "sum-public-inputs" => parameters["A"].GetInt32() + parameters["B"].GetInt32(),
+                "sum-reference-key-inputs" => parameters["numbers"].EnumerateArray().Sum(item => item.GetInt32()) + parameters["offset-value"].GetInt32(),
+                "count-distinct-inputs" => parameters["numbers"].GetInt32() +
+                    parameters.Values.Single(value => value.ValueKind == JsonValueKind.String).GetString()!.Length + parameters.Count,
+                "constant" when parameters.Count == 0 => 42,
+                "read-variable" => request.AmbientVariables["RunningTotal"].GetInt32() + 2,
+                "wrong-type" => "not-an-int",
+                _ => throw new InvalidOperationException("Unexpected expression source.")
+            };
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement(result));
+        }
     }
 
     private GraphActivityScope Scope() =>

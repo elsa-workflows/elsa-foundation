@@ -334,6 +334,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             writer.WriteString("collectionKind", input.Type.CollectionKind.ToString());
             writer.WriteBoolean("isRequired", input.IsRequired);
             writer.WriteBoolean("hasDefaultValue", input.DefaultValue.HasValue);
+            if (input.IsNullable)
+                writer.WriteBoolean("isNullable", true);
             writer.WritePropertyName("defaultValue");
             if (input.DefaultValue is { } defaultValue)
                 WriteCanonicalJson(writer, defaultValue);

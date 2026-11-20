@@ -33,6 +33,28 @@ afterEach(() => {
 });
 
 describe("workflow definition list", () => {
+  it("uses the shared refresh Slot without losing the current query or selected definitions", async () => {
+    window.history.replaceState({}, "", "/workflows/definitions?search=Invoice");
+    let pending: Promise<unknown> | null = null;
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? definitionCapabilities : pending ?? { items: [{ id: "definition-1", name: "Invoice evaluator" }] });
+    const container = render(context(getJson), vi.fn());
+    await waitFor(() => expect(container.querySelector('[role="table"]')?.getAttribute("aria-busy")).toBe("false"));
+    const selection = container.querySelector<HTMLInputElement>('input[aria-label="Select workflow definition Invoice evaluator"]')!;
+    click(selection);
+    let resolveRefresh!: (value: unknown) => void;
+    pending = new Promise(resolve => { resolveRefresh = resolve; });
+    const refresh = container.querySelector<HTMLButtonElement>('button[aria-label="Refresh workflow definitions"]')!;
+    expect(refresh.closest('[data-studio-slot="studio.page-header.refresh"]')).not.toBeNull();
+    click(refresh);
+    await waitFor(() => expect(refresh.disabled).toBe(true));
+    expect(container.textContent).toContain("Invoice evaluator");
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Search all workflows"]')?.value).toBe("Invoice");
+    resolveRefresh({ items: [{ id: "definition-1", name: "Invoice evaluator" }] });
+    await waitFor(() => expect(refresh.disabled).toBe(false));
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Select workflow definition Invoice evaluator"]')?.checked).toBe(true);
+    expect(getJson).toHaveBeenLastCalledWith(expect.stringContaining("searchTerm=Invoice"), expect.anything());
+  });
+
   it("separates names and IDs and isolates the identity popover from row navigation", async () => {
     const definition = {
       id: "definition-exact-0123456789abcdef0123456789abcdef",
@@ -101,16 +123,17 @@ describe("workflow definition list", () => {
     const header = heading?.closest("header");
     const search = container.querySelector<HTMLInputElement>("input[aria-label='Search all workflows']");
     const states = container.querySelector<HTMLElement>('[role="group"][aria-label="Definition state"]');
+    const allStatesIndicator = container.querySelector<HTMLElement>(".wf-library-state-indicator");
     expect(header).not.toBeNull();
     expect(search).not.toBeNull();
-    expect(states).not.toBeNull();
+    expect(states).toBeNull();
+    expect(allStatesIndicator).toBeNull();
+    expect(container.querySelector("button[aria-label='Recycle bin']")).not.toBeNull();
     expect(header?.querySelector("p")?.textContent).toContain("Create and organize workflow definitions");
     const actions = header?.querySelector<HTMLElement>('[role="group"][aria-label="Workflow definition page actions"]');
     expect(actions?.querySelector("button[aria-label='Create workflow']")).toBeTruthy();
     expect(actions?.querySelector("button[aria-label='Refresh workflow definitions']")).toBeTruthy();
     expect(header!.compareDocumentPosition(search!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(header!.compareDocumentPosition(states!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
     expect(actions?.querySelector("button")?.textContent).toContain("Create workflow");
   });
 

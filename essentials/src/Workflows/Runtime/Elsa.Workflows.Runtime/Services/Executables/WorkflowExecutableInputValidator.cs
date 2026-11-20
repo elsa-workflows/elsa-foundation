@@ -114,6 +114,20 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
             var targetType = TypeReferenceFactory.Close(elementType, declaration.Type.CollectionKind);
             foreach (var input in normalized.Where(input => StringComparer.Ordinal.Equals(input.Key, declaration.Name)))
             {
+                if (input.Value.ValueKind == JsonValueKind.Null)
+                {
+                    if (!declaration.IsRequired && declaration.IsNullable)
+                        continue;
+
+                    return WorkflowExecutableInputValidation.Failure(
+                    [
+                        new WorkflowExecutableInputValidationFinding(
+                            WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
+                            $"Workflow input '{declaration.Name}' cannot be null.",
+                            declaration.Name)
+                    ]);
+                }
+
                 try
                 {
                     _ = input.Value.Deserialize(targetType);

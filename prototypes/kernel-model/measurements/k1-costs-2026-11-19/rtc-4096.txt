@@ -1,0 +1,24 @@
+ 4:50  up 16 days, 14:49, 1 user, load averages: 19.82 9.51 10.78
+1795060207
+pass   placement: every scope is held by exactly one node, and an idle one keeps its lease  (6391 ms)
+pass   placement: no activation comes or goes while the cluster is idle  (5885 ms)
+pass   poll: a message added without a hint is handled within the poll interval  (1869 ms)
+pass   hint: a message with a hint is handled well before the poll interval  (2669 ms)
+pass   timer: a delayed message is handled when due, without a hint or a poll  (3809 ms)
+         takeover: 2048 of 4096 scopes held by the crashed node, settled 7499 ms after the kill
+pass   crash: a crashed node's scopes are taken over, and their messages handled once  (15156 ms)
+pass   count: a node whose workers place another count than its store and runtime is refused at its start  (116 ms)
+pass   stop: a stopped node's scopes are taken over before its lease would have run out  (4712 ms)
+pass   fence: a node whose scope was taken while it stalled is told, and activates it again  (3844 ms)
+pass   split: two activations of one scope at once, on two sides; the fence lets one of them write  (9120 ms)
+pass   owned set: one worker serves a scattered set, and gains partitions while it runs  (345 ms)
+pass   owned set: a node hands part of its set over, and keeps the rest as it was  (808 ms)
+pass   owned set: partitions join and leave the set between flushes, never during one  (1160 ms)
+pass   balance: a join and a leave move the fewest partitions  (2751 ms)
+pass   projector: rounds run per partition whose journal moved, nudged by the node's commits  (2201 ms)
+pass   fairness: a hot partition does not hold back the rest of the node's set  (4746 ms)
+pass   join: a node that joins gets a share of the scopes  (2235 ms)
+built-in on in-memory: 17 passed, 0 required failed, 0 reference differ
+exit 
+1795060275
+ 4:51  up 16 days, 14:50, 1 user, load averages: 38.38 17.71 13.80

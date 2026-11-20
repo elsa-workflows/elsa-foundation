@@ -67,3 +67,49 @@ answers (a doubt is a reset, as in the kernel), crash and restart, while leases 
 action: no commit landed under a stale epoch or bound, no two rows at one position of a virtual partition, every
 virtual partition's journal is gapless, and in (ii) the range rows cover without overlap. Then the system settles and
 every node must be able to commit on everything it holds. `mutations` switches one rule off at a time.
+
+In (i) it also models K1's protocol (slice 0 of the range-ownership work, before any Worker change):
+
+- **Seen and Trial marks per virtual-partition epoch (D4).** Messages arrive at a virtual partition; the owner polls
+  what was not seen at that partition's epoch (`Seen < epoch`), marks it in a fenced flush (on trial if it is a
+  suspect: on trial, or seen at a (partition, epoch) this process never took), and consumes it in a later flush. A take
+  from another owner counts an attempt on what was on trial at that partition's old epoch.
+- **The witness.** An outstanding flush spans several virtual partitions. Some of them, never all, move to other nodes,
+  by lease expiry (a late beat; commits renewed the rest) or by a cooperative release during the flush. Then the flush
+  lands. It must be refused whole.
+- **The reset after a refused flush, as the Worker does it** (K1 slice 7; the Worker's choice of slice 2a). The owner
+  retakes, one at a time and each at a new epoch with the store's position, every partition still its at the epoch it
+  holds (`IKernelStore.RetakeAsync`: no death, nothing counted). It drops the rest and takes nothing else, then polls
+  the kept partitions at their new epochs, which reads back what it marked at the old ones. Slice 0 modelled a keeping
+  reset instead (one statement that kept the epochs, and a poll with `Seen <= epoch` once); it is now the mutation
+  `ResetPollsSeenBelow`, without that one poll.
+- **The reset after a lost answer** re-takes, one partition at a time and each at a new epoch, the picture's partitions
+  that are still the node's or free, and drops the rest. Every take keeps what it got.
+- **The projector per virtual partition.** A round reads one partition's cursor and position and writes later or at
+  once, on any node. The write moves the cursor only if it is still where the round read it, and a round may die
+  between the read and the write. At the end every cursor catches up.
+
+Its checks:
+- **W1:** a flush lands whole or not at all.
+- **W3 (liveness):** after the witness, the old owner serves every partition of the flush it still holds, at the
+  store's epoch and position.
+- **W4:** the reset retook each of those once, at the epoch after the one it held.
+- **L1 (liveness, after every reset and at the end):** what a live process holds live in the store, it serves in a picture.
+- **S1:** no message is marked above its partition's epoch, or at it while the owner does not have it in memory (stranded).
+- **S2:** the poll's suspect test agrees with who really marked the message.
+- **T1 (the epoch check):** the take's attempt test on the recorded trial mark gives the same count as the test on the
+  epoch the trial really ran under.
+- **C1:** a message is consumed once.
+- **P1:** no journal row is projected twice or without a commit.
+- **P3 (after settling):** every journal row is projected.
+
+Mutations and what catches them, at both counts:
+- `FenceSubset`: W1.
+- `SeenAtNodeEpoch`: S1; with S1 off, S2.
+- `ResetAll` (K1 slice 7: a refused flush drops the whole picture, what is still held included, and takes nothing
+  back): W3. Before slice 7 it reset by a take, which is the Worker's cost now, so W4 no longer flags it as one.
+- `ResetPollsSeenBelow` (K1 slice 7: the reset keeps the held epochs, with no retake, and polls `Seen < epoch`): W4,
+  first. It is slice 0's keeping reset without its one `Seen <= epoch` poll, which slice 0 caught by S1 (stranded).
+- `ProjectorBlindWrite`: P1.
+- `ProjectorJumps`: P3.
+- C1 has no mutation of its own: a second consumption needs a second landing, which the fence refuses and I1 catches first.
