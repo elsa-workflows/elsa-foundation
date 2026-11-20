@@ -29,7 +29,8 @@ red without the change. xUnit only.
   for variables, workflow inputs and outputs and authored activity definitions; .NET activities keep their C#
   nullability. Nothing reads a stored `isNullable` flag for authored members any more
 - [ ] T004a FR-001c: an unassigned variable reads its type default (`false`, `0`, an enum's zero value) where the
-  read materializes a variable with no value (S-4's read path and the variable store's initial value), `null` for a
+  read materializes a variable with no value (S-4's read path, the variable store's initial value, and
+  `GraphActivity`'s ambient variable read), `null` for a
   type that accepts it; publication refuses a date, time, `TimeSpan` or `Guid` variable without a declared default
   (`VF-ACT-003`). Update S-4's test for spec 1222 US1 scenario 6 for a value-type variable
 - [ ] T005 [P] Add `NullPolicyDefaults` in `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs`
@@ -57,7 +58,10 @@ red without the change. xUnit only.
 - [ ] T008 Hand the executable's pinned `UndefinedAsNull` to every JavaScript evaluation; no per-binding field (R-2).
   Bindings: the input materializer holds the executable. `Run JavaScript`: the runtime puts the executable's value
   policies on the `ActivityExecutionContext` it builds, and the activity passes them with its evaluation request,
-  which also covers FR-030 writes made in that script session
+  which also covers FR-030 writes made in that script session. `Set` / `SetOutput` expressions
+  (`WorkflowIntrinsicExecutor`) get it from the executable the executor holds. Expressions inside an authored
+  activity definition's graph (`GraphActivity`) use the host workflow's policies, taken from the host's
+  `ActivityExecutionContext`, because the graph runs as part of the host's step
 - [ ] T008a Expose `strategyOptions.nullHandling` through the workflow definition API (read and write) and the
   exported JSON, with an API round-trip test (FR-024)
 - [ ] T009 Write `valuePolicies` in `WorkflowExecutableHasher.WriteBehavioralPayload` only when a policy is on, and an

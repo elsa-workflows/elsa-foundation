@@ -60,16 +60,16 @@ Line numbers are from that initiative head.
   `WorkflowStartSchedulerWorkHandler`):
   1. the validator's complete-bag normalization also completes an omitted optional input without a declared default:
      JSON `null` when the input is nullable (R-4), otherwise the type default from `NullPolicyDefaults` (R-6). A member
-     with none of these was refused at publication (FR-006, T007). Known-inputs mode (Design-time DispatchWorkflow)
-     stays as it is;
+     with none of these was refused at publication (FR-006, T007). Known-inputs mode (Design-time `DispatchWorkflow`
+     and `DispatchPinSource`) completes nothing, but applies steps 2 and 3 to the members it is given;
   2. the validator refuses an explicit `null` for a non-nullable input with a new reason code,
      `runtime.input.null-not-allowed` (R-4). An explicit
      `null` for a nullable input is accepted without the L119 conversion, which a `null` for a nullable value type
      would otherwise fail. The conversion itself is unchanged (S-9 moves it);
   3. under default-on-null, `ApplyInputContract` replaces an explicit `null` for a non-nullable input that has a type
      default before it calls the validator, from the executable's pinned `ValuePolicies` (R-6). The early checks in
-     the test-run handler and `DispatchWorkflow` apply the same `NullPolicyDefaults` substitution before validating,
-     so they give the same answer.
+     the test-run handler and `DispatchWorkflow`, and Design's `DispatchPinSource`, apply the same substitution
+     through one shared helper before validating, so all four give the same answer.
   The seed already writes every member of the normalized bag; T014 checks that a completed `null` is stored as an
   explicit null.
 - **Rationale**: #3731 put the contract on every start path. Completion and the null refusal belong in the same
