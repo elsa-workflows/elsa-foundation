@@ -28,7 +28,8 @@ Same two fields. Written in the hash payload as `valuePolicies` only when at lea
 
 From the input's type (Q8: value types not nullable, every other type and every collection nullable). The shared
 `InputDefinition.IsNullable` property stays, because .NET activity descriptors carry it (derived from the C# type);
-for authored members Studio no longer sends it and the backend derives it from the type. Written in `inputContract` only when `true`.
+for authored members Studio no longer sends it and the backend derives it from the type. Written in `inputContract`
+only when `false` (non-nullable), since most workflow inputs are nullable.
 
 ## Undefined policy at evaluation (no new pinned field)
 

@@ -256,8 +256,9 @@ invocation records, the workflow request, variables and outputs (ADR 0091 decisi
 
 **Why this priority**: every other story depends on telling the two apart after a suspend or restart.
 
-**Independent Test**: suspend and resume a workflow whose input was supplied as explicit null and whose other input was
-omitted; after resume, the first reads explicit null and the invocation record shows the second as defaulted.
+**Independent Test**: suspend and resume a workflow with one activity input bound to `null`, one nullable activity
+input left unbound, and one workflow input supplied as `null`. After resume the invocation record shows the first as
+`ExplicitNull` and the second as `Absent`, and the workflow input reads `ExplicitNull`.
 
 **Acceptance Scenarios**:
 
@@ -305,7 +306,7 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-001b**: Only `Boolean` (`false`), the number types (`0`) and enums (their zero value) have a type default
   (Q10). Dates, times, `TimeSpan` and `Guid` have none, because their zero value (`0001-01-01`, `00:00:00`, an empty
   GUID) looks like a real value. For a non-nullable type without a type default, `null` is refused under any policy
-  (`VF-ACT-004`), and an omitted optional member needs a declared default (`VF-ACT-003`). A value that cannot be
+  (`VF-ACT-004`; at admission `runtime.input.null-not-allowed`), and an omitted optional member needs a declared default (`VF-ACT-003`). A value that cannot be
   parsed into the type (for example the text `"tomorrow"` for a `DateTime`, which arrives as a string) is refused by
   the normal conversion (ADR 0046).
 - **FR-001c**: A declared variable that was never assigned MUST read its type default when its type has one
@@ -358,8 +359,9 @@ omitted; after resume, the first reads explicit null and the invocation record s
   (`false` for `Boolean`, `0` for the number types, the zero value for enums: FR-001b) (Q2), independently of any declared default, and the
   substitution MUST be recorded on the invocation record for an activity input (`VF-NULL-001`). A workflow input
   substituted at admission is not recorded separately: the started instance's input holds the substituted value, and
-  the policy is visible on the workflow. A target type without a non-null default (FR-006) still
-  fails with `VF-ACT-004`. Requiredness is checked before any default applies (FR-008).
+  the policy is visible on the workflow. A literal `null` is substituted at run time, not pinned at publication, so it
+  is recorded the same way. A target type without a type default (FR-001b) still fails with `VF-ACT-004` (at
+  admission `runtime.input.null-not-allowed`). Requiredness is checked before any default applies (FR-008).
 - **FR-014**: The policy MUST never replace a `null` for a nullable target.
 
 **`undefined` at the JavaScript boundary (D-11)**

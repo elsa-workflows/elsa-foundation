@@ -45,7 +45,8 @@ admission.
 
 **Constraints**: Elsa 3 knowledge stays in `Extensions/Elsa3` (§E2.7). No compatibility path for executables or
 fixtures from before this change: compatibility is owed from the first stable release, and fixtures whose hashes move
-are regenerated in place. New hash fields are written only when set, so most fixtures do not move.
+are regenerated in place. The policies are hashed only when on, and an input's nullability only when it is
+non-nullable, so most fixtures do not move.
 
 **Scale/Scope**: about 15 source files in Essentials, 5 in `Extensions/Elsa3`, and their tests.
 

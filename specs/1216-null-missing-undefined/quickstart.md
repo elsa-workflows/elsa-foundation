@@ -17,8 +17,9 @@ Run after implementation.
    outputs. The exported JSON shows `nullHandling`.
 6. **Computed read (US6, built by S-4)**: `getVariable('no' + 'pe') === undefined` is `true`; `VF-READ-001` is
    recorded.
-7. **Storage (US7)**: suspend and resume a workflow with one explicit-null input and one omitted input, on each EF
-   provider.
+7. **Storage (US7)**: suspend and resume a workflow with an activity input bound to `null`, an unbound nullable
+   activity input and a workflow input supplied as `null`, on each EF provider: `ExplicitNull`, `Absent`,
+   `ExplicitNull`.
 8. **Nullability by type**: start a workflow with a `String` input set to `null`: admitted. The same with an
    `Int32` input: refused with `runtime.input.null-not-allowed`. Studio shows no policy switch; the converter
    feature's documentation explains the policies.

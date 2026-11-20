@@ -80,7 +80,7 @@ Line numbers are from that initiative head.
 
 - **Decision**: add `IsNullable` to `WorkflowDeclaredInput`, fill it in `BuildInputContract` from the input's type
   (R-5, Q8; the stored `InputDefinition.IsNullable` flag is not read for workflow inputs), and hash it in
-  `inputContract` only when `true`. The validator refuses an explicit JSON `null` for a non-nullable input unless default-on-null
+  `inputContract` only when the input is non-nullable. The validator refuses an explicit JSON `null` for a non-nullable input unless default-on-null
   applies (R-3 step 2 and 3).
 - **Rationale**: FR-005, FR-001a. Studio stores `isNullable: false` on every new workflow input and output, so
   trusting the flag would refuse `null` for a `String` input; the type gives the same answer .NET would.
@@ -103,11 +103,12 @@ Line numbers are from that initiative head.
 
 ## R-6 Default-on-null in the runtime
 
-- **Decision**: one helper, `NullPolicyDefaults.TryGetTypeDefault(alias)`, in `Elsa.Workflows.Runtime.Core`, returning
+- **Decision**: one helper, `NullPolicyDefaults`, in `Elsa.Workflows.Runtime.Core`, looked up by alias for authored
+  members and by CLR type for .NET activity inputs (the registry has no enums and only four number types), returning
   the type default for `Boolean` (`false`), the number types (`0`) and enums (zero value) and nothing for other types
   (dates, times, `TimeSpan`, `Guid`, `String`, `Any` and the JSON aliases, Q10). It is applied in four places, each only
-  when the workflow's pinned `DefaultOnNull` is on: publication (`ValidateNull`: pin the default literal instead of
-  failing), run-time materialization (`ValidatePresence`: replace `ExplicitNull` with the default and record a
+  when the workflow's pinned `DefaultOnNull` is on: publication (`ValidateNull`: keep the literal `null` instead of
+  failing, so the run-time step substitutes and records it), run-time materialization (`ValidatePresence`: replace `ExplicitNull` with the default and record a
   `VF-NULL-001` diagnostic on the invocation), the intrinsic executor (`WorkflowIntrinsicExecutor`: a `Set` /
   `SetOutput` expression that evaluates to `null` becomes `ExplicitNull` without passing the materializer, and
   `ValidateAssignmentPayload` skips anything not `Present`, so today `null` into an `Int32` variable is written; S-2

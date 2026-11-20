@@ -32,10 +32,12 @@ red without the change. xUnit only.
   read materializes a variable with no value (S-4's read path and the variable store's initial value), `null` for a
   type that accepts it; publication refuses a date, time, `TimeSpan` or `Guid` variable without a declared default
   (`VF-ACT-003`). Update S-4's test for spec 1222 US1 scenario 6 for a value-type variable
-- [ ] T005 [P] Add `NullPolicyDefaults.TryGetTypeDefault(alias)` in
-  `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs` (FR-001b): a default for `Boolean`, the
-  number types and enums only; unit tests including `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`,
-  `Guid`, `String`, `Any` and a collection of `Int32` having none, and a collection accepting `null` (FR-001a)
+- [ ] T005 [P] Add `NullPolicyDefaults` in `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs`
+  (FR-001b) with two lookups: `TryGetTypeDefault(alias)` for authored members (registry aliases) and
+  `TryGetTypeDefault(Type)` for .NET activity inputs (`bool`, every numeric primitive including `float`, `short`,
+  `byte` and `uint`, and any enum). A default for `Boolean`, the number types and enums only; unit tests including `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`,
+  `Guid`, `String`, `Any` and a collection of `Int32` having none, a collection accepting `null` (FR-001a), and a
+  .NET enum and `float` having one
 - [ ] T006 Add `NullHandling` (`DefaultOnNull`, `UndefinedAsNull`) to
   `Essentials/src/Workflows/Design/Core/Models/WorkflowStrategyOptions.cs`, `ValuePolicies` to
   `Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs`, and compile one into the other in
@@ -45,7 +47,8 @@ red without the change. xUnit only.
   optional, non-nullable workflow input whose type has no non-null default and that declares no default
   (`VF-ACT-003`, FR-006)
 - [ ] T007a Activity inputs (FR-006, FR-001b): in `RuntimeInputBindingCompiler.CompileOmitted`, replace
-  `TryCreateClrDefault` (any value type's CLR zero value) with `NullPolicyDefaults.TryGetTypeDefault`, so an omitted
+  `TryCreateClrDefault` (any value type's CLR zero value) with `NullPolicyDefaults.TryGetTypeDefault(Type)`, so an
+  omitted optional enum or numeric input keeps its zero value and an omitted
   optional date, time, `TimeSpan` or `Guid` input without a declared default fails `VF-ACT-003`. Audit built-in
   activities for such inputs (`Delay.Duration` declares a default and is unaffected), declare a default where one is
   meant, and test
@@ -53,8 +56,9 @@ red without the change. xUnit only.
   JavaScript`) from the callers that already hold the executable; no per-binding field (R-2)
 - [ ] T008a Expose `strategyOptions.nullHandling` through the workflow definition API (read and write) and the
   exported JSON, with an API round-trip test (FR-024)
-- [ ] T009 Write `valuePolicies` and input `isNullable` in `WorkflowExecutableHasher.WriteBehavioralPayload` only when
-  set; test that each one changes the hash when set (ADR 0038, US5 scenario 3). Regenerate in place any stored fixture
+- [ ] T009 Write `valuePolicies` in `WorkflowExecutableHasher.WriteBehavioralPayload` only when a policy is on, and an
+  input's nullability only when it is non-nullable (most workflow inputs are nullable); test that each one changes
+  the hash (ADR 0038, US5 scenario 3). Regenerate in place any stored fixture
   whose hash moves
 
 ## Phase 3: User Story 1 - Set a variable or output to null (P1) 🎯 MVP
@@ -66,7 +70,8 @@ red without the change. xUnit only.
   non-nullable
 - [ ] T010a [US1] Run time: in `WorkflowIntrinsicExecutor`, check a `null` from a `Set` / `SetOutput` expression
   against the target's nullability: `VF-ACT-004` for a non-nullable target, the type default under `DefaultOnNull`
-  (R-6). Test: the expression `null` into an `Int32` variable faults today's silent write
+  (R-6), recording `VF-NULL-001` on the intrinsic's execution like an activity input. Test: the expression `null`
+  into an `Int32` variable faults today's silent write
 - [ ] T011 [US1] Tests in `Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`: null
   literal into a nullable variable and a nullable output publishes; into an `Int32` variable fails with `VF-ACT-004`
 - [ ] T012 [US1] Run test: the variable holds `ExplicitNull` and a workflow output persists an explicit JSON `null`
@@ -101,7 +106,8 @@ red without the change. xUnit only.
 
 ## Phase 5: User Story 7 - Null and absent survive storage (P1)
 
-**Independent test**: suspend and resume with one explicit-null and one omitted input.
+**Independent test**: suspend and resume with one activity input bound to `null` and one omitted nullable activity
+input, and one workflow input supplied as `null`.
 
 - [ ] T017 [P] [US7] Round-trip tests for `ExplicitNull` and `Absent` envelopes in every runtime store provider
   (in-memory and each EF provider), covering invocation records, workflow request rows, variables and outputs
@@ -113,8 +119,9 @@ red without the change. xUnit only.
 
 **Independent test**: `return null;` into an `Int32` input gives `0` under the policy, `VF-ACT-004` without.
 
-- [ ] T019 [US3] Publication: in `RuntimeInputBindingCompiler.ValidateNull`, pin the type default when the workflow's
-  `DefaultOnNull` is on and the type has one (R-6)
+- [ ] T019 [US3] Publication: in `RuntimeInputBindingCompiler.ValidateNull`, keep a literal `null` for a non-nullable
+  input when the workflow's `DefaultOnNull` is on and the type has a type default, so T020 substitutes it at run time
+  and records `VF-NULL-001` like any other `null` (R-6)
 - [ ] T020 [US3] Run time: in `RuntimeActivityInputMaterializer.ValidatePresence`, substitute the type default for
   `ExplicitNull` under the policy and record `VF-NULL-001` on the invocation
 - [ ] T021 [US3] Tests for each US3 acceptance scenario, including a non-nullable `String` that still fails, and
