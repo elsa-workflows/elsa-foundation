@@ -16,6 +16,7 @@ public static class RuntimeApiCapabilities
         CapabilityId,
         1,
         [
+            new("runtime-persistence-mode", "runtime/workflows/persistence-mode"),
             new("workflow-executables", "runtime/workflows/executables"),
             new("workflow-executable", "runtime/workflows/executables/{artifactId}", templated: true),
             new("workflow-executable-input-sources", "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources", templated: true),
@@ -37,6 +38,12 @@ public static class RuntimeApiCapabilities
             new("activity-execution-value-evidence", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true),
             new("activity-execution-value-payload", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload", templated: true),
             new("workflow-incidents", "runtime/workflows/instances/{workflowExecutionId}/incidents", templated: true),
+            // Spec 1229 (S-6): variable lifecycle inspection.
+            new("workflow-instance-variables", "runtime/workflows/instances/{workflowExecutionId}/variables", templated: true),
+            new("workflow-instance-variable-writes", "runtime/workflows/instances/{workflowExecutionId}/variable-writes", templated: true),
+            new("workflow-instance-variable-write-payload", "runtime/workflows/instances/{workflowExecutionId}/variable-writes/{entryId}/payload", templated: true),
+            new("workflow-instance-journal", "runtime/workflows/instances/{workflowExecutionId}/journal", templated: true),
+            new("workflow-instance-compare", "runtime/workflows/instances/{workflowExecutionId}/compare/{otherWorkflowExecutionId}", templated: true),
             new("workflow-dispatches", "runtime/workflows/dispatches"),
             new("workflow-dispatch", "runtime/workflows/dispatches/{dispatchId}", templated: true),
             new("workflow-dispatch-redrive", "runtime/workflows/dispatches/{dispatchId}/redrive", templated: true)

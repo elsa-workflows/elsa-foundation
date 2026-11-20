@@ -25,6 +25,29 @@ function Get-GitHubHeadingAnchor {
     return $anchor
 }
 
+function Get-NormalizedSha256 {
+    # Hash the file's text-normalized content (CRLF -> LF) so the result matches
+    # git's stored blob for a `text` file regardless of the checkout's line endings.
+    # Without this, a Windows checkout (CRLF) mismatches the LF hashes in the manifest
+    # even though git normalizes these files to LF on commit and CI sees them as LF.
+    param([string]$Path)
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    $normalized = [System.Collections.Generic.List[byte]]::new($bytes.Length)
+    for ($i = 0; $i -lt $bytes.Length; $i++) {
+        if ($bytes[$i] -eq 13 -and ($i + 1) -lt $bytes.Length -and $bytes[$i + 1] -eq 10) {
+            continue
+        }
+        $normalized.Add($bytes[$i])
+    }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($sha.ComputeHash($normalized.ToArray())) -replace '-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
 function Read-FrontMatter {
     param([string]$Path)
     $content = Get-Content -LiteralPath $Path -Raw
@@ -134,7 +157,7 @@ foreach ($wrapperPath in $wrapperFiles) {
         continue
     }
 
-    $actualHash = (Get-FileHash -LiteralPath $wrapperPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actualHash = Get-NormalizedSha256 -Path $wrapperPath
     $expectedHash = [string]$manifestFiles[$repoPath]
     if ($actualHash -ne $expectedHash.ToLowerInvariant()) {
         Add-Failure "${repoPath}: manifest hash mismatch. expected $expectedHash, actual $actualHash"

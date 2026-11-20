@@ -29,7 +29,7 @@ public sealed class ReusableBodyWaitTests(ITestOutputHelper output)
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
-        Assert.Equal("Approved", activity.Completion?.OutcomeKey);
+        Assert.Equal(new[] { "Approved" }, activity.Completion?.OutcomeNames);
         // The Delay suspended and resumed: it completed, and no earlier than its two seconds after it started.
         var delay = Assert.Single(run.Activities, state => state.Execution.ActivityType.EndsWith(".Delay", StringComparison.Ordinal));
         Assert.Equal(ActivityExecutionStatus.Completed, delay.Status);
@@ -60,7 +60,7 @@ public sealed class ReusableBodyWaitTests(ITestOutputHelper output)
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         Assert.Empty(run.Incidents);
         var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
-        Assert.Equal("Approved", activity.Completion?.OutcomeKey);
+        Assert.Equal(new[] { "Approved" }, activity.Completion?.OutcomeNames);
         Assert.Equal(expectedPayload ?? "null", PublishEventResumeTests.PayloadOf(Assert.Single(run.Activities, PublishEventResumeTests.IsEvent)));
     }
 
@@ -86,6 +86,6 @@ public sealed class ReusableBodyWaitTests(ITestOutputHelper output)
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
-        Assert.Equal("Approved", activity.Completion?.OutcomeKey);
+        Assert.Equal(new[] { "Approved" }, activity.Completion?.OutcomeNames);
     }
 }

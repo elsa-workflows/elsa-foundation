@@ -119,18 +119,21 @@ function flowchartStructuralErrors(owner: ActivityNode, labels: ValidationActivi
 
 /**
  * Merges validation sources into one de-duplicated list, preserving order: server draft validations
- * first (authoritative), then the draft's reconciled errors, then designer structural checks. Entries
- * with the same type+path+message collapse to one so the same fault reported by two surfaces shows once.
+ * first (authoritative), then the draft's reconciled errors, then designer structural checks, then
+ * mounted-contribution local checks (Evaluate Decision extras/type/unpublished). Entries with the
+ * same type+path+message collapse to one so the same fault reported by two surfaces shows once.
  */
 export function combineValidationErrors(sources: {
   draftErrors?: ValidationError[] | null;
   serverErrors?: DraftValidationError[] | null;
   structuralErrors?: ValidationError[] | null;
+  localErrors?: ValidationError[] | null;
 }): ValidationError[] {
   const combined: ValidationError[] = [
     ...(sources.serverErrors ?? []).map(fromDraftValidationError),
     ...(sources.draftErrors ?? []),
-    ...(sources.structuralErrors ?? [])
+    ...(sources.structuralErrors ?? []),
+    ...(sources.localErrors ?? [])
   ];
   const seen = new Set<string>();
   const result: ValidationError[] = [];

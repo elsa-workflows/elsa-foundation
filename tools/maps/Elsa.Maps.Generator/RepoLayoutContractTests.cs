@@ -50,11 +50,11 @@ public static class RepoLayoutContractTests
             throw new InvalidOperationException("Catalog selectors must cover exactly backend EXTENSION_POINTS.md files, never ordinary README or Studio files.");
 
         if (!RepoLayout.IsTestPath("Essentials/tests/Architecture/Tests/Example.cs") ||
-            !RepoLayout.IsTestProjectPath("Extensions/Agent/tests/Tests/Example.csproj") ||
+            !RepoLayout.IsTestProjectPath("Extensions/Weaver/tests/Tests/Example.csproj") ||
             !RepoLayout.IsTestPath("Extensions/Agent/src/tests/Example.cs") ||
             RepoLayout.IsModulePath("Extensions/Agent/src/tests/Example.cs") ||
             RepoLayout.IsModulePath("Essentials/tests/Architecture/Tests/Example.cs") ||
-            RepoLayout.IsModulePath("Extensions/Agent/tests/Tests/Example.cs") ||
+            RepoLayout.IsModulePath("Extensions/Weaver/tests/Tests/Example.cs") ||
             RepoLayout.IsTestProjectPath("Extensions/Agent/studio/tests/Example.Tests.csproj") ||
             RepoLayout.IsModulePath("Extensions/Agent/studio/Elsa.Studio.Agent/Example.cs"))
             throw new InvalidOperationException("Backend path classification does not preserve test segments and Studio exclusion.");

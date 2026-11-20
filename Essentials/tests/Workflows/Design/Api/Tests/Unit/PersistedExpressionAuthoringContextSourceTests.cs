@@ -1,4 +1,9 @@
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Expressions.Core.Contracts;
@@ -21,6 +26,42 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 public sealed class PersistedExpressionAuthoringContextSourceTests
 {
     [Fact]
+    public async Task Existing_public_constructor_does_not_fall_back_when_shared_authority_is_missing()
+    {
+        var node = new ActivityNode("target", "activity", [], []);
+        var structure = new RankedStructureService(node, [], new Dictionary<string, string[]>());
+        var draft = new WorkflowDefinitionDraft { Id = "draft", WorkflowDefinitionId = "workflow", State = new([], node, [], [], null) };
+        var source = new PersistedExpressionAuthoringContextSource([new SingleDraftStore(draft)], structure,
+            new ScopedVariablePicker(new ScopedVariableResolver(structure)));
+        Assert.Null(await source.TryResolveAsync(new(ExpressionToolingContractVersion.V1, "draft", "target", "text", "JavaScript", "document"), new(true), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_context_filter_can_deny_before_any_source_shape_is_acquired()
+    {
+        var target = new ActivityNode("target", "activity", [], []);
+        var sibling = new ActivityNode("sibling", "activity", [], []);
+        var root = new ActivityNode("root", "container", [], []);
+        var structure = new RankedStructureService(root, [sibling, target], new Dictionary<string, string[]> { ["target"] = ["sibling"] });
+        var draft = new WorkflowDefinitionDraft { Id = "draft", WorkflowDefinitionId = "workflow", State = new([], root, [], [], null) };
+        var guard = new SourceShapeGuard();
+        var source = CreateSource([new SingleDraftStore(draft)], structure, new ScopedVariablePicker(new ScopedVariableResolver(structure)),
+            contextFilters: [new DenyContextFilter()], configure: services => services.AddSingleton<IActivitySerializedShapeSource>(guard));
+        Assert.Null(await source.TryResolveAsync(new(ExpressionToolingContractVersion.V1, "draft", "target", "text", "JavaScript", "document"), new(true), CancellationToken.None));
+        Assert.Equal(0, guard.Calls);
+    }
+
+    [Fact]
+    public async Task An_untouched_catalog_input_is_a_valid_expression_target()
+    {
+        var node = new ActivityNode("target", "activity", [], []);
+        var structure = new RankedStructureService(node, [], new Dictionary<string, string[]>());
+        var source = SourceFor(node, structure);
+        var context = await source.TryResolveAsync(new(ExpressionToolingContractVersion.V1, "draft", "target", "text", "JavaScript", "document"), new(true), CancellationToken.None);
+        Assert.NotNull(context);
+        Assert.Equal("String", context.ExpectedResultType);
+    }
+    [Fact]
     public async Task Policy_only_change_invalidates_the_existing_context_revision()
     {
         var target = new ActivityNode("target", "activity", [new("text", new(null), null, null, null, null)], []);
@@ -38,7 +79,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             State = new WorkflowDefinitionState([], root, [], [], null),
             LastModifiedAt = DateTimeOffset.UnixEpoch
         };
-        var source = new PersistedExpressionAuthoringContextSource(
+        var source = CreateSource(
             [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
@@ -104,7 +145,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             Inputs = [new InputDefinition("text", "text", new TypeReference("String"), null, "Text", null, false)],
             Outputs = [new OutputDefinition("result", "result", new TypeReference("Int32"), null, "Result", null, false)]
         };
-        var source = new PersistedExpressionAuthoringContextSource(
+        var source = CreateSource(
             [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
@@ -125,7 +166,9 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
         Assert.DoesNotContain(context.RootSymbols, symbol => symbol.SymbolId == "activity-result:target:result");
         Assert.Equal("String", context.Document.ExpectedResultType);
         Assert.Equal("String", context.ExpectedResultType);
-        Assert.Equal(ExpressionValueKind.Scalar, context.ExpectedResultShape!.Kind);
+        // The consuming type is authoritative, but no target serialization profile has been bound.
+        // Do not infer a CLR scalar/member contract from its alias; source shapes use their own owner.
+        Assert.Equal(ExpressionValueKind.Unknown, context.ExpectedResultShape!.Kind);
         Assert.Equal("policy-2", context.PolicyFingerprint);
         Assert.NotEqual("authenticated", context.PermissionRevision);
     }
@@ -179,7 +222,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
                 null),
             LastModifiedAt = DateTimeOffset.UnixEpoch
         };
-        var source = new PersistedExpressionAuthoringContextSource(
+        var source = CreateSource(
             [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
@@ -224,7 +267,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             State = new([], target, inputs, [], null),
             LastModifiedAt = DateTimeOffset.UnixEpoch
         };
-        var source = new PersistedExpressionAuthoringContextSource(
+        var source = CreateSource(
             [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
@@ -259,7 +302,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             LastModifiedAt = DateTimeOffset.UnixEpoch
         };
         var filter = new CountingSymbolFilter();
-        var source = new PersistedExpressionAuthoringContextSource(
+        var source = CreateSource(
             [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
@@ -294,7 +337,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             State = new([], target, inputs, [], null),
             LastModifiedAt = DateTimeOffset.UnixEpoch
         };
-        var source = new PersistedExpressionAuthoringContextSource(
+        var source = CreateSource(
             [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)));
@@ -359,7 +402,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             Inputs = [new InputDefinition("text", "text", new TypeReference("String"), null, "Text", null, false)],
             Outputs = [new OutputDefinition("result", "result", new TypeReference("Int32"), null, "Result", null, false)]
         };
-        return new PersistedExpressionAuthoringContextSource(
+        return CreateSource(
             [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
@@ -385,12 +428,65 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
     private sealed class ScopeStructureService(ActivityNode root, ActivityNode target, ActivityNode sibling, VariableDefinition inside, VariableDefinition hidden) : IActivityStructureService
     {
         public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) =>
-            activity.NodeId == root.NodeId ? [new("Children", [sibling, target])] : [];
+            activity.NodeId == root.NodeId ? [new("Children", new[] { sibling, target }.Where(child => child.NodeId != activity.NodeId))] : [];
+        public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) =>
+            activity.NodeId == root.NodeId && childNodeId == target.NodeId && target.NodeId != root.NodeId ? [sibling.NodeId] : null;
         public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
             activity.NodeId == root.NodeId ? [inside] : activity.NodeId == sibling.NodeId ? [hidden] : [];
         public bool SupportsScopedVariables(ActivityNode activity) => activity.NodeId is "root" or "sibling";
         public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) => throw new NotSupportedException();
         public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => throw new NotSupportedException();
+    }
+
+    private static PersistedExpressionAuthoringContextSource CreateSource(
+        IEnumerable<IWorkflowDefinitionDraftStore> drafts,
+        IActivityStructureService structures,
+        ScopedVariablePicker picker,
+        IActivityDefinitionVersionStore? versions = null,
+        IEnumerable<IExpressionAuthoringContextFilter>? contextFilters = null,
+        IEnumerable<IExpressionAuthoringSymbolFilter>? symbolFilters = null,
+        Action<IServiceCollection>? configure = null)
+    {
+        var input = new InputDefinition("text", "text", new("String"), null, "Text", null, false);
+        var outputs = versions is null ? Array.Empty<OutputDefinition>()
+            : versions.GetAsync("activity").GetAwaiter().GetResult().Outputs.ToArray();
+        var services = new ServiceCollection();
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
+        new WorkflowDesignValidationsFeature().ConfigureServices(services);
+        services.AddSingleton(structures);
+        services.AddSingleton<IActivityDefinitionLookup>(new StubActivityCatalog().Add("container").Add("activity", [input], outputs));
+        services.AddSingleton<IActivityAuthoringCatalog, FixtureCatalogAuthority>();
+        services.AddSingleton<IWorkflowDefinitionAuthorizer, FixtureDefinitionAuthority>();
+        configure?.Invoke(services);
+        return new(drafts, structures, picker, versions, contextFilters, symbolFilters, services.BuildServiceProvider());
+    }
+
+    private sealed class FixtureDefinitionAuthority : IWorkflowDefinitionAuthorizer
+    {
+        public ValueTask<bool> CanReadAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(definitionId == "workflow");
+        public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+    }
+    private sealed class FixtureCatalogAuthority : IActivityAuthoringCatalog
+    {
+        public ValueTask<bool> CanReadAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<ActivityAuthoringCatalogResult> ListAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(new ActivityAuthoringCatalogResult(true,
+            new[] { "activity", "container" }.Select(id => new ActivityAuthoringCatalogEntry(id, id, "1.0.0", id, null, null, true, null, [])).ToArray()));
+    }
+
+    private sealed class DenyContextFilter : IExpressionAuthoringContextFilter
+    {
+        public ValueTask<ExpressionAuthoringContext?> FilterAsync(ExpressionAuthoringContext context, ExpressionAuthoringAuthorization authorization,
+            CancellationToken cancellationToken) => ValueTask.FromResult<ExpressionAuthoringContext?>(null);
+    }
+    private sealed class SourceShapeGuard : IActivitySerializedShapeSource
+    {
+        internal int Calls { get; private set; }
+        public ValueTask<ActivitySerializedShape?> DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey,
+            System.Collections.Immutable.ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default)
+        { Calls++; throw new InvalidOperationException("Source metadata must follow the context filter."); }
+        public ValueTask<ActivitySerializedShape?> DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity,
+            System.Collections.Immutable.ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default)
+        { Calls++; throw new InvalidOperationException("Source metadata must follow the context filter."); }
     }
 
     private sealed class SingleDraftStore(WorkflowDefinitionDraft draft) : IWorkflowDefinitionDraftStore

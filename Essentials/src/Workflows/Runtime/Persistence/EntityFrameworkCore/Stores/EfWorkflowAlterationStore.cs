@@ -195,6 +195,25 @@ public sealed class EfWorkflowAlterationStore(
         }
     }
 
+    public async ValueTask<IReadOnlyList<WorkflowAlterationJobState>> ListVariableWriteJobsAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        var scopeKey = Key(RequireScope());
+        var encodedScope = EfRelationalIdentity.Encode(scopeKey);
+        var scopeHash = EfRelationalIdentity.Hash(scopeKey);
+        var encodedWorkflow = EfRelationalIdentity.Encode(workflowExecutionId);
+        var workflowHash = EfRelationalIdentity.Hash(workflowExecutionId);
+        // Only terminal jobs carry outcomes; the documents are filtered here, the instance's jobs are few.
+        var rows = await _context.WorkflowAlterationJobs.AsNoTracking()
+            .Where(x => x.ScopeKey == encodedScope && x.ScopeKeyHash == scopeHash && x.WorkflowExecutionIdHash == workflowHash && x.WorkflowExecutionId == encodedWorkflow)
+            .ToListAsync(cancellationToken);
+        return rows.Select(row => ReadJob(row, scopeKey))
+            .Where(job => job.Outcomes.Any(outcome => outcome.VariableWrites is { Count: > 0 }))
+            .OrderBy(job => job.CompletedAt)
+            .ThenBy(job => job.JobId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     public async ValueTask<WorkflowAlterationJobState?> FindJobAsync(string jobId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(jobId); var scopeKey = Key(RequireScope()); var row = await _context.WorkflowAlterationJobs.AsNoTracking().SingleOrDefaultAsync(x => x.Id == Id(scopeKey, jobId) && x.ScopeKey == EfRelationalIdentity.Encode(scopeKey) && x.ScopeKeyHash == EfRelationalIdentity.Hash(scopeKey) && x.JobId == EfRelationalIdentity.Encode(jobId) && x.JobIdHash == EfRelationalIdentity.Hash(jobId), cancellationToken); return row is null ? null : ReadJob(row, scopeKey, jobId);

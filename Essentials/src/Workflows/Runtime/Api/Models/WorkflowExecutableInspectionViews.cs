@@ -86,7 +86,8 @@ public sealed record WorkflowExecutableNodeView(
     IReadOnlyCollection<WorkflowExecutableChildSlotView> ChildSlots,
     IReadOnlyCollection<WorkflowExecutableConnectionView> Connections,
     IReadOnlyCollection<WorkflowExecutableOutputCaptureView>? OutputCaptures = null,
-    WorkflowExecutableBpmnStructureView? BpmnStructure = null);
+    WorkflowExecutableBpmnStructureView? BpmnStructure = null,
+    IReadOnlyCollection<string>? Outcomes = null);
 
 /// <summary>Allowlisted semantic projection for supported persisted BPMN executable structures.</summary>
 public sealed record WorkflowExecutableBpmnStructureView(
@@ -133,7 +134,12 @@ public sealed record WorkflowExecutableInputBindingView(
     RuntimeActivityResultReference? ActivityResult = null,
     ValueConversionPlan? ConversionPlan = null,
     IReadOnlyDictionary<string, string>? Metadata = null,
-    RuntimeSecretReference? Secret = null);
+    RuntimeSecretReference? Secret = null)
+{
+    /// <summary>The member a member read selects inside its source; <see langword="null"/> for a whole-value read.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeReadSelection? Selection { get; init; }
+}
 
 public sealed record WorkflowExecutableOutputCaptureView(
     string OutputName,

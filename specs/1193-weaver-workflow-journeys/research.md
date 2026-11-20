@@ -48,7 +48,7 @@ This file records the seams each slice uses, and the decisions that follow from 
 
 **Decision**:
 - The list context reads the flags from the page response Studio already holds.
-- There are no separate handlers. The authority checks are inline in the endpoint `HandleAsync` methods (`WorkflowLibraryEndpoints.cs:235-245`) and use the internal, `HttpContext`-bound `WorkflowLibraryAccess`. Slice E extracts them into `IWorkflowLibraryCommands` (plan D4), which both the endpoints and the tools call.
+- There are no separate handlers. The authority checks are inline in the endpoint `HandleAsync` methods (`WorkflowLibraryEndpoints.cs:235-245`) and use the internal, `HttpContext`-bound `WorkflowLibraryAccess`. Slice E extracts them into `IWorkflowLibraryCommands` (plan D4). The Weaver tools call the installed contract. The HTTP endpoints run the same built-in logic directly, so a replacement decides only Weaver's writes.
 - The operation-key unique index is scoped like the existing tag index (`WorkflowLibraryEntityConfigurations.cs:71`): by the tenant scope key for tags, and by the tenant scope key and subject for views.
 - The operation-key overloads are `CreateTagAsync(input, actorId, operationKey)` and `SaveViewAsync(id, input, subjectId, canShare, operationKey)`.
 
@@ -73,6 +73,7 @@ This file records the seams each slice uses, and the decisions that follow from 
   - **Decision**: the context binds the artifact id together with the Artifact Hash. A read whose returned hash differs from the bound hash is stale.
 - **Run reads**: `IWorkflowInstanceDetailsService`, `IWorkflowIncidentListService`, `IActivityExecutionInspectionService` and `IActivityExecutionStateViewService`, all in `Elsa.Workflows.Runtime.Api`.
 - **Redaction**: execution evidence withholds sensitive values at capture time (`ExecutionEvidenceCheckpointEnricher.cs:150-151`). The Run tool discloses only values those services return. A withheld or unavailable value is reported with its reason.
+- **Decision (slice G review): stricter than the run page.** A sensitive value is never released or resolved by `IWorkflowRunInspection`, even when a capture policy captured it and the actor may resolve it on the run page; incident messages and state views of activities with a sensitive input binding are withheld too, because exception text and projections can echo the input. Weaver discloses to a model provider, a wider audience than the actor's own screen. Trade-off: Weaver never sees values the run page can show, and says they are withheld. A retained read is withheld once the actor loses the access it was read under (`CanInspectValues`, `CanResolveValues`), and only disclosed values are resolved and audited (`ResolveEvidenceIds`).
 - **Decision**: these services are in `Elsa.Workflows.Runtime.Api`. `Elsa.Workflows.Runtime.Core` gains `IWorkflowExecutableInspection` and `IWorkflowRunInspection`, which the Api implements over them (plan D4). `Elsa.Agent.Workflows.Runtime` references the Core only, as the Specialists packages reference `Elsa.Workflows.Runtime.Core`.
 
 ## R8. Deployment shapes (slice F)

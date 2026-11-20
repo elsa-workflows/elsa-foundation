@@ -1,0 +1,69 @@
+#nullable enable
+Elsa.Agent.Api.AgentModelCapabilitiesRequest
+Elsa.Agent.Api.AgentModelCapabilitiesRequest.<Clone>$() -> Elsa.Agent.Api.AgentModelCapabilitiesRequest!
+Elsa.Agent.Api.AgentModelCapabilitiesRequest.ConnectionName.get -> string!
+Elsa.Agent.Api.AgentModelCapabilitiesRequest.ConnectionName.init -> void
+Elsa.Agent.Api.AgentModelCapabilitiesRequest.Deconstruct(out string! ProviderKey, out string! ConnectionName, out string! ModelId) -> void
+Elsa.Agent.Api.AgentModelCapabilitiesRequest.Equals(Elsa.Agent.Api.AgentModelCapabilitiesRequest? other) -> bool
+Elsa.Agent.Api.AgentModelCapabilitiesRequest.ModelId.get -> string!
+Elsa.Agent.Api.AgentModelCapabilitiesRequest.ModelId.init -> void
+Elsa.Agent.Api.AgentModelCapabilitiesRequest.ProviderKey.get -> string!
+Elsa.Agent.Api.AgentModelCapabilitiesRequest.ProviderKey.init -> void
+Elsa.Agent.Api.AgentModelCapabilitiesRequest.AgentModelCapabilitiesRequest(string! ProviderKey, string! ConnectionName, string! ModelId) -> void
+Elsa.Agent.Api.AgentModelCapabilitiesView
+Elsa.Agent.Api.AgentModelCapabilitiesView.<Clone>$() -> Elsa.Agent.Api.AgentModelCapabilitiesView!
+Elsa.Agent.Api.AgentModelCapabilitiesView.Deconstruct(out System.Text.Json.JsonElement SettingsSchema, out bool SupportsJsonSchema, out int MaximumOutputTokens) -> void
+Elsa.Agent.Api.AgentModelCapabilitiesView.Equals(Elsa.Agent.Api.AgentModelCapabilitiesView? other) -> bool
+Elsa.Agent.Api.AgentModelCapabilitiesView.MaximumOutputTokens.get -> int
+Elsa.Agent.Api.AgentModelCapabilitiesView.MaximumOutputTokens.init -> void
+Elsa.Agent.Api.AgentModelCapabilitiesView.SettingsSchema.get -> System.Text.Json.JsonElement
+Elsa.Agent.Api.AgentModelCapabilitiesView.SettingsSchema.init -> void
+Elsa.Agent.Api.AgentModelCapabilitiesView.AgentModelCapabilitiesView(System.Text.Json.JsonElement SettingsSchema, bool SupportsJsonSchema, int MaximumOutputTokens) -> void
+Elsa.Agent.Api.AgentModelCapabilitiesView.SupportsJsonSchema.get -> bool
+Elsa.Agent.Api.AgentModelCapabilitiesView.SupportsJsonSchema.init -> void
+Elsa.Agent.Api.AgentModelProviderView
+Elsa.Agent.Api.AgentModelProviderView.<Clone>$() -> Elsa.Agent.Api.AgentModelProviderView!
+Elsa.Agent.Api.AgentModelProviderView.ConnectionTypeName.get -> string!
+Elsa.Agent.Api.AgentModelProviderView.ConnectionTypeName.init -> void
+Elsa.Agent.Api.AgentModelProviderView.Deconstruct(out string! ProviderKey, out string! ConnectionTypeName, out string! DisplayName) -> void
+Elsa.Agent.Api.AgentModelProviderView.DisplayName.get -> string!
+Elsa.Agent.Api.AgentModelProviderView.DisplayName.init -> void
+Elsa.Agent.Api.AgentModelProviderView.Equals(Elsa.Agent.Api.AgentModelProviderView? other) -> bool
+Elsa.Agent.Api.AgentModelProviderView.ProviderKey.get -> string!
+Elsa.Agent.Api.AgentModelProviderView.ProviderKey.init -> void
+Elsa.Agent.Api.AgentModelProviderView.AgentModelProviderView(string! ProviderKey, string! ConnectionTypeName, string! DisplayName) -> void
+Elsa.Agent.Api.AgentModelProvidersResponse
+Elsa.Agent.Api.AgentModelProvidersResponse.<Clone>$() -> Elsa.Agent.Api.AgentModelProvidersResponse!
+Elsa.Agent.Api.AgentModelProvidersResponse.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Agent.Api.AgentModelProviderView!>! Items) -> void
+Elsa.Agent.Api.AgentModelProvidersResponse.Equals(Elsa.Agent.Api.AgentModelProvidersResponse? other) -> bool
+Elsa.Agent.Api.AgentModelProvidersResponse.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Agent.Api.AgentModelProviderView!>!
+Elsa.Agent.Api.AgentModelProvidersResponse.Items.init -> void
+Elsa.Agent.Api.AgentModelProvidersResponse.AgentModelProvidersResponse(System.Collections.Generic.IReadOnlyList<Elsa.Agent.Api.AgentModelProviderView!>! Items) -> void
+Elsa.Agent.Api.AgentApi
+Elsa.Agent.Api.AgentApiFeature
+Elsa.Agent.Api.AgentApiFeature.AgentApiFeature() -> void
+MinimalEndpoints.Generated.ElsaAgentApiEndpoints
+override Elsa.Agent.Api.AgentModelCapabilitiesRequest.Equals(object? obj) -> bool
+override Elsa.Agent.Api.AgentModelCapabilitiesRequest.GetHashCode() -> int
+override Elsa.Agent.Api.AgentModelCapabilitiesRequest.ToString() -> string!
+override Elsa.Agent.Api.AgentModelCapabilitiesView.Equals(object? obj) -> bool
+override Elsa.Agent.Api.AgentModelCapabilitiesView.GetHashCode() -> int
+override Elsa.Agent.Api.AgentModelCapabilitiesView.ToString() -> string!
+override Elsa.Agent.Api.AgentModelProviderView.Equals(object? obj) -> bool
+override Elsa.Agent.Api.AgentModelProviderView.GetHashCode() -> int
+override Elsa.Agent.Api.AgentModelProviderView.ToString() -> string!
+override Elsa.Agent.Api.AgentModelProvidersResponse.Equals(object? obj) -> bool
+override Elsa.Agent.Api.AgentModelProvidersResponse.GetHashCode() -> int
+override Elsa.Agent.Api.AgentModelProvidersResponse.ToString() -> string!
+static Elsa.Agent.Api.AgentModelCapabilitiesRequest.operator !=(Elsa.Agent.Api.AgentModelCapabilitiesRequest? left, Elsa.Agent.Api.AgentModelCapabilitiesRequest? right) -> bool
+static Elsa.Agent.Api.AgentModelCapabilitiesRequest.operator ==(Elsa.Agent.Api.AgentModelCapabilitiesRequest? left, Elsa.Agent.Api.AgentModelCapabilitiesRequest? right) -> bool
+static Elsa.Agent.Api.AgentModelCapabilitiesView.operator !=(Elsa.Agent.Api.AgentModelCapabilitiesView? left, Elsa.Agent.Api.AgentModelCapabilitiesView? right) -> bool
+static Elsa.Agent.Api.AgentModelCapabilitiesView.operator ==(Elsa.Agent.Api.AgentModelCapabilitiesView? left, Elsa.Agent.Api.AgentModelCapabilitiesView? right) -> bool
+static Elsa.Agent.Api.AgentModelProviderView.operator !=(Elsa.Agent.Api.AgentModelProviderView? left, Elsa.Agent.Api.AgentModelProviderView? right) -> bool
+static Elsa.Agent.Api.AgentModelProviderView.operator ==(Elsa.Agent.Api.AgentModelProviderView? left, Elsa.Agent.Api.AgentModelProviderView? right) -> bool
+static Elsa.Agent.Api.AgentModelProvidersResponse.operator !=(Elsa.Agent.Api.AgentModelProvidersResponse? left, Elsa.Agent.Api.AgentModelProvidersResponse? right) -> bool
+static Elsa.Agent.Api.AgentModelProvidersResponse.operator ==(Elsa.Agent.Api.AgentModelProvidersResponse? left, Elsa.Agent.Api.AgentModelProvidersResponse? right) -> bool
+static Elsa.Agent.Api.AgentApi.MapAgentApi(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> void
+static MinimalEndpoints.Generated.ElsaAgentApiEndpoints.Map(this MinimalEndpoints.EndpointGroup! group, string? routePrefix = null) -> MinimalEndpoints.EndpointGroup!
+virtual Elsa.Agent.Api.AgentApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Agent.Api.AgentApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void

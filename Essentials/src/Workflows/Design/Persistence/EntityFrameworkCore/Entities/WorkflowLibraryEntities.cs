@@ -35,6 +35,10 @@ internal sealed class WorkflowTagEntity : TenantEntity
     public bool EverAssigned { get; set; }
     public string Revision { get; set; } = "";
     public string ValuesJson { get; set; } = "[]";
+    /// <summary>The lookup hash of the client operation key that created this tag, unique in the tenant scope; null for an unkeyed create.</summary>
+    public string? OperationKey { get; set; }
+    /// <summary>The hash of the normalized create input under <see cref="OperationKey"/>, which a repeated keyed create must match.</summary>
+    public string? OperationFingerprint { get; set; }
 }
 
 internal sealed class WorkflowTagAssignmentEntity : TenantEntity
@@ -52,6 +56,10 @@ internal sealed class WorkflowLibraryViewEntity : TenantEntity
     public bool Shared { get; set; }
     public string Revision { get; set; } = "";
     public string ContentJson { get; set; } = "";
+    /// <summary>The lookup hash of the client operation key that created this view, unique per owner in the tenant scope; null for an unkeyed create.</summary>
+    public string? OperationKey { get; set; }
+    /// <summary>The hash of the normalized create input under <see cref="OperationKey"/>, which a repeated keyed create must match.</summary>
+    public string? OperationFingerprint { get; set; }
 }
 
 internal sealed class WorkflowFavoriteEntity : TenantEntity

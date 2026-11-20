@@ -458,6 +458,7 @@ public sealed class EfWorkflowAlterationAndScopeTests
         public ValueTask<WorkflowAlterationPlanState> RequestCancellationAsync(string planId, DateTimeOffset requestedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask CancelPendingJobsAsync(string planId, IReadOnlyCollection<WorkflowAlterationOutcome> skippedOutcomes, DateTimeOffset completedAt, int maximumCount, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowAlterationJobState?> FindJobAsync(string jobId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyList<WorkflowAlterationJobState>> ListVariableWriteJobsAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowAlterationJobPage> PageJobsAsync(string planId, int pageSize, string? cursor = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowAlterationJobState?> ClaimNextAsync(string planId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowAlterationPlanState> ReconcileAsync(string planId, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -493,6 +494,41 @@ public sealed class EfWorkflowAlterationAndScopeTests
         };
         var change = new WorkflowAlterationJobTerminalChange(job!.JobId, job.Claim!.Token, WorkflowAlterationJobStatus.Succeeded, outcomes, WorkflowAlterationIdentity.CreateCheckpointCommitId(job.JobId, 1), plan.CreatedAt.AddMinutes(3));
         await fixture.Store.ApplyTerminalJobChangeAsync(change); Assert.Equal(change.CheckpointCommitId, (await fixture.Store.FindJobByCheckpointCommitIdAsync(change.CheckpointCommitId))!.CheckpointCommitId); Assert.Equal(WorkflowAlterationJobStatus.Succeeded, (await fixture.Store.FindJobAsync(job.JobId))!.Status); Assert.Equal(1, (await fixture.Store.GetJobCountsAsync(plan.PlanId)).Succeeded); Assert.Equal(WorkflowAlterationPlanStatus.Completed, (await fixture.Store.ReconcileAsync(plan.PlanId, plan.CreatedAt.AddMinutes(4))).Status);
+    }
+
+    [Fact]
+    public async Task Jobs_with_variable_writes_are_listed_per_execution_in_EF_and_in_memory()
+    {
+        // Spec 1229 FR-005: an instance's ModifyVariable writes are found from the instance, not from the plan.
+        await using var db = await Database.CreateAsync(); await using var fixture = db.Open("tenant-a");
+        Assert.Equal(1, await ListedAsync(fixture.Store, "execution-1"));
+        Assert.Equal(1, await ListedAsync(new Elsa.Workflows.Runtime.Services.Alterations.InMemoryWorkflowAlterationStore(), "execution-1"));
+    }
+
+    private async Task<int> ListedAsync(IWorkflowAlterationStore store, string execution)
+    {
+        var plan = Plan();
+        await store.AdmitAsync(plan);
+        await store.CaptureAsync(plan.PlanId, 0, [new WorkflowAlterationCapturedTarget(execution, "tenant-a"), new WorkflowAlterationCapturedTarget("execution-2", "tenant-a")], null);
+        await store.SealAsync(plan.PlanId, 1, plan.CreatedAt.AddMinutes(1));
+        var record = new VariableWriteRecord("scope", "count", new VariableWriter(VariableWriteSource.Alteration, null, "alteration:job"),
+            VariableCommitOutcome.Blind, null, 1, 2, 2, plan.CreatedAt) { CommitSequence = 7, FrameId = "frame" };
+        for (var claimed = 0; claimed < 2; claimed++)
+        {
+            var job = await store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2), TimeSpan.FromMinutes(1));
+            Assert.NotNull(job);
+            var outcome = new WorkflowAlterationOutcome(0, "ModifyVariable", 1, WorkflowAlterationOutcomeStatus.Succeeded, "ok", null, plan.CreatedAt);
+            // Only the target instance's job changed a variable.
+            if (job!.WorkflowExecutionId == execution)
+                outcome = outcome with { VariableWrites = [record] };
+            await store.ApplyTerminalJobChangeAsync(new WorkflowAlterationJobTerminalChange(job.JobId, job.Claim!.Token, WorkflowAlterationJobStatus.Succeeded, [outcome],
+                WorkflowAlterationIdentity.CreateCheckpointCommitId(job.JobId, 1), plan.CreatedAt.AddMinutes(3)));
+        }
+
+        var listed = await store.ListVariableWriteJobsAsync(execution);
+        Assert.Empty(await store.ListVariableWriteJobsAsync("execution-2"));
+        Assert.All(listed, job => Assert.Equal(7, job.Outcomes.Single().VariableWrites!.Single().CommitSequence));
+        return listed.Count;
     }
 
     [Fact]
@@ -724,6 +760,45 @@ public sealed class EfWorkflowAlterationAndScopeTests
         Assert.Equal(terminal.CheckpointCommitId, stored.CheckpointCommitId);
         Assert.Equal(job.Revision + 1, stored.Revision);
         Assert.Single(await fixture.Context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task A_replayed_alteration_checkpoint_answered_from_its_marker_before_it_runs_still_counts_as_the_jobs_checkpoint()
+    {
+        // #2564: a commit on a context with a pending change reads its marker before it runs. A replay answered by
+        // that read is the job's checkpoint all the same, so the alteration store accepts the callback.
+        await using var db = await Database.CreateAsync();
+        await using var fixture = db.Open("tenant-a");
+        var plan = Plan();
+        await fixture.Store.AdmitAsync(plan);
+        await fixture.Store.CaptureAsync(plan.PlanId, 0,
+            [new WorkflowAlterationCapturedTarget("execution-1", "tenant-a")], null);
+        await fixture.Store.SealAsync(plan.PlanId, 1, plan.CreatedAt.AddMinutes(1));
+        var job = (await fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2),
+            TimeSpan.FromMinutes(1)))!;
+        var terminal = new WorkflowAlterationJobTerminalChange(
+            job.JobId, job.Claim!.Token, WorkflowAlterationJobStatus.Succeeded, [],
+            WorkflowAlterationIdentity.CreateCheckpointCommitId(job.JobId, 1), plan.CreatedAt.AddMinutes(3));
+        var checkpoint = CheckpointFor(job, terminal);
+        var store = new EfRuntimeCheckpointCommitStore(fixture.Context, new Accessor("tenant-a"));
+
+        async ValueTask CommitCheckpointAsync(CancellationToken cancellationToken) =>
+            _ = await store.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate), cancellationToken);
+        await fixture.Store.CommitTerminalJobChangeAtomicallyAsync(terminal, CommitCheckpointAsync);
+
+        async ValueTask ReplayWithAPendingChangeAsync(CancellationToken cancellationToken)
+        {
+            var row = await fixture.Context.WorkflowAlterationJobs.SingleAsync(cancellationToken);
+            fixture.Context.Entry(row).Property(candidate => candidate.Revision).IsModified = true;
+            await CommitCheckpointAsync(cancellationToken);
+            // The replay did not run an attempt, which would have cleared the tracker.
+            Assert.True(fixture.Context.ChangeTracker.HasChanges());
+        }
+        await fixture.Store.CommitTerminalJobChangeAtomicallyAsync(terminal, ReplayWithAPendingChangeAsync);
+
+        var stored = (await fixture.Store.FindJobAsync(job.JobId))!;
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, stored.Status);
+        Assert.Equal(job.Revision + 1, stored.Revision);
     }
 
     [Fact]

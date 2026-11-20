@@ -1,0 +1,209 @@
+{
+  "id": "script-done-v1",
+  "definitionId": "script-done",
+  "name": "script-done",
+  "description": "Test-owned regular workflow (spec 1208 US2, #3295): a RunJavaScript without possible outcomes and one with possible outcomes that selects none, each connected on Done to a WriteLine.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "script-done-root",
+    "nodeId": "script-done-root",
+    "name": "script-done-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "plain",
+        "nodeId": "plain",
+        "name": "plain",
+        "type": "Elsa.RunJavaScript",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "script": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "return 1;"
+          }
+        }
+      },
+      {
+        "id": "after-plain",
+        "nodeId": "after-plain",
+        "name": "after-plain",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "after-plain"
+          }
+        }
+      },
+      {
+        "id": "listed",
+        "nodeId": "listed",
+        "name": "listed",
+        "type": "Elsa.RunJavaScript",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "script": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "return 2;"
+          }
+        },
+        "possibleOutcomes": {
+          "typeName": "List<String>",
+          "expression": {
+            "type": "Literal",
+            "value": "[\"Approved\",\"Rejected\"]"
+          }
+        }
+      },
+      {
+        "id": "after-listed",
+        "nodeId": "after-listed",
+        "name": "after-listed",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "after-listed"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "plain",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "after-plain",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "after-plain",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "listed",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "listed",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "after-listed",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

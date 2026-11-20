@@ -37,7 +37,8 @@ public static class IncidentStateTransitionValidator
 
     /// <summary>
     /// Ensures an Append creates the incident. Append is create-only: an existing incident with the same identity is a
-    /// conflict, even when its content is identical, because a replayed checkpoint is resolved by its commit marker first.
+    /// conflict, even when its content is identical, because a replayed checkpoint is answered from its commit marker and
+    /// is never applied a second time.
     /// </summary>
     public static void EnsureAppendTargetIsAbsent(IncidentState? existing, IncidentState candidate)
     {

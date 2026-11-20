@@ -23,7 +23,7 @@ internal static partial class OptedCalledSnapshotReader
         var cs = new SqliteConnectionStringBuilder { DataSource = new Uri(Path.GetFullPath(snapshot)).AbsoluteUri + "?immutable=1", Mode = SqliteOpenMode.ReadOnly }.ToString();
         await using var connection = new SqliteConnection(cs); await connection.OpenAsync();
         await using (var query = connection.CreateCommand()) { query.CommandText = "PRAGMA query_only=ON"; await query.ExecuteNonQueryAsync(); }
-        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(await ReadOnlyRuntimeSnapshot.OptionsAsync(connection));
         var access = new ScopedAccess(new PersistenceScope(scopeName));
         var workflows = new EfWorkflowExecutionStateStore(context, access, new NoPaging());
         var activities = new EfActivityExecutionStateStore(context, access, new NoPaging());
@@ -148,7 +148,7 @@ internal static partial class OptedCalledSnapshotReader
                     var inbox = call.ChildControlInbox ?? throw new InvalidDataException("Actual handled sibling has no inbox.");
                     Require(inbox.NextOrdinal == (interrupting ? 1 : 2) && inbox.IsTerminalConsumed == !interrupting && inbox.Pending.Count == 0 && inbox.HasAccepted(first) && inbox.Target.MatchesAddress(last), "Actual sibling consumed another call's stream or fabricated cancellation consumption.");
                     if (interrupting) Require(call.ChildControl is null && ownSources.Count(source => source.Intent.Kind == CancelKind) == 1, "Canceled sibling gained ordinary completion or lost its exact cancel.");
-                    else Require(call.ChildControl is not null && JsonElement.DeepEquals(JsonSerializer.SerializeToElement(call.ChildControl, Json), JsonSerializer.SerializeToElement(last, Json)) && inbox.HasAccepted(last) && call.Completion?.OutcomeKey == "Completed" && call.Fault is null && !string.IsNullOrEmpty(call.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId)), "Actual successful sibling lost truthful one-time completion.");
+                    else Require(call.ChildControl is not null && JsonElement.DeepEquals(JsonSerializer.SerializeToElement(call.ChildControl, Json), JsonSerializer.SerializeToElement(last, Json)) && inbox.HasAccepted(last) && call.Completion?.OutcomeNames is ["Completed"] && call.Fault is null && !string.IsNullOrEmpty(call.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId)), "Actual successful sibling lost truthful one-time completion.");
                 }
                 return new { Call = call, Dispatch = link, Child = child, Activities = childStates.OrderBy(state => state.InvocationId, StringComparer.Ordinal), Incidents = childIncidents.OrderBy(incident => incident.IncidentId, StringComparer.Ordinal), PhysicalBookmarks = physical.OrderBy(wait => wait.State.BookmarkId, StringComparer.Ordinal), StartSource = startSource, Sources = ownSources };
             }

@@ -119,6 +119,42 @@ it.each(["absent", "denied"])("keeps native inspection useful when state-view re
   } finally { view.dispose(); }
 });
 
+it("lets a contribution for a family of user-defined activities match any activity type, decided by the view kind", async () => {
+  const view = fixture();
+  try {
+    const getLinks = vi.fn(() => [{ id: "family", label: "Open family member", path: "/family/member" }]);
+    view.render({ activity: { ...view.activity, activityType: "acme.user-defined" },
+      contributions: [{ id: "family", activityTypes: [], anyActivityType: true, viewKind: "example.run-reference", viewVersion: 1, getLinks }] });
+    await vi.waitFor(() => expect(view.container.querySelector("a")?.textContent).toBe("Open family member"));
+    expect(getLinks).toHaveBeenCalledTimes(1);
+    expect(view.container.querySelector("section[aria-label='Related'] h4")?.textContent).toBe("Related");
+  } finally { view.dispose(); }
+});
+
+it.each(["other view kind", "no links"])("shows no section for an activity an any-type contribution yields no link for: %s", async reason => {
+  if (reason === "other view kind") vi.mocked(getActivityStateView).mockResolvedValue({ ...projection(), viewKind: "other.kind" });
+  const getLinks = vi.fn(() => []);
+  const view = fixture();
+  try {
+    view.render({ activity: { ...view.activity, activityType: "Example.Unrelated" },
+      contributions: [{ id: "family", activityTypes: [], anyActivityType: true, viewKind: "example.run-reference", viewVersion: 1, getLinks }] });
+    await vi.waitFor(() => expect(getActivityStateView).toHaveBeenCalled());
+    if (reason === "no links") await vi.waitFor(() => expect(getLinks).toHaveBeenCalled());
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(view.container.textContent).not.toContain("Related");
+  } finally { view.dispose(); }
+});
+
+it("still matches only the listed activity types without the any-type opt-in", async () => {
+  const view = fixture();
+  try {
+    view.render({ activity: { ...view.activity, activityType: "acme.user-defined" } });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(view.container.querySelector("a")).toBeNull();
+    expect(view.container.textContent).not.toContain("Related runs");
+  } finally { view.dispose(); }
+});
+
 it("rejects foreign destinations and isolates a broken contribution", async () => {
   const view = fixture();
   try {

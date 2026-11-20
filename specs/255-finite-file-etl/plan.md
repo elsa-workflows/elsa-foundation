@@ -64,6 +64,7 @@ Extensions/Etl/
     Workflows/Design/             Elsa.Etl.Workflows.Design
     Workflows/Runtime/            Elsa.Etl.Workflows.Runtime
   tests/Tests/                    Elsa.Etl.Tests with shared fixtures
+  tests/Hosting/Tests/            Elsa.Etl.Hosting.Tests (process-kill witnesses over the production Workbench)
   studio/Elsa.Studio.Etl/          Studio module/frontend tests
 e2e-tests/etl/                     HTTP journey against rebuilt Workbench
 ```

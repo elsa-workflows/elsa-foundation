@@ -96,8 +96,8 @@ public sealed class PreparedJavaScriptReuseTests(ITestOutputHelper output)
     private static async ValueTask<JsonElement?> Evaluate(IServiceScope scope, string source, int value, bool script)
     {
         if (script)
-            return await scope.ScriptEvaluator().EvaluateAsync(new JavaScriptScriptEvaluationRequest(
-                source, JsonSerializer.SerializeToElement(new { value }), default));
+            return (await scope.ScriptEvaluator().EvaluateAsync(new JavaScriptScriptEvaluationRequest(
+                source, JsonSerializer.SerializeToElement(new { value }), default))).Value;
         var definition = new ExpressionDefinition("JavaScript", source, new TypeReference("Object"),
             new Dictionary<string, ExpressionParameterBinding> { ["value"] = new LiteralExpressionParameterBinding(JsonSerializer.SerializeToElement(value)) },
             JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);

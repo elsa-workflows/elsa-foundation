@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Etl.RabbitMq.EtlRabbitMqFeature
+Elsa.Etl.RabbitMq.EtlRabbitMqFeature.EtlRabbitMqFeature() -> void
+virtual Elsa.Etl.RabbitMq.EtlRabbitMqFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

@@ -69,6 +69,9 @@ internal static class StructuralParentEvaluationSupport
         ActivityInputSnapshot freshSnapshot;
         try
         {
+            // Re-materialization reads the node's inputs again, member reads (#4078) included, so it is guarded as
+            // activity start and bookmark resume are: a runtime that cannot select members refuses here.
+            SchedulerWorkHandlerHelpers.EnsureMemberSelectionSupported(executable, serviceProvider);
             freshSnapshot = await inputRematerializer.MaterializeAsync(
                 executable,
                 executableNode,
@@ -157,7 +160,11 @@ internal static class StructuralParentEvaluationSupport
         if (continuation.Kind is RuntimeStructuralContinuationKind.Fault or RuntimeStructuralContinuationKind.Cancel)
             throw new InvalidOperationException("A faulting or cancelling structural decision cannot also cancel child subtrees in the same child-completion evaluation.");
 
-        var duplicateTarget = requests.GroupBy(request => request.ChildActivityExecutionId, StringComparer.Ordinal)
+        var everyLiveChild = requests.Where(request => request.TargetsEveryLiveChild).ToArray();
+        if (everyLiveChild.Length > 1)
+            throw new InvalidOperationException("Child subtree cancellation of every live child is requested more than once.");
+        var targeted = requests.Where(request => !request.TargetsEveryLiveChild).ToArray();
+        var duplicateTarget = targeted.GroupBy(request => request.ChildActivityExecutionId, StringComparer.Ordinal)
             .FirstOrDefault(group => group.Count() > 1);
         if (duplicateTarget is not null)
             throw new InvalidOperationException($"Child subtree cancellation targets activity execution '{duplicateTarget.Key}' more than once.");
@@ -167,7 +174,17 @@ internal static class StructuralParentEvaluationSupport
         var byId = allStates.ToDictionary(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal);
         var occurredAt = timeProvider.GetUtcNow();
         var plans = new List<ActivitySubtreeCancellationPlan>(requests.Count);
-        foreach (var request in requests)
+        // A request for every live child expands here, over the states already loaded, into one request per
+        // non-terminal direct child that no request targets by id.
+        var targetedIds = targeted.Select(request => request.ChildActivityExecutionId).ToHashSet(StringComparer.Ordinal);
+        var expanded = everyLiveChild is [var every]
+            ? targeted.Concat(allStates
+                .Where(state => StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, parentActivityExecutionId) &&
+                                !targetedIds.Contains(state.Execution.ActivityExecutionId) &&
+                                state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered or ActivityExecutionStatus.Superseded))
+                .Select(state => new RuntimeChildSubtreeCancellationRequest(state.Execution.ActivityExecutionId, every.Reason, every.Metadata)))
+            : targeted;
+        foreach (var request in expanded)
         {
             if (!byId.TryGetValue(request.ChildActivityExecutionId, out var target))
                 throw new InvalidOperationException($"Child subtree cancellation references missing activity execution '{request.ChildActivityExecutionId}'.");
@@ -348,7 +365,8 @@ internal static class StructuralParentEvaluationSupport
             activityExecutionId,
             scheduleRequests,
             source.DerivedCommandMetadata,
-            SchedulerWorkItems.ResolveChildExecutionScopeId(parentState)).ToArray();
+            SchedulerWorkItems.ResolveChildExecutionScopeId(parentState),
+            SchedulingCauses(source.Payload, processedChildStates)).ToArray();
         var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
             inspectionAccumulator, subtreeCancellations, checkpointId, occurredAt, metadata, cancellationToken);
         var commit = new RuntimeCheckpointCommit(
@@ -405,23 +423,43 @@ internal static class StructuralParentEvaluationSupport
         await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
+    // Spec 1229 FR-007: a callback schedules because a child ended: the completed child the command names, and the
+    // children this evaluation processed (a faulted child the parent handles).
+    private static IReadOnlyCollection<string> SchedulingCauses(IActivityCommandPayload payload, IReadOnlyCollection<ActivityExecutionState> processedChildStates)
+    {
+        var causes = new List<string>();
+        if (payload is RuntimeCompleteActivityCommandPayload { CompletedChildActivityExecutionId: { } completedChild } && !string.IsNullOrWhiteSpace(completedChild))
+            causes.Add(completedChild);
+        foreach (var child in processedChildStates)
+            if (!causes.Contains(child.Execution.ActivityExecutionId, StringComparer.Ordinal))
+                causes.Add(child.Execution.ActivityExecutionId);
+        return causes;
+    }
+
     /// <summary>
     /// Marks a structural parent completed after evaluating a child, recording the evaluating command's reason and
-    /// work item and the normalized outcome names on its metadata. Shared by the completion and notification
-    /// handlers so both terminalize a parent identically.
+    /// work item and the outcome names its selection resolves to on its metadata (an explicitly empty selection stays
+    /// empty, ADR 0045 §6). Shared by the completion and notification handlers so both terminalize a parent identically.
     /// </summary>
     public static ActivityExecutionState CompleteParentActivity(
         RuntimeSchedulerWorkItem workItem,
         IActivityCommandPayload payload,
         ActivityExecutionState state,
-        IReadOnlyCollection<string> outcomeNames,
-        DateTimeOffset completedAt)
+        OutcomeSelection selection,
+        DateTimeOffset completedAt,
+        string? completedChildActivityExecutionId = null)
     {
-        var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: true);
+        ArgumentNullException.ThrowIfNull(selection);
+        var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(selection.ResolveNames(), defaultToDone: false);
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.InvokeReason] = payload.Reason;
         metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
         metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(normalizedOutcomeNames);
+        // Only the current successful direct-child completion may supply this causal edge. Notification and
+        // other callbacks must not retain a marker left by an earlier fault evaluation or attempt.
+        metadata.Remove(RuntimeMetadataKeys.CompletedChildActivityExecutionId);
+        if (completedChildActivityExecutionId is not null)
+            metadata[RuntimeMetadataKeys.CompletedChildActivityExecutionId] = completedChildActivityExecutionId;
 
         return RuntimeContainerScopeService.CloseOwnedFrames(state with
         {

@@ -108,12 +108,13 @@ internal sealed partial class EfEtlRuntimeStore
     }
 
     /// <summary>The indexed effect column records the delivery mechanism, not the route format: 1 is an HTTP delivery and
-    /// 2 is a file publication. Every prior writer stored 1 for HTTP and 2 for JSON Lines, so CSV files share 2.</summary>
+    /// 2 is a recorded publication. Every prior writer stored 1 for HTTP and 2 for JSON Lines, so CSV files and SQL writes,
+    /// which are recorded through the same publication transition (spec 1197), share 2.</summary>
     private static int? EffectMechanism(EtlConnectorRouteOutput? route) => route?.Kind switch
     {
         null => null,
         EtlConnectorKind.Http => 1,
-        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv => 2,
+        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq => 2,
         _ => throw new InvalidDataException("The connector route kind has no delivery mechanism.")
     };
 
@@ -174,7 +175,8 @@ internal sealed partial class EfEtlRuntimeStore
             }
             EtlRuntimeRecordCodec.ValidateObject(route.Body, "route body");
             if (count <= 0 || route.RecordCount != count || route.Body.ByteLength <= 0 ||
-                route.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv) || !EtlRuntimeRecordCodec.IsSha256(route.EffectId))
+                route.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql or
+                    EtlConnectorKind.RabbitMq) || !EtlRuntimeRecordCodec.IsSha256(route.EffectId))
                 throw new InvalidDataException("The connector route body is invalid.");
             return route.Body.ByteLength;
         }

@@ -15,9 +15,23 @@ public sealed class PublishRefusals
 
     private readonly ConcurrentDictionary<string, byte> _versionIds = new(StringComparer.Ordinal);
 
+    private volatile bool _all;
+
     public void Refuse(string versionId) => _versionIds[versionId] = 0;
-    public void Clear() => _versionIds.Clear();
-    public bool Refuses(string versionId) => _versionIds.ContainsKey(versionId);
+
+    /// <summary>Refuses every version, including those a folder import publishes while the shell activates (spec 235).</summary>
+    public void RefuseAll() => _all = true;
+
+    public void Clear()
+    {
+        _all = false;
+        _versionIds.Clear();
+    }
+
+    public bool Refuses(string versionId) => _all || _versionIds.ContainsKey(versionId);
+
+    /// <summary>The idempotency key of every publish request the seam saw, in order (spec 235 research R-4).</summary>
+    public ConcurrentQueue<string> IdempotencyKeys { get; } = new();
 }
 
 /// <summary>
@@ -37,7 +51,13 @@ public sealed class Elsa3ImportPublishSeamFeature : IShellFeature
 
     private sealed class RefusingPublisher(IReusableActivityImportPublisher inner, PublishRefusals refusals) : IReusableActivityImportPublisher
     {
-        public ValueTask<ReusableActivityImportPublishOutcome> PublishAsync(ReusableActivityImportPublishRequest request, CancellationToken cancellationToken = default) =>
+        public ValueTask<ReusableActivityImportPublishOutcome> PublishAsync(ReusableActivityImportPublishRequest request, CancellationToken cancellationToken = default)
+        {
+            refusals.IdempotencyKeys.Enqueue(request.IdempotencyKey);
+            return Decide(request, cancellationToken);
+        }
+
+        private ValueTask<ReusableActivityImportPublishOutcome> Decide(ReusableActivityImportPublishRequest request, CancellationToken cancellationToken) =>
             refusals.Refuses(request.RequestedVersionId)
                 ? ValueTask.FromResult(ReusableActivityImportPublishOutcome.Refused(PublishRefusals.Code,
                 [

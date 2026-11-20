@@ -23,7 +23,7 @@
     <ProjectReference Include="..\..\..\src\Modularity\Core\Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
     <!-- Not composed by the Workbench; referenced so SecretFeatureSettingTests can pin their secret settings. -->
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Anthropic\Elsa.Agent.Anthropic.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Weaver\src\Anthropic\Elsa.Weaver.Anthropic.csproj" />
     <!-- The optional Extension Builder (#2294): its host-control routes and permission contribution join the Workbench's retained-route and permission-catalog guards. -->
     <ProjectReference Include="..\..\..\..\Extensions\ExtensionBuilder\src\Api\Elsa.ExtensionBuilder.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Design\Reconciliation\Git\Elsa.Workflows.Design.Reconciliation.Git.csproj" />

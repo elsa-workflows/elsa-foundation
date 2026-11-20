@@ -31,6 +31,44 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests;
 public sealed class ActivitiesDesignEntityFrameworkCoreTests
 {
     [Fact]
+    public async Task Sqlite_migration_and_revision_fenced_replacement_preserve_node_presentation()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = new ActivitiesDesignSqliteDbContext(new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options);
+        await db.Database.MigrateAsync();
+        Assert.False(db.Database.HasPendingModelChanges());
+        db.ActivityDefinitions.Add(Definition("d1", "tenant-a"));
+        db.ActivityDefinitionAuthoringStates.Add(new() { Id = "authoring", DefinitionId = "d1", TenantId = "tenant-a", ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design) });
+        var draft = Draft("draft", "d1", "tenant-a", 1);
+        var layout = Layout("draft", "tenant-a", 1);
+        layout.ActivityPresentation.Add(new("node", "Published name"));
+        db.ActivityDefinitionDrafts.Add(draft);
+        db.ActivityDefinitionDraftLayouts.Add(layout);
+        db.ActivityDefinitionVersionLayouts.Add(new() { Id = "version-layout", DefinitionVersionId = "v1", TenantId = "tenant-a", ActivityPresentation = [new("node", "Published name")] });
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var store = new EfActivityDesignStores(db);
+        var changed = await store.ExecuteAsync(new ReplaceActivityDraftRequest("draft", 1, draft.State, []) { ActivityPresentation = [new("node", "New draft name")] });
+        Assert.Equal(2, changed.Revision);
+        db.ChangeTracker.Clear();
+        var saved = await store.FindDraftLayoutAsync("draft");
+        Assert.Equal(2, saved!.Revision);
+        Assert.Equal("New draft name", Assert.Single(saved.ActivityPresentation).DisplayName);
+        Assert.Equal("Published name", Assert.Single((await store.FindVersionLayoutAsync("v1"))!.ActivityPresentation).DisplayName);
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => store.ExecuteAsync(new ReplaceActivityDraftRequest("draft", 1, draft.State, []) { ActivityPresentation = [] }));
+        db.ChangeTracker.Clear();
+        Assert.Single((await store.FindDraftLayoutAsync("draft"))!.ActivityPresentation);
+        await store.ExecuteAsync(new ReplaceActivityDraftRequest("draft", 2, draft.State, []));
+        db.ChangeTracker.Clear();
+        Assert.Single((await store.FindDraftLayoutAsync("draft"))!.ActivityPresentation);
+        await store.ExecuteAsync(new ReplaceActivityDraftRequest("draft", 3, draft.State, []) { ActivityPresentation = [] });
+        db.ChangeTracker.Clear();
+        Assert.Empty((await store.FindDraftLayoutAsync("draft"))!.ActivityPresentation);
+    }
+
+    [Fact]
     public async Task Sqlite_version_lists_use_definition_then_semver_ordinal_order_and_empty_snapshots_use_epoch()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

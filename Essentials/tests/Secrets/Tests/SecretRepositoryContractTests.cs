@@ -206,7 +206,23 @@ public sealed class SecretRepositoryContractTests
         var repository = repositoryFactory();
 
         await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await repository.SaveAsync(ActiveSecret("Payments.Api")));
+            await repository.SaveAsync(ActiveSecret("Payments Api")));
+    }
+
+    [Theory]
+    [MemberData(nameof(RepositoryFactories))]
+    public async Task Stored_Casing_Does_Not_Change_Uniqueness_Or_Ordering(string _, Func<ISecretRepository> repositoryFactory)
+    {
+        var repository = repositoryFactory();
+        Assert.True(await repository.TryAddAsync(ActiveSecret("beta")));
+        Assert.True(await repository.TryAddAsync(ActiveSecret("Alpha")));
+        Assert.False(await repository.TryAddAsync(ActiveSecret("ALPHA")));
+        var otherTenant = ActiveSecret("ALPHA");
+        otherTenant.TenantId = TenantId.ToUpperInvariant();
+        Assert.True(await repository.TryAddAsync(otherTenant));
+        Assert.Equal("Alpha", (await repository.FindAsync(TenantId, "alpha"))!.Name);
+        Assert.Equal("ALPHA", (await repository.FindAsync(otherTenant.TenantId, "alpha"))!.Name);
+        Assert.Equal(new[] { "Alpha", "beta" }, (await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest())).Items.Select(secret => secret.Name));
     }
 
     [Fact]

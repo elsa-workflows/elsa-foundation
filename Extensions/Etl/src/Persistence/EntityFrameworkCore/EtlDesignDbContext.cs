@@ -54,9 +54,36 @@ internal abstract class EtlDesignDbContext(DbContextOptions options) : DbContext
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
 }
 
+// Key columns compare ordinally on every engine: SQLite's TEXT already does, so its model only gains the comparers.
 internal sealed class EtlDesignSqliteDbContext(DbContextOptions<EtlDesignSqliteDbContext> options)
     : EtlDesignDbContext(options)
 {
     internal const string ExpectedProviderName = EfProviderNames.Sqlite;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) { }
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) => EfOrdinalCollation.Apply(modelBuilder, ExpectedProviderName);
+}
+
+internal sealed class EtlDesignSqlServerDbContext(DbContextOptions<EtlDesignSqlServerDbContext> options)
+    : EtlDesignDbContext(options)
+{
+    internal const string ExpectedProviderName = EfProviderNames.SqlServer;
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) => EfOrdinalCollation.Apply(modelBuilder, ExpectedProviderName);
+}
+
+internal sealed class EtlDesignPostgreSqlDbContext(DbContextOptions<EtlDesignPostgreSqlDbContext> options)
+    : EtlDesignDbContext(options)
+{
+    internal const string ExpectedProviderName = EfProviderNames.PostgreSql;
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) => EfOrdinalCollation.Apply(modelBuilder, ExpectedProviderName);
+}
+
+internal sealed class EtlDesignMySqlDbContext(DbContextOptions<EtlDesignMySqlDbContext> options)
+    : EtlDesignDbContext(options)
+{
+    internal const string ExpectedProviderName = EfProviderNames.MySql;
+
+    protected override void ConfigureProvider(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Model.SetAnnotation("MySQL:Charset", "utf8mb4");
+        EfOrdinalCollation.Apply(modelBuilder, ExpectedProviderName);
+    }
 }

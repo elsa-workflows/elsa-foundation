@@ -126,7 +126,10 @@ public sealed record ReplaceActivityDraftRequest(
     long ExpectedRevision,
     ActivityDefinitionDraftState State,
     IReadOnlyList<ActivityLayoutRecord> Layout,
-    string? PresentationLabel = null);
+    string? PresentationLabel = null)
+{
+    public IReadOnlyList<ActivityNodePresentationRecord>? ActivityPresentation { get; init; }
+}
 
 public interface IReplaceActivityDraftCommand
 {

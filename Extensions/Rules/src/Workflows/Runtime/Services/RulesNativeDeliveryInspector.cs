@@ -342,7 +342,7 @@ internal sealed class RulesNativeDeliveryInspector(
             return false;
 
         var expectedOutcome = envelope.Result.Kind == RuleTerminalKind.Succeeded ? "Done" : "Refused";
-        if (completion.OutcomeKey != expectedOutcome)
+        if (completion.OutcomeNames is not [var outcome] || outcome != expectedOutcome)
             return false;
 
         var json = await ReadEnvelopeJsonAsync(completion.Result, cancellationToken);

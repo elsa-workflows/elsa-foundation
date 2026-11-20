@@ -1,5 +1,7 @@
 # Feature Specification: WorkflowDefinitionState Scope Policy
 
+> **Shared revision amendment (4 November 2026, #3790):** Workflow draft payload is stored once in the shared source row, with an unmapped StateSource domain view. Layout remains separate. Existing version/promotion storage remains until the shared-publication successor T066. See [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) and [delivery placement/boundary](../1179-agents/plan.md#3790-source-slice-placement-and-transition).
+
 > Supersession note (2026-06-11): workflow-level `Activities` + `ActivityConnections`
 > requirements in this spec are superseded by
 > [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). The corrected

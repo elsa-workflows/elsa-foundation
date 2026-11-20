@@ -15,7 +15,9 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   authored structure, compiles the executable structure (the body node id), and round-trips both through
   publishing so the runtime resolves the body without re-reading the design document. `ForEach` is not a container scope, so it declares no container-scoped variables
   (`SupportsScopedVariables` defaults to `false`); its per-iteration item/index are loop-owned and live
-  in a per-pass iteration scope, not a container scope.
+  in a per-pass iteration scope, not a container scope. It implements `ProjectIterationVariables` (spec 1222
+  FR-004a): `currentItem`, and `currentIndex` unless `ExposeIndex` is the literal `false`, which a script in the body
+  reads as variables declared by the ForEach node (`variables.currentItem`), pinned at publish to the loop node. Its `AssessChildResult` keeps availability `Unknown` and states `EarlierProducerRunCanReachConsumer = false`: the loop schedules every pass of its body itself, so an earlier pass is never behind a later one.
 
 ## Runtime seam dependencies
 
@@ -31,3 +33,4 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   `{ referenceKey: "currentItem", declaringScopeId: <ForEach node id> }` resolves to the current pass's
   item (the variable name is the reference key). This consumes the `#259` loop-scope primitive that the
   merged wiring (#296) connected into the execution path.
+- `LoopStructureHandler.RelateChildren` states that passes of the body never overlap, and the loop completes after its body (spec 266).

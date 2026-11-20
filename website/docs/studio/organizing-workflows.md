@@ -8,7 +8,7 @@ For example, **Collect overdue payment** can live in **Finance / Receivables**, 
 
 Open **Workflows** to browse **All workflows**, **Unfiled**, or a folder. Expand folders as needed. Search is scoped to the selected location; choose All workflows to search across the library. Select **Include subfolders** when a folder search should cover its descendants.
 
-Create a folder at the current level, then create a workflow inside it. Use **Move to folder** for one workflow or a selected group. A group move succeeds for the entire selection or leaves it unchanged. Rename or move folders as your organization evolves; workflow links retain their identity.
+Create a folder at the current level, then create a workflow inside it. Use **Move to folder** from a workflow's action menu or the editor's Properties. Move a selected group from the selection toolbar. A successful move closes the move dialog. A group move succeeds for the entire selection or leaves it unchanged. Rename or move folders as your organization evolves; workflow links retain their identity.
 
 Deleting a folder previews its contents independently of the current list filters. By default, workflows move to the parent folder, or **Unfiled** for a top-level folder. Child folders move up one level with their hierarchy and workflows intact. A conflicting child-folder name must be resolved before deletion.
 
@@ -18,9 +18,11 @@ If contents change after the preview, reload and confirm again. Older backends s
 
 ## Tags and classifications
 
-Open a workflow's action menu and choose **Organization**, or use Organization in the editor's Properties. Select labels and controlled values, then **Save tags**. Organization is saved independently from the authored draft.
+Open a workflow's action menu and choose **Edit tags**, or use **Edit tags** in the editor's Properties. Type in the Tags field to find labels and controlled values. Selected tags appear as chips; use a chip's Remove button to remove its assignment. Choose **Save tags** to apply your selection and close the dialog. Organization is saved independently from the authored draft.
 
-Simple labels such as **critical** can be toggled directly. Controlled classifications such as **Owning team** present an agreed set of values; a single-valued classification accepts one choice. Reuse existing vocabulary through search. Authorized catalog managers can use **Manage tags** to create labels/classifications, rename them, manage values and retire obsolete vocabulary.
+Simple labels such as **critical** can be selected directly. Controlled classifications such as **Owning team** present an agreed set of values; a single-valued classification accepts one choice.
+
+Authorized catalog managers can type a new label name and choose **Create “name”** without leaving the tag dialog. Creation adds the label to the catalog; choose **Save tags** to apply its assignment to the workflow. Use **Manage tags** to open the tag collection, create controlled classifications, rename tags, manage values and retire obsolete vocabulary.
 
 Retired tags and values remain understandable on existing workflows and in filters. They cannot be newly assigned. A conflicting concurrent edit asks you to reload and reconcile your intended changes.
 

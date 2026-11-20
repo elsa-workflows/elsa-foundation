@@ -19,7 +19,7 @@ public sealed record Elsa3ConvertedDefinition(
 
 /// <summary>A reusable workflow's declared output and the synthesized graph variable that holds it.</summary>
 /// <param name="OutputReferenceKey">The declared output's reference key.</param>
-/// <param name="VariableReferenceKey">The synthesized variable, <c>elsa3.output.{sha256(outputReferenceKey)[..16]}</c>.</param>
+/// <param name="VariableReferenceKey">The synthesized variable, <c>output.{sha256(outputReferenceKey)[..16]}</c>.</param>
 /// <param name="Type">The output's type alias.</param>
 /// <param name="StorageDriverKey">The output's storage driver, or null for the default.</param>
 public sealed record Elsa3GraphOutputMapping(

@@ -33,7 +33,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Api" />
     <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Api.Tests" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Tests" />
   </ItemGroup>
 
 </Project>

@@ -52,3 +52,11 @@ public sealed record WorkflowLibraryViewInput(string Name, WorkflowLibraryQuery 
     IReadOnlyList<string>? Columns = null, string? Revision = null);
 /// <summary>A stale organization or hierarchy write; callers must reload before intentionally retrying.</summary>
 public sealed class WorkflowLibraryConflictException(string message) : Exception(message);
+
+/// <summary>The library store does not support client-supplied operation keys, so a keyed create is unavailable rather than non-idempotent.</summary>
+/// <remarks>The message is fixed.</remarks>
+public sealed class WorkflowLibraryOperationKeyUnsupportedException() : NotSupportedException(FixedMessage)
+{
+    /// <summary>The fixed message.</summary>
+    public const string FixedMessage = "This workflow library backend does not support operation keys for tag or view creation.";
+}

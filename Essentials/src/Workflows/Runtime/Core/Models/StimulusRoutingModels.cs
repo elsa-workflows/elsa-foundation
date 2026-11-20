@@ -207,13 +207,15 @@ public sealed class StimulusStartOutcome
         string artifactId,
         StimulusStartStatus status,
         string? workflowExecutionId,
-        TimeSpan? retryAfter = null)
+        TimeSpan? retryAfter = null,
+        string? reason = null)
     {
         TriggerBindingId = triggerBindingId;
         ArtifactId = artifactId;
         Status = status;
         WorkflowExecutionId = workflowExecutionId;
         RetryAfter = retryAfter;
+        Reason = reason;
     }
 
     public string TriggerBindingId { get; }
@@ -228,6 +230,9 @@ public sealed class StimulusStartOutcome
 
     /// <summary>The admission Retry-After hint of a shed start; <c>null</c> otherwise.</summary>
     public TimeSpan? RetryAfter { get; }
+
+    /// <summary>The input-contract reason code of a refused start; <c>null</c> otherwise.</summary>
+    public string? Reason { get; }
 
     public static StimulusStartOutcome Started(string triggerBindingId, string artifactId, string workflowExecutionId)
     {
@@ -254,6 +259,18 @@ public sealed class StimulusStartOutcome
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         return new StimulusStartOutcome(triggerBindingId, artifactId, StimulusStartStatus.Shed, null, retryAfter);
     }
+
+    /// <summary>
+    /// A start its workflow's input contract refused (#3728): nothing was written, and retrying cannot help. The other
+    /// starts and resumes of the same stimulus still run.
+    /// </summary>
+    public static StimulusStartOutcome Refused(string triggerBindingId, string artifactId, string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(triggerBindingId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        return new StimulusStartOutcome(triggerBindingId, artifactId, StimulusStartStatus.Refused, null, reason: reason);
+    }
 }
 
 public enum StimulusStartStatus
@@ -262,7 +279,10 @@ public enum StimulusStartStatus
     SkippedDuplicate,
 
     /// <summary>Runtime admission refused the start at capacity; nothing was written, and the caller retries it.</summary>
-    Shed
+    Shed,
+
+    /// <summary>The workflow's input contract refused the start; nothing was written, and a retry is refused again.</summary>
+    Refused
 }
 
 /// <summary>The outcome of the router attempting to resume one waiting instance.</summary>
@@ -297,6 +317,7 @@ public sealed class StimulusRoutingResult
 
     public int StartedCount => Starts.Count(start => start.Status == StimulusStartStatus.Started);
     public int SkippedStartCount => Starts.Count(start => start.Status == StimulusStartStatus.SkippedDuplicate);
+    public int RefusedStartCount => Starts.Count(start => start.Status == StimulusStartStatus.Refused);
     public int ResumedCount => Resumes.Count(resume => resume.Status == BookmarkResumeDispatchStatus.Dispatched);
     public int ShedStartCount => Starts.Count(start => start.Status == StimulusStartStatus.Shed);
 

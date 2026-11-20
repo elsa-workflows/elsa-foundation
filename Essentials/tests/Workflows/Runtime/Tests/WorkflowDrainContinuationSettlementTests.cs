@@ -377,6 +377,39 @@ public sealed class WorkflowDrainContinuationSettlementTests
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await FindContinuationAsync(2)).Status);
     }
 
+    /// <summary>
+    /// #3678. A Cancel starts waiting, or the mailbox starts passivating for a hand-off, while the drain waits for another
+    /// deliverer's claim. The drain stops at that poll and ends <c>Yielded</c>, as it does before a step, rather than wait
+    /// up to its limit while the placement lease runs out. The claim lapses at that poll, and the drain does not take the
+    /// continuation back: delivering it would queue a step ahead of the Cancel. It stays with the other deliverer.
+    /// </summary>
+    [Fact]
+    public async Task A_yield_request_ends_the_wait_for_another_deliverers_claim_and_takes_nothing_back()
+    {
+        _drainer.ClaimVisibility = TimeSpan.FromMilliseconds(70);
+        var controls = new DrainControlContext();
+        var control = new DrainControl();
+        using var frame = controls.Push(Wfid, control);
+        IDisposable? pending = null;
+        _observed.OnListed = listed =>
+        {
+            if (listed.Count > 0 && _polls.Count == 3)
+                pending ??= control.Wait();
+            return Task.CompletedTask;
+        };
+
+        var result = await RunAsync(new WorkflowDrainOrchestratorOptions(continuationClaimWaitLimit: TimeSpan.FromSeconds(3)), drainControls: controls);
+        pending?.Dispose();
+
+        Assert.NotNull(pending);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Yielded, result.StopReason);
+        Assert.Equal(Milliseconds(10, 20, 40), _polls);
+        Assert.Equal(1, _drainer.DrainCount);
+        var continuation = await FindContinuationAsync(0);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, continuation.Status);
+        Assert.Equal(OtherDeliverer, continuation.DeliveringOwnerId);
+    }
+
     private Task<RuntimeSchedulerDrainResult> RunAsync(
         WorkflowDrainOrchestratorOptions? options = null,
         int? maxWorkItems = null,

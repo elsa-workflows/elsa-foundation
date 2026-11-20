@@ -170,6 +170,63 @@ public sealed class ActivityStateViewAndOperatorAccessTests
         Assert.Equal(0, Assert.Single(host.Services.GetServices<IActivityStateViewProjector>().OfType<ClearedProjector>()).Calls);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_descriptor_kind_projector_reads_its_family_with_or_without_private_state_and_before_an_alias_projector(bool privateState)
+    {
+        await using var host = await StateViewHost.StartAsync(Reader, privateState: privateState, descriptorProjector: true);
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync(StatePath));
+        Assert.True(document.RootElement.GetProperty("available").GetBoolean());
+        Assert.Equal(DescriptorProjector.Kind, document.RootElement.GetProperty("viewKind").GetString());
+        Assert.Equal(privateState, document.RootElement.GetProperty("view").GetProperty("withState").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_descriptor_kind_projector_cannot_run_before_authorization()
+    {
+        await using var host = await StateViewHost.StartAsync([WorkflowRuntimePermissions.WorkflowRuntimeRead], descriptorProjector: true);
+        using var response = await host.Client.GetAsync(StatePath);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(0, Assert.Single(host.Services.GetServices<IActivityStateViewProjector>().OfType<DescriptorProjector>()).Calls);
+    }
+
+    [Fact]
+    public void Duplicate_descriptor_kinds_are_rejected()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => new ActivityStateViewProjectorRegistry([new DescriptorProjector(), new DescriptorProjector("Other.Unused")]));
+        Assert.Contains("descriptor kind 'test'", error.Message);
+    }
+
+    [Theory]
+    [InlineData("elsa.clr-activity")]
+    [InlineData("elsa.graph-activity")]
+    [InlineData("intrinsic")]
+    public void A_projector_cannot_claim_a_descriptor_kind_a_whole_activity_family_shares(string kind)
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => new ActivityStateViewProjectorRegistry([new DescriptorProjector(kind: kind)]));
+        Assert.Contains(kind, error.Message);
+    }
+
+    [Theory]
+    [InlineData(true, "test.view")]
+    [InlineData(false, null)]
+    public async Task A_composed_descriptor_projector_that_does_not_match_leaves_the_existing_answers(bool privateState, string? kind)
+    {
+        await using var host = await StateViewHost.StartAsync(Reader, privateState: privateState, descriptorProjector: true, descriptorKind: "other");
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync(StatePath));
+        Assert.Equal(kind, document.RootElement.GetProperty("viewKind").GetString());
+        if (!privateState) Assert.Equal("StateCleared", document.RootElement.GetProperty("unavailableReason").GetString());
+        Assert.Equal(0, Assert.Single(host.Services.GetServices<IActivityStateViewProjector>().OfType<DescriptorProjector>()).Calls);
+    }
+
+    [Fact]
+    public void Existing_projectors_read_no_descriptor_kind()
+    {
+        IActivityStateViewProjector projector = new TestProjector();
+        Assert.Null(projector.DescriptorKind);
+    }
+
     [Fact]
     public void Duplicate_cleared_activity_selectors_are_rejected_even_with_different_state_aliases()
     {
@@ -314,7 +371,9 @@ public sealed class ActivityStateViewAndOperatorAccessTests
             bool denyManageResource = false,
             bool clearedProjector = false,
             bool clearedUnavailable = false,
-            bool seedExecutable = true)
+            bool seedExecutable = true,
+            bool descriptorProjector = false,
+            string descriptorKind = "test")
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
@@ -332,6 +391,8 @@ public sealed class ActivityStateViewAndOperatorAccessTests
                 builder.Services.AddSingleton<IActivityStateViewProjector>(new ClearedProjector(unavailable: clearedUnavailable));
             if (duplicateProjector)
                 builder.Services.AddSingleton<IActivityStateViewProjector, TestProjector>();
+            if (descriptorProjector)
+                builder.Services.AddSingleton<IActivityStateViewProjector>(new DescriptorProjector(kind: descriptorKind));
             if (denyManageResource)
                 builder.Services.AddSingleton<IPermissionResourceHandler, DenyManageForRuns>();
             var app = builder.Build();
@@ -438,6 +499,27 @@ public sealed class ActivityStateViewAndOperatorAccessTests
         {
             Calls++;
             return ValueTask.FromResult<JsonElement?>(unavailable ? null : JsonSerializer.SerializeToElement(new { node = context.ExecutableNode.ExecutableNodeId }));
+        }
+    }
+
+    /// <summary>Reads every node whose descriptor kind is <c>test</c>, as a family of user-defined activities would be read.</summary>
+    private sealed class DescriptorProjector(string alias = "Test.Descriptor.Unused", string kind = "test") : IActivityStateViewProjector
+    {
+        public const string Kind = "test.descriptor";
+        public int Calls { get; private set; }
+        public string StateTypeAlias => alias;
+        public string? DescriptorKind => kind;
+        public string ViewKind => Kind;
+        public int ViewVersion => 1;
+        public ValueTask<JsonElement> ProjectAsync(ActivityStateViewContext context, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement(new { withState = true }));
+        }
+        public ValueTask<JsonElement?> ProjectWithoutStateAsync(ActivityStateViewContext context, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult<JsonElement?>(JsonSerializer.SerializeToElement(new { withState = false }));
         }
     }
 

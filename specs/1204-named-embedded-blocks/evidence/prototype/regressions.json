@@ -1,0 +1,72 @@
+{
+  "sequenceResults": {
+    "baselineSource": "32592c342",
+    "baselinePassed": 3,
+    "baselineFailed": 1,
+    "fixedSource": "c227f4e575c945dd313dbc1620692422b896a5d5",
+    "fixedPassed": 4,
+    "fixedFailed": 0
+  },
+  "causalGuards": {
+    "testSource": "c227f4e575c945dd313dbc1620692422b896a5d5",
+    "removeDirectChildGuard": {
+      "passed": 36,
+      "failed": 1
+    },
+    "removeCommittedChildGuard": {
+      "passed": 33,
+      "failed": 4
+    },
+    "removeCommittedParentGuard": {
+      "passed": 32,
+      "failed": 5
+    }
+  },
+  "history": {
+    "initialNormalizationRegression": {
+      "passed": 0,
+      "failed": 2
+    },
+    "acknowledgementMutationSource": "b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+    "removeAcceptedBaselineGuard": {
+      "passed": 4,
+      "failed": 1
+    },
+    "fixedFocused": {
+      "passed": 37,
+      "failed": 0
+    }
+  },
+  "suiteEvidence": {
+    "runtimeSource": "c227f4e575c945dd313dbc1620692422b896a5d5",
+    "Sequence": {
+      "passed": 26,
+      "listed": 26,
+      "skipped": 0
+    },
+    "WorkflowsRuntime": {
+      "passed": 3303,
+      "listed": 3292,
+      "skipped": 0,
+      "inventoryDifference": "Three non-preenumerated MemberData methods execute 14 rows instead of three listed methods (+11)."
+    },
+    "ActivitiesRuntime": {
+      "passed": 733,
+      "listed": 731,
+      "skipped": 0,
+      "inventoryDifference": "Two non-preenumerated MemberData methods execute four rows instead of two listed methods (+2)."
+    },
+    "frontendSource": "2f3e23ffd",
+    "WorkflowsFrontend": {
+      "passed": 3325,
+      "listed": 3325,
+      "skipped": 0
+    },
+    "StudioTypecheck": "Passed",
+    "StudioLint": {
+      "errors": 0,
+      "warnings": 58
+    }
+  },
+  "finalPrGates": "Pending; earlier source receipts do not claim final-head CI or resulting-main acceptance."
+}

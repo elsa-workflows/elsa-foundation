@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-02
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: [Feature #3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442), M3 ([#3432](https://github.com/elsa-workflows/elsa-foundation/issues/3432)) of [Program #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428). The owner authorizes autonomous delivery of the six acceptance criteria, the 30 October reusable-workflow-template and workflow-library refinements, and the two "Workflow authorization read-path follow-through" items recorded on the issue. Prerequisite #3440 is verified Done ([closeout](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6570028483)); #3441 is closed as completed under [spec 1189](../1189-weaver-recovery/spec.md).
 
@@ -199,7 +199,7 @@ A user viewing a workflow's version history or the Executable Inspector asks Wea
 **Acceptance Scenarios**:
 
 1. **Given** a selected historical or published version, **When** Weaver reads context, **Then** it is bound to that exact version identity, and its result says which version it describes.
-2. **Given** two versions, **When** the user asks what changed, **Then** the comparison is computed from those exact versions through the owning design services.
+2. **Given** two versions, **When** the user asks what changed, **Then** the comparison is Weaver's own, computed over two reads of those exact versions from the owning design services, and says so.
 3. **Given** an Executable in a host with the Runtime side, **When** Weaver explains it, **Then** a registered read-only Runtime-side tool returns the Executable's identity, Artifact Hash, graph, and the Source References the actor may see.
 4. **Given** a Design-only host, **When** Executable context is requested, **Then** it is explicitly unavailable. **Given** a Runtime-only host, **Then** version and draft journeys are explicitly unavailable.
 5. **Given** a request to change a published or historical version or an Executable, **When** Weaver receives it, **Then** it refuses with zero effect and offers to work on the current draft instead. It never retargets the edit silently.
@@ -352,7 +352,7 @@ A user viewing one Run asks Weaver why it faulted, where it is waiting, or what 
 
 #### Versions, Executables and Runs
 
-- **FR-026**: Version context and tools MUST be read-only and bound to exact version identities, and MUST be able to compare two exact versions through the owning design services.
+- **FR-026**: Version context and tools MUST be read-only and bound to exact version identities, and MUST be able to compare two exact versions: Weaver's own comparison, computed over two reads from the owning design services (R6), and labelled as such.
 - **FR-027**: Executable and Run context and tools MUST live in a Runtime-side package. They MUST be explicitly unavailable in Design-only hosts, and Design journeys MUST be explicitly unavailable in Runtime-only hosts. The Design-only, Runtime-only and combined deployment shapes MUST all keep working.
 - **FR-028**: A registered read-only Executable tool MUST return an Executable's identity, Artifact Hash, graph, and the Source References the actor may see.
 - **FR-029**: Run context and tools MUST be read-only and bound to one exact Workflow Instance and, where selected, one exact activity execution, under the actor's existing run access. They MUST apply existing execution-evidence redaction. Data that is not captured, pruned, unsupported or not permitted MUST be reported as explicitly unavailable.
@@ -376,7 +376,7 @@ A user viewing one Run asks Weaver why it faulted, where it is waiting, or what 
   - the authorization-unavailable outcome is Minor;
   - the optional operation key on view create and tag create is Minor and additive. It is added as default interface member overloads on `IWorkflowLibraryStore.CreateTagAsync` and `SaveViewAsync`, so existing implementations keep compiling. The default reports that the operation key is unsupported. For a replacement store that ignores the key, a keyed create is therefore unavailable, never silently non-idempotent (SC-008).
 - **FR-034**: The extension-point catalogs MUST be updated in the same change as the code they describe (constitution §2.22.1). These are:
-  - the "Legacy domain seams" section of `Extensions/Agent/src/Workflows/EXTENSION_POINTS.md`;
+  - the "Legacy domain seams" section of `Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/EXTENSION_POINTS.md`;
   - in `Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`, the authorizer and details-reader failure semantics, and the operation-key behavior of view create and tag create;
   - in `Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`, which catalogues `IWorkflowLibraryStore`: its operation-key members and their unsupported default;
   - in `Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`: the unique operation-key index on the EF library store;
@@ -454,3 +454,42 @@ A user viewing one Run asks Weaver why it faulted, where it is waiting, or what 
 | --- | --- |
 | Reduce duplicate GET authorization and store reads while keeping the visibility, organization, actor and tenant guarantees | FR-002; story 5; SC-006 |
 | Explicit fail-closed behavior for a replacement authorizer's `WorkflowDefinitionAuthorizationException`: unavailable versus denied, without causes | FR-001; story 5; SC-006 |
+
+### Acceptance evidence
+
+Evidence categories:
+- **C**: deterministic component tests on the real default services, the EF design store and the Studio client (Vitest and Playwright), and the probe driver's own unit tests (`test_*.py`), which check the driver's assertions on synthetic records and are not native evidence.
+- **P**: deterministic provider-protocol native evidence. It uses the actual Copilot (delegated) and Anthropic (host-driven) adapters, with packaged consumers on the packaged EF store over SQLite, and drives each journey through the normal host in a real browser (`tools/studio/Weaver.Conformance.Probe`). Its cases are named `{copilot,anthropic}-workflow-<journey>`.
+- **Live**: live-provider evidence. None is claimed.
+
+The slices landed as #3671 (A), #3704 (B), #3715 (C), #3722 (D), #3727 (E), #3732 (F) and this specification's closing PR (G). Each PR records its witness runs, including the failed attempts and their causes, and its Code Review fallback evidence. The local native proofs ran on `8e5657d39`, slice G's integrated head with slices E and F and `main`. Three things came after it:
+- run inspection follows a propagated incident's causal chain through each child's own incidents, and withholds child-control and poisoned-work incidents outright (child-control incidents now name their calling child);
+- any reload cancellation after the save is logged;
+- `main` was merged, adding #3730's Studio tag UX in 5 files.
+
+The evidence for the first two is unit tests: `WorkflowRunInspectionTests`, `WorkflowControlInboxTests` and `ShellReloaderTests`. The witness does not exercise a child-control fault. The closing PR merges only once CI's independent package witness and the Studio browser shards pass on its exact head, and that run is recorded on the PR at merge.
+
+| #3442 item | Evidence |
+| --- | --- |
+| Real authorized host catalogs, exact versions and revisions, and domain APIs | C: `ActivityAuthoringCatalogContractTests`, `WorkflowTruthSeamTests`, `WorkflowAgentNativeAuthorityTests`, `WorkflowVersionReaderTests`, `WorkflowExecutableInspectionTests`, `WorkflowRunInspectionTests`, `StudioModuleManifestProviderTests`. P: `workflow-truth-seams`, `workflow-versions`, `workflow-executables` and `workflow-run` on both adapters. C: `test_truth_seam_journeys.py`, `test_inspection_journeys.py`, `test_run_journeys.py` |
+| Lists, filters and selections; new workflow intent; active drafts; selected activities and expressions; versions; Executables; exact Runs | C: `WorkflowLibraryAgentTests`, `WorkflowVersionAgentTests`, `WorkflowExecutableAgentTests`, `WorkflowRunAgentTests`, `workflowLibraryAgent.test.tsx`, `workflowInspectionAgent.test.tsx`, `workflowExplainContext.test.tsx`, `workflowContextSize.test.tsx`. P: `workflow-library`, `workflow-versions`, `workflow-executables` and `workflow-run` on both adapters |
+| Explain, troubleshoot and reviewed edits against current data; clarification or refusal | C: `WorkflowExplainContextTests`, `WorkflowOperationBatchTests`, `workflowAgent.test.tsx`. P: `workflow-explain` and `workflow-batch` on both adapters, including the missing-activity, undeclared-property, ambiguous-target and credential-literal controls. C: `test_explain_journeys.py`, `test_batch_journeys.py` |
+| Atomic visible batches, validation, dirty state, whole-batch Undo; explicit save and publish | C: `WorkflowBatchConformanceTests`, `workflowBatchConformance.test.ts`, `workflowGraphOperationBatch.test.ts`, `workflowOperationBatchEditor.test.tsx`, `workflowEditorSaveCommands.test.tsx`, `workflowPublicationOperations.test.tsx`. P: `workflow-batch` on both adapters (apply, Undo, autosave hold) |
+| Nested, parallel and reusable scope; stale revisions; historical and published resources; denied permissions; unavailable or redacted data | C: `WorkflowOperationBatchTests`, `WorkflowVersionAgentTests`, `WorkflowRunAgentTests` (withheld sensitive values and incident messages). P, on both adapters: nested scope through the nested flowchart in `workflow-batch` (parallel and reusable scope rest on C alone); stale: the stale edit in `workflow-batch` and the stale hash in `workflow-executables`; published or historical targets: the historical-version control in `workflow-batch`, and the refused edits in `workflow-versions` and `workflow-executables`; denied permissions: `workflow-truth-seams`, `workflow-batch`, `workflow-library`, `workflow-versions`, `workflow-executables`, `workflow-run` and `workflow-authorization-unavailable`; unavailable or redacted data, through redaction canaries: `workflow-explain`, `workflow-batch`, `workflow-versions`, `workflow-executables` and `workflow-run`. |
+| Normal-host end-to-end effects, regressions and the provider evidence boundary | P: the complete package witness below. C: the composed Studio suite below. Live: none |
+| Deployment shapes (SC-009) | C: `WorkflowDesignOnlyHostTests`, `WorkflowRuntimeOnlyHostTests`, `WorkflowRuntimeOnlyCompositionTests`, `WorkflowDeploymentShapeTests`. P: the deployment-shape controls inside the `workflow-versions`, `workflow-executables` and `workflow-run` cases |
+
+| 30 October refinements | Evidence |
+| --- | --- |
+| Reusable Workflow Templates | C: `WorkflowLibraryCommandsTests`, `TemplateDesignUpgradeTests`, `WorkflowsDesignRetainedMigrationTests`, `workflowDefinitions.test.tsx`. P: `workflow-templates` on both adapters. C: `test_library_journeys.py` |
+| Workflow library filters, favorites, sort, views, ownership, revisions and native authority | C: `WorkflowLibraryApiContractTests`, `EfWorkflowDesignPersistenceTests` (library operation keys), and the native-database library witness tests on PostgreSQL, SQL Server and MySQL. Those are `*_workflow_library_organization_is_durable_and_bounded` and `*_operation_keys_resolve_to_exactly_one_tag_or_view` in `EfWorkflowDesignNativeProviderSmokeTests.cs`; they ran under Docker, 6 of 6 passing (#3727). P: `workflow-library` on both adapters, including the dropped-response operation-key replay (SC-008) |
+
+| Workflow authorization read-path follow-through | Evidence |
+| --- | --- |
+| Fewer duplicate GET authorization and store reads | C: `DefinitionReadAuthorizationTests` (counted permission checks, store reads and organization checks) |
+| Fail-closed replacement authorizer: unavailable versus denied | C: `WorkflowAuthorizationUnavailableTests`, `AgentOwnerUnavailableTests`, `AgentContextOwnerUnavailableTests`, `AgentRetainedOutcomeAdmissionTests`, `workflow-authorization-unavailable.spec.ts`. P: `workflow-authorization-unavailable` on both adapters. C: `test_authorization_journeys.py` |
+
+Final-head proofs:
+- **Complete package witness:** 107 of 107 cases, no gaps, `independentPackageWitness: true`, report SHA-256 `631345d80a9e41406b86d5048e313ef450b468fc7516bd2d408a56d15e313d98`. An earlier head, `f0b244f51`, also passed 107 of 107. The attempt on `2cfeced8f` failed because a feature apply's shell reload raced the configuration file watcher; `ShellReloader` now retries that CShells refusal, at most three attempts in all.
+- **Composed Studio suite:** 948 tests: 942 passed, 6 skipped, 0 failed, 0 flaky. The 6 skips are opt-in screenshot captures that run only when asked: `activity-icons`, `elsa3-reusable-import`, `home`, `nav-placement` and two in `settings-shell`.
+- **Required CI:** the closing PR merges only once `Build & test`, `Generated maps fresh` and `Full tier` are green on its exact head, including CI's own independent package witness. That run is recorded on the PR.

@@ -1,0 +1,8 @@
+#nullable enable
+Elsa.Decisions.DecisionEngine
+Elsa.Decisions.DecisionEngine.Compile(string! xml, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Elsa.Decisions.Core.DecisionCompilation!
+Elsa.Decisions.DecisionEngine.DecisionEngine() -> void
+Elsa.Decisions.DecisionEngine.Evaluate(Elsa.Decisions.Core.DecisionArtifact! artifact, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Decisions.Core.DecisionValue!>! inputs, int operationBudget = 1000000, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Elsa.Decisions.Core.DecisionEvaluation!
+Elsa.Decisions.DecisionsFeature
+Elsa.Decisions.DecisionsFeature.DecisionsFeature() -> void
+virtual Elsa.Decisions.DecisionsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

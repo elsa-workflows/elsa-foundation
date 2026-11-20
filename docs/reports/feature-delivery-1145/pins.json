@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "last_publish_commit": "5c85bd20b656e5e674052257d80da7539088f4fb",
+  "packages": [
+    {
+      "package_id": "Elsa.Activities.Design.Api",
+      "version": "4.0.31-preview",
+      "commit": "9daaa3206cdd98dfb5978468ea354d711415352d"
+    },
+    {
+      "package_id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+      "version": "4.0.28-preview",
+      "commit": "9daaa3206cdd98dfb5978468ea354d711415352d"
+    },
+    {
+      "package_id": "Elsa.Activities.Runtime",
+      "version": "4.0.42-preview",
+      "commit": "4a81500f8822fa5aae409e13df843dd1480adb3e"
+    },
+    {
+      "package_id": "Elsa.Api.Capabilities",
+      "version": "4.0.18-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Caching.Memory",
+      "version": "4.0.12-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Events",
+      "version": "4.0.16-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Expressions",
+      "version": "4.0.16-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity",
+      "version": "4.0.19-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.Api",
+      "version": "4.0.16-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+      "version": "4.0.29-preview",
+      "commit": "03b8cd124f7dc413f26e29505ffae4c69a7a33be"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+      "version": "4.0.22-preview",
+      "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+    },
+    {
+      "package_id": "Elsa.Locking.FileSystem",
+      "version": "4.0.12-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Mediator",
+      "version": "4.0.13-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Primitives.Hosting",
+      "version": "4.0.12-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Serialization.SystemText",
+      "version": "4.0.13-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Tasks",
+      "version": "4.0.14-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Api",
+      "version": "4.0.35-preview",
+      "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+      "version": "4.0.32-preview",
+      "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Reconciliation.Json",
+      "version": "4.0.16-preview",
+      "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+    },
+    {
+      "package_id": "Elsa.Workflows.Design.Validations",
+      "version": "4.0.18-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Workflows.Publishing",
+      "version": "4.0.47-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
+    },
+    {
+      "package_id": "Elsa.Workflows.Publishing.Api",
+      "version": "4.0.32-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
+    },
+    {
+      "package_id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
+      "version": "4.0.26-preview",
+      "commit": "5a3ad480a31a5a13ecc31deb420851b4cd76812c"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Api",
+      "version": "4.0.42-preview",
+      "commit": "9daaa3206cdd98dfb5978468ea354d711415352d"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "version": "4.0.52-preview",
+      "commit": "5c85bd20b656e5e674052257d80da7539088f4fb"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Resumption",
+      "version": "4.0.17-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Scheduling",
+      "version": "4.0.19-preview",
+      "commit": "6c42c8ffdeaae798700f805f79a7f10e0b9cbebb"
+    }
+  ]
+}

@@ -132,7 +132,36 @@ public sealed class Elsa3FaithfulFixesTests
 
         var node = Node(state, "respond");
         Assert.Equal("202", Text(Input(node, "StatusCode")));
-        Assert.Equal("{}", Text(Input(node, "Headers")));
+        Assert.DoesNotContain(node.Inputs, input => input.ReferenceKey == "Headers");
+    }
+
+    [Theory]
+    [InlineData("""{"X-Demo":["elsa3"],"X-Two":["a","b"]}""", """{"X-Demo":["elsa3"],"X-Two":["a","b"]}""")]
+    [InlineData("""{"X-Demo":"elsa3"}""", """{"X-Demo":["elsa3"]}""")]
+    public async Task An_Elsa3_response_header_map_is_bound_as_an_object_of_value_arrays(string elsa3, string elsa4)
+    {
+        var respond = Activity("respond", "Elsa.WriteHttpResponse",
+            ("content", Literal("ok")),
+            ("responseHeaders", Literal(elsa3, "HttpHeaders")));
+
+        var state = await ConvertAsync(Sequence("root", respond));
+
+        var headers = Input(Node(state, "respond"), "Headers");
+        Assert.Equal("Object", headers.Value.ExpressionType);
+        Assert.Equal(elsa4, Text(headers));
+    }
+
+    [Fact]
+    public async Task An_Elsa3_response_header_literal_that_is_not_a_map_is_refused()
+    {
+        var respond = Activity("respond", "Elsa.WriteHttpResponse",
+            ("content", Literal("ok")),
+            ("responseHeaders", Literal("X-Demo: elsa3", "HttpHeaders")));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", respond)));
+
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ActivityDiagnosticCodes.ValueOutsideContract);
     }
 
     [Fact]

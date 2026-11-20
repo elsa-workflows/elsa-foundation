@@ -2,7 +2,7 @@ using Elsa.Etl.Api;
 using Elsa.Etl.Design.Api.Models;
 using Elsa.Foundation.Identity.Authorization;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Etl.Design.Api.Endpoints.CreateDefinition;
 

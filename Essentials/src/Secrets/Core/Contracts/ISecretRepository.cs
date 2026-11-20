@@ -3,7 +3,8 @@ using Elsa.Secrets.Core.Models;
 namespace Elsa.Secrets.Core.Contracts;
 
 /// <summary>
-/// Stores secrets by tenant and normalized name. A name is unique only among secrets that are not deleted: deleting a
+/// Stores case-preserving names by tenant and lowercase normalized identity. A name is unique case-insensitively only
+/// among secrets that are not deleted: deleting a
 /// secret (saving it with <see cref="SecretStatus.Deleted"/>) frees its name, and the deleted secret stays stored, with its
 /// versions, beside whatever secret takes the name next. A secret that takes a freed name is a new secret with its own id
 /// and versions; nothing of the deleted one becomes visible through it.

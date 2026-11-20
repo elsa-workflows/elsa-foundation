@@ -1,5 +1,7 @@
 # Session policy and lifecycle contract
 
+> **Amended by spec 1203 — 4 November 2026.** Privilege classes, live host veto (including legacy Admin), optional declarations and the performed lifecycle are amended by [spec 1203](../../1203-weaver-module-support/spec.md), approved in [PR #3757](https://github.com/elsa-workflows/elsa-foundation/pull/3757). The proposed [leaf 0 plan and contracts](../../1203-weaver-module-support/plan.md) define implementation and renewed proof. The prior qualification below is historical and does not qualify these additions.
+
 **Status: Frozen for #3440 (T026), preview API.** This records the surface implemented by
 T007–T022 and documented by T023. T026 freezes it as the demonstrated minimum after two proofs passed:
 - the normal composed Studio gate (T024): the complete browser suite;

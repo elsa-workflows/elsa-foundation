@@ -11,7 +11,7 @@
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Elsa.Agent.Core" Version="__PRODUCT_VERSION__" />
+    <PackageReference Include="Elsa.Weaver.Core" Version="__PRODUCT_VERSION__" />
     <PackageReference Include="Elsa.Foundation.Identity.Core" Version="__PRODUCT_VERSION__" />
     <PackageReference Include="Elsa.Studio.Preferences.Core" Version="__PRODUCT_VERSION__" />
     <PackageReference Include="CShells.Abstractions" Version="__CSHELLS_VERSION__" />

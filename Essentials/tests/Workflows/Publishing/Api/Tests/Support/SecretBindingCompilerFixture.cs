@@ -134,7 +134,10 @@ internal static class SecretBindingCompilerFixture
                 .Select(candidate => new InputDefinition(
                     candidate.Attribute!.Key ?? candidate.Property.Name,
                     candidate.Property.Name,
-                    TypeReferenceFactory.FromClrType(candidate.Property.PropertyType, TypeAliasConvention.CanonicalAlias),
+                    // As the scanner does (spec 1231): a variable-reference input's catalog type is its value type.
+                    TypeReferenceFactory.FromClrType(
+                        VariableReferenceTypes.TryGet(candidate.Property.PropertyType, out _, out var valueType) ? valueType : candidate.Property.PropertyType,
+                        TypeAliasConvention.CanonicalAlias),
                     StorageDriverType: null,
                     DisplayName: candidate.Property.Name,
                     Category: null,
@@ -142,7 +145,10 @@ internal static class SecretBindingCompilerFixture
                     IsSensitive: candidate.Attribute.IsSensitive || candidate.Attribute.IsCredential ? true : null,
                     IsCredential: candidate.Attribute.IsCredential ? true : null,
                     DefaultValue: includeDeclaredInputDefaults ? ReadDefaultValue(candidate.Attribute.DefaultValue, candidate.Property.PropertyType) : null,
-                    DefaultSyntax: includeDeclaredInputDefaults ? candidate.Attribute.DefaultSyntax : null))
+                    DefaultSyntax: includeDeclaredInputDefaults ? candidate.Attribute.DefaultSyntax : null,
+                    VariableAccess: VariableReferenceTypes.TryGet(candidate.Property.PropertyType, out var access, out _)
+                        ? access == ActivityVariableAccess.ReadWrite ? InputVariableAccess.ReadWrite : InputVariableAccess.Read
+                        : null))
                 .ToArray());
 
     private static JsonElement? ReadDefaultValue(string? value, Type valueType)

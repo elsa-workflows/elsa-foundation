@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from agent_transport import Response, AgentTransportError
+from weaver_transport import Response, WeaverTransportError
 from journey_runtime import expect_error, same, BASE_GRANTS, browser_inputs, JourneyRuntime
 from contextlib import nullcontext
 from unittest.mock import DEFAULT
@@ -177,6 +177,32 @@ class JourneyBoundariesTests(unittest.TestCase):
         config["workflow"]["draftPath"] += "?accessToken=PRIVATE_CREDENTIAL"
         with self.assertRaises(RuntimeError): browser_inputs(config)
 
+    def test_browser_export_summary_exports_only_the_fields_a_journey_addresses(self):
+        base = {"journey": "workflow-version-history", "provider": "copilot", "studioOrigin": "http://127.0.0.1:51001",
+                "backendOrigin": "http://127.0.0.1:51002"}
+        # Witness f052ff221: the version-history journey addresses a definition and its draft path, no draft id or activity.
+        version = {"definitionId": "definition", "definitionPath": "/design/workflows/definitions/definition",
+                   "draftPath": "/design/workflows/drafts/draft", "version": {"id": "v2", "path": "/design/workflows/versions/v2"}}
+        self.assertEqual({"definitionId", "definitionPath", "draftPath"}, set(browser_inputs({**base, "workflow": version})["workflow"]))
+        executable = {"executable": {"artifactId": "artifact", "artifactHash": "sha256:abc", "path": "/runtime/workflows/executables/artifact"}}
+        self.assertEqual({"executable"}, set(browser_inputs({**base, "workflow": executable})["workflow"]))
+        # Every present field is still validated, and some identity is required.
+        for key, value in (("activityId", ""), ("activityId", None), ("draftId", 7), ("definitionPath", "relative/path"),
+                           ("draftPath", "/x?accessToken=PRIVATE")):
+            with self.subTest(key=key, value=value), self.assertRaises(RuntimeError):
+                browser_inputs({**base, "workflow": {**version, key: value}})
+        with self.assertRaises(RuntimeError): browser_inputs({**base, "workflow": {"definitionPath": "/design/workflows/definitions/d"}})
+        with self.assertRaises(RuntimeError):
+            browser_inputs({**base, "workflow": {"executable": {"artifactId": "a", "artifactHash": "h", "path": "/x?token=1"}}})
+        # A present identity is never null or a non-object: it would otherwise pass as "some identity" and export nothing.
+        for key, value in (("executable", None), ("run", None), ("executable", "artifact"), ("run", [])):
+            with self.subTest(key=key, value=value), self.assertRaises(RuntimeError):
+                browser_inputs({**base, "workflow": {key: value}})
+            with self.subTest(key=key, value=value, beside="definition"), self.assertRaises(RuntimeError):
+                browser_inputs({**base, "workflow": {**version, key: value}})
+        run = {"run": {"workflowExecutionId": "run-1", "path": "/runtime/workflows/instances/run-1"}}
+        self.assertEqual({"run"}, set(browser_inputs({**base, "workflow": run})["workflow"]))
+
     def test_semantic_refusal_requires_native_failure_and_correlated_completion(self):
         result = {"toolCallId": "native-call", "toolName": "declared_tool", "succeeded": False,
                   "content": "The actual declared operation was refused.", "payload": None, "receipt": None}
@@ -206,11 +232,11 @@ class JourneyBoundariesTests(unittest.TestCase):
 
     def test_identical_http_failure_status_cannot_mask_wrong_cause(self):
         def response(code, status=403):
-            return Response("POST", "/_elsa/agent/proposals/p/execute", status, {},
+            return Response("POST", "/_elsa/weaver/proposals/p/execute", status, {},
                             json.dumps({"error": {"code": code, "message": "observed native refusal"}}).encode(), {})
-        self.assertEqual("agent.proposal.forbidden", expect_error(response("agent.proposal.forbidden"), 403, "agent.proposal.forbidden")["error"]["code"])
-        with self.assertRaises(RuntimeError): expect_error(response("agent.proposal.expired"), 403, "agent.proposal.forbidden")
-        with self.assertRaises(AgentTransportError): expect_error(response("agent.proposal.forbidden", 409), 403, "agent.proposal.forbidden")
+        self.assertEqual("weaver.proposal.forbidden", expect_error(response("weaver.proposal.forbidden"), 403, "weaver.proposal.forbidden")["error"]["code"])
+        with self.assertRaises(RuntimeError): expect_error(response("weaver.proposal.expired"), 403, "weaver.proposal.forbidden")
+        with self.assertRaises(WeaverTransportError): expect_error(response("weaver.proposal.forbidden", 409), 403, "weaver.proposal.forbidden")
 
     def test_private_principal_recipe_is_concrete_and_isolates_tenant_axis(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -223,9 +249,18 @@ class JourneyBoundariesTests(unittest.TestCase):
             self.assertEqual(principals[0]["subject"], principals[2]["subject"])
             self.assertNotEqual(principals[0]["tenant"], principals[2]["tenant"])
             self.assertNotEqual(principals[0]["subject"], principals[1]["subject"])
-            # Spec 1193 T012: the four workflow actors are appended; the original indexes keep their meaning.
-            self.assertEqual(9, len(principals))
-            reader, manager, tenant_reader, catalog_denied = principals[5:]
+            # Spec 1193 T012: the four workflow actors are appended; the original indexes keep their meaning. T036 appends the
+            # library actor: tag assignment in the admin's tenant, without tag management or view sharing.
+            # T045 appends the Run actor: runtime read and structure inspection in the admin's tenant, without value inspection.
+            self.assertEqual(11, len(principals))
+            reader, manager, tenant_reader, catalog_denied, library_limited, run_limited = principals[5:]
+            self.assertEqual(principals[0]["tenant"], run_limited["tenant"])
+            self.assertTrue({"workflows/runtime:read", "workflows/activity-executions:inspect"} <= set(run_limited["exactDirectPermissions"]))
+            self.assertFalse({"workflows/activity-executions:inspect-values", "workflows/activity-executions:resolve-value-payloads",
+                              "workflows/runtime:manage"} & set(run_limited["exactDirectPermissions"]))
+            self.assertEqual(principals[0]["tenant"], library_limited["tenant"])
+            self.assertIn("workflows/design/tag-assignments:manage", library_limited["exactDirectPermissions"])
+            self.assertFalse({"workflows/design/tags:manage", "workflows/design/views:share", "workflows/design:manage"} & set(library_limited["exactDirectPermissions"]))
             self.assertNotIn("activities/design:read", catalog_denied["exactDirectPermissions"])
             # Every dedicated actor discovers its owner links through GET /capabilities.
             self.assertTrue(all("api-capabilities:read" in item["exactDirectPermissions"] for item in principals[5:]))
@@ -270,7 +305,7 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
 
     def qualify(self, **overrides):
         names = (*ORIGINAL_SEQUENCE, "owned_origin", "configure_runtime", "_seed_principals", "JourneyRuntime", "private_json", "CaseRecords",
-                 "server", "RestartableServer", "qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
+                 "server", "RestartableServer", "qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "qualify_workflow_library", "qualify_workflow_inspection", "qualify_workflow_run", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
                  "capture_consumer_after", "validate_complete_witness")
         order = []
         def recorder(name):
@@ -286,6 +321,9 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
                 if name == "qualify_workflow_truth_seams": self.run.report["workflowTruthSeamQualification"] = {"status": "passed"}
                 if name == "qualify_workflow_batch": self.run.report["workflowBatchQualification"] = {"status": "passed"}
                 if name == "qualify_workflow_explain": self.run.report["workflowExplainQualification"] = {"status": "passed"}
+                if name == "qualify_workflow_library": self.run.report["workflowLibraryQualification"] = {"status": "passed"}
+                if name == "qualify_workflow_inspection": self.run.report["workflowInspectionQualification"] = {"status": "passed"}
+                if name == "qualify_workflow_run": self.run.report["workflowRunQualification"] = {"status": "passed"}
                 if name == "qualify_witness_autonomy": self.run.report["autonomyLifecycleQualification"] = {"status": "passed"}
                 if name == "JourneyRuntime":
                     return SimpleNamespace(gate_file=self.root / "gate.json", root=self.root, select_provider=Mock(), browser=Mock(),
@@ -306,18 +344,21 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
         sequence = [name for name in order if name in ORIGINAL_SEQUENCE]
         self.assertEqual("qualify_context_disclosure", sequence[-1])
         tail = order[order.index("qualify_context_disclosure") + 1:]
-        self.assertEqual(["qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
+        self.assertEqual(["qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "qualify_workflow_library", "qualify_workflow_inspection", "qualify_workflow_run", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
                           "capture_consumer_after", "validate_complete_witness", "validate_complete_witness"], tail)
         self.assertEqual(1, order.count("qualify_workflow_authorization"))
         self.assertEqual(1, order.count("qualify_workflow_truth_seams"))
         self.assertEqual(1, order.count("qualify_workflow_batch"))
         self.assertEqual(1, order.count("qualify_workflow_explain"))
+        self.assertEqual(1, order.count("qualify_workflow_library"))
+        self.assertEqual(1, order.count("qualify_workflow_inspection"))
+        self.assertEqual(1, order.count("qualify_workflow_run"))
         self.assertEqual(1, order.count("qualify_witness_autonomy"))
         self.assertEqual(1, order.count("qualify_witness_restarts"))
         self.assertEqual(1, order.count("RestartableServer"))
         self.assertEqual([{"reason": "synthetic"}], self.run.report["hostRestarts"])
         self.assertEqual(("passed", True), (self.run.report["status"], self.run.report["independentPackageWitness"]))
-        self.assertEqual(97, self.run.report["witnessManifest"]["expectedCaseCount"])
+        self.assertEqual(107, self.run.report["witnessManifest"]["expectedCaseCount"])
         self.assertNotIn("stageCount", json.dumps(self.run.report["witnessManifest"]))
 
     def test_failed_matrix_changed_original_records_or_failed_gate_never_promote(self):

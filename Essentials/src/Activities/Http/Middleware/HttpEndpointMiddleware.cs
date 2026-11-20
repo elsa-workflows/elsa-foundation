@@ -328,6 +328,14 @@ public sealed class HttpEndpointMiddleware(
             return;
         }
 
+        // Every matched start was refused by its workflow's input contract (#3728) and nothing was resumed: the route is
+        // live, so 404 would be wrong, and the same request would be refused again, so it is a client error.
+        if (result.RefusedStartCount > 0 && result.RefusedStartCount == result.Starts.Count && result.ResumedCount == 0)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
         // Nothing matched: no trigger started AND no waiting instance was resumed. A resolved
         // route whose only claim was a since-consumed bookmark deterministically lands here → 404. This branch stays
         // FIRST — a sync-mode request that started/resumed nothing is still 404, never a 202 degrade.

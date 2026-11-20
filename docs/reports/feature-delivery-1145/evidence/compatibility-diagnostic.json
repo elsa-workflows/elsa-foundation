@@ -1,0 +1,14 @@
+{
+  "failure": {
+    "packageId": "Fr2Proof.Incompatible",
+    "stage": "host-version-unsatisfied",
+    "message": "Package 'Fr2Proof.Incompatible@1.0.0' requires 'Elsa.Primitives [4.0.999-preview,5.0.0)', but the host provides 'Elsa.Primitives 4.0.17-preview'. A package the host declares it provides is never acquired, so the dependent is refused rather than loaded against a version it was not built for.",
+    "occurredAt": "2026-11-05T22:43:32.0920312+00:00",
+    "correlationId": "58d0483bd8524cb59d42dce01f518a73"
+  },
+  "lines": [
+    "Host-provided dependency version refused [CorrelationId=4b4a42c21d944a198f53f3aee1f07c2a, PackageId=Fr2Proof.Incompatible]: Package 'Fr2Proof.Incompatible@1.0.0' requires 'Elsa.Primitives [4.0.999-preview,5.0.0)', but the host provides 'Elsa.Primitives 4.0.17-preview'. A package the host declares it provides is never acquired, so the dependent is refused rather than loaded against a version it was not built for.",
+    "Host-provided dependency version refused [CorrelationId=58d0483bd8524cb59d42dce01f518a73, PackageId=Fr2Proof.Incompatible]: Package 'Fr2Proof.Incompatible@1.0.0' requires 'Elsa.Primitives [4.0.999-preview,5.0.0)', but the host provides 'Elsa.Primitives 4.0.17-preview'. A package the host declares it provides is never acquired, so the dependent is refused rather than loaded against a version it was not built for."
+  ],
+  "remedy": "Use an image providing the required host dependency, or select a feature version whose declared range includes this image."
+}

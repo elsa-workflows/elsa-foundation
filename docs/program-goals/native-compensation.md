@@ -1,6 +1,6 @@
 # Elsa 4 Native Compensation and Saga Recovery
 
-- **Status:** Active for end-to-end delivery of M0–M5, by owner authorization on 19 October 2026.
+- **Status:** Delivered. Program #3035 closed as completed on 9 November 2026; all child issues closed, qualification landed in a710adf26.
 - **Area:** Native workflow runtime/activities and Elsa Studio, together in this repository.
 - **Steward:** Sipke Schoorstra. Delivery leaves are claimed per leaf under Issue Bus Lite.
 - **Program:** [#3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035).

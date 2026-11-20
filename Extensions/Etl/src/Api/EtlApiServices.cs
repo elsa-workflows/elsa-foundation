@@ -3,7 +3,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Etl.Api;
 

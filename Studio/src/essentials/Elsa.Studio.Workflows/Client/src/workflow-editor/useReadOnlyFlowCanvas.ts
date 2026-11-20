@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyNodeChanges, useNodesInitialized, useReactFlow, useStore, type Node, type NodeChange, type Viewport } from "@xyflow/react";
-import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
 
 function isSameViewport(left: Viewport, right: Viewport): boolean {
   return left.x === right.x && left.y === right.y && left.zoom === right.zoom;
@@ -65,7 +65,7 @@ export function FitReadOnlyFlowView({ nodeCount, focusRequestId = 0 }: { nodeCou
       return;
     }
 
-    void fitView(shouldShowReadOnlyMiniMap(nodeCount) ? readOnlyMinimapFitViewOptions : { padding: 0.12 }).then(() => {
+    void fitView(getReadOnlyFitViewOptions(nodeCount)).then(() => {
       lastAutoFitViewport.current = getViewport();
     });
   }, [fitView, focusRequestId, getViewport, initialized, nodeCount, paneHeight, paneWidth]);

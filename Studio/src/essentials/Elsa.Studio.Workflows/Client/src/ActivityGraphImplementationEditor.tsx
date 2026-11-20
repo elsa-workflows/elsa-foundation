@@ -1,3 +1,4 @@
+import { indexActivityPresentation, normalizeActivityPresentation, resolveActivityLabel, updateActivityPresentation } from "./activityPresentation";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "./graph-authoring/activityPaletteContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
@@ -15,6 +16,7 @@ import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft, WorkflowInput } from "./workflowTypes";
 import {
   buildCanvas,
+  collectActivityNodeIds,
   createActivityNode,
   findNodeScopePath,
   getActivityDisplay,
@@ -133,6 +135,7 @@ const activityGraphSidePanelStorageKeys: SidePanelLayoutStorageKeys = {
 };
 
 export function ActivityGraphPublicInterfaceEditor({
+  contractSection,
   context,
   contract,
   providerSchemaVersion,
@@ -206,9 +209,9 @@ export function ActivityGraphPublicInterfaceEditor({
   const unresolvedOutcomes = outcomeMappingOptions.boundaryOutcomes.filter(outcome => !mappedOutcomeTargets.has(outcome.referenceKey));
 
   return (
-    <div className="ad-graph-public-interface wf-tokens">
+    <div className={`ad-graph-public-interface wf-tokens${contractSection ? " is-section-focused" : ""}`}>
       <header className="ad-interface-connections-header"><h2>Designer connections</h2><p>Connect designer results to the public interface.</p></header>
-      <section className="ad-graph-output-mappings" aria-labelledby="activity-graph-output-mappings-title">
+      {(!contractSection || contractSection === "outputs") && <section className="ad-graph-output-mappings" aria-labelledby="activity-graph-output-mappings-title">
         <h3 id="activity-graph-output-mappings-title">Output values</h3>
         {(contract?.outputs ?? []).length > 0 ? <p>Choose where each output gets its value.</p> : null}
         {(contract?.outputs ?? []).length === 0
@@ -236,9 +239,9 @@ export function ActivityGraphPublicInterfaceEditor({
                 );
               })}
             </WorkflowReferenceAuthoringProvider>}
-      </section>
+      </section>}
 
-      {providerSchemaVersion === "2" ? <section className="ad-graph-outcome-mappings" aria-labelledby="activity-graph-outcome-mappings-title">
+      {(!contractSection || contractSection === "outcomes") && (providerSchemaVersion === "2" ? <section className="ad-graph-outcome-mappings" aria-labelledby="activity-graph-outcome-mappings-title">
         <h3 id="activity-graph-outcome-mappings-title">Completion paths</h3>
         <p>Choose an activity outcome for each designer path. Several paths can share an outcome.</p>
         {payload.outcomeMappings.length ? <ul>{payload.outcomeMappings.map(mapping => <li key={mapping.sourceOutcomeReferenceKey}>
@@ -253,7 +256,7 @@ export function ActivityGraphPublicInterfaceEditor({
         </div>}
       </section> : <section className="ad-inline-status" role="status">
         <details><summary>Compatibility details</summary>Schema 1 retains its historical single <code>done</code> boundary. Migrate explicitly to schema 2 to author outcome mappings.</details>
-      </section>}
+      </section>)}
     </div>
   );
 }
@@ -308,7 +311,7 @@ export function ActivityGraphImplementationEditor({
   const expressionState = useActivityGraphExpressionDescriptors(context);
   const sidePanelLayout = useSidePanelLayout(activityGraphSidePanelStorageKeys, { palettePresent: true });
 
-  const buildModel = useCallback((documentRoot: ActivityNode, layout: ReturnType<typeof activityGraphLayoutToDesign>) => {
+  const buildModel = useCallback((documentRoot: ActivityNode, layout: ReturnType<typeof activityGraphLayoutToDesign>, document: typeof value) => {
     const documentScope = resolveScope(documentRoot, resolveScopeFrames(documentRoot, scopePath, catalogByVersion), catalogByVersion);
     if (!documentScope) return { nodes: [], edges: [] };
     const { owner: documentOwner, slot: documentSlot } = documentScope;
@@ -317,11 +320,11 @@ export function ActivityGraphImplementationEditor({
     // A BPMN scope's canvas nodes are its process ELEMENTS (an activity-bearing element carries its
     // child through `childNodeId`), not the slot activities — see the bpmn adapter.
     const model = documentSlot.mode === "bpmn"
-      ? buildBpmnCanvas({ owner: documentOwner, slot: documentSlot }, catalog, layout) as unknown as {
+      ? buildBpmnCanvas({ owner: documentOwner, slot: documentSlot }, catalog, layout, document.activityPresentation) as unknown as {
           nodes: Node<WorkflowNodeData>[];
           edges: Edge[];
         }
-      : buildCanvas({ owner: documentOwner, slot: documentSlot }, catalog, layout);
+      : buildCanvas({ owner: documentOwner, slot: documentSlot }, catalog, layout, undefined, document.activityPresentation);
     return { nodes: model.nodes.map(node => {
       const activity = documentSlot.activities.find(candidate => candidate.nodeId === (node.data.runtimeNodeId ?? node.id));
       return activity ? { ...node, data: { ...node.data, collectionSlots: getCollectionSlots(activity, catalogByVersion.get(activity.activityVersionId)) } } : node;
@@ -367,6 +370,17 @@ export function ActivityGraphImplementationEditor({
     return activityGraphDocumentAdapter.replaceGraph(document, nextRoot, nextLayout);
   }, [catalogByVersion, scopePath]);
 
+  const reconcileDocument = useCallback((previous: typeof value, next: typeof value) => {
+    const previousIds = collectActivityNodeIds(activityGraphDocumentAdapter.readRoot(previous), catalogByVersion);
+    const nextIds = collectActivityNodeIds(activityGraphDocumentAdapter.readRoot(next), catalogByVersion);
+    const removed = new Set([...previousIds].filter(id => !nextIds.has(id)));
+    if (!next.activityPresentation) return next;
+    return {
+      ...next,
+      activityPresentation: next.activityPresentation.filter(record => !removed.has(record.nodeId))
+    };
+  }, [catalogByVersion]);
+
   const canvas = useGraphAuthoringCanvas({
     document: value,
     adapter: activityGraphDocumentAdapter,
@@ -374,6 +388,8 @@ export function ActivityGraphImplementationEditor({
     selectedNodeId,
     buildModel,
     applyModel,
+    reconcileDocument,
+    documentSignature: activityGraphDocumentSignature,
     onChange
   });
   const { nodes, edges, setNodes, setEdges, commitCanvas, commitDocument, undo, redo, canUndo, canRedo } = canvas;
@@ -725,7 +741,7 @@ export function ActivityGraphImplementationEditor({
       scopeOwner: owner,
       catalog: catalogByVersion,
       layout: activityGraphDocumentAdapter.readLayout(value),
-      presentation: []
+      presentation: value.activityPresentation ?? []
     });
     if (!snapshot) return;
     const draft: WorkflowDraft = {
@@ -733,7 +749,7 @@ export function ActivityGraphImplementationEditor({
       definitionId,
       state: { rootActivity: root },
       layout: activityGraphDocumentAdapter.readLayout(value),
-      activityPresentation: [],
+      activityPresentation: value.activityPresentation ?? [],
       validationErrors: []
     };
     const plan = planActivityDuplicate({ snapshot, draft, frames: scopeFrames, catalog: catalogByVersion });
@@ -741,7 +757,7 @@ export function ActivityGraphImplementationEditor({
     const duplicate = applyActivityDuplicatePlan(draft, scopeFrames, plan, catalogByVersion, nodeId);
     const nextRoot = duplicate?.state.rootActivity;
     if (!duplicate || !nextRoot) return;
-    commitDocument(activityGraphDocumentAdapter.replaceGraph(value, nextRoot, duplicate.layout));
+    commitDocument(activityGraphDocumentAdapter.replaceGraph({ ...value, activityPresentation: duplicate.activityPresentation }, nextRoot, duplicate.layout));
     const duplicatedNodeId = plan.selectedNodeIds[0] ?? null;
     setSelectedNodeId(duplicatedNodeId);
     if (duplicatedNodeId) interactions.queueCanvasNodeFocus(duplicatedNodeId);
@@ -770,6 +786,8 @@ export function ActivityGraphImplementationEditor({
     sidePanelLayout.setInspectorCollapsed(false);
   };
   const inspectedNode = selected ?? owner;
+  // Keep raw editor text: normalizing here removes a space before the next word is typed.
+  const inspectedPresentation = value.activityPresentation?.find(record => record.nodeId === inspectedNode.nodeId);
   const inspectedCatalogItem = selected ? selectedCatalogItem : ownerCatalogItem;
   const inspectedDescriptor = inspectedCatalogItem ? toActivityDescriptor(inspectedCatalogItem) : null;
   const inspectedSlots = inspectedNode ? getChildSlots(inspectedNode, catalogByVersion) : [];
@@ -866,7 +884,12 @@ export function ActivityGraphImplementationEditor({
             context={context}
             workflowState={workflowState}
             selectedNode={inspectedNode}
-            selectedNodeLabel={inspectedCatalogItem ? getActivityDisplay(inspectedCatalogItem) : inspectedNode?.nodeId ?? "Activity graph"}
+            selectedNodeLabel={resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(inspectedNode?.nodeId ?? ""), inspectedCatalogItem, inspectedNode?.nodeId ?? "Activity graph")}
+            selectedPresentation={inspectedPresentation}
+            onSelectedPresentationChange={inspectedNode ? presentation => {
+              if (readOnly) return;
+              commitDocument({ ...value, activityPresentation: updateActivityPresentation(value.activityPresentation ?? [], inspectedNode.nodeId, presentation) });
+            } : undefined}
             selectedActivityType={inspectedDescriptor?.typeName ?? inspectedCatalogItem?.activityTypeKey ?? "Unknown"}
             selectedDescriptor={inspectedDescriptor}
             selectedNodeAvailability={null}
@@ -1412,6 +1435,12 @@ function nodeIdAtJsonPointer(payload: ActivityGraphPayload, pointer: string | nu
     if (typeof nodeId === "string" && nodeId) closestNodeId = nodeId;
   }
   return closestNodeId;
+}
+
+function activityGraphDocumentSignature(document: StudioActivityDefinitionImplementationEditorProps["value"]) {
+  // Server normalization (trimmed strings and explicit nulls) acknowledges the same edit.
+  // A different provider, layout, or presentation value still resets external-change history.
+  return JSON.stringify({ ...document, activityPresentation: normalizeActivityPresentation(document.activityPresentation) });
 }
 
 function unsupportedGraphFocus(): StudioActivityDiagnosticFocusResult {

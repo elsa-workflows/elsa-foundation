@@ -16,6 +16,82 @@ afterEach(() => {
 });
 
 describe("ActivityDefinitionPublicationReview toolbar mode", () => {
+  it.each(["Error", "error"])("leads with deduplicated actionable blockers and explains the disabled publish action (%s)", async severity => {
+    const diagnostic = {
+      code: "agent.manifest.model", severity,
+      message: "A complete model connection has not been selected.",
+      remediation: "Choose a model connection with a configured model in Designer.",
+      subject: { kind: "ActivityDefinition", id: "elsa.agent" },
+      location: { providerKey: "elsa.agent", jsonPointer: "/model" },
+      metadata: { actionLabel: "Choose model connection" }
+    };
+    const harness = renderReview({ postJson: async () => ({ ...publicationPreflight(), isPublishable: false, diagnostics: [diagnostic, diagnostic] }) });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+    const blockers = harness.container.querySelector<HTMLElement>(".ad-publication-blockers")!;
+    expect(blockers.textContent).toContain(diagnostic.message);
+    expect(blockers.textContent).toContain(diagnostic.remediation);
+    expect(blockers.querySelectorAll(".ad-publication-diagnostics li")).toHaveLength(1);
+    const summary = harness.container.querySelector(".ad-publication-summary")!;
+    expect(blockers.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const publish = buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement;
+    expect(publish.disabled).toBe(true);
+    expect(publish.getAttribute("aria-describedby")).toBe(blockers.id);
+    expect(harness.container.querySelector(".ad-publication-version")).toBeNull();
+    expect(blockers.querySelector<HTMLDetailsElement>(".ad-publication-diagnostic-details")?.open).toBe(false);
+    click(buttonByText(blockers, "Choose model connection"));
+    await waitFor(() => expect(harness.onFocusDiagnostic).toHaveBeenCalledWith(diagnostic, expect.any(HTMLButtonElement)));
+    expect(harness.container.querySelector("[role='dialog']")).toBeNull();
+  });
+
+  it("rechecks blocked material and restores publication after correction", async () => {
+    let blocked = true;
+    const harness = renderReview({ postJson: async () => ({ ...publicationPreflight(), isPublishable: !blocked }) });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+    expect(harness.container.textContent).toContain("ask an administrator");
+    blocked = false;
+    click(buttonByText(harness.container, "Check again"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).toBeNull());
+    await waitFor(() => expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it("retains a legal provider code in technical details without inventing a correction target", async () => {
+    const code = "acme:model.unavailable";
+    const message = "The activity provider reported an issue.";
+    const harness = renderReview({ postJson: async () => ({ ...publicationPreflight(), isPublishable: false, diagnostics: [{
+      code, severity: "Error", message, remediation: "Ask an administrator to review the diagnostic details and activity provider logs.",
+      subject: { kind: "ActivityDefinition", id: "acme" }, location: { providerKey: "acme" }, metadata: {}
+    }] }) });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+    const issue = harness.container.querySelector(".ad-publication-diagnostics li")!;
+    expect(issue.querySelector("strong")?.textContent).toBe(message);
+    expect(issue.querySelector("code")?.textContent).toBe(code);
+    expect(issue.querySelector<HTMLDetailsElement>("details")?.open).toBe(false);
+    expect(issue.querySelector("button")).toBeNull();
+  });
+
+  it.each(["Rejected", "Failed"])("keeps earlier readiness distinct after a %s receipt", async status => {
+    const harness = renderReview({ postJson: async (url, body) => url.endsWith("/publication-preflight")
+      ? publicationPreflight()
+      : { ...publicationReceipt(body as Record<string, unknown>), status, outcome: null, diagnostics: [{
+        code: "provider.model.unavailable", severity: "Info", message: "Choose an available model connection.",
+        subject: { kind: "ActivityDefinition", id: "provider" }, location: { providerKey: "provider", jsonPointer: "/model" },
+        remediation: "Review the connection in Designer.", metadata: { actionLabel: "Review model connection" }
+      }] } });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
+    click(buttonByText(harness.container, "Publish 1.0.0"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+    const readiness = harness.container.querySelector(".ad-publication-readiness")!;
+    expect(readiness.textContent).toContain("Checks from the earlier review");
+    expect(readiness.textContent).not.toContain("Ready to publish");
+    expect(harness.container.querySelector(".ad-publication-summary")?.textContent).toContain("Blocked");
+    expect(harness.container.querySelector(".ad-publication-blockers")?.textContent).toContain("Publication did not complete");
+    expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("opens with exact save and preflight, then resumes the retained review without another preflight", async () => {
     const preflight = vi.fn(async () => publicationPreflight());
     const flushExactSavedRevision = vi.fn(async () => ({ revision: 3, signature: "signature-3" }));
@@ -179,7 +255,7 @@ function renderReview({
     container.remove();
   };
   unmounts.push(unmount);
-  return { container, unmount };
+  return { container, unmount, onFocusDiagnostic };
 }
 
 function endpoint(postJson: (url: string, body: unknown) => Promise<unknown>, getJson?: (url: string) => Promise<unknown>): StudioEndpointContext {

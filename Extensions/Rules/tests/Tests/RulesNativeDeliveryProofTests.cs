@@ -54,7 +54,7 @@ public sealed class RulesNativeDeliveryProofTests
         fixture.Activities.State = activity with
         {
             Completion = new(completion.InvocationId, completion.AttemptId, wrongResult,
-                completion.OutcomeKey, completion.CompletedAt, completion.ContractFingerprint)
+                completion.Selection, completion.CompletedAt, completion.ContractFingerprint)
         };
         Assert.Null((await fixture.InspectAsync()).Proof);
     }
@@ -109,7 +109,7 @@ public sealed class RulesNativeDeliveryProofTests
         fixture.Activities.State = completed with
         {
             Completion = new(completed.Completion!.InvocationId, completed.Completion.AttemptId,
-                completed.Completion.Result, completed.Completion.OutcomeKey,
+                completed.Completion.Result, completed.Completion.Selection,
                 RulesNativeDeliveryTestFixture.Now.AddSeconds(2), completed.Completion.ContractFingerprint)
         };
 
@@ -397,7 +397,7 @@ internal sealed class RulesNativeDeliveryTestFixture
         }
 
         var activityCompletion = new ActivityCompletion(ActivityId, final.AttemptId, completionResult,
-            activityResult.Kind == RuleTerminalKind.Refused ? "Refused" : "Done", completionAt ?? finalEnded.AddMilliseconds(-1),
+            Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named(activityResult.Kind == RuleTerminalKind.Refused ? "Refused" : "Done"), completionAt ?? finalEnded.AddMilliseconds(-1),
             "native-run-rules-contract");
         var activity = CreateWaitingActivity() with
         {

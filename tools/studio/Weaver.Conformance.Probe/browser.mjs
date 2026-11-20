@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain", "workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector", "workflow-run"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 // T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
@@ -57,7 +57,7 @@ function safeFailureFrames(error) {
 function retainFailureDiagnostic(error) {
   const diagnostic = { kind: ["Error", "TimeoutError", "AssertionError"].includes(error?.name) ? error.name : "Error", frames: safeFailureFrames(error) };
   try {
-    fs.writeFileSync(path.join(config.output, "failure-diagnostic.json"), JSON.stringify(diagnostic) + "\n", { mode: 0o600 });
+    fs.writeFileSync(path.join(config.output, "failure-diagnostic.json"), JSON.stringify(diagnostic) + "\n", { mode: 0o600, flag: "wx" });
   } catch { /* Preserve the original failure even when its diagnostic cannot be written. */ }
   return diagnostic;
 }
@@ -106,7 +106,7 @@ page.on("request", request => {
   // Publish is an explicit boundary: a lifecycle journey records any attempt to cross it.
   if ((lifecycle || config.journey === "workflow-batch") && url.origin === backend && /publish/i.test(url.pathname) && request.method() !== "GET")
     publishAttempts.push({ url: diagnosticUrl(request.url()), method: request.method() });
-  if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || !["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) return;
+  if (url.origin !== backend || !url.pathname.startsWith("/_elsa/weaver/") || !["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) return;
   requests.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
 });
 page.on("response", response => {
@@ -125,24 +125,43 @@ if (config.journey === "workflow-read-only") page.on("response", response => {
   if (url.origin === backend && response.request().method() === "GET" && [401, 403].includes(response.status()))
     refusedReads.push({ path: url.pathname, status: response.status() });
 });
-// Spec 1193 T028: every exchange the page has with the agent API, raw and in memory only (never retained, so no redactor
+// Spec 1193 T028: every exchange the page has with the Weaver API, raw and in memory only (never retained, so no redactor
 // rewrites it): each request's URL and body, whatever its method, and each non-stream response body. Stream bodies are
 // the native SSE capture's own raw bytes. The explanation journey searches all of it for the typed canary.
-const agentTraffic = [], agentResponseReads = [];
-if (config.journey === "workflow-explain") {
+const weaverTraffic = [], weaverResponseReads = [];
+// Spec 1193 T045: the run journey searches the same raw Weaver traffic for its Run canary.
+if (["workflow-explain", "workflow-run"].includes(config.journey)) {
   page.on("request", request => {
     const url = new URL(request.url());
-    if (url.origin === backend && url.pathname.startsWith("/_elsa/agent/"))
-      agentTraffic.push({ method: request.method(), url: request.url(), body: request.postData() ?? "" });
+    if (url.origin === backend && url.pathname.startsWith("/_elsa/weaver/"))
+      weaverTraffic.push({ method: request.method(), url: request.url(), body: request.postData() ?? "" });
   });
   page.on("response", response => {
     const url = new URL(response.url());
-    if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || /event-stream/i.test(response.headers()["content-type"] ?? "")) return;
-    agentResponseReads.push(response.text().then(body => agentTraffic.push({ url: response.url(), status: response.status(), body }))
-      .catch(error => agentTraffic.push({ url: response.url(), unreadable: error.message })));
+    if (url.origin !== backend || !url.pathname.startsWith("/_elsa/weaver/") || /event-stream/i.test(response.headers()["content-type"] ?? "")) return;
+    weaverResponseReads.push(response.text().then(body => weaverTraffic.push({ url: response.url(), status: response.status(), body }))
+      .catch(error => weaverTraffic.push({ url: response.url(), unreadable: error.message })));
   });
 }
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
+// Spec 1193 T036: every write the page sends to the workflow design API (library, templates, definitions), so a journey can
+// prove which owner writes happened: none from a page working-state change, only the user's own Save of the template.
+const designWrites = [];
+if (["workflow-library", "workflow-templates"].includes(config.journey)) page.on("request", request => {
+  const url = new URL(request.url());
+  if (url.origin === backend && url.pathname.includes("/design/workflows/") && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()))
+    designWrites.push({ path: url.pathname, method: request.method(), body: request.postDataJSON() });
+});
+// Spec 1193 T041: the read-only inspection journeys may write nothing to the design, publishing or runtime APIs.
+// Spec 1193 T045: the run page's journey is read-only in the same way.
+const INSPECTION_JOURNEYS = ["workflow-version-history", "workflow-executable-inspector", "workflow-run"];
+if (INSPECTION_JOURNEYS.includes(config.journey)) page.on("request", request => {
+  const url = new URL(request.url());
+  if (url.origin === backend && /\/(design\/workflows|publishing|runtime\/workflows)\//.test(url.pathname) && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()))
+    designWrites.push({ path: url.pathname, method: request.method() });
+});
+// Reads the pages make by POST (preflights, options) are not effects; a change, promotion, publication, run or deletion is.
+const inspectionEffects = () => designWrites.filter(item => item.method !== "POST" || /\/(promote|publish|ingest|execute|test-runs|stop|cancel)$/.test(item.path));
 function observeResourceInteractions({ route }) {
   const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home", "Resize with Weaver"];
   let pressed = null, sequence = 0;
@@ -201,10 +220,10 @@ async function captureNativeStreams(target) {
   const hash = async value => Buffer.from(await globalThis.crypto.subtle.digest("SHA-256", value)).toString("hex");
   function sseText(value, allowTrailingIncomplete = false) {
     const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(value, { stream: allowTrailingIncomplete });
-    // This observer qualifies AgentApi.WriteEventAsync's UTF-8/no-BOM data lines,
+    // This observer qualifies WeaverApi.WriteEventAsync's UTF-8/no-BOM data lines,
     // not arbitrary SSE encodings or original compressed/network-wire bytes.
     if (text.startsWith("\ufeff") || text && !text.startsWith("data: "))
-      throw new Error("Response bytes do not match the native Agent SSE framing profile.");
+      throw new Error("Response bytes do not match the native Weaver SSE framing profile.");
     return text;
   }
   function bytes(body, encoded, allowEmpty = false) {
@@ -280,12 +299,12 @@ async function captureNativeStreams(target) {
   }
   function safeStreamUrl(value) {
     const url = new URL(value);
-    return url.origin === backend && /^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)
+    return url.origin === backend && /^\/_elsa\/weaver\/sessions\/[^/]+\/stream$/.test(url.pathname)
       && !url.username && !url.password && !url.search && !url.hash ? url.href : null;
   }
   cdp.on("Network.requestWillBeSent", event => {
     const url = new URL(event.request.url);
-    if (url.origin !== backend || !/^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
+    if (url.origin !== backend || !/^\/_elsa\/weaver\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
     requests.set(event.requestId, { rawUrl: event.request.url,
       count: (requests.get(event.requestId)?.count ?? 0) + 1,
       observation: { source: "Network.requestWillBeSent", requestId: event.requestId,
@@ -294,7 +313,7 @@ async function captureNativeStreams(target) {
   });
   cdp.on("Network.responseReceived", event => {
     const url = new URL(event.response.url);
-    if (url.origin !== backend || !/^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
+    if (url.origin !== backend || !/^\/_elsa\/weaver\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
     const contentType = Object.entries(event.response.headers).find(([key]) => key.toLowerCase() === "content-type")?.[1] ?? "";
     const isSse = event.response.status === 200 && contentType.split(";", 1)[0].trim() === "text/event-stream";
     const request = requests.get(event.requestId);
@@ -305,7 +324,7 @@ async function captureNativeStreams(target) {
       responseObservationCount: (streams.get(event.requestId)?.responseObservationCount ?? 0) + 1,
       requestIdentityMatchesResponse: !!request && request.rawUrl === event.response.url && responseUrl !== null && request.observation.url === responseUrl,
       reportedCharset: event.response.charset ?? null, reportedMimeType: event.response.mimeType ?? null,
-      bodyProfile: "native-agent-api-utf8-no-bom-data-lines", bodyByteRepresentation: "response-body-after-content-decoding",
+      bodyProfile: "native-weaver-api-utf8-no-bom-data-lines", bodyByteRepresentation: "response-body-after-content-decoding",
       termination: "open", captureError: null, captureMethod: isSse ? "streamResourceContent" : "not-sse",
       streamResourceContentError: null, responseBodyError: null, captureValidationError: null, responseBodyAttempted: false,
       receivedDataBytes: 0, dataEventCount: 0, dataLengthMetadataError: null,
@@ -392,7 +411,7 @@ async function captureAutonomyExchanges(target) {
   const owned = value => {
     try {
       const url = new URL(value);
-      return url.origin === backend && /^\/_elsa\/agent\/sessions\/[^/]+\/autonomy$/.test(url.pathname) ? url : null;
+      return url.origin === backend && /^\/_elsa\/weaver\/sessions\/[^/]+\/autonomy$/.test(url.pathname) ? url : null;
     } catch { return null; }
   };
   const exact = url => url.username || url.password || url.search || url.hash ? null : url.href;
@@ -511,7 +530,7 @@ async function accepted(responsePromise, name) {
   return { response, value };
 }
 async function interceptAcknowledgement(mode) {
-  const pattern = backend + "/_elsa/agent/sessions/*/client-invocations/*/acknowledgements";
+  const pattern = backend + "/_elsa/weaver/sessions/*/client-invocations/*/acknowledgements";
   let resolveObservation;
   const completed = new Promise(resolve => { resolveObservation = resolve; });
   const timeout = setTimeout(() => resolveObservation({ error: new Error("No actual workflow ACK reached the interception boundary within 30 seconds.") }), 30000);
@@ -554,14 +573,14 @@ async function interceptAcknowledgement(mode) {
 }
 function observedLifecycle(ack, status, summary) {
   expect(ack.value).toMatchObject({ error: null, data: { executed: false, status, summary, toolResult: {
-    succeeded: false, content: summary, payload: { typeId: "agent.operation-outcome", schemaVersion: "1", data: { status } }, receipt: null
+    succeeded: false, content: summary, payload: { typeId: "weaver.operation-outcome", schemaVersion: "1", data: { status } }, receipt: null
   } } });
 }
 async function proposalFor(action, name) {
   const message = responseFor("/messages");
   await action();
   const sent = await accepted(message, name + "-message");
-  const proposal = dock().locator(".agent-proposal").last();
+  const proposal = dock().locator(".weaver-proposal").last();
   await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
   await expect(proposal.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
   result.evidence.push(retain(name + "-review", { text: await proposal.innerText(), status: await proposal.getAttribute("data-status") }));
@@ -630,7 +649,7 @@ async function requireAcknowledgedSelector(mode, cause) {
   return observed;
 }
 async function changeEstablishedMode(sessionId, requestedMode, acknowledged) {
-  const updatePath = "/_elsa/agent/sessions/" + encodeURIComponent(sessionId) + "/autonomy";
+  const updatePath = "/_elsa/weaver/sessions/" + encodeURIComponent(sessionId) + "/autonomy";
   const offset = requests.length;
   await requireAcknowledgedSelector(acknowledged.autonomyMode, "autonomy.selector_unacknowledged");
   const selector = dock().locator(".weaver-auto-apply");
@@ -675,7 +694,7 @@ async function changeEstablishedMode(sessionId, requestedMode, acknowledged) {
 async function readTurnSettled(sessionId, messageId) {
   // Policy claims are released when the accepted message is terminal; read the owner without retaining polls.
   for (let attempt = 0; attempt < 20; attempt++) {
-    const response = await page.request.get(backend + "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+    const response = await page.request.get(backend + "/_elsa/weaver/sessions/" + encodeURIComponent(sessionId));
     const value = response.status() === 200 ? await response.json() : null;
     if (value?.data?.messages?.find(item => item.id === messageId)?.status === "completed") return;
     await page.waitForTimeout(250);
@@ -707,7 +726,7 @@ async function autonomySize() {
   await expect(page.getByTestId("acme-home-size")).not.toHaveText("Not available");
   const before = await owner("size-owner-before", witness.sizeOwnerEndpoint);
   const layoutBefore = await owner("size-layout-before", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
-  const bootstrap = await owner("autonomy-native-bootstrap", "/_elsa/agent/bootstrap");
+  const bootstrap = await owner("autonomy-native-bootstrap", "/_elsa/weaver/bootstrap");
   const installedCapabilities = bootstrap.value.data?.capabilities;
   need(Array.isArray(installedCapabilities) && installedCapabilities.some(item => item.id === witness.sizeCapability && item.moduleId === witness.moduleId),
     "The actual backend must advertise the module's size capability before this journey.");
@@ -734,7 +753,7 @@ async function autonomySize() {
   await expect(dock()).toHaveAttribute("aria-busy", "false");
   expect((await owner("size-owner-after-read", witness.sizeOwnerEndpoint)).value).toEqual(before.value);
   await readTurnSettled(sessionId, read.value.data?.message?.id);
-  const initialSession = await owner("autonomy-session-before-selection", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  const initialSession = await owner("autonomy-session-before-selection", "/_elsa/weaver/sessions/" + encodeURIComponent(sessionId));
   expect(initialSession.value.data?.sessionId).toBe(sessionId);
   autonomyNeed(canonical(initialSession.value.data?.policy) === canonical(createdPolicy), "autonomy.readback_mismatch",
     "Session detail does not read back the policy acknowledged at creation.");
@@ -748,7 +767,7 @@ async function autonomySize() {
   const selectionRequests = requests.slice(selectionOffset);
   autonomyNeed(selectionRequests.length === (update ? 1 : 0), update ? "autonomy.update_duplicated" : "autonomy.unexpected_update",
     "An unchanged control sends no autonomy request; a transition sends exactly one.");
-  const selectedSession = await owner("autonomy-session-after-selection", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  const selectedSession = await owner("autonomy-session-after-selection", "/_elsa/weaver/sessions/" + encodeURIComponent(sessionId));
   autonomyNeed(selectedSession.value.data?.sessionId === sessionId && canonical(selectedSession.value.data?.policy) === canonical(effectivePolicy),
     "autonomy.readback_mismatch", "Session detail does not read back the acknowledged mode and revision.");
   const targetSize = before.value.size === "small" ? "medium" : "small";
@@ -758,7 +777,7 @@ async function autonomySize() {
   await page.getByRole("button", { name: "Resize with Weaver", exact: true }).click();
   const sent = await accepted(sizeMessage, "autonomy-size-message");
   expect(sent.value.data?.message?.sessionId).toBe(sessionId);
-  expect(new URL(sent.response.url()).pathname).toBe("/_elsa/agent/sessions/" + sessionId + "/messages");
+  expect(new URL(sent.response.url()).pathname).toBe("/_elsa/weaver/sessions/" + sessionId + "/messages");
   const sentBody = sent.response.request().postDataJSON();
   // The current host forwards its first active capability; the module prompt source
   // identifies the size action. Do not invent action-specific capability propagation.
@@ -775,13 +794,13 @@ async function autonomySize() {
   // A visible module preview/result distinguishes real review from real application; idle alone can race dispatch.
   await expect(dock().getByTestId("acme-home-size-result").last()).toBeVisible();
   await expect(dock()).toHaveAttribute("aria-busy", "false");
-  const pending = dock().locator('.agent-proposal[data-status="awaiting-approval"]').filter({ has: page.getByTestId("acme-home-size-result") });
+  const pending = dock().locator('.weaver-proposal[data-status="awaiting-approval"]').filter({ has: page.getByTestId("acme-home-size-result") });
   const pendingCount = await pending.count();
   need(pendingCount <= 1, "The single size request created duplicate review proposals.");
   const outcome = pendingCount === 1 ? "review" : "automatic";
   // Approval and application change data-status on the same card, so keep it by
   // its module result rather than by the status that classified the outcome.
-  const sizeProposal = dock().locator(".agent-proposal").filter({ has: page.getByTestId("acme-home-size-result") });
+  const sizeProposal = dock().locator(".weaver-proposal").filter({ has: page.getByTestId("acme-home-size-result") });
   const atDecision = await owner("size-owner-at-decision", witness.sizeOwnerEndpoint);
   const layoutAtDecision = await owner("size-layout-at-decision", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
   const expectedOutcome = requestedMode === "manual" ? "review" : "automatic";
@@ -811,10 +830,10 @@ async function autonomySize() {
   const after = await owner("size-owner-after", witness.sizeOwnerEndpoint);
   const layoutAfter = await owner("size-layout-after", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
   result.ownerAfter = after.receipt;
-  const finalSession = await owner("autonomy-session-after-outcome", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  const finalSession = await owner("autonomy-session-after-outcome", "/_elsa/weaver/sessions/" + encodeURIComponent(sessionId));
   const finalData = finalSession.value.data;
   expect(finalData?.sessionId).toBe(sessionId);
-  expect(requests.filter(item => new URL(item.url).pathname === "/_elsa/agent/sessions")).toHaveLength(1);
+  expect(requests.filter(item => new URL(item.url).pathname === "/_elsa/weaver/sessions")).toHaveLength(1);
   expect(requests.filter(item => new URL(item.url).pathname.endsWith("/messages"))).toHaveLength(2);
   autonomyNeed(requests.filter(item => new URL(item.url).pathname.endsWith("/autonomy")).length === selectionRequests.length,
     update ? "autonomy.update_duplicated" : "autonomy.unexpected_update", "A later autonomy request changed the established policy.");
@@ -885,7 +904,7 @@ async function lifecycleFinish() {
   // The originating turn has already settled; read the owning conversation once, never retrying work.
   if (!lifecycle) return;
   need(result.lifecycle?.sessionId, "The lifecycle conversation was never acknowledged.");
-  const session = await owner("lifecycle-session-after", "/_elsa/agent/sessions/" + encodeURIComponent(result.lifecycle.sessionId));
+  const session = await owner("lifecycle-session-after", "/_elsa/weaver/sessions/" + encodeURIComponent(result.lifecycle.sessionId));
   need(session.value.data?.sessionId === result.lifecycle.sessionId, "The lifecycle conversation changed.");
   result.lifecycle.sessionAfter = session.receipt;
 }
@@ -1266,7 +1285,7 @@ async function incompatibleModule() {
   await page.getByRole("button", { name: /^Weaver/ }).click();
   await expect(dock().getByTestId("weaver-provider-status")).toBeVisible();
   await expect(dock().getByRole("button", { name: "Close assistant", exact: true })).toBeEnabled();
-  await expect(dock().locator(".agent-context-chip").filter({ hasText: "Acme status card" })).toHaveCount(0);
+  await expect(dock().locator(".weaver-context-chip").filter({ hasText: "Acme status card" })).toHaveCount(0);
   await expect(dock().getByTestId("acme-home-result")).toHaveCount(0);
   result.evidence.push(retain("common-studio-usable", { url: diagnosticUrl(page.url()), title: await page.locator(".topbar h1").innerText(),
     providerStatus: await dock().getByTestId("weaver-provider-status").innerText(), noPromptSubmitted: requests.length === 0 }));
@@ -1324,7 +1343,7 @@ async function consumedIntentRemount() {
   const capabilities = page.waitForResponse(response => new URL(response.url()).origin === backend
     && new URL(response.url()).pathname === "/capabilities");
   const registryBootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
-    && new URL(request.url()).pathname === "/_elsa/agent/bootstrap");
+    && new URL(request.url()).pathname === "/_elsa/weaver/bootstrap");
   await nativeEnter("remount-capability-refresh", page.getByRole("button", { name: "Refresh backend capabilities", exact: true }), "Refresh actual backend capabilities");
   need((await capabilities).status() === 200, "The real capability read failed.");
   await expect.poll(() => registryDock.evaluate(element => element.isConnected)).toBe(false);
@@ -1396,7 +1415,7 @@ async function consumedIntentRemount() {
   await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search modules", { exact: true }).fill("");
   const bootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
-    && new URL(request.url()).pathname === "/_elsa/agent/bootstrap");
+    && new URL(request.url()).pathname === "/_elsa/weaver/bootstrap");
   await nativeEnter("remount-reopen-weaver", page.getByRole("button", { name: "Weaver", exact: true }), "Reopen Weaver in the new document");
   const bootstrapResponse = await (await bootstrap).response();
   need(bootstrapResponse?.status() === 200, "The remounted assistant bootstrap failed.");
@@ -1481,7 +1500,7 @@ async function workflowReadOnly() {
     return accepted(message, name + "-message");
   };
   const explained = await ask("workflow_read_graph", {}, "explain");
-  // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+  // The accepted message's admitted context, as Studio's Weaver client reads it: data.message.context.
   const admitted = explained.value.data?.message?.context;
   need(Array.isArray(admitted), "The accepted message carries no admitted context.");
   const permissions = admitted.find(item => item.contentType === "workflow.permissions");
@@ -1490,7 +1509,7 @@ async function workflowReadOnly() {
     tools: ["workflow_read_graph"], capabilities: ["workflow.explain"] });
   expect(catalog?.content).toMatchObject({ status: "available" });
   need(Array.isArray(catalog.content.entries) && catalog.content.entries.length > 0, "The reader's catalog has no entries.");
-  await expect(dock().locator(".agent-context-chip", { hasText: "Workflow permissions" })).toBeVisible();
+  await expect(dock().locator(".weaver-context-chip", { hasText: "Workflow permissions" })).toBeVisible();
   const answer = dock().locator('.weaver-message[data-role="assistant"]').last();
   await expect(answer).toHaveAttribute("data-status", "completed");
   await expect(answer).toContainText("Tool outcome received");
@@ -1502,7 +1521,7 @@ async function workflowReadOnly() {
   const ended = page.locator('.weaver-alert, .weaver-message[data-role="assistant"][data-status="failed"]').first();
   await expect(ended).toBeVisible();
   result.evidence.push(retain("layout-outcome", { text: await ended.innerText(), acceptedMessageId: refused.value.data?.message?.id ?? null }));
-  await expect(dock().locator(".agent-proposal")).toHaveCount(0);
+  await expect(dock().locator(".weaver-proposal")).toHaveCount(0);
   await expect(activity).toHaveAttribute("style", position);
   const after = await owner("owner-after", definitionPath);
   result.ownerAfter = after.receipt;
@@ -1564,7 +1583,7 @@ async function workflowBatch() {
     const args = { operations: prepared.operations };
     const selected = command(BATCH_TOOL, args);
     commands[name] = selected.commandId;
-    const cards = dock().locator(".agent-proposal"), before = await cards.count();
+    const cards = dock().locator(".weaver-proposal"), before = await cards.count();
     await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
     await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName: BATCH_TOOL, arguments: args }));
     const message = responseFor("/messages");
@@ -1707,7 +1726,7 @@ async function workflowBatch() {
     await expect(node(nodes.a, second)).toBeVisible();
     await second.getByRole("button", { name: /^Weaver/ }).click();
     const otherDock = second.getByRole("region", { name: "Weaver assistant", exact: true });
-    const card = otherDock.locator(".agent-proposal").last();
+    const card = otherDock.locator(".weaver-proposal").last();
     await expect(card).toHaveAttribute("data-status", "awaiting-approval");
     const approved = second.waitForResponse(response => new URL(response.url()).origin === backend && response.url().endsWith("/approve"));
     await card.getByRole("button", { name: "Approve", exact: true }).click();
@@ -1780,7 +1799,7 @@ async function workflowExplain() {
     const message = responseFor("/messages");
     await dock().getByRole("button", { name: "Send message", exact: true }).click();
     const sent = await accepted(message, name + "-message");
-    // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+    // The accepted message's admitted context, as Studio's Weaver client reads it: data.message.context.
     const admitted = sent.value.data?.message?.context;
     need(Array.isArray(admitted), name + ": the accepted message carries no admitted context.");
     const drafts = admitted.filter(item => item.contentType === "workflow.definition");
@@ -1852,17 +1871,17 @@ async function workflowExplain() {
   const withheld = (maskedContent.selectedActivity.properties ?? []).find(item => item.referenceKey === explain.maskedProperty);
   need(withheld?.isSensitive === true && withheld.value?.kind === "withheld" && Object.keys(withheld.value).sort().join() === "expressionType,kind",
     "The typed masked value was not disclosed only as withheld: " + JSON.stringify(withheld?.value?.kind ?? null));
-  // In-page search, raw and unredacted: no request the page sent to the agent API (any method, URL and query included), no
-  // response body it read, and no byte of any agent stream it received carries the canary.
-  await Promise.all(agentResponseReads);
+  // In-page search, raw and unredacted: no request the page sent to the Weaver API (any method, URL and query included), no
+  // response body it read, and no byte of any Weaver stream it received carries the canary.
+  await Promise.all(weaverResponseReads);
   // An empty body proves nothing: every captured stream must have been captured without error, and at least one must be
-  // an actual agent event stream whose bytes were read, before its absence of the canary counts.
+  // an actual Weaver event stream whose bytes were read, before its absence of the canary counts.
   const captured = await streamCapture();
   need(captured.every(item => item.captureError == null && item.captureValidationError == null)
     && captured.some(item => item.captureMethod !== "not-sse" && typeof item.rawBody === "string" && item.rawBody.startsWith("data: ")),
-    "The in-page search has no complete, error-free agent stream capture to search.");
-  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no agent message to search.");
-  need(!JSON.stringify(agentTraffic).includes(canary) && !captured.some(item => item.rawBody.includes(canary)) && !JSON.stringify(masked).includes(canary),
+    "The in-page search has no complete, error-free Weaver stream capture to search.");
+  need(weaverTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no Weaver message to search.");
+  need(!JSON.stringify(weaverTraffic).includes(canary) && !captured.some(item => item.rawBody.includes(canary)) && !JSON.stringify(masked).includes(canary),
     "The typed canary left the browser's working state.");
   need(owningWrites.length === writes, "The masked edit was saved although autosave was off.");
   const after = await owner("owner-after", definitionPath);
@@ -1877,6 +1896,284 @@ async function workflowExplain() {
     canaryAbsentInPage: true, draftUnchanged: true, owningWrites: owningWrites.length };
 }
 
+// Spec 1193 T036: a reviewed Weaver tool on a library page, in the actual packaged Studio. The command is selected, the dock
+// sends it, and the turn ends with a card awaiting review (or the dock says why it did not).
+async function reviewedTool(toolName, args, name, commands) {
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const selected = command(toolName, args);
+  commands[name] = selected.commandId;
+  const cards = dock().locator(".weaver-proposal"), before = await cards.count();
+  await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+  await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName, arguments: args }));
+  const message = responseFor("/messages");
+  await nativeEnter(name + "-send", dock().getByRole("button", { name: "Send message", exact: true }), "Send message");
+  const sent = await accepted(message, name + "-message");
+  await expect.poll(async () => await cards.count() > before || await dock().getAttribute("aria-busy") === "false", { timeout: 120000 }).toBe(true);
+  if (await cards.count() <= before) {
+    const text = (await dock().innerText()).slice(-800);
+    result.evidence.push(retain(name + "-no-proposal", { text }));
+    need(false, name + ": the turn ended without a proposal: " + text);
+  }
+  const proposal = cards.last();
+  await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
+  result.evidence.push(retain(name + "-review", { text: await proposal.innerText(), status: await proposal.getAttribute("data-status") }));
+  return { proposal, sent };
+}
+// In these journeys the nonmodal dock overlaps page controls and an open page dialog overlaps the dock, so every control,
+// on the page and in the dock, is activated through the keyboard: the same native control, never a pointer that another
+// surface intercepts (as the witness on c58c9f149 observed for the list's Create workflow button).
+async function approveAndApply(proposal, name) {
+  const response = responseFor("/approve");
+  await nativeEnter(name + "-approve", proposal.getByRole("button", { name: "Approve", exact: true }), "Approve");
+  await accepted(response, name + "-approve");
+  await expect(proposal).toHaveAttribute("data-status", "approved");
+  const execute = responseFor("/execute"), acknowledged = responseFor("/acknowledgements");
+  await nativeEnter(name + "-apply", proposal.getByRole("button", { name: "Apply", exact: true }), "Apply");
+  const delivery = await accepted(execute, name + "-execute");
+  need(delivery.response.status() === 202, name + ": the change was not delivered to the originating page.");
+  const ack = await accepted(acknowledged, name + "-ack");
+  await expect(proposal).toHaveAttribute("data-status", "executed");
+  return { ack, sent: ack.response.request().postDataJSON() };
+}
+
+// The library list page: a reviewed narrowing applied and reverted by the list page, and a reviewed prefill of the open create
+// dialog, whose Create is never pressed. No owner write follows either change.
+async function workflowLibrary() {
+  const wf = config.workflow ?? {};
+  const { library } = wf;
+  need(wf.definitionId && library?.search && library?.pagePath && library?.prefill?.name, "The library journey needs a seeded definition, its search and the page link.");
+  const commands = {};
+  await page.goto(studio + "/workflows/definitions");
+  const searchBox = page.getByPlaceholder("Search definitions", { exact: true });
+  await expect(page.getByRole("table", { name: "Workflow definitions", exact: true })).toBeVisible();
+  await expect(searchBox).toHaveValue("");
+  const before = await owner("owner-before", library.pagePath + "?pageSize=100");
+  result.ownerBefore = before.receipt;
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  const writesBefore = designWrites.length;
+  // The list is reviewed only once it is settled: its rows current and its permissions read (aria-busy="false"). A page whose
+  // permissions arrive after the review moves its revision and refuses the reviewed change as stale (the 6231b4434 witness).
+  await expect(page.getByRole("table", { name: "Workflow definitions", exact: true })).toHaveAttribute("aria-busy", "false", { timeout: 30000 });
+  // Narrowing: the list page applies exactly the approved change and the user can revert it.
+  const narrow = await reviewedTool("workflow_library_set_list_state", { search: library.search }, "narrow", commands);
+  const listContext = (narrow.sent.value.data?.message?.context ?? []).find(item => item.contentType === "workflows.library");
+  need(listContext?.target?.resourceType === "workflow-library" && /^sha256:[0-9a-f]{64}$/.test(listContext?.target?.revision ?? ""),
+    "The admitted list context lost its identity or SHA-256 revision.");
+  const narrowed = await approveAndApply(narrow.proposal, "narrow");
+  expect(narrowed.sent).toMatchObject({ outcome: "applied", result: { typeId: "workflows.list-state", schemaVersion: "1",
+    data: { observed: true, change: { search: library.search }, baseRevision: listContext.target.revision } } });
+  await expect(searchBox).toHaveValue(library.search);
+  await nativeEnter("narrow-revert", narrow.proposal.getByRole("button", { name: "Revert", exact: true }), "Revert");
+  await expect(searchBox).toHaveValue("");
+  result.evidence.push(retain("narrow-reverted", { search: await searchBox.inputValue() }));
+  // The create dialog: the prefill fills the open dialog only.
+  await nativeEnter("open-create-dialog", page.getByRole("button", { name: "Create workflow", exact: true }).first(), "Create workflow");
+  const nameField = page.locator('input[aria-label="Display name"]');
+  await expect(nameField).toBeVisible();
+  // Likewise the open dialog is reviewed only once it has read the saved templates it offers.
+  await expect(page.getByRole("combobox", { name: "Starting point", exact: true })).toHaveAttribute("aria-busy", "false", { timeout: 30000 });
+  const prefill = await reviewedTool("workflow_create_dialog_prefill", { name: library.prefill.name }, "prefill", commands);
+  const filled = await approveAndApply(prefill.proposal, "prefill");
+  expect(filled.sent).toMatchObject({ outcome: "applied", result: { typeId: "workflows.create-dialog-prefill", schemaVersion: "1",
+    data: { observed: true, change: { name: library.prefill.name } } } });
+  await expect(nameField).toHaveValue(library.prefill.name);
+  const after = await owner("owner-after", library.pagePath + "?pageSize=100");
+  result.ownerAfter = after.receipt;
+  need(after.value.totalCount === before.value.totalCount, "A workflow was created although Create was never pressed.");
+  need(designWrites.length === writesBefore, "A page working-state change wrote to the workflow design API.");
+  await screenshot("workflow-library-prefilled");
+  result.commands = commands;
+  result.observations = { listNarrowed: true, listReverted: true, dialogPrefilled: true, createNotPressed: true, noLibraryWrite: true };
+}
+
+// The template editor: an approved batch applied to the template's working state as one history step, autosave held, and
+// persisted only by the user's own Save with the template's expected revision. No workflow definition is written.
+async function workflowTemplates() {
+  const wf = config.workflow ?? {};
+  const { template, nodes, definitionPath } = wf;
+  need(template?.id && template?.revision && template?.path && template?.operations && nodes?.a && definitionPath, "The template journey needs the seeded template and nodes.");
+  const commands = {};
+  const node = id => page.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(id) + "]");
+  await page.goto(studio + "/workflows/templates?template=" + encodeURIComponent(template.id));
+  await expect(node(nodes.a)).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", template.path);
+  result.ownerBefore = before.receipt;
+  need(before.value.revision === template.revision, "The template changed before the journey.");
+  const definitionBefore = await owner("definition-before", definitionPath);
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  const writesBefore = designWrites.length;
+  const batch = await reviewedTool("workflow_apply_operation_batch", { operations: template.operations }, "applied", commands);
+  const editor = (batch.sent.value.data?.message?.context ?? []).find(item => item.contentType === "workflows.template-editor");
+  need(editor?.target?.resourceType === "workflow-template" && editor?.target?.resourceId === template.id && editor?.content?.templateRevision === template.revision
+    && !("workflowDefinitionId" in (editor?.content ?? {})), "The admitted template context is not the template with its persisted revision.");
+  const applied = await approveAndApply(batch.proposal, "applied");
+  expect(applied.sent).toMatchObject({ outcome: "applied", after: { resourceType: "workflow-template", resourceId: template.id },
+    result: { typeId: "workflows.batch-result", schemaVersion: "1", data: { observed: true, historyEntry: true, appliedCount: template.operations.length } } });
+  await expect(node(nodes.a)).toContainText(template.displayName);
+  // Autosave is held while the batch is unsaved: beyond the autosave interval the owner still holds the persisted revision.
+  await page.waitForTimeout(1600);
+  need((await owner("owner-after-autosave-window", template.path)).value.revision === template.revision, "Autosave persisted the batch.");
+  need(designWrites.length === writesBefore, "The applied batch wrote to the design API before the user's Save.");
+  // One history step: the card's Undo removes the whole batch, Redo restores it.
+  await nativeEnter("batch-undo", batch.proposal.getByRole("button", { name: "Undo whole change", exact: true }), "Undo whole change");
+  await expect(node(nodes.a)).not.toContainText(template.displayName);
+  await nativeEnter("designer-redo", page.getByRole("button", { name: "Redo", exact: true }), "Redo");
+  await expect(node(nodes.a)).toContainText(template.displayName);
+  // The user's own Save, with the template's expected revision.
+  const saved = page.waitForResponse(response => new URL(response.url()).origin === backend && new URL(response.url()).pathname === template.path && response.request().method() === "PUT");
+  // The toolbar's Save (accessible name "Save", title "Save workflow"), the designer's own explicit save.
+  await nativeEnter("template-save", page.locator("button.wf-save-button"), "Save workflow");
+  const response = await saved;
+  need(response.ok(), "The user's template Save failed: " + response.status());
+  const body = response.request().postDataJSON();
+  result.evidence.push(retain("template-save-request", body));
+  need(body?.expectedRevision === template.revision, "The template Save did not carry the template's expected revision.");
+  const after = await owner("owner-after", template.path);
+  result.ownerAfter = after.receipt;
+  need(after.value.revision !== template.revision && JSON.stringify(after.value.content).includes(template.displayName), "The saved template lacks the batch.");
+  const definitionAfter = await owner("definition-after", definitionPath);
+  expect(definitionAfter.value.draft).toEqual(definitionBefore.value.draft);
+  need(designWrites.every(write => write.path === template.path), "A template journey wrote another design resource: " + JSON.stringify(designWrites.map(item => item.path)));
+  await screenshot("workflow-templates-saved");
+  result.commands = commands;
+  result.observations = { applied: true, templateTarget: true, oneHistoryStep: true, autosaveHeld: true, savedWithExpectedRevision: true, definitionUntouched: true };
+}
+// Spec 1193 T041: a read-only inspection page's own Explain action. The page contributes the exact resource it shows as
+// context; the Weaver Workflows prompt names the read tool; the selected command makes the actual adapter call it. The dock
+// overlaps page controls, so every control is activated through the keyboard, and each wait is on state, never on time.
+async function inspectionExplain(name, explainButton, toolName, args, kind, target, commands) {
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const selected = command(toolName, args);
+  commands[name] = selected.commandId;
+  const answers = dock().locator('.weaver-message[data-role="assistant"]'), earlier = await answers.count();
+  const message = responseFor("/messages");
+  await nativeEnter(name + "-explain", explainButton, "Explain");
+  const sent = await accepted(message, name + "-message");
+  // The accepted message's admitted context, as Studio's Weaver client reads it: data.message.context.
+  const admitted = (sent.value.data?.message?.context ?? []).filter(item => item.contentType === kind);
+  need(admitted.length === 1 && ["authoritativeRead", "AuthoritativeRead"].includes(admitted[0].origin)
+    && admitted[0].target?.resourceType === target.resourceType && admitted[0].target?.resourceId === target.resourceId
+    && admitted[0].target?.revision === target.revision, name + ": the message did not admit the server's read of exactly the shown resource.");
+  await expect.poll(() => answers.count(), { timeout: 120000 }).toBeGreaterThan(earlier);
+  const answer = answers.nth(earlier);
+  await expect(answer).toHaveAttribute("data-status", "completed", { timeout: 120000 });
+  await expect(answer).toContainText("Tool outcome received");
+  result.evidence.push(retain(name + "-outcome", { status: await answer.getAttribute("data-status"), target: admitted[0].target }));
+  return admitted[0];
+}
+
+// The editor's version history: selecting a version discloses it, and its Explain action reads it with a comparison.
+async function workflowVersionHistory() {
+  const wf = config.workflow ?? {};
+  const version = wf.version ?? {};
+  need(wf.definitionId && wf.definitionPath && version.id && version.version && version.path && version.compareToVersionId,
+    "The version history journey needs the seeded definition and the exact versions.");
+  owningDraftPath = wf.draftPath;
+  const commands = {};
+  await page.goto(studio + "/workflows/definitions?definition=" + encodeURIComponent(wf.definitionId));
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", version.path);
+  result.ownerBefore = before.receipt;
+  const definitionBefore = await owner("definition-before", wf.definitionPath);
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  await expect(dock()).toBeVisible();
+  await nativeEnter("versions-tab", page.getByRole("tab", { name: "Versions", exact: true }), "Versions");
+  const select = page.getByRole("button", { name: "Select version " + version.version, exact: true });
+  await expect(select).toBeVisible();
+  await nativeEnter("select-version", select, "Select version");
+  await expect(select).toHaveAttribute("aria-pressed", "true");
+  const explain = page.getByRole("button", { name: "Explain version v" + version.version, exact: true });
+  await expect(explain).toBeVisible();
+  const admitted = await inspectionExplain("explain", explain, "workflow_read_version", { compareToVersionId: version.compareToVersionId }, "workflows.version",
+    { resourceType: "workflow-version", resourceId: version.id, revision: version.id }, commands);
+  need(admitted.content?.versionId === version.id && admitted.content?.definitionId === wf.definitionId, "The admitted version is not the selected version.");
+  const after = await owner("owner-after", version.path);
+  result.ownerAfter = after.receipt;
+  expect(after.value).toEqual(before.value);
+  const definitionAfter = await owner("definition-after", wf.definitionPath);
+  expect(definitionAfter.value.draft).toEqual(definitionBefore.value.draft);
+  need(inspectionEffects().length === 0 && owningWrites.length === 0, "The version history journey changed an owner: " + JSON.stringify(inspectionEffects()));
+  await screenshot("workflow-version-history-explained");
+  result.commands = commands;
+  result.observations = { versionSelected: true, versionContext: true, explainCompleted: true, readOnly: true };
+}
+
+// The Executable Inspector: the shown Executable, bound to its Artifact Hash, is disclosed and its Explain action reads it.
+async function workflowExecutableInspector() {
+  const executable = (config.workflow ?? {}).executable ?? {};
+  need(executable.artifactId && executable.artifactHash && executable.path, "The Executable Inspector journey needs the seeded Executable.");
+  const commands = {};
+  await page.goto(studio + "/workflows/executables/" + encodeURIComponent(executable.artifactId));
+  const explain = page.locator(".wf-toolbar").getByRole("button", { name: "Explain", exact: true });
+  await expect(explain).toBeVisible({ timeout: 30000 });
+  const before = await owner("owner-before", executable.path);
+  result.ownerBefore = before.receipt;
+  need(before.value.artifactHash === executable.artifactHash, "The seeded Executable changed before the journey.");
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  await expect(dock()).toBeVisible();
+  const admitted = await inspectionExplain("explain", explain, "workflow_read_executable", {}, "workflows.executable",
+    { resourceType: "workflow-executable", resourceId: executable.artifactId, revision: executable.artifactHash }, commands);
+  need(admitted.content?.artifactHash === executable.artifactHash, "The admitted Executable is not bound to its Artifact Hash.");
+  const after = await owner("owner-after", executable.path);
+  result.ownerAfter = after.receipt;
+  expect(after.value.artifactHash).toEqual(before.value.artifactHash);
+  expect(after.value.references).toEqual(before.value.references);
+  need(inspectionEffects().length === 0, "The Executable Inspector journey changed an owner: " + JSON.stringify(inspectionEffects()));
+  await screenshot("workflow-executable-inspector-explained");
+  result.commands = commands;
+  result.observations = { executableContext: true, hashBound: true, explainCompleted: true, readOnly: true };
+}
+// Spec 1193 T045: the run page discloses the exact Run and the activity execution selected on it; its Explain action reads it
+// with workflow_read_run. The page's own Weaver traffic (every request, every non-stream response) and every Weaver stream
+// byte are searched, raw, for the Run canary, which exists only in the seeded workflow's sensitive input.
+async function workflowRun() {
+  const run = (config.workflow ?? {}).run ?? {};
+  need(run.workflowExecutionId && run.path && run.activityExecutionId && typeof run.canary === "string" && run.canary.length >= 24,
+    "The Run journey needs the seeded Run, its selected activity execution and the canary.");
+  const commands = {};
+  await page.goto(studio + "/workflows/instances/" + encodeURIComponent(run.workflowExecutionId) + "?selected=" + encodeURIComponent(run.activityExecutionId));
+  // Verify the exact occurrence through the same copyable execution detail a person can inspect.
+  const panel = page.getByLabel("Run details panel", { exact: true });
+  await nativeEnter("inspect-run-activity", panel.getByRole("tab", { name: "Activity", exact: true }), "Activity");
+  const technical = panel.locator(".wf-activity-execution-details");
+  await expect(technical).toBeVisible({ timeout: 30000 });
+  if (await technical.getAttribute("open") === null)
+    await nativeEnter("inspect-run-execution-details", technical.locator("summary"), "Execution details");
+  const selectedExecutionId = technical.locator(".wf-activity-meta-item")
+    .filter({ has: page.locator("dt").filter({ hasText: /^Activity Execution ID$/ }) }).locator("dd code");
+  await expect(selectedExecutionId).toBeVisible({ timeout: 30000 });
+  await expect(selectedExecutionId).toHaveText(run.activityExecutionId, { timeout: 30000 });
+  const before = await owner("owner-before", run.path);
+  result.ownerBefore = before.receipt;
+  need(before.value.instance?.workflowExecutionId === run.workflowExecutionId, "The seeded Run is not the run API's.");
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  await expect(dock()).toBeVisible();
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  await nativeEnter("open-run-actions", page.getByRole("button", { name: "More run actions", exact: true }), "More run actions");
+  const explain = page.getByRole("menu", { name: "More run actions", exact: true }).getByRole("menuitem", { name: "Explain", exact: true });
+  await expect(explain).toBeFocused();
+  const admitted = await inspectionExplain("explain", explain, "workflow_read_run", {}, "workflows.run",
+    { resourceType: "workflow-run", resourceId: run.workflowExecutionId, revision: run.activityExecutionId }, commands);
+  need(admitted.content?.workflowExecutionId === run.workflowExecutionId && admitted.content?.activityExecutionId === run.activityExecutionId,
+    "The admitted Run is not the shown Run and selection.");
+  await Promise.all(weaverResponseReads);
+  // As in the explain journey: only complete, error-free captures with a real Weaver event stream make an absent canary count.
+  const captured = await streamCapture();
+  need(captured.every(item => item.captureError == null && item.captureValidationError == null)
+    && captured.some(item => item.captureMethod !== "not-sse" && typeof item.rawBody === "string" && item.rawBody.startsWith("data: ")),
+    "The in-page search has no complete, error-free Weaver stream capture to search.");
+  need(weaverTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no Weaver message to search.");
+  need(!JSON.stringify(weaverTraffic).includes(run.canary) && !captured.some(item => (item.rawBody ?? "").includes(run.canary)) && !JSON.stringify(admitted).includes(run.canary),
+    "The Run canary left the run page.");
+  const after = await owner("owner-after", run.path);
+  result.ownerAfter = after.receipt;
+  expect(after.value.instance).toEqual(before.value.instance);
+  need(inspectionEffects().length === 0, "The Run journey changed an owner: " + JSON.stringify(inspectionEffects()));
+  await screenshot("workflow-run-explained");
+  result.commands = commands;
+  result.observations = { runContext: true, selectionBound: true, explainCompleted: true, readOnly: true, canaryAbsentInPage: true };
+}
 function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
@@ -1888,6 +2185,11 @@ try {
   else if (config.journey === "workflow-read-only") await workflowReadOnly();
   else if (config.journey === "workflow-batch") await workflowBatch();
   else if (config.journey === "workflow-explain") await workflowExplain();
+  else if (config.journey === "workflow-library") await workflowLibrary();
+  else if (config.journey === "workflow-templates") await workflowTemplates();
+  else if (config.journey === "workflow-version-history") await workflowVersionHistory();
+  else if (config.journey === "workflow-executable-inspector") await workflowExecutableInspector();
+  else if (config.journey === "workflow-run") await workflowRun();
   else if (config.journey === "autonomy-size" || lifecycle) {
     const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
@@ -1919,13 +2221,15 @@ try {
   try { await screenshot("failure"); } catch { /* Retain the original failure if the browser has gone away. */ }
 } finally {
   result.completedAt = new Date().toISOString();
-  result.evidence.push(retain("agent-streams", await streamCapture()));
+  result.evidence.push(retain("weaver-streams", await streamCapture()));
   await Promise.all(pendingOwnerReads);
   result.evidence.push(retain("resource-dispatch-boundaries", { resourceInteractions, moduleOwnerReads }));
-  result.evidence.push(retain("agent-requests", requests));
+  result.evidence.push(retain("weaver-requests", requests));
   if (autonomyCapture) result.evidence.push(retain("autonomy-network", autonomyCapture()));
   if (lifecycle || config.journey === "workflow-batch") result.evidence.push(retain("publish-attempts", publishAttempts));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
+  if (["workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector", "workflow-run"].includes(config.journey))
+    result.evidence.push(retain("design-write-attempts", designWrites));
   result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));
   result.pageErrors = redact(pageErrors);
   retain("observation", result);

@@ -72,12 +72,13 @@
           "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
           "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
           "WorkflowsDashboardEntityFrameworkCore": {},
-          "FoundationAgentAbstractions": {},
-          "FoundationAgentApi": {},
-          "FoundationWorkflowsAgent": {},
+          "Weaver": {},
+          "WeaverApi": {},
+          "WeaverWorkflows": {},
+          "WeaverWorkflowsRuntime": {},
           "FoundationIdentityAbstractions": {},
           "FoundationIdentityOidc": {},
-          "GitHubCopilotAgent": {
+          "WeaverGitHubCopilot": {
             "Enabled": true,
             "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
             "Model": "auto",

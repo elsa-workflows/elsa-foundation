@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
   </ItemGroup>
 
 </Project>

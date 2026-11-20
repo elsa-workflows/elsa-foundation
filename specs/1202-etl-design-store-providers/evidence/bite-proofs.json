@@ -1,0 +1,180 @@
+{
+ "spec": "1202-etl-design-store-providers",
+ "note": "Each entry names the revision it was recorded at, and every entry bit there.",
+ "results": [
+  {
+   "mutation": "design-store-read-retry",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_store_or_catalog_read_that_meets_a_busy_database",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlDefinitionStoreTests.A_store_or_catalog_read_that_meets_a_busy_database_is_read_again"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        await EtlDesignReadRetry.RunAsync(dbContext, () => QueryDraftRowAsync(identity, cancellationToken), cancellationToken);",
+   "mutated_text": "        await QueryDraftRowAsync(identity, cancellationToken);",
+   "sourceRevision": "404298d11170381679006f7e419fefd4b715710f"
+  },
+  {
+   "mutation": "design-read-retry-budget",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EtlDesignReadRetry.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_store_or_catalog_read_that_meets_a_busy_database",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlDefinitionStoreTests.A_store_or_catalog_read_that_meets_a_busy_database_is_read_again"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "private static readonly EfWriteRetry Retry = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient);",
+   "mutated_text": "private static readonly EfWriteRetry Retry = new(1, EfWriteConflict.Transient);",
+   "sourceRevision": "404298d11170381679006f7e419fefd4b715710f"
+  },
+  {
+   "mutation": "design-update-retry",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlDefinitionStoreSqlServerTests.A_draft_update_racing_a_publication",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlDefinitionStoreSqlServerTests.A_draft_update_racing_a_publication_settles_without_a_provider_failure"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "private static readonly EfWriteRetry UpdateRetry = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient);",
+   "mutated_text": "private static readonly EfWriteRetry UpdateRetry = new(1, EfWriteConflict.Transient);",
+   "sourceRevision": "bdb89368ca7238dc9dfadda197692d16075ec5d8"
+  },
+  {
+   "mutation": "design-failed-create-detaches",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_cancelled_draft_create_leaves_nothing",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlDefinitionStoreTests.A_cancelled_draft_create_leaves_nothing_for_a_later_save_and_can_be_retried"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            // A create that failed otherwise, cancelled for one, must not leave its row for a later save on this context.\n            dbContext.Entry(row).State = EntityState.Detached;\n",
+   "mutated_text": "",
+   "sourceRevision": "45c60943229fbfee51d1068d13d54e445de1cef9"
+  },
+  {
+   "mutation": "design-clear-before-rollback",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_publication_whose_rollback_throws",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlDefinitionStoreTests.A_publication_whose_rollback_throws_leaves_nothing_for_a_later_save_to_publish"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            dbContext.ChangeTracker.Clear();\n            await transaction.RollbackAsync(cancellationToken);\n",
+   "mutated_text": "            await transaction.RollbackAsync(cancellationToken);\n            dbContext.ChangeTracker.Clear();\n",
+   "sourceRevision": "ae9f0310536b83a5a7623884fcd06e274daaa957"
+  },
+  {
+   "mutation": "design-update-reports-own-revision",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~An_update_reports_its_own_revision",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlDefinitionStoreTests.An_update_reports_its_own_revision_when_another_writer_advances_the_draft_before_the_reread"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "                updated.Revision = expectedRevision + 1;\n",
+   "mutated_text": "",
+   "sourceRevision": "6337c6befaf9ab10747c2d88d83e3539d0698746"
+  },
+  {
+   "mutation": "design-failed-publication-clears-tracker",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_publication_that_runs_out_of_attempts",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlDefinitionStoreTests.A_publication_that_runs_out_of_attempts_leaves_nothing_for_a_later_save_to_publish"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            // A failed attempt must not leave its artifact tracked, or a later save on this context would publish it.\n            dbContext.ChangeTracker.Clear();\n",
+   "mutated_text": "",
+   "sourceRevision": "6337c6befaf9ab10747c2d88d83e3539d0698746"
+  },
+  {
+   "mutation": "design-selects-postgresql",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/DependencyInjection/EtlDesignEntityFrameworkCoreRegistration.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlDesignPostgreSqlProviderTests.The_design_module_registers",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlDesignPostgreSqlProviderTests.The_design_module_registers_the_engines_context"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            AddContext<EtlDesignPostgreSqlDbContext>,\n",
+   "mutated_text": "            AddContext<EtlDesignSqlServerDbContext>,\n",
+   "sourceRevision": "84b61a306fade9d8f23f151d613c82300e23e8f9"
+  },
+  {
+   "mutation": "design-collation-sqlserver",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlDesignDbContext.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlDesignSqlServerProviderTests",
+   "mutated": "Failed!  - Failed: 3, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlDesignSqlServerProviderTests.A_fresh_database_migrates_validates_and_matches_the_model",
+    "Elsa.Etl.Persistence.ProviderTests.EtlDesignSqlServerProviderTests.Key_and_hash_columns_use_the_engines_binary_collation",
+    "Elsa.Etl.Persistence.ProviderTests.EtlDesignSqlServerProviderTests.The_design_module_registers_the_engines_context"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 3",
+   "original": "    internal const string ExpectedProviderName = EfProviderNames.SqlServer;\n    protected override void ConfigureProvider(ModelBuilder modelBuilder) => EfOrdinalCollation.Apply(modelBuilder, ExpectedProviderName);",
+   "mutated_text": "    internal const string ExpectedProviderName = EfProviderNames.SqlServer;\n    protected override void ConfigureProvider(ModelBuilder modelBuilder) { }",
+   "sourceRevision": "84b61a306fade9d8f23f151d613c82300e23e8f9"
+  },
+  {
+   "mutation": "design-collation-postgresql",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlDesignDbContext.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlDesignPostgreSqlProviderTests",
+   "mutated": "Failed!  - Failed: 3, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlDesignPostgreSqlProviderTests.A_fresh_database_migrates_validates_and_matches_the_model",
+    "Elsa.Etl.Persistence.ProviderTests.EtlDesignPostgreSqlProviderTests.Key_and_hash_columns_use_the_engines_binary_collation",
+    "Elsa.Etl.Persistence.ProviderTests.EtlDesignPostgreSqlProviderTests.The_design_module_registers_the_engines_context"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 3",
+   "original": "    internal const string ExpectedProviderName = EfProviderNames.PostgreSql;\n    protected override void ConfigureProvider(ModelBuilder modelBuilder) => EfOrdinalCollation.Apply(modelBuilder, ExpectedProviderName);",
+   "mutated_text": "    internal const string ExpectedProviderName = EfProviderNames.PostgreSql;\n    protected override void ConfigureProvider(ModelBuilder modelBuilder) { }",
+   "sourceRevision": "84b61a306fade9d8f23f151d613c82300e23e8f9"
+  },
+  {
+   "mutation": "design-collation-mysql",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlDesignDbContext.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlDesignMySqlProviderTests",
+   "mutated": "Failed!  - Failed: 1, Passed: 2",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlDesignMySqlProviderTests.A_fresh_database_migrates_validates_and_matches_the_model"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 3",
+   "original": "        EfOrdinalCollation.Apply(modelBuilder, ExpectedProviderName);\n    }",
+   "mutated_text": "    }",
+   "sourceRevision": "84b61a306fade9d8f23f151d613c82300e23e8f9"
+  },
+  {
+   "mutation": "design-publish-retry",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~Concurrent_publications_of_one_draft",
+   "mutated": "Failed!  - Failed: 3, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlDefinitionStoreMySqlTests.Concurrent_publications_of_one_draft_record_one_artifact_and_settle_without_a_provider_failure",
+    "Elsa.Etl.Persistence.ProviderTests.EtlDefinitionStorePostgreSqlTests.Concurrent_publications_of_one_draft_record_one_artifact_and_settle_without_a_provider_failure",
+    "Elsa.Etl.Persistence.ProviderTests.EtlDefinitionStoreSqlServerTests.Concurrent_publications_of_one_draft_record_one_artifact_and_settle_without_a_provider_failure"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 3",
+   "original": "private static readonly EfWriteRetry PublishRetry = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient);",
+   "mutated_text": "private static readonly EfWriteRetry PublishRetry = new(1, EfWriteConflict.Transient);",
+   "sourceRevision": "84b61a306fade9d8f23f151d613c82300e23e8f9"
+  }
+ ]
+}

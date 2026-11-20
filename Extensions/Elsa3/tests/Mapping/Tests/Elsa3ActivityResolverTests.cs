@@ -145,8 +145,9 @@ public sealed class Elsa3ActivityResolverTests
 
     [Theory]
     [InlineData("Elsa.FlowSendHttpRequest", "ExpectedStatusCodes", "Unmatched status code")]
-    [InlineData("Elsa.RunJavaScript", "possibleOutcomes", "Unmatched")]
-    public async Task Outcomes_named_by_an_input_carry_their_rule(string type, string sourceInput, string unmatched)
+    // Spec 1208 FR-009, FR-012: RunJavaScript has no Unmatched outcome; Elsa 3 Done maps to Done.
+    [InlineData("Elsa.RunJavaScript", "possibleOutcomes", null)]
+    public async Task Outcomes_named_by_an_input_carry_their_rule(string type, string sourceInput, string? unmatched)
     {
         var resolver = new Elsa3ActivityResolver(new Elsa3BuiltInActivityMap(), RealActivityCatalog.Create());
 

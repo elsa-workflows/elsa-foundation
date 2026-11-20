@@ -174,20 +174,18 @@
 .ad-diagnostics-panel { display: grid; margin-top: 1rem; margin-bottom: 1rem; overflow: hidden; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); }
 .ad-diagnostics-panel > details > summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem 1rem; color: var(--studio-text); background: var(--studio-surface-muted); font-weight: 750; cursor: pointer; }
 .ad-diagnostics-panel > details > summary::marker { color: var(--studio-accent); }
-.ad-diagnostics-panel > details > summary span:last-child { color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 650; }
+.ad-diagnostics-panel > details > summary > span:last-child { color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 650; }
 .ad-diagnostics-content { display: grid; gap: .85rem; padding: 1rem; border-top: 1px solid var(--studio-border); }
 .ad-diagnostics-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
-.ad-diagnostics-header h2 { margin: .15rem 0 .25rem; font-size: var(--studio-section-title-size); }
+.ad-diagnostics-panel > details > summary h2 { display: flex; align-items: center; gap: var(--studio-space-2); margin: 0; font-size: var(--studio-body-size); font-weight: 600; }
 .ad-diagnostics-header p { margin: 0; color: var(--studio-text-muted); }
-.ad-validation-result, .ad-diagnostic-counts > span, .ad-diagnostic-severity { display: inline-flex; align-items: center; gap: .3rem; font-weight: 750; }
+.ad-validation-result, .ad-diagnostic-severity { display: inline-flex; align-items: center; gap: .3rem; font-weight: 750; }
 .ad-validation-result { flex: none; padding: .4rem .6rem; border-radius: 999px; }
 .ad-validation-result.is-valid { color: var(--studio-success-fg); background: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface)); }
 .ad-validation-result.is-invalid { color: var(--studio-danger-fg); background: color-mix(in srgb, var(--studio-danger) 12%, var(--studio-surface)); }
-.ad-diagnostic-counts { display: flex; flex-wrap: wrap; gap: .5rem; }
-.ad-diagnostic-counts > span { padding: .35rem .55rem; border: 1px solid var(--studio-border); border-radius: 999px; background: var(--studio-surface-muted); font-size: var(--studio-label-size); }
-.ad-diagnostic-counts .is-error, .ad-diagnostic-item.is-error .ad-diagnostic-severity { color: var(--studio-danger-fg); }
-.ad-diagnostic-counts .is-warning, .ad-diagnostic-item.is-warning .ad-diagnostic-severity { color: var(--studio-warning-fg); }
-.ad-diagnostic-counts .is-info, .ad-diagnostic-item.is-info .ad-diagnostic-severity { color: var(--studio-accent); }
+.ad-diagnostic-item.is-error .ad-diagnostic-severity { color: var(--studio-danger-fg); }
+.ad-diagnostic-item.is-warning .ad-diagnostic-severity { color: var(--studio-warning-fg); }
+.ad-diagnostic-item.is-info .ad-diagnostic-severity { color: var(--studio-accent); }
 .ad-diagnostic-list { display: grid; gap: .65rem; margin: 0; padding: 0; list-style: none; }
 .ad-diagnostic-group { display: grid; gap: .55rem; }
 .ad-diagnostic-group h3 { margin: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); text-transform: uppercase; letter-spacing: .04em; }
@@ -268,6 +266,16 @@
 .ad-publication-diagnostics li { display: grid; justify-items: start; gap: .35rem; padding: .7rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface-muted); }
 .ad-publication-diagnostics li > div { display: flex; justify-content: space-between; gap: .75rem; width: 100%; }
 .ad-publication-diagnostics li span, .ad-publication-diagnostics li code { color: var(--studio-text-muted); }
+.ad-publication-blockers { display: grid; gap: .75rem; padding: 1rem; border: 1px solid var(--studio-danger); border-radius: var(--studio-radius); background: var(--studio-surface); }
+.ad-publication-blockers > h3, .ad-publication-blockers > p, .ad-publication-diagnostics li > p { margin: 0; }
+.ad-publication-blockers > h3 { font-size: var(--studio-section-title-size); }
+.ad-publication-blockers .ad-publication-diagnostics { padding: 0; border: 0; }
+.ad-publication-blockers .ad-publication-diagnostics > h3 { font-size: var(--studio-label-size); color: var(--studio-text-muted); }
+.ad-publication-blocker-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.ad-publication-blocker-actions button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.35rem; padding: .4rem .65rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: inherit; background: var(--studio-surface); cursor: pointer; }
+.ad-publication-diagnostic-details { width: 100%; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.ad-publication-diagnostic-details > summary { cursor: pointer; }
+.ad-publication-diagnostic-details code { display: block; margin-top: .3rem; overflow-wrap: anywhere; }
 .ad-publication-version { display: grid; grid-template-columns: minmax(12rem, .6fr) 1fr; align-items: start; gap: .75rem; padding: .85rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-accent-soft); }
 .ad-publication-version label, .ad-publication-version > div { display: grid; gap: .3rem; }
 .ad-publication-version label span { color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 700; }
@@ -457,3 +465,8 @@ html[data-theme-material] .ad-filters input, html[data-theme-material] .ad-filte
 .ad-source-summary { display: flex; flex-wrap: wrap; gap: 1rem 3rem; margin: 0 0 1.5rem; }
 .ad-source-summary dt { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .ad-source-summary dd { margin: .25rem 0 0; font-weight: 650; }
+
+.ad-diagnostic-help > summary { color: var(--studio-text-muted); cursor: pointer; font-size: var(--studio-label-size); }
+.ad-diagnostic-help p { margin-top: var(--studio-space-2); }
+
+.ad-diagnostics-panel > details[open] > summary .ad-diagnostics-chevron { transform: rotate(90deg); }

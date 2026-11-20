@@ -1,33 +1,38 @@
 import { describe, expect, it } from "vitest";
-import type { ElsaStudioModuleApi, StudioAgentRegistry } from "@elsa-workflows/studio-sdk";
-import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioWeaverRegistry } from "@elsa-workflows/studio-sdk";
+import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 // The Workflows module's own registration, composed beside this package's as the Studio host composes both.
-import { registerWorkflowAgent } from "../../../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowAgent";
-import server from "./workflowAgentRegistrations.json";
+import { registerWorkflowWeaver } from "../../../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowWeaver";
+import server from "./workflowWeaverRegistrations.json";
 
 // Spec 1193 SC-007 (FR-019): over the composed Studio contributions of both Workflows packages and the server registrations
-// of Elsa.Agent.Workflows (workflowAgentRegistrations.json, which Elsa.Agent.Tests holds equal to the composed server), every
+// of Elsa.Weaver.Workflows (workflowWeaverRegistrations.json, which Elsa.Weaver.Tests holds equal to the composed server), every
 // prompt, guidance text and renderer references only registered tools and result kinds, and each contribution is registered
 // under its own package's module identity.
 const workflowsModule = "Elsa.Studio.Workflows";
 const weaverWorkflowsModule = "Elsa.Studio.Weaver.Workflows";
-const toolNames = new Set(server.tools.map(tool => tool.name));
-const resultTypes = new Set(server.tools.map(tool => tool.resultType));
-const capabilities = new Set(server.capabilities);
+// The Design-side module (Elsa.Weaver.Workflows) and the Runtime-side package (Elsa.Weaver.Workflows.Runtime, spec 1193 slices F
+// and G, with its Executable and Run sources) register under the same Studio module identity; a combined host composes both.
+const allTools = [...server.tools, ...server.runtime.tools];
+const toolNames = new Set(allTools.map(tool => tool.name));
+const resultTypes = new Set(allTools.map(tool => tool.resultType));
+const capabilities = new Set([...server.capabilities, ...server.runtime.capabilities]);
+const contextKinds = new Set([...server.contextKinds, ...server.librarySource.contextKinds, ...server.versionSource.contextKinds, ...server.runtime.contextKinds,
+  ...server.runtime.runSource.contextKinds]);
 
 function compose() {
-  const workflows = createAgentRegistry();
-  registerWorkflowAgent(workflows);
-  const weaver = createAgentRegistry();
-  register({ agent: weaver } as unknown as ElsaStudioModuleApi);
+  const workflows = createWeaverRegistry();
+  registerWorkflowWeaver(workflows);
+  const weaver = createWeaverRegistry();
+  register({ weaver } as unknown as ElsaStudioModuleApi);
   return { workflows, weaver };
 }
 
-function contributions(agent: StudioAgentRegistry) {
+function contributions(weaverRegistry: StudioWeaverRegistry) {
   return [
-    ...agent.promptActions.list(), ...agent.promptStarters.list(), ...agent.capabilities.list(), ...agent.contextProviders.list(),
-    ...agent.toolSlots.list(), ...agent.toolContracts.list(), ...agent.resultRenderers.list(), ...(agent.resultControls?.list() ?? [])
+    ...weaverRegistry.promptActions.list(), ...weaverRegistry.promptStarters.list(), ...weaverRegistry.capabilities.list(), ...weaverRegistry.contextProviders.list(),
+    ...weaverRegistry.toolSlots.list(), ...weaverRegistry.toolContracts.list(), ...weaverRegistry.resultRenderers.list(), ...(weaverRegistry.resultControls?.list() ?? [])
   ] as Array<{ id: string; moduleId: string }>;
 }
 
@@ -39,7 +44,10 @@ function namedTools(text: string) {
 }
 
 const samples: unknown[] = [{ id: "definition-1", name: "Onboard customer" }, { definition: { id: "definition-1" }, draft: { id: "draft-1" } },
-  { intent: "Send a welcome email", draft: { name: "", description: "" } }, { instanceId: "instance-1" }];
+  { intent: "Send a welcome email", draft: { name: "", description: "" } }, { instanceId: "instance-1" },
+  { artifactId: "artifact-1", artifactHash: "sha256:abc", sourceReferenceId: "ref-1" }, { artifactId: "artifact-1", artifactHash: "sha256:abc", attached: true },
+  { definitionId: "definition-1", versionId: "version-1", version: "1.0.0" }, { definitionId: "definition-1", versionId: "version-1", attached: true },
+  { workflowExecutionId: "run-1", activityExecutionId: "act-1" }, { workflowExecutionId: "run-1", activityExecutionId: null }, { workflowExecutionId: "run-1", attached: true }];
 
 describe("registered references of the Workflows packages (spec 1193 SC-007)", () => {
   it("registers each contribution under its own package's module identity", () => {
@@ -101,16 +109,80 @@ describe("registered references of the Workflows packages (spec 1193 SC-007)", (
         for (const name of namedTools(prompt.message)) expect([action.id, name, toolNames.has(name)]).toEqual([action.id, name, true]);
         for (const attachment of prompt.attachments ?? []) {
           expect(attachment.moduleId).toBe(workflowsModule);
-          expect(server.contextKinds).toContain(attachment.contentType);
+          expect([action.id, attachment.contentType, contextKinds.has(attachment.contentType)]).toEqual([action.id, attachment.contentType, true]);
         }
         expect(prompt.source?.moduleId).toBe(weaverWorkflowsModule);
       }
     }
   });
 
+  it("explains an Executable and a version only through their registered read tools, attaching each exact identity once (slice F)", () => {
+    const { weaver } = compose();
+    const executable = weaver.promptActions.list().find(item => item.id === "weaver.workflows.explain-executable")!;
+    const version = weaver.promptActions.list().find(item => item.id === "weaver.workflows.explain-version")!;
+    expect(executable).toMatchObject({ placement: "selection", contextKind: "workflow-executable", moduleId: weaverWorkflowsModule });
+    expect(version).toMatchObject({ placement: "selection", contextKind: "workflow-version", moduleId: weaverWorkflowsModule });
+
+    const fromList = executable.createPrompt({ artifactId: "artifact-1", artifactHash: "sha256:abc", definitionId: "definition-1" });
+    expect(new Set(namedTools(fromList.message))).toEqual(new Set(["workflow_read_executable"]));
+    expect(fromList.attachments).toEqual([expect.objectContaining({
+      id: "workflows.executable:artifact-1", moduleId: workflowsModule, contentType: "workflows.executable", schemaVersion: "1",
+      target: { moduleId: workflowsModule, resourceType: "workflow-executable", resourceId: "artifact-1", revision: "sha256:abc" },
+      content: { artifactId: "artifact-1", artifactHash: "sha256:abc", sourceReferenceId: null }
+    })]);
+    expect(server.runtime.contextKinds).toContain(fromList.attachments![0].contentType);
+    // The inspector contributes the context itself; a context without the hash is never sent half-formed.
+    expect(executable.createPrompt({ artifactId: "artifact-1", artifactHash: "sha256:abc", attached: true }).attachments).toEqual([]);
+    expect(executable.createPrompt({ artifactId: "artifact-1" }).attachments).toEqual([]);
+
+    const fromHistory = version.createPrompt({ definitionId: "definition-1", versionId: "version-1", version: "1.0.0" });
+    expect(new Set(namedTools(fromHistory.message))).toEqual(new Set(["workflow_read_version"]));
+    expect(fromHistory.message).toContain("compareToVersionId");
+    expect(fromHistory.attachments).toEqual([expect.objectContaining({
+      id: "workflows.version:version-1", moduleId: workflowsModule, contentType: "workflows.version",
+      target: { moduleId: workflowsModule, resourceType: "workflow-version", resourceId: "version-1", revision: "version-1" },
+      content: { definitionId: "definition-1", versionId: "version-1" }
+    })]);
+    expect(server.versionSource.contextKinds).toContain(fromHistory.attachments![0].contentType);
+    expect(version.createPrompt({ definitionId: "definition-1", versionId: "version-1", attached: true }).attachments).toEqual([]);
+    expect(version.createPrompt({ versionId: "version-1" }).attachments).toEqual([]);
+  });
+
+  it("explains one exact Run only through the registered Run read, attaching the Run and its selection once (slice G)", () => {
+    const { weaver } = compose();
+    const run = weaver.promptActions.list().find(item => item.id === "weaver.workflows.explain-instance")!;
+    expect(run).toMatchObject({ placement: "selection", contextKind: "workflow-instance", moduleId: weaverWorkflowsModule });
+    const selected = run.createPrompt({ workflowExecutionId: "run-1", activityExecutionId: "act-1", status: "Faulted" });
+    expect(new Set(namedTools(selected.message))).toEqual(new Set(["workflow_read_run"]));
+    expect(selected.attachments).toEqual([expect.objectContaining({
+      id: "workflows.run:run-1", moduleId: workflowsModule, contentType: "workflows.run", schemaVersion: "1",
+      target: { moduleId: workflowsModule, resourceType: "workflow-run", resourceId: "run-1", revision: "act-1" },
+      content: { workflowExecutionId: "run-1", activityExecutionId: "act-1" }
+    })]);
+    expect(server.runtime.runSource.contextKinds).toContain(selected.attachments![0].contentType);
+    expect(run.createPrompt({ workflowExecutionId: "run-1", activityExecutionId: null }).attachments).toEqual([expect.objectContaining({
+      target: { moduleId: workflowsModule, resourceType: "workflow-run", resourceId: "run-1", revision: "run-1" },
+      content: { workflowExecutionId: "run-1", activityExecutionId: null }
+    })]);
+    // The run page contributes the context itself; a Run reference never names "the latest run" or a definition instead.
+    expect(run.createPrompt({ workflowExecutionId: "run-1", attached: true }).attachments).toEqual([]);
+    expect(run.createPrompt({ definitionId: "definition-1" }).attachments).toEqual([]);
+    expect(run.createPrompt({ workflowExecutionId: "run-1", activityExecutionId: "run-1" }).attachments).toEqual([]);
+    expect(toolNames.has("workflow_read_run")).toBe(true);
+    // No run control is a registered tool: retry, cancel, delete and dispatch stay with the run page.
+    expect([...toolNames].filter(name => /retry|cancel|delete|dispatch/.test(name))).toEqual([]);
+  });
+
+  it("contributes the Executable Inspector's, the version history's and the run page's context under the Workflows module", () => {
+    const { workflows } = compose();
+    const ids = workflows.contextProviders.list().map(item => item.id);
+    expect(ids).toEqual(expect.arrayContaining(["workflows.executable-inspector", "workflows.version-history", "workflows.run-inspector"]));
+  });
+
   it("fails on the dangling references this slice removed", () => {
     expect(namedTools("call the get-executable-detail tool with this artifact id")).toContain("get-executable-detail");
     expect(toolNames.has("get-executable-detail")).toBe(false);
+    expect(toolNames.has("workflow_read_executable")).toBe(true);
     expect(resultTypes.has("workflows.proposal")).toBe(false);
   });
 });

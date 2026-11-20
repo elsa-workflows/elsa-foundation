@@ -30,12 +30,52 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
   sequence is global, so the winner may be another node publishing a different activity. The EF commit runs
   again with fresh reads, up to three attempts, and reports the version published only if a read finds it.
   A commit that loses every attempt fails the pass with the lost race, an `InvalidOperationException`, as
-  does any other commit failure.
+  does any other commit failure. CLR content has no provider compiler, so it keeps the single-node source-owned
+  root; provider-backed content is compiled and refused per version instead (see the reconciliation catalog).
 - **Catalog:** [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 
 ---
 
-## Replaceable services (per §2.6.2)
+## Serialized-shape contribution
+
+### Serialized read shapes
+
+- **Kind:** Enumerable contributor (`IActivitySerializedShapeSource`); multiple matching owners are refused.
+
+`IActivitySerializedShapeSource` (`Elsa.Activities.Design.Core`) contributes immutable outgoing shape
+facts for an already admitted source contract. The CLR feature registers one scoped contribution.
+The source matches the configured CLR source identity and exact catalog version/projection, including
+typed whole `$result` when no named Output rows exist. Boundary and scoped-value types use the actual
+activated `IVariableTypeDescriptorCatalog` and the host's resolved `IActivityContractCapabilityCatalog`;
+an authored alias never opens arbitrary CLR types or the runtime alias registry.
+
+Type admission alone does not establish the actual serialized profile of a Workflow input, variable or
+current item. The CLR contribution returns Unknown with `activity.shape.serialization-profile-unbound`:
+an admitted whole type can be retained, but a nonempty literal path has no asserted selected type.
+Request seeding preserves caller JSON or default System.Text.Json keys; expression and activity writers
+also differ. No value is normalized or case-folded. Those sources retain literal reads with deferred fit;
+an actual owner with authoritative schema/profile facts can contribute the same port later.
+
+The feature supplies the same pure default type-capability projection as the API with `TryAdd` for
+endpoint-free hosts. A host replacement wins, and API and headless consumers resolve the same configured
+catalog instance. The base Expressions feature supplies selectable type contracts; no expression
+language is required. The new implementation reference is to Expressions Core only.
+
+Admitted activity-result queries read metadata only. They retain literal serialized member names, outgoing nullability ReadState,
+conditional member omission and collection kind, with one global returned-member budget and bounded
+depth. A member-path subtree retains conservative nullable/optional prefix facts. Converters,
+including a type-level converter on `Nullable<T>`'s underlying type, polymorphism, extension data,
+unsupported inclusion/platform codecs and unavailable assets remain unknown or unavailable. A
+nullable enum without a type-level converter stays a Known scalar. No DTO, getter, attribute or converter is constructed or invoked. Scanner
+MetadataLoadContext isolation and existing input WriteState contracts remain unchanged.
+
+Profile, admitted source contract and consulted metadata assets have separate revisions. They do not
+change existing catalog fields or hashes. Resource/disclosure authorization and selection of exactly
+one matching contribution belong to the scoped analysis owner; these facts do not grant write access.
+After exact source/version/metadata checks, `activity.shape.no-typed-result` means no atomic typed result
+exists. Asset/schema/profile failures remain uncertainty, with final publication admission owned by the compiler.
+
+### Reconciliation collaborators
 
 Every collaborator is registered against a contract and injected as that contract (§2.5), so an
 inheriting feature can replace one in isolation: call `base.ConfigureServices(services)` and

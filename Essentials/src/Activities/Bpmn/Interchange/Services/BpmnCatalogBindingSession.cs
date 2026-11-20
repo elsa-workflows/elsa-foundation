@@ -12,6 +12,9 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// <summary>One import's catalog inventory and exact reference resolution, without writing authoring state.</summary>
 internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalog)
 {
+    /// <summary>The capability of a task bound by the author's confirmation of a binding the document retained.</summary>
+    public const string RetainedBindingCapability = "RetainedBinding";
+
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web)
     {
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
@@ -26,6 +29,7 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
     };
     private readonly Dictionary<string, (string? VersionId, string Reason)> _references = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> _resolvedNodes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ActivityNode> _nodes = new(StringComparer.Ordinal);
     private readonly List<BpmnImportCapability> _missing = [];
     private IReadOnlyList<IActivityDefinition> _definitions = [];
 
@@ -47,10 +51,17 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
         var processes = new List<BpmnImportedProcess>();
         foreach (var process in result.ProcessNodes)
             processes.Add(process with { Node = await ResolveNodeAsync(process.Node, cancellationToken) });
+        var refusedInputs = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var capability in result.Analysis.Capabilities.Where(capability =>
+                     capability is { Capability: RetainedBindingCapability, Availability: BpmnImportCapabilityAvailability.Available, BindingRef: not null }))
+            if (await RefusedRetainedInputAsync(capability.BindingRef!, cancellationToken) is { } reason)
+                refusedInputs[capability.BindingRef!] = reason;
         var capabilities = result.Analysis.Capabilities.Select(capability =>
         {
             if (capability.Availability != BpmnImportCapabilityAvailability.Available)
                 return capability;
+            if (capability.BindingRef is { } bindingRef && refusedInputs.TryGetValue(bindingRef, out var refused))
+                return capability with { Availability = BpmnImportCapabilityAvailability.Unsupported, Reason = refused };
             var available = capability.BindingRef is not null && _resolvedNodes.GetValueOrDefault(capability.BindingRef);
             return capability with
             {
@@ -70,6 +81,7 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
     {
         var reference = await ReferenceAsync(node.ActivityVersionId, cancellationToken);
         _resolvedNodes[node.NodeId] = reference.VersionId is not null;
+        _nodes[node.NodeId] = node;
         if (reference.VersionId is null)
             _missing.Add(new BpmnImportCapability(node.NodeId, "ActivityReference", BpmnImportCapabilityAvailability.Unsupported, reference.Reason)
                 { BindingRef = node.NodeId });
@@ -83,6 +95,33 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
         var structure = new BpmnAuthoredStructure(children, source.Elements, source.SequenceFlows, source.Pools, source.Lanes,
             source.Variables, source.Diagram, source.IsTransaction, source.MessageFlows);
         return updated with { Structure = new(node.Structure.Kind, node.Structure.SchemaVersion, JsonSerializer.SerializeToElement(structure, Web)) };
+    }
+
+    /// <summary>
+    /// Why a confirmed retained binding cannot run here, or null: it must name an exact version (never a binding-profile
+    /// placeholder), and this host's version must declare every carried input, and declare it portable. The exporting
+    /// host's declaration is not trusted for the importing one. Anything this pass cannot check is refused.
+    /// </summary>
+    private async Task<string?> RefusedRetainedInputAsync(string nodeId, CancellationToken cancellationToken)
+    {
+        if (!_nodes.TryGetValue(nodeId, out var node))
+            return "The confirmed retained binding was not found in the imported process.";
+        if (Profile.ContainsKey(node.ActivityVersionId))
+            return $"A retained task binding must name an exact activity version, not the binding profile '{node.ActivityVersionId}'.";
+        if (!_resolvedNodes.GetValueOrDefault(nodeId))
+            return null; // Already refused as an unavailable ActivityReference.
+        var version = await catalog.FindVersion(node.ActivityVersionId, cancellationToken);
+        if (version is null)
+            return $"Activity version '{node.ActivityVersionId}' could not be read from the visible host catalog.";
+        var declarations = version.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+        foreach (var input in node.Inputs)
+        {
+            if (!declarations.TryGetValue(input.ReferenceKey, out var declaration))
+                return $"Retained input '{input.ReferenceKey}' is not declared by activity version '{version.Id}' in the visible host catalog.";
+            if (!BpmnTaskBindingMetadata.IsPortable(declaration))
+                return $"Retained input '{input.ReferenceKey}' is sensitive, a credential or a connection on this host; bind it explicitly.";
+        }
+        return null;
     }
 
     private static BpmnAuthoredStructure ReadStructure(ActivityNode node)

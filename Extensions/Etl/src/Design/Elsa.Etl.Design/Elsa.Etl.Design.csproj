@@ -6,5 +6,6 @@
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <ProjectReference Include="../../Core/Elsa.Etl.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Etl.Tests" />
+    <InternalsVisibleTo Include="Elsa.Etl.Persistence.ProviderTests" />
   </ItemGroup>
 </Project>

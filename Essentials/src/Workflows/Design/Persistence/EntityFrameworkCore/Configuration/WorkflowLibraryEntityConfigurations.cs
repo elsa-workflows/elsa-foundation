@@ -69,6 +69,11 @@ internal static class WorkflowLibraryEntityConfigurations
         tags.Property(row => row.Revision).HasMaxLength(32).IsUnicode(false).IsConcurrencyToken();
         tags.Property(row => row.ValuesJson).IsRequired();
         tags.HasIndex(EfDesignSupport.ScopeKeyProperty, nameof(WorkflowTagEntity.NameHash)).IsUnique();
+        // A client operation key creates at most one tag per tenant scope (spec 1193 FR-021). Unkeyed rows hold null,
+        // which every provider admits more than once (SQL Server through EF's not-null filter on the unique index).
+        tags.Property(row => row.OperationKey).HasMaxLength(64).IsUnicode(false);
+        tags.Property(row => row.OperationFingerprint).HasMaxLength(64).IsUnicode(false);
+        tags.HasIndex(EfDesignSupport.ScopeKeyProperty, nameof(WorkflowTagEntity.OperationKey)).IsUnique();
 
         var assignments = Table<WorkflowTagAssignmentEntity>(model, "elsa_workflow_tag_assignments");
         assignments.Property(row => row.DefinitionHash).HasMaxLength(64);
@@ -89,6 +94,10 @@ internal static class WorkflowLibraryEntityConfigurations
         views.Property(row => row.ContentJson).IsRequired();
         views.HasIndex(EfDesignSupport.ScopeKeyProperty, nameof(WorkflowLibraryViewEntity.OwnerHash));
         views.HasIndex(EfDesignSupport.ScopeKeyProperty, nameof(WorkflowLibraryViewEntity.Shared));
+        // A client operation key creates at most one view per owner in a tenant scope (spec 1193 FR-021).
+        views.Property(row => row.OperationKey).HasMaxLength(64).IsUnicode(false);
+        views.Property(row => row.OperationFingerprint).HasMaxLength(64).IsUnicode(false);
+        views.HasIndex(EfDesignSupport.ScopeKeyProperty, nameof(WorkflowLibraryViewEntity.OwnerHash), nameof(WorkflowLibraryViewEntity.OperationKey)).IsUnique();
 
         var favorites = Table<WorkflowFavoriteEntity>(model, "elsa_workflow_favorites");
         favorites.Property(row => row.DefinitionHash).HasMaxLength(64);

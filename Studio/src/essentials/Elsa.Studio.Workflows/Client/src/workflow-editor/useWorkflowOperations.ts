@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
+import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { ActivityCatalogItem, ValidationError, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
 import {
   getWorkflowDefinitionVersion,
   getWorkflowPromotionVersionCapabilities,
@@ -41,10 +41,12 @@ import {
   publicationIntentFor,
   publicationPreflightMatchesIntent,
   splitPublicationValidations,
+  withLocalValidationErrors,
   withPublicationWarnings,
   type PublicationReviewState,
   type PublicationVersionSelection
 } from "./publicationReview";
+import { getNotifications } from "./notifications";
 
 interface WorkflowOperationsParams {
   context: StudioEndpointContext;
@@ -71,6 +73,7 @@ interface WorkflowOperationsParams {
   setActiveRightPanelId(id: string): void;
   setInspectorCollapsed(collapsed: boolean): void;
   setAutosavePaused(paused: boolean): void;
+  collectLocalValidation?(draft: WorkflowDraft): Promise<ValidationError[]>;
 }
 
 // The editor's async command handlers: export JSON, save, promote+publish, and dispatch a transient test
@@ -94,7 +97,8 @@ export function useWorkflowOperations({
   setError,
   setActiveRightPanelId,
   setInspectorCollapsed,
-  setAutosavePaused
+  setAutosavePaused,
+  collectLocalValidation
 }: WorkflowOperationsParams) {
   const [publicationReview, setPublicationReview] = useState<PublicationReviewState | null>(null);
   const latestDraftRef = useRef(draft);
@@ -457,6 +461,7 @@ export function useWorkflowOperations({
       // Spec 261 FR-515: list the server's validation warnings (for example a replay-safe compensation step) in the
       // review. They never block; a host without the validations relation, or a failed read, shows none.
       review = withPublicationWarnings(review, await getDraftValidations(context, draftSnapshot.id).catch(() => null));
+      if (collectLocalValidation) review = withLocalValidationErrors(review, await collectLocalValidation(draftSnapshot));
       if (!review.validationErrors.length && !(review.intent.action === "sideBySide" && !review.intent.slotName)) {
         const intent = publicationIntentFor(review, review.intent.action ?? "replace", review.intent.slotName ?? review.policy.defaultSlotName);
         const [preflight, versionPreflight] = await Promise.all([
@@ -496,7 +501,7 @@ export function useWorkflowOperations({
       setQuickPublishing(false);
       setOperation("idle");
     }
-  }, [draft, details, catalog, busy, context, executePublication, flushPendingSave, lineage, setAutosavePaused, setError, setOperation, setStatus]);
+  }, [collectLocalValidation, draft, details, catalog, busy, context, executePublication, flushPendingSave, lineage, setAutosavePaused, setError, setOperation, setStatus]);
 
   const cancelPublication = useCallback(() => {
     publicationReviewRequest.current += 1;
@@ -554,12 +559,27 @@ export function useWorkflowOperations({
       startTestRun({ draftSignature, startedHere: true, snapshot: draftSnapshot, endpointContext: context, view: nextTestRun, startLabel, workflowInputNames });
       setActiveRightPanelId("runtime");
       setInspectorCollapsed(false);
-      setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
+      setStatus("");
+      const rejected = isRejectedTestRun(nextTestRun);
+      const runtimeIssue = nextTestRun.commandDispatchStatus === "AcceptedButFaulted" || (nextTestRun.incidentCount ?? 0) > 0;
+      const prepared = nextTestRun.status === "Prepared" && !nextTestRun.workflowExecutionId;
+      const deferred = nextTestRun.status === "DispatchDeferred";
+      const duplicate = nextTestRun.status === "DispatchDuplicate";
+      getNotifications().notify({
+        level: rejected || runtimeIssue ? "error" : deferred || duplicate ? "info" : "success",
+        title: rejected ? "Test run rejected" : runtimeIssue ? "Test run needs attention" : prepared ? "Test trigger prepared" : deferred ? "Test run dispatch deferred" : duplicate ? "Test run already dispatched" : "Test run started",
+        message: rejected ? nextTestRun.reason ?? "Review the Runtime panel for details."
+          : runtimeIssue ? "Review the Runtime panel for incident details."
+          : prepared ? "Waiting for a test event. Follow progress in the Runtime panel." : undefined,
+        ...(nextTestRun.workflowExecutionId ? { link: { label: "Open run", path: qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(nextTestRun.workflowExecutionId)}`) } } : {})
+      });
       if (onStarted && !isRejectedTestRun(nextTestRun)) await onStarted(nextTestRun);
       return nextTestRun;
     } catch (e) {
       setStatus("");
-      setError(describeWorkflowError(e, "The test run could not be dispatched."));
+      const error = describeWorkflowError(e, "The test run could not be dispatched.");
+      setError(error);
+      getNotifications().notify({ level: "error", title: "Test run could not start", message: error.message });
       return null;
     } finally {
       setOperation("idle");

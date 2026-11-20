@@ -1,6 +1,6 @@
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, DatabaseZap, Save, ShieldCheck } from "lucide-react";
+import { Info, DatabaseZap, Save, ShieldCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { useRuntimeDiagnosticsSettings, useSaveRuntimeDiagnosticsSettings } from "./api/runtime";
 import type {
@@ -13,7 +13,7 @@ import type {
 const levels: RuntimeDiagnosticsEvidenceLevel[] = ["Off", "Metadata", "DiagnosticSnapshot", "Payload"];
 const levelRank = new Map(levels.map((level, index) => [level, index]));
 
-const subjects: Array<{ id: RuntimeDiagnosticsSubject; label: string; detail: string }> = [
+const subjects: Array<{ id: RuntimeDiagnosticsSubject; label: string; detail: string; inheritLabel?: string }> = [
   { id: "workflowInputs", label: "Workflow inputs", detail: "Start arguments and workflow-level input values." },
   { id: "workflowOutputs", label: "Workflow outputs", detail: "Values emitted as workflow outputs." },
   { id: "activityInputs", label: "Activity inputs", detail: "Materialized values passed to activities." },
@@ -21,8 +21,18 @@ const subjects: Array<{ id: RuntimeDiagnosticsSubject; label: string; detail: st
   { id: "containerVariables", label: "Container variables", detail: "Runtime values scoped to containers." },
   { id: "durableValues", label: "Durable values", detail: "Persisted wait/resume payload evidence." },
   { id: "incidents", label: "Incidents", detail: "Fault and incident diagnostic material." },
-  { id: "diagnostics", label: "Diagnostics", detail: "Internal runtime diagnostic payloads." }
+  { id: "diagnostics", label: "Diagnostics", detail: "Internal runtime diagnostic payloads." },
+  // Spec 1221 FR-025: write-history values are opt-in. Without their own level they stay off, whatever the default.
+  {
+    id: "variableWrites",
+    label: "Variable writes",
+    detail: "The value each variable write wrote, kept in the write history. Off unless given its own level.",
+    inheritLabel: "Off (does not inherit the default)"
+  }
 ];
+
+/** Subjects that never inherit the default level: without their own override the runtime applies Off. */
+const optInSubjects: ReadonlySet<RuntimeDiagnosticsSubject> = new Set(["variableWrites"]);
 
 interface RuntimeDiagnosticsDraft {
   defaultLevel: RuntimeDiagnosticsEvidenceLevel;
@@ -96,14 +106,11 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
               <h3 className="wf-section-label"><ShieldCheck size={14} /> Default capture</h3>
               <p>Choose the level Studio should request. Save changes to apply it; Host Policy may lower the level used by the runtime.</p>
             </div>
-            {settings && (
-              <div className="runtime-diagnostics-effective">
-                <span>New capture events use</span>
-                <strong>{formatLevel(settings.effective.defaultLevel)}</strong>
-                {settings.requested.defaultLevel !== settings.effective.defaultLevel && (
-                  <small>Saved request: {formatLevel(settings.requested.defaultLevel)}. Host Policy applies a lower level.</small>
-                )}
-              </div>
+            {settings && settings.requested.defaultLevel !== settings.effective.defaultLevel && (
+              <p className="runtime-diagnostics-effective-note" role="status">
+                Host policy limits new capture events to {formatLevel(settings.effective.defaultLevel)}.
+                Saved request: {formatLevel(settings.requested.defaultLevel)}.
+              </p>
             )}
           </div>
           <LevelSelect
@@ -136,13 +143,13 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
                     <em>{subject.detail}</em>
                   </span>
                   <span className="runtime-diagnostics-subject-controls">
-                    {effective && <code>Runtime applies: {formatLevel(effective)}</code>}
+                    {effective && <span className="runtime-diagnostics-applied">Runtime applies: {formatLevel(effective)}</span>}
                     <select
                       value={requested}
                       disabled={loading || saving || !canManage}
                       onChange={event => updateSubjectLevel(subject.id, event.target.value)}
                     >
-                      <option value="inherit">Inherit default</option>
+                      <option value="inherit">{subject.inheritLabel ?? "Inherit default"}</option>
                       {allowedLevels.map(level => <option value={level} key={level}>{formatLevel(level)}</option>)}
                     </select>
                   </span>
@@ -154,7 +161,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
 
         {(hostReasons.length > 0 || effectiveReasons.length > 0 || !canManage) && (
           <section className="runtime-diagnostics-section">
-            <h3 className="wf-section-label"><AlertTriangle size={14} /> Policy</h3>
+            <h3 className="wf-section-label"><Info size={14} aria-hidden="true" /> Host policy</h3>
             <div className="runtime-diagnostics-policy">
               {!canManage && <span>Current user can view settings but cannot change them.</span>}
               {settings && <span>Maximum allowed by Host Policy: {formatLevel(settings.hostPolicy.maximumLevel)}</span>}
@@ -187,7 +194,7 @@ function isLevelSelectable(level: RuntimeDiagnosticsEvidenceLevel, settings: Run
 }
 
 function effectiveSubjectLevel(settings: RuntimeDiagnosticsSettingsView, subject: RuntimeDiagnosticsSubject): RuntimeDiagnosticsEvidenceLevel {
-  return settings.effective.subjectOverrides?.[subject] ?? settings.effective.defaultLevel;
+  return settings.effective.subjectOverrides?.[subject] ?? (optInSubjects.has(subject) ? "Off" : settings.effective.defaultLevel);
 }
 
 function formatLevel(level: RuntimeDiagnosticsEvidenceLevel): string {

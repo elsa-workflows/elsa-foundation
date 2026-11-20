@@ -106,7 +106,7 @@ public sealed class ActivityInputHydrator
             ?? throw new InvalidOperationException($"Activity input '{input.Key}' has no inline payload.");
         try
         {
-            return inline.Deserialize(plan.Property.PropertyType);
+            return inline.Deserialize(plan.Property.PropertyType, ActivityValueJson.Options);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {

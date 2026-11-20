@@ -40,7 +40,7 @@ public sealed class DomainApiCapabilityRegistrationTests
         { typeof(Elsa.Connections.Api.Features.ConnectionsApiFeature), new("elsa.api.connections",1,[new("connections","connections"),new("connection-picker","connections/picker")],"ConnectionsApi") },
         { typeof(Elsa.Secrets.Api.Features.SecretsApiFeature), new("elsa.api.secrets",1,[new("secrets","secrets"),new("secret-picker","secrets/picker")],"SecretsApi") },
         { typeof(Elsa.Attention.Api.AttentionApiFeature), new("elsa.api.attention",1,[new("attention-items","_elsa/attention/items")],"AttentionApi") },
-        { typeof(Elsa.Agent.Api.FoundationAgentApiFeature), new("elsa.api.agent",1,[new("agent-bootstrap","_elsa/agent/bootstrap"),new("agent-sessions","_elsa/agent/sessions")],"FoundationAgentApi") },
+        { typeof(Elsa.Weaver.Api.WeaverApiFeature), new("elsa.api.weaver",1,[new("weaver-bootstrap","_elsa/weaver/bootstrap"),new("weaver-sessions","_elsa/weaver/sessions")],"WeaverApi") },
         { typeof(Elsa.Diagnostics.OpenTelemetry.OpenTelemetryFeature), new("elsa.api.open-telemetry",1,[new("telemetry-resources","diagnostics/opentelemetry/resources/search")],"DiagnosticsOpenTelemetry") },
         { typeof(WorkflowsDesignApiFeature), WorkflowDesignApiCapabilities.StaticDeclaration },
         { typeof(ActivitiesDesignApiFeature), ActivityDesignApiCapabilities.StaticDeclaration },
@@ -136,6 +136,26 @@ public sealed class DomainApiCapabilityRegistrationTests
         Assert.Equal(
             ["activity-input-options", "scoped-variable-analysis"],
             Assert.Single(complete).Links.Select(link => link.Rel).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Workflow_design_operational_source_advertises_the_rename_plan_only_when_a_planner_is_composed()
+    {
+        var planner = new StubRenamePlanner();
+
+        var declaration = Assert.Single(await new WorkflowDesignOperationalCapabilitySource(renamePlanner: planner).GetCapabilitiesAsync());
+
+        var link = Assert.Single(declaration.Links);
+        Assert.Equal("scoped-variable-rename-plan", link.Rel);
+        Assert.Equal("design/workflows/scoped-variables/rename-plan", link.Href);
+    }
+
+    private sealed class StubRenamePlanner : Elsa.Workflows.Design.Core.Contracts.IScriptVariableRenamePlanner
+    {
+        public ValueTask<Elsa.Workflows.Design.Core.Models.ScriptVariableRenamePlan> PlanAsync(
+            Elsa.Workflows.Design.Core.Models.WorkflowDefinitionState state, string scopeId, string referenceKey, string newName,
+            Func<Elsa.Workflows.Design.Core.Models.ActivityNode, CancellationToken, ValueTask<string?>>? scriptInputKeyOf = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     [Fact]

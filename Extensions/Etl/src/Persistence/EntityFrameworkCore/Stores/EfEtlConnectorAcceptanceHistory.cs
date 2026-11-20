@@ -67,6 +67,35 @@ internal sealed partial class EfEtlRuntimeStore
             throw new InvalidDataException("The accepted connector batch has invalid output or delivery evidence.");
     }
 
+    /// <summary>
+    /// The partition's batches in ordinal order, read a bounded chunk at a time. The audit reads pages and requests between
+    /// batches, and a server engine runs one command per connection at a time, so no reader stays open across those reads.
+    /// </summary>
+    private async IAsyncEnumerable<EtlConnectorBatchRecord> ConnectorBatchesInOrder(EtlConnectorPartitionRecord partition,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        const int chunkSize = 64;
+        long? lastOrdinal = null;
+        string? lastBatchId = null;
+        while (true)
+        {
+            var query = db.ConnectorBatches.AsNoTracking().Where(batch => batch.ScopeKey == partition.ScopeKey &&
+                batch.RunKey == partition.RunKey && batch.PartitionOrdinal == partition.PartitionOrdinal);
+            if (lastOrdinal is { } ordinal)
+            {
+                var batchId = lastBatchId!;
+                query = query.Where(batch => batch.BatchOrdinal > ordinal || batch.BatchOrdinal == ordinal && batch.BatchId.CompareTo(batchId) > 0);
+            }
+            var chunk = await query.OrderBy(batch => batch.BatchOrdinal).ThenBy(batch => batch.BatchId).Take(chunkSize)
+                .ToListAsync(cancellationToken);
+            foreach (var batch in chunk)
+                yield return batch;
+            if (chunk.Count < chunkSize)
+                yield break;
+            (lastOrdinal, lastBatchId) = (chunk[^1].BatchOrdinal, chunk[^1].BatchId);
+        }
+    }
+
     private async ValueTask AuditConnectorBatchHistoryAsync(EtlConnectorPartitionRecord partition,
         EtlConnectorRunAdmission admission, EtlPipelineV2 pipeline, EtlConnectorPreparedRun prepared,
         EtlConnectorPosition position, CancellationToken cancellationToken)
@@ -75,18 +104,16 @@ internal sealed partial class EfEtlRuntimeStore
             .ElementAtOrDefault(partition.PartitionOrdinal)
             ?? throw new InvalidDataException("The connector partition is outside its prepared input.");
 
-        long metadataBytes = 0, outputBytes = 0, nextBatchOrdinal = 0, settledCount = 0;
-        long acceptedRecords = 0, rejectedRecords = 0, filteredRecords = 0;
+        // A compacted continuous shard's history starts at its compacted summary (spec 1196).
+        long metadataBytes = 0, outputBytes = 0, nextBatchOrdinal = partition.CompactedBatchCount, settledCount = partition.CompactedBatchCount;
+        long acceptedRecords = partition.CompactedAcceptedRecords, rejectedRecords = partition.CompactedRejectedRecords,
+            filteredRecords = partition.CompactedFilteredRecords;
         long nextFileOrdinal = initialPosition is EtlConnectorFilePosition file ? file.StartOrdinal : 0;
         long? lastHttpPageSequence = null;
         var nextHttpItem = 0;
         var owedFound = false;
 
-        await foreach (var retained in db.ConnectorBatches.AsNoTracking()
-            .Where(batch => batch.ScopeKey == partition.ScopeKey && batch.RunKey == partition.RunKey &&
-                batch.PartitionOrdinal == partition.PartitionOrdinal)
-            .OrderBy(batch => batch.BatchOrdinal).ThenBy(batch => batch.BatchId)
-            .AsAsyncEnumerable().WithCancellation(cancellationToken))
+        await foreach (var retained in ConnectorBatchesInOrder(partition, cancellationToken))
         {
             if (retained.BatchOrdinal != nextBatchOrdinal++)
                 throw new InvalidDataException("The connector batch history has a gap or duplicate ordinal.");
@@ -117,7 +144,7 @@ internal sealed partial class EfEtlRuntimeStore
                             throw new InvalidDataException("The connector HTTP batch history moved to an earlier page.");
                         if (lastHttpPageSequence is null || range.PageSequence > lastHttpPageSequence.Value)
                         {
-                            var firstUnverifiedPage = lastHttpPageSequence is { } lastPage ? checked(lastPage + 1) : 0;
+                            var firstUnverifiedPage = lastHttpPageSequence is { } lastPage ? checked(lastPage + 1) : partition.CompactedPageCount;
                             await ValidateAcceptedHttpPagesAsync(partition, firstUnverifiedPage, range.PageSequence, cancellationToken);
                             nextHttpItem = 0;
                         }

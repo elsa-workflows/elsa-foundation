@@ -53,12 +53,18 @@
 }
 
 .wf-panel-tab-list button:hover,
-.wf-panel-tab-list button:focus-visible,
 .wf-panel-tab-list button.active {
   border-color: var(--wf-border);
   background: var(--wf-panel-muted);
   color: var(--wf-text);
-  outline: none;
+}
+
+.wf-panel-tab-list button:focus-visible {
+  border-color: var(--wf-border);
+  background: var(--wf-panel-muted);
+  color: var(--wf-text);
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
 }
 
 .wf-panel-tab-list button.active {
@@ -96,12 +102,18 @@
   padding: 0;
 }
 
-.wf-panel-action-button:hover,
+.wf-panel-action-button:hover {
+  border-color: var(--wf-border);
+  background: var(--wf-panel-muted);
+  color: var(--wf-text);
+}
+
 .wf-panel-action-button:focus-visible {
   border-color: var(--wf-border);
   background: var(--wf-panel-muted);
   color: var(--wf-text);
-  outline: none;
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
 }
 
 .wf-palette-body {

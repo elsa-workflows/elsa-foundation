@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa3.Mapping.Mappings;
 using Elsa3.Models;
 
 namespace Elsa3.Mapping.Conversion;
@@ -35,11 +36,21 @@ internal static class Elsa3NativeStructureBuilder
                 var items = new JsonArray();
                 foreach (var child in children)
                 {
-                    items.Add(new JsonObject
+                    var item = new JsonObject
                     {
                         [slot.LabelProperty ?? "name"] = child.Label,
                         [slot.ChildProperty ?? "activity"] = Node(child.Child, mapped)
-                    });
+                    };
+                    // A slot whose items carry an identity (Switch caseId) and a condition (a MatchAny case) gets them
+                    // from the rewrite; the condition was lowered on the node like any other expression.
+                    if (slot.ItemIdProperty is { } itemIdProperty && child.ItemId is { } itemId)
+                        item[itemIdProperty] = itemId;
+                    if (slot.ConditionProperty is { } conditionProperty &&
+                        child.ConditionProperty is { } property &&
+                        plan.Node.AdditionalProperties.TryGetValue(property, out var condition) &&
+                        Elsa3ActivityToState.TryGetArgument(property, condition, out var argument))
+                        item[conditionProperty] = JsonSerializer.SerializeToNode(argument, PayloadJsonOptions);
+                    items.Add(item);
                 }
                 payload[collection] = items;
             }

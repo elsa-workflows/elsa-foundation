@@ -64,11 +64,12 @@ in the probe driver, a regression check for it and at most two fresh native atte
 of the three-failure stop or any other gate. The same record hands the Program to Claude. On the owner's
 instruction, Claude [posts through the owner account with the `[Claude]` tag](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6563355491)
 while its App credentials are unavailable locally, so its PRs merge through Code Review, not standing self-merge.
+The 3 November standing authorization is recorded below.
 
 [M1 is verified Done](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143),
 merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-only workflow and
 separate-resource journeys establish the bounded minimum, with deterministic provider-protocol
-rather than live-provider evidence. M2–M5 remain open. [Context admission #3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439)
+rather than live-provider evidence. [Context admission #3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439)
 is verified Done through [PR #3514](https://github.com/elsa-workflows/elsa-foundation/pull/3514),
 merged by the review App and qualified on resulting main `c0b47ceb1`. Its actual main CI,
 Studio and separate-package witnesses are recorded on the owning issue; existing skips and
@@ -86,8 +87,15 @@ is verified Done under [spec1189](../../specs/1189-weaver-recovery/spec.md). It 
 (PR #3640) on Sipke's instruction, while Code Review was unavailable, after a self-review that converged
 in four rounds. Main's own CI requalified it, including a fresh complete package witness with 20 restart
 cases on both actual adapters against the packaged EF store. M2 #3431 is verified complete.
-[Workflow journeys #3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442) is the sole
-current implementation leaf, under [spec1193](../../specs/1193-weaver-workflow-journeys/spec.md).
+[Workflow journeys #3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442) is complete under
+[spec1193](../../specs/1193-weaver-workflow-journeys/spec.md), which is now Implemented, and
+[M3 #3432 is verified complete](https://github.com/elsa-workflows/elsa-foundation/issues/3432#issuecomment-6616867867);
+the closeout links its slices and its resulting-main evidence. The slices merged after converged self-review
+loops under the owner's [standing delivery and merge authorization of 3 November](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6615643669),
+whose words are "enter the self review loop with as many iterations as reasonably necessary and then merge".
+[Module support #3443](https://github.com/elsa-workflows/elsa-foundation/issues/3443) is the current
+implementation feature, under [spec1203](../../specs/1203-weaver-module-support/spec.md), delivered as leaves
+that are native sub-issues of #3443.
 Review, required checks and resulting-main evidence remain delivery gates for each subsequent leaf.
 The current inventory also includes workflow library folders, tags and saved views added on main
 during M2.
@@ -129,6 +137,19 @@ selection and unsaved-state fidelity; navigation cannot silently retarget a pend
 Distinguish trusted installed-module guidance from untrusted resource content. Module support grants
 no blanket administration authority and exposes no secret values or unrelated data. Useful read-only
 support is valid where a domain does not support mutation, with that limit explicit in the matrix.
+
+Owner decisions for M4, [3 November](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6612627295)
+and [4 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6617907022),
+quoted verbatim:
+- Irrecoverable deletes and revokes of Secrets and Service connections: "Let the integrator decide what privileges weaver has via configuration".
+- Feature selection apply: "Let the integrator decide via configuration".
+- A generic outcome for an approved action that persists nothing: "Add it in leaf 0".
+- The default of the host option gating Admin-risk effects: "Off; Workbench always on".
+- The Workbench's base configuration for the irrecoverable and activation classes as well: "Enable all three".
+
+[Spec1203](../../specs/1203-weaver-module-support/spec.md) applies these answers as host-configured privilege
+classes; that design and its other defaults are the delivery lane's application, open to owner review.
+Package promotion and package activation remain outside scope under #3443's boundaries.
 
 Approval, denial, effective server autonomy, cancellation, disconnect/reconnect, retry, duplicate
 delivery, restart and module removal need declared supported outcomes. Persist accepted decisions,

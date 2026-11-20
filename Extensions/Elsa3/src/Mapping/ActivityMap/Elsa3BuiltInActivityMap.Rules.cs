@@ -102,6 +102,12 @@ internal sealed partial class Elsa3BuiltInActivityMap
 
     private static Elsa3OutcomeRule Outcome(string elsa3, params string[] elsa4) => new(elsa3, elsa4);
 
+    /// <summary>
+    /// Graph conversion expands this into every outcome the node derives from its value input (one per configured item
+    /// plus the catch-all), or into <c>Done</c> when no item is configured (spec 1208 FR-029a).
+    /// </summary>
+    internal const string ValueOutcomesPlaceholder = "{valueOutcomes}";
+
     private static Elsa3OutcomeRule UnsupportedOutcome(string elsa3, string reason) => new(elsa3, [], reason);
 
     private static JsonElement Literal(string? value) =>

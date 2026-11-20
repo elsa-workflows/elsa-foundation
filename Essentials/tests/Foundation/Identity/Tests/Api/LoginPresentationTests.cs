@@ -9,28 +9,30 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 public sealed class LoginPresentationTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Field_guide_configuration_serves_drawn_logo_and_art_under_both_prefixes(bool proxyPathBase)
+    [InlineData("field-guide", "field-guide-logo.png", true)]
+    [InlineData("field-guide", "field-guide-logo.png", false)]
+    [InlineData("parcel-room", "elsa-logo.png", true)]
+    [InlineData("parcel-room", "elsa-logo.png", false)]
+    public async Task Illustrated_configuration_serves_logo_and_art_under_both_prefixes(string theme, string logo, bool proxyPathBase)
     {
         await using var fixture = await TokenEndpointFixture.StartAsync(services =>
             services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
-                    ["Identity:Login:Layout"] = "field-guide",
-                    ["Identity:Login:Palette"] = "field-guide",
-                    ["Identity:Login:Artwork"] = "field-guide"
+                    ["Identity:Login:Layout"] = theme,
+                    ["Identity:Login:Palette"] = theme,
+                    ["Identity:Login:Artwork"] = theme
                 }).Build()), pathBase: proxyPathBase ? "/tenant-a" : null,
             routePrefix: proxyPathBase ? null : "/tenant-a");
         var html = await fixture.Client.GetStringAsync("/tenant-a/_elsa/identity/login?returnUrl=/studio&error=1");
-        Assert.Contains("data-layout=\"field-guide\"", html);
-        Assert.Contains("data-palette=\"field-guide\"", html);
+        Assert.Contains($"data-layout=\"{theme}\"", html);
+        Assert.Contains($"data-palette=\"{theme}\"", html);
         Assert.Contains("name=\"color-scheme\" content=\"light\"", html);
         Assert.Contains("action=\"/tenant-a/_elsa/identity/login\"", html);
         Assert.Contains("name=\"__csrf\"", html);
         Assert.Contains("name=\"returnUrl\" value=\"/studio\"", html);
         Assert.Contains("role=\"alert\"", html);
-        foreach (var (name, mime) in new[] { ("field-guide.jpg", "image/jpeg"), ("field-guide-logo.png", "image/png") })
+        foreach (var (name, mime) in new[] { ($"{theme}.jpg", "image/jpeg"), (logo, "image/png") })
         {
             var url = $"/tenant-a/_elsa/identity/login-assets/{name}";
             Assert.Contains($"src=\"{url}\"", html);
@@ -38,18 +40,28 @@ public sealed class LoginPresentationTests
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal(mime, response.Content.Headers.ContentType?.MediaType);
             Assert.Equal("public, max-age=86400", response.Headers.CacheControl?.ToString());
-            Assert.True((await response.Content.ReadAsByteArrayAsync()).Length > 10000);
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            Assert.NotEmpty(bytes);
+            if (mime == "image/jpeg")
+            {
+                Assert.True(bytes.Length > 10000);
+                Assert.Equal(new byte[] { 0xff, 0xd8 }, bytes[..2]);
+            }
+            else
+                Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, bytes[..8]);
         }
         Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync("/tenant-a/_elsa/identity/login-assets/arbitrary.png")).StatusCode);
     }
 
-    [Fact]
-    public async Task Field_guide_keeps_real_csrf_protected_cookie_signin()
+    [Theory]
+    [InlineData("field-guide")]
+    [InlineData("parcel-room")]
+    public async Task Illustrated_login_keeps_real_csrf_protected_cookie_signin(string theme)
     {
         await using var fixture = await TokenEndpointFixture.StartAsync(services =>
             services.Configure<LoginPageOptions>(options =>
             {
-                options.Layout = options.Palette = options.Artwork = "field-guide";
+                options.Layout = options.Palette = options.Artwork = theme;
             }));
         using var client = fixture.Client;
         await LoginTestHelper.LoginAsync(client);
@@ -57,12 +69,14 @@ public sealed class LoginPresentationTests
     }
 
     [Fact]
-    public async Task Default_login_uses_unfolding_map()
+    public async Task Default_login_uses_pocket_orchestra_with_the_existing_form_first_layout()
     {
         await using var fixture = await TokenEndpointFixture.StartAsync();
         var html = await fixture.Client.GetStringAsync("/_elsa/identity/login");
-        Assert.Contains("src=\"/_elsa/identity/login-assets/unfolding-map.jpg\"", html);
-        var response = await fixture.Client.GetAsync("/_elsa/identity/login-assets/unfolding-map.jpg");
+        Assert.Contains("data-layout=\"parcel-room\"", html);
+        Assert.Contains("data-palette=\"pocket-orchestra\"", html);
+        Assert.Contains("src=\"/_elsa/identity/login-assets/pocket-orchestra.jpg\"", html);
+        var response = await fixture.Client.GetAsync("/_elsa/identity/login-assets/pocket-orchestra.jpg");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -77,6 +91,8 @@ public sealed class LoginPresentationTests
     [InlineData("miniature-world")]
     [InlineData("glass-and-light")]
     [InlineData("unfolding-map")]
+    [InlineData("parcel-room")]
+    [InlineData("pocket-orchestra")]
     public async Task Configured_artwork_is_rendered_and_served_under_route_prefix(string artwork)
     {
         await using var fixture = await TokenEndpointFixture.StartAsync(services =>

@@ -39,7 +39,12 @@ public sealed partial class StimulusRouter
                     WorkflowRunKind.PublishedRun, null, WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
                     null, null, winner.Scope.TenantId, winner.Scope.Partition, null, WorkflowExecutableStartAuthority.FromStimulusDelivery(source, binding.TriggerBindingId),
                     triggerMetadata: binding.Metadata);
-                var result = await _startDispatcher.DispatchAsync(start, cancellationToken: cancellationToken);
+                var (result, refused) = await TryDispatchStartAsync(start, null, binding.TriggerBindingId, binding.ArtifactId, cancellationToken);
+                if (result is null)
+                {
+                    starts.Add(refused!);
+                    continue;
+                }
                 if (!result.CommandDispatch.IsShed && result.CommandDispatch.Status is not
                     (WorkflowExecutionCommandDispatchStatus.Accepted or WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted or WorkflowExecutionCommandDispatchStatus.Duplicate))
                     throw new IOException("A saved start did not accept its queued responsibility.");

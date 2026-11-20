@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Etl.Sql.PostgreSql.EtlSqlPostgreSqlFeature
+Elsa.Etl.Sql.PostgreSql.EtlSqlPostgreSqlFeature.EtlSqlPostgreSqlFeature() -> void
+virtual Elsa.Etl.Sql.PostgreSql.EtlSqlPostgreSqlFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

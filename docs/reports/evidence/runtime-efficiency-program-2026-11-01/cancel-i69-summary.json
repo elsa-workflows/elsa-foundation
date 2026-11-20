@@ -1,0 +1,182 @@
+{
+ "x1": [
+  {
+   "shape": "delay",
+   "passed": true,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 5,
+   "ownerApiView": {
+    "status": "Cancelled",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [
+    4,
+    4
+   ],
+   "secondsToSettledReceipt": 2.0,
+   "activityRowsProgressingBefore": null,
+   "activityRowsAfterCancel": [
+    3,
+    3
+   ],
+   "transportRows": 0,
+   "incidents": 0,
+   "sender": "passed",
+   "senderHostId": "eff-i68-node-b0",
+   "placementBefore": [
+    [
+     "eff-i68-node-a",
+     2
+    ]
+   ],
+   "placementAfter": [
+    [
+     "eff-i68-node-a",
+     4
+    ]
+   ]
+  },
+  {
+   "shape": "loop",
+   "passed": true,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 5,
+   "ownerApiView": {
+    "status": "Cancelled",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [
+    4,
+    4
+   ],
+   "secondsToSettledReceipt": 4.1,
+   "activityRowsProgressingBefore": [
+    3187,
+    3333
+   ],
+   "activityRowsAfterCancel": [
+    3455,
+    3455
+   ],
+   "transportRows": 0,
+   "incidents": 0,
+   "sender": "passed",
+   "senderHostId": "eff-i68-node-b1",
+   "placementBefore": [
+    [
+     "eff-i68-node-a",
+     29
+    ]
+   ],
+   "placementAfter": [
+    [
+     "eff-i68-node-a",
+     35
+    ]
+   ]
+  }
+ ],
+ "x2": [
+  {
+   "shape": "loop",
+   "passed": true,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 5,
+   "ownerApiView": {
+    "status": "Cancelled",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [
+    4,
+    4
+   ],
+   "secondsToSettledReceipt": 4.1,
+   "activityRowsProgressingBefore": [
+    3138,
+    3285
+   ],
+   "activityRowsAfterCancel": [
+    3415,
+    3415
+   ],
+   "transportRows": 0,
+   "incidents": 0,
+   "sender": "passed",
+   "senderHostId": "eff-i68-node-b0",
+   "placementBefore": [
+    [
+     "eff-i68-node-a",
+     31
+    ]
+   ],
+   "placementAfter": [
+    [
+     "eff-i68-node-a",
+     37
+    ]
+   ]
+  }
+ ],
+ "x3": [
+  {
+   "shape": "loop",
+   "passed": true,
+   "error": null,
+   "stateBeforeCancel": 1,
+   "stateAfter": 5,
+   "ownerApiView": {
+    "status": "Cancelled",
+    "incidentCount": 0
+   },
+   "receiptStatuses": [
+    4,
+    4
+   ],
+   "secondsToSettledReceipt": 4.1,
+   "activityRowsProgressingBefore": [
+    3089,
+    3285
+   ],
+   "activityRowsAfterCancel": [
+    3328,
+    3328
+   ],
+   "transportRows": 0,
+   "incidents": 0,
+   "sender": "passed",
+   "senderHostId": "eff-i68-node-b0",
+   "placementBefore": [
+    [
+     "eff-i68-node-a",
+     31
+    ]
+   ],
+   "placementAfter": [
+    [
+     "eff-i68-node-a",
+     37
+    ]
+   ]
+  }
+ ],
+ "nodeLogs": {
+  "node-a-0.log": {
+   "efSaveFailures": 1,
+   "serializationConflicts": 1,
+   "failLines": 10
+  },
+  "node-b-0.log": {
+   "efSaveFailures": 1,
+   "serializationConflicts": 1,
+   "failLines": 2
+  },
+  "node-b-1.log": {
+   "efSaveFailures": 1,
+   "serializationConflicts": 1,
+   "failLines": 2
+  }
+ }
+}

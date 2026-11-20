@@ -1,0 +1,272 @@
+using System.Text.Json;
+using Elsa.Activities.Flowchart.Models;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
+
+namespace Elsa.Activities.Flowchart.Tests;
+
+public sealed class FlowchartChildResultFactsTests : IDisposable
+{
+    private readonly ServiceProvider _provider;
+    private readonly IActivityStructureService _structures;
+
+    public FlowchartChildResultFactsTests()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesFlowchartFeature().ConfigureServices(services);
+        services.AddSingleton<IActivityStructureService, DefaultActivityStructureService>();
+        _provider = services.BuildServiceProvider();
+        _structures = _provider.GetRequiredService<IActivityStructureService>();
+    }
+
+    public void Dispose() => _provider.Dispose();
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Linear_causality_does_not_depend_on_the_stored_child_order(bool reverseChildren)
+    {
+        string[] children = reverseChildren ? ["consumer", "producer", "start"] : ["start", "producer", "consumer"];
+        var flow = Flowchart(children, [("start", "producer"), ("producer", "consumer")]);
+
+        var facts = _structures.AssessChildResult(flow, "producer", "consumer");
+
+        Assert.Equal(ActivityChildResultAvailability.Definite, facts.Availability);
+        Assert.False(facts.IsCyclicBackEdge);
+        Assert.False(facts.MayRunConcurrently);
+        Assert.False(facts.EarlierProducerRunCanReachConsumer);
+    }
+
+    /// <summary>
+    /// Each node run is scheduled by the run that just completed, so on a cycle every pass leads to the next one and a
+    /// producer that can reach itself has its earlier runs behind a later reader. That holds for a reader the producer
+    /// dominates, which is still a definite read and not a back-edge, and so needs this fact to be refused.
+    /// </summary>
+    [Fact]
+    public void A_producer_that_can_reach_itself_has_earlier_runs_behind_a_later_reader()
+    {
+        var flow = Flowchart(["start", "producer", "consumer", "end"],
+            [("start", "producer"), ("producer", "consumer"), ("consumer", "start"), ("consumer", "end")]);
+
+        var onCycle = _structures.AssessChildResult(flow, "producer", "consumer");
+        Assert.Equal(ActivityChildResultAvailability.Definite, onCycle.Availability);
+        Assert.False(onCycle.IsCyclicBackEdge);
+        Assert.True(onCycle.EarlierProducerRunCanReachConsumer);
+        var afterCycle = _structures.AssessChildResult(flow, "consumer", "end");
+        Assert.True(afterCycle.EarlierProducerRunCanReachConsumer);
+        Assert.False(_structures.AssessChildResult(flow, "end", "start").EarlierProducerRunCanReachConsumer);
+    }
+
+    /// <summary>
+    /// A merge node runs once per arrival without a cycle. Each of its runs schedules its own successor, so no run of it
+    /// is behind another, and reachability to itself is still the whole question.
+    /// </summary>
+    [Fact]
+    public void A_merge_node_that_runs_once_per_arrival_has_no_earlier_run_behind_its_reader()
+    {
+        var flow = Flowchart(["start", "left", "right", "merge", "consumer"],
+            [("start", "left"), ("start", "right"), ("left", "merge"), ("right", "merge"), ("merge", "consumer")]);
+
+        var facts = _structures.AssessChildResult(flow, "merge", "consumer");
+
+        Assert.Equal(ActivityChildResultAvailability.Definite, facts.Availability);
+        Assert.False(facts.EarlierProducerRunCanReachConsumer);
+    }
+
+    [Fact]
+    public void Independent_legal_entries_preserve_local_dominance_and_exclusivity()
+    {
+        var flow = Flowchart(["start", "start-next", "trigger", "consumer"],
+            [("start", "start-next"), ("trigger", "consumer")]);
+
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structures.AssessChildResult(flow, "trigger", "consumer").Availability);
+        var otherEntry = _structures.AssessChildResult(flow, "start-next", "consumer");
+        Assert.Equal(ActivityChildResultAvailability.Unavailable, otherEntry.Availability);
+        Assert.True(otherEntry.AreMutuallyExclusive);
+        Assert.False(otherEntry.MayRunConcurrently);
+    }
+
+    [Fact]
+    public void A_join_reached_from_another_entry_makes_the_producer_conditional()
+    {
+        var flow = Flowchart(["start", "trigger", "consumer"], [("start", "consumer"), ("trigger", "consumer")]);
+
+        var facts = _structures.AssessChildResult(flow, "trigger", "consumer");
+
+        Assert.Equal(ActivityChildResultAvailability.Conditional, facts.Availability);
+        Assert.False(facts.AreMutuallyExclusive);
+        Assert.False(facts.MayRunConcurrently);
+    }
+
+    [Fact]
+    public void A_node_with_an_incoming_connection_is_not_an_additional_entry()
+    {
+        var flow = Flowchart(["start", "producer", "mid-flow-trigger", "consumer"],
+            [("start", "producer"), ("producer", "mid-flow-trigger"), ("mid-flow-trigger", "consumer")]);
+
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structures.AssessChildResult(flow, "producer", "consumer").Availability);
+    }
+
+    [Fact]
+    public void A_fork_from_the_same_entry_retains_the_existing_concurrent_write_relation()
+    {
+        var flow = Flowchart(["start", "left", "right"], [("start", "left"), ("start", "right")]);
+
+        var facts = _structures.AssessChildResult(flow, "left", "right");
+
+        Assert.Equal(ActivityChildResultAvailability.Unavailable, facts.Availability);
+        Assert.True(facts.MayRunConcurrently);
+        Assert.False(facts.AreMutuallyExclusive);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" \t ")]
+    [InlineData(" first ")]
+    public void Cycle_direction_and_self_reads_do_not_admit_a_previous_iteration_result(string? start)
+    {
+        var flow = Flowchart(["first", "second"], [("first", "second"), ("second", "first")], start);
+
+        var backward = _structures.AssessChildResult(flow, "second", "first");
+        Assert.True(backward.IsCyclicBackEdge);
+        Assert.Equal(ActivityChildResultAvailability.Conditional, backward.Availability);
+        var forward = _structures.AssessChildResult(flow, "first", "second");
+        Assert.False(forward.IsCyclicBackEdge);
+        Assert.Equal(ActivityChildResultAvailability.Definite, forward.Availability);
+        var self = _structures.AssessChildResult(flow, "first", "first");
+        Assert.True(self.IsCyclicBackEdge);
+        Assert.Equal(ActivityChildResultAvailability.Unavailable, self.Availability);
+        Assert.True(self.EarlierProducerRunCanReachConsumer);
+    }
+
+    /// <summary>
+    /// Asked about one child with itself, the Flowchart says whether that child can run again within one run of the
+    /// Flowchart, which is what a structure nested in that child relies on. A Flowchart whose analysis cannot be built
+    /// says nothing.
+    /// </summary>
+    [Fact]
+    public void A_child_has_earlier_runs_behind_its_later_runs_exactly_when_it_is_on_a_cycle()
+    {
+        var flow = Flowchart(["start", "steps", "end"], [("start", "steps"), ("steps", "start"), ("steps", "end")]);
+
+        Assert.True(_structures.AssessChildResult(flow, "steps", "steps").EarlierProducerRunCanReachConsumer);
+        Assert.False(_structures.AssessChildResult(flow, "end", "end").EarlierProducerRunCanReachConsumer);
+        var unbuilt = _structures.AssessChildResult(Flowchart(["start", "steps"], [("start", "steps")], "not-a-child"), "steps", "steps");
+        Assert.Equal(ActivityChildResultAvailability.Unknown, unbuilt.Availability);
+        Assert.Null(unbuilt.EarlierProducerRunCanReachConsumer);
+    }
+
+    /// <summary>A definite result always comes with the occurrence fact, so a binding is never offered on availability alone.</summary>
+    [Fact]
+    public void A_definite_result_always_states_whether_an_earlier_producer_run_can_reach_the_reader()
+    {
+        string[] children = ["start", "left", "right", "merge", "end"];
+        var flows = new[]
+        {
+            Flowchart(children, [("start", "left"), ("start", "right"), ("left", "merge"), ("right", "merge"), ("merge", "end")]),
+            Flowchart(children, [("start", "left"), ("left", "merge"), ("merge", "start"), ("merge", "end"), ("right", "end")]),
+            Flowchart(children, [("start", "left"), ("left", "end")], null)
+        };
+
+        foreach (var flow in flows)
+        foreach (var producer in children)
+        foreach (var consumer in children)
+        {
+            var facts = _structures.AssessChildResult(flow, producer, consumer);
+            if (facts.Availability == ActivityChildResultAvailability.Definite)
+                Assert.NotNull(facts.EarlierProducerRunCanReachConsumer);
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \t ")]
+    [InlineData(" producer ")]
+    public void Runtime_normalized_start_strings_preserve_required_result_availability(string start)
+    {
+        var facts = _structures.AssessChildResult(Flowchart(["producer", "consumer"], [("producer", "consumer")], start), "producer", "consumer");
+        Assert.Equal(ActivityChildResultAvailability.Definite, facts.Availability);
+        Assert.False(facts.MayRunConcurrently);
+        Assert.False(facts.IsCyclicBackEdge);
+    }
+
+    [Fact]
+    public void An_unreachable_cycle_does_not_become_an_exclusive_legal_entry()
+    {
+        var flow = Flowchart(["start", "left", "right"], [("left", "right"), ("right", "left")]);
+
+        var facts = _structures.AssessChildResult(flow, "left", "right");
+
+        Assert.Equal(ActivityChildResultAvailability.Unavailable, facts.Availability);
+        Assert.False(facts.AreMutuallyExclusive);
+        Assert.False(facts.MayRunConcurrently);
+        Assert.True(facts.IsCyclicBackEdge);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void An_omitted_start_uses_the_runtime_entry_without_requiring_child_order(bool reverseChildren)
+    {
+        var fallback = _structures.AssessChildResult(Flowchart(reverseChildren ? ["consumer", "producer"] : ["producer", "consumer"], [("producer", "consumer")], null), "producer", "consumer");
+        var declared = _structures.AssessChildResult(Flowchart(["producer", "consumer"], [("producer", "consumer")], "producer"), "producer", "consumer");
+
+        Assert.Equal(ActivityChildResultAvailability.Definite, fallback.Availability);
+        Assert.Equal(declared, fallback);
+    }
+
+    [Fact]
+    public void A_cycle_without_a_declared_start_uses_the_first_child_and_keeps_back_edge_refusal()
+    {
+        var flow = Flowchart(["first", "second"], [("first", "second"), ("second", "first")], null);
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structures.AssessChildResult(flow, "first", "second").Availability);
+        var backward = _structures.AssessChildResult(flow, "second", "first");
+        Assert.True(backward.IsCyclicBackEdge);
+        Assert.Equal(ActivityChildResultAvailability.Conditional, backward.Availability);
+    }
+
+    [Fact]
+    public void Omitted_connections_use_the_owned_empty_default_and_keep_independent_entries_exclusive()
+    {
+        var children = new[] { new ActivityNode("left", "test@1", [], []), new ActivityNode("right", "test@1", [], []) };
+        var flow = new ActivityNode("flow", "flow@1", [], [], new(FlowchartActivity.StructureKind,
+            FlowchartActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(new { Activities = children })));
+        var facts = _structures.AssessChildResult(flow, "left", "right");
+        Assert.Equal(ActivityChildResultAvailability.Unavailable, facts.Availability);
+        Assert.True(facts.AreMutuallyExclusive);
+        Assert.False(facts.MayRunConcurrently);
+    }
+
+    [Fact]
+    public void Authored_property_casing_and_connection_defaults_are_read_by_the_structure_owner()
+    {
+        var flow = new ActivityNode("flow", "flow@1", [], [], new(FlowchartActivity.StructureKind,
+            FlowchartActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(new {
+                Activities = new[] { new ActivityNode("producer", "test@1", [], []), new ActivityNode("consumer", "test@1", [], []) },
+                Connections = new[] { new FlowchartConnection(new("producer"), new("consumer")) }
+            })));
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structures.AssessChildResult(flow, "producer", "consumer").Availability);
+    }
+
+    [Fact]
+    public void Missing_direct_child_identity_is_not_inferred_from_a_dangling_edge()
+    {
+        var flow = Flowchart(["start", "consumer"], [("start", "missing"), ("missing", "consumer")]);
+
+        Assert.Equal(ActivityChildResultAvailability.Unavailable, _structures.AssessChildResult(flow, "missing", "consumer").Availability);
+    }
+
+    private static ActivityNode Flowchart(string[] children, (string Source, string Target)[] edges, string? start = "start") =>
+        new("flow", "flow@1", [], [], new ActivityNodeStructure(
+            FlowchartActivity.StructureKind,
+            FlowchartActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(new FlowchartAuthoredStructure(
+                children.Select(id => new ActivityNode(id, "test@1", [], [])).ToArray(),
+                edges.Select((edge, index) => new FlowchartConnection(new(edge.Source), new(edge.Target), $"edge-{index}")).ToArray(),
+                start))));
+}

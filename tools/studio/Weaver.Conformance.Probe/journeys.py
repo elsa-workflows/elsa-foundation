@@ -31,6 +31,9 @@ from authorization_journeys import SECTION as AUTHORIZATION_SECTION, qualify_wor
 from truth_seam_journeys import SECTION as TRUTH_SEAM_SECTION, qualify_workflow_truth_seams, truth_principals
 from batch_journeys import SECTION as BATCH_SECTION, qualify_workflow_batch
 from explain_journeys import SECTION as EXPLAIN_SECTION, qualify_workflow_explain
+from library_journeys import SECTION as LIBRARY_SECTION, library_principal, qualify_workflow_library
+from inspection_journeys import SECTION as INSPECTION_SECTION, qualify_workflow_inspection
+from run_journeys import SECTION as RUN_SECTION, qualify_workflow_run, run_principal
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_complete_witness, witness_manifest
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
@@ -43,21 +46,21 @@ INVALID_CONTEXT = "Only a current Acme status card reference is supported."
 INVALID_SCHEMA = "The installed module does not support this context schema version."
 MALFORMED_RESULT = "The reported client effect did not validate against the exact prepared operation. Its outcome is uncertain and will not be replayed."
 EXPECTED_CONTROLS = {
-    "module-missing": {"stage": "message", "diagnostic": "agent.policyDenied: No installed module contributes the requested capability."},
+    "module-missing": {"stage": "message", "diagnostic": "weaver.policyDenied: No installed module contributes the requested capability."},
     "sdk-incompatible": {"stage": "module-admission", "diagnostic": "incompatible"},
-    "pending-module-removed": {"stage": "proposal-lookup", "diagnostic": "agent.proposal.not_found"},
-    "read-denied": {"stage": "execute", "diagnostic": "agent.proposal.forbidden"},
-    "write-denied": {"stage": "execute", "diagnostic": "agent.proposal.forbidden"},
-    "cross-user": {"stage": "execute", "diagnostic": "agent.proposal.forbidden"},
-    "cross-tenant": {"stage": "execute", "diagnostic": "agent.proposal.forbidden"},
+    "pending-module-removed": {"stage": "proposal-lookup", "diagnostic": "weaver.proposal.not_found"},
+    "read-denied": {"stage": "execute", "diagnostic": "weaver.proposal.forbidden"},
+    "write-denied": {"stage": "execute", "diagnostic": "weaver.proposal.forbidden"},
+    "cross-user": {"stage": "execute", "diagnostic": "weaver.proposal.forbidden"},
+    "cross-tenant": {"stage": "execute", "diagnostic": "weaver.proposal.forbidden"},
     "cross-host": {"stage": "execute", "diagnostic": "acme.home.host_denied"},
-    "foreign-scope": {"stage": "context-admission", "diagnostic": "agent.context.incomplete: " + INVALID_CONTEXT},
-    "malformed-scope": {"stage": "context-admission", "diagnostic": "agent.context.incomplete: " + INVALID_CONTEXT},
+    "foreign-scope": {"stage": "context-admission", "diagnostic": "weaver.context.incomplete: " + INVALID_CONTEXT},
+    "malformed-scope": {"stage": "context-admission", "diagnostic": "weaver.context.incomplete: " + INVALID_CONTEXT},
     "malformed-arguments": {"stage": "tool-preparation", "diagnostic": "acme.home.arguments_invalid"},
-    "missing-resource": {"stage": "context-admission", "diagnostic": "agent.context.incomplete: The Acme status card is absent from the personal Home layout."},
-    "default-resource": {"stage": "context-admission", "diagnostic": "agent.context.incomplete: Create a personal Home layout before using this widget."},
+    "missing-resource": {"stage": "context-admission", "diagnostic": "weaver.context.incomplete: The Acme status card is absent from the personal Home layout."},
+    "default-resource": {"stage": "context-admission", "diagnostic": "weaver.context.incomplete: Create a personal Home layout before using this widget."},
     "no-op-resource": {"stage": "tool-preparation", "diagnostic": "acme.home.noop"},
-    "invalid-schema": {"stage": "context-admission", "diagnostic": "agent.context.incomplete: " + INVALID_SCHEMA},
+    "invalid-schema": {"stage": "context-admission", "diagnostic": "weaver.context.incomplete: " + INVALID_SCHEMA},
     "stale-revision": {"stage": "execute", "diagnostic": "acme.home.stale"},
     "concurrent-cas": {"stage": "native-cas", "diagnostic": "acme.home.conflict"},
     "malformed-result": {"stage": "client-acknowledgement", "diagnostic": MALFORMED_RESULT},
@@ -111,6 +114,14 @@ def _seed_principals(run):
     principals.extend(truth_principals(principals, lambda prefix, tenant, grants: {
         "subject": prefix + "-" + secrets.token_hex(8), "tenant": tenant, "username": prefix + "-" + secrets.token_hex(8),
         "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(grants)}))
+    # Spec 1193 T036: the library actor (tag assignment without tag management or view sharing), appended likewise.
+    principals.extend(library_principal(principals, lambda prefix, tenant, grants: {
+        "subject": prefix + "-" + secrets.token_hex(8), "tenant": tenant, "username": prefix + "-" + secrets.token_hex(8),
+        "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(grants)}))
+    # Spec 1193 T045: the Run actor (runtime read and structure inspection, no value inspection), appended likewise.
+    principals.extend(run_principal(principals, lambda prefix, tenant, grants: {
+        "subject": prefix + "-" + secrets.token_hex(8), "tenant": tenant, "username": prefix + "-" + secrets.token_hex(8),
+        "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(grants)}))
     path = run.profiles["backend"]["published"] / "appsettings.json"
     settings = json.loads(path.read_text())
     settings["Qualification"].update(Principals=principals, GrantProfiles={
@@ -133,7 +144,7 @@ def _bootstrap(runtime):
     runtime.native.json(runtime.backend, "baseline-health", "/health/live")
     registry, _ = runtime.native.json(runtime.studio, "baseline-registry", "/_elsa/module-management/registry")
     check(not any(item["id"] == runtime.witness["moduleId"] for item in registry["modules"]), "Resource manifest existed before native installation")
-    bootstrap = runtime.transport("baseline-agent").bootstrap().require_status(200)
+    bootstrap = runtime.transport("baseline-weaver").bootstrap().require_status(200)
     check(bootstrap.json()["data"]["providerStatus"] == "available", "Baseline actual provider is unavailable")
     seed_personal_layout(runtime.backend, runtime.output("admin-personal-seed") / "seed")
     for index in (0, 1, 2):
@@ -153,7 +164,7 @@ def _bootstrap(runtime):
 def _module_missing(runtime, records):
     before, bref, bread = runtime.snapshot("missing-module-owner-before")
     turn = runtime.turn("module-missing", arguments={"visible": True})
-    value = expect_error(turn.message, 403, "agent.policyDenied", message="No installed module contributes the requested capability.")
+    value = expect_error(turn.message, 403, "weaver.policyDenied", message="No installed module contributes the requested capability.")
     check(turn.stream is None and turn.proposal is None, "Absent module unexpectedly prepared an operation")
     after, aref, aread = runtime.snapshot("missing-module-owner-after")
     runtime.record(records, "module-missing", bref, aref, turn.evidence + [bread, aread], _unchanged(before, after),
@@ -217,7 +228,7 @@ def _context_controls(runtime, records):
         else: attachment["schemaVersion"] = "999"
         turn = runtime.turn(name, arguments={"visible": not state["visible"]}, attachment=attachment)
         expected = INVALID_SCHEMA if name == "invalid-schema" else INVALID_CONTEXT
-        value = expect_error(turn.message, 400, "agent.context.incomplete", message=expected)
+        value = expect_error(turn.message, 400, "weaver.context.incomplete", message=expected)
         check(turn.stream is None and turn.proposal is None, "Invalid owning context reached tool preparation")
         after, aref, aread = runtime.snapshot(name + "-owner-after")
         runtime.record(records, name, bref, aref, [bread, aread, *turn.evidence], _unchanged(before, after),
@@ -250,7 +261,7 @@ def _resource_absence(runtime, records):
         # A valid-shaped own reference still cannot authorize a nonexistent personal resource.
         attachment = runtime.attachment({"revision": before["revision"], "widgetId": runtime.witness["widgetId"], "visible": True})
         turn = runtime.turn(name, http=http, tool=runtime.witness["readTool"], mode="explain", attachment=attachment)
-        value = expect_error(turn.message, 400, "agent.context.incomplete", message=message)
+        value = expect_error(turn.message, 400, "weaver.context.incomplete", message=message)
         after, aref, aread = runtime.snapshot(name + "-owner-after", http=http, endpoint=NATIVE_HOME)
         runtime.record(records, name, bref, aref, [bread, aread, *turn.evidence], _unchanged(before, after),
             actual={"stage": "context-admission", "diagnostic": value["error"]["code"] + ": " + value["error"]["message"]})
@@ -265,7 +276,7 @@ def _authority_controls(runtime, records):
         selected = runtime.clients[0]
         current = runtime.transport(name + "-fresh-authority", http=selected)
         response = runtime.execute(turn, transport=current)
-        expect_error(response, 403, "agent.proposal.forbidden", message="Current server authority denies the prepared target.")
+        expect_error(response, 403, "weaver.proposal.forbidden", message="Current server authority denies the prepared target.")
         # Restore through the real IAM authority, then freshly authenticate the same
         # owner for independent readback. An old token is not an authorization bypass.
         restored = runtime.set_grants(0, "full")
@@ -280,7 +291,7 @@ def _authority_controls(runtime, records):
         check((selected_identity["subject"] != identity["subject"] and selected_identity["tenantId"] == identity["tenantId"]) if name == "cross-user"
               else (selected_identity["subject"] == identity["subject"] and selected_identity["tenantId"] != identity["tenantId"]), "The cross-principal control did not isolate its intended identity boundary")
         response = runtime.execute(turn, transport=runtime.transport(name + "-foreign-principal", http=foreign))
-        expect_error(response, 403, "agent.proposal.forbidden", message="The agent proposal is not available to the current principal.")
+        expect_error(response, 403, "weaver.proposal.forbidden", message="The Weaver proposal is not available to the current principal.")
         after, aref, aread = runtime.snapshot(name + "-owner-after", http=owner_http)
         runtime.record(records, name, bref, aref, [bread, aread, *turn.evidence, response.receipt], _unchanged(before, after),
             actual={"stage": "execute", "diagnostic": response.json()["error"]["code"]})
@@ -316,7 +327,7 @@ def _deny(runtime, records):
     denied = turn.transport.deny(turn.proposal["id"]).require_status(200)
     check(denied.json()["data"]["status"] == "denied", "Native review decision did not deny the proposal")
     response = runtime.execute(turn)
-    value = expect_error(response, 409, "agent.proposal.closed")
+    value = expect_error(response, 409, "weaver.proposal.closed")
     check(value["data"]["status"] == "denied" and value["data"]["executed"] is False, "Denied execute did not retain its actual terminal denied state")
     after, aref, aread = runtime.snapshot("deny-owner-after")
     runtime.record(records, "deny-before-effect", bref, aref, [bread, aread, *turn.evidence, denied.receipt, response.receipt], _unchanged(before, after),
@@ -481,13 +492,13 @@ def _remove(runtime, records, deltas):
     current = runtime.transport("removed-proposal-lookup")
     current.bootstrap().require_status(200)
     response = runtime.execute(pending, transport=current)
-    value = expect_error(response, 404, "agent.proposal.not_found")
+    value = expect_error(response, 404, "weaver.proposal.not_found")
     check(pending.proposal["id"] in value["error"]["message"], "Lookup refusal did not name the original retained proposal")
     after, aref, aread = runtime.snapshot("remove-owner-after")
     checks = _unchanged(before, after)
     runtime.record(records, "pending-module-removed", bref, aref, evidence + [response.receipt, aread], checks,
         actual={"stage": "proposal-lookup", "diagnostic": value["error"]["code"]},
-        extra={"generationBoundRetention": "The native reload replaced shell-local in-memory Agent stores; the old proposal is absent and was never retargeted or replayed.",
+        extra={"generationBoundRetention": "The native reload replaced shell-local in-memory Weaver stores; the old proposal is absent and was never retargeted or replayed.",
                "originalProposalId": pending.proposal["id"], "nativeMembership": membership_transitions})
     bootstrap = current.bootstrap().require_status(200)
     check(bootstrap.json()["data"]["providerStatus"] == "available", "Removing the resource made the unrelated actual provider unavailable")
@@ -585,7 +596,7 @@ def _autonomy_preflight(runtime):
     atomic_json(runtime.gate_file, {"commandId": "not-an-active-command", "epoch": str(uuid.uuid4()), "state": "release"})
     runtime.sign_in()
     evidence = _active_resource(runtime, "autonomy-preflight")
-    bootstrap = runtime.transport("autonomy-preflight-agent").bootstrap().require_status(200)
+    bootstrap = runtime.transport("autonomy-preflight-weaver").bootstrap().require_status(200)
     check(bootstrap.json()["data"]["providerStatus"] == "available", "The restored package left the actual provider unavailable before the autonomy matrix")
     return {"gateReleased": True, "evidence": [*evidence, bootstrap.receipt]}
 
@@ -674,9 +685,20 @@ def qualify_distributions(run):
         # Spec 1193 T028: explanation and troubleshooting of the active draft, its credential-disclosure control, a canary
         # search over every retained file and the packaged editor journey, through the same test-only catalog seam.
         qualify_workflow_explain(runtime)
+        # Spec 1193 T036: the workflow library (reviewed writes, lost responses resolved by their operation keys, a limited
+        # actor, organization disabled) and Reusable Workflow Templates, through a test-only lost-response seam the driver
+        # selects for the library inventory alone.
+        qualify_workflow_library(runtime)
+        # Spec 1193 T041: read-only versions (explain, compare, refused edits) and Executables (explain, stale hash, refused
+        # edits), with each Weaver feature deselected once for its deployment-shape control and selected again.
+        qualify_workflow_inspection(runtime)
+        # Spec 1193 T045: one exact Run explained read-only (a fault with a sensitive canary input, an in-progress Run, a limited
+        # actor, refused run controls), with the Runtime-side Weaver feature deselected once and selected again, and a canary
+        # search over every retained file.
+        qualify_workflow_run(runtime)
         # The #3440 inventory is appended after the unchanged original sequence, in the same
         # host pair, so the original38+4 keep their proven preconditions and order.
-        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION, BATCH_SECTION, EXPLAIN_SECTION)})
+        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION, BATCH_SECTION, EXPLAIN_SECTION, LIBRARY_SECTION, INSPECTION_SECTION, RUN_SECTION)})
         run.report["autonomyPreflight"] = _autonomy_preflight(runtime)
         run.save()
         qualify_witness_autonomy(runtime)

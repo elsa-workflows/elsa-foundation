@@ -1950,3 +1950,203 @@ Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.CompletionRequestedAt.get -> Sys
 Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.CompletionRequestedAt.init -> void
 Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Continuous.get -> bool
 Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Continuous.init -> void
+Elsa.Etl.Core.EtlSqlDestination
+Elsa.Etl.Core.EtlSqlDestination.Binding.get -> string!
+Elsa.Etl.Core.EtlSqlDestination.Binding.init -> void
+Elsa.Etl.Core.EtlSqlDestination.Deconstruct(out string! Binding, out string! Table, out System.Collections.Generic.IReadOnlyList<string!>! Key) -> void
+Elsa.Etl.Core.EtlSqlDestination.Equals(Elsa.Etl.Core.EtlSqlDestination? other) -> bool
+Elsa.Etl.Core.EtlSqlDestination.EtlSqlDestination(string! Binding, string! Table, System.Collections.Generic.IReadOnlyList<string!>! Key) -> void
+Elsa.Etl.Core.EtlSqlDestination.Key.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Etl.Core.EtlSqlDestination.Key.init -> void
+Elsa.Etl.Core.EtlSqlDestination.Table.get -> string!
+Elsa.Etl.Core.EtlSqlDestination.Table.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorKind.Sql = 3 -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+override Elsa.Etl.Core.EtlSqlDestination.<Clone>$() -> Elsa.Etl.Core.EtlSqlDestination!
+override Elsa.Etl.Core.EtlSqlDestination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlSqlDestination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlSqlDestination.ToString() -> string!
+override sealed Elsa.Etl.Core.EtlSqlDestination.Equals(Elsa.Etl.Core.EtlDestination? other) -> bool
+static Elsa.Etl.Core.EtlSqlDestination.operator !=(Elsa.Etl.Core.EtlSqlDestination? left, Elsa.Etl.Core.EtlSqlDestination? right) -> bool
+static Elsa.Etl.Core.EtlSqlDestination.operator ==(Elsa.Etl.Core.EtlSqlDestination? left, Elsa.Etl.Core.EtlSqlDestination? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorSqlEffectKey(string! effectId) -> string!
+Elsa.Etl.Core.Runtime.EtlSqlErrorKind
+Elsa.Etl.Core.Runtime.EtlSqlErrorKind.AlreadyExists = 3 -> Elsa.Etl.Core.Runtime.EtlSqlErrorKind
+Elsa.Etl.Core.Runtime.EtlSqlErrorKind.DuplicateKey = 2 -> Elsa.Etl.Core.Runtime.EtlSqlErrorKind
+Elsa.Etl.Core.Runtime.EtlSqlErrorKind.MissingConstraint = 5 -> Elsa.Etl.Core.Runtime.EtlSqlErrorKind
+Elsa.Etl.Core.Runtime.EtlSqlErrorKind.MissingObject = 4 -> Elsa.Etl.Core.Runtime.EtlSqlErrorKind
+Elsa.Etl.Core.Runtime.EtlSqlErrorKind.Rejected = 0 -> Elsa.Etl.Core.Runtime.EtlSqlErrorKind
+Elsa.Etl.Core.Runtime.EtlSqlErrorKind.Transient = 1 -> Elsa.Etl.Core.Runtime.EtlSqlErrorKind
+Elsa.Etl.Core.Runtime.EtlSqlTarget
+Elsa.Etl.Core.Runtime.EtlSqlTarget.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlSqlTarget!
+Elsa.Etl.Core.Runtime.EtlSqlTarget.Database.get -> string!
+Elsa.Etl.Core.Runtime.EtlSqlTarget.Database.init -> void
+Elsa.Etl.Core.Runtime.EtlSqlTarget.Deconstruct(out string! Host, out string? Port, out string! Database, out string? User) -> void
+Elsa.Etl.Core.Runtime.EtlSqlTarget.Equals(Elsa.Etl.Core.Runtime.EtlSqlTarget? other) -> bool
+Elsa.Etl.Core.Runtime.EtlSqlTarget.EtlSqlTarget(string! Host, string? Port, string! Database, string? User) -> void
+Elsa.Etl.Core.Runtime.EtlSqlTarget.Host.get -> string!
+Elsa.Etl.Core.Runtime.EtlSqlTarget.Host.init -> void
+Elsa.Etl.Core.Runtime.EtlSqlTarget.Port.get -> string?
+Elsa.Etl.Core.Runtime.EtlSqlTarget.Port.init -> void
+Elsa.Etl.Core.Runtime.EtlSqlTarget.User.get -> string?
+Elsa.Etl.Core.Runtime.EtlSqlTarget.User.init -> void
+Elsa.Etl.Core.Runtime.IEtlSqlEngine
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.Classify(System.Exception! exception) -> Elsa.Etl.Core.Runtime.EtlSqlErrorKind
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.CountUniqueKeys(string! table, System.Collections.Generic.IReadOnlyList<string!>! keyColumns) -> string!
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.CreateConnection(string! connectionString) -> System.Data.Common.DbConnection!
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.CreateLedger(string! ledgerTable) -> string!
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.DescribeTarget(string! connectionString) -> Elsa.Etl.Core.Runtime.EtlSqlTarget!
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.InsertLedger(string! ledgerTable) -> string!
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.MaxParameters.get -> int
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.Parameter(string! column, int row) -> string!
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.Provider.get -> string!
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.ReadLedgerHash(string! ledgerTable) -> string!
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.SessionSetup.get -> string?
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.Upsert(string! table, System.Collections.Generic.IReadOnlyList<string!>! columns, System.Collections.Generic.IReadOnlyList<string!>! keyColumns, int row) -> string!
+override Elsa.Etl.Core.Runtime.EtlSqlTarget.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlSqlTarget.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlSqlTarget.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlSqlTarget.operator !=(Elsa.Etl.Core.Runtime.EtlSqlTarget? left, Elsa.Etl.Core.Runtime.EtlSqlTarget? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlSqlTarget.operator ==(Elsa.Etl.Core.Runtime.EtlSqlTarget? left, Elsa.Etl.Core.Runtime.EtlSqlTarget? right) -> bool
+Elsa.Etl.Core.EtlSqlSource
+Elsa.Etl.Core.EtlSqlSource.Binding.get -> string!
+Elsa.Etl.Core.EtlSqlSource.Binding.init -> void
+Elsa.Etl.Core.EtlSqlSource.Columns.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>!
+Elsa.Etl.Core.EtlSqlSource.Columns.init -> void
+Elsa.Etl.Core.EtlSqlSource.Deconstruct(out string! Binding, out string! Table, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Columns, out System.Collections.Generic.IReadOnlyList<string!>! Key) -> void
+Elsa.Etl.Core.EtlSqlSource.Equals(Elsa.Etl.Core.EtlSqlSource? other) -> bool
+Elsa.Etl.Core.EtlSqlSource.EtlSqlSource(string! Binding, string! Table, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! Columns, System.Collections.Generic.IReadOnlyList<string!>! Key) -> void
+Elsa.Etl.Core.EtlSqlSource.Key.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Etl.Core.EtlSqlSource.Key.init -> void
+Elsa.Etl.Core.EtlSqlSource.Table.get -> string!
+Elsa.Etl.Core.EtlSqlSource.Table.init -> void
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotIsolation.get -> System.Data.IsolationLevel
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.IsLockRefusal(System.Exception! exception) -> bool
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotLock(string! table) -> string?
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.SnapshotSetup.get -> string?
+override Elsa.Etl.Core.EtlSqlSource.<Clone>$() -> Elsa.Etl.Core.EtlSqlSource!
+override Elsa.Etl.Core.EtlSqlSource.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlSqlSource.GetHashCode() -> int
+override Elsa.Etl.Core.EtlSqlSource.ToString() -> string!
+override sealed Elsa.Etl.Core.EtlSqlSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
+static Elsa.Etl.Core.EtlSqlSource.operator !=(Elsa.Etl.Core.EtlSqlSource? left, Elsa.Etl.Core.EtlSqlSource? right) -> bool
+static Elsa.Etl.Core.EtlSqlSource.operator ==(Elsa.Etl.Core.EtlSqlSource? left, Elsa.Etl.Core.EtlSqlSource? right) -> bool
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.ExtremeDatesAreInfinite.get -> bool
+Elsa.Etl.Core.EtlSqlSource.Watermark.get -> string?
+Elsa.Etl.Core.EtlSqlSource.Watermark.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.SourceWatermark.get -> long?
+Elsa.Etl.Core.Runtime.EtlConnectorPreparedRun.SourceWatermark.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Column.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Column.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.DefinitionId.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.DefinitionId.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Equals(Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceAlias.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceAlias.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Table.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Table.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.FindConnectorSourceWatermarkAsync(Elsa.Etl.Core.EtlScope! scope, Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<long?>
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.SelectSnapshot(string! table, System.Collections.Generic.IReadOnlyList<string!>! columns, System.Collections.Generic.IReadOnlyList<string!>! keyColumns, string? watermarkColumn) -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey? left, Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey? left, Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey? right) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.Deconstruct(out string! DefinitionId, out string! SourceAlias, out string! SourceHandle, out string! Table, out string! Column) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.EtlConnectorSourceWatermarkKey(string! DefinitionId, string! SourceAlias, string! SourceHandle, string! Table, string! Column) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceHandle.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorSourceWatermarkKey.SourceHandle.init -> void
+Elsa.Etl.Core.EtlRabbitMqDestination
+Elsa.Etl.Core.EtlRabbitMqDestination.Binding.get -> string!
+Elsa.Etl.Core.EtlRabbitMqDestination.Binding.init -> void
+Elsa.Etl.Core.EtlRabbitMqDestination.Deconstruct(out string! Binding, out string! Exchange, out string! RoutingKey) -> void
+Elsa.Etl.Core.EtlRabbitMqDestination.Equals(Elsa.Etl.Core.EtlRabbitMqDestination? other) -> bool
+Elsa.Etl.Core.EtlRabbitMqDestination.EtlRabbitMqDestination(string! Binding, string! Exchange, string! RoutingKey) -> void
+Elsa.Etl.Core.EtlRabbitMqDestination.Exchange.get -> string!
+Elsa.Etl.Core.EtlRabbitMqDestination.Exchange.init -> void
+Elsa.Etl.Core.EtlRabbitMqDestination.RoutingKey.get -> string!
+Elsa.Etl.Core.EtlRabbitMqDestination.RoutingKey.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorKind.RabbitMq = 4 -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
+Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind.Rejected = 1 -> Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
+Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind.Transient = 0 -> Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlRabbitMqMessage!
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Body.get -> System.ReadOnlyMemory<byte>
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Body.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Deconstruct(out string! MessageId, out System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, string!>>! Headers, out System.ReadOnlyMemory<byte> Body) -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Equals(Elsa.Etl.Core.Runtime.EtlRabbitMqMessage? other) -> bool
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.EtlRabbitMqMessage(string! MessageId, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, string!>>! Headers, System.ReadOnlyMemory<byte> Body) -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Headers.get -> System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, string!>>!
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Headers.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.MessageId.get -> string!
+Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.MessageId.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome
+Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome.Confirmed = 0 -> Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome
+Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome.Nacked = 2 -> Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome
+Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome.Unroutable = 1 -> Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlRabbitMqTarget!
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Deconstruct(out string! Host, out int Port, out string! VirtualHost, out string! User) -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Equals(Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? other) -> bool
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.EtlRabbitMqTarget(string! Host, int Port, string! VirtualHost, string! User) -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Host.get -> string!
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Host.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Port.get -> int
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Port.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.User.get -> string!
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.User.init -> void
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.VirtualHost.get -> string!
+Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.VirtualHost.init -> void
+Elsa.Etl.Core.Runtime.IEtlRabbitMqPublisher
+Elsa.Etl.Core.Runtime.IEtlRabbitMqPublisher.Classify(System.Exception! exception) -> Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
+Elsa.Etl.Core.Runtime.IEtlRabbitMqPublisher.DescribeTarget(string! connectionString) -> Elsa.Etl.Core.Runtime.EtlRabbitMqTarget!
+Elsa.Etl.Core.Runtime.IEtlRabbitMqPublisher.PublishAsync(string! connectionString, string! exchange, string! routingKey, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlRabbitMqMessage!>! messages, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlRabbitMqPublishOutcome>
+override Elsa.Etl.Core.EtlRabbitMqDestination.<Clone>$() -> Elsa.Etl.Core.EtlRabbitMqDestination!
+override Elsa.Etl.Core.EtlRabbitMqDestination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlRabbitMqDestination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlRabbitMqDestination.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.ToString() -> string!
+override sealed Elsa.Etl.Core.EtlRabbitMqDestination.Equals(Elsa.Etl.Core.EtlDestination? other) -> bool
+static Elsa.Etl.Core.EtlRabbitMqDestination.operator !=(Elsa.Etl.Core.EtlRabbitMqDestination? left, Elsa.Etl.Core.EtlRabbitMqDestination? right) -> bool
+static Elsa.Etl.Core.EtlRabbitMqDestination.operator ==(Elsa.Etl.Core.EtlRabbitMqDestination? left, Elsa.Etl.Core.EtlRabbitMqDestination? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.operator !=(Elsa.Etl.Core.Runtime.EtlRabbitMqMessage? left, Elsa.Etl.Core.Runtime.EtlRabbitMqMessage? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRabbitMqMessage.operator ==(Elsa.Etl.Core.Runtime.EtlRabbitMqMessage? left, Elsa.Etl.Core.Runtime.EtlRabbitMqMessage? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.operator !=(Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? left, Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRabbitMqTarget.operator ==(Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? left, Elsa.Etl.Core.Runtime.EtlRabbitMqTarget? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorRabbitMqEffectKey(string! effectId) -> string!
+Elsa.Etl.Core.EtlRabbitMqSource
+Elsa.Etl.Core.EtlRabbitMqSource.Binding.get -> string!
+Elsa.Etl.Core.EtlRabbitMqSource.Binding.init -> void
+Elsa.Etl.Core.EtlRabbitMqSource.Deconstruct(out string! Binding, out string! Queue, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>! Fields, out int MaxMessages) -> void
+Elsa.Etl.Core.EtlRabbitMqSource.Equals(Elsa.Etl.Core.EtlRabbitMqSource? other) -> bool
+Elsa.Etl.Core.EtlRabbitMqSource.EtlRabbitMqSource(string! Binding, string! Queue, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>! Fields, int MaxMessages) -> void
+Elsa.Etl.Core.EtlRabbitMqSource.Fields.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlJsonField!>!
+Elsa.Etl.Core.EtlRabbitMqSource.Fields.init -> void
+Elsa.Etl.Core.EtlRabbitMqSource.MaxMessages.get -> int
+Elsa.Etl.Core.EtlRabbitMqSource.MaxMessages.init -> void
+Elsa.Etl.Core.EtlRabbitMqSource.Queue.get -> string!
+Elsa.Etl.Core.EtlRabbitMqSource.Queue.init -> void
+const Elsa.Etl.Core.EtlRabbitMqSource.MaxMessagesLimit = 100000 -> int
+override Elsa.Etl.Core.EtlRabbitMqSource.<Clone>$() -> Elsa.Etl.Core.EtlRabbitMqSource!
+override Elsa.Etl.Core.EtlRabbitMqSource.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlRabbitMqSource.GetHashCode() -> int
+override Elsa.Etl.Core.EtlRabbitMqSource.ToString() -> string!
+override sealed Elsa.Etl.Core.EtlRabbitMqSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
+static Elsa.Etl.Core.EtlRabbitMqSource.operator !=(Elsa.Etl.Core.EtlRabbitMqSource? left, Elsa.Etl.Core.EtlRabbitMqSource? right) -> bool
+static Elsa.Etl.Core.EtlRabbitMqSource.operator ==(Elsa.Etl.Core.EtlRabbitMqSource? left, Elsa.Etl.Core.EtlRabbitMqSource? right) -> bool
+Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer
+Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer.Classify(System.Exception! exception) -> Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
+Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt
+Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.AcknowledgeAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer.ReceiveAsync(string! connectionString, string! queue, int maxMessages, System.Func<System.ReadOnlyMemory<byte>, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<bool>>! accept, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt!>
+Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.Count.get -> int
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.init -> void
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request, long pollGeneration) -> string!

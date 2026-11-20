@@ -4,7 +4,7 @@ import { describeApiError, tryExtractValidationErrors } from "../sdk";
 
 describe("authenticated HTTP transport", () => {
   it("attaches bearer tokens through the provider manager", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const auth = stubAuth("token-1");
     const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
 
@@ -16,7 +16,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("merges configured default headers before adding bearer tokens", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const auth = stubAuth("token-1");
     const client = createAuthenticatedHttpClient("https://foundation.example/", auth, {
       fetch: fetchMock,
@@ -34,7 +34,7 @@ describe("authenticated HTTP transport", () => {
   it("exposes response headers through getJsonWithHeaders, still bearing the bearer token", async () => {
     // Some endpoints put part of their contract in a header — the executable-artifact export names its
     // download in Content-Disposition (studio #493) — which the JSON verbs discard.
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { "content-disposition": "attachment; filename=\"orders-1.4.0-closure.json\"" }
     }));
@@ -52,7 +52,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("returns the untouched authenticated response for module-owned protocol actions", async () => {
-    const fetchMock = vi.fn(async () => new Response("accepted by HTTP driver", {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("accepted by HTTP driver", {
       status: 202,
       headers: { "content-type": "text/plain", "x-driver-result": "deferred" }
     }));
@@ -75,7 +75,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("returns the untouched response through the authenticated transport", async () => {
-    const fetchMock = vi.fn(async () => new Response("workflow response", {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("workflow response", {
       status: 202,
       statusText: "Accepted",
       headers: { "content-type": "text/plain; charset=utf-8" }
@@ -100,7 +100,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("preserves a Test Drive HTTP 401 without refreshing and replaying a live request", async () => {
-    const fetchMock = vi.fn(async () => new Response("workflow says unauthorized", {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("workflow says unauthorized", {
       status: 401,
       statusText: "Unauthorized",
       headers: { "content-type": "text/plain" }
@@ -126,7 +126,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("maps a failed getJsonWithHeaders response onto the same error as the JSON verbs", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: 409, detail: "Never published." }), {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ status: 409, detail: "Never published." }), {
       status: 409,
       headers: { "content-type": "application/problem+json" }
     }));
@@ -138,7 +138,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("surfaces problem details messages from failed responses", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
       errors: { name: ["Name is required."] }
     }), { status: 400, headers: { "content-type": "application/problem+json" } }));
     const auth = stubAuth("token-1");
@@ -170,7 +170,7 @@ describe("authenticated HTTP transport", () => {
         return { status: "authenticated", subject: "alice", roles: [], permissions: [], provider: { id: "builtin", kind: "openiddict" } };
       })
     };
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(typeof input === "string" ? input : input.toString());
       const authorization = new Headers(init?.headers).get("Authorization");
 
@@ -195,7 +195,7 @@ describe("authenticated HTTP transport", () => {
   it("fails closed without contacting a protected endpoint when preflight refresh does not issue a bearer", async () => {
     const sessionEnded = vi.fn();
     window.addEventListener(authSessionEndedEvent, sessionEnded);
-    const fetchMock = vi.fn(async () => new Response("<html>sign in</html>", { status: 200, headers: { "content-type": "text/html" } }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("<html>sign in</html>", { status: 200, headers: { "content-type": "text/html" } }));
     const auth = {
       getAccessToken: vi.fn(async () => null),
       refresh: vi.fn(async (): Promise<AuthSession> => ({ status: "anonymous", roles: [], permissions: [] }))
@@ -211,7 +211,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("fails closed without contacting a protected endpoint when preflight refresh rejects", async () => {
-    const fetchMock = vi.fn(async () => new Response("unexpected", { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("unexpected", { status: 200 }));
     const auth = {
       getAccessToken: vi.fn(async () => null),
       refresh: vi.fn(async (): Promise<AuthSession> => { throw new Error("refresh failed"); })
@@ -225,7 +225,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("keeps public requests bearer-less when a preflight refresh finds no session", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ public: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ public: true }), { status: 200 }));
     const auth = {
       getAccessToken: vi.fn(async () => null),
       refresh: vi.fn(async (): Promise<AuthSession> => ({ status: "anonymous", roles: [], permissions: [] }))
@@ -239,7 +239,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("preserves a caller-supplied authorization header without refreshing the provider", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const auth = {
       getAccessToken: vi.fn(async () => null),
       refresh: vi.fn(async (): Promise<AuthSession> => ({ status: "anonymous", roles: [], permissions: [] }))
@@ -253,7 +253,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it.each(["", "   "])("does not treat a blank caller authorization header as a credential (%j)", async authorization => {
-    const fetchMock = vi.fn(async () => new Response("<html>sign in</html>", { status: 200, headers: { "content-type": "text/html" } }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("<html>sign in</html>", { status: 200, headers: { "content-type": "text/html" } }));
     const auth = {
       getAccessToken: vi.fn(async () => null),
       refresh: vi.fn(async (): Promise<AuthSession> => ({ status: "anonymous", roles: [], permissions: [] }))
@@ -267,7 +267,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("removes a blank caller authorization header before sending a public request", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ public: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ public: true }), { status: 200 }));
     const auth = {
       getAccessToken: vi.fn(async () => null),
       refresh: vi.fn(async (): Promise<AuthSession> => ({ status: "anonymous", roles: [], permissions: [] }))
@@ -283,7 +283,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("does not preflight refresh when unauthorized retries are disabled", async () => {
-    const fetchMock = vi.fn(async () => new Response("unauthorized", { status: 401 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("unauthorized", { status: 401 }));
     const auth = {
       getAccessToken: vi.fn(async () => null),
       refresh: vi.fn(async (): Promise<AuthSession> => ({ status: "authenticated", subject: "alice", roles: [], permissions: [] }))
@@ -336,7 +336,7 @@ describe("authenticated HTTP transport", () => {
         return { status: "authenticated", subject: "alice", roles: [], permissions: [] };
       })
     };
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
 
     const requests = Promise.all([client.getJson("/_elsa/workflows"), client.getJson("/_elsa/workflows/dashboard/runs")]);
@@ -367,7 +367,7 @@ describe("authenticated HTTP transport", () => {
         return { status: "authenticated", subject: "bob", roles: [], permissions: [] };
       })
     };
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const clientA = createAuthenticatedHttpClient("https://foundation.example/", authA, { fetch: fetchMock });
     const clientB = createAuthenticatedHttpClient("https://foundation.example/", authB, { fetch: fetchMock });
 
@@ -381,7 +381,7 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("uses shared problem-details parsing for authenticated request failures", async () => {
-    const fetchMock = vi.fn(async () => new Response(
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(
       JSON.stringify({ errors: { Name: ["Name is required."] } }),
       { status: 422, headers: { "content-type": "application/json" } }));
     const auth = stubAuth("token-1");

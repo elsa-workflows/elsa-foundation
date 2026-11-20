@@ -13,8 +13,6 @@ namespace Elsa.Activities.Runtime.Services;
 /// </summary>
 public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalPayloadStore = null)
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-
     public ActivityCompletionProjection Project(
         string invocationId,
         ActivityAttempt attempt,
@@ -53,14 +51,13 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
 
         if (transition is not IActivityCompletionTransition completion)
             throw new InvalidOperationException($"Transition '{transition.Kind}' cannot be projected as an activity completion.");
-        if (!contract.Outcomes.Contains(completion.Outcome, StringComparer.Ordinal))
-            throw new InvalidOperationException($"VF-ACT-006: Outcome '{completion.Outcome}' is not declared by activity contract '{contract.ActivityTypeKey}'.");
+        ActivityOutcomeSelectionRules.Validate(contract, completion.Selection);
         if (contract.Result.IsRequired && completion.Result is null)
             throw new InvalidOperationException($"VF-ACT-006: Activity contract '{contract.ActivityTypeKey}' requires a result.");
         if (!contract.Result.Policy.IsPersistable)
             return ProjectTransient(invocationId, attempt, contract, completion, completedAt);
 
-        var resultJson = JsonSerializer.SerializeToElement(completion.Result, completion.ResultType, SerializerOptions);
+        var resultJson = JsonSerializer.SerializeToElement(completion.Result, completion.ResultType, ActivityValueJson.Options);
         var resultPolicy = contract.Result.Projections.Values.Aggregate(
             contract.Result.Policy,
             (policy, projection) => ValuePolicyCombiner.Combine(
@@ -126,7 +123,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
             invocationId,
             attempt.AttemptId,
             resultEnvelope,
-            completion.Outcome,
+            completion.Selection,
             completedAt,
             contract.SchemaFingerprint);
         return new ActivityCompletionProjection(durableCompletion, projections);
@@ -163,7 +160,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
             invocationId,
             attempt.AttemptId,
             resultEnvelope,
-            completion.Outcome,
+            completion.Selection,
             completedAt,
             contract.SchemaFingerprint);
 

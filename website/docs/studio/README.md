@@ -2,9 +2,9 @@
 
 Elsa Studio is the visual client you use with an Elsa server: you design workflows, publish them, run them and inspect what happened.
 
-To set it up next to a server, follow the Foundation [Docker Compose quick start](https://github.com/elsa-workflows/elsa-foundation/blob/main/docker/compose/README.md#quick-start--published-images-no-clone-or-build). It documents the published Workbench and Studio reference pair and the settings that connect them. Use matching server and Studio versions.
+To try a published Workbench and Studio image pair, follow [Try Elsa locally](../essentials/quickstart.md). Those images are pinned by digest and are not built from current `main`. To run Studio from this repository, use the [Studio source quickstart](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/docs/contributing/studio-source-quickstart.md) with a source-built Workbench.
 
-Studio's source lives in the [`Studio/` folder](https://github.com/elsa-workflows/elsa-foundation/tree/main/Studio) of the Foundation repository. Older issues remain in the former [Elsa Foundation Studio repository](https://github.com/elsa-workflows/elsa-foundation-studio).
+Studio's source lives in the [`Studio/` folder](https://github.com/elsa-workflows/elsa-foundation/tree/main/Studio) of the Foundation repository. See the [Studio overview](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/README.md) and [Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation/blob/main/Studio/CONTRIBUTING.md). Older issues remain in the former [Elsa Foundation Studio repository](https://github.com/elsa-workflows/elsa-foundation-studio).
 
 Use [folders, tags and saved views](organizing-workflows.md) to organize a large workflow library.
 

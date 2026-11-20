@@ -5,12 +5,12 @@ import { collectWorkflowContextActivities, collectWorkflowContextConnections, co
 import { readSecretReference, type SecretReferenceView } from "../maskedInput";
 import { getChildSlots } from "../workflowAdapter";
 import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import { indexActivityPresentation } from "../activityPresentation";
 import { admittedSnapshotLength, collectGraphActivityReferences, collectSelectedActivityContext, collectWorkflowContextDiagnostics } from "./workflowExplainContext";
 
 interface WorkflowContextBridgeParams {
-  controller?: WorkflowAgentController;
+  controller?: WorkflowWeaverController;
   clientId: string;
   details: WorkflowDefinitionDetails | null;
   draft: WorkflowDraft | null;
@@ -28,6 +28,8 @@ interface WorkflowContextBridgeParams {
    * these (spec 1193 FR-018); without it the draft's own reconciled errors are disclosed.
    */
   validationErrors?: ValidationError[] | null;
+  /** A template editor's own resource (FR-024); absent for a workflow definition draft. */
+  weaverResource?: { resourceType: "workflow-template"; contentType: "workflows.template-editor"; revision(): string | null };
 }
 
 function resolveActivityType(node: ActivityNode | null, descriptor: StudioActivityDescriptor | null, catalogByVersion: Map<string, ActivityCatalogItem>) {
@@ -47,7 +49,8 @@ export function useWorkflowContextBridge({
   inspectedIsScopeOwner,
   catalogByVersion,
   historical = false,
-  validationErrors
+  validationErrors,
+  weaverResource
 }: WorkflowContextBridgeParams) {
   // The full-tree walks depend only on the draft + catalog; memoized so selection/inspection changes
   // (which re-fire the effect) only rewrite the scalar snapshot fields.
@@ -56,7 +59,7 @@ export function useWorkflowContextBridge({
   const selectionKey = JSON.stringify([details?.definition?.id, selectedNodeId]);
   const activeGeneration = useRef<string | null>(null);
   const authorized = useRef(true);
-  const committedBinding = useRef<{ controller: WorkflowAgentController | undefined; clientId: string } | null>(null);
+  const committedBinding = useRef<{ controller: WorkflowWeaverController | undefined; clientId: string } | null>(null);
   useEffect(() => {
     const previous = committedBinding.current;
     if (!previous || previous.controller !== controller || previous.clientId !== clientId) {
@@ -81,14 +84,18 @@ export function useWorkflowContextBridge({
     void selectionKey;
     const generation = activeGeneration.current;
     if (!controller || !details?.definition || !draft || !authorized.current || !generation) return;
-    const target = { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-definition", resourceId: details.definition.id, revision: getDraftContentRevision(draft), displayName: details.definition.name };
+    // A template is its own resource: its identity and persisted revision replace the definition and draft (FR-005, FR-024).
+    const templateRevision = weaverResource?.revision() ?? null;
+    if (weaverResource && !templateRevision) return;
+    const target = { moduleId: "Elsa.Studio.Workflows", resourceType: weaverResource?.resourceType ?? "workflow-definition", resourceId: details.definition.id, revision: getDraftContentRevision(draft), displayName: details.definition.name };
+    const identity: Record<string, string> = weaverResource ? { templateId: details.definition.id, templateRevision: templateRevision! } : { workflowDefinitionId: details.definition.id, draftId: draft.id };
     const attachment = {
-      id: `workflow:${details.definition.id}`, moduleId: "Elsa.Studio.Workflows", schemaVersion: "1", target,
-      source: "workflow", sourceId: details.definition.id, label: details.definition.name, contentType: "workflow.definition", sensitivity: "internal" as const,
-      scope: selectedNodeId ? "selection" : "screen", origin: "clientSnapshot" as const, client: { clientId, generationId: generation }, agentScopes: ["workflow-author"],
-      summary: details.definition.name, references: { workflowDefinitionId: details.definition.id, draftId: draft.id, revision: target.revision },
+      id: `${weaverResource ? "workflow-template" : "workflow"}:${details.definition.id}`, moduleId: "Elsa.Studio.Workflows", schemaVersion: "1", target,
+      source: "workflow", sourceId: details.definition.id, label: details.definition.name, contentType: weaverResource?.contentType ?? "workflow.definition", sensitivity: "internal" as const,
+      scope: selectedNodeId ? "selection" : "screen", origin: "clientSnapshot" as const, client: { clientId, generationId: generation }, weaverScopes: ["workflow-author"],
+      summary: details.definition.name, references: { ...identity, revision: target.revision },
       content: buildWorkflowSnapshotContent(draft, catalogByVersion, {
-        header: { workflowDefinitionId: details.definition.id, draftId: draft.id, revision: target.revision, selectedNodeId,
+        header: { ...identity, revision: target.revision, selectedNodeId,
           selectedActivityType: resolveActivityType(selectedNode, selectedDescriptor, catalogByVersion),
           inspectedNodeId: inspectedNode?.nodeId ?? null, inspectedActivityType: resolveActivityType(inspectedNode, inspectedDescriptor, catalogByVersion), inspectedIsScopeOwner,
           workingState: historical ? "historical" : "draft" },
@@ -97,7 +104,7 @@ export function useWorkflowContextBridge({
     };
     controller.snapshot = attachment;
     return () => { if (controller.snapshot === attachment) controller.snapshot = null; };
-  }, [catalogByVersion, clientId, controller, details, draft, historical, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, parts, selectedDescriptor, selectedNode, selectedNodeId, selectionKey, validationErrors]);
+  }, [weaverResource, catalogByVersion, clientId, controller, details, draft, historical, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, parts, selectedDescriptor, selectedNode, selectedNodeId, selectionKey, validationErrors]);
 }
 
 /** The draft-derived walks of the snapshot, which depend only on the draft and the catalog (so the bridge memoizes them). */
@@ -118,10 +125,14 @@ export function collectWorkflowSnapshotParts(draft: WorkflowDraft, catalogByVers
   const activities = collectWorkflowContextActivities(draft.state.rootActivity, catalogByVersion, [], indexActivityPresentation(draft.activityPresentation));
   const byNode = collectWorkflowContextStructure(draft.state.rootActivity, catalogByVersion);
   const structure = compactWorkflowStructure(activities, byNode, [...(draft.layout ?? []), ...(draft.activityPresentation ?? [])].map(record => record.nodeId));
+  const placed = new Set(activities.map(activity => activity.id));
   return {
     activities,
     connections: collectWorkflowContextConnections(draft.state.rootActivity, catalogByVersion),
-    positions: (draft.layout ?? []).map(item => ({ nodeId: item.nodeId, x: item.x, y: item.y })),
+    // Only placed activities: a layout record the draft still holds for a removed node (kept by the side table) names no
+    // activity, and the server admits positions only for the snapshot's own activities. Its id stays in reservedIds.
+    positions: (draft.layout ?? []).filter(item => placed.has(item.nodeId))
+      .map(item => ({ nodeId: item.nodeId, x: item.x, y: item.y })),
     // Visible Secret References are those the draft already binds: names, types and scopes only, never a value.
     secretReferences: collectVisibleSecretReferences(draft.state.rootActivity, catalogByVersion),
     structure,
@@ -148,8 +159,8 @@ export interface WorkflowSnapshotOptions {
  * definition and version (never their bodies), and the selected activity's declared properties with withheld credentials.
  *
  * The size guard keeps the content inside the effective admission bound: the host's 32 KiB per-attachment budget on the
- * server's admitted projection (`AgentContextServices`), which is tighter than the module's own 64 KiB bound on what the
- * editor sends (`WorkflowAgentSnapshot`). Parts are left out in this order, each only while the content is still over:
+ * server's admitted projection (`WeaverContextServices`), which is tighter than the module's own 64 KiB bound on what the
+ * editor sends (`WorkflowWeaverSnapshot`). Parts are left out in this order, each only while the content is still over:
  * the selected activity's property context, then the diagnostics (their count stays in `diagnosticsOmitted`), then the
  * structure (explanation keeps working; an Operation Batch then says the structure is required).
  */
@@ -182,16 +193,16 @@ export function buildWorkflowSnapshotContent(draft: WorkflowDraft, catalogByVers
   return content;
 }
 
-/** The server's bound on `workflow.definition` content (`WorkflowAgentSnapshot`), in UTF-16 code units of its JSON text. */
+/** The server's bound on `workflow.definition` content (`WorkflowWeaverSnapshot`), in UTF-16 code units of its JSON text. */
 export const workflowSnapshotContentLimit = 65536;
 /**
- * The host's bound on one context attachment's content (`AgentContextServices`: `JsonSerializer.Serialize(content).Length`
+ * The host's bound on one context attachment's content (`WeaverContextServices`: `JsonSerializer.Serialize(content).Length`
  * over the admitted projection, at most 32,768), which every admitted workflow snapshot must also fit.
  */
 export const workflowContextCandidateBudget = 32768;
 /**
  * Headroom below the host budget. The estimate (`admittedSnapshotLength`) equals the host's measure on the shared fixture
- * (`workflowExplainSnapshot.json`, held equal by Elsa.Agent.Tests); this covers number formatting the two may differ on.
+ * (`workflowExplainSnapshot.json`, held equal by Elsa.Weaver.Tests); this covers number formatting the two may differ on.
  */
 const workflowCandidateMargin = 256;
 /** Headroom for differences between this serialization and the raw text the server bounds at 64 KiB. */

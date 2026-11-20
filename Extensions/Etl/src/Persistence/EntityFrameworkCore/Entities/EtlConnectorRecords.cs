@@ -40,6 +40,16 @@ internal sealed class EtlConnectorPartitionRecord
     public long RetainedOutputBytes { get; set; }
     public long? CurrentRequestSequence { get; set; }
     public string? CurrentRequestHash { get; set; }
+    /// <summary>Caught-up polls a continuous shard has recorded; part of its page-cache key above 0 (spec 1196).</summary>
+    public long PollGeneration { get; set; }
+    /// <summary>The base page sequence of a compacted continuous shard: pages below it were deleted (spec 1196).</summary>
+    public long CompactedPageCount { get; set; }
+    public long CompactedBatchCount { get; set; }
+    public long CompactedAcceptedRecords { get; set; }
+    public long CompactedRejectedRecords { get; set; }
+    public long CompactedFilteredRecords { get; set; }
+    public long CompactedMainEffects { get; set; }
+    public long CompactedErrorEffects { get; set; }
     public long Revision { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }
@@ -105,5 +115,18 @@ internal sealed class EtlConnectorHttpPageRecord
     public string PageDigest { get; set; } = null!;
     public long MetadataBytes { get; set; }
     public int AcceptedItemCount { get; set; }
+    public string SchemaVersion { get; set; } = null!;
+}
+
+/// <summary>The high watermark of the last completed run for one SQL source checkpoint (spec 1199).</summary>
+internal sealed class EtlConnectorSourceWatermarkRecord
+{
+    public string ScopeKey { get; set; } = null!;
+    /// <summary>The hash of the definition, source alias, pinned source handle, table and watermark column.</summary>
+    public string CheckpointKey { get; set; } = null!;
+    public long Watermark { get; set; }
+    /// <summary>The run whose completion last raised the checkpoint.</summary>
+    public string RunKey { get; set; } = null!;
+    public long UpdatedAtUtcTicks { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }

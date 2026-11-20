@@ -71,7 +71,7 @@ internal static class ChildControlDelivery
             if (child.Status != ActivityExecutionStatus.Completed || child.Completion is null ||
                 !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(child.ChildControl), JsonSerializer.SerializeToElement(decision.Ready[^1])))
                 throw new InvalidOperationException("A ready terminal barrier requires its exact committed ordinary leaf completion.");
-            outcomes = [child.Completion.OutcomeKey];
+            outcomes = child.Completion.OutcomeNames;
         }
         await StructuralCallbackEvaluation.RunAsync(services, timeProvider, workItem, payload,
             new StructuralCallbackEvaluation.Definition
@@ -92,7 +92,8 @@ internal static class ChildControlDelivery
                 NewFaultIncidentRecordRequest = (committer, state, exception, subStatus, snapshots) =>
                     new ActivityFaultIncidentRecordRequest(committer, workItem, state.InvocationId, state.Execution.ExecutableNodeId,
                         state, exception, subStatus, new Dictionary<string, string> { [RuntimeMetadataKeys.CheckpointReason] = "ChildControlEvaluation" },
-                        new Dictionary<string, string>(), snapshots),
+                        // Every fault arm (a throw, a returned fault, a failed disposal) names the child whose batches the consumer received.
+                        new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlActivityExecutionId] = incoming.CallingActivityExecutionId }, snapshots),
                 ChildControlContribution = contribution
             }, alreadyProcessed: null, cancellationToken);
     }

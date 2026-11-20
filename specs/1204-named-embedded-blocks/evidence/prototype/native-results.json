@@ -1,0 +1,3215 @@
+{
+  "source": "b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+  "retainedHarnessCases": 22,
+  "additionalControlCases": 4,
+  "status": "Passed",
+  "cases": [
+    {
+      "name": "seq-out-to-in-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a36647237a629676581e69c05f60",
+      "publication": {
+        "publicationId": "publication-14tXj7z9ex2",
+        "definitionId": "14tXj7JmfiB",
+        "versionId": "14tXj7LwyVp",
+        "definitionVersionId": "14tXj7LwyVp",
+        "artifactId": "artifact-ce6aef670f36",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXj7z9ex2",
+        "createdAt": "2026-11-03T21:52:31.135491+00:00",
+        "activatedAt": "2026-11-03T21:52:31.482615+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:ce6aef670f366d987a64e02758fb6ed79e3cfea7db19273fc638f9347ab4fff3",
+        "rootActivityId": "root",
+        "nodeCount": 3
+      },
+      "final": {
+        "workflowExecutionId": "01a1a36647237a629676581e69c05f60",
+        "artifactId": "artifact-ce6aef670f36",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36647c5781db31196d631d35d66",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36648da7c348f0f0c8cd96c6d0f",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36647c5781db31196d631d35d66",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664887791580cedb086f9501c8",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36647c5781db31196d631d35d66",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:31.983817+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "seq-in-to-out-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3664b127cf796b79b49269fcabb",
+      "publication": {
+        "publicationId": "publication-14tXjE1pVsj",
+        "definitionId": "14tXjDss7y4",
+        "versionId": "14tXjDt0JqM",
+        "definitionVersionId": "14tXjDt0JqM",
+        "artifactId": "artifact-ce6aef670f36",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjE1pVsj",
+        "createdAt": "2026-11-03T21:52:32.455244+00:00",
+        "activatedAt": "2026-11-03T21:52:32.505869+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:ce6aef670f366d987a64e02758fb6ed79e3cfea7db19273fc638f9347ab4fff3",
+        "rootActivityId": "root",
+        "nodeCount": 3
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3664b127cf796b79b49269fcabb",
+        "artifactId": "artifact-ce6aef670f36",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3664b4676e4a4daed1caf0c79b3",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a3664b2e73e8922bb08b169e5277",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664b2e73e8922bb08b169e5277",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664b3e7a9bb6201c217daabc47",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a3664b2e73e8922bb08b169e5277",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:32.587779+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "seq-out-to-in-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3664bfa7705857bde23536e28ab",
+      "publication": {
+        "publicationId": "publication-14tXjF8zVJ6",
+        "definitionId": "14tXjF0fkjv",
+        "versionId": "14tXjF0vj9n",
+        "definitionVersionId": "14tXjF0vj9n",
+        "artifactId": "artifact-a41344edb776",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjF8zVJ6",
+        "createdAt": "2026-11-03T21:52:32.698613+00:00",
+        "activatedAt": "2026-11-03T21:52:32.751896+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:a41344edb776e1a6f09d4d82c4f8df6f12f50897ff5baddc1529cca3eff24e1e",
+        "rootActivityId": "root",
+        "nodeCount": 4
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3664bfa7705857bde23536e28ab",
+        "artifactId": "artifact-a41344edb776",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3664c1a78de86a94ad191654276",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664c2770b09580a95d055b217a",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a3664c1a78de86a94ad191654276",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664c3077e6a2ea13d8a8a64b00",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a3664c1a78de86a94ad191654276",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664c3679c1a973d59d0ab57717",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a3664c3077e6a2ea13d8a8a64b00",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:32.828026+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "seq-in-to-out-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3664caf7790be5a8f4336b7a59e",
+      "publication": {
+        "publicationId": "publication-14tXjG41xqv",
+        "definitionId": "14tXjG0isyw",
+        "versionId": "14tXjG0pahZ",
+        "definitionVersionId": "14tXjG0pahZ",
+        "artifactId": "artifact-4d03fad6b24f",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjG41xqv",
+        "createdAt": "2026-11-03T21:52:32.899805+00:00",
+        "activatedAt": "2026-11-03T21:52:32.935873+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:4d03fad6b24f9091cef2a5ee264e225183728b2ccf742382035cf75be1c309e2",
+        "rootActivityId": "root",
+        "nodeCount": 4
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3664caf7790be5a8f4336b7a59e",
+        "artifactId": "artifact-4d03fad6b24f",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3664cd174978002ff5ba4ef503e",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a3664cb971258824cce48313e94d",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664cb971258824cce48313e94d",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664cc87986b9712ef99d6ab186",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a3664cc273039317455769e7d921",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664cc273039317455769e7d921",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a3664cb971258824cce48313e94d",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:32.982138+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "flow-out-to-in-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3664d24776091a0bdeb83c8db3b",
+      "publication": {
+        "publicationId": "publication-14tXjGfModS",
+        "definitionId": "14tXjGcUiZd",
+        "versionId": "14tXjGccmO1",
+        "definitionVersionId": "14tXjGccmO1",
+        "artifactId": "artifact-ce6aef670f36",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjGfModS",
+        "createdAt": "2026-11-03T21:52:33.031359+00:00",
+        "activatedAt": "2026-11-03T21:52:33.05483+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:ce6aef670f366d987a64e02758fb6ed79e3cfea7db19273fc638f9347ab4fff3",
+        "rootActivityId": "root",
+        "nodeCount": 3
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3664d24776091a0bdeb83c8db3b",
+        "artifactId": "artifact-ce6aef670f36",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3664d3170c2b40af05712140c28",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a3664d287c39b50621f6d683cfa5",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664d287c39b50621f6d683cfa5",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664d367e5ca94c982fb5d2f864",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a3664d287c39b50621f6d683cfa5",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:33.081857+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "flow-in-to-out-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3664d8b71e08e3ddcf0f1c3a19b",
+      "publication": {
+        "publicationId": "publication-14tXjH8hFVG",
+        "definitionId": "14tXjH58Vkw",
+        "versionId": "14tXjH4xUX8",
+        "definitionVersionId": "14tXjH4xUX8",
+        "artifactId": "artifact-ce6aef670f36",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjH8hFVG",
+        "createdAt": "2026-11-03T21:52:33.13442+00:00",
+        "activatedAt": "2026-11-03T21:52:33.157901+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:ce6aef670f366d987a64e02758fb6ed79e3cfea7db19273fc638f9347ab4fff3",
+        "rootActivityId": "root",
+        "nodeCount": 3
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3664d8b71e08e3ddcf0f1c3a19b",
+        "artifactId": "artifact-ce6aef670f36",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3664d9c7f55933f45fcbb84cd45",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a3664d90765ead6a2e6a2e0a7401",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664d977068bce193fded395b91",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a3664d90765ead6a2e6a2e0a7401",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664d90765ead6a2e6a2e0a7401",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:33.18403+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "flow-out-to-in-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3664dfa7cc2a486467ced9e044d",
+      "publication": {
+        "publicationId": "publication-14tXjHbvvB1",
+        "definitionId": "14tXjHYjV3F",
+        "versionId": "14tXjHYsiVg",
+        "definitionVersionId": "14tXjHYsiVg",
+        "artifactId": "artifact-b2de1f57cb88",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjHbvvB1",
+        "createdAt": "2026-11-03T21:52:33.237351+00:00",
+        "activatedAt": "2026-11-03T21:52:33.267818+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:b2de1f57cb88650321d234de23ed8d6c4497a97939636bae90534244c787496b",
+        "rootActivityId": "root",
+        "nodeCount": 4
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3664dfa7cc2a486467ced9e044d",
+        "artifactId": "artifact-b2de1f57cb88",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3664e107086847c84c6fc113b28",
+            "node": "block",
+            "type": "Elsa.Activities.Flowchart.Activities.Flowchart",
+            "status": "Completed",
+            "parent": "01a1a3664e0270f6a60d2596a2100682",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664e2e7ee480eb64b2984b9d5b",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a3664e107086847c84c6fc113b28",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664e0b7885b2cdce161341d92d",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a3664e0270f6a60d2596a2100682",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664e0270f6a60d2596a2100682",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:33.330014+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "flow-in-to-out-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3664e957156b73a927077293f37",
+      "publication": {
+        "publicationId": "publication-14tXjIL7RAt",
+        "definitionId": "14tXjIIdOTS",
+        "versionId": "14tXjIITZ3P",
+        "definitionVersionId": "14tXjIITZ3P",
+        "artifactId": "artifact-5a26541fc2e3",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjIL7RAt",
+        "createdAt": "2026-11-03T21:52:33.396836+00:00",
+        "activatedAt": "2026-11-03T21:52:33.422848+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:5a26541fc2e3b21ae4e82b392f013b0de83921db3c7bdd8b66e25960fd011d27",
+        "rootActivityId": "root",
+        "nodeCount": 4
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3664e957156b73a927077293f37",
+        "artifactId": "artifact-5a26541fc2e3",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3664ea47e8da2b992db91567b60",
+            "node": "block",
+            "type": "Elsa.Activities.Flowchart.Activities.Flowchart",
+            "status": "Completed",
+            "parent": "01a1a3664e9c7b3583277a78e547e8ed",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664ea978b4ba7b4bdd90d20ae8",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a3664ea47e8da2b992db91567b60",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664eb07197acbe430b47aa5ff0",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a3664e9c7b3583277a78e547e8ed",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664e9c7b3583277a78e547e8ed",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:33.460078+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "bpmn-out-to-in-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3664f047395b327c1bd6fa72b67",
+      "publication": {
+        "publicationId": "publication-14tXjIq9TzC",
+        "definitionId": "14tXjInBsIs",
+        "versionId": "14tXjInA1Tu",
+        "definitionVersionId": "14tXjInA1Tu",
+        "artifactId": "artifact-ce6aef670f36",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjIq9TzC",
+        "createdAt": "2026-11-03T21:52:33.50653+00:00",
+        "activatedAt": "2026-11-03T21:52:33.533834+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:ce6aef670f366d987a64e02758fb6ed79e3cfea7db19273fc638f9347ab4fff3",
+        "rootActivityId": "root",
+        "nodeCount": 3
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3664f047395b327c1bd6fa72b67",
+        "artifactId": "artifact-ce6aef670f36",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3664f097d9bb9e3a2939bd7b38b",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664f1072cc8e8c86e6eb48872d",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a3664f097d9bb9e3a2939bd7b38b",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664f1574cb84f998bbc094880a",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a3664f097d9bb9e3a2939bd7b38b",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:33.560873+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "bpmn-in-to-out-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3664f59724da5b13353de109adb",
+      "publication": {
+        "publicationId": "publication-14tXjJGovDD",
+        "definitionId": "14tXjJEPcwa",
+        "versionId": "14tXjJEMxgC",
+        "definitionVersionId": "14tXjJEMxgC",
+        "artifactId": "artifact-ce6aef670f36",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjJGovDD",
+        "createdAt": "2026-11-03T21:52:33.599496+00:00",
+        "activatedAt": "2026-11-03T21:52:33.620803+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:ce6aef670f366d987a64e02758fb6ed79e3cfea7db19273fc638f9347ab4fff3",
+        "rootActivityId": "root",
+        "nodeCount": 3
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3664f59724da5b13353de109adb",
+        "artifactId": "artifact-ce6aef670f36",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3664f5d79258e4c2e85294619b9",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664f697bd2a1e944474f5d8581",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a3664f5d79258e4c2e85294619b9",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664f6472449c66f4b31227fbbb",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a3664f5d79258e4c2e85294619b9",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:33.644115+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "bpmn-out-to-in-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3664fce7fb996c7341cf3741ddc",
+      "publication": {
+        "publicationId": "publication-14tXjJevEzU",
+        "definitionId": "14tXjJcqZqU",
+        "versionId": "14tXjJcpIYf",
+        "definitionVersionId": "14tXjJcpIYf",
+        "artifactId": "artifact-f165ebdcbd34",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjJevEzU",
+        "createdAt": "2026-11-03T21:52:33.684125+00:00",
+        "activatedAt": "2026-11-03T21:52:33.738198+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:f165ebdcbd34c9c6b348226d38d1a42c3c1031bb4ba6811f12d71f20b709cef3",
+        "rootActivityId": "root",
+        "nodeCount": 4
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3664fce7fb996c7341cf3741ddc",
+        "artifactId": "artifact-f165ebdcbd34",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a366502575d396e24e3885a166ba",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a3664fde78578396d1287dc6325a",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664fd2764899575637aec9ceac",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664fd97421a5a74d8ab9bf772e",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a3664fd2764899575637aec9ceac",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3664fde78578396d1287dc6325a",
+            "node": "block",
+            "type": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+            "status": "Completed",
+            "parent": "01a1a3664fd2764899575637aec9ceac",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:33.838489+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "bpmn-in-to-out-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3665081759a90e19cd427e04ec4",
+      "publication": {
+        "publicationId": "publication-14tXjKbzsbx",
+        "definitionId": "14tXjKaKGtI",
+        "versionId": "14tXjKaWHA7",
+        "definitionVersionId": "14tXjKaWHA7",
+        "artifactId": "artifact-821dd153e761",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjKbzsbx",
+        "createdAt": "2026-11-03T21:52:33.893484+00:00",
+        "activatedAt": "2026-11-03T21:52:33.917093+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:821dd153e761d0d4c20e4cb63947c9b9e6d3a11f0cdcf02d79f200b7c2717e99",
+        "rootActivityId": "root",
+        "nodeCount": 4
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3665081759a90e19cd427e04ec4",
+        "artifactId": "artifact-821dd153e761",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36650a078968776e9141ad915b3",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366508b73d0a3a59a413d59a112",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36650af7019ba98317ebc3694e0",
+            "node": "consumer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a366508577b58a048ea6173cde1d",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366508577b58a048ea6173cde1d",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366508b73d0a3a59a413d59a112",
+            "node": "block",
+            "type": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+            "status": "Completed",
+            "parent": "01a1a366508577b58a048ea6173cde1d",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "42",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:33.973454+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "loop-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a366510f72aa925390a1b97b8714",
+      "publication": {
+        "publicationId": "publication-14tXjLDaZ4w",
+        "definitionId": "14tXjL64Qjw",
+        "versionId": "14tXjL5oIv7",
+        "definitionVersionId": "14tXjL5oIv7",
+        "artifactId": "artifact-9cd9e46c4cf0",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjLDaZ4w",
+        "createdAt": "2026-11-03T21:52:34.025391+00:00",
+        "activatedAt": "2026-11-03T21:52:34.057982+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:9cd9e46c4cf06288bceb73b50b241c9c5da5ee3cec3487d0c439eaa54f99cf70",
+        "rootActivityId": "root",
+        "nodeCount": 7
+      },
+      "final": {
+        "workflowExecutionId": "01a1a366510f72aa925390a1b97b8714",
+        "artifactId": "artifact-9cd9e46c4cf0",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36652737e59b0336f15cb9df9a2",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366526278c991517efb0cf11145",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36651147a17afbb0d2ec763b27a",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36652967a6e838a7aeb8a87f210",
+            "node": "consumer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366528571d09d0cd139d2bc4bf2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366528571d09d0cd139d2bc4bf2",
+            "node": "body",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a366511c769ab7928df947bc0600",
+            "branch": null,
+            "iteration": "01a1a366511c769ab7928df947bc0600:iter:01a1a366526278c991517efb0cf11145"
+          },
+          {
+            "id": "01a1a36652667240a27f4f1f4ec0bb5e",
+            "node": "increment",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a366526278c991517efb0cf11145",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36652a57e898ab6716e1b0431eb",
+            "node": "increment",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36652a0789a95242810fcab025c",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36652797bd8af95751dd98960e3",
+            "node": "consumer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366526278c991517efb0cf11145",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36652af7aadb98d3a8a81428640",
+            "node": "consumer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36652a0789a95242810fcab025c",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36652bc78c1b888a0d32e6dfb1e",
+            "node": "last",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36651147a17afbb0d2ec763b27a",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366526278c991517efb0cf11145",
+            "node": "body",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a366511c769ab7928df947bc0600",
+            "branch": null,
+            "iteration": "01a1a366511c769ab7928df947bc0600:iter:0"
+          },
+          {
+            "id": "01a1a36652897da58de70d324a508544",
+            "node": "increment",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a366528571d09d0cd139d2bc4bf2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36652a9761182c73131dbb6af43",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36652a0789a95242810fcab025c",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366528e76f39d49606d7fd7c893",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366528571d09d0cd139d2bc4bf2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36652a0789a95242810fcab025c",
+            "node": "body",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a366511c769ab7928df947bc0600",
+            "branch": null,
+            "iteration": "01a1a366511c769ab7928df947bc0600:iter:01a1a366528571d09d0cd139d2bc4bf2"
+          },
+          {
+            "id": "01a1a366511c769ab7928df947bc0600",
+            "node": "loop",
+            "type": "Elsa.Activities.While.Activities.While",
+            "status": "Completed",
+            "parent": "01a1a36651147a17afbb0d2ec763b27a",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "counter": {
+            "value": {
+              "kind": "number",
+              "typeName": "Elsa.Any",
+              "value": 3
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:34.495367+00:00"
+          }
+        },
+        "incidents": []
+      },
+      "consumerValues": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "name": "loop-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a36653517560b0ccf892d3916dcd",
+      "publication": {
+        "publicationId": "publication-14tXjNtetYZ",
+        "definitionId": "14tXjNrdm5f",
+        "versionId": "14tXjNrZt3w",
+        "definitionVersionId": "14tXjNrZt3w",
+        "artifactId": "artifact-2570bb76ccc0",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjNtetYZ",
+        "createdAt": "2026-11-03T21:52:34.610331+00:00",
+        "activatedAt": "2026-11-03T21:52:34.635306+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:2570bb76ccc0a357fb5f5c76ef89b3eda2595c4ef34e37a10cb17a67ea4d2231",
+        "rootActivityId": "root",
+        "nodeCount": 8
+      },
+      "final": {
+        "workflowExecutionId": "01a1a36653517560b0ccf892d3916dcd",
+        "artifactId": "artifact-2570bb76ccc0",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36653997e51bbe9a8e84e8bc5cf",
+            "node": "increment",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36653967dddb71bfff13a46b571",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366538975dd93c5252273b370d9",
+            "node": "consumer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366537c7a2c8bacb01a63248ac9",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366539d7a03bb10535ef7993b08",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36653967dddb71bfff13a46b571",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366537f77a297517158e29c940a",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a366537c7a2c8bacb01a63248ac9",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366536b76bda37bff194bd1d87b",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36653657420a2c576b7d6eac9fb",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36653617503a062d23b47058bed",
+            "node": "body",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a366535c719681990df70daaea7f",
+            "branch": null,
+            "iteration": "01a1a366535c719681990df70daaea7f:iter:0"
+          },
+          {
+            "id": "01a1a366536873c4b3ec5b2e03719650",
+            "node": "increment",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36653657420a2c576b7d6eac9fb",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36653967dddb71bfff13a46b571",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a366539276468e6098d32b9c8817",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366537270a8990a109fa784ba00",
+            "node": "consumer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36653617503a062d23b47058bed",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36653ae70f587fca991725f4ff1",
+            "node": "last",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36653557aeb99eed417c5bd2d7b",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366537c7a2c8bacb01a63248ac9",
+            "node": "body",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a366535c719681990df70daaea7f",
+            "branch": null,
+            "iteration": "01a1a366535c719681990df70daaea7f:iter:01a1a36653617503a062d23b47058bed"
+          },
+          {
+            "id": "01a1a36653557aeb99eed417c5bd2d7b",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36653817194bfb17736e24aec77",
+            "node": "increment",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a366537f77a297517158e29c940a",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36653a4742e8dbf7c94ae89ba6e",
+            "node": "consumer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366539276468e6098d32b9c8817",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366535c719681990df70daaea7f",
+            "node": "loop",
+            "type": "Elsa.Activities.While.Activities.While",
+            "status": "Completed",
+            "parent": "01a1a36653557aeb99eed417c5bd2d7b",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36653657420a2c576b7d6eac9fb",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a36653617503a062d23b47058bed",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366539276468e6098d32b9c8817",
+            "node": "body",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a366535c719681990df70daaea7f",
+            "branch": null,
+            "iteration": "01a1a366535c719681990df70daaea7f:iter:01a1a366537c7a2c8bacb01a63248ac9"
+          },
+          {
+            "id": "01a1a36653847f3084e662d12923707d",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366537f77a297517158e29c940a",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "counter": {
+            "value": {
+              "kind": "number",
+              "typeName": "Elsa.Any",
+              "value": 3
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:34.736884+00:00"
+          }
+        },
+        "incidents": []
+      },
+      "consumerValues": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "name": "restart-Balanced-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a366541777e1bddfabae3edc5a47",
+      "publication": {
+        "publicationId": "publication-14tXjOn9tmd",
+        "definitionId": "14tXjOl3RY1",
+        "versionId": "14tXjOkuxeS",
+        "definitionVersionId": "14tXjOkuxeS",
+        "artifactId": "artifact-c2ad9427eaba",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjOn9tmd",
+        "createdAt": "2026-11-03T21:52:34.806557+00:00",
+        "activatedAt": "2026-11-03T21:52:34.834202+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:c2ad9427eaba3c5ddb63ed3b376a5bc82f4798d904a7ab2bd6942b08c43246c3",
+        "rootActivityId": "root",
+        "nodeCount": 6
+      },
+      "final": {
+        "workflowExecutionId": "01a1a366541777e1bddfabae3edc5a47",
+        "artifactId": "artifact-c2ad9427eaba",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3666f7d73168edf85a0e733f8d4",
+            "node": "message",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366542376918ebcdda4ec62da88",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3666f1279d5aef492b9a448255c",
+            "node": "answer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366542b78b4a80d44aa993476b8",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Completed",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366541b71809c726ea93648e3ac",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366542771b585858ebe9667965b",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "73",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:41.835536+00:00"
+          },
+          "message": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "retained",
+              "length": 8,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:41.864561+00:00"
+          }
+        },
+        "incidents": []
+      },
+      "held": {
+        "workflowExecutionId": "01a1a366541777e1bddfabae3edc5a47",
+        "artifactId": "artifact-c2ad9427eaba",
+        "status": "Running",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a366542376918ebcdda4ec62da88",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366542b78b4a80d44aa993476b8",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Suspended",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366541b71809c726ea93648e3ac",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366542771b585858ebe9667965b",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "afterRestart": {
+        "workflowExecutionId": "01a1a366541777e1bddfabae3edc5a47",
+        "artifactId": "artifact-c2ad9427eaba",
+        "status": "Running",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a366542376918ebcdda4ec62da88",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366542b78b4a80d44aa993476b8",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Suspended",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366541b71809c726ea93648e3ac",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366542771b585858ebe9667965b",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366541b71809c726ea93648e3ac",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "resume": {
+        "startedCount": 0,
+        "skippedStartCount": 0,
+        "resumedCount": 1,
+        "starts": [],
+        "resumes": [
+          {
+            "workflowExecutionId": "01a1a366541777e1bddfabae3edc5a47",
+            "status": "Dispatched",
+            "reason": null
+          }
+        ],
+        "shedStartCount": 0,
+        "retryAfterSeconds": null
+      }
+    },
+    {
+      "name": "restart-Balanced-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a36654cb7949bd909f96ef683e94",
+      "publication": {
+        "publicationId": "publication-14tXjPdhs4Y",
+        "definitionId": "14tXjPbgeqg",
+        "versionId": "14tXjPbkaXV",
+        "definitionVersionId": "14tXjPbkaXV",
+        "artifactId": "artifact-c732445ae476",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjPdhs4Y",
+        "createdAt": "2026-11-03T21:52:34.991341+00:00",
+        "activatedAt": "2026-11-03T21:52:35.015086+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:c732445ae4761ef89339482527e061ffb1b0e781abb5a00931f91da3b5aa5e41",
+        "rootActivityId": "root",
+        "nodeCount": 7
+      },
+      "final": {
+        "workflowExecutionId": "01a1a36654cb7949bd909f96ef683e94",
+        "artifactId": "artifact-c732445ae476",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36654d977728dc01cbd64d9831c",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a36654ce74cf9cb74d629dae7748",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654dc78ff95ce3be2eb2f382b",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36654d977728dc01cbd64d9831c",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654d57a53be55cfd66701baa4",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36654ce74cf9cb74d629dae7748",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654ce74cf9cb74d629dae7748",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36670357498a86a29a9d7cb5347",
+            "node": "answer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36654ce74cf9cb74d629dae7748",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654e07100ad2636e828d901a7",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Completed",
+            "parent": "01a1a36654d977728dc01cbd64d9831c",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366704a7af59462d741daea9446",
+            "node": "message",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36654ce74cf9cb74d629dae7748",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "73",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:42.055922+00:00"
+          },
+          "message": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "retained",
+              "length": 8,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:42.06714+00:00"
+          }
+        },
+        "incidents": []
+      },
+      "held": {
+        "workflowExecutionId": "01a1a36654cb7949bd909f96ef683e94",
+        "artifactId": "artifact-c732445ae476",
+        "status": "Running",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36654d977728dc01cbd64d9831c",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": "01a1a36654ce74cf9cb74d629dae7748",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654dc78ff95ce3be2eb2f382b",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36654d977728dc01cbd64d9831c",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654d57a53be55cfd66701baa4",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36654ce74cf9cb74d629dae7748",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654ce74cf9cb74d629dae7748",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654e07100ad2636e828d901a7",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Suspended",
+            "parent": "01a1a36654d977728dc01cbd64d9831c",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "afterRestart": {
+        "workflowExecutionId": "01a1a36654cb7949bd909f96ef683e94",
+        "artifactId": "artifact-c732445ae476",
+        "status": "Running",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36654d977728dc01cbd64d9831c",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": "01a1a36654ce74cf9cb74d629dae7748",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654dc78ff95ce3be2eb2f382b",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36654d977728dc01cbd64d9831c",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654d57a53be55cfd66701baa4",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36654ce74cf9cb74d629dae7748",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654ce74cf9cb74d629dae7748",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36654e07100ad2636e828d901a7",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Suspended",
+            "parent": "01a1a36654d977728dc01cbd64d9831c",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "resume": {
+        "startedCount": 0,
+        "skippedStartCount": 0,
+        "resumedCount": 1,
+        "starts": [],
+        "resumes": [
+          {
+            "workflowExecutionId": "01a1a36654cb7949bd909f96ef683e94",
+            "status": "Dispatched",
+            "reason": null
+          }
+        ],
+        "shedStartCount": 0,
+        "retryAfterSeconds": null
+      }
+    },
+    {
+      "name": "restart-Durable-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a366554576edab1099ec2bbf268f",
+      "publication": {
+        "publicationId": "publication-14tXjQBAnVe",
+        "definitionId": "14tXjQ8dHFL",
+        "versionId": "14tXjQ8jz2C",
+        "definitionVersionId": "14tXjQ8jz2C",
+        "artifactId": "artifact-0f4eb8827d59",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjQBAnVe",
+        "createdAt": "2026-11-03T21:52:35.109694+00:00",
+        "activatedAt": "2026-11-03T21:52:35.135965+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:0f4eb8827d59f4a7b621049be91fe4453ef1c1c41dd89a6707d1f6698aafa1e5",
+        "rootActivityId": "root",
+        "nodeCount": 6
+      },
+      "final": {
+        "workflowExecutionId": "01a1a366554576edab1099ec2bbf268f",
+        "artifactId": "artifact-0f4eb8827d59",
+        "status": "Completed",
+        "persistenceMode": "Durable",
+        "activities": [
+          {
+            "id": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36670a479c6970762831ce83c2b",
+            "node": "answer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366554f7541960354cf6c796ab5",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36670d4722cbb1249a862863ba3",
+            "node": "message",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655647830b3b543c9e58bd88c",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655717026b33bdba8c1c6a472",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Completed",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "73",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:42.1948+00:00"
+          },
+          "message": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "retained",
+              "length": 8,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:42.22954+00:00"
+          }
+        },
+        "incidents": []
+      },
+      "held": {
+        "workflowExecutionId": "01a1a366554576edab1099ec2bbf268f",
+        "artifactId": "artifact-0f4eb8827d59",
+        "status": "Running",
+        "persistenceMode": "Durable",
+        "activities": [
+          {
+            "id": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366554f7541960354cf6c796ab5",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655647830b3b543c9e58bd88c",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655717026b33bdba8c1c6a472",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Suspended",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "afterRestart": {
+        "workflowExecutionId": "01a1a366554576edab1099ec2bbf268f",
+        "artifactId": "artifact-0f4eb8827d59",
+        "status": "Running",
+        "persistenceMode": "Durable",
+        "activities": [
+          {
+            "id": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366554f7541960354cf6c796ab5",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655647830b3b543c9e58bd88c",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655717026b33bdba8c1c6a472",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Suspended",
+            "parent": "01a1a366554879d49f0b1b7d0b4ae9be",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "resume": {
+        "startedCount": 0,
+        "skippedStartCount": 0,
+        "resumedCount": 1,
+        "starts": [],
+        "resumes": [
+          {
+            "workflowExecutionId": "01a1a366554576edab1099ec2bbf268f",
+            "status": "Dispatched",
+            "reason": null
+          }
+        ],
+        "shedStartCount": 0,
+        "retryAfterSeconds": null
+      }
+    },
+    {
+      "name": "restart-Durable-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a36655cf72d5ba050b4b08357364",
+      "publication": {
+        "publicationId": "publication-14tXjQoMP4y",
+        "definitionId": "14tXjQmtHch",
+        "versionId": "14tXjQmpHUc",
+        "definitionVersionId": "14tXjQmpHUc",
+        "artifactId": "artifact-0e5472bcec9a",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjQoMP4y",
+        "createdAt": "2026-11-03T21:52:35.247987+00:00",
+        "activatedAt": "2026-11-03T21:52:35.274067+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:0e5472bcec9aff518deaf5b80833d1910b5aa43a9fde12935642c2f42f249085",
+        "rootActivityId": "root",
+        "nodeCount": 7
+      },
+      "final": {
+        "workflowExecutionId": "01a1a36655cf72d5ba050b4b08357364",
+        "artifactId": "artifact-0e5472bcec9a",
+        "status": "Completed",
+        "persistenceMode": "Durable",
+        "activities": [
+          {
+            "id": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36671477a629031cf143f1b0bb1",
+            "node": "answer",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36656017053b16cadbd2f9034b2",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36655f3764c9bb193f2df3d3ab4",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655f3764c9bb193f2df3d3ab4",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655da7ed2bdb9e022d2ec8814",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3667160737ca2ab46145feff142",
+            "node": "message",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366560f7a4cbfbc57bb4a4dd657",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Completed",
+            "parent": "01a1a36655f3764c9bb193f2df3d3ab4",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "answer": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "73",
+              "length": 2,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:42.333393+00:00"
+          },
+          "message": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "retained",
+              "length": 8,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:52:42.360296+00:00"
+          }
+        },
+        "incidents": []
+      },
+      "held": {
+        "workflowExecutionId": "01a1a36655cf72d5ba050b4b08357364",
+        "artifactId": "artifact-0e5472bcec9a",
+        "status": "Running",
+        "persistenceMode": "Durable",
+        "activities": [
+          {
+            "id": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36656017053b16cadbd2f9034b2",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36655f3764c9bb193f2df3d3ab4",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655f3764c9bb193f2df3d3ab4",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655da7ed2bdb9e022d2ec8814",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366560f7a4cbfbc57bb4a4dd657",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Suspended",
+            "parent": "01a1a36655f3764c9bb193f2df3d3ab4",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "afterRestart": {
+        "workflowExecutionId": "01a1a36655cf72d5ba050b4b08357364",
+        "artifactId": "artifact-0e5472bcec9a",
+        "status": "Running",
+        "persistenceMode": "Durable",
+        "activities": [
+          {
+            "id": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36656017053b16cadbd2f9034b2",
+            "node": "producer",
+            "type": "Elsa.Activities.Primitives.Activities.Inline",
+            "status": "Completed",
+            "parent": "01a1a36655f3764c9bb193f2df3d3ab4",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655f3764c9bb193f2df3d3ab4",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36655da7ed2bdb9e022d2ec8814",
+            "node": "set",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36655d472c7b6973ed3f9eeb9a2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366560f7a4cbfbc57bb4a4dd657",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Suspended",
+            "parent": "01a1a36655f3764c9bb193f2df3d3ab4",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "resume": {
+        "startedCount": 0,
+        "skippedStartCount": 0,
+        "resumedCount": 1,
+        "starts": [],
+        "resumes": [
+          {
+            "workflowExecutionId": "01a1a36655cf72d5ba050b4b08357364",
+            "status": "Dispatched",
+            "reason": null
+          }
+        ],
+        "shedStartCount": 0,
+        "retryAfterSeconds": null
+      }
+    },
+    {
+      "name": "cancel-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a36673f3732995db02a678c7e98c",
+      "publication": {
+        "publicationId": "publication-14tXjyUVxap",
+        "definitionId": "14tXjxk8tkx",
+        "versionId": "14tXjxkOtoq",
+        "definitionVersionId": "14tXjxkOtoq",
+        "artifactId": "artifact-8d61e1d80c9a",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXjyUVxap",
+        "createdAt": "2026-11-03T21:52:42.603518+00:00",
+        "activatedAt": "2026-11-03T21:52:42.970341+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:8d61e1d80c9a6f9db427932cbb749b00310c9e8cfaed5317832e3777f79a27ed",
+        "rootActivityId": "root",
+        "nodeCount": 3
+      },
+      "final": {
+        "workflowExecutionId": "01a1a36673f3732995db02a678c7e98c",
+        "artifactId": "artifact-8d61e1d80c9a",
+        "status": "Cancelled",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36674077ee398a8f18abce7c864",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Cancelled",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366742d79e49e05d2809a58ec5a",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Cancelled",
+            "parent": "01a1a36674077ee398a8f18abce7c864",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "held": {
+        "workflowExecutionId": "01a1a36673f3732995db02a678c7e98c",
+        "artifactId": "artifact-8d61e1d80c9a",
+        "status": "Running",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36674077ee398a8f18abce7c864",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366742d79e49e05d2809a58ec5a",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Suspended",
+            "parent": "01a1a36674077ee398a8f18abce7c864",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "lateDelivery": {
+        "startedCount": 0,
+        "skippedStartCount": 0,
+        "resumedCount": 0,
+        "starts": [],
+        "resumes": [],
+        "shedStartCount": 0,
+        "retryAfterSeconds": null
+      },
+      "cancelPlan": {
+        "planId": "alteration-plan-6136ce8fb3c1f93280212bcba355b9fc",
+        "status": "Completed",
+        "counts": {
+          "capturedSoFar": 1,
+          "targetCount": 1,
+          "pending": 0,
+          "running": 0,
+          "succeeded": 1,
+          "failed": 0,
+          "cancelled": 0
+        },
+        "jobStatuses": [
+          "Succeeded"
+        ]
+      }
+    },
+    {
+      "name": "cancel-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a3667c76795dba47c819f2d877b4",
+      "publication": {
+        "publicationId": "publication-14tXkA2yMuC",
+        "definitionId": "14tXk9vRmSl",
+        "versionId": "14tXk9vYVUg",
+        "definitionVersionId": "14tXk9vYVUg",
+        "artifactId": "artifact-ac77424002fa",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXkA2yMuC",
+        "createdAt": "2026-11-03T21:52:45.127574+00:00",
+        "activatedAt": "2026-11-03T21:52:45.165598+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:ac77424002facad0b6655ed852035f1f9d183d12e1b2769348cea0798fe58879",
+        "rootActivityId": "root",
+        "nodeCount": 4
+      },
+      "final": {
+        "workflowExecutionId": "01a1a3667c76795dba47c819f2d877b4",
+        "artifactId": "artifact-ac77424002fa",
+        "status": "Cancelled",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3667c977fd2a4fa2fbc64bdef80",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Cancelled",
+            "parent": "01a1a3667c8f7d129a653680d84cad90",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3667c7e7dec8fd93ea5409ba9d4",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Cancelled",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3667c8f7d129a653680d84cad90",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Cancelled",
+            "parent": "01a1a3667c7e7dec8fd93ea5409ba9d4",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "held": {
+        "workflowExecutionId": "01a1a3667c76795dba47c819f2d877b4",
+        "artifactId": "artifact-ac77424002fa",
+        "status": "Running",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a3667c977fd2a4fa2fbc64bdef80",
+            "node": "wait",
+            "type": "Elsa.Event",
+            "status": "Suspended",
+            "parent": "01a1a3667c8f7d129a653680d84cad90",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3667c7e7dec8fd93ea5409ba9d4",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3667c8f7d129a653680d84cad90",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": "01a1a3667c7e7dec8fd93ea5409ba9d4",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      },
+      "lateDelivery": {
+        "startedCount": 0,
+        "skippedStartCount": 0,
+        "resumedCount": 0,
+        "starts": [],
+        "resumes": [],
+        "shedStartCount": 0,
+        "retryAfterSeconds": null
+      },
+      "cancelPlan": {
+        "planId": "alteration-plan-a1601fadb39bf8bdf2dac833d53ad95a",
+        "status": "Completed",
+        "counts": {
+          "capturedSoFar": 1,
+          "targetCount": 1,
+          "pending": 0,
+          "running": 0,
+          "succeeded": 1,
+          "failed": 0,
+          "cancelled": 0
+        },
+        "jobStatuses": [
+          "Succeeded"
+        ]
+      }
+    },
+    {
+      "name": "recover-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "wfexec:dispatch:v1:fdca07777d0ba92de6151e3c36cf4682ea32e91f3f32a044cd1e868f26ff548d",
+      "publication": {
+        "publicationId": "publication-14tXl1Z5tL1",
+        "definitionId": "14tXl1TmIhr",
+        "versionId": "14tXl1Tk64G",
+        "definitionVersionId": "14tXl1Tk64G",
+        "artifactId": "artifact-4be508119568",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXl1Z5tL1",
+        "createdAt": "2026-11-03T21:52:56.817192+00:00",
+        "activatedAt": "2026-11-03T21:52:56.88555+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:4be50811956805684f3846e8e56b3a3c6e85ee47c9c6a6547bf06eb46ec12472",
+        "rootActivityId": "root",
+        "nodeCount": 3
+      },
+      "final": {
+        "workflowExecutionId": "wfexec:dispatch:v1:fdca07777d0ba92de6151e3c36cf4682ea32e91f3f32a044cd1e868f26ff548d",
+        "artifactId": "artifact-4be508119568",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "0c1f4503a6b3bf0f:alteration-reschedule:0:01a1a366c9cc7394ab20583aa7f4a5cf",
+            "node": "fault-child",
+            "type": "Elsa.DispatchWorkflow",
+            "status": "Completed",
+            "parent": "dispatch:v1:fdca07777d0ba92de6151e3c36cf4682ea32e91f3f32a044cd1e868f26ff548d:activity:root",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "dispatch:v1:fdca07777d0ba92de6151e3c36cf4682ea32e91f3f32a044cd1e868f26ff548d:activity:root",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a3678c7e7876b7c83230ec1548b7",
+            "node": "after",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "dispatch:v1:fdca07777d0ba92de6151e3c36cf4682ea32e91f3f32a044cd1e868f26ff548d:activity:root",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366c9cc7394ab20583aa7f4a5cf",
+            "node": "fault-child",
+            "type": "Elsa.DispatchWorkflow",
+            "status": "Superseded",
+            "parent": "dispatch:v1:fdca07777d0ba92de6151e3c36cf4682ea32e91f3f32a044cd1e868f26ff548d:activity:root",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "after": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "continued",
+              "length": 9,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:53:54.825736+00:00"
+          }
+        },
+        "incidents": [
+          {
+            "incidentId": "incident:f0e98a7502348715:d7256f205721281d:ActivityFaulted",
+            "activityExecutionId": "01a1a366c9cc7394ab20583aa7f4a5cf",
+            "failureType": "ActivityFaulted",
+            "status": "Open"
+          }
+        ]
+      },
+      "faulted": {
+        "workflowExecutionId": "wfexec:dispatch:v1:fdca07777d0ba92de6151e3c36cf4682ea32e91f3f32a044cd1e868f26ff548d",
+        "artifactId": "artifact-4be508119568",
+        "status": "Running",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "dispatch:v1:fdca07777d0ba92de6151e3c36cf4682ea32e91f3f32a044cd1e868f26ff548d:activity:root",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366c9cc7394ab20583aa7f4a5cf",
+            "node": "fault-child",
+            "type": "Elsa.DispatchWorkflow",
+            "status": "Faulted",
+            "parent": "dispatch:v1:fdca07777d0ba92de6151e3c36cf4682ea32e91f3f32a044cd1e868f26ff548d:activity:root",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": [
+          {
+            "incidentId": "incident:f0e98a7502348715:d7256f205721281d:ActivityFaulted",
+            "activityExecutionId": "01a1a366c9cc7394ab20583aa7f4a5cf",
+            "failureType": "ActivityFaulted",
+            "status": "Open"
+          }
+        ]
+      },
+      "reschedulePlan": {
+        "planId": "alteration-plan-42d3212b8cb53c4de331f8d9971a8d21",
+        "status": "Completed",
+        "counts": {
+          "capturedSoFar": 1,
+          "targetCount": 1,
+          "pending": 0,
+          "running": 0,
+          "succeeded": 1,
+          "failed": 0,
+          "cancelled": 0
+        },
+        "jobStatuses": [
+          "Succeeded"
+        ]
+      },
+      "outerCompleted": {
+        "workflowExecutionId": "01a1a366aa927c65b522ba9d4a185a88",
+        "artifactId": "artifact-f5eba6c5c196",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a366ab18733f90c70236c6a73e53",
+            "node": "outer-root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366aba37f7396c99a174cff3b47",
+            "node": "dispatch-child",
+            "type": "Elsa.DispatchWorkflow",
+            "status": "Completed",
+            "parent": "01a1a366ab18733f90c70236c6a73e53",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      }
+    },
+    {
+      "name": "recover-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "wfexec:dispatch:v1:616b4d974600edccfff2a0c1613c4dd3a6ee23fe6c476280da475cd0ca0e1b03",
+      "publication": {
+        "publicationId": "publication-14tXldY0M9s",
+        "definitionId": "14tXldWXiKq",
+        "versionId": "14tXldWV5XS",
+        "definitionVersionId": "14tXldWV5XS",
+        "artifactId": "artifact-ab9c2589a45f",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tXldY0M9s",
+        "createdAt": "2026-11-03T21:53:05.113039+00:00",
+        "activatedAt": "2026-11-03T21:53:05.140511+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:ab9c2589a45fa000f18f1921b0ed4e34cd6598fa16b111c82d324e5259498c95",
+        "rootActivityId": "root",
+        "nodeCount": 4
+      },
+      "final": {
+        "workflowExecutionId": "wfexec:dispatch:v1:616b4d974600edccfff2a0c1613c4dd3a6ee23fe6c476280da475cd0ca0e1b03",
+        "artifactId": "artifact-ab9c2589a45f",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "95e53b92a3246d57:alteration-reschedule:0:01a1a366f17178f7bd7b551c86c67145",
+            "node": "fault-child",
+            "type": "Elsa.DispatchWorkflow",
+            "status": "Completed",
+            "parent": "01a1a366f16d75e09f3e730d3151a48e",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a368295379f7bc028712ac743957",
+            "node": "after",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "dispatch:v1:616b4d974600edccfff2a0c1613c4dd3a6ee23fe6c476280da475cd0ca0e1b03:activity:root",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366f17178f7bd7b551c86c67145",
+            "node": "fault-child",
+            "type": "Elsa.DispatchWorkflow",
+            "status": "Superseded",
+            "parent": "01a1a366f16d75e09f3e730d3151a48e",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "dispatch:v1:616b4d974600edccfff2a0c1613c4dd3a6ee23fe6c476280da475cd0ca0e1b03:activity:root",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366f16d75e09f3e730d3151a48e",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "dispatch:v1:616b4d974600edccfff2a0c1613c4dd3a6ee23fe6c476280da475cd0ca0e1b03:activity:root",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "after": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "continued",
+              "length": 9,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:54:34.970977+00:00"
+          }
+        },
+        "incidents": [
+          {
+            "incidentId": "incident:3ff49ab2feaca35e:e9ffa9b49e003435:ActivityFaulted",
+            "activityExecutionId": "01a1a366f17178f7bd7b551c86c67145",
+            "failureType": "ActivityFaulted",
+            "status": "Open"
+          }
+        ]
+      },
+      "faulted": {
+        "workflowExecutionId": "wfexec:dispatch:v1:616b4d974600edccfff2a0c1613c4dd3a6ee23fe6c476280da475cd0ca0e1b03",
+        "artifactId": "artifact-ab9c2589a45f",
+        "status": "Running",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a366f17178f7bd7b551c86c67145",
+            "node": "fault-child",
+            "type": "Elsa.DispatchWorkflow",
+            "status": "Faulted",
+            "parent": "01a1a366f16d75e09f3e730d3151a48e",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "dispatch:v1:616b4d974600edccfff2a0c1613c4dd3a6ee23fe6c476280da475cd0ca0e1b03:activity:root",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366f16d75e09f3e730d3151a48e",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Running",
+            "parent": "dispatch:v1:616b4d974600edccfff2a0c1613c4dd3a6ee23fe6c476280da475cd0ca0e1b03:activity:root",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": [
+          {
+            "incidentId": "incident:3ff49ab2feaca35e:e9ffa9b49e003435:ActivityFaulted",
+            "activityExecutionId": "01a1a366f17178f7bd7b551c86c67145",
+            "failureType": "ActivityFaulted",
+            "status": "Open"
+          }
+        ]
+      },
+      "reschedulePlan": {
+        "planId": "alteration-plan-57b283847ad0be8cd178fb15a28f1821",
+        "status": "Completed",
+        "counts": {
+          "capturedSoFar": 1,
+          "targetCount": 1,
+          "pending": 0,
+          "running": 0,
+          "succeeded": 1,
+          "failed": 0,
+          "cancelled": 0
+        },
+        "jobStatuses": [
+          "Succeeded"
+        ]
+      },
+      "outerCompleted": {
+        "workflowExecutionId": "01a1a366ca9c72fd927590865bc81235",
+        "artifactId": "artifact-7196431e7cf2",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a366caa578f29c2eeb4df7e14d80",
+            "node": "outer-root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a366caab7367af01b8a555887a30",
+            "node": "dispatch-child",
+            "type": "Elsa.DispatchWorkflow",
+            "status": "Completed",
+            "parent": "01a1a366caa578f29c2eeb4df7e14d80",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {},
+        "incidents": []
+      }
+    },
+    {
+      "name": "break-nearest-loop-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a36c04a574b99d92fe6bc2683546",
+      "publication": {
+        "publicationId": "publication-14tYAv5TuwN",
+        "definitionId": "14tYAuqnHlb",
+        "versionId": "14tYAuqkMSl",
+        "definitionVersionId": "14tYAuqkMSl",
+        "artifactId": "artifact-b48417715051",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tYAv5TuwN",
+        "createdAt": "2026-11-03T21:58:47.500306+00:00",
+        "activatedAt": "2026-11-03T21:58:47.702059+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:b48417715051a63a79b053f6fd3d83680b63096180a7a116a26d8725d918f484",
+        "rootActivityId": "root",
+        "nodeCount": 7
+      },
+      "final": {
+        "workflowExecutionId": "01a1a36c04a574b99d92fe6bc2683546",
+        "artifactId": "artifact-b48417715051",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36c05cb76ca8f4b5c64a7a9aea6",
+            "node": "after",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36c04aa798793d3d82107fb8a5d",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c04aa798793d3d82107fb8a5d",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c04b977a19e32f2bf7b7cf063",
+            "node": "increment",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36c04b67ad9a0a8d74aa9f28d9a",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c05c37a6797fe15089745432f",
+            "node": "break",
+            "type": "Elsa.Activities.Primitives.Activities.Break",
+            "status": "Completed",
+            "parent": "01a1a36c04b67ad9a0a8d74aa9f28d9a",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c04b67ad9a0a8d74aa9f28d9a",
+            "node": "body",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a36c04b07ec18169a28194cceed7",
+            "branch": null,
+            "iteration": "01a1a36c04b07ec18169a28194cceed7:iter:0"
+          },
+          {
+            "id": "01a1a36c04b07ec18169a28194cceed7",
+            "node": "loop",
+            "type": "Elsa.Activities.While.Activities.While",
+            "status": "Completed",
+            "parent": "01a1a36c04aa798793d3d82107fb8a5d",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "counter": {
+            "value": {
+              "kind": "number",
+              "typeName": "Elsa.Any",
+              "value": 1
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:58:48.013793+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "break-nearest-loop-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a36c05fd78b18d7a6f75896ac4e5",
+      "publication": {
+        "publicationId": "publication-14tYAxZ6xgd",
+        "definitionId": "14tYAxX7oez",
+        "versionId": "14tYAxXAQtl",
+        "definitionVersionId": "14tYAxXAQtl",
+        "artifactId": "artifact-5a0b339dd8de",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tYAxZ6xgd",
+        "createdAt": "2026-11-03T21:58:48.041836+00:00",
+        "activatedAt": "2026-11-03T21:58:48.057894+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:5a0b339dd8deef3f6d7a21a3d6cedc4a2df4df54c30c3020200ec4c6ef139f2c",
+        "rootActivityId": "root",
+        "nodeCount": 8
+      },
+      "final": {
+        "workflowExecutionId": "01a1a36c05fd78b18d7a6f75896ac4e5",
+        "artifactId": "artifact-5a0b339dd8de",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36c060c7004adcd5edf230a49d0",
+            "node": "break",
+            "type": "Elsa.Activities.Primitives.Activities.Break",
+            "status": "Completed",
+            "parent": "01a1a36c060b725b91e02fbb58417e01",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c06087475b7b1e969d21fbf70",
+            "node": "increment",
+            "type": "elsa.intrinsic.set",
+            "status": "Completed",
+            "parent": "01a1a36c06067b5092b9b42a7e7aed0d",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c05ff7864aacd30779b980efd",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c06067b5092b9b42a7e7aed0d",
+            "node": "body",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a36c06047a5aa240f135430d35de",
+            "branch": null,
+            "iteration": "01a1a36c06047a5aa240f135430d35de:iter:0"
+          },
+          {
+            "id": "01a1a36c060b725b91e02fbb58417e01",
+            "node": "block",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": "01a1a36c06067b5092b9b42a7e7aed0d",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c06047a5aa240f135430d35de",
+            "node": "loop",
+            "type": "Elsa.Activities.While.Activities.While",
+            "status": "Completed",
+            "parent": "01a1a36c05ff7864aacd30779b980efd",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c061075df9d9de864c3b39b3a",
+            "node": "after",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36c05ff7864aacd30779b980efd",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "counter": {
+            "value": {
+              "kind": "number",
+              "typeName": "Elsa.Any",
+              "value": 1
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:58:48.082112+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "complete-nearest-graph-extracted-False",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a36c08047770bdb71c2565ceb92a",
+      "publication": {
+        "publicationId": "publication-14tYAzrOR00",
+        "definitionId": "14tYAzoly9L",
+        "versionId": "14tYAzogJYS",
+        "definitionVersionId": "14tYAzogJYS",
+        "artifactId": "artifact-b1564fdae2fa",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tYAzrOR00",
+        "createdAt": "2026-11-03T21:58:48.542911+00:00",
+        "activatedAt": "2026-11-03T21:58:48.577495+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:b1564fdae2fa49a10b03137c0085832616565b7d34cd6593899bc36c511228c7",
+        "rootActivityId": "root",
+        "nodeCount": 6
+      },
+      "final": {
+        "workflowExecutionId": "01a1a36c08047770bdb71c2565ceb92a",
+        "artifactId": "artifact-b1564fdae2fa",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36c080c77cc9cf2aabb2c2f86a9",
+            "node": "call",
+            "type": "elsa.user.complete-graph-boundary-bf2eaa985fce426c98d074ddc15323cb.activity-def-14tyaxqmhez",
+            "status": "Completed",
+            "parent": "01a1a36c08077e9fa2c435b1ae04206c",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c08077e9fa2c435b1ae04206c",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c08557112bfebfcb4ad6d5e9c",
+            "node": "after",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36c08077e9fa2c435b1ae04206c",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c08307de28a4064ae9e203ec7",
+            "node": "node-6bfa4361417723dd289b0660543485f855a6f4fec5500bcfbf9f2748dd7c2db0",
+            "type": "Elsa.Activities.Graph.Runtime.Activities.Complete",
+            "status": "Completed",
+            "parent": "01a1a36c082c70e7990af0d7b90c8845",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c082c70e7990af0d7b90c8845",
+            "node": "node-73e9968b3cad569df6ee29ee468eb6e379b3cefbefe446c6824026510dad3385",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Cancelled",
+            "parent": "01a1a36c080c77cc9cf2aabb2c2f86a9",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "after": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "continued",
+              "length": 9,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:58:48.663311+00:00"
+          }
+        },
+        "incidents": []
+      }
+    },
+    {
+      "name": "complete-nearest-graph-extracted-True",
+      "status": "Passed",
+      "workflowExecutionId": "01a1a36c08b471f3b2985db048522deb",
+      "publication": {
+        "publicationId": "publication-14tYB0gnexL",
+        "definitionId": "14tYB0ffnCb",
+        "versionId": "14tYB0fOWYS",
+        "definitionVersionId": "14tYB0fOWYS",
+        "artifactId": "artifact-58da445f79f9",
+        "slotName": "default",
+        "status": "active",
+        "sourceReferenceId": "activation-ref:publication-14tYB0gnexL",
+        "createdAt": "2026-11-03T21:58:48.723899+00:00",
+        "activatedAt": "2026-11-03T21:58:48.753684+00:00",
+        "retiredAt": null,
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:58da445f79f9c209c439472e815d7e2041157c130596ffaee00d60df884bbb95",
+        "rootActivityId": "root",
+        "nodeCount": 7
+      },
+      "final": {
+        "workflowExecutionId": "01a1a36c08b471f3b2985db048522deb",
+        "artifactId": "artifact-58da445f79f9",
+        "status": "Completed",
+        "persistenceMode": "Balanced",
+        "activities": [
+          {
+            "id": "01a1a36c08b673b58b02755209ecc4c4",
+            "node": "root",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Completed",
+            "parent": null,
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c08cc7c1582b8c438411f9fd2",
+            "node": "node-5d774f0434d2160ec3d7f8f6ede9b6e03f34e99a7f6a518476352c95b46a5c44",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Cancelled",
+            "parent": "01a1a36c08c97d9181cb2530257c46f0",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c08ce720ab6b8d0c3856490cd",
+            "node": "node-4879adde666c9aeb01eb9d64c117d305b0dcdd80289b49ff4f33e8514c9048d7",
+            "type": "Elsa.Activities.Graph.Runtime.Activities.Complete",
+            "status": "Completed",
+            "parent": "01a1a36c08cc7c1582b8c438411f9fd2",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c08c97d9181cb2530257c46f0",
+            "node": "node-30e706306f05a0070a12367c34f2697f5cb2a08f68449c4ec00bbfc7deacc416",
+            "type": "Elsa.Activities.Sequence.Activities.Sequence",
+            "status": "Cancelled",
+            "parent": "01a1a36c08bb74bab2d85268278823a0",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c08bb74bab2d85268278823a0",
+            "node": "call",
+            "type": "elsa.user.complete-graph-boundary-cbe1db40782f41c797cdc3310f1853f9.activity-def-14tyb0uiusv",
+            "status": "Completed",
+            "parent": "01a1a36c08b673b58b02755209ecc4c4",
+            "branch": null,
+            "iteration": null
+          },
+          {
+            "id": "01a1a36c08e276aeb9ec660b5adc01c6",
+            "node": "after",
+            "type": "elsa.intrinsic.setoutput",
+            "status": "Completed",
+            "parent": "01a1a36c08b673b58b02755209ecc4c4",
+            "branch": null,
+            "iteration": null
+          }
+        ],
+        "outputs": {
+          "after": {
+            "value": {
+              "kind": "string",
+              "typeName": "Elsa.Any",
+              "preview": "continued",
+              "length": 9,
+              "truncated": false
+            },
+            "isRedacted": false,
+            "redactionReason": null,
+            "capturedAt": "2026-11-03T21:58:48.805785+00:00"
+          }
+        },
+        "incidents": []
+      }
+    }
+  ],
+  "restrictedCompositionSha256": "25a621de90316b20bbff98a7d05b9fe1dbdf197f71f0c42909e416ab96a19db9",
+  "restoredCompositionSha256": "5616870bb623b20bc2eec16d704de1d5801ca625672cfaf26d831cd5b0514f54"
+}

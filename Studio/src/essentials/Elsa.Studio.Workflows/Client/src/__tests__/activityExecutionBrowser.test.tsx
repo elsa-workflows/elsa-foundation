@@ -190,3 +190,106 @@ it("keeps the inspected occurrence mounted during refresh and clears it when the
   await vi.waitFor(() => expect(container.querySelector("[data-evidence]")).toBeNull());
   expect(onSelect).not.toHaveBeenCalled();
 });
+
+it("resolves a scoped singleton without presenting redundant navigation", async () => {
+  const single = { ...entry(4), previousActivityExecutionId: null, nextActivityExecutionId: null };
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [single], totalCount: 1, previousCursor: null, nextCursor: null });
+  navigator({ selectedActivityExecutionId: undefined, ancestorActivityExecutionId: "body-4", requireExplicitSelection: true, hideSingleton: true });
+  await vi.waitFor(() => expect(onResolve).toHaveBeenCalledWith(single.execution));
+  expect(container.querySelector("button")).toBeNull();
+  expect(browseActivityExecutions).toHaveBeenCalledWith(context, "run", expect.objectContaining({ ancestorActivityExecutionId: "body-4" }), expect.any(AbortSignal));
+});
+
+it("does not hide missing explicit selections or singleton read failures", async () => {
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [entry(4)], totalCount: 1, previousCursor: null, nextCursor: null });
+  navigator({ selectedActivityExecutionId: "missing", hideSingleton: true });
+  await vi.waitFor(() => expect(container.textContent).toContain("This execution is not available in this scope"));
+  expect(onResolve).toHaveBeenLastCalledWith(null);
+  vi.mocked(browseActivityExecutions).mockRejectedValue(new Error("offline"));
+  navigator({ selectedActivityExecutionId: "missing", hideSingleton: true, refreshKey: 1 });
+  await vi.waitFor(() => expect(container.textContent).toContain("could not be loaded"));
+  expect(button("Retry")).toBeTruthy();
+});
+
+it("keeps singleton evidence mounted on refresh and revokes it after denial", async () => {
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [entry(4)], totalCount: 1, previousCursor: null, nextCursor: null });
+  const panel = (refreshKey: number) => flushSync(() => root.render(<ActivityExecutionInspectionPanel context={context}
+    workflowExecutionId="run" nodeId="ordinary-node" nodeLabel="Ordinary" exactId="execution-4" seed={null}
+    ancestorId="body-4" refreshKey={refreshKey} labelFor={() => "Ordinary"} onSelect={onSelect} onEnter={vi.fn()} onIncident={vi.fn()}
+    renderDetails={(_value, navigation) => <section><span data-single-evidence="">Exact scoped value</span>{navigation}</section>} />));
+  panel(0); await vi.waitFor(() => expect(container.textContent).toContain("Exact scoped value"));
+  expect(container.querySelector("button")).toBeNull();
+  const evidence = container.querySelector("[data-single-evidence]");
+  let refuse!: (error: unknown) => void;
+  vi.mocked(browseActivityExecutions).mockImplementation(() => new Promise((_resolve, reject) => { refuse = reject; }));
+  panel(1); await vi.waitFor(() => expect(refuse).toBeTypeOf("function"));
+  expect(container.querySelector("[data-single-evidence]")).toBe(evidence);
+  vi.mocked(browseActivityExecutions).mockRejectedValue({ status: 403 });
+  refuse({ status: 403 });
+  await vi.waitFor(() => expect(container.textContent).toContain("unavailable for this context"));
+  expect(container.querySelector("[data-single-evidence]")).toBeNull();
+  expect(onSelect).not.toHaveBeenCalled();
+});
+
+it("brings navigation back when a singleton gains another recorded occurrence", async () => {
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [{ ...entry(4), position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });
+  navigator({ selectedActivityExecutionId: "execution-4", hideSingleton: true });
+  await vi.waitFor(() => expect(onResolve).toHaveBeenCalled());
+  expect(container.querySelector("button")).toBeNull();
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [{ ...entry(4), position: 1 }, { ...entry(5), position: 2 }], totalCount: 2, previousCursor: null, nextCursor: null });
+  navigator({ selectedActivityExecutionId: "execution-4", hideSingleton: true, refreshKey: 1 });
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 1 of 2"));
+  expect(button("Next activity execution")).toBeTruthy();
+});
+
+it("shows an unavailable selection when a refresh replaces the singleton with another occurrence", async () => {
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [entry(4)], totalCount: 1, previousCursor: null, nextCursor: null });
+  navigator({ selectedActivityExecutionId: "execution-4", hideSingleton: true });
+  await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(execution(4)));
+  expect(container.querySelector("button")).toBeNull();
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [entry(5)], totalCount: 1, previousCursor: null, nextCursor: null });
+  navigator({ selectedActivityExecutionId: "execution-4", hideSingleton: true, refreshKey: 1 });
+  await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(null));
+  expect(container.textContent).toContain("This execution is not available in this scope.");
+  expect(container.textContent).not.toContain("Execution 4 of 1");
+  expect(onSelect).not.toHaveBeenCalled();
+});
+
+it("labels recorded iterations with scope context and keeps attempts as executions", async () => {
+  const iteration = { ...entry(3), execution: { ...execution(3), executionSequence: 3, iterationId: "iteration-3" }, iterationPosition: 3 };
+  const retry = { ...entry(4), execution: { ...execution(4), executionSequence: 4, iterationId: "iteration-3" }, iterationPosition: 3, attempt: { attemptNumber: 2 } };
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [iteration, retry], totalCount: 4, previousCursor: null, nextCursor: null });
+  navigator({ selectedActivityExecutionId: "execution-3", contextLabel: "Prepare one item", collapseOnSelect: true });
+  await vi.waitFor(() => expect(container.textContent).toContain("Iteration 3"));
+  expect(button("Previous occurrence of Prepare one item")).toBeTruthy();
+  expect(button("Next occurrence of Prepare one item")).toBeTruthy();
+  expect(button("Choose occurrence of Prepare one item: Iteration 3, recorded execution 3 of 4")).toBeTruthy();
+  click("Iteration 3");
+  expect(container.querySelector("ol")?.textContent).toContain("Execution 4");
+  expect(container.querySelector("ol")?.textContent).toContain("Attempt 2");
+  click("Execution 4");
+  expect(onSelect).toHaveBeenLastCalledWith(retry.execution);
+  expect(container.querySelector("ol")).toBeNull();
+  expect(document.activeElement).toBe(button("Choose occurrence of Prepare one item: Iteration 3, recorded execution 3 of 4"));
+});
+
+it("does not steal focus after a delayed choice when user moved away", async () => {
+  const focusRequest = { current: null as string | null };
+  vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [entry(4),entry(5)],totalCount:10,previousCursor:null,nextCursor:null });
+  const panel = (id: string) => flushSync(() => root.render(<ActivityExecutionInspectionPanel context={context}
+    workflowExecutionId="run" nodeId="ordinary-node" nodeLabel="Ordinary" exactId={id} seed={null}
+    refreshKey={0} choiceFocus={focusRequest} labelFor={()=>"Ordinary"} onSelect={onSelect} onEnter={vi.fn()} onIncident={vi.fn()}
+    renderDetails={(_value,navigation)=><section><span>evidence</span>{navigation}</section>}/>));
+  panel("execution-4");
+  await vi.waitFor(()=>expect(container.textContent).toContain("Execution 4 of 10"));
+  click("Execution 4 of 10"); click("Execution 5");
+  expect(focusRequest.current).toBe("execution-5");
+  const outside = document.createElement("button"); outside.textContent="Refresh"; document.body.append(outside); outside.focus();
+  expect(document.activeElement).toBe(outside);
+  panel("execution-5");
+  await vi.waitFor(()=>expect(container.textContent).toContain("Execution 5 of 10"));
+  await new Promise(resolve=>setTimeout(resolve,10));
+  const actual=document.activeElement;
+  outside.remove();
+  expect(actual).toBe(outside);
+});

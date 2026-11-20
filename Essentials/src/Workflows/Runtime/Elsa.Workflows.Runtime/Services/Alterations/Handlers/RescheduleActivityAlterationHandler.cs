@@ -85,7 +85,10 @@ public sealed class RescheduleActivityAlterationHandler(
             scopeId,
             provenance,
             ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId),
-            now);
+            now,
+            // A reschedule is a re-execution (spec 1221 FR-014/FR-015): a new invocation on fresh inputs, so a variable
+            // an operator corrected with ModifyVariable reaches the step.
+            ActivitySuccessorStaging.SuccessorKind.ReExecute);
         var superseded = ActivitySuccessorStaging.Supersede(source, successorId, now);
 
         var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, Slug, Reason, ActivitySuccessorStaging.SchedulingMetadata(successor));

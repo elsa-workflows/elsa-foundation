@@ -1,0 +1,28 @@
+{
+  "source": "b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+  "surface": "Workflow Editor native Sequence; temporary S001 extraction experiment",
+  "definitionId": "14tXpYQXTi8",
+  "draftId": "14tXpYQOg1G",
+  "workflowExecutionId": "01a1a36c7d527e34a274ac20f3c0be8c",
+  "artifactId": "artifact-e3b546730f13",
+  "rootNodeId": "sequence-8bcd320c",
+  "blockNodeId": "sequence-21ba4144",
+  "childNodeIds": [
+    "writeline-4ae0822f",
+    "writeline-da38894e"
+  ],
+  "steps": {
+    "extraction": "Passed",
+    "autosaveAcknowledged": "Passed",
+    "oneUndoRestoresBothChildren": "Passed",
+    "undoAutosavePreservesRedo": "Passed",
+    "redoRestoresBlock": "Passed",
+    "nestedEdit": "Passed",
+    "rename": "Passed",
+    "saveReload": "Passed",
+    "normalPublication": "Passed",
+    "testRun": "Completed",
+    "nestedRunInspection": "both children Completed"
+  },
+  "productionCommandAcceptance": false
+}

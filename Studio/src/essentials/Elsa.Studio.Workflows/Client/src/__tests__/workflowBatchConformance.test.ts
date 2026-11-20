@@ -4,7 +4,7 @@ import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workfl
 import { buildWorkflowSnapshotContent } from "../workflow-editor/useWorkflowContextBridge";
 import fixture from "./workflowBatchConformance.json";
 
-// Spec 1193 slice C: the same cases Elsa.Agent.Tests prepares on the server (WorkflowBatchConformanceTests). What the
+// Spec 1193 slice C: the same cases Elsa.Weaver.Tests prepares on the server (WorkflowBatchConformanceTests). What the
 // server freezes the applier must apply; what the server refuses the applier refuses too, so the two never drift.
 const catalog = fixture.catalog as unknown as ActivityCatalogItem[];
 const draft = () => structuredClone(fixture.draft) as unknown as WorkflowDraft;
@@ -17,6 +17,16 @@ describe("workflow batch contract shared with the server", () => {
     const shared = fixture.snapshot;
     expect({ activities, connections, positions, secretReferences, structure })
       .toEqual({ activities: shared.activities, connections: shared.connections, positions: shared.positions, secretReferences: shared.secretReferences, structure: shared.structure });
+  });
+
+  it("discloses positions only for placed activities and keeps a stale layout record's id reserved", () => {
+    // A version promoted after a node was removed keeps that node's layout record (the witness's v3 draft did).
+    const stale = draft();
+    stale.layout = [...(stale.layout ?? []), { nodeId: "removed-node", x: 1, y: 2 } as (typeof stale.layout)[number]];
+    const catalogByVersion = new Map(catalog.map(item => [item.activityVersionId, item]));
+    const content = buildWorkflowSnapshotContent(stale, catalogByVersion) as { positions: Array<{ nodeId: string }>; structure: { reservedIds?: string[] } };
+    expect(content.positions.map(item => item.nodeId)).toEqual(fixture.snapshot.positions.map(item => item.nodeId));
+    expect(content.structure.reservedIds).toContain("removed-node");
   });
 
   it.each(fixture.cases.filter(item => item.accepted).map(item => [item.name, item] as const))("applies the server's frozen %s batch", (_name, item) => {

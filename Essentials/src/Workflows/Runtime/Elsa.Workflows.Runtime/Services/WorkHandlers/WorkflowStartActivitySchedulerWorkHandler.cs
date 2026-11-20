@@ -206,7 +206,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             return FusedStartResult.CompletedAtStart;
         }
 
-        if (executableNode.ActivityContract?.SideEffectProfile != SideEffectProfile.ReplaySafe)
+        if (!ReplaySafeFusionDriver.IsFusableNode(executableNode))
             return FusedStartResult.Fallback;
 
         var runningState = await ProduceRunningStateAsync(workItem, resolution.StartPayload, resolution.Executable, executableNode, state, serviceProvider, cancellationToken);
@@ -244,6 +244,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             throw new WorkflowExecutableNotFoundException(startPayload.PinnedExecutable.ArtifactId);
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
+        // Every activity start, the root's first, so an executable with member reads never starts any activity here.
+        SchedulerWorkHandlerHelpers.EnsureMemberSelectionSupported(executable, serviceProvider);
 
         if (!executable.NodesById.TryGetValue(startPayload.ExecutableNodeId, out var executableNode))
             throw new InvalidOperationException($"StartActivity scheduler work item '{workItem.WorkItemId}' references executable node '{startPayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
@@ -362,8 +364,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         CancellationToken cancellationToken) =>
         // Shares the one materialization implementation with the parent-completion re-materialization seam
         // (issue #977), constructed from this handler's own stores so the pinned entry snapshot is unchanged.
-        // The JavaScript ambient variable projection (issue #984) lives inside that shared materializer, so both
-        // the entry path and the re-materialization seam expose visible variables to expressions identically.
+        // The readable-variable projection for computed script reads (spec 1222) lives inside that shared materializer,
+        // so both the entry path and the re-materialization seam serve them identically.
         new RuntimeActivityInputSnapshotMaterializer(_activityExecutionStateStore, _durableValueStateStore, _workflowExecutionStateStore)
             .MaterializeAsync(executable, executableNode, state, serviceProvider, materializedAt, cancellationToken);
 

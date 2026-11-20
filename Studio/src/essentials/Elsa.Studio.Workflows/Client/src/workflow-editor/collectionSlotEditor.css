@@ -30,6 +30,7 @@
 
 .wf-slot-collection-item {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   gap: 6px;
   padding: 10px;

@@ -1,10 +1,10 @@
 import { StudioTableContainer, StudioResultState, StudioButton } from "@elsa-workflows/studio-ui";
 import React from "react";
-import { AlertCircle, Cable, ChevronRight, RefreshCw, Search } from "lucide-react";
+import { AlertCircle, Cable, ChevronRight, RefreshCw, Search, Plus } from "lucide-react";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
 import { connectionDate, connectionSchemeLabel, ConnectionStatusBadge, connectionTypeLabel } from "./connectionPresentation";
 
-export function ConnectionList({ items, descriptors, loading, error, searched, onRetry, onClear, onOpen }: {
+export function ConnectionList({ items, descriptors, loading, error, searched, onRetry, onClear, onCreate, onOpen }: {
   items: ConnectionMetadata[];
   descriptors: ConnectionDescriptorsResponse | null;
   loading: boolean;
@@ -12,6 +12,7 @@ export function ConnectionList({ items, descriptors, loading, error, searched, o
   searched: boolean;
   onRetry(): void;
   onClear(): void;
+  onCreate?(): void;
   onOpen(name: string): void;
 }) {
   const empty = items.length === 0;
@@ -25,7 +26,7 @@ export function ConnectionList({ items, descriptors, loading, error, searched, o
               icon={error ? <AlertCircle size={24} /> : searched ? <Search size={24} /> : <Cable size={24} />}
               title={loading ? "Loading connections…" : error ? "Connections could not be loaded" : searched ? "No matching connections" : "No connections yet"}
               description={loading ? undefined : error ? "Try loading the list again." : searched ? "Try a different name or clear your search." : "Connect a service to use it in your workflows."}
-              actions={!loading && error ? <StudioButton onClick={onRetry}><RefreshCw size={14} aria-hidden /> Retry</StudioButton> : !loading && searched ? <StudioButton onClick={onClear}>Clear search</StudioButton> : undefined} />
+              actions={!loading && error ? <StudioButton onClick={onRetry}><RefreshCw size={14} aria-hidden /> Retry</StudioButton> : !loading && searched ? <StudioButton onClick={onClear}>Clear search</StudioButton> : !loading && onCreate ? <StudioButton variant="primary" onClick={onCreate}><Plus size={14} aria-hidden />Create connection</StudioButton> : undefined} />
           </td></tr> : items.map(item => (
             <tr key={item.name}>
               <td><div className="connections-name">

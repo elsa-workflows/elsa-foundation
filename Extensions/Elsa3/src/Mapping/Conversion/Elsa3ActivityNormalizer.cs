@@ -699,6 +699,8 @@ internal sealed class Elsa3ActivityNormalizer(
     /// <summary>R5: returns the value to store when it provably fits the narrower contract, else reports and returns null.</summary>
     private static JsonElement? CheckContract(Elsa3RewriteContext context, Elsa3MemberRule rule, string propertyName, JsonElement value)
     {
+        if (rule.Contract == Elsa3ValueContract.HttpResponseHeaders)
+            return CheckHttpResponseHeaders(context, propertyName, value);
         if (!Elsa3TypedValues.IsBound(value))
             return value;
 
@@ -843,6 +845,62 @@ internal sealed class Elsa3ActivityNormalizer(
         }
     }
 
+    /// <summary>
+    /// Elsa 3 writes <c>{}</c> on save and sends no extra headers; Elsa 4 sends none when <c>Headers</c> is unbound, and
+    /// cannot read the text <c>{}</c> as its header dictionary. A literal map is bound as an object, which publication
+    /// reads into the dictionary. An expression is carried as it is.
+    /// </summary>
+    private static JsonElement? CheckHttpResponseHeaders(Elsa3RewriteContext context, string propertyName, JsonElement value)
+    {
+        if (!Elsa3TypedValues.TryGetLiteral(value, out var literal))
+            return value;
+        if (Elsa3TypedValues.IsEmptyLiteral(literal))
+            return null;
+        if (TryMultiValueHeaders(literal, out var headers))
+            return Elsa3TypedValues.CreateExpression("Object", "Object", headers);
+
+        context.Error(ValueOutsideContract,
+            $"Input '{propertyName}' must be a literal header map, a JSON object of header names to a value or an array of values.",
+            "Write the headers as a JSON object literal, such as {\"X-Header\": [\"value\"]}.",
+            propertyName);
+        return null;
+    }
+
+    private static bool TryMultiValueHeaders(string? literal, out string headers)
+    {
+        headers = "{}";
+        JsonNode? node;
+        try
+        {
+            node = JsonNode.Parse(literal!);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        if (node is not JsonObject map)
+            return false;
+        var multi = new JsonObject();
+        foreach (var (name, header) in map)
+        {
+            switch (header)
+            {
+                case JsonValue scalar:
+                    multi[name] = new JsonArray(scalar.ToString());
+                    break;
+                case JsonArray array when array.All(item => item is JsonValue):
+                    multi[name] = new JsonArray(array.Select(item => (JsonNode?)JsonValue.Create(item!.ToString())).ToArray());
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        headers = multi.ToJsonString();
+        return true;
+    }
+
     private static bool TrySingleValueHeaders(string? literal, out string headers)
     {
         headers = "{}";
@@ -915,7 +973,13 @@ internal sealed class Elsa3ActivityNormalizer(
         if (entry is null)
             return;
         foreach (var rule in entry.Members.Where(rule => rule.Rule == Elsa3MemberRuleKind.Structure))
-            context.RemoveProperty(rule.Elsa3Name);
+        {
+            var names = context.Activity.AdditionalProperties.Keys
+                .Where(name => StringComparer.OrdinalIgnoreCase.Equals(name, rule.Elsa3Name) && !context.Node.RewrittenProperties.Contains(name))
+                .ToArray();
+            foreach (var name in names)
+                context.Activity.AdditionalProperties.Remove(name);
+        }
     }
 
     private void PinIntrinsic(Elsa3RewriteContext context)
@@ -1038,7 +1102,7 @@ internal sealed class Elsa3ActivityNormalizer(
     {
         [FormPostNotParsed] = "Elsa 4 does not parse form posts into ParsedContent, and a text body becomes a string.",
         [RequestSizeNoOutcome] = "A request over the size limit has no outcome in Elsa 4; the request is refused.",
-        [HttpOutcomeSingle] = "Elsa 4 emits one outcome per response: Done no longer fires together with a status-code outcome, and a non-2xx response goes to Failed.",
+        [HttpOutcomeSingle] = "Without expected status codes, a non-2xx response goes to Failed in Elsa 4; Elsa 3 completed it with Done.",
         [AuthHeaderUnvalidated] = "Elsa 4 does not validate the Authorization header, as if validation were disabled.",
         [HttpAuthorizationUseConnection] = "Create an http connection and bind it to Connection. SendHttpRequest.Authorization was removed.",
         [WhilePersistedCondition] = "Elsa 4 re-reads the While condition only from persisted state.",
@@ -1046,7 +1110,6 @@ internal sealed class Elsa3ActivityNormalizer(
         [BreakStopsAtParallel] = "In Elsa 4, Break does not cross a Parallel branch.",
         [ForkWaitAnyCancellation] = "Fork WaitAny becomes a Parallel with threshold 1; cancellation of the other branches may differ.",
         [ExecuteWorkflowDurable] = "ExecuteWorkflow becomes a durable dispatch that waits for completion, not an in-process call.",
-        [ScriptOutcomeRouting] = "Elsa 4 routes RunJavaScript by its return value; setOutcomes with several outcomes is refused.",
         [OutcomeUndeclared] = "The reusable workflow completes with an outcome its definition does not declare; it is declared in the converted contract.",
         [OutcomeUnreached] = "The reusable workflow declares an outcome that nothing completes with; it is left out of the converted contract.",
         [HttpResponseJsonVariant] = "Elsa 3 matched this JSON content type only by exact string and sent the object's type name; Elsa 4 sends the object as JSON.",

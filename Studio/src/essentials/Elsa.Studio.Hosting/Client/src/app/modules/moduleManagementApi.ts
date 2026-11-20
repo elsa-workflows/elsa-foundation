@@ -126,7 +126,6 @@ export interface ModuleManagementFeed {
   name: string;
   serviceIndex?: string | null;
   directoryPath?: string | null;
-  credentials?: string | null;
   includeAll: boolean;
   includePatterns: string[];
   directory: {
@@ -603,7 +602,6 @@ function normalizeFeed(feed: Partial<ModuleManagementFeed>): ModuleManagementFee
     name: feed.name ?? "unnamed-feed",
     serviceIndex: feed.serviceIndex ?? null,
     directoryPath: feed.directoryPath ?? null,
-    credentials: feed.credentials ?? null,
     includeAll: feed.includeAll ?? false,
     includePatterns: asArray(feed.includePatterns),
     directory: {

@@ -51,6 +51,12 @@ The default `ISecretValueProtector` writes a versioned, key-id-tagged payload (`
 - `encrypted`: writes protected payload material through `ISecretValueProtector`.
 - `configuration`: resolves values from `IConfiguration` using a stored configuration key.
 
+Connection-owned field secrets and OAuth grant and PKCE secrets are created in the store named by
+`Elsa:Secrets:DefaultWritableStoreName` (`SecretsOptions.DefaultWritableStoreName`), which defaults to
+`encrypted`. A host that registers its own writable `ISecretStore` selects it by that configured name;
+it does not reuse the name `encrypted`. Startup fails if the configured store is not registered or is
+not writable.
+
 ## Runtime Integration
 
 The package contributes the `Secret` expression descriptor, which the Studio secret picker authors as a reference such
