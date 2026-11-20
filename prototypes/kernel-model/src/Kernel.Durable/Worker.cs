@@ -158,7 +158,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private int _gaining = -1;
     private bool _retaking, _retakeStoodDown;      // a stand-down during a retake (RetakeAsync) cancels it
     private readonly HashSet<int> _retakeLost = [];     // partitions given up during a retake: it does not take them back
-    private readonly HashSet<int> _retakeSet = [];      // what a retake after a reset takes back: the Worker's still, for Claims
+    private readonly HashSet<int> _retakeSet = [];      // what a retake after a reset takes back: the Worker's still, for ClaimedPartitions
     private readonly HashSet<int> _handingOver = [];    // K1b: what a LoseAsync under way gives up: never kept pending
     private readonly HashSet<int> _broughtBack = [];    // K1b: pending partitions an answer's retake took back, for the host's runtime to adopt
     private readonly HashSet<int> _givenUp = [];        // K1b: partitions the host gave up while their gain or counting retake was in flight
@@ -663,7 +663,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     (_woken, installed) = (true, true);
                     if (byItself) _broughtBack.Add(partition);
                 }
-                (_taking, _gaining) = (false, -1);      // after the install: Claims never sees neither
+                (_taking, _gaining) = (false, -1);      // after the install: ClaimedPartitions never sees neither
             }
             if (installed)
             {
@@ -723,23 +723,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public Func<bool>? TakesOpen { get; set; }
     private bool TakesClosed => NodeLease && TakesOpen is { } open && !open();
 
-    public long ClaimsLookups { get; private set; }     // N1: one answer's judging, counted by the lease-check witness
-    /// <summary>The partition is this Worker's: held, pending, or being taken. A host with several Workers divides an answer by it.</summary>
-    public bool Claims(int partition)
-    {
-        lock (_turnSync)
-        {
-            ClaimsLookups++;
-            return _held.ContainsKey(partition) || _pending.ContainsKey(partition) || _gaining == partition || (_taking && Assigned.Contains(partition))
-                || (_retaking && _retakeSet.Contains(partition));
-        }
-    }
+    /// <summary>Test-only (N1, N6): how many times <see cref="ClaimedPartitions"/> ran. One answer asks each Worker once.</summary>
+    public long ClaimedLookups { get; private set; }
 
-    /// <summary>The partitions <see cref="Claims"/> would accept, under the same lock. One answer builds a map from these.</summary>
+    /// <summary>
+    /// The partitions this Worker claims: held, pending, or being taken. A host with several Workers divides an answer by
+    /// these, under the Worker's lock, building one map from them per answer.
+    /// </summary>
     internal IReadOnlyList<int> ClaimedPartitions()
     {
         lock (_turnSync)
         {
+            ClaimedLookups++;
             HashSet<int> claimed = [.. _held.Keys, .. _pending.Keys];
             if (_gaining >= 0) claimed.Add(_gaining);
             if (_taking) claimed.UnionWith(Assigned);
@@ -792,7 +787,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         lock (_turnSync)
         {
             if (lease is { Taken.Count: > 0 }) Install(lease, started);    // a take of a set keeps what it got
-            _taking = false;        // after the install: Claims never sees neither
+            _taking = false;        // after the install: ClaimedPartitions never sees neither
         }
         if (lease is { Taken.Count: > 0 }) Installed(lease);
     }
@@ -851,7 +846,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 taken.RemoveAll(t => _retakeLost.Contains(t.Partition));
             }
             _retakeLost.Clear();
-            _retakeSet.Clear();     // in the same critical section as the install: Claims sees the retake's set, or the held one
+            _retakeSet.Clear();     // in the same critical section as the install: ClaimedPartitions sees the retake's set, or the held one
             if (!stoodDown && taken.Count > 0)
             {
                 Install(new(taken, now), started);
@@ -1042,7 +1037,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 _caughtUp = false;      // F1: until a short poll has read the new partition's inbox, nothing is handed over in memory
                 (_woken, installed) = (true, true);
             }
-            (_taking, _gaining) = (false, -1);      // after the install: Claims never sees neither
+            (_taking, _gaining) = (false, -1);      // after the install: ClaimedPartitions never sees neither
         }
         if (lease is null) return false;
         if (installed)

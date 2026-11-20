@@ -179,7 +179,9 @@ internal static class NodeLeaseChecks
             $"a lazy fixed host heartbeats before any Worker and keeps a scope past one lease: before {before}, mid {mid}, renewed {renewed}, survived {survived}");
     }
 
-    // N1: a ForNode fixed host without owned sets, 256 Workers. One answer must not scan Claims per sibling candidate.
+    // N1, N5 and N6: a ForNode fixed host without owned sets, 256 Workers. One answer asks each Worker for its claimed
+    // partitions once, so it is judged over one map: a rewrite that asks per sibling candidate makes this quadratic. The
+    // heartbeat must be answered, and every Worker asked, or the count proves nothing.
     private static async Task FixedHostAnswerJudgesOnce(Action<bool, string> check)
     {
         const int n = 256;
@@ -188,11 +190,12 @@ internal static class NodeLeaseChecks
         var host = DurableHost.ForNode("n1", wire, new WorkflowInstance([new Counter()]), n, new() { Monotonic = clock, Partitions = n });
         var workers = new Worker[n];
         for (var p = 0; p < n; p++) workers[p] = (Worker)(await host.ActivateAsync(p))!;
-        await host.HeartbeatAsync(Window);
+        var before = workers.Select(w => w.ClaimedLookups).ToArray();
+        var answered = await host.HeartbeatAsync(Window) is not null;
+        var asked = workers.Select((w, i) => w.ClaimedLookups - before[i]).ToArray();
         foreach (var w in workers) await w.RunAsync();
-        var claims = workers.Sum(w => w.ClaimsLookups);
-        check(claims < n && workers.All(w => w.Holds(w.Partition)),
-            $"one answer over {n} Workers judges with {claims} Claims calls (bound {n}), held {workers.Count(w => w.Holds(w.Partition))}");
+        check(answered && asked.All(a => a == 1) && workers.All(w => w.Holds(w.Partition)),
+            $"one answer over {n} Workers asks each once: answered {answered}, asked {asked.Sum()} times (each once {asked.All(a => a == 1)}), held {workers.Count(w => w.Holds(w.Partition))}");
     }
 
     // Review round 2 of #4870, the coordinator's rule: a fixed Worker's pending partition, with a trial on it, is given up by
