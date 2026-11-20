@@ -254,6 +254,15 @@ public sealed class ScriptBodyVariablesRunTests
         Assert.Contains("name is withheld", fault);
     }
 
+    [Fact]
+    public async Task A_parse_error_keeps_its_text_when_no_input_is_protected()
+    {
+        var run = await RunAsync("return (;", sensitive: true);
+
+        var fault = run.State("node-js").Fault!.Message;
+        Assert.DoesNotContain("withheld", fault);
+    }
+
     [Theory]
     [InlineData("throw new Error('ssn ' + variables.order.price);")]
     [InlineData("return JSON.parse('{' + variables.order.price);")]

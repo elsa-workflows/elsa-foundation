@@ -116,12 +116,15 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         {
             // A read the session refused is the cause, even when the script caught the error and failed otherwise
             // (FR-017a); its message is the session's own and names no value.
+            // No inner exception: the script's own error can quote a protected value it read.
             if (variables?.Refusal is { } refusal)
-                throw new InvalidOperationException(refusal, exception);
+                throw new InvalidOperationException(refusal);
             // Spec 1229 FR-006: a script error's text can quote what the script read (`throw new Error(variables.ssn)`,
             // a JSON.parse error). With a protected input or read it is not recorded; the type still says what failed. A
-            // parse error happens before anything is read and quotes only the script.
-            if ((context.HasProtectedInputs || session?.HasReadProtectedValue == true) && !exception.GetType().Name.Contains("ParseError", StringComparison.Ordinal))
+            // script that does not parse (Jint's ScriptPreparationException) has read nothing, but its text can quote the
+            // script, which a protected input can supply, so it keeps its text only when no input is protected.
+            var isParseError = exception.GetType().Name is "ScriptPreparationException" or "ParseErrorException";
+            if (context.HasProtectedInputs || (session?.HasReadProtectedValue == true && !isParseError))
                 throw new InvalidOperationException(
                     $"The script failed ({exception.GetType().Name}). Its message is withheld because a value it read is protected.");
             throw;
