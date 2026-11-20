@@ -154,24 +154,6 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
-      "elsa.serialization.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.workflows.runtime.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Expressions.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )",
-          "Elsa.Serialization.Core": "[4.0.0-dev, )",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
-          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
-        }
-      },
       "Microsoft.Extensions.Configuration": {
         "type": "CentralTransitive",
         "requested": "[10.0.10, )",
@@ -227,6 +209,24 @@
         "requested": "[2.7.5, )",
         "resolved": "2.7.5",
         "contentHash": "0FA67RSnRM4tcBKqiqVu/HPdZ9+QOKbmeRjxRUGTCjPU4C0bmUhd97Dso7Yild5P7nOV6GxJ2xrK0Kv/O9xp0w=="
+      },
+      "elsa.serialization.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
+        }
       }
     }
   }

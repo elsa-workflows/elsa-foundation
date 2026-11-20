@@ -2034,6 +2034,7 @@
         "dependencies": {
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
           "OpenIddict.Abstractions": "[7.5.0, )",
           "OpenIddict.AspNetCore": "[7.5.0, )"
         }

@@ -97,7 +97,10 @@
       "Microsoft.TestPlatform.ObjectModel": {
         "type": "Transitive",
         "resolved": "18.0.0",
-        "contentHash": "Al/a99ymb8UdEEh6DKNiaoFn5i8fvX5PdM9LfU9Z/Q8NJrlyHHzF+LRHLbR+t89gRsJ2fFMpwYxgEn3eH1BQwA=="
+        "contentHash": "Al/a99ymb8UdEEh6DKNiaoFn5i8fvX5PdM9LfU9Z/Q8NJrlyHHzF+LRHLbR+t89gRsJ2fFMpwYxgEn3eH1BQwA==",
+        "dependencies": {
+          "System.Reflection.Metadata": "8.0.0"
+        }
       },
       "Microsoft.TestPlatform.TestHost": {
         "type": "Transitive",
@@ -106,6 +109,19 @@
         "dependencies": {
           "Microsoft.TestPlatform.ObjectModel": "18.0.0",
           "Newtonsoft.Json": "13.0.3"
+        }
+      },
+      "System.Collections.Immutable": {
+        "type": "Transitive",
+        "resolved": "8.0.0",
+        "contentHash": "AurL6Y5BA1WotzlEvVaIDpqzpIPvYnnldxru8oXJU2yFxFUy3+pNXjXd1ymO+RA0rq0+590Q8gaz2l3Sr7fmqg=="
+      },
+      "System.Reflection.Metadata": {
+        "type": "Transitive",
+        "resolved": "8.0.0",
+        "contentHash": "ptvgrFh7PvWI8bcVqG5rsA/weWM09EnthFHR5SCnS6IN+P4mj6rE1lBDC4U8HL9/57htKAqy4KQ3bBj84cfYyQ==",
+        "dependencies": {
+          "System.Collections.Immutable": "8.0.0"
         }
       },
       "xunit.abstractions": {
@@ -159,7 +175,9 @@
           "Elsa.Http.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Http": "[10.0.10, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )"
         }
       },
       "elsa.activities.runtime.core": {

@@ -22,6 +22,16 @@
         "resolved": "2025.2.4",
         "contentHash": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A=="
       },
+      "Microsoft.EntityFrameworkCore.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "bOzrFCl6uZCjaSh2bG1ToRQRdx+iXvxosCg9hFyG9OWeAzOFI4xev9OqKeWfKf/kAHyox2JnbcvLVf2ceA7sqA=="
+      },
+      "Microsoft.EntityFrameworkCore.Analyzers": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "2gLDordUCGf3aNOOuqtTbP5mxhiP9nk6TnvGiE3RnqT891O+Zf/qKu1PIREubs1M16A0SImr4vULBfU5BTDs1Q=="
+      },
       "Microsoft.Extensions.AmbientMetadata.Application": {
         "type": "Transitive",
         "resolved": "10.3.0",
@@ -340,6 +350,7 @@
         "dependencies": {
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
           "OpenIddict.Abstractions": "[7.5.0, )",
           "OpenIddict.AspNetCore": "[7.5.0, )"
         }
@@ -355,6 +366,25 @@
         "dependencies": {
           "CShells.Abstractions": "0.0.31",
           "JetBrains.Annotations": "2025.2.4"
+        }
+      },
+      "Microsoft.EntityFrameworkCore": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "a0V7zj/VbYP6dTdWpUgE/r2PuLKtUGe2aJ0lVKkn/wP9ZhaxUz2kQydVfvOjCv2SKxlrqdBfHhPD4Cvlf+4ffA==",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore.Abstractions": "10.0.10",
+          "Microsoft.EntityFrameworkCore.Analyzers": "10.0.10"
+        }
+      },
+      "Microsoft.EntityFrameworkCore.Relational": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "wNonj40aZxia+GtuBiiD6ZqVh4h6y5Nje1bGdmzZ8/ui0QRsAN+S0SIrLHFCEGbG9cDbeaE40sh+Lr7o9rRs6g==",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore": "10.0.10"
         }
       },
       "OpenIddict.Abstractions": {
