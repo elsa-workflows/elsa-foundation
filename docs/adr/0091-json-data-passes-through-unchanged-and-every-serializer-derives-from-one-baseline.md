@@ -1,8 +1,8 @@
 # JSON Data Passes Through Unchanged And Every Serializer Derives From One Baseline
 
-Status: proposed (2026-10-27)
+Status: accepted (2026-11-20; proposed 2026-10-27); hash-input amendment accepted 2026-11-20.
 
-Amendment proposed (hash input): every hash over JSON goes through one hash input, hashed over the canonical form, and
+Amendment (hash input): every hash over JSON goes through one hash input, hashed over the canonical form, and
 is frozen from Elsa 4's first stable release. It replaces the frozen per-hash options of decisions 1 and 7.
 
 It answers whether JSON property names keep their exact casing everywhere.
