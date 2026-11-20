@@ -94,6 +94,12 @@ red without the change. xUnit only.
   check a `null` captured into a variable or workflow output against the target's nullability: `VF-ACT-004` for a
   non-nullable target, the type default under `DefaultOnNull` with `VF-NULL-001` on the invocation. Tests: a
   `Run JavaScript` result of `null` bound to an `Int32` variable, with and without the policy
+- [ ] T010d [US1] Variable declared defaults: `ExecutableNodeCompiler.CompileVariableDeclaration` compiles a
+  variable's default against the variable's type-derived nullability (T004) instead of `IsNullable: true`, so a
+  declared default of `null` on an `Int32` variable fails publication with `VF-ACT-004`. Default-on-null does not
+  apply to an authored default: the author fixes it. Test
+- [ ] T010e [US1] Operator alteration: `ModifyVariableAlterationHandler.IsCompatible` refuses JSON `null` for a
+  non-nullable variable (`VariableValueTypeMismatch`). Default-on-null does not apply to operator writes. Test
 - [ ] T011 [US1] Tests in `Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`: null
   literal into a nullable variable and a nullable output publishes; into an `Int32` variable fails with `VF-ACT-004`
 - [ ] T012 [US1] Run test: the variable holds `ExplicitNull` and a workflow output persists an explicit JSON `null`

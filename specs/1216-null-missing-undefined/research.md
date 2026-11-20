@@ -120,7 +120,9 @@ Line numbers are from that initiative head.
 - **Every write path.** The same check (refuse with `VF-ACT-004`, or substitute and record `VF-NULL-001` under
   `DefaultOnNull`) runs wherever a value is written to a declared member: admission (T013), activity inputs (T019,
   T020), graph inner nodes (T020a), `Set` / `SetOutput` (T010a), step writes from scripts and .NET activities
-  (T010b), and activity output captures into variables and workflow outputs (T010c).
+  (T010b), and activity output captures into variables and workflow outputs (T010c). Two more refuse `null` for a
+  non-nullable variable without substituting, because an author or operator chose the value directly: a variable's
+  declared default (T010d) and the `ModifyVariable` alteration (T010e).
 - **Rationale**: one rule at every entry point; the hydrator stays a pure contract check.
 - **Alternatives**: substitute in the hydrator (rejected: the invocation record would not show the substitution).
 
