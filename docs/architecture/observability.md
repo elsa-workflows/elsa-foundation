@@ -2350,56 +2350,42 @@ its principal, reason and outcome.
 
 ## Read models: how layer 3 stays off partitions
 
-Studio and the operator API depend on the turn contract, the four seams and read models only. They name an instance by
-its `InstanceRef` and never see a partition, a position, an epoch, an order key or SQL:
+Studio and the operator API depend on the foundation contract and the model contract only. They name an actor by its
+exact `ActorRef` and never see a partition, a position, an epoch, an order key or SQL. Their read models are the
+contract's `IActorReads` ([the foundation contract](foundation-contract.md#read-models-iactorreads), approved with
+conditions on 19 November), which replaces this section's earlier `IParkedWork` and `IInboxInspection` sketch. Each
+call takes a `BoundScope`:
 
-*Approved with conditions, 19 November:* [the foundation contract](foundation-contract.md#read-models-iactorreads)
-restates these read models in contract words (`ActorRef`, `Selection`, `Page`, opaque handles, no creation, Park
-revision or trial state) and supersedes the records below, which stay as the earlier sketch they were approved as.
+| Read | What it returns |
+|---|---|
+| `GetAsync(scope, ref)` | One `ActorView`: the header, the `Selection` an operator command names, the `ParkView` when parked, and `AsOf` |
+| `ListAsync(scope, query)` | A `Page<ActorView>` filtered by `ActorQuery(Type, Status, Labels, EndedBefore, Parked)`; the parked-work list is this query with `Parked` |
+| `TailAsync(scope, ref, from)` | One actor's `JournalEntry` pages after an opaque `PageToken`, in commit order |
+| `InboxAsync(scope, ref, from)` | One actor's `DeliveryView` pages: pending, held, and the rows its Park keeps (`Consumed` or `Arrived`), each with its handle |
 
-```csharp
-interface IParkedWork      // read model, written by the projector from Park, recover and discard journal rows
-{
-    ValueTask<Page<ParkedItem>> ListAsync(ParkedQuery query, CancellationToken cancellationToken);
-    ValueTask<ParkedDetail?> GetAsync(InstanceRef instance, CancellationToken cancellationToken);
-}
-
-interface IInboxInspection // delivery seam: rows only, eventually consistent
-{
-    ValueTask<Page<PendingDelivery>> PendingAsync(InstanceRef target, PageToken? from, CancellationToken cancellationToken);
-    ValueTask<KeptPage> KeptAsync(InstanceRef target, PageToken? from, CancellationToken cancellationToken);
-}
-
-record ParkedItem(InstanceRef Instance, long Creation, long ParkRevision, long ParkAt, /* model, definition, fault, ... */ string Reason);
-record KeptPage(ParkSelection Park, IReadOnlyList<KeptDelivery> Rows, PageToken? Next);   // the Park these rows belong to
-
-record PendingDelivery(string Handle, string Id, string Kind, string? Sender, DateTimeOffset? Due,
-                       DeliveryState State, int Attempts, int Size);   // State: Pending, Held, OnTrial
-record KeptDelivery(string Handle, string Id, string Kind, string? Sender, KeptReason Reason, int Size);
-                       // Handle: the opaque full key (Id, Scope, Match); Reason: the row's KeptBy, Consumed, Arrived or Selected
-record ParkedDetail(ParkedItem Item, IReadOnlyList<string> ConsumedHandles, ResolutionState? Resolution);
-                       // ConsumedHandles from the Park's journal entries; no kept-row list and no reasons
-```
-
-- **Ids are opaque to layer 3.** Today an `InstanceRef` id embeds its partition (`3/order-17` in
-  [Addresses.cs](../../prototypes/kernel-model/src/Kernel.Runtime/Addresses.cs)), and `InstanceRef.Partition` parses it.
-  The contracts package layer 3 builds against exposes no such property: layer 3 compares and stores ids as strings and
-  never parses them; only layer 2 derives a partition from an id.
-- **Where an operator finds a handle.** `KeptAsync` lists an instance's kept rows, in pages, in the drain's tuple
-  order, each with its handle and reason; a `retry` selection takes its handles from there. It reads rows on the
-  delivery seam and is eventually consistent like `PendingAsync`: a row a drain has just restored or cleared can still
-  appear, and the recover's checks refuse a selection that no longer matches.
+- **Ids are opaque to layer 3.** Layer 3 stores and compares an `ActorRef` as a string and never parses it (FC-13).
+  Today's `InstanceRef` embeds its partition (`3/order-17` in
+  [Addresses.cs](../../prototypes/kernel-model/src/Kernel.Runtime/Addresses.cs)); that stays inside the built-in
+  foundation, and K2 removes it from layer 3's reach.
+- **Where an operator finds a handle.** `InboxAsync` lists an actor's rows, in pages, each with its handle and state; a
+  retry names at most 500 handles from there. It is eventually consistent: a row a drain has just restored or cleared
+  can still appear, and the recover refuses a selection that no longer matches (FC-9).
 - **Delivery handles are opaque too.** A handle encodes the store's full message key, so two rows with one wire id
   never share a handle; layer 3 passes handles back unchanged and never builds or parses one.
-- **No order keys or epochs.** A page comes in delivery order; its position travels as an opaque `PageToken`. `seq`,
-  `seen` and `trial` stay in layer 2; inspection reports them as the `State` above.
-- Today's `Viewer.ReadAsync` takes a partition argument; its layer 3 facade drops it.
-- Commands travel through the delivery seam's add, the path every API command takes; their outcome is visible in the
-  read models, or through a reply address for a synchronous API call.
-- Each answer says how fresh it is: read models lag the projector, and inbox inspection sees rows only, so messages an
-  owner holds unwritten in memory do not appear.
-- Partition release, drain and handover are host administration of layers 1 and 2. Studio shows the kernel's health
-  through the metrics above, never through a partition API.
+- **No order keys or epochs.** A page comes in delivery or commit order; its position travels as an opaque
+  `PageToken`. `seq`, `seen` and `trial` stay in the built-in foundation.
+- **Labels, and no tenant feed.** An actor type builds its own read models, the instance list and plan outcomes
+  included, from at most four bounded labels in the header plus the per-actor tail. There is no tenant feed (owner
+  decision 2, 19 November). `ListAsync` over labels is eventually consistent with the commit that set them (FC-11).
+- `TailAsync` replaces today's `Viewer.ReadAsync`, whose partition argument stays inside the built-in foundation.
+- Commands travel through ingress: an operator's `Recover`, `Discard`, `Delete` or `Terminate` is a `SendAsync` with an
+  `OperatorCommand`. Their outcome is visible in the read models, or in the `Reply` of a `RequestAsync`.
+- Each page says how fresh it is in `Page.AsOf`, the foundation clock's reading it is current to. Read models lag the
+  commit, and inbox rows show only what is written, so messages an owner holds unwritten in memory do not appear.
+- Elsewhere on this page, `ParkedItem`, `KeptAsync` and `ParkSelection` name the built-in foundation's own reads and
+  tokens behind these; through the contract they surface as `ActorView`, `InboxAsync` and `Selection`.
+- Partition release, drain and handover are host administration of the built-in foundation. Studio shows the kernel's
+  health through the metrics above, never through a partition API.
 
 ## Release 1
 

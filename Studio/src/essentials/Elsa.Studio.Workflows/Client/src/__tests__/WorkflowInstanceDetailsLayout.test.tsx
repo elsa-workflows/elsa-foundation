@@ -125,7 +125,7 @@ describe("Run detail page layout", () => {
     expect(page?.querySelector(":scope > .studio-page-header")).toBeTruthy();
     await vi.waitFor(() => expect(page?.querySelector(".studio-page-header h2")?.textContent).toBe("Run · Invoice settlement"));
     expect(page?.querySelector(".studio-page-header h2")?.getAttribute("title")).toBe("Run · Invoice settlement");
-    expect(page?.querySelector(".wf-page-context")?.textContent).toContain("run-1");
+    expect(page?.querySelector(".studio-copyable-identifier__value")?.textContent).toContain("run-1");
     expect(page?.querySelector(".wf-status-line")).toBeNull();
     expect(page?.querySelector(".studio-result-state[data-tone='danger']")).toBeNull();
     expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("timeline");

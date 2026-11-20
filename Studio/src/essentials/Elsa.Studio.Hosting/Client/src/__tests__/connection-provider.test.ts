@@ -13,7 +13,7 @@ describe("document-owned connection providers",()=>{
   const fetch=vi.fn<typeof globalThis.fetch>(async()=>Response.json({capabilities:[]}));vi.stubGlobal("fetch",fetch);
   const connection=new ConfiguredBackendConnection(host.host,host.identity,null,"http://backend.example/shell/");
   await connection.initialize();
-  expect(connection.getSnapshot().active?.profile.id).toBe("legacy");
+  expect(connection.getSnapshot().active?.profile.id).toBe("default");
   expect(connection.getSnapshot().active?.capabilities).toEqual({capabilities:[]});
   expect(fetch).toHaveBeenCalledTimes(1);expect(String(fetch.mock.calls[0][0])).toContain("/shell/capabilities");
  });
@@ -21,7 +21,7 @@ describe("document-owned connection providers",()=>{
   window.history.replaceState({},"","/workflows/shared?definition=resource#details");
   vi.stubGlobal("fetch",vi.fn(async()=>Response.json({capabilities:[]})));
   const connection=new ConfiguredBackendConnection(host.host,host.identity,null,"http://backend.example/shell/");
-  const ready=vi.fn(()=>{if(connection.getSnapshot().active)expect(window.location.search).toBe("?definition=resource&backend=legacy");});
+  const ready=vi.fn(()=>{if(connection.getSnapshot().active)expect(window.location.search).toBe("?definition=resource&backend=default");});
   connection.subscribe(ready);await connection.initialize();
   expect(window.location.pathname).toBe("/workflows/shared");expect(window.location.hash).toBe("#details");expect(ready).toHaveBeenCalled();
  });

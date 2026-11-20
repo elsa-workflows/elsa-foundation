@@ -22,12 +22,17 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 ### Studio UI
 
 - **Inner loop:** use the Node.js and pinned pnpm versions in the Studio contribution guide. Run `pnpm install --frozen-lockfile` from `Studio/`, then the affected package's existing test, typecheck, or build script; for example, `pnpm --filter @elsa-workflows/studio-workflows test`. See the [Studio guide](../../Studio/CONTRIBUTING.md#local-checks-and-hosted-checks) for root checks and Foundation [CI](../../.github/workflows/ci.yml) for browser-test setup.
-- **Evidence:** Foundation PR CI runs Studio lint, typecheck, workspace tests, bundle-budget checks, and Chromium tests when that suite is selected. The three extra shuffled Workflows test passes run nightly, on demand, and on PRs that change their workflow (`ci.yml`). For a visible paired source change, use the [Studio source quickstart](../../Studio/docs/contributing/studio-source-quickstart.md) and record the exact checkout revision and browser result.
+- **Evidence:** Foundation PR CI runs Studio lint, typecheck, workspace tests and bundle-budget checks when Studio changed, inside `Build & test`. The Chromium browser tests, Studio .NET build and composed UX acceptance run in `CI`'s nightly schedule and on `gh workflow run ci.yml --ref <branch> -f suite=studio`; dispatch them before merging a change that needs browser proof. The three extra shuffled Workflows test passes run nightly and on demand (`-f suite=studio-order`). For a visible paired source change, use the [Studio source quickstart](../../Studio/docs/contributing/studio-source-quickstart.md) and record the exact checkout revision and browser result.
 
 ### Persistence
 
 - **Inner loop:** run the affected provider test project as a whole. The [solution-filter guide](../reference/developer-solution-filters.md) identifies the Testcontainers-backed profile; those tests need Docker. Use the E2E guide for persistence behavior exercised through a rebuilt Workbench.
 - **Evidence:** Foundation PR CI runs no Testcontainers suite. The EF container matrix and the Secrets/PostgreSQL composition job run in `CI`'s nightly schedule and on manual dispatch only (#2632), not as a required PR check. Run the affected provider suite locally, or dispatch `CI` on the branch, and record the result; do not use the nightly's existence as evidence for an affected suite that did not run.
+
+### Kernel prototype
+
+- **Inner loop:** build and run the standalone kernel model under `prototypes/kernel-model` as its README describes; it has its own projects and no server consumer.
+- **Evidence:** `Kernel prototype gate` (workflow `CI`, not a required check) runs on a non-draft PR that changes `prototypes/kernel-model/**`, `tools/ci/kernel_prototype_gate.py` or `.github/workflows/ci.yml`, and reports as skipped otherwise. The larger sizes run in the `Kernel prototype nightly` jobs of `CI`'s nightly schedule; dispatch `CI` with `suite=kernel-gate` or `suite=kernel-nightly` to run either on a branch.
 
 ### Cross-repository change
 

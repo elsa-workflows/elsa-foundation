@@ -221,6 +221,16 @@ describe("StudioDataGrid semantics", () => {
   });
 });
 
+it("only renders the shared refresh Slot when the current view contributes it", () => {
+  render(<StudioPageHeader title="Editor" actions={<button type="button">Save</button>} />);
+  expect(container.querySelector('[data-studio-slot="studio.page-header.refresh"]')).toBeNull();
+  render(<StudioPageHeader title="Orders" actions={<button type="button">Create order</button>} actionsLabel="Order actions" refresh={{ id: "orders", label: "Refresh orders", onRefresh() {} }} />);
+  const actions = container.querySelector('[role="group"][aria-label="Order actions"]');
+  expect(actions?.querySelector('button[aria-label="Refresh orders"]')).not.toBeNull();
+  expect(actions?.textContent).toContain("Create order");
+  expect(actions?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
+});
+
 it("keeps result feedback below an embedded page title in the heading outline", () => {
   render(<><StudioPageHeader title="Embedded collection" headingLevel={2} /><StudioResultState title="Nothing here" headingLevel={3} /></>);
   expect(Array.from(container.querySelectorAll("h1,h2,h3")).map(heading => [heading.tagName, heading.textContent]))

@@ -6,7 +6,7 @@ import { useWorkflowPageWeaver } from "./useWorkflowLibraryWeaver";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Package, Plus, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioWeaverRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -220,15 +220,18 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   const continuationToken = continuationTokens[page];
   const effectiveFolderSelection: WorkflowFolderSelection =
     folderCapability === "available" ? folderSelection : "all";
+  const recycleBinSelected = listState === "deleted" && effectiveFolderSelection === "all";
   const suggestMetadataAction = findAiAction(ai, "weaver.workflows.suggest-create-metadata");
   const explainDefinitionAction = findAiAction(ai, "weaver.workflows.explain-definition");
   const selectedVisibleCount = selectionMatchesScope ? visibleDefinitionIds.filter(id => selectedDefinitionIds.has(id)).length : 0;
   const allVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCount === visibleDefinitionIds.length;
-  const searchLabel = effectiveFolderSelection === "all"
-    ? "Search all workflows"
-    : effectiveFolderSelection === "unfiled"
-      ? "Search Unfiled"
-      : "Search selected folder";
+  const searchLabel = recycleBinSelected
+    ? "Search Recycle bin"
+    : effectiveFolderSelection === "all"
+      ? "Search all workflows"
+      : effectiveFolderSelection === "unfiled"
+        ? "Search Unfiled"
+        : "Search selected folder";
   const emptyScope = effectiveFolderSelection === "all"
     ? "All workflows"
     : effectiveFolderSelection === "unfiled"
@@ -236,13 +239,19 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
       : "the selected folder";
   const emptyLifecycle = listState === "all"
     ? "workflow definitions in any lifecycle state"
-    : `${listState} workflow definitions`;
+    : listState === "deleted"
+      ? "deleted workflow definitions"
+      : "active workflow definitions";
   const emptyTitle = search
     ? `No workflows match “${search}”`
-    : `No ${emptyLifecycle} in ${emptyScope}`;
+    : recycleBinSelected
+      ? "No workflows in the Recycle bin"
+      : `No ${emptyLifecycle} in ${emptyScope}`;
   const emptyDescription = search
     ? `No ${emptyLifecycle} in ${emptyScope} match this search.`
-    : "Create a workflow to start designing automation, or adjust your filters to see more.";
+    : recycleBinSelected
+      ? "Deleted workflows you can restore will appear here."
+      : "Create a workflow to start designing automation, or adjust your filters to see more.";
 
   const handleFolderAvailability = useCallback((available: boolean) => {
     setFolderCapability(available ? "available" : "unavailable");
@@ -460,10 +469,12 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
 
   useEffect(() => {
     if (moveDialogOpen || !focusRefreshAfterMove) return;
+    // The refresh button is disabled while the post-move reload runs; focus it once it can take focus.
+    if (requestState === "loading") return;
     clearSelection();
     refreshButtonRef.current?.focus();
     setFocusRefreshAfterMove(false);
-  }, [focusRefreshAfterMove, moveDialogOpen]);
+  }, [focusRefreshAfterMove, moveDialogOpen, requestState]);
 
   const closeMoveDialog = () => { if (isCurrentGeneration()) setMoveDialogOpen(false); };
   const movedDefinitions = async (folderId: string | null) => {
@@ -507,13 +518,25 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     });
   };
 
-  const changeListState = (nextState: DefinitionListState) => {
-    navigateBrowseLocation({ ...browseLocation, listState: nextState }, "push", true);
-  };
-
   const changeFolder = (nextFolder: WorkflowFolderSelection) => {
     if (!isCurrentGeneration()) return;
-    navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolder, includeDescendants: typeof nextFolder === "object" ? browseLocation.includeDescendants : false }, "push", true);
+    navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolder, listState: listState === "deleted" ? "active" : listState, includeDescendants: typeof nextFolder === "object" ? browseLocation.includeDescendants : false }, "push", true);
+  };
+  const selectRecycleBin = () => {
+    if (!isCurrentGeneration()) return;
+    navigateBrowseLocation({
+      ...browseLocation,
+      folderSelection: "all",
+      listState: "deleted",
+      search: "",
+      tagFilters: [],
+      invalidTagFilters: undefined,
+      includeDescendants: false,
+      favoritesOnly: false,
+      sort: "name",
+      viewId: undefined,
+      publicationState: undefined
+    }, "push", true);
   };
   const changeLibraryLocation = useCallback((next: WorkflowDefinitionBrowseLocation) => {
     if (renderGeneration !== workGenerationRef.current) return;
@@ -533,7 +556,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
-    if (!(await getDialogs().confirm({ message: `Delete workflow definition "${definition.name}"? You can restore it from the Deleted view.`, confirmLabel: "Delete", tone: "danger" })) || !isCurrentGeneration()) return;
+    if (!(await getDialogs().confirm({ message: `Delete workflow definition "${definition.name}"? You can restore it from the Recycle bin.`, confirmLabel: "Delete", tone: "danger" })) || !isCurrentGeneration()) return;
     setRequestError(null);
     try {
       await deleteDefinition(context, definition.id);
@@ -543,7 +566,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
         level: "success",
         title: `Deleted ${definition.name}`,
         action: { label: "Restore", run: () => restoreFromNotification(definition) },
-        link: { label: "View deleted", path: "/workflows/definitions?state=deleted" }
+        link: { label: "Open Recycle bin", path: "/workflows/definitions?state=deleted" }
       });
       await refreshAfterMutation();
     } catch (e) {
@@ -565,7 +588,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     try {
       const confirmed = await getDialogs().confirm({
         title: "Delete selected workflows",
-        message: `Delete ${ids.length} selected workflow definition${ids.length === 1 ? "" : "s"}? You can restore them from the Deleted view.`,
+        message: `Delete ${ids.length} selected workflow definition${ids.length === 1 ? "" : "s"}? You can restore them from the Recycle bin.`,
         confirmLabel: "Delete selected",
         tone: "danger"
       });
@@ -590,7 +613,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
       requestAnimationFrame(() => { if (stillBrowsing(resultIdentity)) bulkDeleteResultRef.current?.focus(); });
       if (succeeded.size) {
         getNotifications().notify({ level: "success", title: `Deleted ${succeeded.size} workflow definition${succeeded.size === 1 ? "" : "s"}`,
-          link: { label: "View deleted", path: "/workflows/definitions?state=deleted" } });
+          link: { label: "Open Recycle bin", path: "/workflows/definitions?state=deleted" } });
         if (returnToPreviousPage) changePage(page - 1);
         else retry();
       }
@@ -754,16 +777,26 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
 
   return (
     <>
-      <StudioPageHeader title="Workflow definitions" titleId="workflow-definitions-title" description="Create and organize workflow definitions, then open a definition to edit its behavior." actions={        <div className="studio-page-actions" role="group" aria-label="Workflow definition page actions">
-          <StudioButton variant="primary" size="md" title="Create workflow" aria-label="Create workflow" disabled={browseScopeBlocked} onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>
-          <StudioButton ref={refreshButtonRef} variant="default" size="md" title="Refresh workflow definitions" aria-label="Refresh workflow definitions" onClick={retry}>Refresh</StudioButton>
-        </div>} />
+      <StudioPageHeader title={recycleBinSelected ? "Recycle bin" : "Workflow definitions"} titleId="workflow-definitions-title" description={recycleBinSelected ? "Restore deleted workflow definitions or delete them permanently." : "Create and organize workflow definitions, then open a definition to edit its behavior."} actionsLabel="Workflow definition page actions" actions={
+        !recycleBinSelected ? <StudioButton variant="primary" size="md" title="Create workflow" aria-label="Create workflow" disabled={browseScopeBlocked} onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton> : undefined
+      } refresh={{
+        id: `workflow-definitions:${context.baseUrl}:${authorityRevision}`,
+        label: "Refresh workflow definitions",
+        onRefresh: retry,
+        refreshing: requestState === "loading" && !requestsPaused && !browseScopeBlocked && !librarySupportError,
+        disabled: bulkDeleting || !!createDraft || moveDialogOpen || !!organizationTarget || !!bulkTagTargets,
+        autoRefresh: !requestsPaused && !browseScopeBlocked && !librarySupportError,
+        active: workspaceTab?.active ?? true,
+        buttonRef: refreshButtonRef
+      }} />
       <div className="wf-definitions-list">
         <WorkflowFolderNavigation
           key={`${context.baseUrl}:${authorityRevision}`}
           context={context}
           selection={folderSelection}
           onSelect={changeFolder}
+          onSelectRecycleBin={selectRecycleBin}
+          recycleBinSelected={recycleBinSelected}
           onAvailable={handleFolderAvailability}
           onFoldersMutated={foldersMutated}
           canManage={librarySupport === null ? false : librarySupport.organization ? libraryPermissions.canManageFolders === true : true}
@@ -771,11 +804,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
         <div className="wf-library-toolbar">
         <StudioCollectionToolbar>
           <StudioSearchInput aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
-          <div className="studio-filter-group" role="group" aria-label="Definition state">
-            <button type="button" className={listState === "active" ? "active" : ""} aria-pressed={listState === "active"} onClick={() => changeListState("active")}>Active</button>
-            <button type="button" className={listState === "deleted" ? "active" : ""} aria-pressed={listState === "deleted"} onClick={() => changeListState("deleted")}>Deleted</button>
-            <button type="button" className={listState === "all" ? "active" : ""} aria-pressed={listState === "all"} onClick={() => changeListState("all")}>All states</button>
-          </div>
+          {listState === "all" ? <span className="wf-library-state-indicator">All workflow states</span> : null}
 
           {effectiveFolderSelection !== "all" ? <StudioButton onClick={() => changeFolder("all")}>Search all workflows</StudioButton> : null}
         </StudioCollectionToolbar>
@@ -816,7 +845,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
           </div>
         ) : null}
         {bulkDeleteResult?.scope === scopeRevision ? <div ref={bulkDeleteResultRef} tabIndex={-1} className="wf-bulk-delete-result" role={bulkDeleteResult.failures.length ? "alert" : "status"}>
-          <p>{bulkDeleteResult.deleted} workflow definition{bulkDeleteResult.deleted === 1 ? "" : "s"} deleted.{bulkDeleteResult.failures.length ? ` ${bulkDeleteResult.failures.length} couldn't be deleted. Failed workflows remain selected; retry Delete selected.` : " You can restore them from the Deleted view."}</p>
+          <p>{bulkDeleteResult.deleted} workflow definition{bulkDeleteResult.deleted === 1 ? "" : "s"} deleted.{bulkDeleteResult.failures.length ? ` ${bulkDeleteResult.failures.length} couldn't be deleted. Failed workflows remain selected; retry Delete selected.` : " You can restore them from the Recycle bin."}</p>
           {bulkDeleteResult.failures.length ? <ul>{bulkDeleteResult.failures.map(failure => <li key={failure.id}>{failure.id}: {failure.message}</li>)}</ul> : null}
           <StudioButton onClick={() => setBulkDeleteResult(null)}>Dismiss</StudioButton>
         </div> : null}
@@ -826,7 +855,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
             icon={<Package size={22} />}
             title={emptyTitle}
             description={emptyDescription}
-            action={<StudioButton variant="primary" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>}
+            action={recycleBinSelected ? undefined : <StudioButton variant="primary" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>}
           />
         ) : null}
         {renderResultRows && definitions.length > 0 ? (
@@ -885,10 +914,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
                     {...(isCurrentData ? {
                       "aria-label": `Open workflow definition ${definition.name}`,
                       "aria-selected": selectedIds.has(definition.id),
-                      onClick: (event: ReactMouseEvent<HTMLDivElement>) => {
-                        if (event.target instanceof Element && event.target.closest("button, input, label, a")) return;
-                        onOpen(definition.id);
-                      }
+                      ...studioRowInteraction<HTMLDivElement>(() => onOpen(definition.id))
                     } : {})}
                     key={definition.id}
                   >
@@ -922,10 +948,10 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
                       </strong>
                       {definition.description ? <small className="wf-definition-description">{definition.description}</small> : null}
                     </span>
-                    <span className="wf-definition-id wf-definition-primary-identifier" role="cell" onClick={event => event.stopPropagation()}>
+                    <span className="wf-definition-id wf-definition-primary-identifier" role="cell">
                       {isCurrentData ? <CopyableIdentifier label="Definition ID" value={definition.id} /> : <span title={definition.id}>{definition.id}</span>}
                     </span>
-                    <span className="wf-definition-identities-cell" role="cell" onClick={event => event.stopPropagation()}>
+                    <span className="wf-definition-identities-cell" role="cell">
                       {isCurrentData ? <WorkflowListIdentifiers name={definition.name} identifiers={secondaryIdentifiers} description={definition.description}>
                         {folderCapability === "available" && effectiveFolderSelection === "all" ? <ResultFolderBreadcrumb definition={definition} onSelect={changeFolder} /> : null}
                         {isDeleted ? <p>Deleted {formatDate(definition.deletedAt)}</p> : null}

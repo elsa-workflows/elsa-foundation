@@ -15,6 +15,7 @@ import {
   registerBuiltInSettingEditors,
   selectSettingEditor
 } from "../module";
+import { buildCapabilityGroups } from "../capabilities";
 
 const mountedRoots = new Set<() => void>();
 const eventCleanups = new Set<() => void>();
@@ -567,8 +568,7 @@ describe("feature management module", () => {
     expect(metadata?.textContent).not.toContain("Source");
 
     const settingsSection = container.querySelector("[aria-label='Feature settings']");
-    expect(settingsSection?.textContent).toContain("Settings");
-    expect(settingsSection?.textContent).toContain("No configurable settings.");
+    expect(settingsSection).toBeNull();
     expect(container.querySelector(".feature-management-inspector-tabs")).toBeNull();
     expect(container.querySelector(".feature-management-sticky-actions")).toBeNull();
 
@@ -603,7 +603,7 @@ describe("feature management module", () => {
     const settingsSection = container.querySelector("[aria-label='Feature settings']");
 
     expect(selectedCard?.querySelector("strong")?.textContent).toBe("Runtime A");
-    expect(selectedCard?.querySelector("code")?.textContent).toBe("RuntimeA");
+    expect(selectedCard?.querySelector("code")).toBeNull();
     expect(container.querySelector(".feature-management-inspector h3")?.textContent).toBe("Runtime A");
 
     const metadata = container.querySelector(".feature-management-metadata");
@@ -2105,7 +2105,7 @@ function httpError(status: number, message: string) {
 
 type AuthWrapper = (children: React.ReactNode) => React.ReactElement;
 
-async function renderFeatureManagementPage(provider: AuthWrapper = anonymousProvider()) {
+async function renderFeatureManagementPage(provider: AuthWrapper = anonymousProvider(), openAllFeatures = true) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -2131,6 +2131,24 @@ async function renderFeatureManagementPage(provider: AuthWrapper = anonymousProv
   mountedRoots.add(cleanup);
   renderWith(provider);
   await flushPromises();
+  if (openAllFeatures) {
+    const selectedHostTab = container.querySelector<HTMLButtonElement>("[aria-label='Hosts'] [role='tab'][aria-selected='true']");
+    if (featureCompletion(container)) {
+      const panel = selectedHostTab ? document.getElementById(selectedHostTab.getAttribute("aria-controls") ?? "") ?? container : container;
+      await click(buttonByText(panel, "All features"));
+    } else {
+      const selectedHostPanelId = selectedHostTab?.getAttribute("aria-controls");
+      const hostTabs = Array.from(container.querySelectorAll<HTMLButtonElement>("[aria-label='Hosts'] [role='tab']"));
+      for (const hostTab of hostTabs) {
+        await click(hostTab);
+        const panel = document.getElementById(hostTab.getAttribute("aria-controls") ?? "") ?? container;
+        await click(buttonByText(panel, "All features"));
+      }
+      const initialHostTab = Array.from(container.querySelectorAll<HTMLButtonElement>("[aria-label='Hosts'] [role='tab']"))
+        .find(tab => tab.getAttribute("aria-controls") === selectedHostPanelId);
+      if (initialHostTab) await click(initialHostTab);
+    }
+  }
 
   return {
     container,
@@ -2331,4 +2349,139 @@ function assertLinkedPanels(container: Element) {
     expect(panel?.getAttribute("aria-labelledby")).toBe(tab.id);
     expect(panel?.hidden).toBe(tab.getAttribute("aria-selected") !== "true");
   }
+}
+
+describe("feature capability browsing", () => {
+  it("groups by curated categories and counts enabled, pending, and problem states", () => {
+    const groups = buildCapabilityGroups([
+      { categories: ["BPMN"], enabled: true, pending: true },
+      { categories: ["bpmn"], enabled: false, problem: true },
+      { categories: ["Persistence"], enabled: false },
+      { categories: ["Unmapped category"], enabled: true }
+    ]);
+
+    expect(groups.map(group => [group.id, group.features.length])).toEqual([
+      ["bpmn", 2],
+      ["persistence", 1],
+      ["other", 1]
+    ]);
+    expect(groups[0]).toMatchObject({ enabledCount: 1, pendingCount: 1, problemCount: 1 });
+    expect(groups[2].label).toBe("Other features");
+  });
+
+  it("shows capability cards, filters state and advanced features, and searches across groups", async () => {
+    const catalogFeatures = [
+      feature("FeatureEnabled", true, {}, ["BPMN"]),
+      feature("FeatureDisabled", false, {}, ["BPMN"]),
+      feature("FeatureAdvanced", false, {}, ["BPMN"], { advanced: true })
+    ];
+    register(stubApi({ getJson: async () => ({ revision: "browse-rev", features: catalogFeatures }) }));
+    const page = await renderFeatureManagementPage(anonymousProvider(), false);
+
+    try {
+      expect(page.container.querySelectorAll(".feature-management-capability-card")).toHaveLength(1);
+      expect(page.container.querySelector(".feature-management-capability-card")?.textContent).toContain("1 of 3 enabled");
+      await click(page.container.querySelector("[aria-label='View BPMN features']"));
+      expect(page.container.querySelectorAll(".feature-management-card")).toHaveLength(3);
+
+      const stateFilter = page.container.querySelector<HTMLSelectElement>(".feature-management-state-filter");
+      await changeSelect(stateFilter, "enabled");
+      expect(page.container.querySelectorAll(".feature-management-card")).toHaveLength(1);
+      await changeSelect(stateFilter, "disabled");
+      expect(page.container.querySelectorAll(".feature-management-card")).toHaveLength(2);
+
+      const advancedFilter = page.container.querySelector<HTMLInputElement>(".feature-management-advanced-filter input");
+      await click(advancedFilter);
+      expect(page.container.querySelectorAll(".feature-management-card")).toHaveLength(1);
+      await click(advancedFilter);
+      await click(page.container.querySelector("[aria-label='Enable FeatureDisabled']"));
+      await changeSelect(stateFilter, "pending");
+      expect(page.container.querySelectorAll(".feature-management-card")).toHaveLength(1);
+      expect(page.container.querySelector(".feature-management-card")?.textContent).toContain("Pending changes");
+
+      await click(buttonByText(page.container, "Capabilities"));
+      expect(page.container.querySelector(".feature-management-capability-card")?.textContent).toContain("1 pending change");
+      await click(buttonByText(page.container, "All features"));
+      await changeSelect(page.container.querySelector<HTMLSelectElement>(".feature-management-state-filter"), "all");
+      await changeInput(page.container.querySelector<HTMLInputElement>("[aria-label='Filter features']"), "FeatureAdvanced");
+      expect(page.container.querySelectorAll(".feature-management-card")).toHaveLength(1);
+      expect(page.container.querySelector(".feature-management-card")?.textContent).toContain("BPMN");
+
+      await click(buttonByText(page.container, "Studio"));
+      expect(page.container.querySelector(".feature-management-browse-nav button[aria-pressed='true']")?.textContent).toBe("Capabilities");
+      await click(buttonByText(page.container, "All features"));
+      await click(buttonByText(page.container, "Server"));
+      expect(page.container.querySelector(".feature-management-browse-nav button[aria-pressed='true']")?.textContent).toBe("All features");
+    } finally {
+      await page.unmount();
+    }
+  });
+
+  it("shows direct, indirect, optional, and missing relationships with back navigation", async () => {
+    const catalogFeatures = [
+      feature("Consumer", true, {}, ["BPMN"], { dependencies: ["Storage", { id: "OptionalTelemetry", optional: true }, "MissingDependency"] }),
+      feature("Storage", true, {}, ["Persistence"], { dependencies: ["Root"] }),
+      feature("Root", false, {}, ["Persistence"], { dependencies: ["Storage"] }),
+      feature("OptionalTelemetry", false, {}, ["Integrations"]),
+      feature("Dependent", true, {}, ["Integrations"], { dependencies: ["Consumer"] })
+    ];
+    register(stubApi({ getJson: async () => ({ revision: "relationships-rev", features: catalogFeatures }) }));
+    const page = await renderFeatureManagementPage(anonymousProvider(), false);
+
+    try {
+      await click(buttonByText(page.container, "All features"));
+      await changeInput(page.container.querySelector<HTMLInputElement>("[aria-label='Filter features']"), "Consumer");
+      expect(page.container.querySelectorAll(".feature-management-card")).toHaveLength(1);
+      const relationships = page.container.querySelector("[aria-label='Feature relationships']");
+      expect(relationships?.textContent).toContain("Requires");
+      expect(relationships?.textContent).toContain("Used by");
+      expect(relationships?.textContent).toContain("Optional");
+      expect(relationships?.textContent).toContain("Missing from catalog");
+      expect(relationships?.textContent).toContain("Dependent");
+      expect(relationships?.querySelector("details")?.textContent).toContain("Root");
+      expect(relationships?.querySelector("[aria-label='Open MissingDependency']")).toBeNull();
+
+      await click(relationships?.querySelector("[aria-label='Open Storage']") ?? null);
+      expect(page.container.querySelector(".feature-management-inspector h3")?.textContent).toBe("Storage");
+      await click(page.container.querySelector("[aria-label='Back to previous feature']"));
+      expect(page.container.querySelector<HTMLInputElement>("[aria-label='Filter features']")?.value).toBe("Consumer");
+      expect(page.container.querySelector(".feature-management-inspector h3")?.textContent).toBe("Consumer");
+    } finally {
+      await page.unmount();
+    }
+  });
+
+  it("includes settings-only draft changes in pending feature summaries and filters", async () => {
+    const timeout = setting({ name: "Timeout", displayName: "Timeout", jsonType: "number" });
+    const catalogFeatures = [feature("ConfiguredFeature", true, { Timeout: 5 }, ["Integrations"], { settings: [timeout] })];
+    register(stubApi({ getJson: async () => ({ revision: "settings-pending-rev", features: catalogFeatures }) }));
+    const page = await renderFeatureManagementPage(anonymousProvider(), false);
+
+    try {
+      await click(page.container.querySelector("[aria-label='View APIs & integrations features']"));
+      await click(buttonByText(page.container, "Edit settings"));
+      const dialog = page.container.querySelector(".feature-management-settings-dialog");
+      await changeInput(dialog?.querySelector<HTMLInputElement>("input[type='number']") ?? null, "12");
+      await click(buttonByText(dialog!, "Save draft"));
+
+      await click(buttonByText(page.container, "Capabilities"));
+      expect(page.container.querySelector(".feature-management-capability-card")?.textContent).toContain("1 pending change");
+      await click(buttonByText(page.container, "All features"));
+      await changeSelect(page.container.querySelector<HTMLSelectElement>(".feature-management-state-filter"), "pending");
+      expect(page.container.querySelectorAll(".feature-management-card")).toHaveLength(1);
+      expect(page.container.querySelector(".feature-management-card")?.textContent).toContain("Pending changes");
+    } finally {
+      await page.unmount();
+    }
+  });
+});
+
+async function changeSelect(select: HTMLSelectElement | null, value: string) {
+  if (!select) throw new Error("Expected select to exist.");
+  flushSync(() => {
+    const valueSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(select), "value")?.set;
+    valueSetter?.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await flushPromises();
 }

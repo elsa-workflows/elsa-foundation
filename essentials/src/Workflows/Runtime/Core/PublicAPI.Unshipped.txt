@@ -12649,3 +12649,7 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.SequenceToken.ge
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.HasNewerHistory.get -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.IsEligible(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent! observation) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.IsEligibleKind(string! name) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.WorkflowDeclaredInput(string! name, Elsa.Primitives.Models.TypeReference! type, bool isRequired, System.Text.Json.JsonElement? defaultValue, bool isNullable) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.IsNullable.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.WorkflowDeclaredInput(string! name, Elsa.Primitives.Models.TypeReference! type, bool isRequired, System.Text.Json.JsonElement? defaultValue, bool isNullable, bool hasExplicitNullDefault) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput.HasExplicitNullDefault.get -> bool

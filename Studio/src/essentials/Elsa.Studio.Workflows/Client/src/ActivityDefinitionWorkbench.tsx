@@ -41,7 +41,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   requestedDraftActionVersionId?: string | null;
   activityEditors: StudioActivityDefinitionImplementationEditorContribution[];
   onOpenWorkflows?(): void;
-  onNavigate(next: RouteState): void;
+  onNavigate(next: RouteState, replace?: boolean): void;
   onPlanUpgrade(kind: "ActivityDraft" | "ActivityVersion", id: string): void;
 }) {
   const queryClient = useQueryClient();
@@ -138,6 +138,26 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
     const designOwned = isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design");
     if (designOwned && isActionAllowed(detail.actions, "create-draft")) setDraftDialogSource(requestedDraftActionVersionId);
   }, [detail, requestedDraftActionVersionId]);
+
+  useEffect(() => {
+    if (section !== null || !detail) return;
+    if (!designOwned) {
+      const recommendedVersion = detail.lifecycle.recommendation;
+      if (recommendedVersion && isActivityDefinitionEnumValue(recommendedVersion.lifecycle, "Active")) {
+        onNavigate({ definitionId, section: "editor", draftId: null, versionId: recommendedVersion.versionId }, true);
+      }
+      return;
+    }
+    if (!overview || effectiveDraftPrivacyFailure || draftsQuery.error || draftsQuery.isFetching || !draftsQuery.data || draftsQuery.data.hasMore || draftsQuery.data.continuation) return;
+    const activeDrafts = draftsQuery.data.items.filter(item => isActivityDefinitionEnumValue(item.draft.status, "Active"));
+    if (activeDrafts.length === 1 && isActionAllowed(activeDrafts[0].actions, "edit-draft")) {
+      onNavigate({ definitionId, section: "editor", draftId: activeDrafts[0].draft.draftId, versionId: null }, true);
+      return;
+    }
+    if (activeDrafts.length !== 0 || versionsQuery.error || versionsQuery.isFetching || !versionsQuery.data || !detail.definition.headVersionId) return;
+    const head = versionsQuery.data.items.find(item => item.version.versionId === detail.definition.headVersionId);
+    if (head) onNavigate({ definitionId, section: "editor", draftId: null, versionId: head.version.versionId }, true);
+  }, [definitionId, designOwned, detail, draftsQuery.data, draftsQuery.error, draftsQuery.isFetching, effectiveDraftPrivacyFailure, onNavigate, overview, section, versionsQuery.data, versionsQuery.error, versionsQuery.isFetching]);
 
   const navigateSection = (nextSection: Section, draftId: string | null = null, versionId: string | null = null) => onNavigate({ definitionId, section: nextSection, draftId, versionId });
 
@@ -282,7 +302,10 @@ function Overview({ detail, provider, designOwned, versionQuery, onOpen }: { det
 function DraftsSection({ query, exactQuery, exactFailure, privacyFailure, selectedDraftId, page, designOwned, canCreateDraft, onCreate, onPrevious, onNext, onRetry, onSelect, onEdit, onPlanUpgrade }: { query: ReturnType<typeof useActivityDefinitionDrafts>; exactQuery: ReturnType<typeof useActivityDefinitionDraft>; exactFailure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; selectedDraftId: string | null; page: number; designOwned: boolean; canCreateDraft: boolean; onCreate(): void; onPrevious(): void; onNext(): void; onRetry(): void; onSelect(draftId: string): void; onEdit(draftId: string): void; onPlanUpgrade(draftId: string): void }) {
   const data = privacyFailure ? undefined : query.data;
   const selected = privacyFailure || exactFailure ? undefined : data?.items.find(item => item.draft.draftId === selectedDraftId) ?? exactQuery.data;
-  return <div><div className="ad-section-heading-row"><SectionHeading icon={<GitBranch size={18} />} title="Drafts" description="Mutable drafts are listed by exact identity. Presentation labels are optional and need not be unique." />{canCreateDraft ? <button type="button" onClick={onCreate}>Create parallel draft</button> : null}</div>{!designOwned ? <div className="ad-unavailable-note" role="status"><strong>No mutable source-owned drafts</strong><span>Choose an immutable version and fork it into a new Design-owned identity.</span></div> : null}{selected ? <SelectedDraft item={query.error ? { ...selected, actions: [] } : selected} onEdit={() => onEdit(selected.draft.draftId)} onPlanUpgrade={() => onPlanUpgrade(selected.draft.draftId)} /> : <ExactSelectionState kind="draft" selected={Boolean(selectedDraftId)} query={exactQuery} failure={exactFailure} />}<ChildCollectionState query={query} privacyFailure={privacyFailure} empty="No authorized drafts are available for this definition." onRetry={onRetry} />{data?.items.length ? <div className="ad-child-list" role="group" aria-label="Activity Definition drafts">{data.items.map(item => <button key={item.draft.draftId} type="button" className={item.draft.draftId === selectedDraftId ? "is-selected" : ""} onClick={() => onSelect(item.draft.draftId)}><span><strong>{draftLabel(item)}</strong><small>Revision {item.draft.revision} · {item.draft.status}</small></span><span><strong>{item.draft.providerKey}</strong><small>{formatDate(item.draft.updatedAt)}</small></span></button>)}</div> : null}<CursorPager page={page} data={data} onPrevious={onPrevious} onNext={onNext} /></div>;
+  const editableDrafts = data && !data.hasMore && !data.continuation
+    ? data.items.filter(item => isActivityDefinitionEnumValue(item.draft.status, "Active") && isActionAllowed(item.actions, "edit-draft"))
+    : [];
+  return <div><div className="ad-section-heading-row"><SectionHeading icon={<GitBranch size={18} />} title="Drafts" description="Mutable drafts are listed by exact identity. Presentation labels are optional and need not be unique." />{editableDrafts.length === 1 ? <button type="button" onClick={() => onEdit(editableDrafts[0].draft.draftId)}>Open editor</button> : null}{canCreateDraft ? <button type="button" onClick={onCreate}>Create parallel draft</button> : null}</div>{!designOwned ? <div className="ad-unavailable-note" role="status"><strong>No mutable source-owned drafts</strong><span>Choose an immutable version and fork it into a new Design-owned identity.</span></div> : null}{selected ? <SelectedDraft item={query.error ? { ...selected, actions: [] } : selected} onEdit={() => onEdit(selected.draft.draftId)} onPlanUpgrade={() => onPlanUpgrade(selected.draft.draftId)} /> : <ExactSelectionState kind="draft" selected={Boolean(selectedDraftId)} query={exactQuery} failure={exactFailure} />}<ChildCollectionState query={query} privacyFailure={privacyFailure} empty="No authorized drafts are available for this definition." onRetry={onRetry} />{data?.items.length ? <div className="ad-child-list" role="group" aria-label="Activity Definition drafts">{data.items.map(item => <button key={item.draft.draftId} type="button" className={item.draft.draftId === selectedDraftId ? "is-selected" : ""} onClick={() => onSelect(item.draft.draftId)}><span><strong>{draftLabel(item)}</strong><small>Revision {item.draft.revision} · {item.draft.status}</small></span><span><strong>{item.draft.providerKey}</strong><small>{formatDate(item.draft.updatedAt)}</small></span></button>)}</div> : null}<CursorPager page={page} data={data} onPrevious={onPrevious} onNext={onNext} /></div>;
 }
 
 function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, selectedVersionId, page, designOwned, onCreateFromVersion, onManage, onPrevious, onNext, onRetry, onSelect, onPlanUpgrade }: { query: ReturnType<typeof useActivityDefinitionVersions>; exactQuery: ReturnType<typeof useActivityDefinitionVersion>; exactFailure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; selectedVersionId: string | null; page: number; designOwned: boolean; onCreateFromVersion(versionId: string): void; onManage(action: ActivityDefinitionVersionLifecycleAction, version: ActivityDefinitionVersionManagementView): void; onPrevious(): void; onNext(): void; onRetry(): void; onSelect(versionId: string): void; onPlanUpgrade(versionId: string): void }) {
@@ -319,7 +342,7 @@ function CursorPager({ page, data, onPrevious, onNext }: { page: number; data: {
 }
 
 function SectionHeading({ icon, title, description }: { icon: ReactNode; title: string; description: string }) { return <header className="ad-section-heading"><span aria-hidden>{icon}</span><div><h2>{title}</h2><p>{description}</p></div></header>; }
-function SelectedDraft({ item, onEdit, onPlanUpgrade }: { item: ActivityDefinitionDraftManagementView; onEdit(): void; onPlanUpgrade(): void }) { return <div className="ad-selected-record" aria-label="Selected exact draft"><strong>{draftLabel(item)}</strong><span><code>{item.draft.draftId}</code> · revision {item.draft.revision} · {item.draft.providerKey}</span><div className="ad-header-actions">{isActivityDefinitionEnumValue(item.draft.status, "Active") && isActionAllowed(item.actions, "edit-draft") ? <button type="button" onClick={onEdit}>Open implementation editor</button> : <span>This draft is read-only or editing is unavailable for this account.</span>}<button type="button" onClick={onPlanUpgrade}>Plan broad upgrade from this exact draft</button></div></div>; }
+function SelectedDraft({ item, onEdit, onPlanUpgrade }: { item: ActivityDefinitionDraftManagementView; onEdit(): void; onPlanUpgrade(): void }) { return <div className="ad-selected-record" aria-label="Selected exact draft"><strong>{draftLabel(item)}</strong><span><code>{item.draft.draftId}</code> · revision {item.draft.revision} · {item.draft.providerKey}</span><div className="ad-header-actions">{isActivityDefinitionEnumValue(item.draft.status, "Active") && isActionAllowed(item.actions, "edit-draft") ? <button type="button" onClick={onEdit}>Open editor</button> : <span>This draft is read-only or editing is unavailable for this account.</span>}<button type="button" onClick={onPlanUpgrade}>Plan broad upgrade from this exact draft</button></div></div>; }
 function SelectedVersion({ item, compact, actionLabel, actionAllowed, onCreate, onPlanUpgrade, onManage }: { item: ActivityDefinitionVersionManagementView; compact: boolean; actionLabel: string; actionAllowed: boolean; onCreate(): void; onPlanUpgrade(): void; onManage(action: ActivityDefinitionVersionLifecycleAction): void }) {
   const lifecycleActions: Array<{ action: ActivityDefinitionVersionLifecycleAction; availability: string; label: string }> = [
     { action: "recommend", availability: "set-recommendation", label: "Make recommended" },

@@ -244,18 +244,9 @@
   position: relative;
 }
 
-.studio-data-grid-row:hover {
-  background: var(--studio-row-hover);
-}
-
 .studio-data-grid-row.selected {
   background: var(--studio-row-selected);
   box-shadow: inset 3px 0 0 var(--studio-selection-mark);
-}
-
-.studio-data-grid-row:focus-visible {
-  outline: 2px solid var(--studio-focus);
-  outline-offset: -2px;
 }
 
 .studio-icon-button:focus-visible,

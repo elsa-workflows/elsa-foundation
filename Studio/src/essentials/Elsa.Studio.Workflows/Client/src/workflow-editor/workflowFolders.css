@@ -153,14 +153,15 @@ label.wf-move-folder-row:has(input:focus-visible) {
 .wf-folder-navigation,
 .wf-folder-content { min-width: 0; }
 
+/* The workflow navigation (folders or "All workflows" plus Recycle bin) is always present. */
 @media (min-width: 701px) {
-  .wf-folder-browser[data-folders-available="true"] {
+  .wf-folder-browser {
     grid-template-columns: 210px minmax(0, 1fr);
     column-gap: 18px;
     align-items: start;
   }
 
-  .wf-folder-browser[data-folders-available="true"][data-folders-collapsed="true"] {
+  .wf-folder-browser[data-folders-collapsed="true"] {
     grid-template-columns: 48px minmax(0, 1fr);
   }
 }
@@ -171,7 +172,7 @@ label.wf-move-folder-row:has(input:focus-visible) {
   padding: 10px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel);
+  background: transparent;
 }
 
 .wf-folder-nav[data-collapsed="true"] {

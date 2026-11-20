@@ -11,14 +11,13 @@ for (const host of ["workflow", "activity"]) for (const width of [360, 390]) for
     await expect(expandInspector).toBeVisible();
     await expandInspector.click();
     await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
-    const canvas = page.locator(".wf-canvas-shell");
-    const commands = canvas.getByRole("group", { name: "Named block commands", exact: true });
+    const commands = page.getByRole("group", { name: "Named block commands", exact: true });
     await expect(commands).toBeAttached();
     // IntersectionObserver accounts for ancestor clipping: a command's painted area must
     // never escape its canvas into the active inspector, even when its own box is wider.
     await expect.poll(() => commands.evaluate(async element => {
-      const boundary = element.closest(".wf-canvas-shell")!.getBoundingClientRect();
-      const buttons = [...element.querySelectorAll("button")];
+      const boundary = element.closest(".wf-canvas-shell, .wf-editor-toolbar")!.getBoundingClientRect();
+      const buttons = [...element.querySelectorAll(".wf-block-menu-trigger, button:not(.wf-block-menu-trigger)")];
       const entries = await new Promise<IntersectionObserverEntry[]>(resolve => {
         const observer = new IntersectionObserver(observed => {
           observer.disconnect();
@@ -34,7 +33,9 @@ for (const host of ["workflow", "activity"]) for (const width of [360, 390]) for
     await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
     const palette = page.getByRole("button", { name: "Collapse activities panel", exact: true });
     if (await palette.isVisible()) await palette.click();
-    const create = commands.getByRole("button", { name: "Create Sequence block", exact: true });
+    const trigger = commands.getByRole("button", { name: "Blocks", exact: true });
+    await trigger.click();
+    const create = page.getByRole("menuitem", { name: "Create Sequence block", exact: true });
     await expect(create).toBeVisible();
     // This isolated activity fixture has no resource candidate-validation endpoint.
     // Its commands must stay unavailable; editable activity drafts are covered on the composed host.
@@ -50,7 +51,7 @@ for (const host of ["workflow", "activity"]) for (const width of [360, 390]) for
     await expect(dialog).toBeVisible();
     await dialog.getByRole("textbox", { name: "Name", exact: true }).press("Escape");
     await expect(dialog).toHaveCount(0);
-    await expect(create).toBeFocused();
+    await expect(trigger).toBeFocused();
     await page.screenshot({ path: info.outputPath("canvas-returned.png"), fullPage: true });
   });
 }

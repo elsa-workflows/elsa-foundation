@@ -49,7 +49,7 @@ const reopened: ActivityNode = {
 let unmount: (() => void) | undefined;
 afterEach(() => unmount?.());
 
-it("shows the workflow input bindings in the first render of a reopened JavaScript expression", () => {
+it("keeps reopened workflow input bindings collapsed and intact until requested", () => {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -76,6 +76,11 @@ it("shows the workflow input bindings in the first render of a reopened JavaScri
   // No waiting: the section must be part of the same commit as the expression it belongs to.
   const bindings = container.querySelector<HTMLElement>(".wf-js-input-bindings");
   expect(bindings, "Workflow input bindings section").not.toBeNull();
+  const disclosure = bindings!.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
+  expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+  expect(bindings!.querySelector("[aria-label='Bound workflow inputs']")).toBeNull();
+  flushSync(() => disclosure.click());
+  expect(disclosure.getAttribute("aria-expanded")).toBe("true");
   expect(bindings!.querySelector("[aria-label='Bound workflow inputs']")?.textContent).toContain("args.data2");
   expect(bindings!.querySelector("button[aria-label='Remove data2 binding']")).not.toBeNull();
 });

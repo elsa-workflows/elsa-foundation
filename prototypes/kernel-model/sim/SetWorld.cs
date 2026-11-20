@@ -7,8 +7,14 @@ namespace Kernel.Sim;
 /// answers them. The queue keeps every continuation on that thread and in order: an operation starts when the one before
 /// it has ended, inline. Nothing else changes: the host and its worker are the runtime's.
 /// </summary>
-public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount
+public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount, INodeLeaseHost
 {
+    // K1b: the node lease. The heartbeat runs off the turn, as the built-in runtime's own loop sends it; the node passes
+    // are queued with the host's other operations.
+    public TimeSpan? NodeLease => host.NodeLease;
+    public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default) => host.HeartbeatAsync(window, cancellationToken);
+    public async ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default) => await Queued(() => host.PassAsync(cancellationToken));
+
     public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) => host.CheckScopesAsync(scopes, cancellationToken);
 
     private Task _tail = Task.CompletedTask;
@@ -26,6 +32,9 @@ public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount
         finally { done.SetResult(); }
     }
 
+    /// <summary>K1b: a whole pass of the node's Worker, queued as the host's own operations are (under its turn).</summary>
+    public async Task RunNodeAsync(CancellationToken cancellationToken = default) => await Queued(() => host.RunNodeAsync(cancellationToken));
+
     public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default) =>
         await Queued(() => host.ActivateAsync(scope, cancellationToken)) is { } activation
             ? _scopes.TryGetValue(scope, out var known) ? known : _scopes[scope] = new SerialScope(this, activation)
@@ -38,6 +47,50 @@ public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount
         public ValueTask WokenAsync(InstanceRef? actor, CancellationToken cancellationToken = default) => inner.WokenAsync(actor, cancellationToken);
         public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default) => await host.Queued(() => inner.RunAsync(cancellationToken));
         public async ValueTask DisposeAsync() => await host.Queued(async () => { await inner.DisposeAsync(); return true; });
+    }
+}
+
+/// <summary>
+/// K1b review A: the give-ups a node's layer 1 made, as its host sees them. A scope given up (an activation disposed:
+/// a <c>LoseAsync</c> of the node's Worker, or a fixed Worker's release) is recorded until the runtime asks for it again.
+/// A partition its Worker holds that the runtime does not know is adopted only when the runtime never gave it up since its
+/// last activation: the Worker brought it back by itself (a pending retake). One given up is a bug, reported, not adopted.
+/// </summary>
+public sealed class GiveUps(IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost
+{
+    public TimeSpan? NodeLease => (inner as INodeLeaseHost)?.NodeLease;
+    public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default) =>
+        inner is INodeLeaseHost lease ? lease.HeartbeatAsync(window, cancellationToken) : ValueTask.FromResult<Cluster?>(null);
+    public ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default) =>
+        inner is INodeLeaseHost lease ? lease.PassAsync(cancellationToken) : ValueTask.FromResult<IReadOnlyCollection<int>>([]);
+
+    private readonly Dictionary<int, (IScopeActivation Inner, Recorded Outer)> _scopes = [];
+    public HashSet<int> GivenUp { get; } = [];
+
+    public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) =>
+        inner is IScopeCount counted ? counted.CheckScopesAsync(scopes, cancellationToken) : ValueTask.CompletedTask;
+
+    public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
+    {
+        GivenUp.Remove(scope);      // the runtime asks for it again: what the attempt's take brings back is the runtime's
+        if (await inner.ActivateAsync(scope, cancellationToken) is not { } activation) return null;
+        if (_scopes.TryGetValue(scope, out var known) && known.Inner == activation) return known.Outer;
+        var outer = new Recorded(this, activation);
+        _scopes[scope] = (activation, outer);
+        return outer;
+    }
+
+    private sealed class Recorded(GiveUps host, IScopeActivation inner) : IScopeActivation
+    {
+        public int Scope => inner.Scope;
+        public bool Active => inner.Active;
+        public ValueTask WokenAsync(InstanceRef? actor, CancellationToken cancellationToken = default) => inner.WokenAsync(actor, cancellationToken);
+        public ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default) => inner.RunAsync(cancellationToken);
+        public ValueTask DisposeAsync()
+        {
+            host.GivenUp.Add(inner.Scope);
+            return inner.DisposeAsync();
+        }
     }
 }
 

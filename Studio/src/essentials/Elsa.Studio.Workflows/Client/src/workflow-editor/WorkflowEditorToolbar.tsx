@@ -36,6 +36,7 @@ interface WorkflowEditorToolbarProps {
   canRun: boolean;
   publicationUnavailableReason?: string;
   directBpmnPublication?: ReactNode;
+  canvasToolsSlot?: (element: HTMLElement | null) => void;
   runTitle: string;
   moreActions: WorkflowToolbarActionGroup[];
 }
@@ -98,6 +99,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           <button type="button" className="wf-icon-button" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!props.canUndo} onClick={props.onUndo}><Undo2 size={16} /></button>
           <button type="button" className="wf-icon-button" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!props.canRedo} onClick={props.onRedo}><Redo2 size={16} /></button>
           <button type="button" className="wf-icon-button" aria-label="Auto-layout" title="Auto-layout the canvas" disabled={!props.canAutoLayout} onClick={props.onAutoLayout}><Network size={16} /></button>
+          <span ref={props.canvasToolsSlot} className="wf-canvas-tools-slot" />
         </div>
         <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={15} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
         {!props.templateMode ? props.directBpmnPublication : null}

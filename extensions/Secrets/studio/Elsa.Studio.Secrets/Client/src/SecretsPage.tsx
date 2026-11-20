@@ -1,4 +1,4 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, KeyRound, Plus, RefreshCw, X } from "lucide-react";
 import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, useStudioRouteLocation, useStudioWorkspaceTab, type StudioDialogApi, type StudioNotificationApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -315,10 +315,10 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
                 </td></tr>
               ) : null}
               {!loading && filteredSecrets.map(secret => (
-                <tr key={secret.name}>
+                <tr key={secret.name} {...studioRowInteraction<HTMLTableRowElement>(() => openEditor(secret.name))}>
                   <td className="secrets-name-cell">
                     <div className="secrets-name-heading">
-                      <a className="secrets-row-link" data-secret-open={secret.name} href={secretPath(browse, secret.name, undefined, undefined, location.href)} onClick={event => { const path = secretPath(browse, secret.name, undefined, undefined, location.href); if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(path)) { event.preventDefault(); return; } if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !navigate) return; event.preventDefault(); openEditor(secret.name); }}><strong>{secret.displayName || secret.name}</strong></a>
+                      <a className="secrets-row-link studio-row-link" data-secret-open={secret.name} href={secretPath(browse, secret.name, undefined, undefined, location.href)} onClick={event => { const path = secretPath(browse, secret.name, undefined, undefined, location.href); if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(path)) { event.preventDefault(); return; } if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !navigate) return; event.preventDefault(); openEditor(secret.name); }}><strong>{secret.displayName || secret.name}</strong></a>
                       {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton name={secret.name} notifications={notifications} scope={context} /> : null}
                     </div>
                     {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} notifications={notifications} scope={context} /></div> : null}
@@ -385,15 +385,14 @@ function SecretNotification({ message, onDismiss }: { message: string; onDismiss
 
 function FilterSelect({ label, value, options, helpText, description, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; helpText?: string; description?: string; onChange(value: string): void }) {
   const id = useId();
-  const helpId = helpText ? `${id}-help` : undefined;
-  const descriptionId = description ? `${id}-description` : undefined;
+  const combinedDescription = helpText ? (description ? `${helpText}. ${description}` : helpText) : description;
+  const descriptionId = combinedDescription ? `${id}-description` : undefined;
   return (
-    <StudioField className="secrets-filter" controlId={id} label={label} meta={helpText ? <small className="secrets-filter-hint" id={helpId}>{helpText}</small> : null}>
-      <select id={id} value={value} aria-describedby={[helpId, descriptionId].filter(Boolean).join(" ") || undefined} onChange={event => onChange(event.target.value)}>
+    <StudioField className="secrets-filter" controlId={id} label={label} description={combinedDescription ? <small id={descriptionId}>{combinedDescription}</small> : undefined}>
+      <select id={id} value={value} aria-describedby={descriptionId} onChange={event => onChange(event.target.value)}>
         <option value="">All</option>
         {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
-      {description ? <span className="secrets-visually-hidden" id={descriptionId}>{description}</span> : null}
     </StudioField>
   );
 }

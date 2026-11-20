@@ -147,6 +147,12 @@ function propertyLabels(container: HTMLElement) {
   return [...container.querySelectorAll(".wf-property-row[role='group']")].map(label => label.getAttribute("aria-label")?.replace(/ property$/, ""));
 }
 
+function toggleWorkflowInputBindings(container: HTMLElement) {
+  const button = container.querySelector<HTMLButtonElement>(".wf-js-input-bindings > button")!;
+  flushSync(() => button.click());
+  return button;
+}
+
 it("commits related literal inputs atomically and refreshes contributed editors after a sibling edit", () => {
   const onChange = vi.fn();
   const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true, readsActivityContext: true,
@@ -200,6 +206,12 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-js-input-bindings > button")!;
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(disclosure.textContent).toBe("Workflow input bindings");
+    expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
+    toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
     expect(picker).not.toBeNull();
@@ -218,6 +230,7 @@ describe("activity property organization", () => {
         OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" }
       }
     });
+    expect(container.querySelector(".wf-js-input-bindings > button")?.textContent).toBe("Workflow input bindings (1)");
     expect(container.textContent).toContain("args.OrderId");
 
     const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
@@ -228,6 +241,80 @@ describe("activity property organization", () => {
       parameters: { Existing: { kind: "Literal", value: "preserve me" } }
     });
     expect(Object.keys(removed.parameters)).toEqual(["Existing"]);
+    expect(container.querySelector(".wf-js-input-bindings > button")?.textContent).toBe("Workflow input bindings");
+  });
+
+  it("keeps workflow input bindings collapsed and intact when reopened", async () => {
+    const source = "args.OrderId";
+    const binding = { kind: "WorkflowRequest", memberKey: "OrderId" };
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source,
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { OrderId: binding },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] }
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-js-input-bindings > button")!;
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(disclosure.textContent).toBe("Workflow input bindings (1)");
+    expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
+    expect(container.querySelector("[aria-label='Bound workflow inputs']")).toBeNull();
+
+    toggleWorkflowInputBindings(container);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain("OrderId");
+    toggleWorkflowInputBindings(container);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
+
+    toggleWorkflowInputBindings(container);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain("OrderId → args.OrderId");
+  });
+
+  it("lets read-only authors inspect bindings while keeping mutation controls disabled", async () => {
+    const binding = { kind: "WorkflowRequest", memberKey: "OrderId" };
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source: "args.OrderId",
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { OrderId: binding },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] },
+      readOnly: true,
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-js-input-bindings > button")!;
+    expect(disclosure.disabled).toBe(false);
+    toggleWorkflowInputBindings(container);
+    expect(container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")?.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")?.disabled).toBe(true);
+    expect(container.textContent).toContain("OrderId → args.OrderId");
+    expect(changes).toHaveLength(0);
   });
 
   it("keeps a stale workflow input binding removable after the input is deleted", async () => {
@@ -251,6 +338,8 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
+    toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
     expect(picker.disabled).toBe(true);
@@ -283,6 +372,8 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
+    toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     expect(container.textContent).toContain("Unknown workflow input (invalid workflow input binding)");
     const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
@@ -310,6 +401,8 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
+    toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
     expect(picker.querySelector<HTMLOptionElement>("option[value='constructor']")?.disabled).toBe(false);

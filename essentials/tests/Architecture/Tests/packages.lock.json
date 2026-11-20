@@ -1002,7 +1002,8 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )"
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.activities.design.persistence.core": {
@@ -2010,7 +2011,6 @@
         "dependencies": {
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
           "OpenIddict.Abstractions": "[7.5.0, )",
           "OpenIddict.AspNetCore": "[7.5.0, )"
         }

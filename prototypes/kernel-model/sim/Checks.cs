@@ -534,14 +534,25 @@ public sealed partial class World
         // A slot is a node's scope of a partition: in a set world the node's one worker serves every slot of its node.
         var slots = Enumerable.Range(0, Config.Nodes).SelectMany(n => Enumerable.Range(0, Config.Partitions).Select(p => (Node: n, Partition: p))).ToList();
         var published = false;
-        for (var round = 0; round < 150; round++)
+        // K1b: under the node lease a lost owner's partitions wait a lease of one-second rounds, so a poison message that
+        // kills process after process needs more rounds to be counted down.
+        var rounds = Config.NodeLease ? 600 : 150;
+        for (var round = 0; round < rounds; round++)
         {
             // Expire a missing owner's lease; while every partition has an owner, give healthy owners passes within
             // their lease. Advancing past every lease on every round would manufacture repeated owner loss.
             var missing = Enumerable.Range(0, Config.Partitions).Any(p => !slots.Any(s => s.Partition == p && Of(s.Node, p).Worker.Holds(p)));
-            Time += round == 0 || missing ? 11_000 : 1_000;
+            // K1b: one node lease covers every partition of a process, so a missing owner's lease runs out by itself while the
+            // live nodes beat every round; a long silence would expire every node at once.
+            Time += Config.NodeLease ? 1_000 : round == 0 || missing ? 11_000 : 1_000;
             var beaten = new HashSet<Actor>();
-            for (var p = 0; p < Config.Partitions; p++)
+            if (Config.NodeLease)       // K1b: each node's heartbeat, which its pass gate may withhold
+                foreach (var runtime in LiveRuntimes.ToList())
+                {
+                    Watch(runtime.HeartbeatAsync().AsTask());
+                    if (_dying.Count != 0) FinishDeaths();
+                }
+            else for (var p = 0; p < Config.Partitions; p++)
             {
                 foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Holds(p)))
                 {
@@ -562,15 +573,29 @@ public sealed partial class World
                 {
                     var actor = Of(node, partition);
                     var worker = actor.Worker;
+                    // K1b: the runtime's node pass, as the built-in runtime's pass loop runs it: a Worker whose only partitions
+                    // are pending keeps getting passes, so that its gate reopens, one that holds none gets a pass while a
+                    // heartbeat answer waits for it, and what a Worker took back by itself is adopted before it is checked.
+                    if (Config.NodeLease && !actor.Dead && !Actors.Any(a => a.Runtime == actor.Runtime && a.Passing)
+                        && (!worker.Owns && (worker.Pending.ContainsKey(partition) || worker.AnswerWaiting) || worker.Holds(partition) && !actor.Runtime.Owns(partition) && !actor.Runtime.Activating(partition)))
+                    {
+                        Watch(actor.Runtime.NodePassAsync());
+                        if (_dying.Count != 0)
+                        {
+                            FinishDeaths();
+                            continue;
+                        }
+                    }
                     if (!worker.Holds(partition)) continue;
-                    if (!actor.Runtime.Owns(partition)) Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it");
+                    if (!actor.Runtime.Owns(partition))
+                        Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it{(actor.GiveUps.GivenUp.Contains(partition) ? ": the runtime gave it up" : "")}");
                     // An eager host: every pass reads the inbox, and runs whatever is ready before it flushes. A process that
                     // dies (now, or before the pass) cancels it: no turn after that, and no flush.
                     using (_pass = new CancellationTokenSource())
                     {
                         if (Dying is not null) _pass.Cancel();
                         Watch(actor.Runtime.WakeAsync(InstanceRef.In(partition, "")).AsTask());     // over the runtime's wake signal
-                        Watch(actor.Runtime.PassAsync(partition, _pass.Token).AsTask());
+                        Watch(Adopting(actor, actor.Runtime.PassAsync(partition, _pass.Token).AsTask()));
                     }
                     _pass = null;
                     if (_dying.Count != 0)     // a turn or a background job killed its process
@@ -599,7 +624,7 @@ public sealed partial class World
             published = true;
         }
         var left = Store.Messages.Values.Where(m => !m.Done).Select(m => $"{m.Message.Id} ({m.Message.Kind} to {m.Message.Target}, seen {m.Seen}, attempts {m.Attempts})").Take(5);
-        return $"IDLE not idle after 150 rounds without faults; waiting: {string.Join("; ", left)}{(Unfair() is { } unfair ? "; " + unfair : "")}";
+        return $"IDLE not idle after {rounds} rounds without faults; waiting: {string.Join("; ", left)}{(Unfair() is { } unfair ? "; " + unfair : "")}";
     }
 
     // Fair share, once faults stop: every partition has one owner at its current epoch, and no node holds more than its share.

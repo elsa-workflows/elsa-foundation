@@ -22,9 +22,13 @@ test("native task form designer supports recipient preview and accessible editin
   await expect(page.locator("main")).toHaveAttribute("data-field-order", "text1,number1");
 
   const secondHandle = page.getByRole("button", { name: "Reorder Number field 1", exact: true });
+  const secondField = page.locator(".user-task-designer__field").nth(1);
   await secondHandle.focus();
   await page.keyboard.press("Space");
+  await expect(secondField).toHaveClass(/is-dragging/);
+  const initialY = (await secondField.boundingBox())!.y;
   await page.keyboard.press("ArrowUp");
+  await expect.poll(async () => (await secondField.boundingBox())?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(initialY);
   await page.keyboard.press("Space");
   await expect(page.locator("main")).toHaveAttribute("data-field-order", "number1,text1");
   await page.screenshot({ path: testInfo.outputPath("form-designer-keyboard-order.png") });

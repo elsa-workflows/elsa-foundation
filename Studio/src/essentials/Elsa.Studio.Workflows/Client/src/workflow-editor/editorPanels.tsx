@@ -1,6 +1,6 @@
-import { Suspense, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 import { AlertCircle, Check, Flag, Layers, MapPin, Wrench } from "lucide-react";
-import { CopyableIdentifier, StudioButton, TechnicalDetails } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, DisclosureFold, StudioButton, TechnicalDetails } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ValidationError, WorkflowDraft, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { WorkflowTestRunState, WorkflowTestRunWaitDraftState } from "./editorTypes";
@@ -122,6 +122,8 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
   observation?: TestRunObservation;
   executionControls?: ReactNode;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   if (!testRun) {
     return (
       <div className="wf-runtime-panel">
@@ -154,61 +156,77 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
   const equivalent = !stale && !rejected && publishedEquivalent && publishedEquivalent.artifactId === view.artifactId
     ? publishedEquivalent
     : null;
+
+  // Build the "Run details" disclosure summary line from activity/incident counts
+  const detailsSummary = [
+    typeof activityCount === "number" ? formatEvidenceCount(activityCount, "activity") : null,
+    typeof incidentCount === "number" ? formatEvidenceCount(incidentCount, "incident") : null
+  ].filter(Boolean).join(" · ");
+
   return (
     <div className="wf-runtime-panel">
       <section className="wf-runtime-card" aria-label="Test run summary" data-state={rejected ? "rejected" : acceptedWithIncidents ? "accepted-with-incidents" : "accepted"}>
-        <header className="wf-runtime-heading">
-          <h3>{stale ? "Earlier test run" : "Latest test run"}</h3>
+        {/* Tier 1 — compact status + outcome */}
+        <div className="wf-runtime-status-outcome">
           <WorkflowStatusBadge status={summary.status} />
-        </header>
+          <span className="wf-runtime-outcome" aria-live="polite">{summary.description}</span>
+        </div>
+
+        {/* Primary action */}
         {workflowExecutionId || view.artifactId ? (
           <div className="wf-runtime-actions">
             {workflowExecutionId ? <StudioButton size="sm" variant="primary" onClick={() => onOpenRun(workflowExecutionId)}>Open run</StudioButton> : null}
             {view.artifactId ? <StudioLink className="wf-runtime-artifact-link" href={`/workflows/executables/${encodeURIComponent(view.artifactId)}`}>View artifact</StudioLink> : null}
           </div>
         ) : null}
+
         {executionControls}
-        <p className="wf-runtime-outcome" aria-live="polite">{summary.description}</p>
-        <p className="wf-runtime-note">Temporary test · your draft is unchanged</p>
-        {stale ? <div className="wf-test-drive-stale" role="status">This result belongs to an earlier draft snapshot.</div> : null}
-        {runState.driverActionError ? <div className="wf-test-drive-error" role="alert">{runState.driverActionError}</div> : null}
-        {rejected && view.reason ? <RejectedReason reason={view.reason} activityLabels={activityLabels} /> : null}
-        {acceptedWithIncidents ? (
-          <div className="wf-runtime-incident-warning" role="status">
-            <AlertCircle size={14} aria-hidden="true" />
-            <span>{incidentCount != null && incidentCount > 0
-              ? `The test run was accepted and recorded ${incidentCount} incident${incidentCount === 1 ? "" : "s"}. Review the incident details on the linked Run.`
-              : "The test run was accepted with a runtime issue. Incident details may be unavailable in this response; review the linked Run."}</span>
-            {workflowExecutionId ? <StudioButton size="sm" onClick={() => onOpenRun(workflowExecutionId, "issues")}>Review incidents</StudioButton> : null}
-          </div>
-        ) : null}
-        {equivalent ? (
-          <div className="wf-runtime-equivalence">
-            <Layers size={14} aria-hidden="true" /> Current draft has the same behavior as a published version.
-          </div>
-        ) : null}
-        {typeof activityCount === "number" || typeof incidentCount === "number" ? (
-          <p className="wf-runtime-note">{[
-            typeof activityCount === "number" ? formatEvidenceCount(activityCount, "activity") : null,
-            typeof incidentCount === "number" ? formatEvidenceCount(incidentCount, "incident") : null
-          ].filter(Boolean).join(" · ")}</p>
-        ) : null}
-        {ActionResult && runState.driverActionResult ? (
-          <Suspense fallback={<p role="status">Loading Test Run response…</p>}>
-            <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} />
-          </Suspense>
-        ) : null}
-        {!rejected && context && onRunViewUpdated && "view" in testRun ? (
-          <LazyWorkflowTestRunControls
-            context={context}
-            testRun={runState}
-            stimulusEditors={stimulusEditors ?? []}
-            onRunViewUpdated={onRunViewUpdated}
-            onWaitDraftUpdated={onWaitDraftUpdated}
-            observation={observation}
-            showExecutionStatus={!execution}
-          />
-        ) : null}
+
+        {/* Tier 2 — collapsible run details */}
+        <DisclosureFold
+          className="wf-runtime-details"
+          label="Run details"
+          summary={detailsSummary || null}
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+        >
+          <p className="wf-runtime-note">Temporary test · your draft is unchanged</p>
+          {stale ? <div className="wf-test-drive-stale" role="status">This result belongs to an earlier draft snapshot.</div> : null}
+          {runState.driverActionError ? <div className="wf-test-drive-error" role="alert">{runState.driverActionError}</div> : null}
+          {rejected && view.reason ? <RejectedReason reason={view.reason} activityLabels={activityLabels} /> : null}
+          {acceptedWithIncidents ? (
+            <div className="wf-runtime-incident-warning" role="status">
+              <AlertCircle size={14} aria-hidden="true" />
+              <span>{incidentCount != null && incidentCount > 0
+                ? `The test run was accepted and recorded ${incidentCount} incident${incidentCount === 1 ? "" : "s"}. Review the incident details on the linked Run.`
+                : "The test run was accepted with a runtime issue. Incident details may be unavailable in this response; review the linked Run."}</span>
+              {workflowExecutionId ? <StudioButton size="sm" onClick={() => onOpenRun(workflowExecutionId, "issues")}>Review incidents</StudioButton> : null}
+            </div>
+          ) : null}
+          {equivalent ? (
+            <div className="wf-runtime-equivalence">
+              <Layers size={14} aria-hidden="true" /> Current draft has the same behavior as a published version.
+            </div>
+          ) : null}
+          {ActionResult && runState.driverActionResult ? (
+            <Suspense fallback={<p role="status">Loading Test Run response…</p>}>
+              <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} />
+            </Suspense>
+          ) : null}
+          {!rejected && context && onRunViewUpdated && "view" in testRun ? (
+            <LazyWorkflowTestRunControls
+              context={context}
+              testRun={runState}
+              stimulusEditors={stimulusEditors ?? []}
+              onRunViewUpdated={onRunViewUpdated}
+              onWaitDraftUpdated={onWaitDraftUpdated}
+              observation={observation}
+              showExecutionStatus={!execution}
+            />
+          ) : null}
+        </DisclosureFold>
+
+        {/* Tier 3 — technical details */}
         <TechnicalDetails key={view.testRunId}>
           <div className="wf-runtime-identifiers">
             <CopyableIdentifier label="Test run ID" value={view.testRunId} />

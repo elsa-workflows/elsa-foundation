@@ -6,4 +6,5 @@ using InMemoryProvider = Kernel.Store.Conformance.InMemoryProvider;
 //   dotnet ... semantic-broken
 //   dotnet ... stress 20 2000
 //   dotnet ... stress-broken 10 1000
+if (args.Contains("semantic", StringComparer.Ordinal) && await LoopYieldCheck.RunAsync() != 0) return 1;
 return await Cli.RunAsync(new BuiltInProvider(), new InMemoryProvider(), args);

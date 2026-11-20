@@ -33,7 +33,15 @@ function render() {
   flushSync(() => root.render(<NativeBlockCommands endpoint={{} as StudioEndpointContext} context={nativeContext} selectedNodeIds={["block"]} createPosition={{ x: 0, y: 0 }}
     validate={vi.fn()} apply={vi.fn()} open={vi.fn()} promotion={host} />));
 }
-const button = (label: string) => [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label)!;
+const button = (label: string) => {
+  let item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === label);
+  if (!item) {
+    const trigger = container.querySelector<HTMLButtonElement>(".wf-block-menu-trigger");
+    if (trigger && trigger.getAttribute("aria-expanded") !== "true") flushSync(() => trigger.click());
+    item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === label);
+  }
+  return item!;
+};
 const notice = () => container.querySelector("[role=status]")?.textContent ?? null;
 
 it("keeps the replacement notice while the call is in the document and retires it after Undo", async () => {

@@ -1,6 +1,6 @@
 import { useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
 import { StudioField } from "@elsa-workflows/studio-ui";
-import { useId } from "react";
+import { useId, useState } from "react";
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
 import { readPortableExpressionDefinition, withLiteralValue, type PortableExpressionDefinitionValue, type WrappedActivityInputValue } from "./activityProperties";
 import type { WorkflowInput } from "./workflowTypes";
@@ -182,57 +182,71 @@ export function WorkflowInputArgumentBindings({
   const inputKind = inputBindingTarget === "referenceKey" ? "activity" : "workflow";
   const inputKindLabel = inputKind === "activity" ? "Activity" : "Workflow";
   const selectId = useId();
+  const bindingsId = useId();
+  const [expanded, setExpanded] = useState(false);
   const arguments_ = readWorkflowInputExpressionArguments(value, syntax);
   const bindingsByArgumentName = new Map(arguments_.map(binding => [binding.argumentName, binding]));
 
   return (
-    <div className="wf-js-input-bindings"><StudioField className="wf-section-label" controlId={selectId} label={`${inputKindLabel} input bindings`}>
-
-      <select
-        id={selectId}
-        value=""
-        disabled={disabled || inputs.length === 0}
-        onChange={event => {
-          const selected = inputs.find(workflowInput => workflowInput.name === event.currentTarget.value);
-          if (!selected) return;
-          const definition = withWorkflowInputExpressionArgument(value, syntax, activityInput, selected, inputBindingTarget);
-          if (definition) onChange(withLiteralValue(wrapped, definition));
-        }}
+    <div className="wf-js-input-bindings">
+      <button
+        type="button"
+        className={`wf-choose-data-trigger wf-expression-insert-data${expanded ? " open" : ""}`}
+        aria-expanded={expanded}
+        aria-controls={bindingsId}
+        onClick={() => setExpanded(open => !open)}
       >
-        <option value="">Add {inputKind} input…</option>
-        {inputs.map(workflowInput => {
-          const alreadyBound = bindingsByArgumentName.has(workflowInput.name);
-          const occupied = valueHasParameter(value, syntax, workflowInput.name) && !alreadyBound;
-          return <option key={workflowInput.referenceKey} value={workflowInput.name} disabled={alreadyBound || occupied}>{workflowInput.name}{occupied ? " — argument name already used" : ""}</option>;
-        })}
-      </select>
-      {arguments_.length > 0 ? (
-        <ul className="wf-reference-list" aria-label={`Bound ${inputKind} inputs`}>
-          {arguments_.map(binding => {
-            const declaration = inputs.find(input => input[inputBindingTarget] === binding.memberKey);
-            const label = declaration?.name || binding.memberKey || `Unknown ${inputKind} input`;
-            const missing = !binding.memberKey || !declaration;
-            return (
-              <li className="wf-reference-meta" key={binding.argumentName}>
-                <span>{label}{missing ? (binding.memberKey ? ` (missing ${inputKind} input)` : ` (invalid ${inputKind} input binding)`) : ""} <span aria-hidden="true">→</span> <code>{formatArgumentReference(binding.argumentName)}</code></span>
-                <button
-                  type="button"
-                  className="wf-reference-toggle"
-                  aria-label={`Remove ${binding.argumentName} binding`}
-                  disabled={disabled}
-                  onClick={() => {
-                    const definition = withoutPortableExpressionParameter(value, syntax, binding.argumentName);
-                    if (definition) onChange(withLiteralValue(wrapped, definition));
-                  }}
-                >
-                  Remove
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-    </StudioField></div>
+        {inputKindLabel} input bindings{arguments_.length > 0 ? ` (${arguments_.length})` : ""}
+      </button>
+      <div id={bindingsId} hidden={!expanded}>
+        {expanded ? <StudioField className="wf-section-label" controlId={selectId} label={`${inputKindLabel} input bindings`}>
+          <select
+            id={selectId}
+            value=""
+            disabled={disabled || inputs.length === 0}
+            onChange={event => {
+              const selected = inputs.find(workflowInput => workflowInput.name === event.currentTarget.value);
+              if (!selected) return;
+              const definition = withWorkflowInputExpressionArgument(value, syntax, activityInput, selected, inputBindingTarget);
+              if (definition) onChange(withLiteralValue(wrapped, definition));
+            }}
+          >
+            <option value="">Add {inputKind} input…</option>
+            {inputs.map(workflowInput => {
+              const alreadyBound = bindingsByArgumentName.has(workflowInput.name);
+              const occupied = valueHasParameter(value, syntax, workflowInput.name) && !alreadyBound;
+              return <option key={workflowInput.referenceKey} value={workflowInput.name} disabled={alreadyBound || occupied}>{workflowInput.name}{occupied ? " — argument name already used" : ""}</option>;
+            })}
+          </select>
+          {arguments_.length > 0 ? (
+            <ul className="wf-reference-list" aria-label={`Bound ${inputKind} inputs`}>
+              {arguments_.map(binding => {
+                const declaration = inputs.find(input => input[inputBindingTarget] === binding.memberKey);
+                const label = declaration?.name || binding.memberKey || `Unknown ${inputKind} input`;
+                const missing = !binding.memberKey || !declaration;
+                return (
+                  <li className="wf-reference-meta" key={binding.argumentName}>
+                    <span>{label}{missing ? (binding.memberKey ? ` (missing ${inputKind} input)` : ` (invalid ${inputKind} input binding)`) : ""} <span aria-hidden="true">→</span> <code>{formatArgumentReference(binding.argumentName)}</code></span>
+                    <button
+                      type="button"
+                      className="wf-reference-toggle"
+                      aria-label={`Remove ${binding.argumentName} binding`}
+                      disabled={disabled}
+                      onClick={() => {
+                        const definition = withoutPortableExpressionParameter(value, syntax, binding.argumentName);
+                        if (definition) onChange(withLiteralValue(wrapped, definition));
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </StudioField> : null}
+      </div>
+    </div>
   );
 }
 

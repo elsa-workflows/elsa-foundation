@@ -5,7 +5,7 @@ namespace Kernel.Runtime.Conformance;
 /// <param name="FaultRate">The share of store calls whose connection breaks, as in the store suite's stress test.</param>
 /// <param name="BrokenFence">MUTATION: the store's commit ignores epoch and position. The fence's cases and the stress test must fail with it.</param>
 /// <param name="WorkerPartitions">K1 slice 7: the count the node's host and workers place, when a case sets it apart from the store's and the runtime's.</param>
-public sealed record HarnessSetup(int Partitions, RuntimeTiming Timing, double FaultRate = 0, bool BrokenFence = false, int? WorkerPartitions = null);
+public sealed record HarnessSetup(int Partitions, RuntimeTiming Timing, double FaultRate = 0, bool BrokenFence = false, int? WorkerPartitions = null, bool NodeLease = false);
 
 /// <summary>
 /// One cluster of one runtime over one fresh store, with layer 2 built by the suite: every node gets one worker for its
@@ -35,7 +35,7 @@ public sealed class Harness : IAsyncDisposable
 
     public static async Task<Harness> CreateAsync(IRuntimeProvider runtime, IStoreProvider store, HarnessSetup setup)
     {
-        var provided = await store.CreateAsync(setup.Partitions, new StoreSetup(BrokenFence: setup.BrokenFence));
+        var provided = await store.CreateAsync(setup.Partitions, new StoreSetup(BrokenFence: setup.BrokenFence, NodeLease: setup.NodeLease));
         var harness = new Harness(provided, setup) { _oneWorkerPerNode = runtime.OneWorkerPerNode };
         try { harness._cluster = await runtime.CreateAsync(new RuntimeEnvironment(setup.Partitions, setup.Timing, harness.Node)); }
         catch

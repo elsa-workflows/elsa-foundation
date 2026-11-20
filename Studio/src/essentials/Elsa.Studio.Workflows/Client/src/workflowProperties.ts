@@ -170,6 +170,83 @@ export function readVariableDefault(value: ArgumentValue | null | undefined): st
   return typeof value.value === "object" ? JSON.stringify(value.value) : String(value.value);
 }
 
+export function readWorkflowInputDefault(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "object") return JSON.stringify(value) ?? "";
+  return value === undefined ? "" : String(value);
+}
+
+export function parseWorkflowInputDefault(input: WorkflowInput, draft: string, editor: string): { value?: unknown; error?: string } {
+  if (editor === "checkbox") return draft === "true" ? { value: true } : draft === "false" ? { value: false } : { error: "Choose true or false." };
+  if (editor === "date") return parseDateDefault(draft);
+  if (editor === "number") return parseNumericDefault(input.type.alias, draft);
+  if (editor === "json" || input.type.collectionKind !== "Single") {
+    if (!hasSafeJsonNumbers(draft)) return { error: "Unsafe JSON number." };
+    try {
+      const value = JSON.parse(draft) as unknown;
+      if (input.type.collectionKind !== "Single" && !Array.isArray(value)) return { error: "Enter an array." };
+      if (value === null && (input.isRequired || !input.isNullable)) return { error: "Null requires optional nullable." };
+      return { value };
+    } catch {
+      return { error: "Invalid JSON." };
+    }
+  }
+  return { value: draft };
+}
+
+function parseDateDefault(draft: string): { value?: unknown; error?: string } {
+  return /^\d{4}-\d{2}-\d{2}$/.test(draft) && !Number.isNaN(Date.parse(`${draft}T00:00:00Z`))
+    ? { value: draft }
+    : { error: "Invalid date." };
+}
+
+function parseNumericDefault(alias: string, draft: string): { value?: unknown; error?: string } {
+  const canonicalAlias = alias.trim().split(".").pop()?.toLowerCase() ?? "";
+  const decimal = draft.trim();
+  const integerRanges: Record<string, [bigint, bigint]> = {
+    byte: [0n, 255n], sbyte: [-128n, 127n],
+    int16: [-32768n, 32767n], short: [-32768n, 32767n],
+    uint16: [0n, 65535n], ushort: [0n, 65535n],
+    int32: [-2147483648n, 2147483647n], int: [-2147483648n, 2147483647n],
+    uint32: [0n, 4294967295n], uint: [0n, 4294967295n],
+    int64: [-9223372036854775808n, 9223372036854775807n], long: [-9223372036854775808n, 9223372036854775807n],
+    uint64: [0n, 18446744073709551615n], ulong: [0n, 18446744073709551615n]
+  };
+  const range = integerRanges[canonicalAlias];
+  if (range) {
+    if (!/^-?\d+$/.test(decimal)) return { error: "Integer required." };
+    const value = BigInt(decimal);
+    if (value < range[0] || value > range[1]) return { error: "Value out of range." };
+    const number = Number(value);
+    return Number.isSafeInteger(number) ? { value: number } : { error: "Integer exceeds safe range." };
+  }
+
+  const isDecimal = canonicalAlias === "decimal";
+  const pattern = isDecimal ? /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/ : /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
+  const number = Number(decimal);
+  if (!pattern.test(decimal) || decimal === "" || !Number.isFinite(number)) return { error: "Enter a number." };
+  if (!hasSafeNumericPrecision(decimal)) return { error: "Number exceeds safe precision." };
+  return { value: number };
+}
+
+function hasSafeJsonNumbers(source: string): boolean {
+  return [...source.matchAll(/"(?:\\.|[^"\\])*"|(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/gi)]
+    .every(match => match[1] === undefined || isSafeJsonNumber(match[1]));
+}
+
+function isSafeJsonNumber(token: string): boolean {
+  const number = Number(token);
+  if (!Number.isFinite(number)) return false;
+  if (!/[.eE]/.test(token)) return Number.isSafeInteger(number);
+  return hasSafeNumericPrecision(token);
+}
+
+function hasSafeNumericPrecision(value: string): boolean {
+  const mantissa = value.split(/[eE]/)[0].replace(/^-/, "").replace(".", "");
+  const significantDigits = mantissa.replace(/^0+/, "").replace(/0+$/, "");
+  return significantDigits.length <= 15;
+}
+
 export function createInput(options: { name: string; alias?: string; storageDriver?: string | null }): WorkflowInput {
   return {
     referenceKey: generateId(),
@@ -186,7 +263,14 @@ export function createInput(options: { name: string; alias?: string; storageDriv
 }
 
 export function updateInput(existing: WorkflowInput, patch: Partial<WorkflowInput>): WorkflowInput {
-  return { ...existing, ...patch };
+  const displayName = patch.name !== undefined
+    && (existing.displayName == null || existing.displayName === "" || existing.displayName === existing.name)
+    ? { displayName: patch.name }
+    : {};
+  const updated = { ...existing, ...displayName, ...patch };
+  if (Object.prototype.hasOwnProperty.call(patch, "defaultValue") && patch.defaultValue === undefined) delete updated.defaultValue;
+  if (Object.prototype.hasOwnProperty.call(patch, "defaultSyntax") && patch.defaultSyntax === undefined) delete updated.defaultSyntax;
+  return updated;
 }
 
 export function createOutput(options: { name: string; alias?: string }): WorkflowOutput {

@@ -38,7 +38,8 @@ public sealed partial class BpmnDirectExecutionTests
         var sender = PipelinePublisher("sender", "orders", LiteralPipelineInput(nameof(PublishEvent.Payload), "JsonElement", new { text = "from-actual-workflow" }));
         var worker = PipelinePublisher("worker", "worker-consumed", new(nameof(PublishEvent.Payload), PipelinePayloadType,
             ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new("message")),
-            new(1, [new("message", new("String"), true)]));
+            // An explicit null is accepted only for a nullable optional input (#4903), so the literal-null case declares one.
+            new(1, [literalNull ? new("message", new("String"), false, isNullable: true) : new("message", new("String"), true)]));
         var waiting = PipelineEvent("waiting", "orders", false);
         var consumed = PipelineEvent("consumed", "worker-consumed", false);
         var embedded = PipelineEvent("embedded", "orders", true);

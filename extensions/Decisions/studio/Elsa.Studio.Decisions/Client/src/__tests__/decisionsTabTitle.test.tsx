@@ -24,7 +24,7 @@ describe("Decisions workspace tab titles", () => {
   it("names an unsaved decision New decision, then the saved decision's name once it is opened", async () => {
     const api = stubApi(), { host, setTitle, navigate, update } = mountInTab({ api, isNew: true });
     api.backend.http.postJson.mockResolvedValue({ ...asset, name: "Purchase approval" } as never);
-    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     expect(setTitle).toHaveBeenLastCalledWith({ title: "New decision", detail: undefined });
     const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
     type(name, "Purchase approval"); expect(setTitle).toHaveBeenLastCalledWith({ title: "New decision", detail: undefined });
