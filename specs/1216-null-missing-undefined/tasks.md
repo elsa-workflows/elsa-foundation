@@ -122,7 +122,7 @@ red without the change. xUnit only.
 
 - [ ] T022 [US4] In S-8's bridge writer (`CopyComparePatchValueBridge`), run the replacer on every written object
   (today `Mark` skips it without an entered object) and add `undefined` and `NaN` markers that `WriteMarked` resolves
-  with their paths (R-7): a dropped
+  with their paths (R-7), following S-8's value-free rule for paths (FR-028): a dropped
   `undefined` property records `VF-UNDEF-002`; an `undefined` array element or hole becomes a `null` placeholder with
   `VF-UNDEF-003` (holes checked by index, FR-016a); a computed `NaN` or `±Infinity` becomes `null` with `VF-NUM-001`, after
   S-8's precision check; under `UndefinedAsNull` an `undefined` property is kept as `null`. Add the codes to
@@ -139,7 +139,8 @@ red without the change. xUnit only.
   part 2 (script writes) is not merged yet, test at the bridge and leave the end-to-end test to whichever lands
   second
 - [ ] T026 [US4] Tests for each US4 acceptance scenario, including a `JSON.stringify` string that is not rewritten,
-  `undefined` at depth three, a hole, and a `Run JavaScript` body that returns on some paths only
+  `undefined` at depth three, a hole, a `Run JavaScript` body that returns on some paths only, and a path warning
+  that names only the root when the evaluation read a protected value (FR-028)
 
 ## Phase 8: User Story 5 - Converted workflows carry their policies (P2)
 
@@ -156,8 +157,8 @@ red without the change. xUnit only.
   `Elsa3BuiltInActivityMap.Entries.cs`: emit a typed `Literal` null for a nullable target, or when `DefaultOnNull` is
   recorded and the target type has a type default (`NullPolicyDefaults`); refuse otherwise, including a non-nullable
   `String` target (FR-029); update `Elsa3NullMemberTests`
-- [ ] T031 [US5] Verify Elsa 3 3.6.3 input requiredness (R-11) and map converted inputs' requiredness and nullability
-  accordingly
+- [ ] T031 [US5] Verify Elsa 3 3.6.3 input requiredness (R-11) and map converted inputs' requiredness accordingly;
+  nullability follows the converted type (Q8) and is not mapped
 - [ ] T032 [US5] Export/import round-trip test: `nullHandling` survives. Parity test (SC-004): run every US3 and US4
   acceptance scenario of T021 and T026 once as a native workflow and once as a converted one with the same policies,
   and compare outputs and diagnostics
@@ -165,9 +166,12 @@ red without the change. xUnit only.
 ## Phase 9: Studio (Q6: no policy controls; Q8, Q9)
 
 - [ ] T033 [P] Retire *Allow null* (Q8): drop `isNullable` from `WorkflowInput` / `WorkflowOutput`
-  (`workflowTypes.ts`, `createInput` / `createOutput`) and the *Allow null* checkbox and its rules from
-  `ActivityDefinitionContractEditor.tsx`, `activityContractAuthoring.ts` and `activityContractComparison.ts` (a
-  nullability change becomes a type change). On the backend, authored members stop carrying the flag; for .NET
+  (`workflowTypes.ts`) and from `createInput` / `createOutput` (`workflowProperties.ts`); remove the *Allow null*
+  checkbox and its rules from `ActivityDefinitionContractEditor.tsx`, `activityContractAuthoring.ts` and
+  `activityContractComparison.ts` (a nullability change becomes a type change), the "Allows null" fact in
+  `activityContractProposalModel.ts`, and the flag from `activityDefinitionTypes.ts` and `activityInputWire.ts`; the
+  activity definition test run (`ActivityDefinitionTestRunDialog.tsx`, `activityDefinitionTestRuns.ts`) takes
+  nullability from the type. On the backend, authored members stop carrying the flag; for .NET
   activities the descriptor's nullability is derived from the C# type, not authored. Regenerate any stored fixture
   that carried it
 - [ ] T034 [P] Activity definition contract editor (`ActivityDefinitionContractEditor.tsx`): setting a default turns

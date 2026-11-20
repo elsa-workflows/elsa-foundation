@@ -121,7 +121,8 @@ A caller starts a workflow without supplying a declared optional input. The work
 **Why this priority**: today the run starts, then a scheduler work item is poisoned and the instance stays `Running`.
 
 **Independent Test**: start `composition-bulk-dispatch-sub-workflow` from the JTest corpus with no input; the
-FlowDecision reads `ShouldFault` as `null` and the flow continues.
+FlowDecision reads `ShouldFault` as its type default (`null` for `Any`, `false` for `Boolean`) and the flow
+continues.
 
 **Acceptance Scenarios**:
 
@@ -276,8 +277,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - The default-on-null policy applies to a `null` produced by any source: a literal, a variable, an expression, or a
   request member.
 - A required and nullable input accepts an explicit `null`; requiredness concerns presence, not value.
-- A non-nullable type without a non-null default (`String`, a JSON object) has no type default, under omission or
-  under default-on-null (FR-006, FR-013).
+- A non-nullable type without a type default (a .NET activity's non-nullable `string` or JSON object; dates, times,
+  `TimeSpan`, `Guid`) gets nothing substituted, under omission or under default-on-null (FR-001b, FR-006, FR-013).
 - An undeclared request member is not an omitted optional member. Today's refusal of unknown keys stays.
 - A workflow edited after conversion keeps its recorded policies until the author changes them.
 - Under undefined-as-null, a `null` that then reaches a non-nullable input still fails unless default-on-null is also
@@ -302,7 +303,7 @@ omitted; after resume, the first reads explicit null and the invocation record s
   activity's input follows its C# declaration (`TimeSpan` versus `TimeSpan?`, `string` versus `string?`).
 - **FR-001b**: Only `Boolean` (`false`), the number types (`0`) and enums (their zero value) have a type default
   (Q10). Dates, times, `TimeSpan` and `Guid` have none, because their zero value (`0001-01-01`, `00:00:00`, an empty
-  GUID) looks like a real value. For a type without a type default, `null` is refused under any policy
+  GUID) looks like a real value. For a non-nullable type without a type default, `null` is refused under any policy
   (`VF-ACT-004`), and an omitted optional member needs a declared default (`VF-ACT-003`). A value that cannot be
   parsed into the type (for example the text `"tomorrow"` for a `DateTime`, which arrives as a string) is refused by
   the normal conversion (ADR 0046).
@@ -351,7 +352,7 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-012**: A workflow MUST be able to select the default-on-null policy, as one workflow-level setting (Q1). A
   per-input setting is added only once a case needs it.
 - **FR-013**: Under the policy, a `null` for a non-nullable target MUST be replaced by the target type's default
-  (`default(T)` for value types and enums, Elsa 3's behaviour) (Q2), independently of any declared default, and the
+  (`false` for `Boolean`, `0` for the number types, the zero value for enums: FR-001b) (Q2), independently of any declared default, and the
   substitution MUST be recorded: on the invocation record for an activity input, and as a diagnostic of the started
   instance for a workflow input substituted at admission. A target type without a non-null default (FR-006) still
   fails with `VF-ACT-004`. Requiredness is checked before any default applies (FR-008).
@@ -447,8 +448,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
 ## Spec decisions
 
 These are about how this spec builds the settled decisions above. ADR 0045 §2 left Q1 to Q4 to this spec; Q5 came
-from the code survey; Q6 to Q9 came from the recheck against the merged specs and the code; Q10 came from the
-coordinator's review. All are accepted. The requirements follow the answers.
+from the code survey; Q6 to Q9 came from the recheck against the merged specs and the code; Q10 and Q11 came from
+the coordinator's review. All are accepted. The requirements follow the answers.
 
 - **Q1 — Where is default-on-null set?** **Accepted: workflow only**, until a case needs per input.
 - **Q2 — Which default does it use?** **Accepted: the type default**, independently of declared defaults: it is what

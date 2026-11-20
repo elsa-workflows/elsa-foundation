@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [x] No [NEEDS CLARIFICATION] markers remain; Q1–Q8 are accepted, Q9 carries a recommendation
+- [x] No [NEEDS CLARIFICATION] markers remain; Q1–Q11 are accepted
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] All acceptance scenarios are defined
@@ -29,5 +29,5 @@
 
 ## Notes
 
-- Rechecked against the merged ADRs and specs 1221, 1222, 1223, 1228 and 1231; Studio presentation added (FR-031 to
-  FR-033).
+- Rechecked against the merged ADRs and specs 1221, 1222, 1223, 1228 and 1231. Studio: no policy controls (FR-031 is
+  documentation), diagnostics through the existing surface (FR-033), *Allow null* retired (Q8).

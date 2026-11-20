@@ -84,7 +84,7 @@ Line numbers are from that initiative head.
   applies (R-3 step 2 and 3).
 - **Rationale**: FR-005, FR-001a. Studio stores `isNullable: false` on every new workflow input and output, so
   trusting the flag would refuse `null` for a `String` input; the type gives the same answer .NET would.
-- **Alternatives**: infer nullability from the type alias (rejected: it would change meaning silently).
+- **Alternatives**: trust the stored `isNullable` flag (rejected: Studio stores `false` for every new member).
 
 ## R-5 Explicit null on intrinsics
 
@@ -93,8 +93,9 @@ Line numbers are from that initiative head.
   `outcome`) stay non-nullable. `WorkflowIntrinsicExecutor` already stores `ExplicitNull`.
 - **Rationale**: FR-001, FR-002. Required stays: the input must be bound, and may be bound to `null`.
 - **Decided (Q8)**: variables, workflow inputs and workflow outputs take their nullability from their type, as in
-  .NET: a value type (`Int32`, `Boolean`, an enum, …) is not nullable and defaults to `false` / `0` / its zero value;
-  every other type is nullable and defaults to `null`. This matches how `Any` / `String` variables already hold
+  .NET, by the type registry's `supportsNull`: a value type (`Int32`, `Boolean`, `DateTime`, `TimeSpan`, `Guid`, …)
+  is not nullable, every other type is nullable. Only `Boolean`, the number types and enums have a type default
+  (Q10, FR-001b). This matches how `Any` / `String` variables already hold
   `null` from expressions. For the JSON kinds the rule goes by kind, not CLR type: `Any` and
   every JSON alias (`JsonElement`, `JsonNode` and their full names, which S-8 FR-021 and #4832 treat as one
   structured kind) are nullable, although `JsonElement` is a CLR struct; `Object` reads as `Any` after S-8. Checked in
@@ -103,8 +104,8 @@ Line numbers are from that initiative head.
 ## R-6 Default-on-null in the runtime
 
 - **Decision**: one helper, `NullPolicyDefaults.TryGetTypeDefault(alias)`, in `Elsa.Workflows.Runtime.Core`, returning
-  the type default for value types and enums and nothing for other types (`String`, `Any` and the JSON aliases have
-  none, although `JsonElement` is a CLR struct). It is applied in four places, each only
+  the type default for `Boolean` (`false`), the number types (`0`) and enums (zero value) and nothing for other types
+  (dates, times, `TimeSpan`, `Guid`, `String`, `Any` and the JSON aliases, Q10). It is applied in four places, each only
   when the workflow's pinned `DefaultOnNull` is on: publication (`ValidateNull`: pin the default literal instead of
   failing), run-time materialization (`ValidatePresence`: replace `ExplicitNull` with the default and record a
   `VF-NULL-001` diagnostic on the invocation), the intrinsic executor (`WorkflowIntrinsicExecutor`: a `Set` /
@@ -184,5 +185,6 @@ Line numbers are from that initiative head.
 
 ## R-11 Elsa 3 input requiredness
 
-- **Decision**: to verify in T030 against Elsa 3 3.6.3 `InputDefinition`. If Elsa 3 has no enforced required flag, the
-  converter maps every input as optional and nullable, which makes #3288 read `null`, as Elsa 3 did.
+- **Decision**: to verify in T031 against Elsa 3 3.6.3 `InputDefinition`. If Elsa 3 has no enforced required flag, the
+  converter maps every input as optional. Nullability is not mapped: it follows the converted type (Q8), so an
+  omitted `Any` input reads `null` and an omitted `Boolean` input reads `false`.

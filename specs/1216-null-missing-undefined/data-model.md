@@ -17,7 +17,7 @@ as JSON `null` is stored as `ExplicitNull`.
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `DefaultOnNull` | bool | `false` | `null` for a non-nullable target becomes the type default (value types and enums). |
+| `DefaultOnNull` | bool | `false` | `null` for a non-nullable target becomes the type default (`Boolean`, the number types and enums only, FR-001b). |
 | `UndefinedAsNull` | bool | `false` | An `undefined` JavaScript result or property becomes `null`; a consumed script result that is `undefined` gives `null` instead of a fault. |
 
 ## `WorkflowExecutable.ValuePolicies` (new, pinned)

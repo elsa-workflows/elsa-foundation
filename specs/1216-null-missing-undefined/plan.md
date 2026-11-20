@@ -64,7 +64,7 @@ are regenerated in place. New hash fields are written only when set, so most fix
 | §2.17 duplication beats dependency | PASS | The type-default table is one helper in `Runtime.Core`, which every caller already references. |
 | §2.24.2 sanctioned patterns | PASS | Feature options bound from configuration; hashed strategy options. No new extension point. |
 | §2.22 / §2.22.1 docs and extension points | ACTION | Spec 095 contracts (already amended by #3388), the authoring reference for workflow settings, the Elsa 3 Mapping README and migration readiness guide, glossary rows for *default-on-null* and *undefined-as-null*, and the *Usage* line of `IWorkflowExecutableInputValidator` and `IWorkflowStartDispatcher` in the Runtime extension-point catalog. No contributor or replacement contract is added. |
-| §2.23.1–§2.23.2 tests | PASS | A test per acceptance scenario; a registration test for `Elsa3MappingOptions`; hash tests for each new field; Studio client tests for the two sections. |
+| §2.23.1–§2.23.2 tests | PASS | A test per acceptance scenario; a registration test for `Elsa3MappingOptions`; hash tests for each new field; Studio client tests for T033 to T035. |
 | §2.23.5 exception boundaries | PASS | Publication and admission refusals keep their diagnostic exceptions; boundary warnings are diagnostics, not exceptions. |
 | ADR 0038 content-addressed executables | PASS | Policies and input nullability are hashed, written only when set (R-2, R-4). |
 | ADR 0045 §2, ADR 0083, ADR 0091 d. 3 and 8, ADR 0046 V8, ADR 0089 R3 | PASS | All merged into the initiative branch; applied as merged. |
@@ -77,18 +77,18 @@ Plan decisions are numbered P-n, apart from the board's D-n.
 | # | Decision | Detail |
 |---|---|---|
 | P-1 | Intrinsic `value` takes the target's nullability | R-5, Q8. From the target's type (P-2); `name` / `outcome` stay non-nullable strings. The intrinsic executor checks a run-time `null` too (R-6). |
-| P-2 | Nullability from the type | R-5, Q8: variables, workflow inputs and outputs; value types not nullable (default `false` / `0`), all else nullable (default `null`). T004. |
+| P-2 | Nullability from the type | R-5, Q8, Q10: variables, workflow inputs and outputs and authored activity definitions, by the type registry's `supportsNull`; a type default only for `Boolean`, the number types and enums (FR-001b); an unassigned variable reads that default (Q11). T004, T004a. |
 | P-3 | Workflow input nullability pinned | R-4. From the type (P-2); hashed only when `true`. |
 | P-4 | Extend #3731's admission | R-3. #3731 already checks the input contract once in `WorkflowStartDispatcher` for every start, before the start policy and enqueue, and fills declared defaults. S-2 adds the board's D-10 completion (`null` or type default) and the `null` refusal for non-nullable inputs to the validator's normalization, and default-on-null substitution before it. No new admission step. |
 | P-5 | Policies on `WorkflowStrategyOptions.NullHandling` | R-2. Compiled to `WorkflowExecutable.ValuePolicies`; each JavaScript evaluation gets the undefined policy from the executable. |
-| P-6 | Default-on-null = type default | R-6, Q2. Value types and enums only; other types keep `VF-ACT-004`. |
+| P-6 | Default-on-null = type default | R-6, Q2, Q10. `Boolean`, the number types and enums only (FR-001b); every other type keeps `VF-ACT-004`. |
 | P-7 | In S-8's bridge writer | R-7. `VF-UNDEF-002` (property dropped), `VF-UNDEF-003` (array element or hole as a `null` placeholder, either policy), `VF-NUM-001` (computed `NaN`/`Infinity`); the policy keeps `undefined` properties as `null`. |
 | P-8 | Script without a value | R-8, Q3. Bindings (expression or statement body) need no `return`; only `Run JavaScript` (a function body) with a bound result and no `return` is refused at publication (`VF-UNDEF-001`). A consumed `undefined` faults the step at run time; `null` under the policy. Unbound: nothing written. |
 | P-13 | `undefined` assigned to a variable | R-8, Q7. `VF-UNDEF-001` fault naming the variable; `null` under the policy. |
 | P-14 | Studio | Q6. No controls: engineers set the policies through the converter option or the definition API, and the documentation explains them. Warnings show through the existing instance diagnostics. |
 | P-9 | Converter option | R-9, Q4. `Elsa3MappingOptions.ApplyElsa3NullPolicies`, default `true`. |
 | P-10 | Computed read miss | R-10. Built by S-4 (`VF-READ-001`); no work here. |
-| P-15 | Required with a default | Q9. Requiredness is checked before the default at publication and admission; built-in inputs that are required with a default become optional. |
+| P-15 | Required with a default | Q9, FR-034. Publication refuses a member declared both required and with a default (`VF-ACT-013`); Studio's contract editor turns *Required* off when a default is set; built-in inputs declared that way become optional. |
 | P-12 | Inputs that cannot hold null | R-12, Q5. `VF-ACT-004` under any policy; audit built-in activities. |
 | P-11 | Diagnostic codes | [contracts/null-policies.md](contracts/null-policies.md). |
 
