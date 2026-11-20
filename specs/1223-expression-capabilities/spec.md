@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-10 · **Rechecked**: 2026-11-19 against the initiative branch at `9aeda8dd3`
 
-**Status**: Approved — agreed 2026-11-19 by @j03y-nxxbz as coordinator (the approval plan), with every open question decided as recommended; applies ADR 0045 §5, ADR 0083, ADR 0046, ADR 0089, ADR 0090 and ADR 0092 as merged on the initiative branch. Initiative #3052 spec **S-1**. Issue #3026.
+**Status**: Implemented — PR #4855 (2026-11-20). Approved 2026-11-19 by @j03y-nxxbz as coordinator (the approval plan), with every open question decided as recommended; applies ADR 0045 §5, ADR 0083, ADR 0046, ADR 0089, ADR 0090 and ADR 0092 as merged on the initiative branch. Initiative #3052 spec **S-1**. Issue #3026.
 
 **Input**: User description: "Expression capabilities (Elsa 4) — what expressions may do for current time, randomness, GUIDs, built-in helpers, and .NET-implemented functions, and how Elsa 3 time/GUID/string functions convert faithfully."
 
