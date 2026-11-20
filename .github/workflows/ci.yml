@@ -3,19 +3,23 @@ name: CI
 # All source validation lives here; publishing and trusted maintenance have separate tokens.
 # Required check names stay stable. Marking a PR ready runs both tiers and maps in one suite;
 # splitting the required contexts across draft/ready suites can block protected merges (#3708).
-# A merge-queue entry (merge_group) runs both tiers on the exact merge result and reports all three
-# required checks. Focused manual runs select a suite below.
+# Focused manual runs select a suite below.
 # Path filters live in tools/ci/workflow-paths.json and are applied by plan-scope.
 # Pull requests to an initiative branch (docs/contributing/initiatives.md) run exactly what a pull request to main runs,
 # diffed against the initiative branch: the same tier selection and the same documentation-only fast path.
 #
-# Cost rules: a push to main runs the PR tier, not the full tier (the PR and the merge queue already ran it; the
-# nightly run below runs it again on main). The heavy proofs of a ready PR (the full tier, the Studio browser
-# proofs and the Weaver witness) run when it opens ready, is reopened or marked ready, in the merge queue, when it has the
-# `full-tier` label or changes the tiers, or when the repository variable CI_FULL_TIER_EVERY_PUSH is 'true'
+# Cost rules: a push to main runs the PR tier, not the full tier (the PR already ran it; the nightly run below
+# runs it again on main). The heavy proofs of a ready PR (the full tier, the Studio browser proofs and the Weaver
+# witness) run when it opens ready, is reopened or marked ready, when it has the `full-tier` label or changes the
+# tiers, or when the repository variable CI_FULL_TIER_EVERY_PUSH is 'true'
 # (tools/ci/workflow_scope.py, heavy_now). A later push runs the PR tier, and `Full tier` reports as deferred.
 # Full composed UX runs nightly, on manual suite=studio requests and on explicit full-tier opt-in.
 # Task-specific local visual acceptance remains part of each visible change's review.
+#
+# The standalone kernel model (prototypes/kernel-model, issue #4229) has its own gate here, folded in from the former
+# kernel-prototype.yml: `Kernel prototype gate` runs on a pull request that changes the kernel model, the gate script
+# or this workflow (plan-scope's `kernel` output), and the `Kernel prototype nightly` jobs run on the nightly schedule.
+# None of them is a required check.
 
 on:
   pull_request:
@@ -26,10 +30,6 @@ on:
   push:
     branches:
       - main
-  # The merge queue on main requires `Build & test`, `Generated maps fresh` and `Full tier` from this run. A required
-  # check that a merge_group run does not report keeps the entry waiting until the queue times it out.
-  merge_group:
-    types: [checks_requested]
   workflow_dispatch:
     inputs:
       # FR-008: the one way to run the full tier early, on any branch, a draft's head included. The literals "tier"
@@ -37,7 +37,8 @@ on:
       suite:
         description: Validation to run
         type: choice
-        options: [ci, studio, backend-source, weaver, published-images, studio-order]
+        # kernel-gate and kernel-nightly run only the kernel prototype's gate or its nightly jobs.
+        options: [ci, studio, backend-source, weaver, published-images, studio-order, kernel-gate, kernel-nightly]
         default: ci
       tier:
         description: Which tier to run
@@ -55,7 +56,7 @@ permissions:
 # newest pending push in the same group, so a stream of merges cannot restart validation
 # indefinitely. Intermediate pending pushes are replaced by the latest one; plan-scope then diffs the latest push from
 # the last push run that ran, so the replaced pushes' changes still select their focused proofs (#4713). Manual,
-# scheduled and merge-queue runs retain their own groups. A cancelled run is not a failure,
+# and scheduled runs retain their own groups. A cancelled run is not a failure,
 # and the aggregate jobs use !cancelled() so cancellation does not file a red-main issue.
 concurrency:
   group: >-
@@ -85,6 +86,7 @@ jobs:
       published-images: ${{ steps.scope.outputs.published-images }}
       studio-order: ${{ steps.scope.outputs.studio-order }}
       backend-source: ${{ steps.scope.outputs.backend-source }}
+      kernel: ${{ steps.kernel.outputs.kernel }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -97,6 +99,20 @@ jobs:
           # Only a push reads the earlier runs; pull request code gets no token here.
           GH_TOKEN: ${{ github.event_name == 'push' && github.token || '' }}
         run: python3 tools/ci/workflow_scope.py
+      # The kernel prototype gate's path filter, the former kernel-prototype.yml's `paths`. A pull request diffs from the
+      # first parent of the merge commit GitHub tests (as change_scope.py does); a diff it cannot read runs the gate.
+      - name: Select the kernel prototype gate
+        id: kernel
+        run: |
+          kernel=false
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            if ! changed=$(git diff --name-only "$GITHUB_SHA^1" "$GITHUB_SHA"); then
+              kernel=true
+            elif grep -Eq '^(prototypes/kernel-model/|tools/ci/kernel_prototype_gate\.py$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+              kernel=true
+            fi
+          fi
+          echo "kernel=$kernel" >> "$GITHUB_OUTPUT"
 
   # Python only, so the shards start within a minute: the change scope, the cheap guards, and the shard matrix.
   plan-tiers:
@@ -1734,3 +1750,255 @@ jobs:
             fi
             echo "::endgroup::"
           done
+
+  # The kernel prototype (prototypes/kernel-model, #4229), folded in from the former kernel-prototype.yml without a
+  # change to its steps. The server jobs select no test shard for a change under prototypes/ (affected_tests.py), so
+  # these are the prototype's own gate and nightly:
+  #   - pull request: a fast gate, the deterministic simulation at a small size plus both mutation checks, the in-memory
+  #     store conformance and the graph engine corpus. Target: well under its 25-minute timeout.
+  #   - nightly (this workflow's schedule): the larger simulation sizes, the runtime and store conformance (built-in
+  #     runtime, EF on SQLite in both fence modes) and the native smoke and cost runs.
+  # The database engines that run in containers (PostgreSQL, SQL Server, MySQL and the document database) stay manual:
+  # see the README. None of these is a required check, and `alert` does not need them.
+  kernel-prototype-gate:
+    name: Kernel prototype gate
+    needs: plan-scope
+    if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft && needs.plan-scope.outputs.kernel == 'true' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-gate' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25      # K1b slice 5a: the node-lease seeds add about 4 minutes to a 13-minute gate
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      # Output folders of the prototype projects, relative to prototypes/kernel-model.
+      BIN: bin/Release/net10.0
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      # One project at a time: they share obj/ folders through project references (README, Build). Every project
+      # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
+      - name: Build
+        run: |
+          for p in sim models/Native.Recovery.Run models/Statecharts.Run conformance/Kernel.Store.Conformance.Run models/Graph.Tests; do
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
+          done
+
+      # K1 slice 7: the sim's --count only sizes the store's rows, so the gate runs the default, 1,024. The nightly's
+      # count-4096 job runs the integrated runtime suite at 4,096.
+      - name: Simulation, kernel and native, plus the lease witness
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --seeds 10000
+          $SIM --native --seeds 10000
+          # K1b: the same seeds under the node lease, beside the per-partition lease until slice 6 flips the default.
+          $SIM --seeds 10000 --node-lease
+          $SIM --native --seeds 10000 --node-lease
+          $SIM --lease-check
+          $SIM --landed-check
+          # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
+          $SIM --placement-check
+          # It must fail on its checks (exit 1 with "placement: N check(s) FAILED"), not crash or reject the flaw name.
+          code=0; out=$($SIM --placement-check --flaw ContiguousOnlyBalancer) || code=$?
+          if [ "$code" -ne 1 ] || ! grep -Eq '^placement: [0-9]+ check\(s\) FAILED$' <<<"$out"; then echo "--placement-check did not catch ContiguousOnlyBalancer (exit $code)"; exit 1; fi
+          # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
+          dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
+          dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+
+      # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
+      # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 3208 (6946 before K1 slice 7's set worlds), a seed
+      # that has drifted before, so a smaller size would sit too close to it. The native check runs 12,000 seeds:
+      # FreshTurnSwapsLoopKeys is first caught at seed 3589 since slice 7 (NATIVE.md), and the gate keeps three times that. Every kernel mutation is caught except the two FINDINGS documents as caught only
+      # with the rule that covers them. --expect-total pins the number of mutations, the two flag combinations included, so one dropped or added fails.
+      # K1 slice 7 added five (48): FenceSubset, SeenAtNodeEpoch, SuspectAcrossPartitions, ChildIssuerPerWorker, TrialSparesOtherPartitions.
+      - name: Mutation checks
+        run: |
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 48 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 12000
+
+      # K1 slice 7: both witness cases must fail, each on the landed flush, with the k-row fence broken to land the part
+      # of a flush still fenced.
+      - name: Store conformance, in memory
+        run: |
+          STC="dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll"
+          $STC semantic
+          $STC semantic-flaw FenceSubset "the K1 witness" "the held flush landed"
+          # K1b slice 1: the node lease's store cases, each failing on its own check under its mutation.
+          $STC semantic-flaw TakeIgnoresNodeLease "NL-2" "from the live p"
+          $STC semantic-flaw PlainReadEmptyFence "NL-5" "taken on the wire landed"
+          $STC semantic-flaw StableNodeName "NL-6" "while its predecessor's node lease was live"
+
+      - name: Graph engine corpus
+        run: dotnet test models/Graph.Tests -c Release --no-build
+
+      - name: Gate script self-test
+        working-directory: .
+        run: python3 tools/ci/kernel_prototype_gate.py --self-test
+
+  kernel-prototype-nightly:
+    name: Kernel prototype nightly
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180     # K1b slice 5a: the node-lease sizes add about an hour to a 60- to 75-minute nightly
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      # Output folders of the prototype projects, relative to prototypes/kernel-model.
+      BIN: bin/Release/net10.0
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      - name: Build
+        run: |
+          for p in sim models/Native.Run models/Native.Recovery.Run models/Statecharts.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
+          done
+
+      # The sizes of the README's refactor gates (The gates of a refactor).
+      - name: Simulation, full sizes
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --seeds 200000
+          $SIM --seeds 20000 --actions 1000
+          $SIM --native --seeds 200000
+          $SIM --native --seeds 20000 --actions 1000
+          # K1b: the same sizes under the node lease, beside the per-partition lease until slice 6 flips the default.
+          $SIM --seeds 200000 --node-lease
+          $SIM --seeds 20000 --actions 1000 --node-lease
+          $SIM --native --seeds 200000 --node-lease
+          $SIM --native --seeds 20000 --actions 1000 --node-lease
+          $SIM --lease-check
+          $SIM --landed-check
+          # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
+          $SIM --placement-check
+          # It must fail on its checks (exit 1 with "placement: N check(s) FAILED"), not crash or reject the flaw name.
+          code=0; out=$($SIM --placement-check --flaw ContiguousOnlyBalancer) || code=$?
+          if [ "$code" -ne 1 ] || ! grep -Eq '^placement: [0-9]+ check\(s\) FAILED$' <<<"$out"; then echo "--placement-check did not catch ContiguousOnlyBalancer (exit $code)"; exit 1; fi
+          # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
+          dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
+          dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+
+      - name: Mutation checks, full size
+        run: |
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 48 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
+
+      - name: Store conformance, in memory and EF on SQLite in both fence modes
+        run: |
+          dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll semantic
+          EFC="dotnet ef/Kernel.Ef.Conformance/$BIN/Kernel.Ef.Conformance.dll"
+          $EFC sqlite --checked-fence semantic
+          $EFC sqlite --fence-in-batch semantic
+
+      - name: Runtime conformance, built-in runtime
+        run: |
+          RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
+          $RTC semantic
+          $RTC semantic --partitions 1024
+          $RTC stress 20 2000
+          # K1b slice 5a: the nodes' heartbeat loops renew the node lease, the only renewal under it.
+          $RTC semantic --node-lease
+          $RTC stress 20 2000 --node-lease
+
+      # The -broken forms break the store's fence on purpose; the runner decides whether the runtime failed as it must.
+      - name: Fence broken on purpose
+        run: |
+          RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
+          $RTC semantic-broken
+          $RTC stress-broken 10 1000
+
+      - name: Native model, smoke and cost
+        run: |
+          NAT="dotnet models/Native.Run/$BIN/Kernel.Native.Run.dll"
+          $NAT smoke
+          $NAT cost sqlite
+
+      - name: Graph engine corpus
+        run: dotnet test models/Graph.Tests -c Release --no-build
+
+  # K1 slice 7: the count of 4,096. The sim's --count only sizes the store's rows (PARTITIONS.md, slice 7), so it runs
+  # here at reduced seeds; the integrated runtime suite qualifies 4,096 end to end. Estimate on a 4-core runner: build
+  # 3 min, the two sims 4 min, the runtime suite at 4,096 about 3 min (49 s on 15 cores).
+  kernel-prototype-nightly-4096:
+    name: Kernel prototype nightly, 4,096 virtual partitions
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      # Output folders of the prototype projects, relative to prototypes/kernel-model.
+      BIN: bin/Release/net10.0
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      - name: Build
+        run: |
+          for p in sim conformance/Kernel.Runtime.Conformance.Run; do
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
+          done
+
+      - name: Simulation at 4,096, kernel and native
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --seeds 20000 --count 4096
+          $SIM --native --seeds 20000 --count 4096
+
+      - name: Runtime conformance at 4,096, built-in runtime
+        run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096
