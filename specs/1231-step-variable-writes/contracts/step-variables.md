@@ -45,7 +45,9 @@ public class MyActivity : Activity<MyResult>
 
 | Code | When |
 |---|---|
+| `VF-WRITE-002`, `VF-WRITE-003`, `VF-WRITE-004` | a script body's literal write to an undeclared, transient, or loop item or index target (publish and draft validation) |
+| `VF-WRITE-005` | warning: a script body writes by a computed or opaque name |
 | `VF-BG-001 (C9)` | background placement of an activity with a variable signal (FR-030), at publication, admission and the worker |
 | `VF-ACT-010` | session read of a withheld value |
 | publish diagnostics (codes chosen in implementation, `ValueFlow/*` family) | unbound / undeclared / read-only-target reference; undeclared, transient or read-only literal script write; may-write set overlaps own capture (warning) |
-| `ELS3-*` (stable, chosen in implementation under `Elsa3ImportDiagnosticCodes`) | computed setter name; setter of an undeclared variable; setter of a transient variable |
+| `ELS3-SETTER-UNDECLARED-VARIABLE` (`Elsa3ImportDiagnosticCodes`) | setter of an undeclared variable (a computed setter name converts to `variables[k] = v`, FR-033 as amended; no variable converts to a transient one) |

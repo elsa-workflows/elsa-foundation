@@ -1333,9 +1333,9 @@ public sealed class Elsa3ExpressionRewriter
 
         /// <summary>
         /// Elsa 3's <c>setVariable(name, value)</c>. In a Run JavaScript body a literal name of a declared variable becomes a
-        /// whole assignment, <c>variables.name = value</c> (spec 1231 FR-032, Q6); everything else is refused with guidance
-        /// (FR-033): a computed name, an undeclared variable, an input expression (which only reads) and a reusable
-        /// workflow's script.
+        /// whole assignment, <c>variables.name = value</c> (spec 1231 FR-032, Q6), and a computed name becomes
+        /// <c>variables[name] = value</c> (FR-033 as amended). Refused with guidance (FR-033): an undeclared variable, an
+        /// input expression (which only reads) and a reusable workflow's script.
         /// </summary>
         private void ConvertSetVariable(CallExpression call)
         {
@@ -1361,14 +1361,34 @@ public sealed class Elsa3ExpressionRewriter
 
             if (call.Arguments[0] is not Literal { Value: string name })
             {
-                Issues.Add(new Elsa3ExpressionRewriteIssue(
-                    Elsa3ImportDiagnosticCodes.ComputedSetterName,
-                    "JavaScript calls 'setVariable' with a computed name, so the variable it writes cannot be checked at import.",
-                    "Call setVariable with the variable's name as a string literal (setVariable('total', value)) in the Elsa 3 workflow before import."));
+                ConvertComputedSetVariable(call);
                 return;
             }
 
             ConvertSetter(call, Elsa3AmbientReferenceKind.Variable, name, "setVariable", call.Arguments[1]);
+        }
+
+        /// <summary>
+        /// <c>setVariable(k, v)</c> with a computed name becomes <c>variables[k] = v</c> (spec 1231 FR-033 as amended on
+        /// 2026-11-20, #4899): the name resolves when the script runs, nearest scope first; a declared variable is written,
+        /// and an undeclared name faults the step (FR-020a) where Elsa 3 created the variable. Like a computed read, it may
+        /// reach a loop's value or a shadowed name, so the same import checks apply.
+        /// </summary>
+        private void ConvertComputedSetVariable(CallExpression call)
+        {
+            if (!EnsureRootFree(ExpressionParameterSurfaces.Variables, call))
+                return;
+
+            HasComputedVariableRead = true;
+            var name = call.Arguments[0];
+            var value = call.Arguments[1];
+            var standsAlone = _statementCalls.Contains(call);
+            var grouped = value is SequenceExpression;
+            Edits.Add(new SourceEdit(call.Start, name.Start, (standsAlone ? "" : "void (") + "variables["));
+            Edits.Add(new SourceEdit(name.End, value.Start, "] = " + (grouped ? "(" : "")));
+            Edits.Add(new SourceEdit(value.End, call.End, (grouped ? ")" : "") + (standsAlone ? "" : ")")));
+            Visit(name);
+            Visit(value);
         }
 
         /// <summary>
@@ -1908,9 +1928,6 @@ public static class Elsa3ImportDiagnosticCodes
     /// gives the value Elsa 3 did (spec 1228 FR-023, FR-024): refused, with guidance.
     /// </summary>
     public const string UntypedResultIntoTypedInput = "ELS3-UNTYPED-RESULT";
-
-    /// <summary>A Run JavaScript script calls <c>setVariable</c> with a computed name (spec 1231 FR-033): refused, with guidance.</summary>
-    public const string ComputedSetterName = "ELS3-SETTER-COMPUTED-NAME";
 
     /// <summary>
     /// A Run JavaScript script sets a variable the workflow does not declare; Elsa 3 created it on its first write, Elsa 4

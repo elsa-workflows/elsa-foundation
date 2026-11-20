@@ -262,8 +262,9 @@ and run the converted scripts.
 2. **Given** a generated setter `setTotal(x)`, **Then** it converts to `variables.Total = x`.
 3. **Given** `getVariable('Order').Status = 'Paid'`, **Then** it converts to `variables.Order.Status = 'Paid'`, a
    member change (C2).
-4. **Given** `setVariable(name, x)` with a computed name, **Then** conversion is refused with a diagnostic and
-   guidance to use a literal name.
+4. **Given** `setVariable(name, x)` with a computed name, **Then** it converts to `variables[name] = x`, a computed
+   write (FR-020a): a name that matches a declared variable is written, and an undeclared name faults the step at run
+   time with a clear error. *(Amended 2026-11-20, coordinator-approved, #4899; it first said "refused".)*
 5. **Given** a setter on a variable the workflow does not declare (Elsa 3 created it on first write), **Then**
    conversion is refused with guidance to declare the variable in the Elsa 3 workflow first.
 6. **Given** any of these forms in an input expression, **Then** conversion stays refused with the existing
@@ -422,9 +423,11 @@ and run the converted scripts.
 - **FR-032**: Inside `RunJavaScript`, the converter MUST rewrite `setVariable('<literal>', v)` and a generated
   `set<Name>(v)` of a declared variable to an assignment through `variables` (Q6), and keep a member change of a read
   value (`getVariable('o').x = v`, `variables.o.x = v`) as a member change through `variables`.
-- **FR-033**: The converter MUST refuse, with a stable diagnostic and guidance: a computed setter name; a setter of an
-  undeclared variable; a setter of a variable that converts to a transient one; and every write form in an input
-  expression (the existing refusal, with guidance naming a `RunJavaScript` step).
+- **FR-033**: The converter MUST convert `setVariable(name, v)` with a computed name to `variables[name] = v`, a computed
+  write resolved at run time (FR-020a). It MUST refuse, with a stable diagnostic and guidance: a setter of an undeclared
+  variable; a setter of a variable that converts to a transient one; and every write form in an input expression (the
+  existing refusal, with guidance naming a `RunJavaScript` step). *(Amended 2026-11-20 by the coordinator, #4899: a
+  computed setter name was first refused.)*
 - **FR-034**: `setOutput`, `setInput`, `setResult`, `setCorrelationId` and `setWorkflowInstanceName` MUST stay refused
   (Q1).
 

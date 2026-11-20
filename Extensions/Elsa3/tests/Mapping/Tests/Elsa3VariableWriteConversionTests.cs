@@ -68,15 +68,13 @@ public sealed class Elsa3VariableWriteConversionTests
     }
 
     [Theory]
-    [InlineData("const name = 'Total'; setVariable(name, 1);")]
-    [InlineData("setVariable('To' + 'tal', 1);")]
-    public async Task A_computed_setter_name_is_refused_with_guidance(string source)
+    [InlineData("const name = 'Total';\nsetVariable(name, 1);\nreturn 1;", "const name = 'Total';\nvariables[name] = 1;\nreturn 1;")]
+    [InlineData("setVariable('To' + 'tal', getVariable('Total') + 1);\nreturn 1;", "variables['To' + 'tal'] = variables.Total + 1;\nreturn 1;")]
+    [InlineData("const name = 'Total'; setVariable(name, 1)", "const name = 'Total'; return void (variables[name] = 1)")]
+    public async Task A_computed_setter_name_becomes_a_computed_write(string source, string expected)
     {
-        // Acceptance 4.
-        var issue = await RefusedScriptAsync(source, Total);
-
-        Assert.Equal(Elsa3ImportDiagnosticCodes.ComputedSetterName, issue.Code);
-        Assert.Contains("string literal", issue.Guidance, StringComparison.Ordinal);
+        // Acceptance 4, as amended on 2026-11-20 (#4899): the name resolves at run time; an undeclared one faults the step.
+        Assert.Equal(expected, await ConvertScriptAsync(source, Total));
     }
 
     [Fact]
