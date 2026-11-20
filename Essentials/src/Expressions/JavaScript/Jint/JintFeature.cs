@@ -1,7 +1,6 @@
 ﻿using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
-using Elsa.Expressions.JavaScript.Core.Services;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Elsa.Expressions.JavaScript.Jint.Services;
