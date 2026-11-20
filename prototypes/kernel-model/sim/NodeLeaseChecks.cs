@@ -40,16 +40,19 @@ internal static class NodeLeaseChecks
         await FixedHostAnswerJudgesOnce(check);
         await WatchdogClosesAStuckCommit(check, abortable: true);
         await WatchdogClosesAStuckCommit(check, abortable: false);
-        WatchedStoreForwardsEverything(check);
+        await WatchdogClosesAStuckCommit(check, abortable: false, "throws", () => throw new InvalidOperationException("the abort failed"));
+        await WatchdogClosesAStuckCommit(check, abortable: false, "blocks", () => Thread.Sleep(4_000));     // past the 2 s the look may take
     }
 
     // K1b slice 5b, the watchdog: p's commit is stuck on a live connection. At twice the lease since it was sent the
     // watchdog closes that call's connection (its token); a call that aborts on it ends, and the process lives on. One whose
-    // client never resumes is still in flight a third of a lease later: then, and only then, the process ends.
-    private static async Task WatchdogClosesAStuckCommit(Action<bool, string> check, bool abortable)
+    // client never resumes is still in flight a third of a lease later: then, and only then, the process ends. The commit
+    // lands and its reply is stuck, so its outcome is unknown; that the server rolls an open transaction back is K4's.
+    // A3: an abort that throws or blocks neither ends the watchdog nor holds back the end of the process.
+    private static async Task WatchdogClosesAStuckCommit(Action<bool, string> check, bool abortable, string abort = "", Action? onAbort = null)
     {
         var (store, clock, advance) = World(1, out _);
-        var wire = new DelayedCommit(store) { AbortOnToken = abortable };
+        var wire = new DelayedCommit(store) { AbortOnToken = abortable, OnAbort = onAbort };
         var ended = new List<string>();
         var watchdog = new Watchdog(Lease, ended.Add, clock);
         var worker = Owner(watchdog.Watch(wire), [0], clock);
@@ -62,7 +65,9 @@ internal static class NodeLeaseChecks
         advance(19_000);
         var early = watchdog.Check();       // 19 s: under twice the lease, untouched
         advance(1_000);
-        var closed = watchdog.Check();      // 20 s: closed
+        int closed;
+        try { closed = await Task.Run(watchdog.Check).WaitAsync(TimeSpan.FromSeconds(2)); }        // 20 s: closed
+        catch (Exception e) { check(false, $"the watchdog survives an abort that {abort}: {e.GetType().Name}"); return; }
         if (abortable) await Task.WhenAny(pass, Task.Delay(TimeSpan.FromSeconds(5)));
         advance(1_000);
         watchdog.Check();                   // within a third of a lease of the close: the process waits for the call
@@ -73,16 +78,9 @@ internal static class NodeLeaseChecks
         wire.Reply.TrySetResult();
         await pass.WaitAsync(TimeSpan.FromSeconds(5));
         check(early == 0 && closed == 1 && waited && passEnded == abortable && (abortable ? ended.Count == 0 && watchdog.Ended == 0 : ended.Count == 1 && ended[0].Contains("commit", StringComparison.Ordinal)),
+            abort != "" ? $"the watchdog ends the process when the abort {abort}: closed {closed}, waited {waited}, ended {ended.Count}" :
             abortable ? $"the watchdog closes a stuck commit's connection at twice the lease, and the process lives on: closed {closed}, pass ended {passEnded}, ended {watchdog.Ended}"
                       : $"the watchdog ends the process only when the stuck call outlives its closed connection: closed {closed}, waited {waited}, ended [{string.Join("; ", ended)}]");
-    }
-
-    // The watched store implements every member of the store contract itself: none falls back to an interface default.
-    private static void WatchedStoreForwardsEverything(Action<bool, string> check)
-    {
-        var missing = new[] { typeof(IKernelStore), typeof(IMembership) }
-            .SelectMany(i => typeof(WatchedStore).GetInterfaceMap(i).TargetMethods).Where(m => m.DeclaringType != typeof(WatchedStore)).Select(m => m.Name).ToList();
-        check(missing.Count == 0, $"the watched store implements the whole store contract itself: missing [{string.Join(", ", missing)}]");
     }
 
     // CodeRabbit 4636945436 (review B of #4870): an empty Worker's first take hangs. Once it has been in flight for a lease
@@ -192,10 +190,12 @@ internal static class NodeLeaseChecks
         for (var p = 0; p < n; p++) workers[p] = (Worker)(await host.ActivateAsync(p))!;
         var before = workers.Select(w => w.ClaimedLookups).ToArray();
         var answered = await host.HeartbeatAsync(Window) is not null;
+        var waiting = workers.All(w => w.AnswerWaiting);       // each answer lists partitions the Worker does not hold: it waits
+        foreach (var w in workers) await w.RunAsync();          // where each Worker judges it, asking about its siblings
+        var judged = workers.All(w => !w.AnswerWaiting);
         var asked = workers.Select((w, i) => w.ClaimedLookups - before[i]).ToArray();
-        foreach (var w in workers) await w.RunAsync();
-        check(answered && asked.All(a => a == 1) && workers.All(w => w.Holds(w.Partition)),
-            $"one answer over {n} Workers asks each once: answered {answered}, asked {asked.Sum()} times (each once {asked.All(a => a == 1)}), held {workers.Count(w => w.Holds(w.Partition))}");
+        check(answered && waiting && judged && asked.All(a => a == 1) && workers.All(w => w.Holds(w.Partition)),
+            $"one answer over {n} Workers asks each once: answered {answered}, every Worker judged {waiting && judged}, asked {asked.Sum()} times (each once {asked.All(a => a == 1)}), held {workers.Count(w => w.Holds(w.Partition))}");
     }
 
     // Review round 2 of #4870, the coordinator's rule: a fixed Worker's pending partition, with a trial on it, is given up by

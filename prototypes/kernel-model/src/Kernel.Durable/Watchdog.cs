@@ -27,8 +27,9 @@ public sealed class Watchdog
         (_lease, _endProcess, _monotonic) = (lease, endProcess, monotonic ?? (static () => Environment.TickCount64));
 
     /// <summary>Calls whose connection the watchdog closed, and the times it ended the process because one stayed stuck.</summary>
-    public long Closed { get; private set; }
-    public long Ended { get; private set; }
+    public long Closed => Interlocked.Read(ref _closed);
+    public long Ended => Interlocked.Read(ref _ended);
+    private long _closed, _ended;
 
     /// <summary>The store as the host's Workers use it: its owner-path calls are watched; every other call goes through as it is.</summary>
     public IKernelStore Watch(IKernelStore store) => new WatchedStore(this, store);
@@ -81,13 +82,13 @@ public sealed class Watchdog
                 }
         foreach (var call in closing)
         {
-            Closed++;
-            try { call.Close.Cancel(); }        // from this thread: the store's abort runs here, beside the stuck caller
-            catch (ObjectDisposedException) { /* the call ended meanwhile */ }
+            Interlocked.Increment(ref _closed);
+            // Off this loop: an abort that throws or blocks neither ends the watchdog nor holds back the end-process look.
+            _ = Task.Run(() => { try { call.Close.Cancel(); } catch (Exception) { /* the call ended meanwhile, or the grace covers it */ } });
         }
         if (stuck is not null)
         {
-            Ended++;
+            Interlocked.Increment(ref _ended);
             _endProcess($"the {stuck.What} call has outlasted twice the lease and its connection could not be closed: the process ends");
         }
         return closing.Count;
@@ -144,7 +145,7 @@ public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKerne
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) =>
         watchdog.RunAsync("heartbeat", cancellationToken, token => inner.HeartbeatAsync(node, window, token));
 
-    // Everything else, as it is.
+    // Everything else, as it is. Whether releases and a pass's event writes are owner-path calls is open (#4880, 7048452155).
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => inner.ReleaseAsync(partition, epoch, cancellationToken);
     public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default) => inner.ReleaseAsync(owned, cancellationToken);
     public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => inner.PartitionCountAsync(cancellationToken);
