@@ -179,12 +179,21 @@ internal static class PlainJson
         {
             json.Append('{');
             var any = false;
+            // As Jint: the enumerable own keys are taken first, then each is read as it comes. A marker met on the way can
+            // run the script's code and change the rest: a key read is written whether or not it is still enumerable, and
+            // a key gone or turned into an accessor would read through the prototype chain or run a getter: not plain.
+            var keys = new List<JsValue>();
             foreach (var key in instance.GetOwnPropertyKeys(Types.String))
             {
+                var own = instance.GetOwnProperty(key);
+                if (own != PropertyDescriptor.Undefined && own.Enumerable)
+                    keys.Add(key);
+            }
+
+            foreach (var key in keys)
+            {
                 var property = instance.GetOwnProperty(key);
-                if (property == PropertyDescriptor.Undefined || !property.Enumerable)
-                    continue;
-                if (!property.IsDataDescriptor())
+                if (property == PropertyDescriptor.Undefined || !property.IsDataDescriptor())
                     return Outcome.NotPlain;
                 var start = json.Length;
                 if (any)

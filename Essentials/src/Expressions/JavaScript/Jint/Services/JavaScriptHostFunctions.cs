@@ -152,7 +152,9 @@ internal sealed class JavaScriptHostFunctions
             catch (Exception exception) when (exception is not (OperationCanceledException or JintException or OutOfMemoryException) &&
                                               !EvaluationLimits.IsLimit(exception))
             {
-                throw new JavaScriptException(engine.Intrinsics.Error, $"{declaration.Name}: {exception.Message}");
+                // The script can catch the error and keep it, stack text and all: counted.
+                using (EvaluationLimits.CountScriptWork(engine))
+                    throw new JavaScriptException(engine.Intrinsics.Error, $"{declaration.Name}: {exception.Message}");
             }
 
             if (result.ValueKind == JsonValueKind.Undefined)
@@ -253,8 +255,10 @@ internal sealed class JavaScriptHostFunctions
         }
         catch (InvalidOperationException exception)
         {
-            throw new JavaScriptException(engine.Intrinsics.TypeError,
-                $"{function}: argument {index} is not a JSON value. {exception.Message}");
+            // The script can catch the error and keep it, stack text and all: counted.
+            using (EvaluationLimits.CountScriptWork(engine))
+                throw new JavaScriptException(engine.Intrinsics.TypeError,
+                    $"{function}: argument {index} is not a JSON value. {exception.Message}");
         }
     }
 

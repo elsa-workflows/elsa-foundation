@@ -113,6 +113,38 @@ public sealed class PlainJsonTests
         Assert.False(plain);
     }
 
+    // Keys are taken as Jint takes them, before any marker runs: what a marker's script code changes later reads as Jint
+    // reads it, or is not plain.
+    [Theory]
+    [InlineData("Object.defineProperty(o, 'h', { value: 'hidden', enumerable: true })", true, "{\"first\":{\"x\":1}}")]
+    [InlineData("Object.defineProperty(o, 'h', { enumerable: false })", true, "{\"first\":{\"x\":1},\"h\":\"shown\"}")]
+    [InlineData("delete o.h", false, null)]
+    [InlineData("Object.defineProperty(o, 'h', { get: function () { return 1; } })", false, null)]
+    public void Keys_changed_while_marking_read_as_jint_reads_them(string change, bool plain, string? expected)
+    {
+        var engine = new Engine();
+        engine.Execute("var o = { first: { x: 1 } }; Object.defineProperty(o, 'h', { value: 'shown', enumerable: true, configurable: true, writable: true });");
+        if (change.Contains("'hidden'", StringComparison.Ordinal))
+            engine.Execute("Object.defineProperty(o, 'h', { value: 'hidden', enumerable: false, configurable: true, writable: true });");
+        var value = engine.GetValue("o").AsObject();
+        var marked = false;
+
+        var result = PlainJson.TryStringify(engine, value, null, instance =>
+        {
+            if (!marked && !ReferenceEquals(instance, value))
+            {
+                marked = true;
+                engine.Execute(change);
+            }
+
+            return null;
+        }, out var text);
+
+        Assert.Equal(plain, result);
+        if (plain)
+            Assert.Equal(expected, text);
+    }
+
     [Theory]
     [InlineData("Object.prototype.toJSON = function () { return 1; }")]
     [InlineData("Array.prototype.toJSON = function () { return 1; }")]

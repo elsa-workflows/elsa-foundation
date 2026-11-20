@@ -278,11 +278,32 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         /// </summary>
         private string? Serialize(JsValue value, bool infinity, Dictionary<string, JsonElement>? markers)
         {
-            using (EvaluationLimits.ExcludeHostWork(_engine))
+            // Inside a .NET serialization, comparing a nested value that is not plain would run the script's code in the
+            // middle of it: instead the whole serialization gives up before any script code runs, and the engine does it
+            // all, in its own order.
+            var outerPlainOnly = _plainOnly;
+            bool serialized;
+            string? plain;
+            try
             {
-                if (PlainJson.TryStringify(_engine, value, infinity ? InfinityMarkerText : null, markers is null ? null : MarkerFor, out var plain))
-                    return plain;
+                _plainOnly = true;
+                using (EvaluationLimits.ExcludeHostWork(_engine))
+                    serialized = PlainJson.TryStringify(_engine, value, infinity ? InfinityMarkerText : null, markers is null ? null : MarkerFor, out plain);
             }
+            catch (NotPlainInside) when (!outerPlainOnly)
+            {
+                serialized = false;
+                plain = null;
+            }
+            finally
+            {
+                _plainOnly = outerPlainOnly;
+            }
+
+            if (serialized)
+                return plain;
+            if (outerPlainOnly)
+                throw NotPlainInside.Instance;
 
             // Markers taken before the serializer gave up are not in any text: start again.
             if (markers is not null)
@@ -299,6 +320,15 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     ? JintResultMaterializer.Stringify(_engine, value, InfinityOnlyReplacer())
                     : JintResultMaterializer.Stringify(_engine, value);
             }
+        }
+
+        // Whether a .NET serialization is running, which must not run the script's code.
+        private bool _plainOnly;
+
+        // Thrown up to the outermost .NET serialization when a value inside it is not plain.
+        private sealed class NotPlainInside : Exception
+        {
+            public static readonly NotPlainInside Instance = new();
         }
 
         // A Mark's markers, once written: their origin paths are needed no longer, and every preview makes new ones.

@@ -273,6 +273,37 @@ public sealed class HostFunctionArgumentTests
             RunAsync(source, configure: feature => { feature.MaxMemoryBytes = 64 * 1024 * 1024; feature.ExecutionTimeout = null; }));
     }
 
+    // An error a function call raises can be caught and kept by the script, stack text and all: counted.
+    [Fact]
+    public async Task Errors_the_script_keeps_from_function_calls_count()
+    {
+        await Assert.ThrowsAsync<global::Jint.Runtime.MemoryLimitExceededException>(() => RunAsync(
+            "var name = 'n'.repeat(100000); var o = { [name]: function () { try { acme.echo(function () { }); } catch (e) { return e; } } };" +
+            " var keep = []; for (var i = 0; i < 3000; i++) keep.push(o[name]()); return 1;",
+            configure: feature => { feature.MaxMemoryBytes = 64 * 1024 * 1024; feature.ExecutionTimeout = null; }));
+    }
+
+    // A changed value that is not plain (a getter) inside a written variable makes the whole write go through the engine,
+    // in its own order: the getter's changes to keys still to come read as JSON.stringify reads them.
+    [Fact]
+    public async Task A_getter_inside_a_written_variable_serializes_as_the_engine_does()
+    {
+        var session = new Session("""{"a":{"x":1},"h":"shown"}""");
+        await RunAsync(
+            "var o = variables.order; Object.prototype.h = 'inherited';" +
+            " Object.defineProperty(o.a, 'g', { enumerable: true, configurable: true, get: function () { delete o.h; Object.defineProperty(o.a, 'g', { value: 2, enumerable: true }); return 2; } });" +
+            " return 1;",
+            session: session);
+
+        var expected = await RunAsync(
+            "var o = variables.order; Object.prototype.h = 'inherited';" +
+            " Object.defineProperty(o.a, 'g', { enumerable: true, configurable: true, get: function () { delete o.h; Object.defineProperty(o.a, 'g', { value: 2, enumerable: true }); return 2; } });" +
+            " return JSON.stringify(o, function (k, v) { if (k === '') JSON.stringify(v); return v; });",
+            session: new Session("""{"a":{"x":1},"h":"shown"}"""));
+
+        Assert.Equal(expected.Result!.Value.GetString(), session.Written!.Value.GetRawText());
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {
