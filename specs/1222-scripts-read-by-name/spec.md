@@ -248,7 +248,8 @@ value and confirm it is not provided.
   pinned read. BPMN multi-instance iteration frames are out of scope (Q1).
 - **FR-005**: Liquid templates MUST read variables through the same `variables` root and the same nearest-scope
   resolution as JavaScript.
-- **FR-006**: A declared variable with no value set MUST read JSON `null`, never `undefined`.
+- **FR-006**: A declared variable with no value set MUST read JSON `null`, never `undefined`. *Amended by spec 1216
+  FR-001c:* a variable whose type has a type default (`Boolean`, numbers, enums) reads that default instead.
 - **FR-007**: For literal reads, loading MUST materialize only the variables the script names (not every visible
   variable).
 

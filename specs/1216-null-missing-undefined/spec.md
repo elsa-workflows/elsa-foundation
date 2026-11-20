@@ -306,6 +306,10 @@ omitted; after resume, the first reads explicit null and the invocation record s
   (`VF-ACT-004`), and an omitted optional member needs a declared default (`VF-ACT-003`). A value that cannot be
   parsed into the type (for example the text `"tomorrow"` for a `DateTime`, which arrives as a string) is refused by
   the normal conversion (ADR 0046).
+- **FR-001c**: A declared variable that was never assigned MUST read its type default when its type has one
+  (`false`, `0`, an enum's zero value), as a .NET field does, and `null` when its type accepts `null` (Q11). A variable
+  whose type has neither (a date, a time, `TimeSpan`, `Guid`) MUST declare a default, or publication refuses it
+  (`VF-ACT-003`). This amends spec 1222 FR-006 for value-type variables.
 - **FR-002**: An intrinsic's `value` input MUST take the nullability of its target variable or output, instead of
   always being non-nullable.
 - **FR-003**: Without the default-on-null policy, `null` for a non-nullable target MUST fail with `VF-ACT-004`: at
@@ -444,7 +448,7 @@ omitted; after resume, the first reads explicit null and the invocation record s
 
 These are about how this spec builds the settled decisions above. ADR 0045 §2 left Q1 to Q4 to this spec; Q5 came
 from the code survey; Q6 to Q9 came from the recheck against the merged specs and the code; Q10 came from the
-coordinator's review. Q1 to Q10 are accepted; Q11 waits for the coordinator. The requirements follow the answers.
+coordinator's review. All are accepted. The requirements follow the answers.
 
 - **Q1 — Where is default-on-null set?** **Accepted: workflow only**, until a case needs per input.
 - **Q2 — Which default does it use?** **Accepted: the type default**, independently of declared defaults: it is what
@@ -488,14 +492,11 @@ coordinator's review. Q1 to Q10 are accepted; Q11 waits for the coordinator. The
   under default-on-null, and an omitted optional one needs a declared default. Dates and times arrive as strings and
   go through the normal parser; a string that does not parse is refused. Rejected: the zero value, which Elsa 3
   produced.
-- **Q11 — A `Boolean` or number variable that was never assigned.** Problem: spec 1222 FR-006 says a declared variable
-  with no value reads `null`. Under Q8 a `Boolean` variable cannot hold `null`, so reading an unassigned one would
-  give a value its type does not allow. There is no `Boolean?` workflow type to opt into `null`. *Recommended:* the
-  variable starts at its type default, as a .NET field does (`false`, `0`); a variable of a type without a type
-  default (a date, `TimeSpan`, `Guid`) needs a declared default, refused at publication otherwise (`VF-ACT-003`). A
-  variable of a type that accepts `null` still reads `null` until assigned. This amends spec 1222 FR-006 for
-  value-type variables. Alternative: reading an unassigned value-type variable faults the step (the error then
-  appears at run time, possibly on a rarely taken path).
+- **Q11 — A `Boolean` or number variable that was never assigned.** **Accepted: it starts at its type default**, as a
+  .NET field does (`false`, `0`) (FR-001c). A date, `TimeSpan` or `Guid` variable needs a declared default, refused at
+  publication otherwise. A `String` or `Any` variable still reads `null` until assigned. This amends spec 1222
+  FR-006 for value-type variables. Rejected: faulting the step on reading an unassigned value-type variable (the
+  error would appear only at run time, possibly on a rarely taken path).
 
 ## Success Criteria *(mandatory)*
 

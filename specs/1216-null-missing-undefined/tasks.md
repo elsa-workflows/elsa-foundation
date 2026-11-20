@@ -28,6 +28,10 @@ red without the change. xUnit only.
 - [ ] T004 Implement FR-001a from the type registry's existing `supportsNull` (`DefaultVariableTypeDescriptorProvider`)
   for variables, workflow inputs and outputs and authored activity definitions; .NET activities keep their C#
   nullability. Nothing reads a stored `isNullable` flag for authored members any more
+- [ ] T004a FR-001c: an unassigned variable reads its type default (`false`, `0`, an enum's zero value) where the
+  read materializes a variable with no value (S-4's read path and the variable store's initial value), `null` for a
+  type that accepts it; publication refuses a date, time, `TimeSpan` or `Guid` variable without a declared default
+  (`VF-ACT-003`). Update S-4's test for spec 1222 US1 scenario 6 for a value-type variable
 - [ ] T005 [P] Add `NullPolicyDefaults.TryGetTypeDefault(alias)` in
   `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs` (FR-001b): a default for `Boolean`, the
   number types and enums only; unit tests including `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`,
