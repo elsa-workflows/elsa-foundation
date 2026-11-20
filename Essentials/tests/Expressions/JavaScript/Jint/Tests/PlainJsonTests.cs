@@ -91,9 +91,32 @@ public sealed class PlainJsonTests
         Assert.False(PlainJson.TryStringify(engine, value, null, null, out _));
     }
 
+    // A marker that runs the script's code can change what is plain: the serializer looks again.
+    [Fact]
+    public void A_toJSON_installed_while_marking_makes_the_rest_not_plain()
+    {
+        var engine = new Engine();
+        var value = engine.Evaluate("({ a: { x: 1 }, b: { y: 2 } })").AsObject();
+        var first = true;
+
+        var plain = PlainJson.TryStringify(engine, value, null, instance =>
+        {
+            if (first)
+            {
+                first = false;
+                engine.Execute("Object.prototype.toJSON = function () { return 'T'; }");
+            }
+
+            return null;
+        }, out _);
+
+        Assert.False(plain);
+    }
+
     [Theory]
     [InlineData("Object.prototype.toJSON = function () { return 1; }")]
     [InlineData("Array.prototype.toJSON = function () { return 1; }")]
+    [InlineData("Object.setPrototypeOf(Array.prototype, { toJSON: function () { return 1; } })")]
     public void An_inherited_toJSON_makes_nothing_plain(string tamper)
     {
         var engine = new Engine();

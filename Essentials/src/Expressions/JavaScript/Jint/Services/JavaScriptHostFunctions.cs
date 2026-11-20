@@ -140,7 +140,7 @@ internal sealed class JavaScriptHostFunctions
             var values = new JsonElement[arguments.Length];
             for (var index = 0; index < arguments.Length; index++)
                 values[index] = Argument(engine, options, declaration.Name, index, arguments[index]);
-            WarnLossyArguments(declaration.Name, values, context);
+            WarnLossyArguments(engine, declaration.Name, values, context);
 
             JsonElement result;
             try
@@ -170,7 +170,7 @@ internal sealed class JavaScriptHostFunctions
     /// with the nearest value JavaScript holds, and a warning names the function and the argument path, never a value.
     /// The function does not turn the number into a string. One warning per function and set of paths in an evaluation.
     /// </summary>
-    private static void WarnLossyArguments(string function, IReadOnlyList<JsonElement> arguments, JavaScriptHostFunctionContext context)
+    private static void WarnLossyArguments(Engine engine, string function, IReadOnlyList<JsonElement> arguments, JavaScriptHostFunctionContext context)
     {
         var paths = new List<string>();
         for (var index = 0; index < arguments.Count; index++)
@@ -178,6 +178,8 @@ internal sealed class JavaScriptHostFunctions
         if (paths.Count == 0)
             return;
 
+        // A warning stays until the evaluation ends and grows with what the script passes: counted, unlike the walk.
+        using var scriptWork = EvaluationLimits.CountScriptWork(engine);
         var where = string.Join(", ", paths.Distinct(StringComparer.Ordinal));
         // A member path can name keys of the value: the protected form names the arguments only.
         var roots = string.Join(", ", paths.Select(path => path.Split('.')[0]).Distinct(StringComparer.Ordinal));

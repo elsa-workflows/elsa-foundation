@@ -111,14 +111,21 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 var buffer = new ArrayBufferWriter<byte>();
                 // Plain .NET over JSON: no script code runs here, so its memory is not the script's.
                 JsonElement patched;
-                using (EvaluationLimits.ExcludeHostWork(_engine))
+                try
                 {
-                    using (var writer = NewWriter(buffer))
+                    using (EvaluationLimits.ExcludeHostWork(_engine))
                     {
-                        Patch(entry.Element, marked.Root, key, writer, changed, losses, marked.Markers);
-                    }
+                        using (var writer = NewWriter(buffer))
+                        {
+                            Patch(entry.Element, marked.Root, key, writer, changed, losses, marked.Markers);
+                        }
 
-                    patched = JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
+                        patched = JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
+                    }
+                }
+                finally
+                {
+                    Forget(marked.Markers);
                 }
 
                 _bytes += buffer.WrittenCount;
@@ -200,18 +207,25 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             _wroteInfinity = false;
             // Plain .NET over JSON: no script code runs here, so its memory is not the script's.
             JsonElement json;
-            using (EvaluationLimits.ExcludeHostWork(_engine))
+            try
             {
-                using (var writer = NewWriter(buffer))
+                using (EvaluationLimits.ExcludeHostWork(_engine))
                 {
-                    WriteMarked(marked.Root, path, arrayPath: null, writer, losses, marked.Markers);
-                }
+                    using (var writer = NewWriter(buffer))
+                    {
+                        WriteMarked(marked.Root, path, arrayPath: null, writer, losses, marked.Markers);
+                    }
 
-                // The serialized value is returned as is only when nothing in it was replaced: no marker, no loss and no
-                // Infinity, which is written as null even when no lossy entered number has its sign.
-                json = marked.Markers.Count == 0 && losses.Count == 0 && !_wroteInfinity
-                    ? marked.Root
-                    : JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
+                    // The serialized value is returned as is only when nothing in it was replaced: no marker, no loss and
+                    // no Infinity, which is written as null even when no lossy entered number has its sign.
+                    json = marked.Markers.Count == 0 && losses.Count == 0 && !_wroteInfinity
+                        ? marked.Root
+                        : JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
+                }
+            }
+            finally
+            {
+                Forget(marked.Markers);
             }
 
             _bytes += buffer.WrittenCount;
@@ -245,6 +259,11 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 using (EvaluationLimits.ExcludeHostWork(_engine))
                     return (JintResultMaterializer.ParseResult(text, _options), markers);
             }
+            catch
+            {
+                Forget(markers);
+                throw;
+            }
             finally
             {
                 _currentMarkers = outer;
@@ -266,7 +285,12 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             }
 
             // Markers taken before the serializer gave up are not in any text: start again.
-            markers?.Clear();
+            if (markers is not null)
+            {
+                Forget(markers);
+                markers.Clear();
+            }
+
             using (EvaluationLimits.CountScriptWork(_engine))
             {
                 if (markers is not null)
@@ -275,6 +299,13 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     ? JintResultMaterializer.Stringify(_engine, value, InfinityOnlyReplacer())
                     : JintResultMaterializer.Stringify(_engine, value);
             }
+        }
+
+        // A Mark's markers, once written: their origin paths are needed no longer, and every preview makes new ones.
+        private void Forget(Dictionary<string, JsonElement> markers)
+        {
+            foreach (var marker in markers.Keys)
+                _markerPaths.Remove(marker);
         }
 
         // The marker standing for an unchanged entered object, or null to serialize it.

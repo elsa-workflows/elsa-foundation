@@ -40,9 +40,7 @@ internal static class PlainJson
         var intrinsics = engine.Intrinsics;
         var objectPrototype = intrinsics.Object.PrototypeObject;
         var arrayPrototype = intrinsics.Array.PrototypeObject;
-        // An inherited toJSON would run for every object or array.
-        if (objectPrototype.GetOwnProperty(ToJsonKey) != PropertyDescriptor.Undefined ||
-            arrayPrototype.GetOwnProperty(ToJsonKey) != PropertyDescriptor.Undefined)
+        if (!PrototypesArePlain(objectPrototype, arrayPrototype))
             return false;
 
         var writer = new Writer(objectPrototype, arrayPrototype, infinity, marker);
@@ -58,6 +56,13 @@ internal static class PlainJson
                 return false;
         }
     }
+
+    // An inherited toJSON would run for every object or array: none on Object.prototype or Array.prototype, and
+    // Array.prototype inheriting from Object.prototype only (its prototype can be changed; Object.prototype's cannot).
+    private static bool PrototypesArePlain(ObjectInstance objectPrototype, ObjectInstance arrayPrototype) =>
+        objectPrototype.GetOwnProperty(ToJsonKey) == PropertyDescriptor.Undefined &&
+        arrayPrototype.GetOwnProperty(ToJsonKey) == PropertyDescriptor.Undefined &&
+        arrayPrototype.Prototype == objectPrototype;
 
     private enum Outcome
     {
@@ -115,10 +120,18 @@ internal static class PlainJson
                 return Outcome.NotPlain;
             if (instance.GetOwnProperty(ToJsonKey) != PropertyDescriptor.Undefined)
                 return Outcome.NotPlain;
-            if (marker?.Invoke(instance) is { } replaced)
+            if (marker is not null)
             {
-                Quote(replaced, json);
-                return Outcome.Written;
+                var replaced = marker(instance);
+                // The marker can run the script's code (comparing a value that is not plain goes through the engine):
+                // what was plain before it may be no longer.
+                if (!PrototypesArePlain(objectPrototype, arrayPrototype))
+                    return Outcome.NotPlain;
+                if (replaced is not null)
+                {
+                    Quote(replaced, json);
+                    return Outcome.Written;
+                }
             }
 
             if (!_open.Add(instance))
