@@ -20,6 +20,8 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
 {
     private NodeHeartbeat? _beat;       // K1b: the node's heartbeat over this host's Workers, made at the first one
     private (IKernelStore Store, int Placed, bool Part)? _counted;     // a node's host (ForNode): what its start checks
+    private string? _name;              // ForNode: the node, for the heartbeat before any Worker exists
+    private TimeSpan? _lease;           // ForNode: the lease, independent of Workers
     private readonly Dictionary<int, Worker> _workers = [];
     private readonly Func<int, Worker?> _fixed;
     private readonly Worker? _node;
@@ -32,6 +34,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
     {
         _workers = workers.ToDictionary(w => w.Partition);
         _fixed = scope => _workers.GetValueOrDefault(scope);
+        if (_workers.Values.FirstOrDefault() is { } first) (_name, _lease) = (first.Node, first.Lease);
     }
 
     private DurableHost(Worker node) => (_node, _fixed) = (node, _ => null);
@@ -66,6 +69,8 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
             options = options with { OnJournal = options.OnJournal is { } earlier ? moved => { earlier(moved); projection.Nudge(moved); } : projection.Nudge };
         var host = store.OwnedSetsAvailable ? new DurableHost(Worker.ForNode(node, store, type, options)) : new DurableHost(scope => new Worker(node, scope, store, type, options));
         host._counted = (store, partitions, placesPart);
+        host._name = node;
+        host._lease = options.Lease;
         return host;
     }
 
@@ -124,7 +129,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
     private IKernelStore? Store => _counted?.Store ?? Workers.FirstOrDefault()?.Store;
 
     /// <summary>The node's lease, once the store keeps one (<see cref="IKernelStore.NodeLeaseAvailable"/>); null before.</summary>
-    public TimeSpan? NodeLease => Store is { NodeLeaseAvailable: true } && Workers.FirstOrDefault() is { } first ? first.Lease : null;
+    public TimeSpan? NodeLease => Store is { NodeLeaseAvailable: true } ? _lease : null;
 
     /// <summary>
     /// The node's heartbeat over every Worker of this host, its pass gate deciding (<see cref="NodeHeartbeat"/>). It runs
@@ -132,9 +137,9 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
     /// </summary>
     public async ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default)
     {
-        if (NodeLease is not { } lease || Store is not { } store) return null;
+        if (NodeLease is not { } lease || Store is not { } store || _name is not { } name) return null;
         NodeHeartbeat beat;
-        lock (_workers) beat = _beat ??= new NodeHeartbeat(Workers[0].Node, store, Workers, lease, window);
+        lock (_workers) beat = _beat ??= new NodeHeartbeat(name, store, Workers, lease, window);
         return (await beat.BeatAsync(cancellationToken))?.Cluster;
     }
 

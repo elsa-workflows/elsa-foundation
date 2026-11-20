@@ -709,10 +709,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             lock (_turnSync)
             {
                 // A Worker that holds nothing counts only when nothing is on its way back either: no gain in flight, and no
-                // reset's retake (CodeRabbit 5984758539) or take (CodeRabbit 4636945436) in flight for a lease or more. One that
-                // hangs keeps the gate closed, as a hung pass does. One still within the lease leaves the gate open: a retake
-                // must not close the gate it checks at its own start, a fresh node heartbeats and takes, and its other
-                // Workers' takes go on beside it.
+                // reset's retake or take in flight for a lease or more. The take and retake terms are a backstop for a Worker
+                // that passes nothing; a recent pass still opens the gate.
                 var (now, lease) = (_options.Monotonic(), (long)_options.Lease.TotalMilliseconds);
                 var retakeHangs = _retaking && _retakeSet.Count > 0 && now - Volatile.Read(ref _retakeAt) >= lease;
                 var takeHangs = _taking && now - Volatile.Read(ref _takeAt) >= lease;
@@ -758,8 +756,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             await RetakePendingAsync(pending, cancellationToken);
             return;
         }
-        _taking = true;
         Volatile.Write(ref _takeAt, _options.Monotonic());
+        _taking = true;
         Interlocked.Increment(ref _takesStarted);
         if (partitions.Count > 1 && !_store.OwnedSetsAvailable)
         {

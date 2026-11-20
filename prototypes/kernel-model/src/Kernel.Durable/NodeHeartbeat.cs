@@ -72,7 +72,7 @@ public sealed class NodeHeartbeat
         for (var i = 0; i < workers.Length; i++)
         {
             var self = workers[i];
-            self.HeartbeatAnswered(sent[i], answer, partition => workers.Any(w => w != self && w.Claims(partition)));
+            self.HeartbeatAnswered(sent[i], answer, partition => Workers.Any(w => w != self && w.Claims(partition)));
         }
         return answer;
     }

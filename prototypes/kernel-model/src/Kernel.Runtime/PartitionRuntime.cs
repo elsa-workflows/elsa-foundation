@@ -106,7 +106,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// </summary>
     public async Task BalanceAsync(CancellationToken cancellationToken = default)
     {
-        if (_balancing) return;
+        if (_balancing) return;     // a single caller is assumed
         Cluster cluster;
         if (NodeLease is not null)
         {
@@ -140,7 +140,12 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// </summary>
     public async ValueTask<bool> HeartbeatAsync(CancellationToken cancellationToken = default)
     {
-        if (_host is not INodeLeaseHost { NodeLease: not null } host || await host.HeartbeatAsync(window, cancellationToken) is not { } cluster) return false;
+        if (_host is not INodeLeaseHost { NodeLease: not null } host) return false;
+        if (await host.HeartbeatAsync(window, cancellationToken) is not { } cluster)
+        {
+            Volatile.Write(ref _cluster, null);
+            return false;
+        }
         // The free list is the store's; this runtime places its own scopes only (a world that places part of the store's).
         Volatile.Write(ref _cluster, cluster.Free.All(p => p < partitions) ? cluster : cluster with { Free = [.. cluster.Free.Where(p => p < partitions)] });
         return true;
