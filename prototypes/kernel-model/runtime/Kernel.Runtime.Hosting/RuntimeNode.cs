@@ -5,8 +5,14 @@ namespace Kernel.Runtime.Hosting;
 /// <summary>When the loop of a <see cref="RuntimeNode"/> does what.</summary>
 public sealed record LoopOptions
 {
-    /// <summary>A round of the fair share: the node's heartbeat, and the partitions it gives up or asks for.</summary>
+    /// <summary>A round of the fair share: the membership heartbeat, and the partitions it gives up or asks for.</summary>
     public TimeSpan BalanceEvery { get; init; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// K1b: the node lease's heartbeat, on a loop of its own. At least three per lease and at most half the window apart;
+    /// null takes the longest such cadence up to a second. Unused while the store keeps a lease per partition.
+    /// </summary>
+    public TimeSpan? HeartbeatEvery { get; init; }
 
     /// <summary>The nodes heard from within this window count for the fair share. Two rounds or more.</summary>
     public TimeSpan Window { get; init; } = TimeSpan.FromSeconds(3);
@@ -16,14 +22,21 @@ public sealed record LoopOptions
 }
 
 /// <summary>
-/// One node of the built-in runtime, on a clock: a <see cref="PartitionRuntime"/> and the loop that the kernel leaves to
-/// its host. The loop balances every <see cref="LoopOptions.BalanceEvery"/>, runs a pass of every scope it holds when
-/// the last pass asked for one (at once, after a timer's delay, or at the next renewal of its lease), runs one at once
-/// when a hint comes, and tells every held scope to read its inbox every <see cref="LoopOptions.PollInterval"/>. One
-/// loop per node: its passes run one after another, so a scope never has two at once and the workers of the node may
-/// share their trial gate. The loop runs on a scheduler of the node's own that runs one task at a time, as a grain's
-/// does in Orleans: what a pass starts and awaits elsewhere (a background job's continuation) comes back on it, between
-/// the loop's awaits, and never beside them. A worker is a single-threaded state machine.
+/// One node of the built-in runtime, on a clock: a <see cref="PartitionRuntime"/> and the loops that the kernel leaves to
+/// its host. The pass loop runs a pass of every scope it holds when the last pass asked for one (at once, or after a
+/// timer's delay), runs one at once when a hint comes, tells every held scope to read its inbox every
+/// <see cref="LoopOptions.PollInterval"/>, and runs the passes no active scope gives (a Worker whose partitions are all
+/// pending). Its passes run one after another, so a scope never has two at once and the workers of the node may share
+/// their trial gate. The balancing loop runs a round every <see cref="LoopOptions.BalanceEvery"/>, apart from the
+/// passes, so a long round of moves never holds them back beyond the lease. Both run on a scheduler of the node's own
+/// that runs one task at a time: what a pass starts and awaits elsewhere (a background job's continuation) comes back on
+/// it, between the loops' awaits, and never beside them. A worker is a single-threaded state machine.
+/// <para>
+/// K1b: under the node lease a third loop sends the node's heartbeat on its own cadence
+/// (<see cref="LoopOptions.HeartbeatEvery"/>), off that scheduler, never behind a pass or a round: the host's pass gate
+/// decides whether it renews, and any failure is a missed renewal. Its answer renews the Workers' guards at once; the
+/// stand-down it asks for runs at their next pass, which the heartbeat wakes the pass loop for.
+/// </para>
 /// </summary>
 public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 {
@@ -36,6 +49,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly TaskScheduler _scheduler = new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private Task? _loop, _halted;
+    private TimeSpan? _heartbeatEvery;
     private readonly object _halting = new();
     private volatile bool _gone;
 
@@ -54,6 +68,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 
     public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
+        if (host is INodeLeaseHost { NodeLease: { } lease }) _heartbeatEvery = Cadence(lease, _options);
         await _runtime.StartAsync(host, cancellationToken);
         _runtime.Wake.Listen(actor =>
         {
@@ -63,7 +78,64 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             Signal();
         });
         lock (_halting)
-            if (_halted is null) _loop = OnNode(LoopAsync);     // a stop or kill that came first leaves the node unstarted
+            if (_halted is null)     // a stop or kill that came first leaves the node unstarted
+                _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync), _heartbeatEvery is { } every ? Task.Run(() => HeartbeatLoopAsync(every)) : Task.CompletedTask);
+    }
+
+    /// <summary>The heartbeat's cadence: at least three per lease and at most half the window apart, a second at most by default.</summary>
+    public static TimeSpan Cadence(TimeSpan lease, LoopOptions options)
+    {
+        var most = TimeSpan.FromTicks(Math.Min(lease.Ticks / 3, options.Window.Ticks / 2));
+        if (options.HeartbeatEvery is not { } every) return TimeSpan.FromTicks(Math.Min(most.Ticks, TimeSpan.TicksPerSecond));
+        if (every <= TimeSpan.Zero || every > most)
+            throw new ArgumentException($"The heartbeat every {every.TotalMilliseconds} ms must be at most a third of the lease ({lease.TotalMilliseconds} ms) and half the window ({options.Window.TotalMilliseconds} ms).", nameof(options));
+        return every;
+    }
+
+    /// <summary>K1b: the heartbeats sent, and those that renewed.</summary>
+    public (long Sent, long Renewed) Heartbeats => (Interlocked.Read(ref _beats), Interlocked.Read(ref _renewals));
+    private long _beats, _renewals;
+
+    private async Task HeartbeatLoopAsync(TimeSpan every)
+    {
+        var exit = _exit.Token;
+        while (!exit.IsCancellationRequested)
+        {
+            var started = Now;
+            try
+            {
+                Interlocked.Increment(ref _beats);
+                if (await _runtime.HeartbeatAsync(exit)) Interlocked.Increment(ref _renewals);
+                Signal();       // an answer may have asked a Worker for a pass: its stand-down, release or retake
+            }
+            catch (OperationCanceledException) when (exit.IsCancellationRequested) { break; }
+            catch (Exception e)
+            {
+                Interlocked.Increment(ref _errors);     // the host counts a failed heartbeat as missed; anything else is a bug
+                LastError = e;
+            }
+            try { await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, (long)every.TotalMilliseconds - (Now - started))), exit); }
+            catch (OperationCanceledException) { break; }
+        }
+    }
+
+    private async Task BalanceLoopAsync()
+    {
+        var (exit, kill) = (_exit.Token, _kill.Token);
+        while (!exit.IsCancellationRequested)
+        {
+            var started = Now;
+            try { await _runtime.BalanceAsync(kill); }
+            catch (OperationCanceledException) when (kill.IsCancellationRequested) { break; }
+            catch (Exception e)
+            {
+                Interlocked.Increment(ref _errors);
+                LastError = e;
+            }
+            Signal();       // a scope taken gets its first pass at once
+            try { await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, (long)_options.BalanceEvery.TotalMilliseconds - (Now - started))), exit); }
+            catch (OperationCanceledException) { break; }
+        }
     }
 
     /// <summary>
@@ -135,16 +207,12 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     {
         var (exit, kill) = (_exit.Token, _kill.Token);
         var partitions = _due.Length;
-        long balanceAt = 0, pollAt = Now + (long)_options.PollInterval.TotalMilliseconds;
+        long pollAt = Now + (long)_options.PollInterval.TotalMilliseconds;
         while (!exit.IsCancellationRequested)
         {
             try
             {
-                if (Now >= balanceAt)
-                {
-                    balanceAt = Now + (long)_options.BalanceEvery.TotalMilliseconds;
-                    await _runtime.BalanceAsync(kill);
-                }
+                await _runtime.NodePassAsync(kill);     // K1b: the passes no active scope gives; nothing under the per-partition lease
                 if (Now >= pollAt)
                 {
                     pollAt = Now + (long)_options.PollInterval.TotalMilliseconds;
@@ -184,11 +252,15 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 try { await Task.Delay(TimeSpan.FromMilliseconds(100), exit); }      // no spin on a bug that throws every time
                 catch (OperationCanceledException) { break; }
             }
-            var wait = Math.Min(balanceAt, pollAt);
+            var wait = pollAt;
             for (var scope = 0; scope < partitions; scope++)
                 if (_runtime.Owns(scope)) wait = Math.Min(wait, Volatile.Read(ref _due[scope]));
             var ms = Math.Clamp(wait - Now, 0, int.MaxValue);
-            if (ms == 0) continue;
+            if (ms == 0)
+            {
+                await Task.Yield();     // a Zero-delay pass must not hold this exclusive scheduler: BalanceLoopAsync runs on it
+                continue;
+            }
             try { await _signal.WaitAsync(TimeSpan.FromMilliseconds(ms), exit); }
             catch (OperationCanceledException) { break; }
         }
