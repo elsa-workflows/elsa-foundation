@@ -39,6 +39,24 @@ public sealed class RunJavaScriptProtectedFailureTests
     }
 
     [Fact]
+    public async Task A_caught_refusal_is_the_cause_even_when_a_lossy_result_is_refused()
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteAsync(
+            "try { variables.cache; } catch (e) { } return { id: variables.order.id };", new FakeSession()));
+
+        Assert.Equal(FakeSession.Refusal, exception.Message);
+    }
+
+    [Fact]
+    public async Task A_caught_refusal_is_the_cause_even_when_a_write_is_refused()
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteAsync(
+            "try { variables.cache; } catch (e) { } variables.undeclared = 1; return 1;", new FakeSession()));
+
+        Assert.Equal(FakeSession.Refusal, exception.Message);
+    }
+
+    [Fact]
     public async Task A_script_error_after_a_protected_read_is_withheld()
     {
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteAsync(
@@ -95,7 +113,7 @@ public sealed class RunJavaScriptProtectedFailureTests
             if (target == Cache)
                 throw new InvalidOperationException(Refusal);
             HasReadProtectedValue = true;
-            return JsonNode.Parse("""{"price":10.5}""");
+            return JsonNode.Parse("""{"price":10.5,"id":9007199254740993}""");
         }
 
         public void WriteJson(StepVariableTarget target, JsonNode? value) { }
