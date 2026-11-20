@@ -151,12 +151,32 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
             JavaScriptOutcomeSelectionState.Empty => OutcomeSelection.Empty,
             _ => OutcomeSelection.Unspecified
         };
+
+        // Spec 1229 FR-006: an outcome name can come from a protected value the script read or received
+        // (`complete(x, variables.customer.tier)`). The projection's refusal of a name outside the outcome set quotes it, so
+        // under protection the selection is checked here, against the same set (Done plus PossibleOutcomes), and refused
+        // without naming it.
+        if ((context.HasProtectedInputs || session?.HasReadProtectedValue == true) && !IsValidSelection(evaluation))
+            return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(JavaScriptCompletionException.FaultCode,
+                "The script selected an outcome that is not in this node's outcome set, or Done together with another outcome. " +
+                "The names are withheld because a value it read is protected."));
         return ActivityTransition.Complete(new RunJavaScriptResult(evaluation.Value), selection);
     }
 
     // A read the session refused is the cause of a failed step, even when the script caught the error and failed
     // otherwise (spec 1222 FR-017a). Its message is the session's own and names no value; nothing the script threw is
     // attached, since that could quote a protected value it read.
+    private bool IsValidSelection(JavaScriptScriptEvaluationResult evaluation)
+    {
+        if (evaluation.SelectionState != JavaScriptOutcomeSelectionState.Named)
+            return true;
+        var names = evaluation.OutcomeNames;
+        if (names.Count > 1 && names.Contains(OutcomeSelection.DefaultOutcome, StringComparer.Ordinal))
+            return false;
+        return names.All(name => StringComparer.Ordinal.Equals(name, OutcomeSelection.DefaultOutcome) ||
+                                 PossibleOutcomes?.Contains(name, StringComparer.Ordinal) == true);
+    }
+
     private static void ThrowIfRefused(StepScriptVariables? variables)
     {
         if (variables?.Refusal is { } refusal)

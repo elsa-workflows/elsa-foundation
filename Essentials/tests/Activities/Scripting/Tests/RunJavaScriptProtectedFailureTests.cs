@@ -56,6 +56,25 @@ public sealed class RunJavaScriptProtectedFailureTests
         Assert.Equal(FakeSession.Refusal, exception.Message);
     }
 
+    [Theory]
+    [InlineData("return complete(1, variables.order.tier);", false)]
+    [InlineData("return complete(1, ['Gold', 'Done']);", false)]
+    [InlineData("return complete(1, 'Gold');", true)]
+    public async Task An_outcome_selection_after_a_protected_read_is_checked_without_naming_it(string script, bool valid)
+    {
+        var transition = await ExecuteAsync("const t = variables.order.price; " + script, new FakeSession(), possibleOutcomes: ["Gold"]);
+
+        if (valid)
+            Assert.False(transition is IActivityFaultTransition);
+        else
+        {
+            var fault = Assert.IsAssignableFrom<IActivityFaultTransition>(transition).Fault;
+            Assert.Equal("VF-ACT-006", fault.Code);
+            Assert.DoesNotContain("Platinum", fault.Message);
+            Assert.Contains("withheld", fault.Message);
+        }
+    }
+
     [Fact]
     public async Task A_script_error_after_a_protected_read_is_withheld()
     {
@@ -75,14 +94,14 @@ public sealed class RunJavaScriptProtectedFailureTests
         Assert.Contains("withheld", exception.Message);
     }
 
-    private static async Task<ActivityTransition> ExecuteAsync(string script, FakeSession session, bool protectedInputs = false)
+    private static async Task<ActivityTransition> ExecuteAsync(string script, FakeSession session, bool protectedInputs = false, string[]? possibleOutcomes = null)
     {
         var services = new ServiceCollection();
         new JintFeature().ConfigureServices(services);
         new JavaScriptFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
-        var activity = new RunJavaScript(scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>()) { Script = script };
+        var activity = new RunJavaScript(scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>()) { Script = script, PossibleOutcomes = possibleOutcomes };
         var context = new SimpleActivityExecutionContext(activity, CancellationToken.None, invocationId: "script-1", executableNodeId: "script-node")
             .ToActivityExecutionContext()
             .WithVariables(session)
@@ -113,7 +132,7 @@ public sealed class RunJavaScriptProtectedFailureTests
             if (target == Cache)
                 throw new InvalidOperationException(Refusal);
             HasReadProtectedValue = true;
-            return JsonNode.Parse("""{"price":10.5,"id":9007199254740993}""");
+            return JsonNode.Parse("""{"price":10.5,"id":9007199254740993,"tier":"Platinum"}""");
         }
 
         public void WriteJson(StepVariableTarget target, JsonNode? value) { }
