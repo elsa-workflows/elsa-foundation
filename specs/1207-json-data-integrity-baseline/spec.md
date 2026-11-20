@@ -21,7 +21,7 @@ baseline that transforms no data, as ADR 0091 records it.
 
 | ADR | What this spec takes from it | Merged |
 |---|---|---|
-| ADR 0091 (A-5, [#3408](https://github.com/elsa-workflows/elsa-foundation/pull/3408)) | Decisions 1–7: the baseline, no data transformation, scoped conversion contracts for user types, raw passthrough and the canonical form, one encoder, JSON at every boundary, no host-option changes with staged enforcement, the deviation register, and the explicit hash-input decision decision 1 allows (FR-021); decision 8 only as far as the serializer keeps nulls | `771ba6679f` (20 Nov) |
+| ADR 0091 (A-5, [#3408](https://github.com/elsa-workflows/elsa-foundation/pull/3408)) | Decisions 1–7: the baseline, no data transformation, scoped conversion contracts for user types, raw passthrough and the canonical form, one encoder, JSON at every boundary, no host-option changes with staged enforcement, the deviation register, and the explicit hash-input decision decision 1 allows (FR-021); decision 8 only as far as the serializer keeps nulls | `771ba6679f` (20 Nov); hash-input amendment `da362455f9` (20 Nov) |
 | ADR 0046 amendment (A-1, [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)), *Adapter rules* and *Dates* | Member matching at activity inputs and outputs, no text-to-number parsing, no narrowing, and the date rule: an offset, or an explicit interpretation, never implicit UTC or server-local time; the Elsa 3 converter's literal rule (FR-016) | 16 Nov |
 
 **Specs this one meets**, merged or in implementation on the initiative branch:
