@@ -88,6 +88,10 @@ internal static class JavaScriptValueWrites
     /// the run-time warning channel, which records it on the activity execution, and to the log. It names the paths and
     /// why, never a value (spec 1229 FR-006).
     /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex HostFunctionCall = new(
+        @"^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\(\)\[\d+\]",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
     public static void WarnLossyReads(
         IScriptValueEvaluation values,
         IReadOnlyCollection<JavaScriptPrecisionLoss> written,
@@ -102,7 +106,8 @@ internal static class JavaScriptValueWrites
         var read = values.LossyNumbers.Where(number => !writtenPaths.Contains(number.Path)).ToArray();
         if (read.Length == 0)
             return;
-        var paths = string.Join(", ", read.Select(number => number.Path).Distinct(StringComparer.Ordinal));
+        // Each host-function call's result has a path of its own (acme.lookup()[3]); reported once per function.
+        var paths = string.Join(", ", read.Select(number => HostFunctionCall.Replace(number.Path, "$1()")).Distinct(StringComparer.Ordinal));
         var roots = string.Join(", ", read.Select(number => ValuePaths.Root(number.Path)).Distinct(StringComparer.Ordinal));
         var integers = read.Any(number => number.IsInteger);
         var decimals = read.Any(number => !number.IsInteger);

@@ -143,7 +143,9 @@ internal sealed class JavaScriptHostFunctions
             {
                 result = declaration.Implementation(new JavaScriptHostFunctionCall(values, context.Variables, cancellationToken));
             }
-            catch (Exception exception) when (exception is not (OperationCanceledException or JavaScriptException or OutOfMemoryException))
+            // An engine limit reached inside the function (reading a variable runs the engine) stops the evaluation; a
+            // script cannot catch it as the function's error.
+            catch (Exception exception) when (exception is not (OperationCanceledException or JintException or TimeoutException or OutOfMemoryException))
             {
                 throw new JavaScriptException(engine.Intrinsics.Error, $"{declaration.Name}: {exception.Message}");
             }

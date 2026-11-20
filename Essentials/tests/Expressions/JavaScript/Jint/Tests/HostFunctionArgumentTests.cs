@@ -106,7 +106,7 @@ public sealed class HostFunctionArgumentTests
         var (_, warnings) = await RunAsync("var x = acme.lookup('a').n * 2; variables.order = acme.lookup('b'); return x > 0 ? 1 : 0;");
 
         Assert.Contains(warnings.Warnings, warning => warning.Code == JavaScriptValueDiagnostics.PrecisionLossRead &&
-                                                     warning.Details!["paths"].Contains("acme.lookup()[1]", StringComparison.Ordinal));
+                                                     warning.Details!["paths"].Contains("acme.lookup()", StringComparison.Ordinal));
     }
 
     // A blind write is the script's value: the function's read records no session read the script never made.
@@ -176,6 +176,38 @@ public sealed class HostFunctionArgumentTests
         Assert.Contains("\"n\":5", session.Written!.Value.GetRawText(), StringComparison.Ordinal);
     }
 
+    // Many calls of one function report it once, not once per call.
+    [Fact]
+    public async Task Lossy_results_of_many_calls_report_the_function_once()
+    {
+        var (_, warnings) = await RunAsync("var s = 0; for (var i = 0; i < 50; i++) s += acme.big() > 0 ? 1 : 0; return s;");
+
+        var warning = Assert.Single(warnings.Warnings, warning => warning.Code == JavaScriptValueDiagnostics.PrecisionLossRead);
+        Assert.Equal("acme.big()", warning.Details!["paths"]);
+    }
+
+    // The evaluation's limits count across host-function calls, which call back into the engine; a script cannot catch
+    // a limit as the function's error.
+    [Theory]
+    [InlineData("while (true) acme.echo(1);")]
+    [InlineData("while (true) { try { acme.readOrder(); } catch (e) { } }")]
+    public async Task Statement_limit_counts_across_host_function_calls(string source)
+    {
+        await Assert.ThrowsAsync<global::Jint.Runtime.StatementsCountOverflowException>(() =>
+            RunAsync(source, configure: feature => { feature.MaxStatements = 1_000; feature.ExecutionTimeout = null; }));
+    }
+
+    [Fact]
+    public async Task Timeout_counts_across_host_function_calls()
+    {
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            RunAsync("variables.order.price = 1; while (true) acme.readOrder();", configure: feature =>
+            {
+                feature.ExecutionTimeout = TimeSpan.FromMilliseconds(200);
+                feature.MaxStatements = null;
+            }));
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {
@@ -184,7 +216,8 @@ public sealed class HostFunctionArgumentTests
         Assert.Equal(10.5, result!.Value.GetDouble());
     }
 
-    private static async Task<(JsonElement? Result, ExecutionWarningCollector Warnings)> RunAsync(string source, bool protectedRead = false, Session? session = null)
+    private static async Task<(JsonElement? Result, ExecutionWarningCollector Warnings)> RunAsync(
+        string source, bool protectedRead = false, Session? session = null, Action<JintFeature>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.echo", call => call.Arguments[0].Clone()));
@@ -203,7 +236,9 @@ public sealed class HostFunctionArgumentTests
             "acme.readOrder",
             call => call.Variables!.Read("order").Value,
             ReadsVariables: true));
-        new JintFeature().ConfigureServices(services);
+        var feature = new JintFeature();
+        configure?.Invoke(feature);
+        feature.ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         var warnings = new ExecutionWarningCollector();
