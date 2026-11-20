@@ -33,8 +33,10 @@ only when `false` (non-nullable), since most workflow inputs are nullable.
 
 ## Undefined policy at evaluation (no new pinned field)
 
-The JavaScript evaluator receives the executable's pinned `ValuePolicies.UndefinedAsNull` with each evaluation (the
-caller already holds the executable), and passes it to S-8's value bridge writer. No per-binding copy is pinned: the
+The JavaScript evaluator receives the executable's pinned `ValuePolicies.UndefinedAsNull` with each evaluation and
+passes it to S-8's value bridge writer. Bindings get it from the input materializer, which holds the executable;
+`Run JavaScript` gets it from its `ActivityExecutionContext`, on which the runtime puts the executable's value
+policies. No per-binding copy is pinned: the
 workflow-level value is already in the hash, and a second copy would only have to agree with it.
 
 ## Admission (state transition)

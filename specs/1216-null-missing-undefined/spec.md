@@ -326,15 +326,16 @@ input left unbound, and one workflow input supplied as `null`. After resume the 
   requiredness is declared, a workflow input's nullability comes from its type (FR-001a). A workflow input's
   nullability MUST be pinned in the executable's input contract and its hash (today only requiredness and the
   default are).
-- **FR-006**: An omitted member MUST take its declared default; an optional member without one MUST materialize as
-  `null` when nullable, and otherwise as its type's default. A non-nullable type without a type default (FR-001b:
+- **FR-006**: An omitted member MUST take its declared default; an optional member without one MUST read `null` when
+  nullable, and otherwise its type's default. A workflow input is completed at admission (`ExplicitNull` or the type
+  default); an omitted nullable activity input stays `Absent`, which the activity reads as `null`. A non-nullable type without a type default (FR-001b:
   dates, times, `TimeSpan`, `Guid`, or a non-nullable `string` on a .NET activity) has none to give: such an optional
   member needs a declared default, or publication refuses it (`VF-ACT-003`). Today publication pins the CLR zero
   value for an omitted optional value-type activity input (`0001-01-01` for a `DateTime`); S-2 replaces that with the
   type default of FR-001b.
 - **FR-007**: An omitted required activity input MUST fail publication (`VF-ACT-003`).
 - **FR-034**: A member declared both required and with a default (an activity input, an authored activity
-  definition's input, a workflow input) MUST fail publication with `VF-ACT-013`, naming the member and saying to set
+  definition's input, a workflow input) MUST fail publication with `VF-ACT-014`, naming the member and saying to set
   *Required* off, because a required member always receives a value and its default could never be used (Q9). Built-in
   activity inputs declared that way are fixed at their source: declared optional. Where Studio lets an author set a
   default (the activity definition contract editor), setting a default turns *Required* off.
@@ -487,7 +488,7 @@ the coordinator's review. All are accepted. The requirements follow the answers.
   `SetOutput` too) and activity definition contracts; a .NET activity follows its C# declaration. Rejected: a per-member flag (Studio
   stores `false` for it on every new input and output today, so trusting it would refuse `null` even for a `String`
   output).
-- **Q9 — A member declared both required and with a default.** **Accepted: refuse at publication** (`VF-ACT-013`):
+- **Q9 — A member declared both required and with a default.** **Accepted: refuse at publication** (`VF-ACT-014`):
   "a default is set but *Required* is on; set *Required* off". A required member always receives a value, so its
   default could never be used. In Studio, setting a default turns *Required* off. Built-in activity inputs declared
   that way become optional (FR-034). This is the strict form of ADR 0045 §2 (a declared default never satisfies a

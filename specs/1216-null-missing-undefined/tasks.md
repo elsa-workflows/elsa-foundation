@@ -45,15 +45,19 @@ red without the change. xUnit only.
 - [ ] T007 Add `IsNullable` to `WorkflowDeclaredInput` in `WorkflowExecutableInputContract.cs` and fill it in
   `WorkflowExecutableCompiler.BuildInputContract` from the input's type (T004, FR-001a; R-4). Publication refuses an
   optional, non-nullable workflow input whose type has no non-null default and that declares no default
-  (`VF-ACT-003`, FR-006)
+  (`VF-ACT-003`, FR-006). The message for a workflow input says to turn *Required* on or declare a default (through
+  the API or JSON), because Studio's inputs table has no default column
 - [ ] T007a Activity inputs (FR-006, FR-001b): in `RuntimeInputBindingCompiler.CompileOmitted`, replace
   `TryCreateClrDefault` (any value type's CLR zero value) with `NullPolicyDefaults.TryGetTypeDefault(Type)`, so an
-  omitted optional enum or numeric input keeps its zero value and an omitted
+  omitted optional enum or numeric input keeps its zero value, an omitted nullable input stays `Absent` (the activity
+  receives `null`), and an omitted
   optional date, time, `TimeSpan` or `Guid` input without a declared default fails `VF-ACT-003`. Audit built-in
   activities for such inputs (`Delay.Duration` declares a default and is unaffected), declare a default where one is
   meant, and test
-- [ ] T008 Hand the executable's pinned `UndefinedAsNull` to every JavaScript evaluation (binding and `Run
-  JavaScript`) from the callers that already hold the executable; no per-binding field (R-2)
+- [ ] T008 Hand the executable's pinned `UndefinedAsNull` to every JavaScript evaluation; no per-binding field (R-2).
+  Bindings: the input materializer holds the executable. `Run JavaScript`: the runtime puts the executable's value
+  policies on the `ActivityExecutionContext` it builds, and the activity passes them with its evaluation request,
+  which also covers FR-030 writes made in that script session
 - [ ] T008a Expose `strategyOptions.nullHandling` through the workflow definition API (read and write) and the
   exported JSON, with an API round-trip test (FR-024)
 - [ ] T009 Write `valuePolicies` in `WorkflowExecutableHasher.WriteBehavioralPayload` only when a policy is on, and an
@@ -68,10 +72,12 @@ red without the change. xUnit only.
 - [ ] T010 [US1] Build the intrinsic `value` definition with the target's nullability in
   `ExecutableNodeCompiler.CompileIntrinsicNode` (R-5, FR-001a: by the target's type); keep `name` and `outcome`
   non-nullable
-- [ ] T010a [US1] Run time: in `WorkflowIntrinsicExecutor`, check a `null` from a `Set` / `SetOutput` expression
-  against the target's nullability: `VF-ACT-004` for a non-nullable target, the type default under `DefaultOnNull`
-  (R-6), recording `VF-NULL-001` on the intrinsic's execution like an activity input. Test: the expression `null`
-  into an `Int32` variable faults today's silent write
+- [ ] T010a [US1] Run time: in `WorkflowIntrinsicExecutor`, check a `null` from every `Set` / `SetOutput` source
+  (literal, variable, request member, expression) against the target's nullability before it is written:
+  `VF-ACT-004` for a non-nullable target, the type default under `DefaultOnNull` (R-6), recording `VF-NULL-001` on the
+  intrinsic's execution like an activity input. Today `ValidateAssignmentPayload` skips anything not `Present`. Tests:
+  a literal `null`, a variable holding `null` and the expression `null` into an `Int32` variable, with and without the
+  policy
 - [ ] T011 [US1] Tests in `Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`: null
   literal into a nullable variable and a nullable output publishes; into an `Int32` variable fails with `VF-ACT-004`
 - [ ] T012 [US1] Run test: the variable holds `ExplicitNull` and a workflow output persists an explicit JSON `null`
@@ -87,12 +93,14 @@ red without the change. xUnit only.
   default (`NullPolicyDefaults`); refuse an explicit `null` for a non-nullable input with
   `runtime.input.null-not-allowed`; accept an explicit `null` for a nullable input without running the type
   conversion, and leave that conversion as it is (S-9 owns it). In `WorkflowStartDispatcher.ApplyInputContract`, and
-  in the early checks of `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow`, substitute the type default for
-  such a `null` before validating when the pinned `DefaultOnNull` is on (no separate record, FR-013). One shared
-  helper does the substitution; the early checks call it only because they refuse
-  before their own side effects (#3731), so all three give the same answer
+  in the early checks of `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow` and in Design's
+  `DispatchPinSource` (which validates a child workflow's pinned inputs at publication), substitute the type default
+  for such a `null` before validating when the pinned `DefaultOnNull` is on (no separate record, FR-013). One shared
+  helper does the substitution, so all four give the same answer; the early checks exist because they refuse before
+  their own side effects (#3731). Known-inputs mode (`ValidateKnownInputs`) applies the same `null` refusal and
+  substitution to the members it is given, and completes nothing
 - [ ] T013a [US2] Q9 (FR-034): publication refuses a member declared both required and with a default with
-  `VF-ACT-013` (activity inputs, authored activity definition inputs, workflow inputs); remove the validator's
+  `VF-ACT-014` (activity inputs, authored activity definition inputs, workflow inputs); remove the validator's
   `!DefaultValue.HasValue` exemption, which can then never apply. Audit built-in activity descriptors for inputs
   declared that way, declare them optional, and test
 - [ ] T014 [US2] Check that `RuntimeWorkflowStateSeed.BuildSeedChanges` stores a completed JSON `null` as an explicit
@@ -143,8 +151,10 @@ input, and one workflow input supplied as `null`.
 - [ ] T023 [US4] Under `UndefinedAsNull`, an `undefined` binding result materializes as `null` in
   `JintPortableJavaScriptEvaluator` for both binding forms; without it the ADR 0083 error stays
 - [ ] T024 [US4] `Run JavaScript` with a bound result (R-8): refuse a body with no `return` statement at publication
-  (`VF-UNDEF-001`, from the publish-time JavaScript parse); never refuse a binding for lacking one; fault the step when
-  a bound result is `undefined` at run time, `ExplicitNull` under the policy; an unbound result writes nothing
+  (`VF-UNDEF-001`, from the publish-time JavaScript parse, where the output binding is known); never refuse a binding
+  for lacking one. At run time the activity's result carries "no value" (a top-level `undefined`) distinct from JSON
+  `null`; the runtime step that writes the result to its bound target faults on "no value" with `VF-UNDEF-001`, or
+  writes `ExplicitNull` under the policy; an unbound result writes nothing
 - [ ] T025 [US4] `undefined` assigned to a whole variable (FR-030, Q7): the bridge's change report marks it; the step
   faults with `VF-UNDEF-001` naming the variable, or writes `ExplicitNull` under the policy. A member set to
   `undefined` follows T022. Test `variables.discount = order.discount` with no `order.discount` as well. If S-7

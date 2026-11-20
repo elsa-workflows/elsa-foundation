@@ -89,7 +89,7 @@ Plan decisions are numbered P-n, apart from the board's D-n.
 | P-14 | Studio | Q6. No controls: engineers set the policies through the converter option or the definition API, and the documentation explains them. Warnings show through the existing activity execution warnings. |
 | P-9 | Converter option | R-9, Q4. `Elsa3MappingOptions.ApplyElsa3NullPolicies`, default `true`. |
 | P-10 | Computed read miss | R-10. Built by S-4 (`VF-READ-001`); no work here. |
-| P-15 | Required with a default | Q9, FR-034. Publication refuses a member declared both required and with a default (`VF-ACT-013`); Studio's contract editor turns *Required* off when a default is set; built-in inputs declared that way become optional. |
+| P-15 | Required with a default | Q9, FR-034. Publication refuses a member declared both required and with a default (`VF-ACT-014`); Studio's contract editor turns *Required* off when a default is set; built-in inputs declared that way become optional. |
 | P-12 | Inputs that cannot hold null | R-12, Q5. `VF-ACT-004` under any policy; audit built-in activities. |
 | P-11 | Diagnostic codes | [contracts/null-policies.md](contracts/null-policies.md). |
 
