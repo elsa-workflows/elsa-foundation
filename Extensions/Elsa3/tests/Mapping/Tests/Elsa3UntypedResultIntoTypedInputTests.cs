@@ -93,6 +93,19 @@ public sealed class Elsa3UntypedResultIntoTypedInputTests
     }
 
     [Fact]
+    public async Task A_typed_result_captured_into_an_untyped_variable_is_not_checked()
+    {
+        // ReadLine's result is a string in Elsa 3 and Elsa 4; the Object variable carries it as it is.
+        var root = Sequence("root",
+            Activity("read", "Elsa.ReadLine", ("result", Captured("line"))),
+            Activity("write", "Elsa.WriteLine", ("text", Captured("line"))));
+
+        var result = await ConvertAsync(root, new Elsa3Variable { Id = "line", Name = "line", TypeName = "Object" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Fact]
     public async Task A_for_index_read_into_a_string_input_is_refused()
     {
         // Elsa 3 wrote "0"; Elsa 4's index is an Int32, which has no conversion into text.
@@ -113,7 +126,7 @@ public sealed class Elsa3UntypedResultIntoTypedInputTests
 
         var result = await ConvertAsync(Sequence("root", loop), new Elsa3Variable { Id = "i", Name = "i", TypeName = "Object" });
 
-        Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput);
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
     [Theory]

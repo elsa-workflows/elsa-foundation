@@ -66,6 +66,7 @@ public sealed class Elsa3FlowchartValidationTests
         invoices.CustomProperties = new Elsa3ActivityCustomProperties { CanStartWorkflow = true };
         var orders = Activity("orders", "Elsa.HttpEndpoint", ("path", Literal("/orders")));
         orders.CustomProperties = new Elsa3ActivityCustomProperties { CanStartWorkflow = true };
+        // A dynamic input: request data into a typed one is refused (#4898).
         var chart = Flowchart("root", orders, Write("handle-orders"), invoices,
             Activity("handle-invoices", "Elsa.PublishEvent", ("eventName", Literal("invoice")), ("payload", Captured("invoice-body"))));
         chart.Connections = [Connect("orders", "Done", "handle-orders"), Connect("invoices", "Done", "handle-invoices")];

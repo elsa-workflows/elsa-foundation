@@ -174,7 +174,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 // A loop value read outside its loop is refused below for that reason first.
                 var heldLoop = producerMatches.FirstOrDefault(IsLoopVariable);
                 if (property.InputContract is not null && (heldLoop is null || IsCarriedValue(heldLoop, property)) &&
-                    CapturedResultRefusal(properties, variableMatches[0], producerMatches, property) is { } captured)
+                    CapturedResultRefusal(properties, inventory, variableMatches[0], producerMatches, property) is { } captured)
                 {
                     diagnostics.Add(CreateDiagnostic(
                         input,
@@ -1141,11 +1141,13 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
     /// <summary>
     /// The same check for an untyped workflow variable an activity captures its result into (#4898): the read gets
-    /// whatever the producer wrote, as Elsa 3 coerced it into the input. The first refused producer refuses the read. A
-    /// typed variable, or one only Set Variable writes, is not an untyped result and is not checked here.
+    /// whatever the producer wrote, as Elsa 3 coerced it into the input. Only a producer whose own output is untyped (or
+    /// a For loop's index) is checked: a typed output keeps its kind through the variable. The first refused producer
+    /// refuses the read. A typed variable, or one only Set Variable writes, is not an untyped result and is not checked.
     /// </summary>
     private static (string Message, string Guidance)? CapturedResultRefusal(
         IReadOnlyList<ActivityProperty> properties,
+        Elsa3MemoryReferenceInventory inventory,
         Elsa3Variable variable,
         IEnumerable<Elsa3MemoryOccurrence> producers,
         ActivityProperty consumer)
@@ -1153,9 +1155,21 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         if (variable.IsArray || string.IsNullOrWhiteSpace(variable.TypeName) || !IsUntypedName(SimpleName(variable.TypeName)))
             return null;
         return producers
+            .Where(producer => IsForLoop(properties, producer) || inventory.PropertyContracts.FirstOrDefault(contract =>
+                contract.Direction == Elsa3PropertyDirection.Output &&
+                contract.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal) &&
+                contract.StablePropertyKey.Equals(producer.StablePropertyKey, StringComparison.Ordinal)) is not { } contract ||
+                IsUntyped(contract.Type, SimpleName(contract.Type.Alias)))
             .Select(producer => ResultRefusal(properties, producer, consumer))
             .FirstOrDefault(refusal => refusal is not null);
     }
+
+    private static string? ProducerActivityType(IReadOnlyList<ActivityProperty> properties, Elsa3MemoryOccurrence producer) =>
+        properties.FirstOrDefault(property => property.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal))
+            ?.Activity.Type;
+
+    private static bool IsForLoop(IReadOnlyList<ActivityProperty> properties, Elsa3MemoryOccurrence producer) =>
+        ProducerActivityType(properties, producer) == "Elsa.For";
 
     private static (string Message, string Guidance)? ResultRefusal(
         IReadOnlyList<ActivityProperty> properties,
@@ -1167,9 +1181,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             Elsa3ScriptResultKinds.ScalarTarget(SimpleName(target.Alias)) is not { } scalar)
             return null;
 
-        var producerType = properties
-            .FirstOrDefault(property => property.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal))
-            ?.Activity.Type;
+        var producerType = ProducerActivityType(properties, producer);
         var reads = $"Input '{consumer.PropertyName}' ({target.Alias}) of activity '{consumer.ActivityNodeId}' reads";
 
         if (producerType == "Elsa.RunJavaScript")
@@ -1187,14 +1199,14 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 Elsa3ScriptResultKinds.Guidance(scalar));
         }
 
-        // A For loop's current value is its index: an Int32 in Elsa 4, which converts only into an Int32, an Int64 or a
-        // Decimal input (safe widening). Elsa 3 converted it into anything, text included.
-        if (producerType == "Elsa.For" || producer.StablePropertyKey == "index")
+        // A For loop's current value is its index: an Int32 in Elsa 4, which widens safely only into an Int32, an Int64 or
+        // a Decimal input. Elsa 3 converted it into anything, text included.
+        if (producerType == "Elsa.For")
         {
             if (SimpleName(target.Alias) is "Int32" or "int" or "Int64" or "long" or "Decimal" or "decimal")
                 return null;
             return ($"{reads} the current index of loop '{producer.ActivityNodeId}', an Int32 in Elsa 4. Elsa 3 converted it " +
-                    $"into any input; Elsa 4 converts an Int32 only into an Int32, Int64 or Decimal input, so the read would fail at run time.",
+                    $"into any input; Elsa 4 widens an Int32 safely only into an Int32, Int64 or Decimal input, so the read could fail at run time.",
                 Elsa3ScriptResultKinds.ReadGuidance(scalar));
         }
 
