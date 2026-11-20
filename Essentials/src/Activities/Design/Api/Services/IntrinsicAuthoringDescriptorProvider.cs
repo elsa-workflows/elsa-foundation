@@ -49,7 +49,7 @@ public sealed class IntrinsicAuthoringDescriptorProvider : IBuiltInAuthoringDesc
     private const string VariableKey = "variable";
 
     private const string PrimitivesCategory = "Primitives";
-    private const string AnyType = "Elsa.Any";
+    private const string AnyType = TypeAliasConvention.AnyAlias;
     private const string StringType = "String";
 
     public IReadOnlyCollection<ActivityAuthoringDescriptorView> GetDescriptors() =>

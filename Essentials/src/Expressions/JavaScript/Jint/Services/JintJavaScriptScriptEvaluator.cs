@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Jint.Native;
@@ -7,12 +9,17 @@ using Jint.Native.Object;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime.Interop;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services;
 
 /// <summary>Executes transient script-activity programs in the same closed value world as pure bindings.</summary>
-internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> featureOptions) : IJavaScriptScriptEvaluator
+internal sealed class JintJavaScriptScriptEvaluator(
+    IOptions<FeatureOptions> featureOptions,
+    IScriptValueBridge valueBridge,
+    IJavaScriptPrecisionPolicy precisionPolicy,
+    ILogger<JintJavaScriptScriptEvaluator>? logger = null) : IJavaScriptScriptEvaluator
 {
     public ValueTask<JavaScriptScriptEvaluationResult> EvaluateAsync(JavaScriptScriptEvaluationRequest request)
     {
@@ -21,20 +28,57 @@ internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> fea
 
         var options = featureOptions.Value;
         var engine = IsolatedJintEngine.Create(options, request.CancellationToken);
-        IsolatedJintEngine.SetReadOnlyArgs(engine, request.Arguments, options);
+        using var values = valueBridge.Begin(engine);
+        IsolatedJintEngine.SetArgs(engine, values, request.Arguments, options);
+        // Spec 1222 FR-033: the body reads and writes the step's variables through its session; every read is recorded
+        // there, literal or computed, so nothing is pinned into the engine.
+        var variables = request.Variables is { } session
+            ? IsolatedJintEngine.SetVariables(engine, values, NoPinnedValues, session, options)
+            : null;
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
 
         var returned = engine.Evaluate(PreparedJavaScript.Script(request.Source));
 
         // Only the script's own top-level returned value selects, wherever it was created (a `return f()` counts).
+        JavaScriptScriptEvaluationResult result;
+        IReadOnlyList<JavaScriptPrecisionLoss> losses;
         if (completions.TryGet(returned, out var completion))
         {
             var (state, names) = completion.ResolveSelection();
-            return ValueTask.FromResult(new JavaScriptScriptEvaluationResult(
-                completions.Materialize(engine, completion.Result, options), state, names));
+            result = new JavaScriptScriptEvaluationResult(Write(completions, values, completion.Result, out losses), state, names);
         }
+        else
+            result = new JavaScriptScriptEvaluationResult(Write(completions, values, returned, out losses));
 
-        return ValueTask.FromResult(new JavaScriptScriptEvaluationResult(completions.Materialize(engine, returned, options)));
+        var warnings = new List<Elsa.Expressions.Core.Models.ExecutionWarning>();
+        if (variables is not null)
+            losses = [.. losses, .. JavaScriptValueWrites.WriteVariables(variables, request.Variables!, precisionPolicy, warnings)];
+
+        // A value the script read through its session may be protected: its warnings then keep their protected form,
+        // which names no member of it (spec 1229 FR-006). A protected input is handled by the step's own collector.
+        var sink = request.Variables?.HasReadProtectedValue == true && request.Warnings is { } warningSink
+            ? new ProtectingWarningSink(warningSink)
+            : request.Warnings;
+        foreach (var warning in warnings)
+            sink?.Report(warning);
+        JavaScriptValueWrites.WarnLossyReads(values, losses, sink, logger);
+        return ValueTask.FromResult(result);
+    }
+
+    private static readonly IReadOnlyDictionary<string, JsonElement> NoPinnedValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+
+    // Reports each warning's protected form, when it has one.
+    private sealed class ProtectingWarningSink(Elsa.Expressions.Core.Contracts.IExecutionWarningSink inner) : Elsa.Expressions.Core.Contracts.IExecutionWarningSink
+    {
+        public void Report(Elsa.Expressions.Core.Models.ExecutionWarning warning) => inner.Report(warning.ProtectedForm ?? warning);
+    }
+
+    /// <summary>The result leaves through the value bridge, and a lossy one meets the precision policy (spec 1228 FR-013).</summary>
+    private JsonElement? Write(ScriptCompletions completions, IScriptValueEvaluation values, JsValue value, out IReadOnlyList<JavaScriptPrecisionLoss> losses)
+    {
+        var written = JavaScriptValueWrites.Apply(completions.Materialize(values, value), "result", precisionPolicy);
+        losses = written.Losses;
+        return written.Value;
     }
 
     /// <summary>
@@ -74,15 +118,15 @@ internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> fea
         /// Materializes a result the way any returned value is (ADR 0046). A completion value reached inside it, nested
         /// in returned data or stored as a result, faults: it can select only as the top-level returned value.
         /// </summary>
-        public JsonElement? Materialize(Engine engine, JsValue value, FeatureOptions options)
+        public ScriptValueWrite Materialize(IScriptValueEvaluation values, JsValue value)
         {
             if (value.IsUndefined())
-                return null;
+                return new ScriptValueWrite(null, []);
 
             _materializing = true;
             try
             {
-                return JintResultMaterializer.Materialize(engine, value, options);
+                return values.Write(value, "result");
             }
             finally
             {

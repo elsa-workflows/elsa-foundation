@@ -23,13 +23,13 @@ const WORKFLOW_SCOPE_ID = "workflow";
  *
  * Wire shape emitted (Set Variable):
  *   { nodeId, activityVersionId: "elsa.intrinsic.set@1", inputs: [{ referenceKey: "value", value }],
- *     outputs: [], intrinsic: { kind: "Set", valueType: { alias: "Elsa.Any", collectionKind: "Single" },
+ *     outputs: [], intrinsic: { kind: "Set", valueType: { alias: "Any", collectionKind: "Single" },
  *     variable: { referenceKey, declaringScopeId } } }
  *
  * Wire shape emitted (Set Output):
  *   { nodeId, activityVersionId: "elsa.intrinsic.set-output@1",
  *     inputs: [{ referenceKey: "name", value }, { referenceKey: "value", value }], outputs: [],
- *     intrinsic: { kind: "SetOutput", valueType: { alias: "Elsa.Any", collectionKind: "Single" } } }
+ *     intrinsic: { kind: "SetOutput", valueType: { alias: "Any", collectionKind: "Single" } } }
  *
  * The variable/value/name inputs ride the standard `inputs` folding in {@link ./activityInputWire}; the
  * `intrinsic` block round-trips verbatim as a non-input node member.
@@ -38,7 +38,7 @@ const WORKFLOW_SCOPE_ID = "workflow";
 // Portable authoring fallback matching the generic catalog value input. Publication resolves a
 // variable-writing intrinsic against the selected variable's current declaration; the inspector uses
 // that same declaration for its value editor without persisting a second copy of the variable's type.
-export const INTRINSIC_ANY_VALUE_TYPE = { alias: "Elsa.Any", collectionKind: "Single" } as const;
+export const INTRINSIC_ANY_VALUE_TYPE = { alias: "Any", collectionKind: "Single" } as const;
 
 // Reads the additive intrinsic descriptor block from a catalog item, tolerating older backends that omit
 // it (returns null). A well-formed block requires a `kind` and a `valueInputKey`.

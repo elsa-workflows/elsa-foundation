@@ -203,6 +203,12 @@ public sealed record ActivityExecutionInspectionView(
     public IReadOnlyCollection<ActivityInputRefreshView>? InputRefreshes { get; init; }
 
     /// <summary>
+    /// The warnings this execution raised (spec 1228, the shared run-time warning channel): first those of its input
+    /// expressions, then those of its steps. None carries a value (spec 1229 FR-006). Absent when there were none.
+    /// </summary>
+    public IReadOnlyCollection<ExecutionWarningView>? Warnings { get; init; }
+
+    /// <summary>
     /// Adds the variable-lifecycle records the execution's durable state keeps (spec 1221) to this view. Record i is
     /// the state's <c>VariableWrites[i]</c>, so a later per-entry read (spec 1229) can address it by that index.
     /// </summary>
@@ -218,7 +224,8 @@ public sealed record ActivityExecutionInspectionView(
                 RecordedCompletion = RecordedCompletionView.From(state.RecordedCompletion),
                 InputRefreshes = state.InputRefreshes is { Count: > 0 } refreshes
                     ? refreshes.Select(ActivityInputRefreshView.From).ToArray()
-                    : null
+                    : null,
+                Warnings = ExecutionWarningView.From(state)
             };
 }
 
@@ -706,4 +713,47 @@ public sealed record WorkflowExecutionStartDispatchView(
         int.TryParse(seconds, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+}
+
+/// <summary>
+/// One warning an execution raised (spec 1228): its stable code, severity and message, where it came from (an input
+/// expression or the step), and structured details such as the paths it names. It never carries a value.
+/// </summary>
+public sealed record ExecutionWarningView(
+    string Code,
+    string Severity,
+    string Message,
+    string Source,
+    string? InputKey,
+    string ExecutableNodeId,
+    string ActivityExecutionId,
+    IReadOnlyDictionary<string, string> Details)
+{
+    public const string InputSource = "input";
+    public const string StepSource = "step";
+
+    public static IReadOnlyCollection<ExecutionWarningView>? From(ActivityExecutionState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        var views = (state.InputSnapshot?.Warnings ?? []).Select(warning => From(warning, InputSource, state))
+            .Concat((state.Warnings ?? []).Select(warning => From(warning, StepSource, state)))
+            .ToArray();
+        return views.Length == 0 ? null : views;
+    }
+
+    private static ExecutionWarningView From(Elsa.Expressions.Core.Models.ExecutionWarning warning, string source, ActivityExecutionState state)
+    {
+        var details = warning.Details ?? new Dictionary<string, string>();
+        return new(
+            warning.Code,
+            warning.Severity.ToString(),
+            warning.Message,
+            source,
+            source == InputSource ? details.GetValueOrDefault("input") : null,
+            state.Execution.ExecutableNodeId,
+            state.InvocationId,
+            details.Where(item => !(source == InputSource && item.Key == "input"))
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+    }
 }

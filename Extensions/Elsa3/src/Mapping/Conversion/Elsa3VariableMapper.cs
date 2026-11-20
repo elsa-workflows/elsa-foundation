@@ -19,7 +19,9 @@ internal sealed record Elsa3VariableRefusal(string Message, string Guidance);
 /// </summary>
 internal static class Elsa3VariableMapper
 {
-    private const string ObjectAlias = "Object";
+    // The Elsa 3 name of its untyped kind, and the Elsa 4 alias it becomes: Any, the dynamic kind (spec 1228 FR-019).
+    private const string Elsa3ObjectTypeName = "Object";
+    private const string AnyAlias = TypeAliasConvention.AnyAlias;
     private static readonly ObjectConverterOptions StrictConversion = new(StrictMode: true);
 
     /// <summary>
@@ -35,7 +37,7 @@ internal static class Elsa3VariableMapper
 
     /// <summary>
     /// Elsa 3 types that stand for a resource (a file, a stream, raw bytes), not data. Elsa 4 has no counterpart yet, and
-    /// holding one as <c>Object</c> would pretend the conversion works, so a variable of one is refused (#3194).
+    /// holding one as <c>Any</c> would pretend the conversion works, so a variable of one is refused (#3194).
     /// </summary>
     private static readonly IReadOnlySet<string> ResourceTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -43,7 +45,7 @@ internal static class Elsa3VariableMapper
     };
 
     /// <summary>
-    /// Elsa 3 dictionary types Elsa 4 has no type for. Each becomes an <c>Object</c> variable whose starting value is a
+    /// Elsa 3 dictionary types Elsa 4 has no type for. Each becomes an <c>Any</c> variable whose starting value is a
     /// JSON object; the value is the example a refusal shows.
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> DictionaryTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -77,7 +79,7 @@ internal static class Elsa3VariableMapper
         out VariableDefinition variable,
         out Elsa3VariableRefusal? refusal)
     {
-        var typeName = string.IsNullOrWhiteSpace(source.TypeName) ? ObjectAlias : source.TypeName.Trim();
+        var typeName = string.IsNullOrWhiteSpace(source.TypeName) ? Elsa3ObjectTypeName : source.TypeName.Trim();
         var shape = Resolve(wellKnownTypeRegistry, typeName, source.IsArray);
         var storageDriverType = !string.IsNullOrWhiteSpace(source.StorageDriverTypeName) && !IsDefaultStorageDriver(source.StorageDriverTypeName)
             ? wellKnownTypeRegistry.GetAliasOrDefault(LegacyClrTypeResolver.Resolve(wellKnownTypeRegistry, source.StorageDriverTypeName))
@@ -119,7 +121,7 @@ internal static class Elsa3VariableMapper
         json = default;
         switch (shape.Kind)
         {
-            // Elsa 3 kept an Object variable's text as it was, JSON or not.
+            // Elsa 3 kept an Object variable's text as it was, JSON or not: it becomes a JSON string with the same text.
             case ShapeKind.Text:
                 json = JsonSerializer.SerializeToElement(value);
                 return true;
@@ -160,7 +162,7 @@ internal static class Elsa3VariableMapper
                     $"In the Elsa 3 workflow, change the starting value to a valid {typeName} value, or change the type to Object to keep the value as text.");
                 return false;
 
-            // A type Elsa 4 does not know runs as Object. JSON keeps the shape Elsa 3 deserialized into that type; other text
+            // A type Elsa 4 does not know runs as Any. JSON keeps the shape Elsa 3 deserialized into that type; other text
             // Elsa 3 converted in a way the converter cannot know (an enum, a type converter), so it is refused.
             default:
                 if (TryParse(value, JsonValueKind.Object, out json) || TryParse(value, JsonValueKind.Array, out json))
@@ -175,16 +177,16 @@ internal static class Elsa3VariableMapper
     /// <summary>
     /// The Elsa 4 shape of an Elsa 3 type name. Elsa 3 writes a list as <c>List&lt;T&gt;</c> and an array as <c>T[]</c>:
     /// a collection whose element type Elsa 4 knows keeps that element type. Any other type Elsa 4 does not know, a nested
-    /// collection included, becomes <c>Object</c>; a resource is refused.
+    /// collection included, becomes <c>Any</c>; a resource is refused.
     /// </summary>
     private static VariableShape Resolve(IWellKnownTypeRegistry registry, string typeName, bool isArray)
     {
         // Byte with the array flag is Byte[]: raw bytes, a resource.
         if (IsResource(typeName) || isArray && IsResource($"{typeName.Split(',')[0].Trim()}[]"))
-            return new(ShapeKind.Resource, new TypeReference(ObjectAlias), null);
+            return new(ShapeKind.Resource, new TypeReference(AnyAlias), null);
 
         if (DictionaryTypes.TryGetValue(typeName, out var example))
-            return new(ShapeKind.Dictionary, new TypeReference(ObjectAlias), null, Example: example);
+            return new(ShapeKind.Dictionary, new TypeReference(AnyAlias), null, Example: example);
 
         var isCollection = TryReadCollection(typeName, out var elementName, out var kind);
         if (!isCollection && isArray)
@@ -197,7 +199,7 @@ internal static class Elsa3VariableMapper
         if (isCollection)
         {
             if (!TryResolveKnown(registry, elementName, out var elementType, out var elementAlias))
-                return new(ShapeKind.Unknown, new TypeReference(ObjectAlias), null);
+                return new(ShapeKind.Unknown, new TypeReference(AnyAlias), null);
             return new(
                 ShapeKind.Collection,
                 new TypeReference(elementAlias, kind),
@@ -206,13 +208,13 @@ internal static class Elsa3VariableMapper
         }
 
         if (IsObjectAlias(typeName))
-            return new(ShapeKind.Text, new TypeReference(ObjectAlias), typeof(object));
+            return new(ShapeKind.Text, new TypeReference(AnyAlias), typeof(object));
 
         if (TryResolveKnown(registry, typeName, out var scalarType, out _))
             return new(ShapeKind.Scalar, TypeReferenceFactory.FromClrType(scalarType, registry.GetAliasOrDefault), scalarType);
 
-        // A type Elsa 4's registry does not know runs as Object.
-        return new(ShapeKind.Unknown, new TypeReference(ObjectAlias), null);
+        // A type Elsa 4's registry does not know runs as Any.
+        return new(ShapeKind.Unknown, new TypeReference(AnyAlias), null);
     }
 
     /// <summary>Whether <paramref name="typeName"/>, or the element of a collection of it, is a <see cref="ResourceTypes">resource</see>.</summary>
@@ -327,13 +329,13 @@ internal static class Elsa3VariableMapper
     {
         "String" => """["a", "b"]""",
         "Boolean" => "[true, false]",
-        "Object" => """[{"key": "value"}]""",
+        AnyAlias => """[{"key": "value"}]""",
         _ => "[1, 2]"
     };
 
     private static bool IsObjectAlias(string? typeName) =>
         string.IsNullOrWhiteSpace(typeName) ||
-        string.Equals(typeName, ObjectAlias, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(typeName, Elsa3ObjectTypeName, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(typeName, "System.Object", StringComparison.Ordinal);
 
     private static string Echo(string value) => value.Length <= 80 ? value : $"{value[..80]}…";

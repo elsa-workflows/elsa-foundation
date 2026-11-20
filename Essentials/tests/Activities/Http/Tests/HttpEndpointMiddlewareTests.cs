@@ -1579,7 +1579,7 @@ public sealed class HttpEndpointMiddlewareTests
     private static RuntimeInputBinding LiteralJsonBinding(string name, string rawJson)
     {
         using var document = JsonDocument.Parse(rawJson);
-        var type = new ValueTypeDescriptor("Elsa.Any");
+        var type = new ValueTypeDescriptor("Any");
         return new RuntimeInputBinding(
             name,
             type,

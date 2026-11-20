@@ -67,7 +67,7 @@ const setVariableNode: ActivityNode = {
   intrinsic: {
     kind: "Set",
     variable: { referenceKey: "counter", declaringScopeId: "workflow" },
-    valueType: { alias: "Elsa.Any", collectionKind: "Single" }
+    valueType: { alias: "Any", collectionKind: "Single" }
   }
 };
 

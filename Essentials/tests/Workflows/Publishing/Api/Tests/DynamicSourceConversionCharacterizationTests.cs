@@ -34,7 +34,7 @@ public sealed class DynamicSourceConversionCharacterizationTests
     [Fact]
     public void A_dynamic_source_onto_a_dynamic_target_is_planned_without_a_static_contract()
     {
-        var source = new ValueTypeDescriptor("Elsa.Any");
+        var source = new ValueTypeDescriptor("Any");
 
         var plan = _resolver.Resolve(source, ValueRepresentationDefaults.Infer(source), source);
 

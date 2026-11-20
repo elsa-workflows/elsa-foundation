@@ -48,3 +48,12 @@ Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultNodes.get -> in
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultNodes.set -> void
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxStatements.get -> int?
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxStatements.set -> void
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Enter(string! key, System.Text.Json.JsonElement value) -> Jint.Native.JsValue!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Collect(string! key, Jint.Native.JsValue! current, bool assigned) -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Write(Jint.Native.JsValue! value, string! path) -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge.Begin(Jint.Engine! engine) -> Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.TryFindLoss(double value, out Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber? number) -> bool
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.LossyNumbers.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber!>!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.WrittenExactly.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber!>!

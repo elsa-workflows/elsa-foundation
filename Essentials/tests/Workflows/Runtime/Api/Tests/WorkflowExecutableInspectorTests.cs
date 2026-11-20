@@ -749,7 +749,7 @@ public sealed class WorkflowExecutableInspectorTests
             ValueConversionPlan.CurrentSchemaVersion,
             ValueRepresentation.FormattedContent,
             new ValueTypeDescriptor("String"),
-            new ValueTypeDescriptor("Elsa.Any"),
+            new ValueTypeDescriptor("Any"),
             ValueConversionMode.Json,
             ValueConversionOperation.Profile,
             new ValueConversionProfileReference("elsa.json", "1"),
@@ -757,7 +757,7 @@ public sealed class WorkflowExecutableInspectorTests
             options: null);
         var binding = new RuntimeInputBinding(
             "payload",
-            new ValueTypeDescriptor("Elsa.Any"),
+            new ValueTypeDescriptor("Any"),
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.WorkflowRequest,
             workflowRequest: new RuntimeWorkflowRequestReference("payload"),
@@ -771,7 +771,7 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Equal(ValueConversionMode.Json, conversion.Mode);
         Assert.Equal(ValueRepresentation.FormattedContent, conversion.SourceRepresentation);
         Assert.Equal("String", conversion.SourceType.Alias);
-        Assert.Equal("Elsa.Any", conversion.TargetType.Alias);
+        Assert.Equal("Any", conversion.TargetType.Alias);
         Assert.Equal("elsa.json", conversion.Profile!.Id);
         Assert.Equal("1", conversion.Profile.Version);
         Assert.Equal(plan.Fingerprint, conversion.Fingerprint);

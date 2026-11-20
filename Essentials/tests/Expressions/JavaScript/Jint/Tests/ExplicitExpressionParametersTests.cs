@@ -66,7 +66,7 @@ public sealed class ExplicitExpressionParametersTests
     }
 
     [Fact]
-    public async Task Args_are_deeply_read_only_and_cannot_mutate_the_request_snapshot()
+    public async Task Args_change_locally_and_never_mutate_the_request_snapshot()
     {
         await using var provider = BuildProvider();
         await using var scope = provider.CreateAsyncScope();
@@ -80,7 +80,8 @@ public sealed class ExplicitExpressionParametersTests
 
         var result = await evaluator.EvaluateAsync(request);
 
-        Assert.Equal("21:2:undefined", result.GetString());
+        // Spec 1228 FR-001: plain, changeable values; the args global itself stays in place.
+        Assert.Equal("0:3:number", result.GetString());
         Assert.Equal(21, request.ParameterValues["order"].GetProperty("total").GetInt32());
         Assert.Equal(2, request.ParameterValues["order"].GetProperty("lines").GetArrayLength());
     }

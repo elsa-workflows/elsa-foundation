@@ -1072,7 +1072,7 @@ public sealed partial class AgentNativeTests
             await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.MigrateAsync(provider.GetRequiredService<Elsa.Agent.Persistence.EntityFrameworkCore.AgentDbContext>().Database);
         var types = provider.GetRequiredService<IWellKnownTypeRegistry>();
         types.RegisterType(typeof(string), "String");
-        types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
+        types.RegisterType(typeof(JsonElement), "Any"); // The host seeds JSON as Any; the full name resolves by convention.
         types.RegisterType(typeof(Elsa.Activities.Sequence.Activities.Sequence), typeof(Elsa.Activities.Sequence.Activities.Sequence).FullName!);
         types.RegisterType(typeof(ActivityUnit), typeof(ActivityUnit).FullName!);
         types.RegisterType(typeof(RetryInterventionActivity), typeof(RetryInterventionActivity).FullName!);

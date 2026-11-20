@@ -469,11 +469,9 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     {
         if (value.Presence != ValuePresence.Present || value.InlineValue is not { } payload)
             return;
-        // A single Elsa.Any accepts any value. A collection of Elsa.Any still has a shape to fit, as the intrinsic path
-        // checks it: Object is its CLR element type, as it is in the type registry.
-        var type = binding.TargetType is { Alias: "Elsa.Any", CollectionKind: not CollectionKind.Single }
-            ? TypeReferenceFactory.Resolve(new TypeReference("Object", binding.TargetType.CollectionKind), _ => typeof(object))
-            : ResolveType(binding.TargetType, nodeId, binding.InputName);
+        // A single Any accepts any value. A collection of Any still has a shape to fit, as the intrinsic path checks it:
+        // ResolveType closes the collection around JsonElement, the CLR type of Any.
+        var type = ResolveType(binding.TargetType, nodeId, binding.InputName);
         if (type == typeof(object) || type == typeof(JsonElement) || type == typeof(JsonElement?))
             return;
         try
@@ -790,8 +788,9 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
     private Type ResolveType(ValueTypeDescriptor descriptor, string nodeId, string inputName)
     {
-        if (descriptor.Alias == "Elsa.Any")
-            return typeof(object);
+        // Any, the dynamic kind, is JSON: its CLR type is JsonElement, whatever the registry holds.
+        if (TypeAliasConvention.IsAny(descriptor.Alias))
+            return TypeReferenceFactory.Close(typeof(JsonElement), descriptor.ToTypeReference());
         if (_wellKnownTypeRegistry is null)
             throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares portable type alias '{descriptor.Alias}', but no well-known type registry was supplied.");
 
@@ -800,7 +799,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             typeReference,
             alias => _wellKnownTypeRegistry.TryGetTypeOrDefault(alias, out var type) ? type : typeof(object));
 
-        if (resolvedType == typeof(object) && !string.Equals(descriptor.Alias, "Object", StringComparison.OrdinalIgnoreCase))
+        if (resolvedType == typeof(object))
             throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares unknown portable type alias '{descriptor.Alias}'.");
 
         return resolvedType;

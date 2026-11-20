@@ -19,7 +19,7 @@ internal static class StepVariableTestGraph
     public const string OtherKey = "var-other";
     public const string OrderKey = "var-order";
     public static readonly ValueTypeDescriptor ReferenceType = new(VariableReferenceTypes.Alias);
-    public static readonly ValueTypeDescriptor AnyType = new("Elsa.Any");
+    public static readonly ValueTypeDescriptor AnyType = new("Any");
 
     public static RuntimeVariableDeclaration OtherDeclaration(int initial = 0) => Declaration(OtherKey, "other", VariableLifecycleTestGraph.Int32Type, initial);
 

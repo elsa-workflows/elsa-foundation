@@ -389,15 +389,13 @@ public sealed class GraphActivity(
     {
         var descriptor = ReadType(expectedType);
         var alias = descriptor.Alias;
-        if (StringComparer.OrdinalIgnoreCase.Equals(alias, "Elsa.Any"))
+        if (TypeAliasConvention.IsAny(alias))
             return value is JsonElement element ? element.Clone() : value;
 
         var registry = _wellKnownTypeRegistry
             ?? throw new InvalidOperationException(
                 $"Graph expression result type '{alias}' requires a well-known type registry.");
-        if (!registry.TryGetTypeOrDefault(alias, out var elementType) || elementType == typeof(object) &&
-            !StringComparer.OrdinalIgnoreCase.Equals(alias, "Object") &&
-            !StringComparer.OrdinalIgnoreCase.Equals(alias, "object"))
+        if (!registry.TryGetTypeOrDefault(alias, out var elementType) || elementType == typeof(object))
         {
             throw new InvalidOperationException($"Graph expression result type alias '{alias}' is not registered.");
         }

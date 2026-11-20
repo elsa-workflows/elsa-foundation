@@ -46,7 +46,7 @@ public sealed partial class AgentPublicationTests
         var provider = fixture.Services;
         var types = provider.GetRequiredService<IWellKnownTypeRegistry>();
         types.RegisterType(typeof(string), "String");
-        types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
+        types.RegisterType(typeof(JsonElement), "Any"); // The host seeds JSON as Any; the full name resolves by convention.
         await new AgentTypesStartupTask(types).ExecuteAsync(CancellationToken.None);
         IActivityDraftTestRunService service = new ActivityDraftTestRunService(fixture.Stores, fixture.Stores, fixture.Stores, fixture.Compiler, new Access(),
             fixture.Templates, fixture.Sources,

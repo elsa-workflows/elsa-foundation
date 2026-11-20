@@ -1,8 +1,11 @@
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using System.Buffers;
 using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Jint.Native;
@@ -40,42 +43,54 @@ internal static class IsolatedJintEngine
         return engine;
     }
 
-    public static void SetReadOnlyArgs(
+    /// <summary>
+    /// Installs <c>args</c>: the declared parameters, entered through the value bridge as plain, changeable values (spec
+    /// 1228 FR-001). Changing <c>args</c> is local to the evaluation: they are inputs, not variables, so a change is never
+    /// a write. The <c>args</c> global itself cannot be replaced.
+    /// </summary>
+    public static void SetArgs(
         Engine engine,
+        IScriptValueEvaluation values,
         IReadOnlyDictionary<string, JsonElement> parameters,
         FeatureOptions configured)
     {
         ArgumentNullException.ThrowIfNull(engine);
+        ArgumentNullException.ThrowIfNull(values);
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(configured);
         ValidateInput(parameters, configured);
-        SetReadOnlyArgsCore(
+        SetArgsCore(
             engine,
+            values,
             parameters
                 .OrderBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => (item.Key, item.Value)));
     }
 
-    public static void SetReadOnlyArgs(
+    public static void SetArgs(
         Engine engine,
+        IScriptValueEvaluation values,
         JsonElement arguments,
         FeatureOptions configured)
     {
         ArgumentNullException.ThrowIfNull(engine);
+        ArgumentNullException.ThrowIfNull(values);
         ArgumentNullException.ThrowIfNull(configured);
         if (arguments.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("JavaScript script arguments must be a JSON object.");
         ValidateInput(arguments, configured);
-        SetReadOnlyArgsCore(
+        SetArgsCore(
             engine,
+            values,
             arguments
                 .EnumerateObject()
                 .OrderBy(property => property.Name, StringComparer.Ordinal)
                 .Select(property => (property.Name, property.Value)));
     }
 
-    private static void SetReadOnlyArgsCore(
+    private static void SetArgsCore(
         Engine engine,
+        IScriptValueEvaluation values,
         IEnumerable<(string Name, JsonElement Value)> parameters)
     {
         var args = engine.Intrinsics.Object.Construct([]);
@@ -83,46 +98,59 @@ internal static class IsolatedJintEngine
         {
             args.DefineOwnProperty(
                 parameter.Name,
-                new PropertyDescriptor(CreateValue(engine, parameter.Value), writable: false, enumerable: true, configurable: false));
+                new PropertyDescriptor(values.Enter(ValuePaths.Member("args", parameter.Name), parameter.Value), writable: true, enumerable: true, configurable: true));
         }
 
-        args.PreventExtensions();
         engine.Global.DefineOwnProperty("args", new PropertyDescriptor(args, writable: false, enumerable: true, configurable: false));
     }
 
     /// <summary>
     /// Installs the <c>variables</c> root and <c>getVariable</c> (spec 1222 FR-003, FR-008, ADR 0089). Names publish
     /// pinned read their pinned value; on an expression with a computed or opaque read, any other name goes through the
-    /// host's <paramref name="reader"/>, which records the read. Every read path to one variable returns the same
-    /// JavaScript value within the evaluation (FR-034), and the values are frozen (FR-037). An unset declared variable
-    /// reads JSON <c>null</c> (FR-006); a computed name that matches nothing reads <c>undefined</c> (FR-011); a refused
-    /// read throws, and the host has already recorded the refusal, so catching it does not hide it (FR-017a). No
-    /// generated <c>get&lt;Name&gt;()</c> accessor is installed (ADR 0089 decision 6, FR-036). With no pinned read and
-    /// no reader nothing is installed, so an expression that reads no variable sees no <c>variables</c> surface.
+    /// host's <paramref name="reader"/>, which records the read. A value enters through the value bridge the first time it
+    /// is read, as a plain, changeable value (spec 1228 FR-001), and every read path to one variable returns that same
+    /// JavaScript value within the evaluation (FR-003, spec 1222 FR-034). An assignment to <c>variables.x</c> or
+    /// <c>variables[name]</c> is recorded, and later reads see it. The returned handle reports, after the run, what the
+    /// script changed. An unset declared variable reads JSON <c>null</c> (spec 1222 FR-006); a computed name that matches
+    /// nothing reads <c>undefined</c> (FR-011); a refused read throws, and the host has already recorded the refusal, so
+    /// catching it does not hide it (FR-017a). No generated <c>get&lt;Name&gt;()</c> accessor is installed (ADR 0089
+    /// decision 6). With no pinned read and no reader nothing is installed, so an expression that reads no variable sees
+    /// no <c>variables</c> surface, and <see langword="null"/> is returned.
     /// </summary>
-    public static void SetReadOnlyVariables(
+    public static ScriptVariables? SetVariables(
         Engine engine,
+        IScriptValueEvaluation values,
         IReadOnlyDictionary<string, JsonElement> pinned,
         IExpressionVariableReader? reader,
         FeatureOptions configured)
     {
         ArgumentNullException.ThrowIfNull(engine);
+        ArgumentNullException.ThrowIfNull(values);
         ArgumentNullException.ThrowIfNull(pinned);
         ArgumentNullException.ThrowIfNull(configured);
         if (pinned.Count == 0 && reader is null)
-            return;
+            return null;
         ValidateInput(pinned, configured);
 
-        var values = new Dictionary<string, JsValue>(StringComparer.Ordinal);
+        var variables = new ScriptVariables(values);
+        // A loop's item or index is read-only to a script (spec 1231 FR-006): it enters frozen, all the way down, so a
+        // change throws where the script makes it. The freezing function is taken before the script runs.
+        var session = reader as IScriptVariableSession;
+        var freeze = session is null
+            ? null
+            : engine.Evaluate(
+                "(function (freezeOne, isFrozen, keys) { return function deep(o) {" +
+                " if (o !== null && typeof o === 'object' && !isFrozen(o)) { freezeOne(o); var k = keys(o); for (var i = 0; i < k.length; i++) deep(o[k[i]]); }" +
+                " return o; }; })(Object.freeze, Object.isFrozen, Object.keys)");
         // Every value the script has been handed, pinned or looked up: the input limits apply to them together.
         var loaded = new Dictionary<string, JsonElement>(pinned, StringComparer.Ordinal);
-        foreach (var (name, element) in pinned.OrderBy(item => item.Key, StringComparer.Ordinal))
-            values[name] = CreateValue(engine, element);
 
         JsValue Read(string name)
         {
-            if (values.TryGetValue(name, out var known))
+            if (variables.TryGet(name, out var known))
                 return known;
+            if (pinned.TryGetValue(name, out var element))
+                return variables.Enter(name, element);
             // A name that only an engine probe asks for (JSON.stringify asks for toJSON, string conversion for toString
             // and valueOf, await for then) is not looked up when no variable has it: the engine cannot tell its own
             // probe from a script's, so such a name reads undefined unrecorded on every path. A variable that has the
@@ -136,50 +164,58 @@ internal static class IsolatedJintEngine
                 case ExpressionVariableReadOutcome.Present:
                     loaded[name] = read.Value;
                     ValidateInput(loaded, configured);
-                    var value = CreateValue(engine, read.Value);
-                    values[name] = value;
-                    return value;
+                    var entered = variables.Enter(name, read.Value);
+                    if (freeze is not null && session!.IsReadOnly(name))
+                        engine.Invoke(freeze, entered);
+                    return entered;
                 case ExpressionVariableReadOutcome.Refused:
                     throw new JavaScriptException(engine.Intrinsics.Error, read.Refusal);
                 default:
-                    values[name] = JsValue.Undefined;
+                    variables.Missing(name);
                     return JsValue.Undefined;
             }
         }
 
-        // A null-prototype target: inherited members such as toString are not variables.
-        var target = engine.Evaluate("Object.create(null)").AsObject();
-        foreach (var name in values.Keys.Order(StringComparer.Ordinal).ToArray())
-            target.DefineOwnProperty(name, new PropertyDescriptor(values[name], writable: false, enumerable: true, configurable: false));
-        if (reader is not null)
+        JsValue Assign(string name, JsValue value)
         {
-            // Every candidate is an own, enumerable property, so enumerating or spreading `variables` sees them; reading
-            // one goes through the host and is recorded.
-            foreach (var name in reader.CandidateNames)
-            {
-                if (target.HasOwnProperty(name))
-                    continue;
-                var captured = name;
-                var getter = new ClrFunction(engine, "get " + captured, (_, _) => Read(captured));
-                target.DefineOwnProperty(captured, new GetSetPropertyDescriptor(getter, JsValue.Undefined, enumerable: true, configurable: false));
-            }
+            if (session is not null && session.IsReadOnly(name))
+                throw new JavaScriptException(engine.Intrinsics.TypeError, $"Variable '{name}' is a loop item or index and is read-only.");
+            variables.Assign(name, value);
+            return JsValue.Undefined;
+        }
+
+        // A null-prototype target: inherited members such as toString are not variables. Every pinned name and every
+        // candidate is an own, enumerable accessor, so enumerating or spreading `variables` sees them; reading one goes
+        // through Read, so it enters once and is recorded.
+        var target = engine.Evaluate("Object.create(null)").AsObject();
+        var names = pinned.Keys.Order(StringComparer.Ordinal).Concat(reader?.CandidateNames ?? []);
+        foreach (var name in names)
+        {
+            if (target.HasOwnProperty(name))
+                continue;
+            var captured = name;
+            variables.Declare(captured);
+            var getter = new ClrFunction(engine, "get " + captured, (_, _) => Read(captured));
+            var setter = new ClrFunction(engine, "set " + captured, (_, arguments) => Assign(captured, arguments.At(0)));
+            target.DefineOwnProperty(captured, new GetSetPropertyDescriptor(getter, setter, enumerable: true, configurable: false));
         }
 
         target.PreventExtensions();
-        JsValue root = target;
-        if (reader is not null)
-        {
-            // A name that is not a candidate is still looked up, so the missing read is recorded with its warning. The
-            // engine's own probes (JSON.stringify asks for toJSON, string conversion for toString and valueOf, await for
-            // then) are not reads a script made, so they read undefined unrecorded.
-            var miss = new ClrFunction(engine, "miss", (_, arguments) => Read(arguments.At(0).AsString()));
-            var factory = engine.Evaluate(
-                "(function (target, miss) {" +
-                " var has = Function.prototype.call.bind(Object.prototype.hasOwnProperty); var get = Reflect.get;" +
-                " return new Proxy(target, { get: function (t, p, r) { return typeof p === 'string' && !has(t, p) ? miss(p) : get(t, p, r); } });" +
-                " })");
-            root = engine.Invoke(factory, target, miss);
-        }
+        // A name that is not an own property is still looked up, so the missing read is recorded with its warning, and
+        // an assignment to it is recorded as a change. The engine's own probes (JSON.stringify asks for toJSON, string
+        // conversion for toString and valueOf, await for then) are not reads a script made, so they read undefined
+        // unrecorded.
+        var miss = new ClrFunction(engine, "miss", (_, arguments) => Read(arguments.At(0).AsString()));
+        var assign = new ClrFunction(engine, "assign", (_, arguments) => Assign(arguments.At(0).AsString(), arguments.At(1)));
+        var factory = engine.Evaluate(
+            "(function (target, miss, assign) {" +
+            " var has = Function.prototype.call.bind(Object.prototype.hasOwnProperty); var get = Reflect.get; var set = Reflect.set;" +
+            " return new Proxy(target, {" +
+            "  get: function (t, p, r) { return typeof p === 'string' && !has(t, p) ? miss(p) : get(t, p, r); }," +
+            "  set: function (t, p, v, r) { if (typeof p === 'string' && !has(t, p)) { assign(p, v); return true; } return set(t, p, v, r); }" +
+            " });" +
+            " })");
+        var root = engine.Invoke(factory, target, miss, assign);
 
         engine.Global.DefineOwnProperty("variables", new PropertyDescriptor(root, writable: false, enumerable: true, configurable: false));
 
@@ -188,6 +224,81 @@ internal static class IsolatedJintEngine
                 ? Read(callArguments[0].AsString())
                 : JsValue.Undefined);
         engine.Global.DefineOwnProperty("getVariable", new PropertyDescriptor(getVariable, writable: false, enumerable: false, configurable: false));
+        return variables;
+    }
+
+    /// <summary>The variables one evaluation read or assigned, and what it did to each.</summary>
+    internal sealed class ScriptVariables(IScriptValueEvaluation values)
+    {
+        private readonly Dictionary<string, JsValue> _current = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _assigned = new(StringComparer.Ordinal);
+        private readonly List<string> _order = [];
+        private readonly HashSet<string> _declared = new(StringComparer.Ordinal);
+
+        /// <summary>A name the evaluation can name: pinned, or a candidate of its lookup.</summary>
+        public void Declare(string name) => _declared.Add(name);
+
+        /// <summary>Whether a name is declared; any other name the script computed, possibly from a value.</summary>
+        public bool IsDeclared(string name) => _declared.Contains(name);
+
+        public bool TryGet(string name, out JsValue value) => _current.TryGetValue(name, out value!);
+
+        public JsValue Enter(string name, JsonElement element)
+        {
+            var value = values.Enter(Key(name), element);
+            Remember(name, value);
+            return value;
+        }
+
+        public void Missing(string name) => Remember(name, JsValue.Undefined);
+
+        public void Assign(string name, JsValue value)
+        {
+            Remember(name, value);
+            _assigned.Add(name);
+        }
+
+        /// <summary>
+        /// One change per variable read or assigned, for a script body that writes them: a value the script made
+        /// unserializable or grew past the JSON limits fails the evaluation with that error, so nothing is written.
+        /// </summary>
+        public IReadOnlyList<(string Name, ScriptValueChange Change)> Collect() =>
+            _order.Select(name => (name, values.Collect(Key(name), _current[name], _assigned.Contains(name)))).ToArray();
+
+        /// <summary>
+        /// One change per variable read or assigned, for an input expression, which refuses any change: a value the script
+        /// made unserializable or grew past the JSON limits is reported as changed as a whole.
+        /// </summary>
+        public IReadOnlyList<(string Name, ScriptValueChange Change)> CollectForRefusal() =>
+            _order.Select(name => (name, CollectOne(name))).ToArray();
+
+        /// <summary>Whether the script assigned the variable itself (<c>variables.x = v</c>), rather than only changing what it read.</summary>
+        public bool WasAssigned(string name) => _assigned.Contains(name);
+
+        // A value the script made unserializable (a cycle, a BigInt) or grew past the JSON limits (depth, size) was
+        // changed: it is reported as changed as a whole, so an input expression fails with its write diagnostic rather
+        // than the engine's or the parser's error (spec 1228 FR-006a). The catch covers only the bridge's Collect, where an
+        // InvalidOperationException is the materializer's limit or not-persistable error for this value.
+        private ScriptValueChange CollectOne(string name)
+        {
+            try
+            {
+                return values.Collect(Key(name), _current[name], _assigned.Contains(name));
+            }
+            catch (Exception exception) when (exception is JavaScriptException or System.Text.Json.JsonException or InvalidOperationException)
+            {
+                return new ScriptValueChange(Key(name), ScriptValueChangeKind.WholeAssignment, null, [Key(name)], []);
+            }
+        }
+
+        public static string Key(string name) => ValuePaths.Member("variables", name);
+
+        private void Remember(string name, JsValue value)
+        {
+            if (!_current.ContainsKey(name))
+                _order.Add(name);
+            _current[name] = value;
+        }
     }
 
     private static readonly HashSet<string> EngineProbes = new(StringComparer.Ordinal)
@@ -204,51 +315,6 @@ internal static class IsolatedJintEngine
         engine.GetValue("Math").AsObject().DefineOwnProperty(
             "random",
             new PropertyDescriptor(JsValue.Undefined, writable: false, enumerable: false, configurable: false));
-    }
-
-    private static JsValue CreateValue(Engine engine, JsonElement element) => element.ValueKind switch
-    {
-        JsonValueKind.Object => CreateObject(engine, element),
-        JsonValueKind.Array => CreateArray(engine, element),
-        JsonValueKind.String => JsValue.FromObject(engine, element.GetString()),
-        JsonValueKind.Number when element.TryGetInt64(out var integer) => JsValue.FromObject(engine, integer),
-        JsonValueKind.Number => JsValue.FromObject(engine, element.GetDouble()),
-        JsonValueKind.True => JsBoolean.True,
-        JsonValueKind.False => JsBoolean.False,
-        JsonValueKind.Null => JsValue.Null,
-        _ => throw new InvalidOperationException($"JSON kind '{element.ValueKind}' is not a persistable JavaScript parameter value.")
-    };
-
-    private static JsValue CreateObject(Engine engine, JsonElement element)
-    {
-        var value = engine.Intrinsics.Object.Construct([]);
-        foreach (var property in element.EnumerateObject())
-        {
-            value.DefineOwnProperty(
-                property.Name,
-                new PropertyDescriptor(CreateValue(engine, property.Value), writable: false, enumerable: true, configurable: false));
-        }
-
-        value.PreventExtensions();
-        return value;
-    }
-
-    private static JsValue CreateArray(Engine engine, JsonElement element)
-    {
-        var length = element.GetArrayLength();
-        var value = engine.Intrinsics.Array.Construct((uint)length);
-        var index = 0;
-        foreach (var item in element.EnumerateArray())
-        {
-            value.DefineOwnProperty(
-                index.ToString(CultureInfo.InvariantCulture),
-                new PropertyDescriptor(CreateValue(engine, item), writable: false, enumerable: true, configurable: false));
-            index++;
-        }
-
-        value.DefineOwnProperty("length", new PropertyDescriptor(JsNumber.Create(length), writable: false, enumerable: false, configurable: false));
-        value.PreventExtensions();
-        return value;
     }
 
     private static void ValidateInput(

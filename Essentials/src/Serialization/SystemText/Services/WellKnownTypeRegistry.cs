@@ -17,6 +17,8 @@ internal sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
 
     private readonly Dictionary<string, Type> _aliasTypeDictionary = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<Type, string> _typeAliasDictionary = [];
+    // The convention alias (TypeAliasConvention.CanonicalAlias) of each type registered under another, curated alias.
+    private readonly Dictionary<string, Type> _conventionAliasTypeDictionary = new(StringComparer.OrdinalIgnoreCase);
 
     public WellKnownTypeRegistry(IDictionary<string, Type> aliasTypeDictionary)
     {
@@ -47,9 +49,20 @@ internal sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
         }
 
         if (_typeAliasDictionary.TryGetValue(type, out var existingAlias) && !string.Equals(existingAlias, alias, StringComparison.OrdinalIgnoreCase))
-            throw new DuplicateTypeAliasException(alias, $"The type '{type}' is already registered under the alias '{existingAlias}'; it cannot also be registered as '{alias}'.");
+        {
+            // A type registered only under its dotted convention alias (the reflection pass over activity types may run
+            // before the primitive seed) takes a framework primitive alias, such as JsonElement taking Any; the convention
+            // alias keeps resolving through the fallback. Any other second alias for a type is still refused.
+            if (!ReservedBareAliases.Contains(alias) || !existingAlias.Contains('.') ||
+                !string.Equals(existingAlias, TypeAliasConvention.CanonicalAlias(type), StringComparison.OrdinalIgnoreCase))
+                throw new DuplicateTypeAliasException(alias, $"The type '{type}' is already registered under the alias '{existingAlias}'; it cannot also be registered as '{alias}'.");
+
+            _aliasTypeDictionary.Remove(existingAlias);
+            _conventionAliasTypeDictionary.TryAdd(existingAlias, type);
+        }
 
         _typeAliasDictionary[type] = alias;
+        RecordConventionAlias(type, alias);
         _aliasTypeDictionary[alias] = type;
 
         RegisterDerivedNullable(type, alias);
@@ -73,13 +86,39 @@ internal sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
             _aliasTypeDictionary[nullableAlias] = nullableType;
         if (!_typeAliasDictionary.ContainsKey(nullableType))
             _typeAliasDictionary[nullableType] = nullableAlias;
+        RecordConventionAlias(nullableType, nullableAlias);
+    }
+
+    // A type registered under a curated alias keeps resolving by its convention alias, which activity contracts
+    // scanned by reflection carry. Only adds when absent, so it never shadows a registered alias.
+    private void RecordConventionAlias(Type type, string alias)
+    {
+        var conventionAlias = TypeAliasConvention.CanonicalAlias(type);
+        if (!StringComparer.OrdinalIgnoreCase.Equals(conventionAlias, alias))
+            _conventionAliasTypeDictionary.TryAdd(conventionAlias, type);
     }
 
     /// <inheritdoc />
     public bool TryGetAlias(Type type, out string alias) => _typeAliasDictionary.TryGetValue(type, out alias!);
 
     /// <inheritdoc />
-    public bool TryGetType(string alias, out Type type) => _aliasTypeDictionary.TryGetValue(alias, out type!);
+    /// <remarks>
+    /// An alias that is not registered as written is read first through <see cref="TypeAliasConvention.ReadAlias"/>
+    /// (<c>Object</c> and <c>Elsa.Any</c> read as <c>Any</c>), then as the convention alias of a registered type: a type
+    /// registered under a curated alias, such as <c>JsonElement</c> under <c>Any</c>, still resolves by the full name
+    /// the reflection-only scanner writes for it (spec 1228 FR-018).
+    /// </remarks>
+    public bool TryGetType(string alias, out Type type)
+    {
+        if (_aliasTypeDictionary.TryGetValue(alias, out type!))
+            return true;
+
+        var read = TypeAliasConvention.ReadAlias(alias);
+        if (!StringComparer.Ordinal.Equals(read, alias) && _aliasTypeDictionary.TryGetValue(read, out type!))
+            return true;
+
+        return _conventionAliasTypeDictionary.TryGetValue(alias, out type!);
+    }
 
     /// <inheritdoc />
     public IEnumerable<Type> ListTypes() => _typeAliasDictionary.Keys;

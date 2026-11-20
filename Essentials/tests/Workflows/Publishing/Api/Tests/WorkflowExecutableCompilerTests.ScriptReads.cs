@@ -160,6 +160,20 @@ public sealed partial class WorkflowExecutableCompilerTests
             ((VariableExpressionParameterBinding)published.NodesById["consumer"].InputBindings["Text"].Expression!.Parameters["variables.greeting"]).DeclaringScopeNodeId);
     }
 
+    [Fact]
+    public async Task An_input_expression_that_assigns_a_variable_refuses_publication()
+    {
+        // Spec 1228 FR-006a, ADR 0083 binding-readonly-v1.
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            CompileReadsAsync(Node("consumer", JavaScriptText("variables.greeting = 'x'")), [Greeting]).AsTask());
+
+        Assert.Contains(ScriptVariableReadDiagnostics.InputExpressionWrite, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'consumer'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'Text'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("variable 'greeting' at 'variables.greeting'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Input expressions only read", exception.Message, StringComparison.Ordinal);
+    }
+
     private ValueTask<WorkflowExecutable> CompileReadsAsync(
         Elsa.Workflows.Design.Core.Models.ActivityNode root,
         IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> variables) =>
@@ -182,7 +196,12 @@ public sealed partial class WorkflowExecutableCompilerTests
         public ScriptVariableReadAnalysis Analyze(string source, bool scriptBody = false) =>
             new(
                 Regex.Matches(source, @"variables\.([A-Za-z_][\w]*)").Select(match => match.Groups[1].Value).ToArray(),
-                source.Contains("variables[", StringComparison.Ordinal));
+                source.Contains("variables[", StringComparison.Ordinal))
+            {
+                Writes = Regex.Matches(source, @"(variables\.([A-Za-z_]\w*)[\w.]*)\s*=[^=]")
+                    .Select(match => new ScriptVariableWrite(match.Groups[2].Value, match.Groups[1].Value))
+                    .ToArray()
+            };
     }
 
     [ActivityScriptOutcomes("script")]
