@@ -260,6 +260,8 @@ public sealed class ScriptBodyVariablesRunTests
         var run = await RunAsync("return (;", sensitive: true);
 
         var fault = run.State("node-js").Fault!.Message;
+        // Jint's own parse error text ("Could not prepare script: …") is kept.
+        Assert.Contains("prepare script", fault);
         Assert.DoesNotContain("withheld", fault);
     }
 

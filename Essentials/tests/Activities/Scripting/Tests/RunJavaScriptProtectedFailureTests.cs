@@ -30,6 +30,15 @@ public sealed class RunJavaScriptProtectedFailureTests
     }
 
     [Fact]
+    public async Task A_caught_refusal_is_the_cause_even_when_the_completion_is_invalid()
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteAsync(
+            "try { variables.cache; } catch (e) { } return complete(1, 42);", new FakeSession()));
+
+        Assert.Equal(FakeSession.Refusal, exception.Message);
+    }
+
+    [Fact]
     public async Task A_script_error_after_a_protected_read_is_withheld()
     {
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteAsync(

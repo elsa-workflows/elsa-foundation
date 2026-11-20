@@ -103,22 +103,27 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         }
         catch (JavaScriptCompletionException exception)
         {
+            ThrowIfRefused(variables);
             return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code, exception.Message));
         }
         catch (JavaScriptPrecisionException exception)
         {
+            ThrowIfRefused(variables);
             // Spec 1228 FR-013: the precision policy refused the result; the step faults and nothing of it is written. With
             // a protected input the fault names no number and no path from it (spec 1229 FR-006).
             return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code,
                 context.HasProtectedInputs || session?.HasReadProtectedValue == true ? exception.ValueFreeMessage : exception.Message));
         }
-        catch (Exception exception) when (exception is not OperationCanceledException and not ScriptVariableWriteRefusedException)
+        catch (ScriptVariableWriteRefusedException)
+        {
+            ThrowIfRefused(variables);
+            throw;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // A read the session refused is the cause, even when the script caught the error and failed otherwise
             // (FR-017a); its message is the session's own and names no value.
-            // No inner exception: the script's own error can quote a protected value it read.
-            if (variables?.Refusal is { } refusal)
-                throw new InvalidOperationException(refusal);
+            ThrowIfRefused(variables);
             // Spec 1229 FR-006: a script error's text can quote what the script read (`throw new Error(variables.ssn)`,
             // a JSON.parse error). With a protected input or read it is not recorded; the type still says what failed. A
             // script that does not parse (Jint's ScriptPreparationException) has read nothing, but its text can quote the
@@ -147,6 +152,15 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
             _ => OutcomeSelection.Unspecified
         };
         return ActivityTransition.Complete(new RunJavaScriptResult(evaluation.Value), selection);
+    }
+
+    // A read the session refused is the cause of a failed step, even when the script caught the error and failed
+    // otherwise (spec 1222 FR-017a). Its message is the session's own and names no value; nothing the script threw is
+    // attached, since that could quote a protected value it read.
+    private static void ThrowIfRefused(StepScriptVariables? variables)
+    {
+        if (variables?.Refusal is { } refusal)
+            throw new InvalidOperationException(refusal);
     }
 }
 
