@@ -156,7 +156,8 @@ public sealed class Elsa3MemoryReferenceImportTests
         });
         var definition = Workflow("loop", loop);
 
-        return Case(definition, [Consumer()], [memoryId], version =>
+        // A dynamic input: a loop item into a typed one is refused (#4898).
+        return Case(definition, [ActivityShape.Create("Elsa.Consumer", inputs: ["Value"], inputType: "Object")], [memoryId], version =>
         {
             var value = ReadValue(FindInput(version, "loop-body", ValueInputKey));
             Assert.Equal("Variable", value.ExpressionType);

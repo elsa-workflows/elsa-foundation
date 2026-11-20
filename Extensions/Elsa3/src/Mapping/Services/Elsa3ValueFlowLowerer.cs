@@ -171,6 +171,22 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
             if (variableMatches.Length == 1)
             {
+                // A loop value read outside its loop is refused below for that reason first.
+                var heldLoop = producerMatches.FirstOrDefault(IsLoopVariable);
+                if (property.InputContract is not null && (heldLoop is null || IsCarriedValue(heldLoop, property)) &&
+                    CapturedResultRefusal(properties, variableMatches[0], producerMatches, property) is { } captured)
+                {
+                    diagnostics.Add(CreateDiagnostic(
+                        input,
+                        property,
+                        Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput,
+                        captured.Message,
+                        captured.Guidance,
+                        $"{property.JsonPath}.memoryReference",
+                        property.MemoryReferenceId));
+                    continue;
+                }
+
                 if (producerMatches.FirstOrDefault(IsLoopVariable) is { } loop)
                 {
                     LowerLoopVariableRead(input, property, loop, diagnostics);
@@ -1109,43 +1125,89 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     /// <summary>
-    /// Spec 1228 US6 (FR-023, FR-024, research R-5): an untyped activity result bound to a boolean, string or number input.
-    /// Elsa 3 coerced whatever the producer returned (<c>ObjectConverter.ConvertTo</c>: <c>"true"</c> and <c>1</c> became
-    /// <c>true</c>, a fraction was rounded into an integer, a boolean became <c>"True"</c>); Elsa 4 converts only a JSON
-    /// value of the matching kind and refuses the rest at run time. So a script's result is kept only when the script's
-    /// source shows a matching kind, and refused at import otherwise: it is never compatible on its own. Null when the
-    /// binding is not such a case or is kept.
+    /// Spec 1228 US6 (FR-023, FR-024, research R-5), extended to every untyped producer by #4898: an untyped activity
+    /// result bound to a boolean, string or number input. Elsa 3 coerced whatever the producer returned
+    /// (<c>ObjectConverter.ConvertTo</c>: <c>"true"</c> and <c>1</c> became <c>true</c>, a fraction was rounded into an
+    /// integer, a number became text); Elsa 4 converts only a value of the matching kind and refuses the rest at run time.
+    /// So the binding is kept only when the kind is known to match (a script's source shows it, or the producer's Elsa 4
+    /// contract fixes it), and refused at import otherwise. Null when the binding is not such a case or is kept.
     /// </summary>
     private static (string Message, string Guidance)? UntypedResultRefusal(
         IReadOnlyList<ActivityProperty> properties,
         Elsa3MemoryOccurrence producer,
         TypeReference producerType,
+        ActivityProperty consumer) =>
+        IsUntyped(producerType, SimpleName(producerType.Alias)) ? ResultRefusal(properties, producer, consumer) : null;
+
+    /// <summary>
+    /// The same check for an untyped workflow variable an activity captures its result into (#4898): the read gets
+    /// whatever the producer wrote, as Elsa 3 coerced it into the input. The first refused producer refuses the read. A
+    /// typed variable, or one only Set Variable writes, is not an untyped result and is not checked here.
+    /// </summary>
+    private static (string Message, string Guidance)? CapturedResultRefusal(
+        IReadOnlyList<ActivityProperty> properties,
+        Elsa3Variable variable,
+        IEnumerable<Elsa3MemoryOccurrence> producers,
+        ActivityProperty consumer)
+    {
+        if (variable.IsArray || string.IsNullOrWhiteSpace(variable.TypeName) || !IsUntypedName(SimpleName(variable.TypeName)))
+            return null;
+        return producers
+            .Select(producer => ResultRefusal(properties, producer, consumer))
+            .FirstOrDefault(refusal => refusal is not null);
+    }
+
+    private static (string Message, string Guidance)? ResultRefusal(
+        IReadOnlyList<ActivityProperty> properties,
+        Elsa3MemoryOccurrence producer,
         ActivityProperty consumer)
     {
         var target = consumer.InputContract!.Type;
-        if (!IsUntyped(producerType, SimpleName(producerType.Alias)) || target.CollectionKind != CollectionKind.Single ||
+        if (target.CollectionKind != CollectionKind.Single ||
             Elsa3ScriptResultKinds.ScalarTarget(SimpleName(target.Alias)) is not { } scalar)
             return null;
 
-        // Only a script's result is checked: its source can show the kind. Other untyped producers (a loop item, an event
-        // payload) keep today's binding; their kind is not in the definition at all.
-        var scriptProperty = properties.FirstOrDefault(property =>
-            property.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal) &&
-            property.Activity.Type.Equals("Elsa.RunJavaScript", StringComparison.Ordinal) &&
-            property.PropertyName.Equals("script", StringComparison.OrdinalIgnoreCase));
-        if (scriptProperty is null)
-            return null;
-        var script = scriptProperty.Expression;
-        var kind = script is { Type: var type, Value: { } source } && type.Equals("Literal", StringComparison.OrdinalIgnoreCase)
-            ? Elsa3ScriptResultKinds.Infer(source)
-            : Elsa3ScriptResultKind.Unknown;
-        if (Elsa3ScriptResultKinds.Fits(kind, scalar))
-            return null;
+        var producerType = properties
+            .FirstOrDefault(property => property.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal))
+            ?.Activity.Type;
+        var reads = $"Input '{consumer.PropertyName}' ({target.Alias}) of activity '{consumer.ActivityNodeId}' reads";
 
-        var message =
-            $"Input '{consumer.PropertyName}' ({target.Alias}) of activity '{consumer.ActivityNodeId}' reads the untyped result of activity '{producer.ActivityNodeId}', " +
-            $"which returns {Elsa3ScriptResultKinds.Describe(kind)}. {Elsa3ScriptResultKinds.Difference(scalar)}.";
-        return (message, Elsa3ScriptResultKinds.Guidance(scalar));
+        if (producerType == "Elsa.RunJavaScript")
+        {
+            var script = properties.FirstOrDefault(property =>
+                property.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal) &&
+                property.PropertyName.Equals("script", StringComparison.OrdinalIgnoreCase))?.Expression;
+            var kind = script is { Type: var type, Value: { } source } && type.Equals("Literal", StringComparison.OrdinalIgnoreCase)
+                ? Elsa3ScriptResultKinds.Infer(source)
+                : Elsa3ScriptResultKind.Unknown;
+            if (Elsa3ScriptResultKinds.Fits(kind, scalar))
+                return null;
+            return ($"{reads} the untyped result of activity '{producer.ActivityNodeId}', which returns " +
+                    $"{Elsa3ScriptResultKinds.Describe(kind)}. {Elsa3ScriptResultKinds.Difference(scalar)}.",
+                Elsa3ScriptResultKinds.Guidance(scalar));
+        }
+
+        // A For loop's current value is its index: an Int32 in Elsa 4, which converts only into an Int32, an Int64 or a
+        // Decimal input (safe widening). Elsa 3 converted it into anything, text included.
+        if (producerType == "Elsa.For" || producer.StablePropertyKey == "index")
+        {
+            if (SimpleName(target.Alias) is "Int32" or "int" or "Int64" or "long" or "Decimal" or "decimal")
+                return null;
+            return ($"{reads} the current index of loop '{producer.ActivityNodeId}', an Int32 in Elsa 4. Elsa 3 converted it " +
+                    $"into any input; Elsa 4 converts an Int32 only into an Int32, Int64 or Decimal input, so the read would fail at run time.",
+                Elsa3ScriptResultKinds.ReadGuidance(scalar));
+        }
+
+        var what = producerType switch
+        {
+            "Elsa.ForEach" or "Elsa.ParallelForEach" => $"the current item of loop '{producer.ActivityNodeId}'",
+            "Elsa.Event" => $"the payload of event '{producer.ActivityNodeId}'",
+            "Elsa.HttpEndpoint" => $"request data captured by HTTP endpoint '{producer.ActivityNodeId}'",
+            "Elsa.SendHttpRequest" => $"response data captured by HTTP request '{producer.ActivityNodeId}'",
+            _ => $"the untyped result of activity '{producer.ActivityNodeId}'"
+        };
+        return ($"{reads} {what}, whose kind the definition does not show. {Elsa3ScriptResultKinds.Difference(scalar)}.",
+            Elsa3ScriptResultKinds.ReadGuidance(scalar));
     }
 
     // The nested element of a collection of collections (spec 1228 FR-022), compared by simple name like the alias.

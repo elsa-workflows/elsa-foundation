@@ -128,6 +128,21 @@ internal static class Elsa3ScriptResultKinds
         _ => "Make the script return a number explicitly, for example by wrapping its value in `Number(…)`, before import."
     };
 
+    /// <summary>
+    /// What to change when the producer is not a script (#4898): a loop item, an event payload, parsed content. Nothing in
+    /// the definition shows their kind, so the input states it in a JavaScript expression in the Elsa 3 workflow.
+    /// </summary>
+    public static string ReadGuidance(Elsa3ScalarTarget target) => target switch
+    {
+        Elsa3ScalarTarget.Decimal =>
+            "Bind the input to a JavaScript expression that returns an integer (for example an amount in cents), or to a value " +
+            "that is already a decimal, before import. Rounding the value would change it.",
+        Elsa3ScalarTarget.Integer => "Bind the input to a JavaScript expression that converts the value explicitly, for example `Math.round(…)`, before import.",
+        Elsa3ScalarTarget.Boolean => "Bind the input to a JavaScript expression that converts the value explicitly, for example `Boolean(…)`, before import.",
+        Elsa3ScalarTarget.String => "Bind the input to a JavaScript expression that converts the value explicitly, for example `String(…)`, before import.",
+        _ => "Bind the input to a JavaScript expression that converts the value explicitly, for example `Number(…)`, before import."
+    };
+
     private static string Expected(Elsa3ScalarTarget target) => target switch
     {
         Elsa3ScalarTarget.Boolean => "a boolean",

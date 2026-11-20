@@ -114,8 +114,8 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
   target, the number is an integer; for a decimal target, an integer or a fraction literal Elsa 3 kept exactly. The import therefore infers the kind from the script's source (decided by Joey
   2026-11-19: infer, refuse unknown) and keeps the binding only then; any other or unknown kind is refused at import
   with `ELS3-UNTYPED-RESULT` and guidance to state the kind (`Boolean(…)`, `String(…)`, `Number(…)`, `Math.round(…)`).
-  Only a script's result is checked: other untyped producers (a loop item, an event payload) carry no source that
-  shows a kind and keep today's binding (follow-up).
+  Other untyped producers (a loop item, an event payload, HTTP data) carry no source that shows a kind; #4898 refuses
+  them the same way, keeping only a For loop's index (an Elsa 4 `Int32`) for an `Int32`, `Int64` or `Decimal` input.
 
 ## R-6 One dynamic kind (settled)
 
