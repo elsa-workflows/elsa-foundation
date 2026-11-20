@@ -65,6 +65,7 @@ when their options change, or when the text they read was written by a changed w
   L201–221) hashes the stored `InlineValue` text. Raw passthrough changes the digests of values written after it,
   which is correct: the digest is of the value as stored.
 - `WorkflowDraftStateHash` and `StructuredLogAppendFingerprint` hash stored text. They change only across a rewrite.
+- Superseded 2026-11-20 by Q11: these three hash the canonical form through `JsonHashInput` too (tasks T023).
 
 **Ordinal comparison of a re-serialization with stored text.** Each compares a value read back from storage with a
 fresh serialization of the incoming value. With raw passthrough, a `JsonElement` read back keeps its stored text,
@@ -104,6 +105,8 @@ Under FR-018 both sides are written by the same serializer, so they agree (infer
 - **Alternatives**:
   - Let the preimages derive from the baseline and recompute every stored hash. Rejected: spec 180 FR-028 forbids
     changing an identity-hashed format in place, and ADR 0038 hashes are pinned in executables and fixtures.
+    Superseded 2026-11-20 by Q11: before the first stable release there are no stored releases to protect, so every
+    hash moves once to `JsonHashInput` and the fixtures are regenerated.
   - Leave the `Ordinal` comparisons as they are. Rejected: they turn equal values into spurious writes or faults.
 
 ## R-2 Dictionary keys (check 2)

@@ -205,7 +205,8 @@ test of every hash.
    `9007199254740992` are not equal; `{}` and `{"x":null}` are not equal; and the value digest of ADR 0092 agrees on
    every pair (FR-021a).
 5. **Given** an unchanged definition exported to Git before and after this change, **When** both files are compared,
-   **Then** they differ only by the null members `IPayloadSerializer` now keeps (FR-022a).
+   **Then** they differ only in the three ways FR-022a lists, and their content hashes differ only through the null
+   members.
 
 ---
 
@@ -508,10 +509,12 @@ faithful-or-refuse.
   hash (FR-021), so its values change once with the rest.
 - **FR-022**: Git definition files MUST keep data text as received (Q5). The Git content hash is `JsonHashInput` over
   the file (FR-021), so a Git round trip keeps every hash whatever the file's indentation or escaping.
-- **FR-022a**: The Git file is written from `IPayloadSerializer` output. Once that keeps nulls (FR-018), an unchanged
-  definition re-exported after S-9 writes its null members, for example `"description": null`. That is a real change
-  of content (missing and `null` differ), made in the same one-time move as FR-021; the repository's Git fixtures are
-  regenerated with it.
+- **FR-022a**: An unchanged definition re-exported to Git after S-9 differs from its earlier export in three ways,
+  all intended: its null members are written (FR-018, for example `"description": null`), its carried data keeps the
+  text it was received with (FR-007, FR-022), and Elsa's own strings use the relaxed encoder (FR-009, `René` instead
+  of `Ren\u00E9`). Only the null members change the content hash (missing and `null` differ); the other two do not,
+  because the hash is taken over the canonical form (FR-021). The repository's Git fixtures are regenerated with
+  this change.
 
 **Runtime durable state (decision 7, question 6)**
 - **FR-023**: The runtime EF writers MUST adopt FR-007 and FR-018 (Q7, card 10). Compatibility and meaning, not a

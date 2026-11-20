@@ -51,8 +51,8 @@ shows each new test failing without the change.
   and host resolvers checked for describing owned types only, with no overlap. Add the FR-011 check: no member of an
   API, store or message contract that carries data is a dictionary, `ExpandoObject`, `object` or POCO; data members
   are `JsonElement` or `JsonNode`
-- [ ] T007 Add the "Baseline deviations" register to `docs/serialization.md`, with the ADR 0091 decision 7 rows and
-  one row for `JsonHashInput`'s option set, the only register entry for hashes (Q11, FR-019, FR-021). Generate `Baselines/json-optionless-calls.txt` from
+- [ ] T007 Add the "Baseline deviations" register to `docs/serialization.md`, with the ADR 0091 decision 7 rows except its
+  hash-inputs row, and one row for `JsonHashInput`'s option set, the only register entry for hashes (Q11, FR-019, FR-021). Generate `Baselines/json-optionless-calls.txt` from
   today's option-less calls, excluding the value-path sites of research R-10 (Q3, FR-002a)
 - [ ] T008 Add `JsonCanonicalForm` in `Serialization/Core/` (FR-021a): move the canonical writer out of
   `Workflows/Runtime/Core/Models/VariableValueDigest.cs` and add `Equals(JsonElement, JsonElement)`. Unit tests with
@@ -98,6 +98,8 @@ shows each new test failing without the change.
   the executable. Add `StrictDateTimeConverters` (used by the API wire contexts and the conversion contracts, not the baseline): `Z` or an offset required, else
   `json-datetime-offset-missing`; a `DateTime` normalized to UTC, a `DateTimeOffset` keeps its offset; `DateOnly` and
   `TimeOnly` as FR-016 states (FR-016, FR-016c, Q8, Q10)
+  Add the converters to every API wire context (the T009 contexts and every other owner and `MapEndpointGroup`
+  context) and to every conversion contract
 - [ ] T015a [US3] FR-016c: test that a start request with an offset-less `DateTime` input, and an own-contract
   `DateTimeOffset` field without an offset, get 400 with `json-datetime-offset-missing` and the path (US3 scenario
   12), and that instants Elsa returns are UTC
@@ -133,14 +135,15 @@ shows each new test failing without the change.
   shared formatter, so every date shows its offset
 - [ ] T017c [US3] Run dialog: `workflowRunInputs.ts` turns `datetime-local` text into ISO 8601 with the setting's
   offset for that date, and `WorkflowRunInputDialog.tsx` shows the zone. Vitest: a winter and a summer Amsterdam date
-  get `+01:00` and `+02:00`, and the UTC setting gives `+00:00`. Verify in the composed host per Studio UX acceptance,
-  with screenshots in the PR
+  get `+01:00` and `+02:00`, and the UTC setting gives `+00:00`. The instance list's From/To filters
+  (`WorkflowInstances.tsx`, `toUtcIso`) use the setting's zone too. Verify in the composed host per Studio UX
+  acceptance, with screenshots in the PR
 
 ## Phase 5: User Story 2 - Data comes back as sent (P1)
 
 - [ ] T018 [US2] Derive `JsonPayloadSerializer` (`Serialization/SystemText/Services/JsonPayloadSerializer.cs`
   L103–137) from the baseline, keeping `DeterministicDictionaryConverter` and `SortObjectMembers` as register entries
-- [ ] T019 [US2] Derive `EfDesignSupport.Json` / `ReadJson`
+- [ ] T019 [US2] Derive the activities design store's options (`ActivitiesDesignDbContext.cs`, its own Web options) and `EfDesignSupport.Json` / `ReadJson`
   (`Workflows/Design/Persistence/EntityFrameworkCore/Stores/EfDesignSupport.cs`) from the baseline for data reads and
   writes; `Fingerprint`, `LegacyFingerprint` and `EfWorkflowLibraryStore.Fingerprint` are handled in T023
   (FR-021)
@@ -154,8 +157,9 @@ shows each new test failing without the change.
   reads a row in today's format with the same meaning, and today's reader options read a new row with the same
   meaning; if they fail, regenerate the migrations and golden fixtures in place (no upcaster, no family-version bump,
   no run-time check). Document the rule of FR-023 in `docs/serialization.md` next to the Distributed gate (Q7)
-- [ ] T022 [US2] Add the round-trip tests of US2 scenarios 1, 2, 4 and 5, plus scenario 3 (suspend, restart, resume)
-  on SQLite and PostgreSQL
+- [ ] T022 [US2] Add the round-trip tests of US2 scenarios 1, 2, 4 and 5 through every FR-008 store (the workflow
+  design store, the activities design store, the runtime store, Git files and exports), plus scenario 3 (suspend,
+  restart, resume) on SQLite and PostgreSQL
 
 ## Phase 6: User Story 4 - Content hashes stay stable (P2)
 
@@ -163,7 +167,10 @@ shows each new test failing without the change.
   move every hash on the T003 checklist to it, including `WorkflowExecutableHasher` and its context,
   `ActivityContract`'s fingerprint, `DefaultActivityDefinitionHasher`, `ExecutableActivityTemplateBehaviorHasher`,
   `EfDesignSupport.Fingerprint`, `EfWorkflowLibraryStore.Fingerprint`, `GitCanonicalJson`, `EtlArtifactJson`,
-  `ActivityForkMaterialFingerprint`, `AuthoringSchemaExporter.ComputeFingerprint` and `VariableValueDigest` (T023b);
+  `ActivityForkMaterialFingerprint`, `AuthoringSchemaExporter.ComputeFingerprint`, the evidence digest
+  (`ExecutionEvidenceCheckpointEnricher`), `WorkflowDraftStateHash`, `StructuredLogAppendFingerprint` and
+  `VariableValueDigest` (T023b). A digest of a stored value then means the value, not its text, so two spellings of
+  one value digest the same;
   delete `EfDesignSupport.LegacyFingerprint` and the V1 verification path of `WorkflowExecutableHasher.MatchesHash`
   (FR-021, Q11)
 - [ ] T023a [US4] Add a golden test per hash (fixed input → pinned value), covering every variant the canonical form
@@ -193,8 +200,8 @@ shows each new test failing without the change.
   `Essentials/tests/Workflows/Fixtures/legacy-set-v1.json`, `WorkflowExecutableCompilerGoldenTests`, the response-replay
   manifests), list them in the PR, and test that equal inputs with other escaping, whitespace, member order or number
   notation hash the same (SC-004, US4 scenario 3)
-- [ ] T026a [US4] FR-022a: test that an unchanged definition exported before and after differs only by kept null
-  members (US4 scenario 5), and regenerate the Git fixtures with them
+- [ ] T026a [US4] FR-022a: test that an unchanged definition exported before and after differs only in the three
+  ways FR-022a lists and that only the null members move its hash (US4 scenario 5); regenerate the Git fixtures
 
 ## Phase 7: User Story 5 - Explicit nulls are kept (P2)
 
@@ -253,7 +260,7 @@ shows each new test failing without the change.
 
 - **T001 and T002 gate everything.** T004 to T008 block every story.
 - **Stories**:
-  - US1 needs only T004.
+  - US1 needs the foundational phase (T004 to T008).
   - US3 needs T004 and T014.
   - US2 needs T004 and T008.
   - US4 needs T008, and must land in the same change as T018 and T025 (FR-022, FR-022a).
@@ -262,7 +269,7 @@ shows each new test failing without the change.
   - US7 needs every earlier story.
   - US8 is independent; T032a needs S-1's `Elsa3ConversionOptions` on the initiative branch (#4855).
   - T017c needs T015 (the refusal it avoids) and T017a. T023 needs T008; T023b needs T023.
-- **Within US3**: T013 runs with T016.
+- **Within US3**: T015 comes before T014 (the scanner reads the conversion contract); T013 runs with T016.
 - **Parallel**: T009 with T014 and T032; T034 to T036 together.
 
 ## Implementation strategy
