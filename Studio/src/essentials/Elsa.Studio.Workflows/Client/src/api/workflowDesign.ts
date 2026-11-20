@@ -12,7 +12,6 @@ import type {
   PromoteDraftResponse,
   ScopedVariableAnalysisResponse,
   ScriptBodyWriteSet,
-  ScriptBodyWriteTarget,
   WorkflowDefinitionDetails,
   WorkflowDefinitionState,
   WorkflowDefinitionsResponse,
@@ -496,17 +495,8 @@ export async function analyzeScopedVariables(
 }
 
 // A script body's may-write set (spec 1231 FR-036), or null when the server sent none or an unreadable one.
-function readScriptWrites(value: unknown): ScriptBodyWriteSet | null {
-  if (!value || typeof value !== "object") return null;
-  const { variables, mayWriteEveryVisibleVariable } = value as { variables?: unknown; mayWriteEveryVisibleVariable?: unknown };
-  if (!Array.isArray(variables) || typeof mayWriteEveryVisibleVariable !== "boolean") return null;
-  const targets = variables.filter((item): item is ScriptBodyWriteTarget =>
-    !!item && typeof item === "object" &&
-    typeof (item as ScriptBodyWriteTarget).name === "string" &&
-    typeof (item as ScriptBodyWriteTarget).scopeId === "string" &&
-    typeof (item as ScriptBodyWriteTarget).referenceKey === "string");
-  return { variables: targets, mayWriteEveryVisibleVariable };
-}
+const readScriptWrites = (value?: ScriptBodyWriteSet | null): ScriptBodyWriteSet | null =>
+  value && Array.isArray(value.variables) ? value : null;
 
 export async function getActivityInputOptions(
   context: StudioEndpointContext,
