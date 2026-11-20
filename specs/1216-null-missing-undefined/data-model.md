@@ -26,7 +26,8 @@ Same two fields. Written in the hash payload as `valuePolicies` only when at lea
 
 ## `WorkflowDeclaredInput.IsNullable` (new, pinned)
 
-From `InputDefinition.IsNullable`. Written in `inputContract` only when `true`.
+From the input's type (Q8: value types not nullable, every other type nullable); the stored
+`InputDefinition.IsNullable` flag is not read for workflow inputs. Written in `inputContract` only when `true`.
 
 ## Undefined policy at evaluation (no new pinned field)
 

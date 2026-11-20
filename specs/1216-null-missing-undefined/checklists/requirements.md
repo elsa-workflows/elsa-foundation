@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [x] No [NEEDS CLARIFICATION] markers remain; Q1–Q5 are accepted, Q6 and Q7 carry a recommendation
+- [x] No [NEEDS CLARIFICATION] markers remain; Q1–Q8 are accepted, Q9 carries a recommendation
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] All acceptance scenarios are defined

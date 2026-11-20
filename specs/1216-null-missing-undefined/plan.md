@@ -2,9 +2,8 @@
 
 **Branch**: `agent/claude/3052-s2-null-missing-undefined` | **Date**: 2026-11-03 | **Spec**: [spec.md](spec.md)
 
-**Status**: ready with the spec. Every ADR it applies is merged into the initiative branch. Implementation starts once
-the spec is approved (D-18). User Story 4 waits for S-8's implementation (#4838) to merge, because it builds in S-8's
-value bridge.
+**Status**: ready with the spec. Every ADR it applies is merged into the initiative branch, and S-8's value bridge
+(#4838) is merged. Implementation starts once the spec is approved (D-18).
 
 ## Summary
 
@@ -18,7 +17,8 @@ says. The technical approach (research R-2 to R-10):
   pinned and hashed on `WorkflowExecutable`, and handed to each JavaScript evaluation from the executable;
 - S-8's script value bridge writer reports or converts `undefined`, `NaN` and `Infinity` (one pass, its existing
   replacer), for binding results, `Run JavaScript` results and variable changes alike;
-- Studio shows the policies as two switches in the workflow properties and a workflow input's *Allow null*;
+- nullability of variables, workflow inputs and outputs comes from the type, as in .NET; no Studio controls, the
+  converter feature's documentation explains the policies;
 - the Elsa 3 converter gets one option that records both policies, and loses spec 262's `?? null` lowering and
   spec 267's null refusals for nullable targets;
 - a computed variable read that matches nothing stays `undefined` and records a warning: already built by S-4.
@@ -47,7 +47,7 @@ admission.
 fixtures from before this change: compatibility is owed from the first stable release, and fixtures whose hashes move
 are regenerated in place. New hash fields are written only when set, so most fixtures do not move.
 
-**Scale/Scope**: about 15 source files in Essentials, 5 in `Extensions/Elsa3`, 3 in Studio, and their tests.
+**Scale/Scope**: about 15 source files in Essentials, 5 in `Extensions/Elsa3`, and their tests.
 
 ## Constitution Check
 
@@ -68,7 +68,7 @@ are regenerated in place. New hash fields are written only when set, so most fix
 | §2.23.5 exception boundaries | PASS | Publication and admission refusals keep their diagnostic exceptions; boundary warnings are diagnostics, not exceptions. |
 | ADR 0038 content-addressed executables | PASS | Policies and input nullability are hashed, written only when set (R-2, R-4). |
 | ADR 0045 §2, ADR 0083, ADR 0091 d. 3 and 8, ADR 0046 V8, ADR 0089 R3 | PASS | All merged into the initiative branch; applied as merged. |
-| Initiatives guide, *Studio work stays in the initiative* | PASS | Studio presentation is FR-031 to FR-033 and Phase 9, built in the implementation PR. |
+| Initiatives guide, *Studio work stays in the initiative* | PASS | Studio gets no controls (Q6); FR-033's diagnostics check is Phase 9. |
 
 ## Decisions
 
@@ -76,16 +76,16 @@ Plan decisions are numbered P-n, apart from the board's D-n.
 
 | # | Decision | Detail |
 |---|---|---|
-| P-1 | Intrinsic `value` takes the target's nullability | R-5, Q8. Variables by kind, outputs by their flag; `name` / `outcome` stay non-nullable strings. The intrinsic executor checks a run-time `null` too (R-6). |
-| P-2 | Variable nullability from the type | R-5: nullable unless a non-nullable value type. Verified in T004. |
-| P-3 | Workflow input nullability pinned | R-4. Hashed only when `true`. |
+| P-1 | Intrinsic `value` takes the target's nullability | R-5, Q8. From the target's type (P-2); `name` / `outcome` stay non-nullable strings. The intrinsic executor checks a run-time `null` too (R-6). |
+| P-2 | Nullability from the type | R-5, Q8: variables, workflow inputs and outputs; value types not nullable (default `false` / `0`), all else nullable (default `null`). T004. |
+| P-3 | Workflow input nullability pinned | R-4. From the type (P-2); hashed only when `true`. |
 | P-4 | Extend #3731's admission | R-3. #3731 already checks the input contract once in `WorkflowStartDispatcher` for every start, before the start policy and enqueue, and fills declared defaults. S-2 adds the board's D-10 completion (`null` or type default) and the `null` refusal for non-nullable inputs to the validator's normalization, and default-on-null substitution before it. No new admission step. |
 | P-5 | Policies on `WorkflowStrategyOptions.NullHandling` | R-2. Compiled to `WorkflowExecutable.ValuePolicies`; each JavaScript evaluation gets the undefined policy from the executable. |
 | P-6 | Default-on-null = type default | R-6, Q2. Value types and enums only; other types keep `VF-ACT-004`. |
 | P-7 | In S-8's bridge writer | R-7. `VF-UNDEF-002` (property dropped), `VF-UNDEF-003` (array element or hole as a `null` placeholder, either policy), `VF-NUM-001` (computed `NaN`/`Infinity`); the policy keeps `undefined` properties as `null`. |
 | P-8 | Script without a value | R-8, Q3. Bindings (expression or statement body) need no `return`; only `Run JavaScript` (a function body) with a bound result and no `return` is refused at publication (`VF-UNDEF-001`). A consumed `undefined` faults the step at run time; `null` under the policy. Unbound: nothing written. |
 | P-13 | `undefined` assigned to a variable | R-8, Q7. `VF-UNDEF-001` fault naming the variable; `null` under the policy. |
-| P-14 | Studio | Q6. `NullHandlingSection` beside `PersistenceModeSection` in `WorkflowPropertiesView`; an *Allow null* column on workflow inputs; warnings through the existing instance diagnostics. |
+| P-14 | Studio | Q6. No controls: engineers set the policies through the converter option or the definition API, and the documentation explains them. Warnings show through the existing instance diagnostics. |
 | P-9 | Converter option | R-9, Q4. `Elsa3MappingOptions.ApplyElsa3NullPolicies`, default `true`. |
 | P-10 | Computed read miss | R-10. Built by S-4 (`VF-READ-001`); no work here. |
 | P-15 | Required with a default | Q9. Requiredness is checked before the default at publication and admission; built-in inputs that are required with a default become optional. |
@@ -126,14 +126,12 @@ Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/
   └── Values/RuntimeActivityInputMaterializer.cs
 Essentials/src/Workflows/Publishing/Api/Handlers/StartWorkflowTestRunRequestHandler.cs  # same substitution
 Essentials/src/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs       # same substitution
-Essentials/src/Expressions/JavaScript/Jint/Services/          # after S-8 (#4838) merges
+Essentials/src/Expressions/JavaScript/Jint/Services/          # S-8's bridge (#4838, merged)
   ├── CopyComparePatchValueBridge.cs       # undefined, holes, NaN/Infinity, the policy
   ├── JintPortableJavaScriptEvaluator.cs   # undefined binding result under the policy
   └── JintJavaScriptScriptEvaluator.cs     # Run JavaScript result
 Essentials/src/Expressions/JavaScript/Core/Exceptions/JavaScriptValueExceptions.cs  # VF-UNDEF-*, VF-NUM-001
-Studio/src/essentials/Elsa.Studio.Workflows/Client/src/
-  ├── NullHandlingSection.tsx (new), WorkflowPropertiesView.tsx, workflowProperties.ts
-  └── __tests__/
+docs: Elsa 3 converter feature README, workflow definition reference
 Extensions/Elsa3/src/Mapping/
   ├── Elsa3MappingFeature.cs, Elsa3MappingOptions.cs (new)
   ├── Mappings/Elsa3WorkflowDefinitionToState.cs
@@ -142,7 +140,7 @@ Extensions/Elsa3/src/Mapping/
 ```
 
 **Structure Decision**: existing projects only; one new file in Runtime.Core (`NullPolicyDefaults`), one in the
-Elsa 3 extension, one Studio component.
+Elsa 3 extension.
 
 ## Complexity Tracking
 

@@ -1,7 +1,8 @@
 # Research: Null, missing and undefined
 
 **Spec**: [spec.md](spec.md) · **Date**: 2026-11-03, rechecked against #3731 and, on 2026-11-20, against the
-initiative branch at `771ba6679f` (S-4, S-6, S-7 part 1, S-10, S-11 merged) and S-8's open implementation (#4838).
+initiative branch at `771ba6679f` (S-4, S-6, S-7 part 1, S-10, S-11 merged) and S-8's implementation (#4838, since
+merged as `8bf168f3e2` with the same bridge code).
 Line numbers are from that initiative head.
 
 ## R-1 What the code does today
@@ -17,7 +18,7 @@ Line numbers are from that initiative head.
 | Workflow inputs | `WorkflowDeclaredInput` (`WorkflowExecutableInputContract.cs` L51–57); `WorkflowExecutableCompiler.BuildInputContract` (L598–612) | `Name`, `Type`, `IsRequired`, `DefaultValue`. **No nullability**: the compiler drops `InputDefinition.IsNullable`. Studio already authors `isNullable` on workflow inputs but shows no column for it. |
 | Admission | `WorkflowStartDispatcher.ApplyInputContract` (L465–481, called at L212); `WorkflowExecutableInputValidator` (L80–89 required, L95–99 defaults, L119 type check); `RuntimeWorkflowStateSeed.BuildSeedChanges` (L63–77) | Since #3731 every new start runs the validator in complete-bag mode before enqueue. An optional input with no declared default is still left out of the bag, so it gets no envelope and the first read fails (#3288). An explicit `null` passes for a `String` input and fails as `incompatible-value` for an `Int32` one: the outcome comes from the L119 conversion, not from a declared nullability. Reason codes: `WorkflowExecutableInputValidation.cs` L67–75 (`runtime.input.*`). |
 | JavaScript results (initiative head) | `JintResultMaterializer.Materialize` (L32–73) | The intrinsic `JSON.stringify`: `undefined` properties dropped, `undefined` array elements and holes become `null`, `NaN` / `Infinity` become `null`, all without a diagnostic (#3170). |
-| JavaScript results (S-8, #4838) | `CopyComparePatchValueBridge.cs`; `JintResultMaterializer` split into `Stringify(engine, value, replacer?)` and `ParseResult` | Every value leaving a script (binding result, script result, variable change) goes through the bridge's writer with a marker replacer. A top-level `undefined` becomes `ScriptValueWrite(null)`. Only an `Infinity` that came from an entered too-large number is tracked, as a precision loss (`VF-PREC-001`); computed `NaN` / `Infinity`, `undefined` properties and holes stay silent. Warnings go through `IExecutionWarningSink` (`ExecutionWarning`). |
+| JavaScript results (S-8, #4838, merged) | `CopyComparePatchValueBridge.cs`; `JintResultMaterializer` split into `Stringify(engine, value, replacer?)` and `ParseResult` | Every value leaving a script (binding result, script result, variable change) goes through the bridge's writer with a marker replacer. A top-level `undefined` becomes `ScriptValueWrite(null)`. Only an `Infinity` that came from an entered too-large number is tracked, as a precision loss (`VF-PREC-001`); computed `NaN` / `Infinity`, `undefined` properties and holes stay silent. Warnings go through `IExecutionWarningSink` (`ExecutionWarning`). |
 | `undefined` result | `JintPortableJavaScriptEvaluator` L71–72 (S-8: after the write check); `JintJavaScriptScriptEvaluator` L79–80 (S-8: `Write` L123–124) | Bindings throw (ADR 0083). `Run JavaScript` returns no value (C# `null` / `ScriptValueWrite(null)`). |
 | Script forms | `PreparedJavaScript.cs` L21–29 (bindings), L46 (`Run JavaScript`) | Bindings are programs: an expression, or a statement body whose value is its completion value or a top-level `return`. `Run JavaScript` is a function body (`"use strict"; (() => { source })()`): its result is only what `return` gives. It is the only built-in script activity. ADR 0083 keeps this "function-body contract". |
 | Spec 262 lowering | `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` (`AddNullCoalescing`, L481–484; called at L142, 153, 214, 221) | The converter wraps each top-level expression result as `(...) ?? null`. |
@@ -77,11 +78,12 @@ Line numbers are from that initiative head.
 
 ## R-4 Workflow input nullability
 
-- **Decision**: add `IsNullable` to `WorkflowDeclaredInput`, fill it from `InputDefinition.IsNullable` in
-  `BuildInputContract`, and hash it in `inputContract` only when `true`, so existing hashes are unchanged for inputs
-  that stay non-nullable. The validator refuses an explicit JSON `null` for a non-nullable input unless default-on-null
+- **Decision**: add `IsNullable` to `WorkflowDeclaredInput`, fill it in `BuildInputContract` from the input's type
+  (R-5, Q8; the stored `InputDefinition.IsNullable` flag is not read for workflow inputs), and hash it in
+  `inputContract` only when `true`. The validator refuses an explicit JSON `null` for a non-nullable input unless default-on-null
   applies (R-3 step 2 and 3).
-- **Rationale**: FR-005; the authored model already has the flag.
+- **Rationale**: FR-005, FR-001a. Studio stores `isNullable: false` on every new workflow input and output, so
+  trusting the flag would refuse `null` for a `String` input; the type gives the same answer .NET would.
 - **Alternatives**: infer nullability from the type alias (rejected: it would change meaning silently).
 
 ## R-5 Explicit null on intrinsics
@@ -90,9 +92,10 @@ Line numbers are from that initiative head.
   (variable type, or the workflow output's declared type), and keeps `IsRequired: true`. Literal keys (`name`,
   `outcome`) stay non-nullable. `WorkflowIntrinsicExecutor` already stores `ExplicitNull`.
 - **Rationale**: FR-001, FR-002. Required stays: the input must be bound, and may be bound to `null`.
-- **Open**: how a variable's nullability is declared. Variables carry a type alias and no nullability flag today. The
-  proposal: a variable is nullable unless its type is a non-nullable value type (`Int32`, `Boolean`, …), which matches
-  how `Any` / `String` variables already hold `null` from expressions. The rule goes by kind, not CLR type: `Any` and
+- **Decided (Q8)**: variables, workflow inputs and workflow outputs take their nullability from their type, as in
+  .NET: a value type (`Int32`, `Boolean`, an enum, …) is not nullable and defaults to `false` / `0` / its zero value;
+  every other type is nullable and defaults to `null`. This matches how `Any` / `String` variables already hold
+  `null` from expressions. For the JSON kinds the rule goes by kind, not CLR type: `Any` and
   every JSON alias (`JsonElement`, `JsonNode` and their full names, which S-8 FR-021 and #4832 treat as one
   structured kind) are nullable, although `JsonElement` is a CLR struct; `Object` reads as `Any` after S-8. Checked in
   T004 against the alias registry.
@@ -131,7 +134,7 @@ Line numbers are from that initiative head.
 - **Rationale**: one pass per written value, no change to JavaScript semantics; a string the script itself produced with
   `JSON.stringify` is a string value and is never re-parsed (FR-018). Building in the bridge, not in
   `JintResultMaterializer`, follows S-8: the materializer is only the bridge's stringify step after #4838.
-- **Order**: User Story 4 is built after #4838 is merged. A JavaScript `Array` hole is not an own property, so the
+- **Note**: a JavaScript `Array` hole is not an own property, so the
   writer checks holes by index, not through the replacer's key list (check in T022).
 - **Check in T022**: the replacer's cost on the byte, depth and node limits; the limits must count the output, not the
   replacer's calls.

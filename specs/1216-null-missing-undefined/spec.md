@@ -35,9 +35,9 @@ matches nothing reads `undefined` in JavaScript and nil in Liquid, records `VF-R
 literal name that matches nothing stays a publish diagnostic. This spec keeps those requirements as the rule and adds
 no work for them.
 
-**Builds on S-8 (spec 1228).** S-8's script value bridge (copy, compare, patch) is the one place a JavaScript value
-leaves a script: a binding result, a script result and a script's variable changes. FR-015 to FR-018 and FR-030 act in
-that bridge's writer. User Story 4 is built after S-8's implementation is merged.
+**Builds on S-8 (spec 1228, implemented).** S-8's script value bridge (copy, compare, patch) is the one place a
+JavaScript value leaves a script: a binding result, a script result and a script's variable changes. FR-015 to FR-018
+and FR-030 act in that bridge's writer.
 
 **Implementation** starts once this spec is approved (D-18: per spec).
 
@@ -81,7 +81,8 @@ delivers FR-008 for an omitted required input and the declared-default half of F
 start path. S-2 adds four things to it:
 - an omitted optional input without a declared default materializes as `null` when nullable, otherwise as its type
   default (FR-006, FR-009);
-- workflow-input nullability is pinned in the input contract (FR-005), so admission refuses an explicit `null` for a
+- workflow-input nullability, which comes from the input's type (FR-001a), is pinned in the input contract (FR-005),
+  so admission refuses an explicit `null` for a
   non-nullable input unless default-on-null applies (FR-008, FR-013);
 - an omitted required input that declares a default is refused, as ADR 0045 §2 says; today the default satisfies it
   (FR-034);
@@ -221,11 +222,9 @@ converter, publish, and run; the same inputs give the same outputs.
 3. **Given** a converted workflow, **When** its policies change, **Then** its artifact hash changes (ADR 0038).
 4. **Given** a native workflow, **When** an author selects a policy, **Then** it behaves exactly like a converted
    workflow with that policy.
-5. **Given** a converted workflow open in Studio, **When** the author opens the workflow properties, **Then** the
-   *Null handling* section shows both switches on; **When** the author turns one off and publishes, **Then** the
-   executable no longer pins it (FR-031).
-6. **Given** a workflow input in Studio's inputs table, **When** the author ticks *Allow null* and publishes, **Then**
-   a start with an explicit `null` for that input is admitted (FR-032).
+5. **Given** a host engineer, **When** they read the Elsa 3 converter feature's documentation, **Then** it states
+   what the option records, what each policy changes at run time, with an example, and that native workflows are not
+   affected (FR-031).
 
 ---
 
@@ -295,9 +294,11 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-001**: The system MUST accept an explicit `null` for every nullable target: activity inputs, variables, workflow
   outputs and the `value` of the `Set` / `SetOutput` intrinsics, whether it comes from a literal, a variable or an
   expression.
-- **FR-001a**: A variable's nullability comes from its kind: it is nullable unless its type is a non-nullable value
-  type (`Int32`, `Boolean`, an enum); `String`, `Any` and every JSON alias are nullable. A workflow output's
-  nullability is its declared *Allow null* flag (Q8).
+- **FR-001a**: The nullability of a variable, a workflow input and a workflow output comes from its type, as in .NET
+  (Q8): `Boolean`, the number types, enums and the other value types cannot hold `null`, and their default is
+  `false`, `0` or the type's zero value; every other type (`String`, `Any`, every JSON alias, object types) can hold
+  `null`, and its default is `null`. No per-member *Allow null* flag is read for these members, and Studio shows none.
+  Activity inputs keep their declared nullability (the activity's .NET contract).
 - **FR-002**: An intrinsic's `value` input MUST take the nullability of its target variable or output, instead of
   always being non-nullable.
 - **FR-003**: Without the default-on-null policy, `null` for a non-nullable target MUST fail with `VF-ACT-004`: at
@@ -307,9 +308,10 @@ omitted; after resume, the first reads explicit null and the invocation record s
   default-on-null policy is recorded.
 
 **Omitted members (D-10)**
-- **FR-005**: Requiredness and nullability MUST be separate, declared properties of an activity input and of a
-  workflow input. A workflow input's nullability MUST be pinned in the executable's input contract and its hash
-  (today only requiredness and the default are).
+- **FR-005**: Requiredness and nullability MUST be separate properties of an activity input and of a workflow input:
+  requiredness is declared, a workflow input's nullability comes from its type (FR-001a). A workflow input's
+  nullability MUST be pinned in the executable's input contract and its hash (today only requiredness and the
+  default are).
 - **FR-006**: An omitted member MUST take its declared default; an optional member without one MUST materialize as
   `null` when nullable, and otherwise as its type's default. A non-nullable type without a non-null default (for
   example `String` or a JSON object) has no type default: such an optional member still needs a declared default, as
@@ -378,29 +380,28 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-022**: The Elsa 3 converter feature MUST have exactly one option that selects the policies Elsa 3 parity needs
   (undefined-as-null and default-on-null), and MUST record them on every workflow it converts while the option is on.
   The option is on by default (Q4) and acts only on workflows the converter produces: Elsa 3 imports and Elsa 3 JSON
-  reconciled at engine start. Native Elsa 4 workflows, new or reconciled, start with both policies off; an author may
-  switch either on per workflow.
+  reconciled at engine start. Native Elsa 4 workflows, new or reconciled, start with both policies off. The policies
+  are an engineer's capability: set through the converter feature's option, or per workflow through the definition
+  API and JSON. Studio has no control for them (Q6).
 - **FR-023**: The undefined-to-null lowering spec 262 added to converted expressions MUST be replaced by the recorded
   policy, so the converter no longer rewrites scripts for this purpose.
-- **FR-024**: The workflow definition API and the exported workflow JSON MUST expose both policies, and a workflow
-  input's nullability, so Studio and export show them.
+- **FR-024**: The workflow definition API and the exported workflow JSON MUST expose both policies, so an engineer
+  can read and set them and an export carries them.
 
-**Studio (Q6)**
-- **FR-031**: Studio's workflow properties MUST show both policies as two switches in a *Null handling* section beside
-  the persistence and incident settings, each with a one-line explanation of what it changes. A converted workflow
-  shows the switches its conversion turned on. Changing a switch changes the definition like any other workflow
-  setting.
-- **FR-032**: Studio's workflow inputs and outputs tables MUST show and edit nullability (*Allow null*) beside
-  *Required*, as the activity contract editor already does for activity inputs. A new input or output whose type can
-  hold null MUST start with *Allow null* on. Today Studio creates an optional, non-nullable `String` input with no
-  default, which FR-006 would refuse at publication.
+**Documentation, not Studio controls (Q6)**
+- **FR-031**: The Elsa 3 converter feature's documentation and the workflow definition reference MUST state, for the
+  converter option and each policy: what it changes at run time, an example of a value with and without it, that it
+  is recorded on each converted workflow, and that native workflows keep both off. Studio adds no control for the
+  policies.
 - **FR-033**: The boundary warnings of FR-016 and FR-017 and the substitution of FR-013 MUST reach Studio through the
   existing instance diagnostics; no new Studio surface is added for them.
 
 **`undefined` written to a variable (Q7)**
-- **FR-030**: A script that assigns `undefined` as a variable's whole value (`variables.discount = undefined`,
-  `setVariable('discount', undefined)`) MUST fault the step without undefined-as-null, naming the variable and saying
-  to assign a value or `null`; under undefined-as-null the variable MUST be written as `null`. A member set to
+- **FR-030**: A script that assigns `undefined` as a variable's whole value MUST fault the step without
+  undefined-as-null, naming the variable and saying to assign a value or `null`; under undefined-as-null the variable
+  MUST be written as `null`. The rule judges the value assigned, not how the script wrote it:
+  `variables.discount = undefined`, `setVariable('discount', undefined)` and `variables.discount = order.discount`
+  where `order` has no `discount` all fault the same way. A member set to
   `undefined` inside a variable's value (`variables.order.discount = undefined`) follows FR-016 and FR-018 like any
   other property.
 
@@ -435,7 +436,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
 ## Spec decisions
 
 These are about how this spec builds the settled decisions above. ADR 0045 §2 left Q1 to Q4 to this spec; Q5 came
-from the code survey; Q6 to Q9 came from the recheck against the merged specs and the code. The requirements follow the answers.
+from the code survey; Q6 to Q9 came from the recheck against the merged specs and the code. Q1 to Q8 are
+accepted; Q9 waits for the coordinator. The requirements follow the answers.
 
 - **Q1 — Where is default-on-null set?** **Accepted: workflow only**, until a case needs per input.
 - **Q2 — Which default does it use?** **Accepted: the type default**, independently of declared defaults: it is what
@@ -453,24 +455,28 @@ from the code survey; Q6 to Q9 came from the recheck against the merged specs an
   **Accepted: refuse** (`VF-ACT-004`) with guidance under any policy; declare the input nullable where an Elsa 4
   activity handles `null`; audit the built-in activities (FR-029). Rejected: substituting `""` (changes what Elsa 3
   did) and passing `null` through (breaks the contract).
-- **Q6 — How does Studio show the policies and a workflow input's nullability?** *Recommended:* two switches in the
-  workflow properties beside persistence and incident handling, and an *Allow null* column on workflow inputs
-  (FR-031 to FR-033). The policies are workflow-level value semantics that D-11 says must be visible, not per-node
-  runtime knobs. Alternative: show the policies read-only and change them only through the API or the converter.
-- **Q7 — A script assigns `undefined` to a whole variable.** *Recommended:* the same rule as a consumed result: a
-  fault naming the variable without undefined-as-null, `null` under it (FR-030). Rejected: writing nothing (the
+- **Q6 — Where are the policies controlled?** **Accepted: by engineers, not in Studio.** The policies matter for
+  converted Elsa 3 workflows, whose migration an engineer runs. The engineer sets them through the converter
+  feature's option (and per workflow through the definition API or JSON); the documentation states clearly what each
+  one changes (FR-031). Studio shows no switch and no read-only label. Rejected: switches or labels in Studio (a
+  different audience, and one flick of a switch can change a workflow's behaviour a lot).
+- **Q7 — A script assigns `undefined` to a whole variable.** **Accepted: refuse with guidance**: the step faults,
+  naming the variable; `null` under undefined-as-null (FR-030). The rule judges the assigned value, so
+  `variables.discount = order.discount` with no `order.discount` faults the same way. Rejected: writing nothing (the
   assignment silently keeps the old value) and always writing `null` (hides the bug in native workflows).
-- **Q8 — Where do variable and output nullability come from?** Problem: `Set` / `SetOutput` must know whether their
-  target accepts `null` (FR-002), but variables carry no nullability flag, and outputs carry one that Studio always
-  sets to off. *Recommended:* variables by kind (FR-001a: nullable unless a non-nullable value type), outputs by
-  their declared flag, with Studio showing it and starting it on (FR-032). Alternative: outputs by kind too, ignoring
-  the flag (then the flag means nothing, and an author cannot forbid `null` on a `String` output).
+- **Q8 — Where does nullability of variables, workflow inputs and workflow outputs come from?** **Accepted: from the
+  type, as in .NET** (FR-001a): `Boolean` defaults to `false`, numbers to `0`, other value types to their zero
+  value, and every other type can hold `null` and defaults to `null`. No *Allow null* flag for these members.
+  Rejected: a per-member flag shown in Studio (Studio stores `false` for it on every new input and output today, so
+  trusting it would refuse `null` even for a `String` output).
 - **Q9 — A required input that declares a default.** Problem: ADR 0045 §2 says a declared default never satisfies a
-  required member, but today it does, at publication for activity inputs and at admission for workflow inputs. Example:
-  a required `Int32` workflow input with default `5`, omitted at start, runs with `5` today; under the ADR it is
-  refused. *Recommended:* apply the ADR (FR-007, FR-034) and declare any built-in activity input that is required
-  with a default as optional, so it keeps its default; the audit is a task. Alternative: amend ADR 0045 so a default
-  satisfies a required member (then *required* only matters for members without a default).
+  required member, but today it does. Example: a workflow definition (written through the API or JSON; Studio has no
+  default column for workflow inputs) declares input `quantity` as required with default `5`. A caller starts the
+  workflow without `quantity`; today the engine fills in `5`, so *required* has no effect. The same happens for a
+  built-in activity input that is required and declares a default in code. *Recommended:* publication refuses a
+  member declared both required and with a default, with a message to choose one; built-in activity inputs declared
+  that way become optional (their default keeps applying), found by an audit task (FR-007, FR-034). Alternative:
+  amend ADR 0045 so a default satisfies a required member.
 
 ## Success Criteria *(mandatory)*
 

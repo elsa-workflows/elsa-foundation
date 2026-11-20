@@ -8,13 +8,15 @@
     "nullHandling": { "defaultOnNull": true, "undefinedAsNull": true }
   },
   "inputs": [
-    { "name": "discount", "type": { "alias": "Decimal" }, "isRequired": false, "isNullable": true }
+    { "name": "discount", "type": { "alias": "String" }, "isRequired": false }
   ]
 }
 ```
 
-Omitted `nullHandling` means both `false`. The block round-trips through export and import unchanged. `isNullable` on
-a workflow input already exists on the authored `InputDefinition`; S-2 pins it in the executable's input contract.
+Omitted `nullHandling` means both `false`. The block round-trips through export and import unchanged. A workflow
+input's nullability comes from its type (`String` here: nullable, omitted reads `null`); S-2 pins it in the
+executable's input contract. Engineers set `nullHandling` through the converter option or this JSON / the definition
+API; Studio has no control for it.
 
 ## Diagnostics
 

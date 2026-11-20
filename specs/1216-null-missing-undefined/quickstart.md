@@ -19,6 +19,7 @@ Run after implementation.
    recorded.
 7. **Storage (US7)**: suspend and resume a workflow with one explicit-null input and one omitted input, on each EF
    provider.
-8. **Studio**: open a converted workflow; *Null handling* shows both switches on. Tick *Allow null* on a
-   workflow input, publish, and start with an explicit `null`: admitted.
+8. **Nullability by type**: start a workflow with a `String` input set to `null`: admitted. The same with an
+   `Int32` input: refused with `runtime.input.null-not-allowed`. Studio shows no policy switch; the converter
+   feature's documentation explains the policies.
 9. **Measurement**: rerun the #3052 JTest measurement and post it on #3052.
