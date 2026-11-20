@@ -25,18 +25,65 @@
 }
 
 /*
+ * Phone- and 768px-tablet-width workbench (#4695). An open inspector takes the whole workbench as a
+ * sheet, and its header offers the way back to the canvas: side by side, the canvas would be left a
+ * sliver too narrow to read or select. The class comes from useSidePanelLayout, which measures the
+ * workbench rather than the viewport, so wider workbenches keep their docked or floating panels.
+ */
+.wf-editor-body.phone-layout.inspector-sheet {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.wf-editor-body.phone-layout.inspector-sheet > .wf-inspector {
+  grid-column: 1;
+  border-left: 0;
+}
+
+.wf-editor-body.phone-layout.inspector-sheet > :is(.wf-palette, .wf-canvas-shell, .wf-side-resize-handle, .wf-side-resize-spacer) {
+  display: none;
+}
+
+.wf-panel-back-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-sm);
+  background: var(--wf-panel);
+  color: var(--wf-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: var(--wf-label-weight, 600);
+  padding: 0 10px 0 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.wf-panel-back-button:hover {
+  background: var(--wf-panel-muted);
+}
+
+.wf-panel-back-button:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+/*
  * Theme layouts (docs/design-tokens.md, "Layouts"). Keyed on the host-published
  * `data-theme-layout` attribute — an arrangement, not a theme — and styled only through tokens.
  */
 
 /* Floating (Drift): palette and inspector float as islands over a full-bleed canvas. */
-html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-canvas-shell {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout) > .wf-canvas-shell {
   grid-row: 1;
   grid-column: 1 / -1;
 }
 
-html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-palette,
-html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-inspector {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout) > .wf-palette,
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout) > .wf-inspector {
   z-index: 3;
   grid-row: 1;
   margin: 12px;
@@ -45,18 +92,18 @@ html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body >
   box-shadow: var(--wf-shadow-overlay);
 }
 
-html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-side-resize-handle,
-html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-side-resize-spacer {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout) > .wf-side-resize-handle,
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout) > .wf-side-resize-spacer {
   display: none;
 }
 
 /* The canvas's own chrome sits between the islands rather than underneath them. */
-html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.palette-maximized):not(.inspector-maximized) > .wf-canvas-shell > :not(.wf-canvas) {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout):not(.palette-maximized):not(.inspector-maximized) > .wf-canvas-shell > :not(.wf-canvas) {
   margin-right: calc(var(--wf-inspector-width, 320px) + 24px);
   margin-left: calc(var(--wf-palette-width, 260px) + 24px);
 }
 
-html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body.palette-absent > .wf-canvas-shell > :not(.wf-canvas) {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout).palette-absent > .wf-canvas-shell > :not(.wf-canvas) {
   margin-left: 12px;
 }
 

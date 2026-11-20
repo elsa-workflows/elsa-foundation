@@ -8,6 +8,8 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     if (host === "editor") {
       await page.getByRole("button", { name: "Test Run", exact: true }).click();
       await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+      // A phone-width inspector is a sheet over the canvas (#4695): return to the canvas to pick a node.
+      if (width <= 600) await page.getByRole("button", { name: "Back to canvas", exact: true }).click();
     }
     const canvas = host === "instance" ? page.getByRole("region", { name: "Workflow run canvas", exact: true })
       : page.getByLabel("Workflow canvas", { exact: true });

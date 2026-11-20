@@ -87,9 +87,78 @@ describe("theme layouts in the designer", () => {
     expect(container.querySelector("[aria-label='Resize activities panel']")).toBeNull();
     expect(container.querySelector("[aria-label='Inspector panel']")).not.toBeNull();
   });
+
+  it("offers the way back to the canvas from a phone inspector sheet and drops its resize handles", () => {
+    const showCanvas = vi.fn();
+    const renderWorkbench = (layout: ReturnType<typeof useSidePanelLayout>) => flushSync(() => root.render(
+      <GraphAuthoringWorkbench
+        resourceKind="workflow-definition"
+        layout={layout}
+        palette={{ ariaLabel: "Activities panel", tabLabel: "Activities tabs", tabs: [{ id: "activities", title: "Activities", order: 0, icon: null, render: () => null }], activeTabId: "activities", onSelect: () => {} }}
+        canvas={<main aria-label="Graph canvas" />}
+        inspector={{ ariaLabel: "Inspector panel", tabLabel: "Inspector tabs", tabs: [{ id: "inspector", title: "Inspector", order: 0, icon: null, render: () => null }], activeTabId: "inspector", onSelect: () => {} }}
+      />
+    ));
+
+    renderWorkbench(sidePanelLayout({ phoneWidth: true, inspectorSheet: true, paletteCollapsed: true, paletteExpanded: false, showCanvas }));
+    const back = container.querySelector<HTMLButtonElement>("[aria-label='Back to canvas']");
+    expect(back?.textContent).toBe("Canvas");
+    expect(container.querySelector(".wf-palette [aria-label='Back to canvas']")).toBeNull();
+    expect(container.querySelector("[role='separator']")).toBeNull();
+    flushSync(() => back!.click());
+    expect(showCanvas).toHaveBeenCalledOnce();
+
+    renderWorkbench(sidePanelLayout({ phoneWidth: true, inspectorSheet: false, inspectorCollapsed: true, inspectorExpanded: false }));
+    expect(container.querySelector("[aria-label='Back to canvas']")).toBeNull();
+
+    renderWorkbench(sidePanelLayout());
+    expect(container.querySelector("[aria-label='Back to canvas']")).toBeNull();
+    expect(container.querySelectorAll("[role='separator']")).toHaveLength(2);
+  });
+
+  it("moves focus from a hidden canvas control to the way back when the sheet opens", () => {
+    const render = (inspectorSheet: boolean) => flushSync(() => root.render(
+      <GraphAuthoringWorkbench
+        resourceKind="workflow-definition"
+        layout={sidePanelLayout({ phoneWidth: true, inspectorSheet })}
+        canvas={<section className="wf-canvas-shell"><button type="button" className="wf-sequence-step">Write Line</button></section>}
+        inspector={{ ariaLabel: "Inspector panel", tabLabel: "Inspector tabs", tabs: [{ id: "inspector", title: "Inspector", order: 0, icon: null, render: () => null }], activeTabId: "inspector", onSelect: () => {} }}
+      />
+    ));
+    render(false);
+    container.querySelector<HTMLButtonElement>(".wf-sequence-step")!.focus();
+    render(true);
+    expect(document.activeElement).toBe(container.querySelector("[aria-label='Back to canvas']"));
+
+    render(false);
+    container.querySelector<HTMLButtonElement>("[aria-label='Collapse inspector panel']")!.focus();
+    render(true);
+    expect(document.activeElement).toBe(container.querySelector("[aria-label='Collapse inspector panel']"));
+  });
+
+  it.each([
+    ["the selected activity", true],
+    ["the inspector's expand control without a selection", false]
+  ] as const)("returns focus to %s when a phone inspector sheet closes", async (_, selected) => {
+    flushSync(() => root.render(
+      <GraphAuthoringWorkbench
+        resourceKind="workflow-definition"
+        layout={sidePanelLayout({ phoneWidth: true, inspectorSheet: true })}
+        canvas={<section className="wf-canvas-shell"><button type="button" className="wf-sequence-step" aria-pressed={selected}>Write Line</button></section>}
+        inspector={{ ariaLabel: "Inspector panel", tabLabel: "Inspector tabs", tabs: [{ id: "inspector", title: "Inspector", order: 0, icon: null, render: () => null }], activeTabId: "inspector", onSelect: () => {} }}
+      />
+    ));
+
+    container.querySelector<HTMLButtonElement>("[aria-label='Back to canvas']")!.click();
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
+    expect(document.activeElement).toBe(selected
+      ? container.querySelector(".wf-sequence-step")
+      : container.querySelector(".wf-inspector .wf-panel-actions button"));
+  });
 });
 
-function sidePanelLayout(): ReturnType<typeof useSidePanelLayout> {
+function sidePanelLayout(overrides: Partial<ReturnType<typeof useSidePanelLayout>> = {}): ReturnType<typeof useSidePanelLayout> {
   return {
     containerRef: () => {},
     paletteWidth: 260,
@@ -101,13 +170,17 @@ function sidePanelLayout(): ReturnType<typeof useSidePanelLayout> {
     maximizedSidePanel: null,
     paletteExpanded: true,
     inspectorExpanded: true,
+    phoneWidth: false,
+    inspectorSheet: false,
+    showCanvas: () => {},
     editorBodyClassName: "wf-editor-body",
     editorBodyStyle: { "--wf-palette-width": "260px", "--wf-inspector-width": "320px" },
     setInspectorCollapsed: () => {},
     toggleSidePanelCollapsed: () => {},
     toggleSidePanelMaximized: () => {},
     startSidePanelResize: () => {},
-    handleSidePanelResizeKeyDown: () => {}
+    handleSidePanelResizeKeyDown: () => {},
+    ...overrides
   };
 }
 

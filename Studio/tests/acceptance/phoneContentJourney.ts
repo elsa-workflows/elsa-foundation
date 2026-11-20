@@ -43,9 +43,20 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await expectCanvas();
   for (const width of [768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
-    await expectCanvas();
-    await capture(page, info, `authoring-${width}`);
+    if (width === 768) {
+      await expect(page.getByRole("button", { name: "Expand inspector panel", exact: true })).toBeVisible();
+      await expectCanvas();
+      await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Back to canvas", exact: true })).toBeVisible();
+      await expect(canvas).toBeHidden();
+      await capture(page, info, `authoring-${width}`);
+      await page.getByRole("button", { name: "Back to canvas", exact: true }).click();
+      await expect(canvas).toBeVisible();
+    } else {
+      await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
+      await expectCanvas();
+      await capture(page, info, `authoring-${width}`);
+    }
   }
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto(editorUrl); await expectCanvas();
   await expect(page.locator("#activity-draft-title")).toHaveText(activityName);
