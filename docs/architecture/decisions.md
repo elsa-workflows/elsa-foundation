@@ -317,6 +317,22 @@ invariants S1 to S4, a coordinator design under these answers.
 | 19 Nov | Release 1 has StateMachine's full surface: hierarchy and parallel regions (K7); in Studio the chart designer with the transition inspector and the hierarchy outline, and the run view of the active configuration and pending phases with linked history (K10). History states stay deferred. | Owner card; answer 3; [program plan](../program-goals/clean-slate-kernel.md#milestones) K7 and K10 |
 | 19 Nov | Release 1's saga-style StateMachine example uses ordinary activities and explicit compensating states and transitions, with no Saga type. Native compensation on the kernel is a separate scope decision. | Owner card; answer 4 |
 
+## Owner decisions (20 November)
+
+The owner took five cards on 20 November, each on the recommended option. Three settle conditions of the
+[gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) table (NL-C1, FC-C2, FC-C3), whose
+status stays Open until their evidence lands; two settle findings of the Elsa 4 Architect's re-check on #4229
+([comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7026689348)). None changes the
+contract's count of 38 types and 167 members.
+
+| Date | Rule | Source |
+|---|---|---|
+| 20 Nov | NL-C1: the take's transaction runs at read committed on every engine. On each engine NL-9's locking-read mutation must deadlock and the ordered take must not: SQL Server with the take at REPEATABLE READ, with and without RCSI; MySQL at REPEATABLE READ with the node read as a subquery of the update, a locking read there; PostgreSQL with the node read taken `FOR SHARE`. K1b slice 6 builds the evidence. This replaces the coordinator's narrowing of 19 November in the K1b README. | Owner card; [plan, gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) NL-C1 |
+| 20 Nov | A pending partition the host gives up moves only through its counting retake, then is released at the returned epoch. On a hand-over it stays pending, marked given up, until the next answer's retake; on a full release (dispose) the counting retake runs at once, and a partition that cannot be retaken stays pending and given up while the host keeps passing that Worker until its pending set is empty. | Owner card; [ownership and fencing](ownership-and-fencing.md#the-nodes-heartbeat), NL-10 |
+| 20 Nov | FC-C2: a request to `Event(key)` answered "no waiter" published nothing. No wait consumes it, now or later, and keeping waits never see it, so a retry is safe. A caller who wants the event kept uses `SendAsync(Event(key))` with `KeepFor`. | Owner card; [the foundation contract](foundation-contract.md#ingress-iingress), FC-6 |
+| 20 Nov | FC-C3: a turn may send `Terminate` to its own registered children only; the commit checks only the parent's child registry. A `Terminate` that reaches a child that has already ended is the ordinary delivery to an ended actor and changes nothing (FC-9). | Owner card; [the foundation contract](foundation-contract.md#what-a-foundation-adapter-must-supply), FC-9 |
+| 20 Nov | Ambient: a request fanned out to an event key gives `Ambient` only to a waiter whose turn runs on the node that took the request. Waiters elsewhere get none, and the first live output still answers (FC-14). | Owner card; [the foundation contract](foundation-contract.md#ingress-iingress), `RequestOptions`, FC-6 and FC-14 |
+
 ## Process
 
 | Date | Rule | Source |
