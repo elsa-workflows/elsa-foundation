@@ -5,7 +5,7 @@ Status: proposed (output-capture slice accepted — see Decision status)
 Amendment proposed (analysis A-1): one core value model, an adapter with a written contract at every boundary, and the agreed adapter rules. If
 accepted, it settles the representation taxonomy that this ADR leaves proposed. See *Amendment* below.
 
-V9 and the adapter rules were clarified on 2026-11-20, decision unchanged: accepting a precision loss at a write is
+V9 and the *Adapter rules* table were clarified on 2026-11-20, decision unchanged: accepting a precision loss at a write is
 host-wide, through the precision policy the host installs. No workflow or published executable records an acceptance.
 
 Product requirements are captured in [Typed Output Binding Coercion PRD](../plans/output-binding-coercion-prd.md).
@@ -125,9 +125,9 @@ replacement and precision handling:
   (copied, returned, or inside a replaced array), the write is **refused by default with a diagnostic** naming the path
   and both values, and saying plainly why: JavaScript cannot hold the value exactly, because it exceeds the largest
   integer a JavaScript number holds exactly (2^53 − 1, `9007199254740991`). A warning alone is insufficient, because
-  silent precision loss corrupts data. Such a write goes
-  through only when the host's precision policy allows it (next rule). A loss is never accepted per workflow, and the
-  published conversion contract records no acceptance; a designer who needs exact digits holds them as a string. A script that only **computes** with such a value,
+  silent precision loss corrupts data. Such a write goes through only when the host's precision policy allows it (next
+  rule). A workflow cannot accept a loss itself, and the published conversion contract records no acceptance; a
+  designer who needs exact digits holds them as a string. A script that only **computes** with such a value,
   without writing it, still gets a warning — the engine cannot prevent a lossy computation
   (`9007199254740993 + 1` is still `9007199254740992`), only its silent persistence.
 - **How a loss is handled is a replaceable policy; the default refuses.** The handling of a precision loss is one

@@ -6,7 +6,7 @@ design in a brainstorming session on 2026-10-24, started from the review of spec
 architects agreed the amended text; Joey Barten recorded the agreement as coordinator. Decision 3 was amended on
 2026-11-17 (computed and opaque writes in scripts, from spec 1231 Q5), approved by Joey Barten as coordinator. C3's
 precision sentence was clarified on 2026-11-20 to match ADR 0046 V9, decision unchanged: a loss is accepted only by the
-host's precision policy, never per workflow.
+host's precision policy, not per workflow.
 
 Part of epic #3052. Implementing it needs an active program whose scope covers runtime value flow
 ([program-goal registry](../program-goals/README.md#registry)). It amends
