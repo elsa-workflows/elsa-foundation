@@ -155,8 +155,9 @@ Line numbers are from that initiative head.
   - At run time, a bound `Run JavaScript` result that is `undefined` faults the step with `VF-UNDEF-001`, or is
     `ExplicitNull` under the policy. An unbound result writes nothing.
   - A script that assigns `undefined` to a whole variable (FR-030, Q7) faults the step with `VF-UNDEF-001` naming the
-    variable, or writes `ExplicitNull` under the policy. S-7 part 2 builds script writes; this rule goes in the
-    bridge's change report, which S-7 consumes, so whichever lands second adds the end-to-end test.
+    variable, or writes `ExplicitNull` under the policy. Script writes go through S-7's `StepVariableSession.Write`;
+    the bridge and the session both carry "no value" distinct from JSON `null`, and the session decides. A `null`
+    written there is checked against the variable's nullability like a `Set` (T010b).
 - **Rationale**: a bound result that is never produced is a bug in the script; this matches ADR 0083's rule for
   bindings. Elsa 3's `Result = null` stays available through the policy.
 - **Alternatives**: an absent result that the binding skips (rejected: it silently keeps the old value); always

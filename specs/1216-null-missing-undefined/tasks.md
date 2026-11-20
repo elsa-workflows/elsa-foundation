@@ -82,6 +82,12 @@ red without the change. xUnit only.
   intrinsic's execution like an activity input. Today `ValidateAssignmentPayload` skips anything not `Present`. Tests:
   a literal `null`, a variable holding `null` and the expression `null` into an `Int32` variable, with and without the
   policy
+- [ ] T010b [US1] Step writes: in `StepVariableSession.Write` (used by `Run JavaScript` script writes through
+  `StepScriptVariables` and by .NET activities through `IStepVariables`), check a `null` against the variable's
+  nullability before it becomes an intent: `VF-ACT-004` for a non-nullable variable, the type default under
+  `DefaultOnNull` (from the executable the session holds), recording `VF-NULL-001` on the step's invocation. Today
+  `Validate` skips anything not `Present`, so `variables.count = null` on an `Int32` variable is written. Tests: a
+  script write and an `IStepVariables` write of `null` to an `Int32` variable, with and without the policy
 - [ ] T011 [US1] Tests in `Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`: null
   literal into a nullable variable and a nullable output publishes; into an `Int32` variable fails with `VF-ACT-004`
 - [ ] T012 [US1] Run test: the variable holds `ExplicitNull` and a workflow output persists an explicit JSON `null`
@@ -165,11 +171,12 @@ input, and one workflow input supplied as `null`.
   for lacking one. At run time the activity's result carries "no value" (a top-level `undefined`) distinct from JSON
   `null`; the runtime step that writes the result to its bound target faults on "no value" with `VF-UNDEF-001`, or
   writes `ExplicitNull` under the policy; an unbound result writes nothing
-- [ ] T025 [US4] `undefined` assigned to a whole variable (FR-030, Q7): the bridge's change report marks it; the step
-  faults with `VF-UNDEF-001` naming the variable, or writes `ExplicitNull` under the policy. A member set to
-  `undefined` follows T022. Test `variables.discount = order.discount` with no `order.discount` as well. If S-7
-  part 2 (script writes) is not merged yet, test at the bridge and leave the end-to-end test to whichever lands
-  second
+- [ ] T025 [US4] `undefined` assigned to a whole variable (FR-030, Q7): carry "no value" distinct from JSON `null`
+  from the bridge (today a top-level `undefined` becomes `ScriptValueWrite(null)`) through to
+  `StepVariableSession.Write` (today it maps `Undefined` to `ValueEnvelope.Null`); there the step faults with
+  `VF-UNDEF-001` naming the variable, or writes `ExplicitNull` under the policy. A member set to `undefined` follows
+  T022. End-to-end tests through `Run JavaScript`, including `variables.discount = order.discount` with no
+  `order.discount`
 - [ ] T026 [US4] Tests for each US4 acceptance scenario, including a `JSON.stringify` string that is not rewritten,
   `undefined` at depth three, a hole, a top-level `0/0` and `1/0` binding result, a `Run JavaScript` body that returns on some paths only, and a path warning
   that names only the root when the evaluation read a protected value (FR-028)
