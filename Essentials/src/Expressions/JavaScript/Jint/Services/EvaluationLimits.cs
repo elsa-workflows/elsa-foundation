@@ -12,10 +12,11 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// <list type="bullet">
 /// <item>The evaluator starts the count right before the script runs and again before its result and variables are
 /// written, so the engine setup, the input conversion and the parse before them never count.</item>
-/// <item>The engine's own work in between — a host-function call, the value bridge serializing or comparing a value — is
-/// an excluded region: the statements and memory it uses do not count against the script, and inside it they are limited
-/// per region, as Jint's per-call reset limited them (a script's toJSON met there stays bounded). The timeout is the
-/// evaluation's wall clock and counts everything, a slow host function included.</item>
+/// <item>Every statement counts, wherever it runs: a toJSON, getter or Proxy trap met while a value is converted is the
+/// script's own code.</item>
+/// <item>The memory the value bridge allocates in plain .NET work — parsing, comparing and patching JSON, where no script
+/// code can run — does not count against the script (<see cref="ExcludeHostWork"/>). Should script code run inside such
+/// a section after all, its memory counts.</item>
 /// </list>
 /// The exceptions are the ones Jint throws for the same limits; a timeout is marked so a host function's own timeout stays
 /// its own error.
@@ -29,25 +30,23 @@ internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, lo
 
     private bool _started;
     private long _phaseStarted;
-
-    // The script's own count: statements, and bytes allocated outside excluded regions.
     private long _statements;
     private long _memoryBaseline;
     private long _excludedBytes;
 
-    // The current excluded region, counted on its own.
-    private int _regionDepth;
-    private long _regionStatements;
-    private long _regionBaseline;
+    // The current host-work section.
+    private int _hostWorkDepth;
+    private long _hostWorkBaseline;
+    private bool _scriptRanInHostWork;
 
     /// <summary>Starts the count for one phase of the evaluation: the script, or writing what it left.</summary>
     public static void Start(Engine engine) => engine.Constraints.Find<EvaluationLimits>()?.Start();
 
     /// <summary>
-    /// Marks the engine's own work (a host-function call, the value bridge) as not the script's: its statements and memory
-    /// are limited on their own and do not count against the script. Dispose to end the region.
+    /// Marks plain .NET work of the host (parsing, comparing, patching JSON): the memory it allocates does not count against
+    /// the script, unless script code runs inside it. Dispose to end the section.
     /// </summary>
-    public static Region Exclude(Engine engine) => new(engine.Constraints.Find<EvaluationLimits>());
+    public static HostWork ExcludeHostWork(Engine engine) => new(engine.Constraints.Find<EvaluationLimits>());
 
     /// <summary>Whether an exception is a limit this constraint raised.</summary>
     public static bool IsLimit(Exception exception) => exception.Data.Contains(LimitMark);
@@ -56,8 +55,9 @@ internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, lo
     {
         if (!_started)
             return;
-        var inRegion = _regionDepth > 0;
-        if (maxStatements is { } max && (inRegion ? ++_regionStatements : ++_statements) > max)
+        if (_hostWorkDepth > 0)
+            _scriptRanInHostWork = true;
+        if (maxStatements is { } max && ++_statements > max)
             throw new StatementsCountOverflowException();
         if (_timeoutTicks is { } limitTicks && Stopwatch.GetTimestamp() - _phaseStarted > limitTicks)
         {
@@ -68,8 +68,7 @@ internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, lo
 
         if (maxMemoryBytes is { } limit)
         {
-            var allocated = GC.GetAllocatedBytesForCurrentThread();
-            var used = inRegion ? allocated - _regionBaseline : allocated - _memoryBaseline - _excludedBytes;
+            var used = GC.GetAllocatedBytesForCurrentThread() - _memoryBaseline - _excludedBytes;
             if (used > limit)
                 throw new MemoryLimitExceededException($"Script has allocated {used} but is limited to {limit}");
         }
@@ -89,32 +88,33 @@ internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, lo
         _memoryBaseline = GC.GetAllocatedBytesForCurrentThread();
     }
 
-    private void Enter()
+    private void EnterHostWork()
     {
-        if (_regionDepth++ > 0)
+        if (_hostWorkDepth++ > 0)
             return;
-        _regionStatements = 0;
-        _regionBaseline = GC.GetAllocatedBytesForCurrentThread();
+        _hostWorkBaseline = GC.GetAllocatedBytesForCurrentThread();
+        _scriptRanInHostWork = false;
     }
 
-    private void Exit()
+    private void ExitHostWork()
     {
-        if (--_regionDepth > 0)
+        if (--_hostWorkDepth > 0)
             return;
-        _excludedBytes += GC.GetAllocatedBytesForCurrentThread() - _regionBaseline;
+        if (!_scriptRanInHostWork)
+            _excludedBytes += GC.GetAllocatedBytesForCurrentThread() - _hostWorkBaseline;
     }
 
-    /// <summary>An excluded region; a no-op when the engine has no limits.</summary>
-    public readonly struct Region : IDisposable
+    /// <summary>A host-work section; a no-op when the engine has no limits.</summary>
+    public readonly struct HostWork : IDisposable
     {
         private readonly EvaluationLimits? _limits;
 
-        internal Region(EvaluationLimits? limits)
+        internal HostWork(EvaluationLimits? limits)
         {
             _limits = limits;
-            _limits?.Enter();
+            _limits?.EnterHostWork();
         }
 
-        public void Dispose() => _limits?.Exit();
+        public void Dispose() => _limits?.ExitHostWork();
     }
 }

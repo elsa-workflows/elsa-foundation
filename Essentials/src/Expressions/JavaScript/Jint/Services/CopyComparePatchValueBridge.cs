@@ -85,8 +85,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         public ScriptValueChange Collect(string key, JsValue current, bool assigned)
         {
             ArgumentException.ThrowIfNullOrEmpty(key);
-            // The bridge's own work, not the script's: limited per call, not counted against the script.
-            using var region = EvaluationLimits.Exclude(_engine);
+            // The bridge's own work: its memory is not the script's, unless the script's code (a toJSON, a getter) runs.
+            using var hostWork = EvaluationLimits.ExcludeHostWork(_engine);
             var started = Stopwatch.GetTimestamp();
             try
             {
@@ -155,7 +155,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         public ScriptValueWrite Write(JsValue value, string path)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-            using var region = EvaluationLimits.Exclude(_engine);
+            using var hostWork = EvaluationLimits.ExcludeHostWork(_engine);
             var started = Stopwatch.GetTimestamp();
             try
             {
@@ -260,12 +260,16 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 _markerPaths[marker] = _originPaths[instance];
                 return new JsString(marker);
             });
-            // Plain operators only, so nothing the script changed on the prototypes can intercept the replacer.
-            var factory = _engine.Evaluate(
-                "(function (lookup, infinity) { return function (key, value) {" +
-                " if (value === Infinity || value === -Infinity) return infinity(value);" +
-                " return value !== null && typeof value === 'object' ? lookup(value) : value; }; })");
-            return _engine.Invoke(factory, lookup, InfinityMarker());
+            var infinity = InfinityMarker();
+            // .NET, not JavaScript: nothing the script changed on the prototypes can intercept it, and it runs no script
+            // statement, so the bridge's work stays apart from the script's in the evaluation limits.
+            return new ClrFunction(_engine, "replacer", (_, arguments) =>
+            {
+                var value = arguments.At(1);
+                if (value.IsNumber() && double.IsInfinity(value.AsNumber()))
+                    return infinity.Call(JsValue.Undefined, [value]);
+                return value is ObjectInstance ? lookup.Call(JsValue.Undefined, [value]) : value;
+            });
         }
 
         /// <summary>
@@ -293,10 +297,17 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             return true;
         }
 
-        private JsValue InfinityOnlyReplacer() =>
-            _infinityReplacer ??= _engine.Invoke(
-                _engine.Evaluate("(function (infinity) { return function (key, value) { return value === Infinity || value === -Infinity ? infinity(value) : value; }; })"),
-                InfinityMarker());
+        private JsValue InfinityOnlyReplacer()
+        {
+            if (_infinityReplacer is not null)
+                return _infinityReplacer;
+            var infinity = InfinityMarker();
+            return _infinityReplacer = new ClrFunction(_engine, "replacer", (_, arguments) =>
+            {
+                var value = arguments.At(1);
+                return value.IsNumber() && double.IsInfinity(value.AsNumber()) ? infinity.Call(JsValue.Undefined, [value]) : value;
+            });
+        }
 
         private bool IsUnchanged(ObjectInstance instance)
         {

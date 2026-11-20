@@ -133,9 +133,9 @@ internal sealed class JavaScriptHostFunctions
         CancellationToken cancellationToken) =>
         new(engine, name, (_, arguments) =>
         {
-            // The call is the host's work, not the script's: its statements and memory are limited per call and do not
-            // count against the script; the evaluation's timeout still runs.
-            using var region = EvaluationLimits.Exclude(engine);
+            // The call is the host's work: its memory is not the script's, unless the script's code (a toJSON, a getter met
+            // converting an argument) runs in it. Every statement and the evaluation's timeout still count.
+            using var hostWork = EvaluationLimits.ExcludeHostWork(engine);
             var values = new JsonElement[arguments.Length];
             for (var index = 0; index < arguments.Length; index++)
                 values[index] = Argument(engine, options, declaration.Name, index, arguments[index]);

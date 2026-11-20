@@ -244,6 +244,24 @@ public sealed class HostFunctionArgumentTests
         Assert.Contains("\"updatedAt\":1", session.Written!.Value.GetRawText(), StringComparison.Ordinal);
     }
 
+    // The script's own code met in host work (a toJSON on an argument) is the script's: its statements and the memory it
+    // keeps count against the script's limits, across calls.
+    [Fact]
+    public async Task Script_code_in_host_work_counts_its_statements()
+    {
+        await Assert.ThrowsAsync<global::Jint.Runtime.StatementsCountOverflowException>(() => RunAsync(
+            "var n = 0; for (var j = 0; j < 30; j++) acme.echo({ toJSON: function () { for (var k = 0; k < 4000; k++) n++; return 1; } }); return n;",
+            configure: feature => { feature.MaxStatements = 10_000; feature.ExecutionTimeout = null; }));
+    }
+
+    [Fact]
+    public async Task Script_code_in_host_work_counts_the_memory_it_keeps()
+    {
+        await Assert.ThrowsAsync<global::Jint.Runtime.MemoryLimitExceededException>(() => RunAsync(
+            "var keep = []; for (var i = 0; i < 20; i++) acme.echo({ toJSON: function () { keep.push('x'.repeat(20000000) + i); return 1; } }); return keep.length;",
+            configure: feature => { feature.MaxMemoryBytes = 64 * 1024 * 1024; feature.ExecutionTimeout = null; }));
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {
