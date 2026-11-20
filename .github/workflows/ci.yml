@@ -1795,7 +1795,7 @@ jobs:
       # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
       - name: Build
         run: |
-          for p in sim models/Native.Recovery.Run models/Statecharts.Run conformance/Kernel.Store.Conformance.Run models/Graph.Tests; do
+          for p in sim models/Native.Recovery.Run models/Statecharts.Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1845,6 +1845,10 @@ jobs:
           $STC semantic-flaw TakeIgnoresNodeLease "NL-2" "from the live p"
           $STC semantic-flaw PlainReadEmptyFence "NL-5" "taken on the wire landed"
           $STC semantic-flaw StableNodeName "NL-6" "while its predecessor's node lease was live"
+
+      # K1b slice 5b: `semantic` runs the loop-yield, fixed-host and watchdog checks first; the filter keeps two cases.
+      - name: Runtime checks and placement
+        run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic placement
 
       - name: Graph engine corpus
         run: dotnet test models/Graph.Tests -c Release --no-build
