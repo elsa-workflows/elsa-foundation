@@ -556,16 +556,18 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
   const edges = runCanvas.edges;
-  const showEditorRunData = () => {
-    if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
+  // Selecting an activity while a run is attached reveals the Inspector and keeps the activity view the
+  // author chose (#4845).
+  const revealEditorInspector = () => {
+    if (runCanvas.attached) { setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
   };
   const selectEditorNode = (nodeId: string | null) => {
     select(nodeId);
-    if (inspectorView === "run-data") showEditorRunData();
+    revealEditorInspector();
   };
   const selectEditorNodes = (nodeIds: string[], primaryNodeId?: string | null) => {
     canvas.selectNodes(nodeIds, primaryNodeId);
-    if (nodeIds.length && inspectorView === "run-data") showEditorRunData();
+    if (nodeIds.length) revealEditorInspector();
   };
   const selectedCanvasNodeIds = useMemo(() => {
     const selected = nodes.filter(node => node.selected).map(node => node.id);
