@@ -58,12 +58,9 @@ public static class ValueConversionCompatibility
         };
     }
 
+    // The dynamic kind under any of its names: Any, JsonElement, JsonNode, nullable or not (spec 1228 FR-021).
     public static bool IsCanonicalAnyTarget(ValueTypeDescriptor target) =>
-        target.CollectionKind == CollectionKind.Single &&
-        (StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "Elsa.Any") ||
-         StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "Any") ||
-         StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "JsonNode") ||
-         StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "Text.Json.JsonElement"));
+        target.CollectionKind == CollectionKind.Single && TypeAliasConvention.IsDynamicKind(target.Alias);
 
     public static bool IsJsonObjectTarget(ValueTypeDescriptor target) =>
         target.CollectionKind == CollectionKind.Single &&

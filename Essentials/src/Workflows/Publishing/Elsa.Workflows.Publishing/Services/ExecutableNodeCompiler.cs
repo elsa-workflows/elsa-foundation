@@ -37,6 +37,7 @@ public sealed class ExecutableNodeCompiler(
     ValueConversionPlanResolver? conversionPlanResolver = null,
     ScriptVariableReadResolver? scriptVariableReadResolver = null)
 {
+
     /// <summary>
     /// The scoped-variable visibility of one compilation, iteration scopes included, kept per tree projection so the
     /// recursive node compilation reads it without threading it through every call (spec 1222 FR-001, FR-004a).
@@ -282,6 +283,7 @@ public sealed class ExecutableNodeCompiler(
                 continue;
             }
 
+            EnsureReadOnly(nodeId, key, plan);
             EnsureResolvable(nodeId, key, plan);
             var parameters = expression.Parameters
                 .Where(parameter => !ExpressionParameterSurfaces.TryGetVariableName(parameter.Key, out _))
@@ -317,6 +319,20 @@ public sealed class ExecutableNodeCompiler(
         }
 
         return pinned;
+    }
+
+    /// <summary>
+    /// Spec 1228 FR-006a, ADR 0083 <c>binding-readonly-v1</c>: an input expression only reads. One that the source shows
+    /// assigning a variable, or a member of one, is refused here; a write publication cannot see fails at run time.
+    /// </summary>
+    private static void EnsureReadOnly(string nodeId, string inputKey, ScriptVariableReadPlan plan)
+    {
+        if (plan.Writes.Count == 0)
+            return;
+        var write = plan.Writes[0];
+        throw new ArgumentException(
+            $"Input '{inputKey}' on activity node '{nodeId}': " +
+            ScriptVariableReadDiagnostics.DescribeInputExpressionWrite(write.Name, write.Path));
     }
 
     private static void EnsureResolvable(string nodeId, string inputKey, ScriptVariableReadPlan plan)
@@ -603,7 +619,7 @@ public sealed class ExecutableNodeCompiler(
 
         // Dynamic JSON has no static source contract. Runtime validates its actual payload against
         // the destination contract before storage; do not invent a source type or parse string content.
-        if (sourceType is null || sourceType.Alias == "Elsa.Any")
+        if (sourceType is null || TypeAliasConvention.IsAny(sourceType.Alias))
             return binding;
         var source = new ValueTypeDescriptor(sourceType.Alias, sourceType.CollectionKind);
         try
@@ -683,14 +699,14 @@ public sealed class ExecutableNodeCompiler(
                 {
                     VariableReference = new ActivityInputVariableReference(
                         StringComparer.Ordinal.Equals(input.VariableAccess, InputVariableAccess.ReadWrite) ? ActivityVariableAccess.ReadWrite : ActivityVariableAccess.Read,
-                        new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind))
+                        ValueTypeDescriptor.FromTypeReference(input.Type))
                 };
             }
 
             return new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
                 input.ReferenceKey,
                 input.Name,
-                new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind),
+                ValueTypeDescriptor.FromTypeReference(input.Type),
                 input.IsRequired,
                 input.IsNullable,
                 input.DefaultValue.HasValue,
@@ -716,10 +732,10 @@ public sealed class ExecutableNodeCompiler(
                 return new ActivityResultProjectionContract(
                     key,
                     attribute.Path ?? JsonNamingPolicy.CamelCase.ConvertName(candidate.Property.Name),
-                    new ValueTypeDescriptor(type.Alias, type.CollectionKind),
+                    ValueTypeDescriptor.FromTypeReference(type),
                     attribute.IsRequired,
                     CompileActivityPolicy(outputDefinition?.StorageDriverType, outputState, $"Result projection '{key}' on activity node '{activity.NodeId}'"),
-                    ResolveSourceRepresentation(attribute, outputDefinition, new ValueTypeDescriptor(type.Alias, type.CollectionKind)));
+                    ResolveSourceRepresentation(attribute, outputDefinition, ValueTypeDescriptor.FromTypeReference(type)));
             })
             .ToArray();
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
@@ -747,11 +763,11 @@ public sealed class ExecutableNodeCompiler(
             activityVersion.DescriptorPayload,
             inputs,
             new ActivityResultContract(
-                new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind),
+                ValueTypeDescriptor.FromTypeReference(resultReference),
                 isRequired: true,
                 resultPolicy,
                 projections,
-                ValueRepresentationDefaults.Infer(new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind))),
+                ValueRepresentationDefaults.Infer(ValueTypeDescriptor.FromTypeReference(resultReference))),
             outcomes,
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)),
             ResolveSideEffectProfile(activityType),

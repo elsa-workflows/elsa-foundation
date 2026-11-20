@@ -203,6 +203,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         SimpleActivityExecutionContext? context = null;
         // Spec 1231: the step's variable session, created with its context and committed with its transition.
         StepVariableSession? stepSession = null;
+        // Spec 1228: where the step reports warnings; they are recorded with whatever state the step ends in. A step with a
+        // protected input keeps each warning's protected form, which names no member of that value (spec 1229 FR-006).
+        var stepWarnings = new ExecutionWarningCollector(protect: ProtectsAnyInput(state.InputSnapshot));
         ActivityTransition? committedTransition = null;
         ActivityActivationLease? activationLease = null;
         ActivityAttempt? valueFlowAttempt = null;
@@ -352,7 +355,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             else
             {
                 returnedTransition = await activity!.ExecuteAsync(context!.ToActivityExecutionContext().WithVariables(
-                    (IStepVariables?)stepSession ?? UnavailableStepVariables.Instance));
+                    (IStepVariables?)stepSession ?? UnavailableStepVariables.Instance).WithWarnings(stepWarnings).WithProtectedInputs(ProtectsAnyInput(state.InputSnapshot)));
                 // A fault the session raised (undeclared name, withheld value, failed type check) faults the step even when
                 // the body caught it (spec 1231 FR-006b, FR-014); nothing the step staged is saved.
                 if (stepSession?.PendingFault is { } sessionFault)
@@ -471,7 +474,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 if (recordedOutputs.Count > 0)
                 {
                     var recordedAt = TimeProvider.GetUtcNow();
-                    valueSnapshots.AddRange(ActivityExecutionInspection.BuildOutputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, executableNode, recordedOutputs, recordedAt));
+                    valueSnapshots.AddRange(ActivityExecutionInspection.BuildOutputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, executableNode, recordedOutputs, recordedAt,
+                        activity is IStepVariableSessionConsumer ? ReadProtection(stepSession) : null));
                 }
 
                 var outcomeNames = valueFlowCompletion is not null
@@ -571,7 +575,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ActivityFaulted" : "ActivityDisposalFailed";
-            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, WithSessionReads(state, stepSession), fault, subStatus, valueSnapshots, cancellationToken);
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, WithSessionReads(state, stepSession, stepWarnings), fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
 
@@ -608,6 +612,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 activityContract,
                 returnedTransition,
                 TimeProvider.GetUtcNow(),
+                activity is IStepVariableSessionConsumer ? ReadProtection(stepSession) : null,
                 cancellationToken);
             var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId,
@@ -639,7 +644,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             // Masked once, here: the durable fault and the incident both read this text, so masking the exception built
             // from it again would mask a value occurring inside an inserted marker and make the two differ.
             returnedFault = faultMasking.Mask(returnedFault);
-            var faultedState = WithSessionReads(state, stepSession) with
+            var faultedState = WithSessionReads(state, stepSession, stepWarnings) with
             {
                 Fault = backgroundResult?.Result?.Fault ?? returnedFault.ToNormalized()
             };
@@ -666,7 +671,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 inspectionAccumulator,
                 TimeProvider,
                 workItem,
-                WithSessionReads(state, stepSession),
+                WithSessionReads(state, stepSession, stepWarnings),
                 returnedCancellationReason,
                 valueSnapshots,
                 cancellationToken: cancellationToken);
@@ -684,7 +689,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             if (suspensionWrites.LostUpdateFault is { } suspensionLostUpdate)
             {
                 await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                    invokePayload, WithSessionReads(state, stepSession).WithVariableWrites([suspensionLostUpdate]), new VariableLostUpdateException(suspensionLostUpdate),
+                    invokePayload, WithSessionReads(state, stepSession, stepWarnings).WithVariableWrites([suspensionLostUpdate]), new VariableLostUpdateException(suspensionLostUpdate),
                     VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
                 return;
             }
@@ -692,7 +697,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             if (suspensionWrites.Failure is { } suspensionFailure)
             {
                 await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                    invokePayload, WithSessionReads(state, stepSession), suspensionFailure, "ActivityFaulted", valueSnapshots, cancellationToken);
+                    invokePayload, WithSessionReads(state, stepSession, stepWarnings), suspensionFailure, "ActivityFaulted", valueSnapshots, cancellationToken);
                 return;
             }
 
@@ -705,7 +710,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 serviceProvider.GetService<BookmarkLifecycleNotifier>(),
                 workItem,
                 invokePayload,
-                suspensionWrites.Apply(typedSuspendedState),
+                suspensionWrites.Apply(typedSuspendedState).WithWarnings(stepWarnings.Warnings),
                 valueSnapshots,
                 stagedWorkflowDispatch,
                 stagedPublishIntents,
@@ -747,7 +752,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         if (stepWrites.LostUpdateFault is { } stepLostUpdate)
         {
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                invokePayload, WithSessionReads(state, stepSession).WithVariableWrites([stepLostUpdate]), new VariableLostUpdateException(stepLostUpdate),
+                invokePayload, WithSessionReads(state, stepSession, stepWarnings).WithVariableWrites([stepLostUpdate]), new VariableLostUpdateException(stepLostUpdate),
                 VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }
@@ -755,11 +760,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         if (stepWrites.Failure is { } stepFailure)
         {
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                invokePayload, WithSessionReads(state, stepSession), stepFailure, "ActivityFaulted", valueSnapshots, cancellationToken);
+                invokePayload, WithSessionReads(state, stepSession, stepWarnings), stepFailure, "ActivityFaulted", valueSnapshots, cancellationToken);
             return;
         }
 
-        completedState = stepWrites.Apply(completedState);
+        completedState = stepWrites.Apply(completedState).WithWarnings(stepWarnings.Warnings);
 
         // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
         // completion (#972), mirroring how the Set intrinsic commits its changed frame. Each capture is judged against
@@ -784,7 +789,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             // A refused write into a closed scope's variable row refuses the completion the same way (T003). Its
             // completion produced durable rows, so it is not recorded for acceptance.
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
-                invokePayload, WithSessionReads(state, stepSession).WithVariableWrites([rowLostUpdate]), new VariableLostUpdateException(rowLostUpdate),
+                invokePayload, WithSessionReads(state, stepSession, stepWarnings).WithVariableWrites([rowLostUpdate]), new VariableLostUpdateException(rowLostUpdate),
                 VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }
@@ -797,7 +802,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             // refused completion for an operator to accept (spec 1221 FR-017).
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
                 invokePayload,
-                WithSessionReads(state, stepSession).WithVariableWrites(captureCommit.Records) with
+                WithSessionReads(state, stepSession, stepWarnings).WithVariableWrites(captureCommit.Records) with
                 {
                     // A completion whose step also wrote variables in its session is not recorded: accepting it would replay
                     // its captures without those writes.
@@ -842,8 +847,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
     }
 
     // Spec 1231 FR-007: a faulted attempt keeps the session reads it made, for inspection.
-    private static ActivityExecutionState WithSessionReads(ActivityExecutionState state, StepVariableSession? session) =>
-        session is null ? state : state.WithSessionReads(session.Reads);
+    // Spec 1228: and the warnings the step raised.
+    private static ActivityExecutionState WithSessionReads(ActivityExecutionState state, StepVariableSession? session, ExecutionWarningCollector warnings) =>
+        (session is null ? state : state.WithSessionReads(session.Reads)).WithWarnings(warnings.Warnings);
 
     /// <summary>The checkpoint change of a step's session writes to workflow variables when no capture also wrote one.</summary>
     private static RuntimeStateChange<WorkflowExecutionState>? StepWorkflowChange(StepVariableCommitResult writes, RuntimeSchedulerWorkItem workItem, string reason) =>
@@ -1561,4 +1567,28 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         return changes.Values.ToArray();
     }
 
+    // Spec 1228 US7 (ADR 0092): an engine script activity's result takes the strongest protection among the values its
+    // body read through the session; null when it read none that is protected.
+    private static ActivityValuePolicy? ReadProtection(StepVariableSession? session)
+    {
+        if (session is null)
+            return null;
+        ActivityValuePolicy? strongest = null;
+        foreach (var read in session.Reads)
+        {
+            var policy = read.Policy;
+            if (!policy.IsSensitive && !policy.RequiresEncryption && string.IsNullOrWhiteSpace(policy.RedactionMode))
+                continue;
+            var minimum = new ActivityValuePolicy(IsPersistable: true, policy.IsSensitive, policy.RequiresEncryption, policy.RedactionMode);
+            strongest = strongest is null
+                ? minimum
+                : ValuePolicyCombiner.Combine(strongest, minimum, "Protection of the variables a script body read");
+        }
+
+        return strongest;
+    }
+
+    private static bool ProtectsAnyInput(ActivityInputSnapshot? snapshot) =>
+        snapshot?.Values.Values.Any(value =>
+            value.Policy.IsSensitive || value.Policy.RequiresEncryption || !string.IsNullOrWhiteSpace(value.Policy.RedactionMode)) == true;
 }

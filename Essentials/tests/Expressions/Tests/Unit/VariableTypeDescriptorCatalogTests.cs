@@ -9,10 +9,10 @@ namespace Elsa.Expressions.Tests.Unit;
 public sealed class VariableTypeDescriptorCatalogTests
 {
     [Fact]
-    public void Json_is_a_durable_selectable_type_with_a_json_editor_and_the_existing_contract_alias()
+    public void Json_is_the_durable_selectable_dynamic_kind_Any_with_a_json_editor()
     {
         var catalog = new VariableTypeDescriptorCatalog([new DefaultVariableTypeDescriptorProvider()]);
-        var descriptor = Assert.Single(catalog.GetDescriptors(), x => x.Alias == "System.Text.Json.JsonElement");
+        var descriptor = Assert.Single(catalog.GetDescriptors(), x => x.Alias == "Any");
 
         Assert.Equal(typeof(System.Text.Json.JsonElement), descriptor.ClrType);
         Assert.Equal("JSON", descriptor.DisplayName);
@@ -20,6 +20,29 @@ public sealed class VariableTypeDescriptorCatalogTests
         Assert.True(descriptor.SupportsNull);
         Assert.True(descriptor.SupportsDurability);
         Assert.Contains("elsa.json", descriptor.CompatibleStorageDriverKeys);
+    }
+
+    // Spec 1228 User Story 4, acceptance 1: the variable type list offers JSON once and no Object.
+    [Fact]
+    public void The_type_list_offers_JSON_once_and_no_Object()
+    {
+        var descriptors = new VariableTypeDescriptorCatalog([new DefaultVariableTypeDescriptorProvider()]).GetDescriptors().ToArray();
+
+        Assert.Single(descriptors, x => x.DisplayName == "JSON");
+        Assert.DoesNotContain(descriptors, x => x.Alias is "Object" or "System.Object" or "Elsa.Any" or "System.Text.Json.JsonElement");
+        Assert.DoesNotContain(descriptors, x => x.DisplayName == "Object" || x.ClrType == typeof(object));
+    }
+
+    // Spec 1228 FR-020: DateOnly and TimeOnly are kinds.
+    [Theory]
+    [InlineData("DateOnly", typeof(DateOnly))]
+    [InlineData("TimeOnly", typeof(TimeOnly))]
+    public void DateOnly_and_TimeOnly_are_selectable_kinds(string alias, Type clrType)
+    {
+        var descriptor = Assert.Single(new DefaultVariableTypeDescriptorProvider().GetDescriptors(), x => x.Alias == alias);
+
+        Assert.Equal(clrType, descriptor.ClrType);
+        Assert.True(descriptor.SupportsDurability);
     }
 
     private sealed class StubProvider(params TypeDescriptor[] descriptors) : IVariableTypeDescriptorProvider

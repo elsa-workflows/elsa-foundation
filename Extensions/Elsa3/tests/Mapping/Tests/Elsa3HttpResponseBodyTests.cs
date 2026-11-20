@@ -194,7 +194,8 @@ public sealed class Elsa3HttpResponseBodyTests
         var state = await ConvertAsync(Sequence("root",
             Activity("loop", "Elsa.ForEach", ("items", Expression("JavaScript", "return [1, 2];", typeName)))));
 
-        Assert.Equal("Object", ResultTypeAlias(Input(Node(state, "loop"), "Collection")));
+        // ForEach.Collection is a .NET object, which reads as Any, the dynamic kind (spec 1228 FR-018).
+        Assert.Equal("Any", ResultTypeAlias(Input(Node(state, "loop"), "Collection")));
     }
 
     private static Elsa3Activity Respond(params (string Name, JsonElement Value)[] properties) =>

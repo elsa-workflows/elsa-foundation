@@ -118,7 +118,7 @@ public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore exe
 
     private static bool IsCompatible(JsonElement value, Elsa.Primitives.Models.ValueTypeDescriptor type)
     {
-        if (value.ValueKind == JsonValueKind.Null || StringComparer.Ordinal.Equals(type.Alias, "Elsa.Any"))
+        if (value.ValueKind == JsonValueKind.Null || Elsa.Primitives.Models.TypeAliasConvention.IsAny(type.Alias))
             return true;
         if (type.CollectionKind != Elsa.Primitives.Models.CollectionKind.Single)
             return value.ValueKind == JsonValueKind.Array;

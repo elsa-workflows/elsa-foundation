@@ -100,6 +100,13 @@ public sealed record ActivityInputSnapshot
     public IReadOnlyList<VariableComputedRead>? ComputedVariableReads { get; init; }
 
     /// <summary>
+    /// The warnings the input expressions raised while this snapshot was materialized (spec 1228, the shared run-time
+    /// warning channel), each with the input it came from in <c>input</c>. Absent when there were none.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning>? Warnings { get; init; }
+
+    /// <summary>
     /// Which evaluation of the invocation's inputs this is (spec 1221 FR-018): 1 for the snapshot Start materialized, one
     /// more for each background admission refresh. Omitted while 1.
     /// </summary>

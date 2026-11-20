@@ -100,7 +100,7 @@ public sealed class IntrinsicAuthoringCatalogTests
         Assert.True(variableInput.IsRequired);
         Assert.Equal("variable-picker", variableInput.UiHint);
         var valueInput = Assert.Single(setVariable.Inputs, input => input.ReferenceKey == "value");
-        Assert.Equal("Elsa.Any", valueInput.Type);
+        Assert.Equal("Any", valueInput.Type);
         Assert.True(valueInput.IsRequired);
     }
 
@@ -119,7 +119,7 @@ public sealed class IntrinsicAuthoringCatalogTests
         var nameInput = Assert.Single(setOutput.Inputs, input => input.ReferenceKey == "name");
         Assert.True(nameInput.IsRequired);
         var valueInput = Assert.Single(setOutput.Inputs, input => input.ReferenceKey == "value");
-        Assert.Equal("Elsa.Any", valueInput.Type);
+        Assert.Equal("Any", valueInput.Type);
     }
 
     [Fact]

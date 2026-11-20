@@ -75,7 +75,7 @@ describe("IntrinsicInspector", () => {
   it("renders the selected variable's current type and updates it after declaration or target changes", () => {
     const node: ActivityNode = {
       ...createActivityNode(setVariableActivity, "set-typed"),
-      intrinsic: { kind: "Set", valueType: { alias: "Elsa.Any", collectionKind: "Single" }, variable: { referenceKey: "counter", declaringScopeId: "workflow" } }
+      intrinsic: { kind: "Set", valueType: { alias: "Any", collectionKind: "Single" }, variable: { referenceKey: "counter", declaringScopeId: "workflow" } }
     };
     const variables = visibleVariables.map(variable => ({ ...variable, type: { alias: "Int32", collectionKind: "Single" as const } }));
     const container = render(inspector(setVariableActivity, node, vi.fn(), variables));
@@ -99,7 +99,7 @@ describe("IntrinsicInspector", () => {
   it("matches the declaration by scope when keys and names are shadowed", () => {
     const node: ActivityNode = {
       ...createActivityNode(setVariableActivity, "set-scoped"),
-      intrinsic: { kind: "Set", valueType: { alias: "Elsa.Any", collectionKind: "Single" }, variable: { referenceKey: "counter", declaringScopeId: "container-1" } }
+      intrinsic: { kind: "Set", valueType: { alias: "Any", collectionKind: "Single" }, variable: { referenceKey: "counter", declaringScopeId: "container-1" } }
     };
     const variables = [
       { ...visibleVariables[0], type: { alias: "Int32", collectionKind: "Single" as const } },
@@ -151,7 +151,7 @@ describe("IntrinsicInspector", () => {
       ...createActivityNode(setVariableActivity, "set-1"),
       intrinsic: {
         kind: "Set",
-        valueType: { alias: "Elsa.Any", collectionKind: "Single" },
+        valueType: { alias: "Any", collectionKind: "Single" },
         variable: { referenceKey: "counter", declaringScopeId: "workflow" }
       }
     };

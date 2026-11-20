@@ -283,7 +283,7 @@ public static class BackgroundEligibility
         if (subject.Contract is not { } contract)
             return "the activity has no pinned typed result contract";
         if ((subject.ActivityType is { } type && FindResultType(type) == typeof(object)) ||
-            contract.Result.Type.Alias is "Object" or "System.Object" or "Any" or "Elsa.Any")
+            TypeAliasConvention.IsAny(contract.Result.Type.Alias))
             return "untyped object results are not supported";
         return null;
     }

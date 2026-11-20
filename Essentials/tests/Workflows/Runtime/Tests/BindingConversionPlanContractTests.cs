@@ -10,7 +10,7 @@ public sealed class BindingConversionPlanContractTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private static readonly ValueTypeDescriptor StringType = new("System.String");
-    private static readonly ValueTypeDescriptor AnyType = new("Elsa.Any");
+    private static readonly ValueTypeDescriptor AnyType = new("Any");
 
     [Fact]
     public void Auto_mode_pins_an_identity_plan()

@@ -30,7 +30,9 @@ A conversion clones the definition, so the caller's object is never changed, the
 Nothing throws for input or catalog content. Every cause is a diagnostic:
 - `ELS3-ACTIVITY-*` errors make the item unconvertible;
 - `ELS3-BEHAVIOUR-*` warnings mean it converts, but Elsa 4 behaves differently at run time;
-- `VF-IMP-*` are value-flow errors.
+- `VF-IMP-*` are value-flow errors;
+- `ELS3-UNTYPED-RESULT` (an error) and `ELS3-SCRIPT-OUTCOME-*` are about a script's result and its outcomes: a result
+  bound to a typed input whose kind the script does not show (spec 1228 US6), and a script's computed outcomes.
 
 The codes are constants in `Elsa3.Models.Elsa3ActivityDiagnosticCodes` and `Elsa3ImportDiagnosticCodes`.
 
@@ -122,6 +124,14 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   bound to a JSON member must therefore be declared untyped in Elsa 3 (`Object`, or a list or dictionary of objects):
   Elsa 3 converted a typed declaration's result (`Int32` turns `"5"` into 5), and Elsa 4 would take the value as
   returned, so a typed declaration is `VF-IMP-008`.
+- **Script results into typed inputs** (spec 1228 US6). A RunJavaScript result has no declared type. Elsa 3 coerced it
+  into a boolean, string or number input whatever it was (`"true"` and `1` became `true`, a fraction was rounded);
+  Elsa 4 converts only a JSON value of the matching kind. The import infers the kind from the script's completion value
+  and its top-level returns (literals, comparisons, `!`, template strings, `Boolean(…)`, `String(…)`, `Number(…)`,
+  `Math.round(…)`, …) and keeps the binding only when it matches the input (for an integral input, an integer; for a decimal input, an integer or
+  a fraction literal, since Elsa 3 converted a computed fraction at 15 significant digits). Any
+  other or unknown kind is `ELS3-UNTYPED-RESULT`, with guidance to state the kind in the script. Other untyped
+  producers (a loop item, an event payload) are not checked: nothing in the definition shows their kind.
 - **Literal lists.** A literal bound to a collection input whose text is a JSON array (`["Approved","Rejected"]`,
   `[200,404]`) converts to that JSON array, as Elsa 3 converted the text. Elsa 4 reads literal text for a collection
   as a comma-separated list, so the brackets and quotes would otherwise become part of the items.
@@ -214,9 +224,9 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 
 | Elsa 3 | Elsa 4 |
 |---|---|
-| `getVariable("x")`, `variables.x`, `variables["x"]` in an input expression | `variables.x`, spelled as the variable is declared; publish pins it to the nearest declaring scope. A loop's current value becomes the loop's own `variables.currentItem` or `variables.index` |
-| `getVariable(name)`, `variables[name]` (a computed name) in an input expression | Kept as written; the Elsa 4 run-time lookup resolves the name nearest scope first and records the read. Inside a loop, or where a name is declared in more than one visible scope, the conversion warns (`VF-IMP-011`) |
-| `getInput("x")`, and any read in a RunJavaScript body | A declared parameter, read as `args.x`. A body reads variables through `args` until it has its own `variables` root |
+| `getVariable("x")`, `variables.x`, `variables["x"]` in an input expression or a RunJavaScript body | `variables.x`, spelled as the variable is declared; publish pins it to the nearest declaring scope. A loop's current value becomes the loop's own `variables.currentItem` or `variables.index` |
+| `getVariable(name)`, `variables[name]` (a computed name) in an input expression or a RunJavaScript body | Kept as written; the Elsa 4 run-time lookup resolves the name nearest scope first and records the read. Inside a loop, or where a name is declared in more than one visible scope, the conversion warns (`VF-IMP-011`) |
+| `getInput("x")`, and a body's other reads (inputs, activity results, metadata) | A declared parameter, read as `args.x`. A body's variable reads are not arguments: it reads them over its variable session (spec 1222 FR-026a, FR-033) |
 | `{{ Variables.x }}` in Liquid | `{{ variables.x }}` |
 | `get{Name}()` generated for a variable (`get` + the name with its first letter upper-cased) or a workflow input (`get` + the name as written) | The same read as `getVariable`/`getInput`. Elsa 3's precedence applies: an activity output accessor `get{Output}From{Activity}()` shadows both and is refused; an input shadows a variable with the identical accessor name. In a reusable workflow, Elsa 3 declared inputs as variables, so only the variable-style name exists |
 | `getCorrelationId()`, `getWorkflowInstanceId()` | A `WorkflowInstance` parameter that reads the running instance's correlation ID (null when it has none) or instance ID |

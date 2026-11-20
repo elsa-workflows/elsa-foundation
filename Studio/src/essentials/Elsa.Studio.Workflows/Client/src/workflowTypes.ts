@@ -980,6 +980,24 @@ export interface ActivityExecutionInspection {
   recordedCompletion?: RecordedCompletionView | null;
   /** The input evaluations a background admission refresh superseded. */
   inputRefreshes?: ActivityInputRefreshView[] | null;
+  /** Spec 1228: the warnings this execution raised, input expressions first; absent when none or on older hosts. */
+  warnings?: ExecutionWarningView[] | null;
+}
+
+/**
+ * One warning an execution raised (spec 1228, the shared run-time warning channel). It changed and refused nothing, and
+ * it never carries a value: `details` names paths, inputs and variables only.
+ */
+export interface ExecutionWarningView {
+  code: string;
+  severity: "Warning" | "Information" | string;
+  message: string;
+  /** `input` for an input expression's warning, `step` for the activity's own. */
+  source: "input" | "step" | string;
+  inputKey?: string | null;
+  executableNodeId: string;
+  activityExecutionId: string;
+  details: Record<string, string>;
 }
 
 /**

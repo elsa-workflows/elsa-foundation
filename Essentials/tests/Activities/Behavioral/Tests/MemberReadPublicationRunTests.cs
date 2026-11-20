@@ -166,7 +166,7 @@ public sealed class MemberReadPublicationRunTests
         private readonly IServiceScope _scope;
         private readonly WorkflowExecutableCompiler _compiler;
 
-        public Publication(bool memberReads, bool typed)
+        public Publication(bool memberReads, bool typed, params (Type Type, string Id, InputDefinition[] Inputs)[] extraVersions)
         {
             var serializer = SerializationServices.PayloadSerializer();
             ActivityDefinitionVersion Version(Type type, string id, params InputDefinition[] inputs) => new("1.0.0", "definition:" + id)
@@ -181,7 +181,8 @@ public sealed class MemberReadPublicationRunTests
                 Version(typeof(FlowchartActivity), "flowchart-version"),
                 Version(typeof(AddressProducer), "producer-version"),
                 Version(typeof(MemberReader), "reader-version",
-                    new InputDefinition(nameof(MemberReader.Value), nameof(MemberReader.Value), new TypeReference("String"), null, "Value", null, IsNullable: false))
+                    new InputDefinition(nameof(MemberReader.Value), nameof(MemberReader.Value), new TypeReference("String"), null, "Value", null, IsNullable: false)),
+                .. extraVersions.Select(extra => Version(extra.Type, extra.Id, extra.Inputs))
             ]);
             var services = new ServiceCollection();
             services.AddOptions();
@@ -197,7 +198,7 @@ public sealed class MemberReadPublicationRunTests
             _scope = _provider.CreateScope();
             var structures = _scope.ServiceProvider.GetRequiredService<IActivityStructureService>();
             var analyzer = _scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>();
-            var registry = ClrConstruction.RegistryFor(typeof(SequenceActivity), typeof(FlowchartActivity), typeof(AddressProducer), typeof(MemberReader));
+            var registry = ClrConstruction.RegistryFor([typeof(SequenceActivity), typeof(FlowchartActivity), typeof(AddressProducer), typeof(MemberReader), .. extraVersions.Select(extra => extra.Type)]);
             var inputs = new RuntimeInputBindingCompiler(registry);
             var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
             var unused = new UnusedReaders();

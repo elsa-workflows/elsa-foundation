@@ -146,6 +146,22 @@ public sealed record ActivityExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<VariableSessionRead>? SessionReads { get; init; }
 
+    /// <summary>
+    /// The warnings this invocation's steps raised (spec 1228, the shared run-time warning channel): a lossy number read
+    /// and not written, and later other step-body warnings. Inspection data only; none carries a value.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning>? Warnings { get; init; }
+
+    /// <summary>Appends step warnings to this invocation's record of them.</summary>
+    public ActivityExecutionState WithWarnings(IReadOnlyCollection<Elsa.Expressions.Core.Models.ExecutionWarning> warnings)
+    {
+        ArgumentNullException.ThrowIfNull(warnings);
+        return warnings.Count == 0
+            ? this
+            : this with { Warnings = [.. Warnings ?? [], .. warnings] };
+    }
+
     /// <summary>Appends session reads to this invocation's inspection record of them.</summary>
     public ActivityExecutionState WithSessionReads(IReadOnlyCollection<VariableSessionRead> reads)
     {

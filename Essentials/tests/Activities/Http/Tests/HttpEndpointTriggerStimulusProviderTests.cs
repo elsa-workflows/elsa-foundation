@@ -531,25 +531,25 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     private static RuntimeInputBinding LiteralJsonBinding(string name, string rawJson)
     {
         using var document = JsonDocument.Parse(rawJson);
-        return CanonicalLiteral(name, document.RootElement, "Elsa.Any");
+        return CanonicalLiteral(name, document.RootElement, "Any");
     }
 
     private static RuntimeInputBinding LiteralCollectionBinding(string name, IReadOnlyCollection<string> values)
     {
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(values));
-        return CanonicalLiteral(name, document.RootElement, "Elsa.Any");
+        return CanonicalLiteral(name, document.RootElement, "Any");
     }
 
     private static RuntimeInputBinding RawLiteralBinding(string name, string rawJson)
     {
         using var document = JsonDocument.Parse(rawJson);
-        return CanonicalLiteral(name, document.RootElement, "Elsa.Any");
+        return CanonicalLiteral(name, document.RootElement, "Any");
     }
 
     private static RuntimeInputBinding ExpressionBinding(string name) =>
         new(
             name,
-            new ValueTypeDescriptor("Elsa.Any"),
+            new ValueTypeDescriptor("Any"),
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding("JavaScript", "input.foo"));
@@ -558,7 +558,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     // nullable optional input (see CompileOmitted). Distinct from a missing binding (FindBinding == null).
     private static RuntimeInputBinding AbsentLiteralBinding(string name)
     {
-        var type = new ValueTypeDescriptor("Elsa.Any");
+        var type = new ValueTypeDescriptor("Any");
         return new RuntimeInputBinding(
             name,
             type,
@@ -571,7 +571,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     // through in production (ValueEnvelope.Null), as opposed to an Inline envelope holding a JSON null.
     private static RuntimeInputBinding ExplicitNullLiteralBinding(string name)
     {
-        var type = new ValueTypeDescriptor("Elsa.Any");
+        var type = new ValueTypeDescriptor("Any");
         return new RuntimeInputBinding(
             name,
             type,

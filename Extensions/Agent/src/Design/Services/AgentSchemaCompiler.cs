@@ -98,7 +98,7 @@ internal sealed class AgentSchemaCompiler(AgentSchemaValidator validator)
             "Double" => new() { ["type"] = "number", ["minimum"] = double.MinValue, ["maximum"] = double.MaxValue },
             "Decimal" => new() { ["type"] = "number", ["minimum"] = decimal.MinValue, ["maximum"] = decimal.MaxValue },
             "DateTime" or "DateTimeOffset" or "TimeSpan" or "Guid" => new() { ["type"] = "string" },
-            "Object" or "JsonElement" or "System.Text.Json.JsonElement" => new(),
+            TypeAliasConvention.AnyAlias or "JsonElement" or "System.Text.Json.JsonElement" => new(),
             _ => throw new AgentSchemaException(path, "agent.schema.type", "This type alias is outside the agent JSON profile; use a JSON type or an explicit conversion boundary.")
         };
         var schema = type.CollectionKind switch
@@ -108,7 +108,7 @@ internal sealed class AgentSchemaCompiler(AgentSchemaValidator validator)
             CollectionKind.Dictionary => new JsonObject { ["type"] = "object", ["additionalProperties"] = scalar },
             _ => throw new AgentSchemaException(path, "agent.schema.collection", "This collection shape is outside the agent JSON profile.")
         };
-        if (type.CollectionKind == CollectionKind.Single && type.Alias is "Object" or "JsonElement" or "System.Text.Json.JsonElement")
+        if (type.CollectionKind == CollectionKind.Single && type.Alias is TypeAliasConvention.AnyAlias or "JsonElement" or "System.Text.Json.JsonElement")
             schema["type"] = new JsonArray(nullable
                 ? ["object", "array", "string", "number", "boolean", "null"]
                 : new JsonNode?[] { "object", "array", "string", "number", "boolean" });
@@ -199,7 +199,7 @@ internal sealed class AgentSchemaCompiler(AgentSchemaValidator validator)
         if (type.CollectionKind is CollectionKind.Array or CollectionKind.List or CollectionKind.Dictionary)
         {
             var itemType = new TypeReference(type.Alias);
-            var itemNullable = type.Alias is "Object" or "JsonElement" or "System.Text.Json.JsonElement";
+            var itemNullable = type.Alias is TypeAliasConvention.AnyAlias or "JsonElement" or "System.Text.Json.JsonElement";
             var keyword = type.CollectionKind == CollectionKind.Dictionary ? "additionalProperties" : "items";
             if (schema[keyword] is JsonObject item) ValidateNativeRefinements(item, itemType, itemNullable, path);
             if (type.CollectionKind == CollectionKind.Dictionary && schema["properties"] is JsonObject properties)

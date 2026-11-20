@@ -94,7 +94,8 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         var commit = await ExecuteAsync(Node("request", "Object"), new { message = "hello" }, false);
 
         var value = commit.StateChanges.WorkflowExecution!.State.RootVariableFrame!.Values["counter"];
-        Assert.Equal("Object", value.Type.Alias);
+        // Object reads as Any, the dynamic kind (spec 1228 FR-018).
+        Assert.Equal("Any", value.Type.Alias);
         Assert.Equal("hello", value.InlineValue!.Value.GetProperty("message").GetString());
     }
 
@@ -134,7 +135,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
     {
         var commit = await ExecuteAsync(Node("request", "Elsa.Any", collectionKind: kind), new object[] { 1, "x" }, false);
         var value = commit.StateChanges.WorkflowExecution!.State.RootVariableFrame!.Values["counter"];
-        Assert.Equal("Elsa.Any", value.Type.Alias);
+        Assert.Equal("Any", value.Type.Alias);
         Assert.Equal(kind, value.Type.CollectionKind);
         Assert.Equal(1, value.InlineValue!.Value[0].GetInt32());
         Assert.Equal("x", value.InlineValue.Value[1].GetString());
@@ -174,7 +175,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         public bool TryGetAlias(Type type, out string alias) { alias = "Int32"; return type == typeof(int); }
         public bool TryGetType(string alias, out Type type)
         {
-            type = alias switch { "Int32" => typeof(int), "Guid" => typeof(Guid), "DateTime" => typeof(DateTime), "TimeSpan" => typeof(TimeSpan), "Object" => typeof(object), _ => typeof(void) };
+            type = alias switch { "Int32" => typeof(int), "Guid" => typeof(Guid), "DateTime" => typeof(DateTime), "TimeSpan" => typeof(TimeSpan), "Any" => typeof(JsonElement), _ => typeof(void) };
             return type != typeof(void);
         }
         public IEnumerable<Type> ListTypes() => [typeof(int)];

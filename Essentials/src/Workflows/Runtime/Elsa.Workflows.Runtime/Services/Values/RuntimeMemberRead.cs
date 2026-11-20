@@ -22,9 +22,9 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 internal static class RuntimeMemberRead
 {
     // The type of the source, not of the selected member: the input's type describes the member, so the derived
-    // whole-value read is labelled with the neutral Elsa.Any. The built-in resolver uses the type only as the label of
+    // whole-value read is labelled with the neutral Any. The built-in resolver uses the type only as the label of
     // the envelope it returns, and the member read never relies on that label.
-    private static readonly ValueTypeDescriptor SourceType = new("Elsa.Any");
+    private static readonly ValueTypeDescriptor SourceType = new(TypeAliasConvention.AnyAlias);
 
     public static RuntimeInputBinding WholeValueBinding(RuntimeInputBinding binding) => binding.Source switch
     {
