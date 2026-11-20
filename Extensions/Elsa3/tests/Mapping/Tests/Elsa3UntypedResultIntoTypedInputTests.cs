@@ -91,7 +91,7 @@ public sealed class Elsa3UntypedResultIntoTypedInputTests
 
         var result = await ConvertAsync(root, new Elsa3Variable { Id = "payload", Name = "payload", TypeName = "String" });
 
-        Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput);
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
     [Fact]

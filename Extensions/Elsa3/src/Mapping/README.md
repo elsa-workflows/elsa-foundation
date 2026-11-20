@@ -136,7 +136,7 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   an Event's payload, HTTP request or response data, any other `Object` output. Nothing in the definition shows their
   kind, so a binding to a boolean, string or number input is `ELS3-UNTYPED-RESULT`, with guidance to convert the value
   in a JavaScript expression (`String(…)`, `Boolean(…)`, …). A For loop's current value is its index, an `Int32` in
-  Elsa 4: it is kept for an `Int32`, `Int64` or `Decimal` input and refused for any other (Elsa 3 wrote it into text).
+  Elsa 4: it is kept for an `Int32`, `Int64` or `Decimal` input and refused for any other (Elsa 3 converted it into any input).
   A typed output, a typed variable, or a variable only Set Variable writes is not an untyped result; a loop's value
   captured into a typed variable still is, since Elsa 4 reads the loop's own variable there. A loop value
   captured into a variable and read outside its loop keeps its own refusal. Not yet checked: a JavaScript or Liquid expression that reads such a

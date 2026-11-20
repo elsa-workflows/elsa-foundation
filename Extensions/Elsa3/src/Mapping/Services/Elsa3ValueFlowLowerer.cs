@@ -1129,8 +1129,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     /// result bound to a boolean, string or number input. Elsa 3 coerced whatever the producer returned
     /// (<c>ObjectConverter.ConvertTo</c>: <c>"true"</c> and <c>1</c> became <c>true</c>, a fraction was rounded into an
     /// integer, a number became text); Elsa 4 converts only a value of the matching kind and refuses the rest at run time.
-    /// So the binding is kept only when the kind is known to match (a script's source shows it, or the producer's Elsa 4
-    /// contract fixes it), and refused at import otherwise. Null when the binding is not such a case or is kept.
+    /// So the binding is kept only when the kind is known to match (a script's source shows it, or the producer is a For
+    /// loop, whose index is an Int32 in Elsa 4), and refused at import otherwise. Null when the binding is not such a case or is kept.
     /// </summary>
     private static (string Message, string Guidance)? UntypedResultRefusal(
         IReadOnlyList<ActivityProperty> properties,
@@ -1163,7 +1163,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             .Where(producer => IsForLoop(properties, producer) || inventory.PropertyContracts.FirstOrDefault(contract =>
                 contract.Direction == Elsa3PropertyDirection.Output &&
                 contract.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal) &&
-                contract.StablePropertyKey.Equals(producer.StablePropertyKey, StringComparison.Ordinal)) is not { } contract ||
+                contract.StablePropertyKey.Equals(producer.StablePropertyKey, StringComparison.Ordinal)) is { } contract &&
                 IsUntyped(contract.Type, SimpleName(contract.Type.Alias)))
             .Select(producer => ResultRefusal(properties, producer, consumer))
             .FirstOrDefault(refusal => refusal is not null);
