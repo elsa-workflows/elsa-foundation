@@ -175,6 +175,45 @@ public sealed class ScriptVariableReadResolutionTests : IDisposable
         Assert.Empty(plan.MayWrite());
     }
 
+    [Theory]
+    [InlineData("variables.currentItem.total = 1;")]
+    [InlineData("[variables.currentIndex] = [2];")]
+    [InlineData("for (variables.currentItem of [1]) {}")]
+    public void Publication_refuses_a_literal_write_to_a_loop_item_or_index(string script)
+    {
+        // Spec 1231 FR-020 (T029): the decision publish and draft validation share.
+        var plan = Resolve(script, ForEach(Body()), "script", scriptBody: true);
+
+        var (write, code) = Assert.Single(plan.RefusedLiteralWrites());
+        Assert.Equal(ScriptVariableReadDiagnostics.ReadOnlyLiteralWrite, code);
+        Assert.StartsWith("current", write.Name, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Publication_refuses_a_literal_write_to_a_transient_or_undeclared_variable()
+    {
+        // FR-020: transience is a runtime storage decision, which publish passes in.
+        var plan = Resolve("variables.order = 1; setVariable('missing', 2);", Body(), "script", scriptBody: true);
+
+        var refused = plan.RefusedLiteralWrites(variable => variable.ReferenceKey == "order-key").ToArray();
+
+        Assert.Equal(
+            [("order", ScriptVariableReadDiagnostics.TransientLiteralWrite), ("missing", ScriptVariableReadDiagnostics.UndeclaredLiteralWrite)],
+            refused.Select(item => (item.Write.Name, item.Code)));
+        Assert.Equal([("missing", ScriptVariableReadDiagnostics.UndeclaredLiteralWrite)], plan.RefusedLiteralWrites().Select(item => (item.Write.Name, item.Code)));
+    }
+
+    [Fact]
+    public void A_whole_write_by_destructuring_counts_a_scalar_variable_too()
+    {
+        // FR-019: destructuring and loop heads assign; only an escaped scalar is left out.
+        var plan = Resolve("[variables.count] = [5]; for (variables.name in {}) {}", Body(), "script", scriptBody: true,
+            new VariableDefinition("count-key", "count", new TypeReference("Int32"), null, null),
+            new VariableDefinition("name-key", "name", new TypeReference("String"), null, null));
+
+        Assert.Equal(["count", "name"], plan.MayWrite().Select(write => write.Name));
+    }
+
     [Fact]
     public void A_computed_write_without_any_read_is_still_reported()
     {

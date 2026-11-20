@@ -56,6 +56,15 @@ public sealed partial class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task A_script_activity_type_that_declares_the_marker_itself_may_write_every_visible_variable()
+    {
+        // FR-028: a declared [AccessesUndeclaredVariables] covers the type's C# code too, so its body does not narrow it.
+        var executable = await CompileBodyAsync("variables.greeting = 'hi'; return 1;", typeof(MarkedScriptProbe));
+
+        Assert.Equal("true", executable.RootActivity.Metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable]);
+    }
+
+    [Fact]
     public async Task A_body_that_only_reads_pins_no_write()
     {
         var executable = await CompileBodyAsync("return variables.greeting + '!';");
@@ -72,11 +81,12 @@ public sealed partial class WorkflowExecutableCompilerTests
         Assert.Equal("true", executable.RootActivity.Metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable]);
     }
 
-    private ValueTask<WorkflowExecutable> CompileBodyAsync(string script)
+    private ValueTask<WorkflowExecutable> CompileBodyAsync(string script, Type? probeType = null)
     {
+        probeType ??= typeof(ScriptProbe);
         var registry = TestWellKnownTypeRegistry.Create();
-        registry.RegisterType(typeof(ScriptProbe), TypeAliasConvention.CanonicalAlias(typeof(ScriptProbe)));
-        var probe = ClrActivityVersion("activity-script-probe", "Test.ScriptProbe", TypeAliasConvention.CanonicalAlias(typeof(ScriptProbe)));
+        registry.RegisterType(probeType, TypeAliasConvention.CanonicalAlias(probeType));
+        var probe = ClrActivityVersion("activity-script-probe", "Test." + probeType.Name, TypeAliasConvention.CanonicalAlias(probeType));
         probe.Inputs = [new InputDefinition("script", "Script", new TypeReference("String"), null, "Script", null, IsNullable: true)];
         var node = new Elsa.Workflows.Design.Core.Models.ActivityNode(
             "script",
@@ -90,5 +100,18 @@ public sealed partial class WorkflowExecutableCompilerTests
                 registry,
                 scriptVariableReadResolver: ReadResolver)
             .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+    }
+
+    [Elsa.Activities.Runtime.Core.Attributes.AccessesUndeclaredVariables]
+    [Elsa.Activities.Runtime.Core.Attributes.ActivityScriptOutcomes("script")]
+    private sealed class MarkedScriptProbe : Elsa.Activities.Runtime.Core.Models.Activity
+    {
+        [Elsa.Activities.Runtime.Core.Attributes.ActivityInput(Key = "script")]
+        public string? Script { get; set; }
+
+        protected override ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition<Elsa.Activities.Runtime.Core.Models.ActivityUnit>> ExecuteAsync(
+            Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext context) =>
+            ValueTask.FromResult(Elsa.Activities.Runtime.Core.Models.ActivityTransition<Elsa.Activities.Runtime.Core.Models.ActivityUnit>.Complete(
+                Elsa.Activities.Runtime.Core.Models.ActivityUnit.Value));
     }
 }

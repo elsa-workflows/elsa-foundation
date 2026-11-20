@@ -9,9 +9,10 @@ namespace Elsa3.Mapping.Tests;
 /// <summary>
 /// Spec 1231 User Story 6 (T038–T040), #4899: inside a Run JavaScript body, Elsa 3's <c>setVariable('x', v)</c> and
 /// generated <c>setX(v)</c> become whole assignments through <c>variables</c> (Q6), and a member change of a value read
-/// through <c>getVariable</c> or <c>variables</c> stays a member change. A computed setter name, a setter of an undeclared
-/// variable or of a loop's value, a write in an input expression and a write in a reusable workflow's script are refused
-/// with guidance; the other Elsa 3 setters stay refused (FR-034).
+/// through <c>getVariable</c> or <c>variables</c> stays a member change, and a computed setter name becomes
+/// <c>variables[name] = v</c> (FR-033 as amended). A setter of an undeclared variable or of a loop's value, a write in an
+/// input expression and a write in a reusable workflow's script are refused with guidance; the other Elsa 3 setters stay
+/// refused (FR-034).
 /// </summary>
 public sealed class Elsa3VariableWriteConversionTests
 {

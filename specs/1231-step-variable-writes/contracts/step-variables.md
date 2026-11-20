@@ -8,7 +8,8 @@
 | `variables.x = v`, `variables['x'] = v`, `setVariable('x', v)` | whole assignment | pinned; in may-write set |
 | `variables.x += v`, `variables.x++` | read and whole assignment | pinned |
 | `variables.o.m = v`, `getVariable('o').m = v`, mutation through an alias of a read value | member change (C2) | `o` in may-write set |
-| a read value passed to a function, stored in a local or captured by a closure | possible write | in may-write set |
+| a read value passed to a function, stored in a local or captured by a closure | possible write | in may-write set, unless the variable's declared type is a scalar |
+| `[variables.a, variables.b] = …`, `for (variables.k in o)`, `(variables.o || {}).m = v` | whole assignment or member change | pinned; in may-write set |
 | `variables[k] = v`, `setVariable(k, v)` | computed write | publishes; node may write every visible variable; name resolved at run time; undeclared or transient → step faults |
 | a write through `variables` or `setVariable` used as a value (`const v = variables; v.X = 1`) | opaque write | same as a computed write (Q5) |
 | literal write to an undeclared, transient, or read-only (loop item/index) target | — | refused |

@@ -10,7 +10,8 @@ namespace Elsa.Workflows.Design.Core.Contracts;
 /// </summary>
 /// <remarks>
 /// Replacement contract: exactly one scoped implementation per host. A host's own registration made before the feature
-/// replaces the default; a second registration fails the shell at start.
+/// replaces the default; a second registration fails the shell at start. It feeds Studio's display only: publication and
+/// draft validation resolve the may-write set themselves, so a replacement should agree with them.
 /// </remarks>
 public interface IScriptBodyWriteAnalyzer
 {

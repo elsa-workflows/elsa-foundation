@@ -122,6 +122,50 @@ public sealed class ScriptVariableWriteAnalyzerTests
     }
 
     [Theory]
+    [InlineData("(variables.order || {}).total = 5;", "order")]
+    [InlineData("(flag ? variables.order : variables.order).count++;", "order")]
+    [InlineData("delete (variables.order ?? {}).note;", "order")]
+    [InlineData("(0, variables.order).total = 1;", "order")]
+    [InlineData("[variables.order] = [1];", "order")]
+    [InlineData("({ x: variables.order } = o);", "order")]
+    [InlineData("({ ...variables.order } = o);", "order")]
+    [InlineData("[variables.order = 1] = [];", "order")]
+    [InlineData("for (variables.order of list) {}", "order")]
+    [InlineData("for (variables.order in o) {}", "order")]
+    [InlineData("for (variables.order.key in o) {}", "order")]
+    public void A_write_through_a_wrapper_a_pattern_or_a_loop_head_is_reported(string source, string name)
+    {
+        // Review of #4912: these write at run time, so publication must see them.
+        var analysis = _analyzer.Analyze(source, scriptBody: true)!;
+
+        Assert.Contains(analysis.Writes, write => write.Name == name);
+    }
+
+    [Theory]
+    [InlineData("(variables[k] || {}).x = 1;")]
+    [InlineData("[variables[k]] = [1];")]
+    public void A_computed_write_through_a_wrapper_or_a_pattern_is_reported(string source)
+    {
+        Assert.True(_analyzer.Analyze(source, scriptBody: true)!.HasComputedWrite);
+    }
+
+    [Fact]
+    public void A_value_passed_to_a_tag_function_escapes()
+    {
+        Assert.Equal(["items"], _analyzer.Analyze("const add = (s, list) => list.push(1); add`${variables.items}`;", scriptBody: true)!.Escapes);
+    }
+
+    [Fact]
+    public void An_input_expressions_own_local_named_setVariable_is_an_ordinary_local()
+    {
+        // Only a script body has setVariable; an input expression keeps pinning its reads.
+        var analysis = _analyzer.Analyze("(() => { const setVariable = 1; return variables.a + setVariable; })()")!;
+
+        Assert.False(analysis.HasComputedRead);
+        Assert.Equal(["a"], analysis.LiteralNames);
+    }
+
+    [Theory]
     [InlineData("return variables[k] + 1;")]
     [InlineData("return getVariable(k) === 1;")]
     public void A_computed_read_whose_value_does_not_escape_is_not_a_write(string source)

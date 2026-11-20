@@ -28,8 +28,9 @@ evaluate canonical input bindings, and shares only the closed `IsolatedJintEngin
 with portable expression evaluation.
 
 - **Variables** (spec 1222 FR-033, spec 1228 FR-006, FR-007): the request's `Variables`
-  (`IScriptVariableSession`, `Elsa.Expressions.JavaScript.Core`) gives the body the `variables` root and
-  `getVariable`, read through the host's session (each read recorded; the committed value plus the step's own
+  (`IScriptVariableSession`, `Elsa.Expressions.JavaScript.Core`) gives the body the `variables` root,
+  `getVariable` and `setVariable(name, value)` (a whole assignment, spec 1231 FR-005; only a body with a session gets
+  it, never an input expression), read through the host's session (each read recorded; the committed value plus the step's own
   writes). After the run, each change the bridge reports goes through the precision policy and then back through
   `Write` as a whole value (a member change patched into the stored value); every change is checked before any is
   written. A change made without assigning the variable is still written and raises `VF-WRITE-001` (ADR 0090 C2).
@@ -82,13 +83,21 @@ with portable expression evaluation.
   `null` when it does not parse: `LiteralNames` read as `variables.X`, `variables['X']` or `getVariable('X')`, and
   `HasComputedRead` when it also reads variables it does not name (`variables[expr]`, `getVariable(expr)`, `variables`
   or `getVariable` used as a value or declared by the script). `Writes` lists each variable, or member of one, that
-  the script visibly assigns, updates or deletes (spec 1228 FR-006a); an analyzer that does not report them leaves
-  only the run-time `VF-BIND-001` check.
+  the script visibly assigns, updates or deletes (spec 1228 FR-006a), including through a destructuring pattern, a
+  `for…in`/`for…of` head, a parenthesized value (`(variables.o || {}).x = 1`) and, in a script body,
+  `setVariable('X', v)`; each `ScriptVariableWrite` carries its source offset (`Start`). `Escapes` lists the literal
+  names whose value the script lets escape (a binding, an argument, a container, a closure's return, a method call on
+  it), and `HasComputedWrite` says it writes variables it does not name (spec 1231 FR-019, FR-020a); `MayWriteNames`
+  joins `Writes` and `Escapes`. An analyzer that does not report writes leaves only the run-time `VF-BIND-001` check
+  for input expressions, and a script body's may-write set empty.
 - **Implementation:** `JavaScriptVariableReadAnalyzer` (internal, Acornima), registered as a singleton by
   `JavaScriptFeature`. One analyzer per language; the Liquid feature registers its own.
 - **Consumer:** `ScriptVariableReadResolver` in `Elsa.Workflows.Design.Validations`, used by the publish compiler to
   pin literal reads and set the fallback marker and to refuse an input expression that writes (`VF-BIND-001`), by
-  `ScriptVariableReadValidator` for the draft diagnostics and by the rename planner.
+  `ScriptVariableReadValidator` for the draft diagnostics and by the rename planner. For a script body (spec 1231):
+  publication's `VF-WRITE-002`–`004` refusals and pinned may-write set (`StepVariableWriteMetadata`),
+  `StepVariableWriteValidation` (the concurrent-write and overlap warnings), and `ScriptBodyWriteAnalyzer` (Studio's
+  may-write display).
 - **Override when:** a host uses another JavaScript parser or dialect. Replace the default registration (remove it and
   register its own): two analyzers of different types for one language fail the shell at start, so none wins silently.
 - **Host functions:** a host function that reads workflow variables is declared with

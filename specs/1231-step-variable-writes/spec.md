@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-17
 
-**Status**: Approved — by @j03y-nxxbz (the approval plan) on 2026-11-17, with Q1, Q2, Q4, Q6 and Q7 answered
+**Status**: Implemented — in #4761 (Phases 1–4, 6, 7, 9, 10) and #4912 (Phases 5 and 8, 2026-11-20). Approved by @j03y-nxxbz (the approval plan) on 2026-11-17, with Q1, Q2, Q4, Q6 and Q7 answered
 as recommended, Q5 with its alternative (allow and count computed and opaque writes), and Q3 decided earlier on #4725. Applies ADR 0090 (`87e55ebc7`), ADR 0092 (`f52a661df`) and ADR 0093
 (`875aa14c7`, amended `dc32983a2`) as merged. Q5 led to one ADR amendment, merged before this spec: ADR 0090 decision 3 as amended on 2026-11-17 (#4729, `53e301034a`).
 
@@ -367,7 +367,9 @@ and run the converted scripts.
   reads, and pin the target (scope and key).
 - **FR-019**: Publish MUST compute the node's may-write set: every variable the script assigns, changes a member of, or
   lets escape into a local, a function argument or a closure. Read-only targets are frozen, so their escapes are not
-  writes.
+  writes. *(Clarified in implementation, 2026-11-20: an escaped value of a scalar declared type (a string, number,
+  boolean, date or GUID) is left out, since a script cannot change a scalar in place; a scalar the script assigns is
+  in the set.)*
 - **FR-020**: Publish MUST refuse a script that: writes an undeclared literal name; reads or writes a transient
   variable by a literal name; or assigns, or directly assigns into, a read-only target by a literal name. Each refusal
   names the script position and the target.
@@ -427,7 +429,11 @@ and run the converted scripts.
   write resolved at run time (FR-020a). It MUST refuse, with a stable diagnostic and guidance: a setter of an undeclared
   variable; a setter of a variable that converts to a transient one; and every write form in an input expression (the
   existing refusal, with guidance naming a `RunJavaScript` step). *(Amended 2026-11-20 by the coordinator, #4899: a
-  computed setter name was first refused.)*
+  computed setter name was first refused.)* *(Implementation notes, 2026-11-20: every write form in a reusable
+  workflow's script is refused too (faithful-or-refuse: a step cannot write a graph body's variables yet, #4805, so the
+  converted script would fail every run); no Elsa 3 variable converts to a transient one today (authored storage always
+  has the Instance lifecycle), so the transient-setter refusal has no input, and publication's `VF-WRITE-003` refuses
+  such a write should one appear.)*
 - **FR-034**: `setOutput`, `setInput`, `setResult`, `setCorrelationId` and `setWorkflowInstanceName` MUST stay refused
   (Q1).
 

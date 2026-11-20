@@ -230,8 +230,11 @@ are still the variable's).
   concurrent-write warning and the overlap warning count these, and Studio shows the set in the node's properties
   (from the scoped-variable analysis). Run JavaScript, an engine script activity, carries the type-level free-name
   marker as well (its computed names resolve at run time, and C9 refuses it in the background), but its analyzed body,
-  not the marker, decides its may-write set. A script that is not a literal (bound to an expression) cannot be analyzed,
-  so it counts as writing every visible variable.
+  not the marker, decides its may-write set. A script activity type that declares `[AccessesUndeclaredVariables]`
+  itself is counted as writing every visible variable once published (draft validation cannot tell the two apart). A
+  script that is not a literal (bound to an expression) cannot be analyzed, so it counts as writing every visible
+  variable. Destructuring (`[variables.a, variables.b] = …`), loop heads (`for (variables.k in o)`) and writes through a
+  parenthesized value (`(variables.o || {}).x = 1`) count like plain assignments.
 - **Run time.** Writes commit with the step like any session write: nothing on a fault or cancel, read-your-writes
   inside the script, nothing written for an equal value (C4). A computed write to an undeclared name faults the step
   before its commit; nothing is created. A write to a transient variable faults the step; a write to a loop's item or

@@ -52,10 +52,12 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         // A script that declares its own `variables` or `getVariable` (a variable, parameter, function, class or catch
         // binding) reads that local through the name: none of its reads can be pinned, so all of them go through the
         // recorded run-time lookup.
-        if (DeclaresRoot(parsed))
+        // setVariable exists only in a script body, so only there is it a root (an input expression's own local of that
+        // name is an ordinary local).
+        if (DeclaresRoot(parsed, scriptBody))
             return new ScriptVariableReadAnalysis([], hasComputedRead: true) { HasComputedWrite = true };
 
-        var walker = new Walker(_readingFunctions);
+        var walker = new Walker(_readingFunctions, scriptBody);
         walker.Visit(parsed);
         return new ScriptVariableReadAnalysis(walker.LiteralNames, walker.HasComputedRead, walker.LiteralReads)
         {
@@ -65,7 +67,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         };
     }
 
-    private static bool DeclaresRoot(Node node)
+    private static bool DeclaresRoot(Node node, bool scriptBody)
     {
         var bindings = node switch
         {
@@ -76,35 +78,36 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
             ClassExpression { Id: { } id } => [id],
             _ => (IEnumerable<Node>)[]
         };
-        if (bindings.Any(BindsRoot))
+        if (bindings.Any(binding => BindsRoot(binding, scriptBody)))
             return true;
 
         foreach (var child in node.ChildNodes)
         {
-            if (DeclaresRoot(child))
+            if (DeclaresRoot(child, scriptBody))
                 return true;
         }
 
         return false;
     }
 
-    private static bool BindsRoot(Node binding) => binding switch
+    private static bool BindsRoot(Node binding, bool scriptBody) => binding switch
     {
-        Identifier { Name: VariablesRoot or GetVariable or SetVariable } => true,
+        Identifier { Name: VariablesRoot or GetVariable } => true,
+        Identifier { Name: SetVariable } => scriptBody,
         Identifier => false,
         ObjectPattern pattern => pattern.Properties.Any(property => property switch
         {
-            Property { Value: Node value } => BindsRoot(value),
-            RestElement rest => BindsRoot(rest.Argument),
+            Property { Value: Node value } => BindsRoot(value, scriptBody),
+            RestElement rest => BindsRoot(rest.Argument, scriptBody),
             _ => false
         }),
-        ArrayPattern pattern => pattern.Elements.Any(element => element is not null && BindsRoot(element)),
-        AssignmentPattern assignment => BindsRoot(assignment.Left),
-        RestElement rest => BindsRoot(rest.Argument),
+        ArrayPattern pattern => pattern.Elements.Any(element => element is not null && BindsRoot(element, scriptBody)),
+        AssignmentPattern assignment => BindsRoot(assignment.Left, scriptBody),
+        RestElement rest => BindsRoot(rest.Argument, scriptBody),
         _ => false
     };
 
-    private sealed class Walker(IReadOnlySet<string> readingFunctions)
+    private sealed class Walker(IReadOnlySet<string> readingFunctions, bool scriptBody)
     {
         public List<string> LiteralNames { get; } = [];
         public List<ScriptVariableLiteralRead> LiteralReads { get; } = [];
@@ -120,12 +123,43 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         /// Records a write whose target is rooted at a variable named literally (spec 1228 FR-006a): <c>variables.X…</c>,
         /// <c>variables['X']…</c> or <c>getVariable('X')…</c>.
         /// </summary>
-        private void RecordWrite(Node target)
+        private void RecordWrite(Node target) => RecordWrite(target, target, []);
+
+        /// <summary>
+        /// Walks a write target from its outermost member to the value it changes. A member of a parenthesized value
+        /// (<c>(variables.order || {}).total = 5</c>, <c>(flag ? variables.a : variables.b).n++</c>) changes whichever
+        /// value the wrapper yields, so each branch is followed.
+        /// </summary>
+        private void RecordWrite(Node target, Node start, List<string> outer)
         {
-            var segments = new List<string>();
-            var node = target;
-            while (node is MemberExpression member)
+            var segments = new List<string>(outer);
+            var node = start;
+            while (true)
             {
+                switch (node)
+                {
+                    case LogicalExpression logical when segments.Count > 0:
+                        RecordWrite(target, logical.Left, segments);
+                        RecordWrite(target, logical.Right, segments);
+                        return;
+                    case ConditionalExpression conditional when segments.Count > 0:
+                        RecordWrite(target, conditional.Consequent, segments);
+                        RecordWrite(target, conditional.Alternate, segments);
+                        return;
+                    case SequenceExpression sequence when segments.Count > 0:
+                        node = sequence.Expressions[^1];
+                        continue;
+                    case AwaitExpression awaited when segments.Count > 0:
+                        node = awaited.Argument;
+                        continue;
+                    case ChainExpression chain:
+                        node = chain.Expression;
+                        continue;
+                }
+
+                if (node is not MemberExpression member)
+                    return;
+
                 if (member.Object is Identifier { Name: VariablesRoot })
                 {
                     var name = !member.Computed && member.Property is Identifier identifier ? identifier.Name
@@ -169,6 +203,42 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         }
 
         /// <summary>
+        /// Records the writes of an assignment or loop-head target: a member target, or each member target inside a
+        /// destructuring pattern (<c>[variables.a, variables.b] = …</c>, <c>({ x: variables.total } = o)</c>,
+        /// <c>for (variables.key in o)</c>).
+        /// </summary>
+        private void RecordTargetWrites(Node? target)
+        {
+            switch (target)
+            {
+                case ArrayPattern array:
+                    foreach (var element in array.Elements)
+                        RecordTargetWrites(element);
+                    return;
+                case ObjectPattern objectPattern:
+                    foreach (var property in objectPattern.Properties)
+                        RecordTargetWrites(property switch
+                        {
+                            Property { Value: Node value } => value,
+                            RestElement rest => rest.Argument,
+                            _ => null
+                        });
+                    return;
+                case AssignmentPattern assignment:
+                    RecordTargetWrites(assignment.Left);
+                    return;
+                case RestElement rest:
+                    RecordTargetWrites(rest.Argument);
+                    return;
+                case null:
+                    return;
+                default:
+                    RecordWrite(target);
+                    return;
+            }
+        }
+
+        /// <summary>
         /// Whether the value read at the end of <see cref="_path"/> can be changed by the script later (FR-019): it
         /// escapes into a binding, an argument, a container, a closure's return, or has a method called on it. A value
         /// that is only compared, combined into a new value, tested, discarded, or returned from the script itself does
@@ -197,10 +267,14 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                         if (ReferenceEquals(conditional.Test, current))
                             return false;
                         break;
+                    case TemplateLiteral when index > 1 && _path[index - 2] is TaggedTemplateExpression:
+                        // A tagged template passes its substitutions to the tag function as arguments.
+                        return true;
                     case AssignmentExpression assignment when ReferenceEquals(assignment.Left, current):
                     case UpdateExpression or UnaryExpression or BinaryExpression or TemplateLiteral or ExpressionStatement:
                     case IfStatement or WhileStatement or DoWhileStatement or ForStatement or SwitchStatement or SwitchCase:
                     case ForInStatement:
+                        // for…in reads only its object's keys; its head is a write, recorded as one.
                         return false;
                     case ReturnStatement:
                         // The script's own returned value leaves the script; a nested function's goes back into it.
@@ -249,7 +323,13 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
             switch (node)
             {
                 case AssignmentExpression assignment:
-                    RecordWrite(assignment.Left);
+                    RecordTargetWrites(assignment.Left);
+                    break;
+                case ForInStatement { Left: not VariableDeclaration } forIn:
+                    RecordTargetWrites(forIn.Left);
+                    break;
+                case ForOfStatement { Left: not VariableDeclaration } forOf:
+                    RecordTargetWrites(forOf.Left);
                     break;
                 case UpdateExpression update:
                     RecordWrite(update.Argument);
@@ -272,15 +352,17 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                     }
 
                     return;
-                case MemberExpression { Computed: false, Property: Identifier { Name: VariablesRoot or GetVariable or SetVariable } } global
-                    when global.Object is ThisExpression or Identifier { Name: "globalThis" or "self" or "window" }:
+                case MemberExpression { Computed: false, Property: Identifier { Name: VariablesRoot or GetVariable or SetVariable } property } global
+                    when global.Object is ThisExpression or Identifier { Name: "globalThis" or "self" or "window" } &&
+                         (scriptBody || property.Name != SetVariable):
                     // globalThis.variables, this.getVariable(...): the root reached through another object.
                     HasComputedRead = true;
                     HasComputedWrite = true;
                     Visit(global.Object);
                     return;
-                case MemberExpression { Computed: true, Property: Literal { Value: VariablesRoot or GetVariable or SetVariable } } bracketed
-                    when bracketed.Object is ThisExpression or Identifier { Name: "globalThis" or "self" or "window" }:
+                case MemberExpression { Computed: true, Property: Literal { Value: VariablesRoot or GetVariable or SetVariable } key } bracketed
+                    when bracketed.Object is ThisExpression or Identifier { Name: "globalThis" or "self" or "window" } &&
+                         (scriptBody || (string?)key.Value != SetVariable):
                     // globalThis['variables']: the root reached through another object by a literal key.
                     HasComputedRead = true;
                     HasComputedWrite = true;
@@ -309,7 +391,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                     foreach (var argument in call.Arguments)
                         Visit(argument);
                     return;
-                case CallExpression { Callee: Identifier { Name: SetVariable } } setter:
+                case CallExpression { Callee: Identifier { Name: SetVariable } } setter when scriptBody:
                     // setVariable('X', v) is a whole assignment of X (spec 1231 FR-005); a computed name is a computed write.
                     if (setter.Arguments.Count >= 1 && setter.Arguments[0] is Literal { Value: string written } writtenNode)
                     {
@@ -348,7 +430,8 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                     return;
                 case BreakStatement or ContinueStatement:
                     return;
-                case Identifier { Name: VariablesRoot or GetVariable or SetVariable }:
+                case Identifier { Name: VariablesRoot or GetVariable }:
+                case Identifier { Name: SetVariable } when scriptBody:
                     // Any other appearance is a value use, or the script's own declaration of the name: reads and
                     // writes through it cannot be named (FR-020a).
                     HasComputedRead = true;

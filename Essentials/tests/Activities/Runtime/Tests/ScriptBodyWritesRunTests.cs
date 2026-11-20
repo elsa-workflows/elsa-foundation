@@ -25,6 +25,8 @@ namespace Elsa.Activities.Runtime.Tests;
 /// </summary>
 public sealed class ScriptBodyWritesRunTests
 {
+    private const string Order = """{"id":9007199254740993,"price":10.50,"note":"a\u0022b","lines":[1,2]}""";
+
     [Fact]
     public async Task A_script_that_changes_two_variables_commits_both_with_the_step()
     {
@@ -54,12 +56,12 @@ public sealed class ScriptBodyWritesRunTests
     }
 
     [Theory]
-    [InlineData("variables.count = 5; return variables.count;")]
-    [InlineData("setVariable('count', 5); return getVariable('count');")]
-    [InlineData("variables['count'] = 5; return variables['count'];")]
+    [InlineData("const before = variables.count; variables.count = 5; return before * 100 + variables.count;")]
+    [InlineData("const before = getVariable('count'); setVariable('count', 5); return before * 100 + getVariable('count');")]
+    [InlineData("const before = variables['count']; variables['count'] = 5; return before * 100 + variables['count'];")]
     public async Task A_read_after_a_whole_assignment_sees_it(string script)
     {
-        // Acceptance 3 (read-your-writes).
+        // Acceptance 3 (read-your-writes): a read before the write sees the committed 0, the read after it the 5.
         var run = await RunAsync(script);
 
         run.AssertWorkflowCompleted();
@@ -72,12 +74,15 @@ public sealed class ScriptBodyWritesRunTests
     {
         // Acceptance 4 (C1).
         var before = await RunAsync("return 1;");
-        var run = await RunAsync("const t = variables.total; return t + variables.count;");
+        var run = await RunAsync("const t = variables.total; const o = variables.order; return t + variables.count + o.lines.length + JSON.stringify(o).length;");
 
         run.AssertWorkflowCompleted();
         Assert.Null(run.AssertCompleted("node-js").VariableWrites);
         Assert.Equal(Stored(before, "var-total"), Stored(run, "var-total"));
         Assert.Equal(Version(before, "var-total"), Version(run, "var-total"));
+        // An object value keeps its stored text exactly: the large integer, the trailing zero, the escape.
+        Assert.Equal(Order, Stored(run, "var-order"));
+        Assert.Equal(Version(before, "var-order"), Version(run, "var-order"));
     }
 
     [Theory]
@@ -199,7 +204,8 @@ public sealed class ScriptBodyWritesRunTests
             metadata: new Dictionary<string, string>());
 
         return await harness.RunAsync(
-            WorkflowExecutionHarness.NewExecutable(node, Declare("var-total", "total", "Int32", "10"), Declare("var-count", "count", "Int32", "0")),
+            WorkflowExecutionHarness.NewExecutable(node,
+                Declare("var-total", "total", "Int32", "10"), Declare("var-count", "count", "Int32", "0"), Declare("var-order", "order", "Any", Order)),
             allowPendingWorkOnTerminalCompletion: true,
             allowAcceptedButFaulted: true);
     }

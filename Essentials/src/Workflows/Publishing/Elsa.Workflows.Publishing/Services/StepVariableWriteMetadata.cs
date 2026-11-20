@@ -24,7 +24,8 @@ internal static class StepVariableWriteMetadata
         IReadOnlyDictionary<string, RuntimeInputBinding> bindings,
         RuntimeActivityContract? contract,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
-        ScriptVariableReadPlan? scriptBody = null)
+        ScriptVariableReadPlan? scriptBody = null,
+        bool explicitlyMarked = false)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         var targets = new List<MayWriteTarget>();
@@ -50,9 +51,10 @@ internal static class StepVariableWriteMetadata
 
         if (targets.Count > 0)
             metadata[RuntimeMetadataKeys.MayWriteVariables] = JsonSerializer.Serialize(targets, SerializerOptions);
-        // An engine script activity carries the type-level marker; its analyzed body says whether it may write every
-        // visible variable (a computed or opaque write) or only its may-write set.
-        if (scriptBody is not null ? scriptBody.HasComputedWrite : contract?.AccessesUndeclaredVariables == true)
+        // An engine script activity carries the type-level marker without declaring it; its analyzed body says whether
+        // it may write every visible variable (a computed or opaque write) or only its may-write set. A type that declares
+        // [AccessesUndeclaredVariables] itself may write any visible variable from its C# code too (FR-028).
+        if (explicitlyMarked || (scriptBody is not null ? scriptBody.HasComputedWrite : contract?.AccessesUndeclaredVariables == true))
             metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable] = "true";
         return metadata;
     }

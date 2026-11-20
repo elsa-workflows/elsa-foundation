@@ -115,6 +115,8 @@ internal static class StepVariableWriteValidation
                 {
                     // An engine script activity carries the type-level marker (it can reach any visible variable by name);
                     // its analyzed body says which it may write: every visible variable only for a computed or opaque write.
+                    // The design facet does not tell an engine script activity's implied marker from one a script activity
+                    // type declares itself; publication does (FR-028), so such a type is counted fully once published.
                     everyVisible = plan.HasComputedWrite;
                     foreach (var write in plan.MayWrite())
                     {
