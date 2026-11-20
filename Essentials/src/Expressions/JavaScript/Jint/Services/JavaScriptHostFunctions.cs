@@ -28,6 +28,9 @@ internal sealed record JavaScriptHostFunctionContext(
     /// read can still turn them into their protected form.
     /// </summary>
     public List<ExecutionWarning> Warnings { get; } = [];
+
+    /// <summary>The calls made so far: each result enters the value bridge under a key of its own.</summary>
+    public int Calls { get; set; }
 }
 
 /// <summary>
@@ -149,7 +152,7 @@ internal sealed class JavaScriptHostFunctions
                 ? JsValue.Undefined
                 // The result enters through the value bridge, as variables and arguments do: a number JavaScript cannot
                 // hold exactly is tracked like any lossy entered number (spec 1228; reported if read, refused if written).
-                : context.Values.Enter($"{declaration.Name}()", result);
+                : context.Values.Enter($"{declaration.Name}()[{++context.Calls}]", result);
         });
 
     /// <summary>

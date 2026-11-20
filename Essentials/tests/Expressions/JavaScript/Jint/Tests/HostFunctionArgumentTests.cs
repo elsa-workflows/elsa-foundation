@@ -80,6 +80,8 @@ public sealed class HostFunctionArgumentTests
     [InlineData("variables.order = { price: 1 }; return [variables.order.price, acme.readOrder().price];", "[1,1]")]
     [InlineData("variables.order.total = 2; return acme.readOrder().total;", "2")]
     [InlineData("var p = variables.order.price; return acme.readOrder().price === p;", "true")]
+    // Read but unchanged: the function gets the stored JSON, every digit kept.
+    [InlineData("var o = variables.order; return acme.readOrderIdText();", "\"9007199254740993\"")]
     public async Task A_function_sees_the_script_s_current_value_of_a_variable(string source, string expected)
     {
         var (result, _) = await RunAsync(source);
@@ -97,6 +99,16 @@ public sealed class HostFunctionArgumentTests
         Assert.Contains("acme.big()", warning.Details!["paths"], StringComparison.Ordinal);
     }
 
+    // Each call's result is its own entered value: writing one call's result does not hide another call's lossy read.
+    [Fact]
+    public async Task A_lossy_result_read_from_one_call_still_warns_when_another_call_s_result_is_written()
+    {
+        var (_, warnings) = await RunAsync("var x = acme.lookup('a').n * 2; variables.order = acme.lookup('b'); return x > 0 ? 1 : 0;");
+
+        Assert.Contains(warnings.Warnings, warning => warning.Code == JavaScriptValueDiagnostics.PrecisionLossRead &&
+                                                     warning.Details!["paths"].Contains("acme.lookup()[1]", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {
@@ -110,6 +122,12 @@ public sealed class HostFunctionArgumentTests
         var services = new ServiceCollection();
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.echo", call => call.Arguments[0].Clone()));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.big", _ => JsonSerializer.Deserialize<JsonElement>("9007199254740993")));
+        services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookup", call => JsonSerializer.Deserialize<JsonElement>(
+            call.Arguments[0].GetString() == "a" ? """{"n":9007199254740993}""" : """{"m":1}""")));
+        services.AddSingleton(new JavaScriptHostFunctionDeclaration(
+            "acme.readOrderIdText",
+            call => JsonSerializer.SerializeToElement(call.Variables!.Read("order").Value.GetProperty("id").GetRawText()),
+            ReadsVariables: true));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration(
             "acme.readOrder",
             call => call.Variables!.Read("order").Value,

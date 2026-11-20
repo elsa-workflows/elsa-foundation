@@ -82,9 +82,11 @@ internal sealed class JintJavaScriptScriptEvaluator(
     private static readonly IReadOnlyDictionary<string, JsonElement> NoPinnedValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
 
     /// <summary>
-    /// A host function's view of the body's variables: the value the script holds now for a variable it has read or
-    /// changed (its changes are written to the session only after the run), otherwise the session's value, read and
-    /// recorded by the session.
+    /// A host function's view of the body's variables (spec 1222 FR-034: one value per variable within the run). The
+    /// session's value, read and recorded by the session, unless the script has changed a variable it holds: its changes
+    /// reach the session only after the run, so the function then gets the script's value. Whether the script changed it
+    /// is decided by comparing the two as JavaScript sees them, so an unchanged value keeps its stored JSON exactly, with
+    /// every digit of a number JavaScript cannot hold.
     /// </summary>
     private sealed class CurrentVariableReader(
         IScriptVariableSession session,
@@ -92,17 +94,24 @@ internal sealed class JintJavaScriptScriptEvaluator(
         Engine engine,
         FeatureOptions options) : Elsa.Expressions.Core.Contracts.IExpressionVariableReader
     {
+        // The intrinsic parser, captured before user code runs.
+        private readonly JsValue _parse = engine.GetValue("JSON").AsObject().Get("parse");
+
         public IReadOnlyList<string> CandidateNames => session.CandidateNames;
 
         public Elsa.Expressions.Core.Contracts.ExpressionVariableRead Read(string name)
         {
+            var stored = session.Read(name);
             if (current() is not { } variables || !variables.TryGet(name, out var held))
-                return session.Read(name);
+                return stored;
             if (held.IsUndefined())
                 return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Missing;
-            return JintResultMaterializer.Stringify(engine, held) is { } json
-                ? Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Present(JintResultMaterializer.ParseResult(json, options))
-                : throw new JavaScriptException(engine.Intrinsics.TypeError, $"Variable '{name}' holds a value with no JSON form.");
+            var heldJson = JintResultMaterializer.Stringify(engine, held)
+                ?? throw new JavaScriptException(engine.Intrinsics.TypeError, $"Variable '{name}' holds a value with no JSON form.");
+            if (stored.Outcome == Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome.Present &&
+                StringComparer.Ordinal.Equals(JintResultMaterializer.Stringify(engine, engine.Invoke(_parse, JsValue.Undefined, [stored.Value.GetRawText()])), heldJson))
+                return stored;
+            return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Present(JintResultMaterializer.ParseResult(heldJson, options));
         }
     }
 
