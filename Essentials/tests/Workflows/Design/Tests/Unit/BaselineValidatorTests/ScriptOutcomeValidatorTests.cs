@@ -40,6 +40,7 @@ public sealed class ScriptOutcomeValidatorTests : IDisposable
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
         new Elsa.Activities.Flowchart.ActivitiesFlowchartFeature().ConfigureServices(services);
         // The script analysis is the JavaScript feature's; the validator consumes it through its contract.
+        services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookup", _ => default));
         new JavaScriptFeature().ConfigureServices(services);
         _provider = services.BuildServiceProvider();
         _structures = _provider.CreateScope().ServiceProvider.GetRequiredService<IActivityStructureService>();
@@ -200,6 +201,53 @@ public sealed class ScriptOutcomeValidatorTests : IDisposable
         Assert.Empty(await Validate(Script("js", script)));
     }
 
+    // Spec 1223 FR-027: declaring 'variables' breaks the pinned reads.
+    [Theory]
+    [InlineData("const variables = {}; return variables;")]
+    [InlineData("function f(variables) { return variables; } return f(1);")]
+    public async Task A_script_that_declares_variables_is_a_reserved_name_error(string script)
+    {
+        var error = Assert.Single(await Validate(Script("js", script)));
+
+        Assert.Equal(ScriptOutcomeValidator.ReservedNameType, error.Type);
+        Assert.Equal(ValidationSeverities.Error, error.Severity);
+        Assert.Contains("'variables'", error.Message, StringComparison.Ordinal);
+    }
+
+    // Spec 1223 FR-027: a built-in, a namespace root or an unused read root declared by the script is shadowed.
+    [Theory]
+    [InlineData("const newGuid = () => 'x'; return newGuid();", "newGuid")]
+    [InlineData("const input = 1; return input;", "input")]
+    [InlineData("const acme = {}; return acme;", "acme")]
+    public async Task A_script_that_declares_a_platform_function_or_root_gets_a_shadowing_warning(string script, string name)
+    {
+        var warning = Assert.Single(await Validate(Script("js", script)));
+
+        Assert.Equal(ScriptOutcomeValidator.ShadowedFunctionType, warning.Type);
+        Assert.Equal(ValidationSeverities.Warning, warning.Severity);
+        Assert.Contains($"'{name}'", warning.Message, StringComparison.Ordinal);
+    }
+
+    // Spec 1223 FR-017, FR-018: live .NET objects and types are not available under the default JSON-only strategy.
+    [Theory]
+    [InlineData("return TimeSpan.FromHours(1);", "TimeSpan.FromHours(1)")]
+    [InlineData("const a = [1]; return a.Where(x => x);", "a.Where(x => x)")]
+    public async Task A_script_that_uses_dotnet_types_or_members_is_an_error_quoting_the_expression(string script, string quoted)
+    {
+        var error = Assert.Single(await Validate(Script("js", script)));
+
+        Assert.Equal(ScriptOutcomeValidator.DotNetMemberUsageType, error.Type);
+        Assert.Equal(ValidationSeverities.Error, error.Severity);
+        Assert.Contains($"'{quoted}'", error.Message, StringComparison.Ordinal);
+        Assert.Equal("js/inputs/script", error.Path);
+    }
+
+    [Fact]
+    public async Task Native_calls_json_reads_and_built_ins_are_not_dotnet_usage()
+    {
+        Assert.Empty(await Validate(Script("js", "const id = newGuid(); return { id, at: new Date().toISOString(), n: args.order.OrderId, u: 'a'.toUpperCase() };")));
+    }
+
     // The analyzer is the JavaScript feature's and optional: a host without it gets no script checks.
     [Fact]
     public async Task Without_a_script_outcome_analyzer_scripts_are_not_checked()
@@ -216,7 +264,8 @@ public sealed class ScriptOutcomeValidatorTests : IDisposable
     }
 
     private ScriptOutcomeValidator Validator() =>
-        new(CatalogResolver(_catalog), Options(), new ActivityTreeWalker(_structures), _structures, _analyzer);
+        new(CatalogResolver(_catalog), Options(), new ActivityTreeWalker(_structures), _structures, _analyzer,
+            _provider.GetRequiredService<IJavaScriptDotNetUsageAnalyzer>());
 
     private async Task<IReadOnlyList<ValidationError>> Validate(ActivityNode root) =>
         [.. await Validator().Validate(new Draft(StateWithRoot(root)), CancellationToken.None)];

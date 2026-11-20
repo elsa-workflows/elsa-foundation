@@ -19,19 +19,31 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// <summary>Builds the closed Jint value world shared by portable expressions and scripts.</summary>
 internal static class IsolatedJintEngine
 {
-    public static Engine Create(FeatureOptions configured, CancellationToken cancellationToken)
+    /// <summary>
+    /// A fresh engine with the native intrinsics, <c>Date</c>, <c>Intl</c>, <c>Temporal</c> and <c>Math.random</c>
+    /// included (spec 1223 FR-004, FR-005), on the host clock in UTC with the invariant culture (FR-002).
+    /// </summary>
+    public static Engine Create(FeatureOptions configured, CancellationToken cancellationToken, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(configured);
-        var options = new JintOptions();
+        var options = new JintOptions
+        {
+            TimeSystem = new JintTimeSystem(timeProvider ?? TimeProvider.System),
+            TimeZone = TimeZoneInfo.Utc,
+            Culture = CultureInfo.InvariantCulture,
+        };
+        // Intl and Temporal take their default zone from the Temporal zone provider, not TimeZone: UTC there too.
+        options.Temporal.TimeZoneProvider = UtcDefaultTimeZoneProvider.Instance;
 
-        if (configured.ExecutionTimeout is { } timeout && timeout > TimeSpan.Zero)
-            options.TimeoutInterval(timeout);
-        if (configured.MaxStatements is { } maxStatements && maxStatements > 0)
-            options.MaxStatements(maxStatements);
+        // Counted across the script: Jint's own limits restart on every call from .NET back into the engine, which every
+        // host function makes. The evaluator starts the count (EvaluationLimits.Start).
+        var timeout = configured.ExecutionTimeout is { } interval && interval > TimeSpan.Zero ? interval : (TimeSpan?)null;
+        var maxStatements = configured.MaxStatements is { } statements && statements > 0 ? statements : (int?)null;
+        var maxMemoryBytes = configured.MaxMemoryBytes is { } bytes && bytes > 0 ? bytes : (long?)null;
+        if (timeout is not null || maxStatements is not null || maxMemoryBytes is not null)
+            options.Constraint(new EvaluationLimits(timeout, maxStatements, maxMemoryBytes));
         if (configured.MaxRecursionDepth is { } maxRecursionDepth && maxRecursionDepth > 0)
             options.LimitRecursion(maxRecursionDepth);
-        if (configured.MaxMemoryBytes is { } maxMemoryBytes && maxMemoryBytes > 0)
-            options.LimitMemory(maxMemoryBytes);
         if (configured.MaxArrayLength is { } maxArrayLength && maxArrayLength > 0)
             options.Constraints.MaxArraySize = maxArrayLength;
         if (cancellationToken.CanBeCanceled)
@@ -39,9 +51,32 @@ internal static class IsolatedJintEngine
 
         var engine = new Engine(options);
         JintResultMaterializer.Initialize(engine);
-        DisableAmbientCapabilities(engine);
+        DefaultIntlToUtc(engine);
         return engine;
     }
+
+    /// <summary>
+    /// Jint's <c>Intl.DateTimeFormat</c> formats in the host's local zone when no <c>timeZone</c> is given, whatever the
+    /// engine's zone. Every expression evaluates in UTC with no ambient zone (spec 1223 FR-002, FR-023), so the
+    /// constructor defaults <c>timeZone</c> to <c>UTC</c>; an explicit zone is kept. Installed before user code runs.
+    /// </summary>
+    private static void DefaultIntlToUtc(Engine engine) => engine.Execute(IntlUtcDefault);
+
+    // Parsed once: every evaluation's engine runs the same wrapper.
+    private static readonly Prepared<Acornima.Ast.Script> IntlUtcDefault = Engine.PrepareScript(
+        "(function () {" +
+        " var Native = Intl.DateTimeFormat;" +
+        " function withUtc(options) {" +
+        "  if (options === undefined) return { timeZone: 'UTC' };" +
+        "  if (options === null) return options;" +
+        "  var o = Object(options); return o.timeZone === undefined ? Object.assign({}, o, { timeZone: 'UTC' }) : options;" +
+        " }" +
+        " function DateTimeFormat(locales, options) { return new Native(locales, withUtc(options)); }" +
+        " DateTimeFormat.prototype = Native.prototype;" +
+        " Object.defineProperty(DateTimeFormat, 'supportedLocalesOf', { value: Native.supportedLocalesOf, writable: true, configurable: true });" +
+        " Object.defineProperty(Native.prototype, 'constructor', { value: DateTimeFormat, writable: true, configurable: true });" +
+        " Object.defineProperty(Intl, 'DateTimeFormat', { value: DateTimeFormat, writable: true, configurable: true, enumerable: false });" +
+        "})();");
 
     /// <summary>
     /// Installs <c>args</c>: the declared parameters, entered through the value bridge as plain, changeable values (spec
@@ -288,6 +323,9 @@ internal static class IsolatedJintEngine
         /// <summary>Whether the script assigned the variable itself (<c>variables.x = v</c>), rather than only changing what it read.</summary>
         public bool WasAssigned(string name) => _assigned.Contains(name);
 
+        /// <summary>During the run, the change the script has made to a variable so far, as it would be collected now.</summary>
+        public ScriptValueChange Preview(string name) => values.Preview(Key(name), _current[name], _assigned.Contains(name));
+
         // A value the script made unserializable (a cycle, a BigInt) or grew past the JSON limits (depth, size) was
         // changed: it is reported as changed as a whole, so an input expression fails with its write diagnostic rather
         // than the engine's or the parser's error (spec 1228 FR-006a). The catch covers only the bridge's Collect, where an
@@ -318,17 +356,6 @@ internal static class IsolatedJintEngine
     {
         "toJSON", "toString", "valueOf", "toLocaleString", "then", "constructor"
     };
-
-    private static void DisableAmbientCapabilities(Engine engine)
-    {
-        // Time, randomness, locale, and environment data enter through pinned args, never intrinsics.
-        foreach (var name in new[] { "Date", "Temporal", "Intl" })
-            engine.Global.DefineOwnProperty(name, new PropertyDescriptor(JsValue.Undefined, writable: false, enumerable: false, configurable: false));
-
-        engine.GetValue("Math").AsObject().DefineOwnProperty(
-            "random",
-            new PropertyDescriptor(JsValue.Undefined, writable: false, enumerable: false, configurable: false));
-    }
 
     private static void ValidateInput(
         IReadOnlyDictionary<string, JsonElement> parameters,

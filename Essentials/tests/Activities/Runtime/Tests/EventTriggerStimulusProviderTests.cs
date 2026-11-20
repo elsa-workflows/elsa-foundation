@@ -367,5 +367,5 @@ public sealed class EventTriggerStimulusProviderTests
                 "JavaScript",
                 "input.eventName",
                 new RuntimeValueTypeDescriptor("alias", "String", null),
-                capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1));
+                capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1));
 }

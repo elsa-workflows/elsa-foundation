@@ -109,6 +109,14 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
 
     private sealed class Walker(IReadOnlySet<string> readingFunctions, bool scriptBody)
     {
+        // A built-in is called by its own name, a host function as namespace.member (spec 1223 FR-027).
+        private static string? CalleeName(Node callee) => callee switch
+        {
+            Identifier identifier => identifier.Name,
+            MemberExpression { Computed: false, Object: Identifier root, Property: Identifier member } => $"{root.Name}.{member.Name}",
+            _ => null
+        };
+
         public List<string> LiteralNames { get; } = [];
         public List<ScriptVariableLiteralRead> LiteralReads { get; } = [];
         public bool HasComputedRead { get; private set; }
@@ -387,7 +395,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                     if (member.Computed)
                         Visit(member.Property);
                     return;
-                case CallExpression { Callee: Identifier callee } readingCall when readingFunctions.Contains(callee.Name):
+                case CallExpression readingCall when CalleeName(readingCall.Callee) is { } calleeName && readingFunctions.Contains(calleeName):
                     // An opaque read: the host function reads variables the script does not name.
                     HasComputedRead = true;
                     foreach (var argument in readingCall.Arguments)

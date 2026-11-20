@@ -6,6 +6,8 @@
 
 **Status**: Implemented — merged as [#3028](https://github.com/elsa-workflows/elsa-foundation/pull/3028) (`88e513b7e`), 2026-10-19
 
+**Superseded in part** by [spec 1223](../1223-expression-capabilities/spec.md) (S-1, initiative #3052): the GUID functions (`newGuid`, `newGuidString`, `newShortGuid`, `getGuidString`, `getShortGuid`), `parseGuid` and the Base64 pair now convert to Elsa 4 built-ins that return Elsa 3's text; `toJson` is rewritten to `JSON.stringify` with a behaviour warning; `Date` and `Math.random` convert natively (FR-014 there). FR-017 here and the refusals of research R-6 for these functions no longer apply; the inlined null/whitespace helpers stay.
+
 **Issue**: [#2717](https://github.com/elsa-workflows/elsa-foundation/issues/2717)
 
 **Depends on**:

@@ -6,11 +6,24 @@ namespace Elsa.Expressions.JavaScript.Services;
 
 /// <summary>
 /// Parses a script-activity program (top-level <c>return</c> allowed, as the script evaluator runs it) and reads the
-/// literal outcomes of its <c>complete(result, outcomes)</c> calls, its top-level returned string literals and its
-/// declarations of the reserved name <c>complete</c>. It never evaluates the source.
+/// literal outcomes of its <c>complete(result, outcomes)</c> calls, its top-level returned string literals, its
+/// declarations of the reserved name <c>complete</c>, and the platform names it declares (spec 1223 FR-027). It never
+/// evaluates the source.
 /// </summary>
-internal sealed class JavaScriptScriptOutcomeAnalyzer : IJavaScriptScriptOutcomeAnalyzer
+internal sealed class JavaScriptScriptOutcomeAnalyzer(IEnumerable<JavaScriptHostFunctionDeclaration>? hostFunctions = null)
+    : IJavaScriptScriptOutcomeAnalyzer
 {
+    private const string VariablesRoot = "variables";
+
+    // input, activities and workflow are reserved read roots a script does not use yet; a declaration only shadows them.
+    private readonly HashSet<string> _shadowable = new HashSet<string>(["input", "activities", "workflow"], StringComparer.Ordinal)
+        .Concat(JavaScriptBuiltInFunctions.Names)
+        .Concat((hostFunctions ?? [])
+            .Select(function => function.Name)
+            .Where(name => name.Contains('.', StringComparison.Ordinal))
+            .Select(name => name[..name.IndexOf('.', StringComparison.Ordinal)]))
+        .ToHashSet(StringComparer.Ordinal);
+
     public JavaScriptScriptOutcomeAnalysis? Analyze(string script)
     {
         ArgumentNullException.ThrowIfNull(script);
@@ -31,8 +44,16 @@ internal sealed class JavaScriptScriptOutcomeAnalyzer : IJavaScriptScriptOutcome
         return new JavaScriptScriptOutcomeAnalysis(
             literalOutcomes,
             returnedStrings,
-            JavaScriptReservedNames.CollectCompleteDeclarations(parsed).Select(JavaScriptReservedNames.RangeOf).ToArray());
+            JavaScriptReservedNames.CollectCompleteDeclarations(parsed).Select(JavaScriptReservedNames.RangeOf).ToArray(),
+            DeclaredNames(parsed, name => StringComparer.Ordinal.Equals(name, VariablesRoot)),
+            DeclaredNames(parsed, _shadowable.Contains));
     }
+
+    private static string[] DeclaredNames(Node parsed, Func<string, bool> matches) =>
+        JavaScriptReservedNames.CollectDeclarations(parsed, matches)
+            .Select(identifier => identifier.Name)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
     private static void Visit(Node node, bool insideFunction, List<string> literalOutcomes, List<string> returnedStrings)
     {

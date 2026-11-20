@@ -911,7 +911,7 @@ describe("WorkflowActivityExecutionDetails", () => {
         }
       },
       options: { strict: true },
-      capabilityProfile: "binding-pure-v1"
+      capabilityProfile: "binding-readonly-v1"
     };
     const executableNodeFacts: ExecutableGraphNodeFacts = {
       executableNodeId: "node-1",
@@ -1029,7 +1029,7 @@ describe("WorkflowActivityExecutionDetails", () => {
               resultType: { alias: "String", collectionKind: "Single" },
               parameters: { response: { kind: "ActivityResult", projectionKey: metadataCanary } },
               options: { strict: true },
-              capabilityProfile: "binding-pure-v1"
+              capabilityProfile: "binding-readonly-v1"
             }
           }],
           inputBindings: []

@@ -178,7 +178,7 @@ public sealed class Elsa3MemoryReferenceImportTests
             Assert.Equal("JavaScript", expression.Language);
             Assert.Equal("(40 + 2) ?? null", expression.Source);
             Assert.Empty(expression.Parameters);
-            Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, expression.CapabilityProfile);
+            Assert.Equal(ExpressionCapabilityProfiles.BindingReadonlyV1, expression.CapabilityProfile);
         });
     }
 
@@ -233,7 +233,7 @@ public sealed class Elsa3MemoryReferenceImportTests
             Assert.Equal("{{ variables.customer.name }}", expression.Source);
             var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["variables.customer"]);
             Assert.Equal("variable-customer", parameter.VariableKey);
-            Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, expression.CapabilityProfile);
+            Assert.Equal(ExpressionCapabilityProfiles.BindingReadonlyV1, expression.CapabilityProfile);
         });
     }
 

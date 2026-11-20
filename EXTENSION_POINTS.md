@@ -68,7 +68,7 @@ not automatic constitution violations.
 |---|---|
 | Expressions (evaluator + descriptor providers) | [`Essentials/src/Expressions/Elsa.Expressions/EXTENSION_POINTS.md`](Essentials/src/Expressions/Elsa.Expressions/EXTENSION_POINTS.md) |
 | Expressions API (descriptor projections and capability declaration) | [`Essentials/src/Expressions/Api/EXTENSION_POINTS.md`](Essentials/src/Expressions/Api/EXTENSION_POINTS.md) |
-| JavaScript expressions (pre/post-processors) | [`Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md) |
+| JavaScript expressions (host functions, .NET-usage analysis, script analyzers) | [`Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md) |
 | JavaScript rendering (declaration contributors) | [`Essentials/src/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](Essentials/src/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md) |
 | Liquid expressions (rendering lifecycle) | [`Essentials/src/Expressions/Liquid/EXTENSION_POINTS.md`](Essentials/src/Expressions/Liquid/EXTENSION_POINTS.md) |
 

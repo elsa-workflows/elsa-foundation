@@ -28,11 +28,11 @@ internal sealed class PortableExpressionEvaluator : IPortableExpressionEvaluator
     {
         ArgumentNullException.ThrowIfNull(request);
         request.CancellationToken.ThrowIfCancellationRequested();
-        if (!request.Capabilities.IsBindingPure ||
-            !StringComparer.Ordinal.Equals(request.Capabilities.Profile, ExpressionCapabilityProfiles.BindingPureV1))
+        if (!request.Capabilities.IsBindingReadonly ||
+            !StringComparer.Ordinal.Equals(request.Capabilities.Profile, ExpressionCapabilityProfiles.BindingReadonlyV1))
         {
             throw new InvalidOperationException(
-                $"Portable expression evaluation requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'. " +
+                $"Portable expression evaluation requires capability profile '{ExpressionCapabilityProfiles.BindingReadonlyV1}'. " +
                 $"Profile '{request.Definition.CapabilityProfile}' belongs to an explicitly separate evaluator path.");
         }
 

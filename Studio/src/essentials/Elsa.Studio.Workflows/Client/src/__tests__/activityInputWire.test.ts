@@ -124,7 +124,7 @@ describe("activity input wire adapter", () => {
       resultType: { alias: "String", collectionKind: "Single" },
       parameters: { status: { kind: "Literal", value: "ok" } },
       options: { strict: true },
-      capabilityProfile: "binding-pure-v1"
+      capabilityProfile: "binding-readonly-v1"
     };
     const seeded = stateOf({
       ...writeLine("write-result", {}),
