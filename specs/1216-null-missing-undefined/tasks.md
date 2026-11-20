@@ -102,7 +102,8 @@ red without the change. xUnit only.
   for such a `null` before validating when the pinned `DefaultOnNull` is on (no separate record, FR-013). One shared
   helper does the substitution, so all four give the same answer; the early checks exist because they refuse before
   their own side effects (#3731). Known-inputs mode (`ValidateKnownInputs`) applies the same `null` refusal and
-  substitution to the members it is given, and completes nothing
+  substitution to the members it is given; it fills declared defaults as today but adds no `null` or type-default
+  completion
 - [ ] T013a [US2] Q9 (FR-034): publication refuses a member declared both required and with a default with
   `VF-ACT-014` (activity inputs, authored activity definition inputs, workflow inputs); remove the validator's
   `!DefaultValue.HasValue` exemption, which can then never apply. Audit built-in activity descriptors for inputs
@@ -112,7 +113,7 @@ red without the change. xUnit only.
 - [ ] T015 [US2] Tests for S-2's additions (US2 scenarios 2, 3 and 5, and the `null` refusal) on the API, trigger,
   test-run and child-workflow paths, beside #3731's `WorkflowStartInputContractTests`; scenarios 1 and 4 are covered
   there already. Include a refused start that schedules nothing, and one test per validator mode proving known-inputs
-  mode does not complete members
+  mode fills declared defaults but adds no `null` or type-default completion
 - [ ] T016 [US2] Behavioural test: a JavaScript condition reads an omitted optional input as `null`
   (`Essentials/tests/Activities/Behavioral/Tests`)
 
@@ -185,6 +186,10 @@ input, and one workflow input supplied as `null`.
   `String` target (FR-029); update `Elsa3NullMemberTests`
 - [ ] T031 [US5] Verify Elsa 3 3.6.3 input requiredness (R-11) and map converted inputs' requiredness accordingly;
   nullability follows the converted type (Q8) and is not mapped
+- [ ] T031a [US5] Converter (FR-001b, FR-001c, FR-006): an Elsa 3 variable or workflow input of a date, time,
+  `TimeSpan` or `Guid` type with no starting value is refused at conversion with an `ELS3-*` diagnostic that says to
+  declare a default (or type the member `String` / `Any`), instead of converting and then failing publication. List
+  these refusals in the conversion report and the Elsa 3 migration readiness guide; T003 and T039 count them
 - [ ] T032 [US5] Export/import round-trip test: `nullHandling` survives. Parity test (SC-004): run every US3 and US4
   acceptance scenario of T021 and T026 once as a native workflow and once as a converted one with the same policies,
   and compare outputs and diagnostics
@@ -227,7 +232,7 @@ Built by S-4 (spec 1222 FR-011, FR-012; `VF-READ-001`).
 - [ ] T038 [P] Q5 audit (R-12): list built-in activity inputs that cannot hold `null` and whose Elsa 3 counterparts
   accepted it; declare each nullable where the Elsa 4 activity handles `null`, with a test, and record the rest in the
   Elsa 3 migration readiness guide
-- [ ] T039 Rerun the #3052 JTest measurement and post it on #3052 (SC-002, SC-003)
+- [ ] T039 Rerun the #3052 JTest measurement and post it on #3052 (SC-002, SC-003), listing T031a's refusals
 - [ ] T040 Close #3280, #3288, #3172 and #3170 after the merge (initiative branch: they do not auto-close); set this
   spec's **Status** to `Implemented` in the delivery PR
 

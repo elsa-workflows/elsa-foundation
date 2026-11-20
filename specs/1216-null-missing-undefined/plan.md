@@ -79,7 +79,7 @@ Plan decisions are numbered P-n, apart from the board's D-n.
 |---|---|---|
 | P-1 | Intrinsic `value` takes the target's nullability | R-5, Q8. From the target's type (P-2); `name` / `outcome` stay non-nullable strings. The intrinsic executor checks a run-time `null` too (R-6). |
 | P-2 | Nullability from the type | R-5, Q8, Q10: variables, workflow inputs and outputs and authored activity definitions, by the type registry's `supportsNull`; a type default only for `Boolean`, the number types and enums (FR-001b); an unassigned variable reads that default (Q11). T004, T004a. |
-| P-3 | Workflow input nullability pinned | R-4. From the type (P-2); hashed only when `true`. |
+| P-3 | Workflow input nullability pinned | R-4. From the type (P-2); hashed only when non-nullable. |
 | P-4 | Extend #3731's admission | R-3. #3731 already checks the input contract once in `WorkflowStartDispatcher` for every start, before the start policy and enqueue, and fills declared defaults. S-2 adds the board's D-10 completion (`null` or type default) and the `null` refusal for non-nullable inputs to the validator's normalization, and default-on-null substitution before it. No new admission step. |
 | P-5 | Policies on `WorkflowStrategyOptions.NullHandling` | R-2. Compiled to `WorkflowExecutable.ValuePolicies`; each JavaScript evaluation gets the undefined policy from the executable. |
 | P-6 | Default-on-null = type default | R-6, Q2, Q10. `Boolean`, the number types and enums only (FR-001b); every other type keeps `VF-ACT-004`. |

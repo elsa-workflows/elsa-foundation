@@ -513,8 +513,10 @@ the coordinator's review. All are accepted. The requirements follow the answers.
 - **SC-001**: All four issues (#3280, #3288, #3172, #3170) can be closed against this spec's acceptance scenarios.
 - **SC-002**: `composition-bulk-dispatch-sub-workflow` starts with no input and completes, instead of leaving a
   poisoned work item.
-- **SC-003**: The JTest measurement on #3052 converts and publishes at least as many definitions as before, and every
-  null `SetVariable` / `SetOutput` refusal from spec 267 with a nullable target is gone.
+- **SC-003**: The JTest measurement on #3052 converts and publishes at least as many definitions as before, apart
+  from those refused at conversion because a date, time, `TimeSpan` or `Guid` member has no starting value (each
+  listed with guidance), and every null `SetVariable` / `SetOutput` refusal from spec 267 with a nullable target is
+  gone.
 - **SC-004**: A native workflow and a converted workflow with the same policies give the same outputs for the same
   inputs, in a test that covers every acceptance scenario of US3 and US4.
 - **SC-005**: No `undefined` property, array element, `NaN` or `Infinity` is changed at the boundary without a
