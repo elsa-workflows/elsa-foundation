@@ -97,6 +97,12 @@ internal sealed class JintJavaScriptScriptEvaluator(
         // The intrinsic parser, captured before user code runs.
         private readonly JsValue _parse = engine.GetValue("JSON").AsObject().Get("parse");
 
+        // JSON text tells Infinity and null apart only through a replacer; the value bridge does too, so a member set
+        // from Infinity to null counts as changed here as it does there. Strings are prefixed so no string can pass for
+        // an Infinity.
+        private readonly JsValue _exact = engine.Evaluate(
+            "(function (key, value) { return typeof value === 'string' ? 's' + value : value === Infinity ? 'i+' : value === -Infinity ? 'i-' : value; })");
+
         public IReadOnlyList<string> CandidateNames => session.CandidateNames;
 
         public Elsa.Expressions.Core.Contracts.ExpressionVariableRead Read(string name)
@@ -114,7 +120,9 @@ internal sealed class JintJavaScriptScriptEvaluator(
             // Held without a whole assignment means the script read it, so this read is already recorded.
             var stored = session.Read(name);
             if (stored.Outcome == Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome.Present &&
-                StringComparer.Ordinal.Equals(JintResultMaterializer.Stringify(engine, engine.Invoke(_parse, JsValue.Undefined, [stored.Value.GetRawText()])), heldJson))
+                StringComparer.Ordinal.Equals(
+                    JintResultMaterializer.Stringify(engine, engine.Invoke(_parse, JsValue.Undefined, [stored.Value.GetRawText()]), _exact),
+                    JintResultMaterializer.Stringify(engine, held, _exact)))
                 return stored;
             return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Present(JintResultMaterializer.ParseResult(heldJson, options));
         }

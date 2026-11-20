@@ -120,6 +120,15 @@ public sealed class HostFunctionArgumentTests
         Assert.Empty(session.ReadNames);
     }
 
+    // A member set from a stored Infinity to null is a change, as the value bridge sees it: the function gets null.
+    [Fact]
+    public async Task A_function_sees_a_member_changed_from_infinity_to_null()
+    {
+        var (result, _) = await RunAsync("variables.order.n = null; return acme.readOrderText();", session: new Session("""{"n":1e400}"""));
+
+        Assert.Equal("""{"n":null}""", result!.Value.GetString());
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {
@@ -135,6 +144,10 @@ public sealed class HostFunctionArgumentTests
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.big", _ => JsonSerializer.Deserialize<JsonElement>("9007199254740993")));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookup", call => JsonSerializer.Deserialize<JsonElement>(
             call.Arguments[0].GetString() == "a" ? """{"n":9007199254740993}""" : """{"m":1}""")));
+        services.AddSingleton(new JavaScriptHostFunctionDeclaration(
+            "acme.readOrderText",
+            call => JsonSerializer.SerializeToElement(call.Variables!.Read("order").Value.GetRawText()),
+            ReadsVariables: true));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration(
             "acme.readOrderIdText",
             call => JsonSerializer.SerializeToElement(call.Variables!.Read("order").Value.GetProperty("id").GetRawText()),
