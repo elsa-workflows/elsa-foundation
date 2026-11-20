@@ -76,6 +76,12 @@ public interface IStepVariableSession : IStepVariables
     /// diagnostics then use their value-free form (spec 1229 FR-006), and its result takes that protection (spec 1228 US7).
     /// </summary>
     bool HasReadProtectedValue { get; }
+
+    /// <summary>
+    /// Whether a target is read-only to a step: a loop's item or index (spec 1231 FR-006). A script gets it frozen, so a
+    /// change throws where the script makes it.
+    /// </summary>
+    bool IsReadOnly(StepVariableTarget target);
 }
 
 /// <summary>A variable a session reads or writes: its declaring scope and key, and its declared name.</summary>

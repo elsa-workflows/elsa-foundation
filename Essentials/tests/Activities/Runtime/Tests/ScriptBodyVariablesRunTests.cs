@@ -231,7 +231,37 @@ public sealed class ScriptBodyVariablesRunTests
         Assert.Equal(new JavaScriptPrecisionException("result", []).ValueFreeMessage, fault);
     }
 
+    [Fact]
+    public async Task The_output_evidence_of_a_sensitive_read_is_flagged_and_not_captured()
+    {
+        // The inspection record of the output takes the read protection too, not only the stored result.
+        var (run, output) = await RunWithOutputSnapshotAsync("return variables.order.price;", sensitive: true);
+
+        run.AssertWorkflowCompleted();
+        Assert.True(output.IsSensitive);
+        Assert.Null(output.Payload);
+    }
+
+    [Fact]
+    public async Task A_write_to_a_computed_name_does_not_name_it_when_a_protected_value_was_read()
+    {
+        var run = await RunAsync("variables['k' + variables.order.price] = 1; return 1;", sensitive: true);
+
+        var fault = run.State("node-js").Fault!.Message;
+        Assert.DoesNotContain("k10.5", fault);
+        Assert.Contains("name is withheld", fault);
+    }
+
     // ---- harness ----
+
+    private static async Task<(WorkflowExecutionRun Run, ActivityExecutionInspectionValueSnapshot Output)> RunWithOutputSnapshotAsync(string script, bool sensitive)
+    {
+        await using var harness = NewHarness();
+        var run = await RunAsync(harness, script, sensitive, plan: null);
+        var projection = await harness.Services.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionInspectionStore>()
+            .FindAsync(harness.ExecutionId, "actexec-js-body");
+        return (run, Assert.Single(projection!.ValueSnapshots, snapshot => snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput));
+    }
 
     private static void AssertStoredOrder(WorkflowExecutionRun run, string expected)
     {
@@ -242,7 +272,11 @@ public sealed class ScriptBodyVariablesRunTests
 
     private static async Task<WorkflowExecutionRun> RunAsync(string script, bool sensitive = false, ScriptBodyReadPlan? plan = null)
     {
-        await using var harness = WorkflowExecutionHarness.Create()
+        await using var harness = NewHarness();
+        return await RunAsync(harness, script, sensitive, plan);
+    }
+
+    private static WorkflowExecutionHarness NewHarness() => WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesScriptingFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
@@ -257,6 +291,8 @@ public sealed class ScriptBodyVariablesRunTests
             })
             .Build("actexec-js-body");
 
+    private static async Task<WorkflowExecutionRun> RunAsync(WorkflowExecutionHarness harness, string script, bool sensitive, ScriptBodyReadPlan? plan)
+    {
         var metadata = new Dictionary<string, string>();
         if (plan is not null)
             metadata[RuntimeMetadataKeys.ScriptBodyReadPlan] = plan.Serialize();

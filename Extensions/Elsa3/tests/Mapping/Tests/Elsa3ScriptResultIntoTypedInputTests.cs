@@ -46,6 +46,8 @@ public sealed class Elsa3ScriptResultIntoTypedInputTests
     [InlineData("2.5", "Integer", false)]
     [InlineData("x / 2", "Number", true)]
     [InlineData("'42'", "Number", false)]
+    [InlineData("0.1 + 0.2", "Decimal", false)]
+    [InlineData("42", "Decimal", true)]
     public void Each_kind_fits_only_the_target_elsa_4_converts_it_into(string script, string target, bool fits) =>
         Assert.Equal(fits, Elsa3ScriptResultKinds.Fits(Elsa3ScriptResultKinds.Infer(script), Enum.Parse<Elsa3ScalarTarget>(target)));
 

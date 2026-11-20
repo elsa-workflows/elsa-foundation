@@ -100,7 +100,8 @@ internal static class ActivityExecutionInspection
         RuntimeInvokeActivityCommandPayload invokePayload,
         ExecutableNode executableNode,
         IReadOnlyCollection<RecordedActivityOutput> outputs,
-        DateTimeOffset capturedAt) =>
+        DateTimeOffset capturedAt,
+        ActivityValuePolicy? readProtection = null) =>
         BuildOutputValueSnapshots(
             payloadCapturePolicy,
             workItem,
@@ -109,7 +110,8 @@ internal static class ActivityExecutionInspection
             executableNode.ActivityContract,
             outputs,
             RuntimeMetadataKeys.InvokeSchedulerWorkItemId,
-            capturedAt);
+            capturedAt,
+            readProtection);
 
     public static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildOutputValueSnapshots(
         IRuntimePayloadCapturePolicy payloadCapturePolicy,
@@ -119,7 +121,8 @@ internal static class ActivityExecutionInspection
         ActivityContract? contract,
         IReadOnlyCollection<RecordedActivityOutput> outputs,
         string schedulerWorkItemMetadataKey,
-        DateTimeOffset capturedAt) =>
+        DateTimeOffset capturedAt,
+        ActivityValuePolicy? readProtection = null) =>
         outputs
             .Select(output =>
             {
@@ -130,7 +133,10 @@ internal static class ActivityExecutionInspection
                     : new RuntimeValueTypeDescriptor("alias", projection.Type.Alias, projection.Type.Schema);
                 // An output whose policy requires encryption is treated as sensitive too, so the
                 // payload capture policy withholds it like any sensitive output. Nothing scans this record at commit.
-                var isSensitive = contract?.Result.Policy.HidesValue() == true || projection?.Policy.HidesValue() == true;
+                // A script body's output is as protected as the variables it read (spec 1228 US7): the read protection
+                // the result took, not only the static contract.
+                var isSensitive = contract?.Result.Policy.HidesValue() == true || projection?.Policy.HidesValue() == true ||
+                                  readProtection?.HidesValue() == true;
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityOutput,
                     workItem.WorkflowExecutionId,

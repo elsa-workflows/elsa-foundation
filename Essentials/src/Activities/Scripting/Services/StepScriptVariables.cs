@@ -38,6 +38,8 @@ internal sealed class StepScriptVariables : IScriptVariableSession
 
     public bool HasReadProtectedValue => _session.HasReadProtectedValue;
 
+    public bool IsReadOnly(string name) => TryTarget(name, out var target) && _session.IsReadOnly(target);
+
     public ExpressionVariableRead Read(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -66,8 +68,11 @@ internal sealed class StepScriptVariables : IScriptVariableSession
     {
         ArgumentNullException.ThrowIfNull(name);
         if (!TryTarget(name, out var target))
-            throw new InvalidOperationException(
-                $"The script writes variable '{name}', which is not declared in any scope visible to it; a script never creates a variable.");
+            // The name can be computed from a value the script read; when that value is protected, it is not named.
+            throw new InvalidOperationException(_session.HasReadProtectedValue
+                ? "The script writes a variable that is not declared in any scope visible to it; a script never creates a variable. " +
+                  "The name is withheld because a value it read is protected."
+                : $"The script writes variable '{name}', which is not declared in any scope visible to it; a script never creates a variable.");
         _session.WriteJson(target, value is { ValueKind: not JsonValueKind.Null } json ? JsonNode.Parse(json.GetRawText()) : null);
     }
 

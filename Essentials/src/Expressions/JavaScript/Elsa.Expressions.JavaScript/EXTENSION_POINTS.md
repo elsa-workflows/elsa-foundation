@@ -33,7 +33,9 @@ with portable expression evaluation.
   writes). After the run, each change the bridge reports goes through the precision policy and then back through
   `Write` as a whole value (a member change patched into the stored value); every change is checked before any is
   written. A change made without assigning the variable is still written and raises `VF-WRITE-001` (ADR 0090 C2).
-  When `HasReadProtectedValue` is set, the evaluator reports warnings in their protected form. The implementation
+  When `HasReadProtectedValue` is set, the evaluator reports warnings in their protected form. A variable
+  `IsReadOnly` reports (a loop's item or index) enters deep-frozen, and assigning it throws, so a change fails where
+  the script makes it (spec 1231 FR-006). The implementation
   is `StepScriptVariables` in `Elsa.Activities.Scripting`, over the step's `IStepVariableSession`; without a session
   the body has no `variables` root.
 

@@ -94,6 +94,13 @@ internal sealed class StepVariableSession : IStepVariableSession
 
     public IReadOnlyList<string> VisibleNames => _byName.Keys.ToArray();
 
+    public bool IsReadOnly(StepVariableTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        EnsureEngineSurface();
+        return ResolvePinned(target.ScopeId, target.VariableKey, target.Name).Frame.Kind == VariableFrameKind.Iteration;
+    }
+
     public bool HasReadProtectedValue => _readOrder.Any(read =>
         read.Policy.IsSensitive || read.Policy.RequiresEncryption || !string.IsNullOrWhiteSpace(read.Policy.RedactionMode));
 

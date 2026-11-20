@@ -58,6 +58,9 @@ internal static class Elsa3ScriptResultKinds
         // Elsa 3 rounded a fraction into an integral target (Convert.ChangeType); Elsa 4 refuses it, so only an integer fits.
         Elsa3ScalarTarget.Integer => kind == Elsa3ScriptResultKind.Integer,
         Elsa3ScalarTarget.Number => kind is Elsa3ScriptResultKind.Number or Elsa3ScriptResultKind.Integer,
+        // Elsa 3 converted the double to decimal at 15 significant digits (Convert.ToDecimal(double)); Elsa 4 reads the
+        // JSON text exactly (0.1 + 0.2 is 0.3 in Elsa 3 and 0.30000000000000004 in Elsa 4). Only an integer is the same.
+        Elsa3ScalarTarget.Decimal => kind == Elsa3ScriptResultKind.Integer,
         _ => false
     };
 
@@ -67,7 +70,8 @@ internal static class Elsa3ScriptResultKinds
         "Boolean" or "bool" => Elsa3ScalarTarget.Boolean,
         "String" or "string" => Elsa3ScalarTarget.String,
         "Int16" or "Int32" or "Int64" or "UInt16" or "UInt32" or "UInt64" or "Byte" or "SByte" or "int" or "long" => Elsa3ScalarTarget.Integer,
-        "Single" or "Double" or "Decimal" or "float" or "double" or "decimal" => Elsa3ScalarTarget.Number,
+        "Single" or "Double" or "float" or "double" => Elsa3ScalarTarget.Number,
+        "Decimal" or "decimal" => Elsa3ScalarTarget.Decimal,
         _ => null
     };
 
@@ -87,7 +91,7 @@ internal static class Elsa3ScriptResultKinds
     {
         Elsa3ScalarTarget.Boolean => "a boolean",
         Elsa3ScalarTarget.String => "a string",
-        Elsa3ScalarTarget.Integer => "an integer",
+        Elsa3ScalarTarget.Integer or Elsa3ScalarTarget.Decimal => "an integer",
         _ => "a number"
     };
 
@@ -96,7 +100,7 @@ internal static class Elsa3ScriptResultKinds
     {
         Elsa3ScalarTarget.Boolean => "Boolean(…)",
         Elsa3ScalarTarget.String => "String(…)",
-        Elsa3ScalarTarget.Integer => "Math.round(…)",
+        Elsa3ScalarTarget.Integer or Elsa3ScalarTarget.Decimal => "Math.round(…)",
         _ => "Number(…)"
     };
 
@@ -197,5 +201,7 @@ internal enum Elsa3ScalarTarget
     Boolean,
     String,
     Integer,
-    Number
+    Number,
+    /// <summary>A decimal input: only an integer converts to the value Elsa 3 gave.</summary>
+    Decimal
 }

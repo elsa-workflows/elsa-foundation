@@ -81,12 +81,41 @@ public sealed class ScriptBodyVariableEvaluationTests
         Assert.Equal("variables.order", warning.Details!["paths"]);
     }
 
+    [Theory]
+    [InlineData("try { variables.order.price = 1; } catch (e) { return e instanceof TypeError; } return false;")]
+    [InlineData("try { variables.order = {}; } catch (e) { return e instanceof TypeError; } return false;")]
+    [InlineData("try { getVariable('order').price = 1; } catch (e) { return e instanceof TypeError; } return false;")]
+    public async Task A_read_only_variable_is_frozen_so_a_change_throws_where_the_script_makes_it(string source)
+    {
+        // A loop item or index (spec 1231 FR-006): the script can catch the error, and nothing is written.
+        var session = new FakeSession(Order) { ReadOnly = true };
+
+        var result = await EvaluateResultAsync(source, session);
+
+        Assert.True(result!.Value.GetBoolean());
+        Assert.Empty(session.Writes);
+    }
+
     private static async Task<(FakeSession Session, ExecutionWarningCollector Warnings)> RunAsync(string source, bool protectedRead = false)
     {
         var session = new FakeSession(Order) { HasReadProtectedValue = protectedRead };
         var warnings = new ExecutionWarningCollector();
         await EvaluateAsync(source, session, warnings);
         return (session, warnings);
+    }
+
+    private static async Task<JsonElement?> EvaluateResultAsync(string source, FakeSession session)
+    {
+        var services = new ServiceCollection();
+        new JintFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>();
+        var result = await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(source, JsonSerializer.SerializeToElement(new { }), CancellationToken.None)
+        {
+            Variables = session
+        });
+        return result.Value;
     }
 
     private static async Task EvaluateAsync(string source, FakeSession session, IExecutionWarningSink warnings)
@@ -108,6 +137,8 @@ public sealed class ScriptBodyVariableEvaluationTests
         public List<(string Name, JsonElement? Value)> Writes { get; } = [];
         public IReadOnlyList<string> CandidateNames { get; } = ["order"];
         public bool HasReadProtectedValue { get; init; }
+        public bool ReadOnly { get; init; }
+        public bool IsReadOnly(string name) => ReadOnly && name == "order";
 
         public ExpressionVariableRead Read(string name) =>
             name == "order" ? ExpressionVariableRead.Present(JsonSerializer.Deserialize<JsonElement>(order)) : ExpressionVariableRead.Missing;

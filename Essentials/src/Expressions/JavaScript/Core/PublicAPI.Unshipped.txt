@@ -184,6 +184,7 @@ Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptPrecisionException.ValueFr
 Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession
 Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession.Write(string! name, System.Text.Json.JsonElement? value) -> void
 Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession.HasReadProtectedValue.get -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession.IsReadOnly(string! name) -> bool
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Variables.get -> Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession?
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Variables.init -> void
 const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.ChangeWithoutAssignment = "VF-WRITE-001" -> string!

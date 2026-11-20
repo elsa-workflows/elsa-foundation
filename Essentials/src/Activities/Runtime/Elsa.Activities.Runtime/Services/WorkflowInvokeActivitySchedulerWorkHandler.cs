@@ -474,7 +474,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 if (recordedOutputs.Count > 0)
                 {
                     var recordedAt = TimeProvider.GetUtcNow();
-                    valueSnapshots.AddRange(ActivityExecutionInspection.BuildOutputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, executableNode, recordedOutputs, recordedAt));
+                    valueSnapshots.AddRange(ActivityExecutionInspection.BuildOutputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, executableNode, recordedOutputs, recordedAt,
+                        activity is IStepVariableSessionConsumer ? ReadProtection(stepSession) : null));
                 }
 
                 var outcomeNames = valueFlowCompletion is not null

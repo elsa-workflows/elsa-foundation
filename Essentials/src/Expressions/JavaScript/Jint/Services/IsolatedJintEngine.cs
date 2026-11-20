@@ -1,3 +1,4 @@
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using System.Buffers;
 using System.Globalization;
 using System.Text.Encodings.Web;
@@ -132,6 +133,15 @@ internal static class IsolatedJintEngine
         ValidateInput(pinned, configured);
 
         var variables = new ScriptVariables(values);
+        // A loop's item or index is read-only to a script (spec 1231 FR-006): it enters frozen, all the way down, so a
+        // change throws where the script makes it. The freezing function is taken before the script runs.
+        var session = reader as IScriptVariableSession;
+        var freeze = session is null
+            ? null
+            : engine.Evaluate(
+                "(function (freezeOne, isFrozen, keys) { return function deep(o) {" +
+                " if (o !== null && typeof o === 'object' && !isFrozen(o)) { freezeOne(o); var k = keys(o); for (var i = 0; i < k.length; i++) deep(o[k[i]]); }" +
+                " return o; }; })(Object.freeze, Object.isFrozen, Object.keys)");
         // Every value the script has been handed, pinned or looked up: the input limits apply to them together.
         var loaded = new Dictionary<string, JsonElement>(pinned, StringComparer.Ordinal);
 
@@ -154,7 +164,10 @@ internal static class IsolatedJintEngine
                 case ExpressionVariableReadOutcome.Present:
                     loaded[name] = read.Value;
                     ValidateInput(loaded, configured);
-                    return variables.Enter(name, read.Value);
+                    var entered = variables.Enter(name, read.Value);
+                    if (freeze is not null && session!.IsReadOnly(name))
+                        engine.Invoke(freeze, entered);
+                    return entered;
                 case ExpressionVariableReadOutcome.Refused:
                     throw new JavaScriptException(engine.Intrinsics.Error, read.Refusal);
                 default:
@@ -165,6 +178,8 @@ internal static class IsolatedJintEngine
 
         JsValue Assign(string name, JsValue value)
         {
+            if (session is not null && session.IsReadOnly(name))
+                throw new JavaScriptException(engine.Intrinsics.TypeError, $"Variable '{name}' is a loop item or index and is read-only.");
             variables.Assign(name, value);
             return JsValue.Undefined;
         }
@@ -243,7 +258,6 @@ internal static class IsolatedJintEngine
             _assigned.Add(name);
         }
 
-        /// <summary>One change per variable read or assigned, in the order the script first touched them.</summary>
         /// <summary>
         /// One change per variable read or assigned, for a script body that writes them: a value the script made
         /// unserializable or grew past the JSON limits fails the evaluation with that error, so nothing is written.

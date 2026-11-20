@@ -66,6 +66,12 @@ public interface IScriptVariableSession : Elsa.Expressions.Core.Contracts.IExpre
     /// value-free form (spec 1229 FR-006).
     /// </summary>
     bool HasReadProtectedValue { get; }
+
+    /// <summary>
+    /// Whether the variable is read-only to the script (a loop's item or index): the engine freezes it, so a change throws
+    /// where the script makes it (ADR 0090, spec 1231 FR-006).
+    /// </summary>
+    bool IsReadOnly(string name);
 }
 
 /// <summary>The state of a script's outcome selection; mirrors the activity runtime's outcome selection.</summary>

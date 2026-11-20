@@ -181,7 +181,7 @@ not provided.
 
 - [x] T040 [P] Update docs/glossary or CONTEXT for the `variables` read surface and the run-time fallback if warranted (domain terms only).
 - [x] T041 [P] Confirm architecture guard tests pass: `Runtime_projects_do_not_add_design_references`, `Elsa3MigrationBoundaryTests`, `FeatureCompositionTests`; place new tests in the correct CI tier (§E7). Done: architecture guard tests run green; new tests sit in their projects' existing tiers.
-- [x] T042 Run `specs/1222-scripts-read-by-name/quickstart.md` validation end-to-end. Done through the tests named on T006–T037; scenario 18 (body pending writes) waits on S-7.
+- [x] T042 Run `specs/1222-scripts-read-by-name/quickstart.md` validation end-to-end. Done through the tests named on T006–T037; scenario 18 (body pending writes) through `ScriptBodyVariablesRunTests.A_read_after_a_write_sees_it` (PR #4838).
 - [x] T043 Confirm the spec 095 contract change (T004) lands with the first implementation PR. Done: the spec 095 contract change is in this PR.
 - [x] T044 Set this spec's `**Status**:` line to `Implemented` in the delivery PR, before it merges (spec-lifecycle rule; never a separate status PR). — done in PR #4838, which delivers Phase 8
 

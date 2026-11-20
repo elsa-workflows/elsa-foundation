@@ -48,8 +48,9 @@ carries no loss. Any other written number that equals, as a double, a lossy ente
 A script activity reads workflow variables through `variables` and `getVariable` over its step's variable session
 (spec 1222 FR-033): each read is recorded with its version and protection, and returns the committed value plus the
 step's own writes. Its changes go to the step write path of ADR 0090 (spec 1231), committed with the step; every
-change meets the precision policy before any is written. Its result takes the strongest protection among the values
-it read (spec 1228 US7). An input expression never writes (ADR 0083 `binding-readonly-v1`).
+change meets the precision policy before any is written. Its result, and its output's inspection record, take the strongest
+protection among the values it read (spec 1228 US7). A loop's item or index is frozen in the script, so changing it
+throws where the script does it (spec 1231 FR-006). An input expression never writes (ADR 0083 `binding-readonly-v1`).
 
 ### Refusals and warnings
 
