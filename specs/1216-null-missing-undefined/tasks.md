@@ -57,7 +57,8 @@ red without the change. xUnit only.
   meant, and test
 - [ ] T008 Hand the executable's pinned `UndefinedAsNull` to every JavaScript evaluation; no per-binding field (R-2).
   Bindings: the input materializer holds the executable. `Run JavaScript`: the runtime puts the executable's value
-  policies on the `ActivityExecutionContext` it builds, and the activity passes them with its evaluation request,
+  policies on `IActivityExecutionContext` (both `ActivityExecutionContext` and `SimpleActivityExecutionContext`, which
+  `GraphActivity` runs on), and the activity passes them with its evaluation request,
   which also covers FR-030 writes made in that script session. `Set` / `SetOutput` expressions
   (`WorkflowIntrinsicExecutor`) get it from the executable the executor holds. Expressions inside an authored
   activity definition's graph (`GraphActivity`) use the host workflow's policies, taken from the host's
@@ -88,6 +89,11 @@ red without the change. xUnit only.
   `DefaultOnNull` (from the executable the session holds), recording `VF-NULL-001` on the step's invocation. Today
   `Validate` skips anything not `Present`, so `variables.count = null` on an `Int32` variable is written. Tests: a
   script write and an `IStepVariables` write of `null` to an `Int32` variable, with and without the policy
+- [ ] T010c [US1] Output captures: in `RuntimeOutputCaptureProjector` (frame path and graph-row path; today an
+  `ExplicitNull` projection is written and `RuntimeValueConversionExecutor` passes any non-`Present` source through),
+  check a `null` captured into a variable or workflow output against the target's nullability: `VF-ACT-004` for a
+  non-nullable target, the type default under `DefaultOnNull` with `VF-NULL-001` on the invocation. Tests: a
+  `Run JavaScript` result of `null` bound to an `Int32` variable, with and without the policy
 - [ ] T011 [US1] Tests in `Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`: null
   literal into a nullable variable and a nullable output publishes; into an `Int32` variable fails with `VF-ACT-004`
 - [ ] T012 [US1] Run test: the variable holds `ExplicitNull` and a workflow output persists an explicit JSON `null`
@@ -138,13 +144,13 @@ input, and one workflow input supplied as `null`.
 
 **Independent test**: `return null;` into an `Int32` input gives `0` under the policy, `VF-ACT-004` without.
 
-- [ ] T019 [US3] Publication: in `RuntimeInputBindingCompiler.ValidateNull`, keep a literal `null` for a non-nullable
-  input when the workflow's `DefaultOnNull` is on and the type has a type default, so T020 substitutes it at run time
+- [ ] T019 [US3] Publication: in `RuntimeInputBindingCompiler.ValidateNull` (activity inputs and the intrinsic `value`
+  input alike), keep a literal `null` for a non-nullable input when the workflow's `DefaultOnNull` is on and the type has a type default, so T020 substitutes it at run time
   and records `VF-NULL-001` like any other `null` (R-6)
 - [ ] T020 [US3] Run time: in `RuntimeActivityInputMaterializer.ValidatePresence`, substitute the type default for
   `ExplicitNull` under the policy and record `VF-NULL-001` on the invocation
 - [ ] T020a [US3] Graphs: in `GraphActivity.CoerceExpressionResult` (graph inner nodes skip the input materializer),
-  apply the host workflow's `DefaultOnNull` from the `ActivityExecutionContext`: substitute the type default and record
+  apply the host workflow's `DefaultOnNull` from `IActivityExecutionContext` (T008): substitute the type default and record
   `VF-NULL-001`, otherwise refuse with `VF-ACT-004` instead of today's uncoded `InvalidOperationException`. Test
 - [ ] T021 [US3] Tests for each US3 acceptance scenario, including a non-nullable `String` that still fails, and
   update `ValueDurabilityPolicyTests.Snapshot_materialization_rejects_nullish_value_for_non_nullable_contract` to
@@ -250,7 +256,8 @@ Built by S-4 (spec 1222 FR-011, FR-012; `VF-READ-001`).
 
 ## Dependencies
 
-- Phase 2 blocks every story. T013 builds on #3731.
+- Phase 2 blocks every story. T013 builds on #3731. T010a's and T010b's "with the policy" tests need T019 (a literal
+  `null` must pass publication) and T006.
 - US1, US2 and US7 (P1) can run in parallel after Phase 2. US3 needs T006. US4 needs T008.
   US5 needs US3 and US4 (the policies it records must work). Phase 9 needs Phase 7.
 - MVP: Phases 1–5.

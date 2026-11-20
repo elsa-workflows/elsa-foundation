@@ -108,7 +108,7 @@ Line numbers are from that initiative head.
 - **Decision**: one helper, `NullPolicyDefaults`, in `Elsa.Workflows.Runtime.Core`, looked up by alias for authored
   members and by CLR type for .NET activity inputs (the registry has no enums and only four number types), returning
   the type default for `Boolean` (`false`), the number types (`0`) and enums (zero value) and nothing for other types
-  (dates, times, `TimeSpan`, `Guid`, `String`, `Any` and the JSON aliases, Q10). It is applied in four places, each only
+  (dates, times, `TimeSpan`, `Guid`, `String`, `Any` and the JSON aliases, Q10). It is applied in the places listed under *Every write path*, each only
   when the workflow's pinned `DefaultOnNull` is on: publication (`ValidateNull`: keep the literal `null` instead of
   failing, so the run-time step substitutes and records it), run-time materialization (`ValidatePresence`: replace `ExplicitNull` with the default and record a
   `VF-NULL-001` diagnostic on the invocation), the intrinsic executor (`WorkflowIntrinsicExecutor`: a `Set` /
@@ -117,7 +117,11 @@ Line numbers are from that initiative head.
   refuses it with `VF-ACT-004` or substitutes under the policy), and admission
   (`WorkflowStartDispatcher.ApplyInputContract`, R-3). The hydrator's CLR guard stays as a
   backstop; it never sees a null for such an input once the materializer substituted.
-- **Rationale**: one rule, four entry points; the hydrator stays a pure contract check.
+- **Every write path.** The same check (refuse with `VF-ACT-004`, or substitute and record `VF-NULL-001` under
+  `DefaultOnNull`) runs wherever a value is written to a declared member: admission (T013), activity inputs (T019,
+  T020), graph inner nodes (T020a), `Set` / `SetOutput` (T010a), step writes from scripts and .NET activities
+  (T010b), and activity output captures into variables and workflow outputs (T010c).
+- **Rationale**: one rule at every entry point; the hydrator stays a pure contract check.
 - **Alternatives**: substitute in the hydrator (rejected: the invocation record would not show the substitution).
 
 ## R-7 Boundary diagnostics and undefined-as-null in S-8's value bridge
