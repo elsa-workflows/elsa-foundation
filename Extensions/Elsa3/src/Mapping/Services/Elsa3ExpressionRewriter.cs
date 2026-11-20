@@ -2033,16 +2033,46 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// <summary><c>R.name(args)</c> becomes <c>__elsa3Tz.call(R, "name", [args])</c> (FR-023).</summary>
         private void WrapLocalCall(CallExpression call, MemberExpression callee, string name)
         {
-            // From the member's dot (or ?.), so a parenthesized receiver keeps its closing parenthesis.
-            var dot = Source.LastIndexOf('.', callee.Property.Start - 1);
-            if (dot > 0 && Source[dot - 1] == '?')
-                dot--;
-            var open = Source.IndexOf('(', callee.End);
+            // The member's dot (or ?.) and the call's opening parenthesis, found by skipping whitespace and comments from the
+            // parser's node ranges: a comment may itself hold a '.' or '('. From the dot, so a parenthesized receiver keeps
+            // its closing parenthesis.
+            var dot = SkipTrivia(callee.Object.End, skipClosingParentheses: true);
+            var open = SkipTrivia(callee.Property.End, skipClosingParentheses: false);
+            if (Source.AsSpan(open).StartsWith("?."))
+                open = SkipTrivia(open + 2, skipClosingParentheses: false);
             // An optional chain (d?.getHours(), a?.b.getDate()) gives undefined for a null receiver, as it did in Elsa 3.
             var optional = callee.Optional;
             Edits.Add(new SourceEdit(call.Start, call.Start, $"{Helper()}.call("));
             Edits.Add(new SourceEdit(dot, open + 1, $", {JsonSerializer.Serialize(name)}, ["));
             Edits.Add(new SourceEdit(call.End - 1, call.End, optional ? "], true)" : "])"));
+        }
+
+        /// <summary>
+        /// The first position at or after <paramref name="position"/> that is not whitespace or a comment (and, when asked,
+        /// not the closing parenthesis of a parenthesized receiver).
+        /// </summary>
+        private int SkipTrivia(int position, bool skipClosingParentheses)
+        {
+            while (position < Source.Length)
+            {
+                var character = Source[position];
+                if (char.IsWhiteSpace(character) || skipClosingParentheses && character == ')')
+                    position++;
+                else if (Source.AsSpan(position).StartsWith("//"))
+                {
+                    var end = Source.IndexOfAny(['\n', '\r', '\u2028', '\u2029'], position);
+                    position = end < 0 ? Source.Length : end;
+                }
+                else if (Source.AsSpan(position).StartsWith("/*"))
+                {
+                    var end = Source.IndexOf("*/", position + 2, StringComparison.Ordinal);
+                    position = end < 0 ? Source.Length : end + 2;
+                }
+                else
+                    return position;
+            }
+
+            return position;
         }
 
         /// <summary>

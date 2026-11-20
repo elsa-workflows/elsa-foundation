@@ -197,6 +197,14 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("(function () { var d = null; return d?.getHours() ?? 'none'; })()", "none")]
     // A day-month-year text has no offset: a local time.
     [InlineData("new Date('2026-01-15 10:00').toISOString()", "2026-01-15T09:00:00.000Z")]
+    // Layout does not matter: the classification reads the syntax tree, so whitespace, line breaks and comments (even
+    // ones holding '.' or '(') change nothing, and escapes in a string literal are decoded before its text is classified.
+    [InlineData("var   \t d\n=\n   new   Date('2026-10-28T09:15:00') ;\n d . getHours ( )", "9")]
+    [InlineData("const\n\nd = new Date(Date.UTC(2026, 9, 28, 8, 15)); d /* a.b( */ . /* c.d( */ getHours /* e( */ ( /* f) */ )", "9")]
+    [InlineData("let d = new Date(Date.UTC(2026, 9, 28, 8, 15)); // a.b(\n d\n  .getHours // c(\n  ()", "9")]
+    [InlineData("new Date('2026\\u002D10\\u002D28T09:15:00').getHours()", "9")]
+    [InlineData("new Date(`2026-10-28T09:15:00`).getHours()", "9")]
+    [InlineData("(new Date(Date.UTC(2026, 9, 28, 8, 15)) /* x) */ ) . getHours()", "9")]
     // Zone-independent usage is untouched.
     [InlineData("new Date(Date.UTC(2026, 9, 28, 8, 15)).getUTCHours()", "8")]
     public async Task Under_source_time_zone_the_zone_is_written_in_the_code_and_matches_elsa3(string expression, string expected)
@@ -222,6 +230,27 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
         // Behind a deeper optional chain the helper cannot tell which link was null: refused, not guessed.
         var chain = await ConvertAsync("(function () { var a = { b: null }; return a?.b.getHours(); })()", Elsa3DateInterpretation.SourceTimeZone, "Europe/Amsterdam");
         Assert.Contains("?.", Assert.Single(chain.Diagnostics, diagnostic => diagnostic.IsError).Guidance, StringComparison.Ordinal);
+    }
+
+    // An Elsa 3 workflow stores the script inside JSON, escaped (\u0027 for a quote, \n for a line break); the importer
+    // reads the JSON first, so the converter sees the script as written.
+    [Fact]
+    public async Task A_script_read_from_escaped_workflow_json_converts_as_written()
+    {
+        const string script = "var\t when = new Date('2026-10-28T09:15:00');\n\n  return 'Due <' + when.toISOString() + '> & ' + when.getHours();";
+        var definition = ConversionServices.Definition(
+            Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(script)))));
+        // System.Text.Json's default encoder escapes ', <, >, & and + as \u0027 and so on, as Elsa 3 stored them.
+        var json = JsonSerializer.Serialize(definition, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Contains("\\u0027", json, StringComparison.Ordinal);
+        var read = JsonSerializer.Deserialize<Elsa3WorkflowDefinition>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), read,
+            feature: new Elsa3MappingFeature { DateInterpretation = Elsa3DateInterpretation.SourceTimeZone, SourceTimeZone = "Europe/Amsterdam" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var converted = Text(Input(Node(result.Value!.State, "node"), "script"));
+        Assert.Equal("Due <2026-10-28T08:15:00.000Z> & 9", (await PortableJavaScript.RunScriptAsync(converted))!.Value.GetString());
     }
 
     [Fact]
