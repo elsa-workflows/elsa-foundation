@@ -145,8 +145,9 @@ input, and one workflow input supplied as `null`.
 
 **Independent test**: `({ a: undefined, b: NaN, c: [1, , undefined] })` with and without the policy.
 
-- [ ] T022 [US4] In S-8's bridge writer (`CopyComparePatchValueBridge`), run the replacer on every written object
-  (today `Mark` skips it without an entered object) and add `undefined` and `NaN` markers that `WriteMarked` resolves
+- [ ] T022 [US4] In S-8's bridge writer (`CopyComparePatchValueBridge`), run the replacer on every written value
+  (today `Mark` skips it for a non-object value and for an object without an entered object, so a top-level `0/0` or
+  `1/0` is written as `null` silently) and add `undefined` and `NaN` markers that `WriteMarked` resolves
   with their paths (R-7), following S-8's value-free rule for paths (FR-028): a dropped
   `undefined` property records `VF-UNDEF-002`; an `undefined` array element or hole becomes a `null` placeholder with
   `VF-UNDEF-003` (holes checked by index, FR-016a); a computed `NaN` or `±Infinity` becomes `null` with `VF-NUM-001`, after
@@ -154,7 +155,8 @@ input, and one workflow input supplied as `null`.
   `JavaScriptValueDiagnostics`; warnings go through `IExecutionWarningSink`. Check that the byte, depth and node
   limits still count the output
 - [ ] T023 [US4] Under `UndefinedAsNull`, an `undefined` binding result materializes as `null` in
-  `JintPortableJavaScriptEvaluator` for both binding forms; without it the ADR 0083 error stays
+  `JintPortableJavaScriptEvaluator` for both binding forms; without it the ADR 0083 error stays, now carrying
+  `VF-UNDEF-001` (today an uncoded `InvalidOperationException`) with the ADR 0083 guidance
 - [ ] T024 [US4] `Run JavaScript` with a bound result (R-8): refuse a body with no `return` statement at publication
   (`VF-UNDEF-001`, from the publish-time JavaScript parse, where the output binding is known); never refuse a binding
   for lacking one. At run time the activity's result carries "no value" (a top-level `undefined`) distinct from JSON
@@ -166,7 +168,7 @@ input, and one workflow input supplied as `null`.
   part 2 (script writes) is not merged yet, test at the bridge and leave the end-to-end test to whichever lands
   second
 - [ ] T026 [US4] Tests for each US4 acceptance scenario, including a `JSON.stringify` string that is not rewritten,
-  `undefined` at depth three, a hole, a `Run JavaScript` body that returns on some paths only, and a path warning
+  `undefined` at depth three, a hole, a top-level `0/0` and `1/0` binding result, a `Run JavaScript` body that returns on some paths only, and a path warning
   that names only the root when the evaluation read a protected value (FR-028)
 
 ## Phase 8: User Story 5 - Converted workflows carry their policies (P2)
@@ -186,8 +188,8 @@ input, and one workflow input supplied as `null`.
   `String` target (FR-029); update `Elsa3NullMemberTests`
 - [ ] T031 [US5] Verify Elsa 3 3.6.3 input requiredness (R-11) and map converted inputs' requiredness accordingly;
   nullability follows the converted type (Q8) and is not mapped
-- [ ] T031a [US5] Converter (FR-001b, FR-001c, FR-006): an Elsa 3 variable or workflow input of a date, time,
-  `TimeSpan` or `Guid` type with no starting value is refused at conversion with an `ELS3-*` diagnostic that says to
+- [ ] T031a [US5] Converter (FR-001b, FR-001c, FR-006): an Elsa 3 variable, or an optional workflow input, of a
+  date, time, `TimeSpan` or `Guid` type with no starting value is refused (a required input converts as is) at conversion with an `ELS3-*` diagnostic that says to
   declare a default (or type the member `String` / `Any`), instead of converting and then failing publication. List
   these refusals in the conversion report and the Elsa 3 migration readiness guide; T003 and T039 count them
 - [ ] T032 [US5] Export/import round-trip test: `nullHandling` survives. Parity test (SC-004): run every US3 and US4

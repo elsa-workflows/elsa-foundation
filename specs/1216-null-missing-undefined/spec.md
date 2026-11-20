@@ -367,7 +367,7 @@ input left unbound, and one workflow input supplied as `null`. After resume the 
 
 **`undefined` at the JavaScript boundary (D-11)**
 - **FR-015**: By default, a binding result of `undefined` MUST stay an error with the ADR 0083 guidance, for both
-  binding forms.
+  binding forms, carrying `VF-UNDEF-001` (FR-028).
 - **FR-016**: By default, an `undefined`-valued object property MUST be dropped and a warning MUST name its path.
 - **FR-016a**: Under either policy, an `undefined` array element or sparse hole MUST become a `null` placeholder and a
   warning MUST name its path, so later indices never shift. An element already `null` needs no warning.
