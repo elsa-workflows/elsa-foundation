@@ -14,11 +14,16 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services;
 
-/// <summary>Executes transient script-activity programs in the same closed value world as pure bindings.</summary>
+/// <summary>
+/// Executes transient script-activity programs in the same closed value world as input bindings, with the same
+/// intrinsics, clock and registered functions (spec 1223 FR-003).
+/// </summary>
 internal sealed class JintJavaScriptScriptEvaluator(
     IOptions<FeatureOptions> featureOptions,
     IScriptValueBridge valueBridge,
     IJavaScriptPrecisionPolicy precisionPolicy,
+    JavaScriptHostFunctions hostFunctions,
+    TimeProvider? timeProvider = null,
     ILogger<JintJavaScriptScriptEvaluator>? logger = null) : IJavaScriptScriptEvaluator
 {
     public ValueTask<JavaScriptScriptEvaluationResult> EvaluateAsync(JavaScriptScriptEvaluationRequest request)
@@ -26,7 +31,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
         ArgumentNullException.ThrowIfNull(request);
         request.CancellationToken.ThrowIfCancellationRequested();
 
-        // Issue #4901: on a large-stack evaluation thread, so no script can overflow the host's stack.
+        // Issue #4901: run on a large-stack evaluation thread, so no script can overflow the host's stack.
         var prepared = PreparedJavaScript.Script(request.Source);
         return ValueTask.FromResult(JintEvaluationThreads.Run(() => Evaluate(request, prepared)));
     }
@@ -34,17 +39,30 @@ internal sealed class JintJavaScriptScriptEvaluator(
     private JavaScriptScriptEvaluationResult Evaluate(JavaScriptScriptEvaluationRequest request, Prepared<Acornima.Ast.Script> prepared)
     {
         var options = featureOptions.Value;
-        var engine = IsolatedJintEngine.Create(options, request.CancellationToken);
+        var engine = IsolatedJintEngine.Create(options, request.CancellationToken, timeProvider);
         using var values = valueBridge.Begin(engine);
+        // A host function reads variables through the body's session, as it does through an input binding's reader
+        // (spec 1223 FR-003, FR-029; spec 1222 T047), and sees what the script holds for a variable it already read or
+        // changed, so every read path to one variable gives the same value within the run (spec 1222 FR-034).
+        IsolatedJintEngine.ScriptVariables? variables = null;
+        var functionReader = request.Variables is { } reader
+            ? new CurrentVariableReader(reader, () => variables, engine, options)
+            : null;
+        var functions = new JavaScriptHostFunctionContext(values, functionReader, logger);
+        hostFunctions.Install(engine, options, functions, request.CancellationToken);
         IsolatedJintEngine.SetArgs(engine, values, request.Arguments, options);
         // Spec 1222 FR-033: the body reads and writes the step's variables through its session; every read is recorded
         // there, literal or computed, so nothing is pinned into the engine.
-        var variables = request.Variables is { } session
+        variables = request.Variables is { } session
             ? IsolatedJintEngine.SetVariables(engine, values, NoPinnedValues, session, options)
             : null;
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
 
+        // Parsed before the count starts, on the caller's thread: a parse (on a cache miss) is not the script's work.
+        EvaluationLimits.Start(engine);
         var returned = engine.Evaluate(prepared);
+        // Writing the result and the variables runs the script's own toJSON and getters: a phase of its own, as before.
+        EvaluationLimits.Start(engine);
 
         // Only the script's own top-level returned value selects, wherever it was created (a `return f()` counts).
         JavaScriptScriptEvaluationResult result;
@@ -57,7 +75,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
         else
             result = new JavaScriptScriptEvaluationResult(Write(completions, values, returned, out losses));
 
-        var warnings = new List<Elsa.Expressions.Core.Models.ExecutionWarning>();
+        var warnings = new List<Elsa.Expressions.Core.Models.ExecutionWarning>(functions.Warnings);
         if (variables is not null)
             losses = [.. losses, .. JavaScriptValueWrites.WriteVariables(variables, request.Variables!, precisionPolicy, warnings)];
 
@@ -73,6 +91,41 @@ internal sealed class JintJavaScriptScriptEvaluator(
     }
 
     private static readonly IReadOnlyDictionary<string, JsonElement> NoPinnedValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// A host function's view of the body's variables (spec 1222 FR-034: one value per variable within the run). The
+    /// session's value, read and recorded by the session, unless the script has changed a variable it holds: its changes
+    /// reach the session only after the run, so the function then gets the script's value. Whether the script changed it
+    /// is the value bridge's own judgement, and the function gets what the bridge would write: what the session will hold
+    /// after the run, with every digit the bridge keeps of a number JavaScript cannot hold.
+    /// </summary>
+    private sealed class CurrentVariableReader(
+        IScriptVariableSession session,
+        Func<IsolatedJintEngine.ScriptVariables?> current,
+        Engine engine,
+        FeatureOptions options) : Elsa.Expressions.Core.Contracts.IExpressionVariableReader
+    {
+        public IReadOnlyList<string> CandidateNames => session.CandidateNames;
+
+        public Elsa.Expressions.Core.Contracts.ExpressionVariableRead Read(string name)
+        {
+            // Converting the script's value counts, even inside the function's host work.
+            using var scriptWork = EvaluationLimits.CountScriptWork(engine);
+            if (current() is not { } variables || !variables.TryGet(name, out var held))
+                return session.Read(name);
+            if (held.IsUndefined())
+                return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Missing;
+            // What the value bridge would write now, so the function gets what the session will hold. Unchanged: the
+            // stored JSON, from the session; the script read it to hold it unassigned, so this read is already recorded.
+            // A variable the script assigned is never read again here: that would record a read the script never made.
+            var change = variables.Preview(name);
+            if (change.Kind == ScriptValueChangeKind.Unchanged)
+                return session.Read(name);
+            return change.Value is { } value
+                ? Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Present(value)
+                : Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Missing;
+        }
+    }
 
     // Reports each warning's protected form, when it has one.
     private sealed class ProtectingWarningSink(Elsa.Expressions.Core.Contracts.IExecutionWarningSink inner) : Elsa.Expressions.Core.Contracts.IExecutionWarningSink

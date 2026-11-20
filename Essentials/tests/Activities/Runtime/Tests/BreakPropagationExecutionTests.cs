@@ -276,7 +276,7 @@ public sealed class BreakPropagationExecutionTests
                         CountingConditionEvaluator.Language,
                         "while-condition",
                         new RuntimeValueTypeDescriptor("alias", "Boolean", null),
-                        capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1))
+                        capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1))
             },
             childSlots: [new ExecutableChildSlot(WhileActivity.BodySlotName, [body])],
             structure: new ExecutableActivityStructure(

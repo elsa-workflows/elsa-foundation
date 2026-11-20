@@ -87,6 +87,24 @@ public sealed class JavaScriptScriptOutcomeAnalyzerTests
         Assert.Null(_analyzer.Analyze("return complete(1, 'X'"));
     }
 
+    // Spec 1223 FR-027: a script that declares 'variables' breaks pinning; one that declares an unused read root, a
+    // built-in or a namespace root shadows it.
+    [Theory]
+    [InlineData("const variables = {}; return variables;", new[] { "variables" }, new string[0])]
+    [InlineData("const newGuid = () => 'x'; const input = 1; return newGuid();", new string[0], new[] { "newGuid", "input" })]
+    [InlineData("function f(acme, workflow) { return acme; } return f(1, 2);", new string[0], new[] { "acme", "workflow" })]
+    [InlineData("const { activities } = {}; return { newGuid: 1, variables: 2 };", new string[0], new[] { "activities" })]
+    [InlineData("const args = 1; const complete2 = 2; return args;", new string[0], new string[0])]
+    public void Declared_platform_names_are_reported(string script, string[] reserved, string[] shadowed)
+    {
+        var analyzer = new JavaScriptScriptOutcomeAnalyzer([new JavaScriptHostFunctionDeclaration("acme.lookup", _ => default)]);
+
+        var analysis = analyzer.Analyze(script)!;
+
+        Assert.Equal(reserved, analysis.ReservedRootDeclarations);
+        Assert.Equal(shadowed, analysis.ShadowedNameDeclarations);
+    }
+
     private JavaScriptScriptOutcomeAnalysis Analyze(string script) =>
         _analyzer.Analyze(script) ?? throw new InvalidOperationException($"'{script}' did not parse.");
 }

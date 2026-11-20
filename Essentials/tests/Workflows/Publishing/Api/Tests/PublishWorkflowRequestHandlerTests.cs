@@ -108,7 +108,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var definition = new ExpressionDefinition("JavaScript", descendant ? "p !== null" : "String(p)",
             new(descendant ? "Boolean" : "String"),
             new Dictionary<string, ExpressionParameterBinding> { ["p"] = new ActivityResultExpressionParameterBinding(descendant ? "producer" : "consumer", "$result") },
-            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         object payload = form switch
         {
             "dictionary" => new Dictionary<string, object?> { ["language"] = definition.Language, ["source"] = definition.Source,
@@ -160,7 +160,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     public async Task Owned_and_plain_root_expression_forms_still_publish(string form)
     {
         var definition = new ExpressionDefinition("JavaScript", "'value'", new("String"),
-            new Dictionary<string, ExpressionParameterBinding>(), JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+            new Dictionary<string, ExpressionParameterBinding>(), JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         var value = form switch
         {
             "typed" => new ArgumentValue(definition, "JavaScript"),
@@ -190,7 +190,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             new Dictionary<string, Elsa.Expressions.Core.Models.ExpressionParameterBinding>
             {
                 ["customer"] = new Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding("missing-producer", "$result", true)
-            }, JsonSerializer.SerializeToElement(new { }), Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1);
+            }, JsonSerializer.SerializeToElement(new { }), Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingReadonlyV1);
         var value = form switch
         {
             "direct" => new ArgumentValue(JsonSerializer.SerializeToElement(new
@@ -384,7 +384,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             "duplicate-parameters" => Parameters("parameters", decoyParameter) + "," + Parameters("parameters", parameter),
             _ => Parameters("parameters", parameter)
         };
-        using var json = JsonDocument.Parse("""{"language":"JavaScript","source":"customer","resultType":{"alias":"String"},"options":{},"capabilityProfile":"binding-pure-v1",""" + properties + "}");
+        using var json = JsonDocument.Parse("""{"language":"JavaScript","source":"customer","resultType":{"alias":"String"},"options":{},"capabilityProfile":"binding-readonly-v1",""" + properties + "}");
         var value = new ArgumentValue(json.RootElement.Clone(), "JavaScript");
         var version = WorkflowVersion(SequenceNode("sequence", [Node("earlier", Text("one")),
             Node("consumer", new WorkflowArgumentState("Text", value, null, null, null, null)), Node("later", Text("two"))]));

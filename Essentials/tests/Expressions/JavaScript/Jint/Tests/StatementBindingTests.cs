@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Acornima;
 using Elsa.Expressions.Core.Models;
-using Elsa.Expressions.JavaScript.Core.Exceptions;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Expressions.JavaScript.Jint.Options;
@@ -191,21 +190,12 @@ public sealed class StatementBindingTests
             new Elsa.Primitives.Models.TypeReference("Any"),
             new Dictionary<string, ExpressionParameterBinding>(),
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
 
         Assert.False(cancellation.IsCancellationRequested);
         await Assert.ThrowsAsync<ExecutionCanceledException>(() =>
             evaluator.EvaluateAsync(new ExpressionEvaluationRequest(definition, values, cancellation.Token)).AsTask());
         Assert.True(cancellation.IsCancellationRequested);
-    }
-
-    [Fact]
-    public async Task Statement_body_stripped_capability_error_keeps_the_binding_diagnostic()
-    {
-        var exception = await Assert.ThrowsAsync<JavaScriptBindingEvaluationException>(() =>
-            EvaluateAsync("return new Date();"));
-
-        Assert.Contains("ambient capability [Date]", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -240,7 +230,7 @@ public sealed class StatementBindingTests
             new Elsa.Primitives.Models.TypeReference("Any"),
             bindings,
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         return await evaluator.EvaluateAsync(new ExpressionEvaluationRequest(definition, values, cancellationToken));
     }
 }

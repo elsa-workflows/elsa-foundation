@@ -373,7 +373,7 @@ public sealed class GraphActivity(
                 expected.ToTypeReference(),
                 parameterBindings,
                 JsonSerializer.SerializeToElement(new Dictionary<string, object?>()),
-                ExpressionCapabilityProfiles.BindingPureV1);
+                ExpressionCapabilityProfiles.BindingReadonlyV1);
             // The graph's own variables are read by name through the variables root (spec 1222): a graph expression is
             // evaluated in-process from the graph scope, so the values are already here and every name is looked up.
             var request = new ExpressionEvaluationRequest(

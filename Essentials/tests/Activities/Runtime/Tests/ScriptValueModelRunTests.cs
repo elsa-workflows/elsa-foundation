@@ -285,6 +285,6 @@ public sealed class ScriptValueModelRunTests
                     [ExpressionParameterSurfaces.VariablesKey("order")] = new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, "var-order", ExpressionParameterSurfaces.Variables)
                 },
                 options: JsonSerializer.SerializeToElement(new { }),
-                capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1));
+                capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1));
     }
 }

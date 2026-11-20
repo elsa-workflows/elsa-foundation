@@ -112,6 +112,8 @@ internal static class ReusableActivityImportFixtures
         services.AddSingleton(command);
         new Elsa.Events.EventsFeature().ConfigureServices(services);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
+        // The converter checks converted scripts with the JavaScript strategy (the feature depends on JavaScriptExpressions).
+        new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services);
         new Elsa3MappingFeature().ConfigureServices(services);
         new Elsa3ImportActivitiesFeature().ConfigureServices(services);
         // A host also composes the publish phase (spec 246); these tests stop at the commit port, so it publishes

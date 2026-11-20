@@ -29,10 +29,23 @@ public sealed class JintStackExhaustionTests
     }
 
     [Fact]
+    public async Task A_toJSON_that_passes_its_own_object_to_a_host_function_fails_the_evaluation()
+    {
+        // The issue's second reproduction: the host function's argument goes through the value bridge, which calls
+        // toJSON, which calls the host function with the same object again.
+        var nop = new JavaScriptHostFunctionDeclaration("acme.nop", _ => default);
+
+        var exception = await EvaluateScriptFromSmallStackAsync(
+            "var o = {}; o.toJSON = function () { acme.nop(o); return 1; }; acme.nop(o); return 1;",
+            services: services => services.AddSingleton(nop));
+
+        AssertStackLimitError(exception);
+    }
+
+    [Fact]
     public async Task A_toJSON_that_serializes_its_own_object_again_fails_the_evaluation()
     {
-        // The re-entry of the issue's second reproduction: serializing the object calls toJSON, which serializes the
-        // object again. JSON.stringify stands in for the host function of the issue, which is not on this branch.
+        // The same re-entry through JSON.stringify: serializing the object calls toJSON, which serializes it again.
         var exception = await EvaluateScriptFromSmallStackAsync(
             "var o = {}; o.toJSON = function () { JSON.stringify(o); return 1; }; return JSON.stringify(o);");
 
@@ -123,7 +136,7 @@ public sealed class JintStackExhaustionTests
             new TypeReference("Any"),
             new Dictionary<string, ExpressionParameterBinding>(),
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var request = new ExpressionEvaluationRequest(definition, new Dictionary<string, JsonElement>(), CancellationToken.None);
 
         var exception = await RunOnSmallStackAsync(() =>
@@ -169,14 +182,23 @@ public sealed class JintStackExhaustionTests
         Assert.Equal(JintEvaluationThreads.StackBudgetExceededMessage, javaScript.Message);
     }
 
-    private static async Task<Exception?> EvaluateScriptFromSmallStackAsync(string source, Action<JintFeature>? configure = null) =>
-        (await EvaluateScriptValueFromSmallStackAsync(source, configure)).Exception;
+    private static async Task<Exception?> EvaluateScriptFromSmallStackAsync(
+        string source,
+        Action<JintFeature>? configure = null,
+        Action<IServiceCollection>? services = null) =>
+        (await EvaluateScriptValueFromSmallStackAsync(source, configure, services)).Exception;
 
     private static async Task<(JsonElement? Value, Exception? Exception)> EvaluateScriptValueFromSmallStackAsync(
         string source,
-        Action<JintFeature>? configure = null)
+        Action<JintFeature>? configure = null,
+        Action<IServiceCollection>? services = null)
     {
-        await using var provider = JintTestHost.Build(configure);
+        var feature = new JintFeature();
+        configure?.Invoke(feature);
+        var collection = new ServiceCollection();
+        feature.ConfigureServices(collection);
+        services?.Invoke(collection);
+        await using var provider = collection.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var evaluator = scope.ScriptEvaluator();
         var request = new JavaScriptScriptEvaluationRequest(source, JsonSerializer.SerializeToElement(new { }), CancellationToken.None);

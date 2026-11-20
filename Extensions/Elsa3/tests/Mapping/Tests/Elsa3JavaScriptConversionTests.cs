@@ -23,14 +23,14 @@ public sealed class Elsa3JavaScriptConversionTests
     [InlineData("args.value")]
     [InlineData("getVariable('o').name = 'x'")]
     [InlineData("getOrderId()")]
-    [InlineData("Date.now")]
+    [InlineData("DateTime.Now")]
     [InlineData("typeof moment")]
     [InlineData("[DateTime][0]")]
-    [InlineData("function f(Date) { return Date; } Date.now()")]
+    [InlineData("function f(DateTime) { return DateTime; } DateTime.Now")]
     [InlineData("(() => { let moment = 1; return moment; })() + moment")]
     [InlineData("[1].map(Guid => Guid).concat([Guid])[0]")]
     [InlineData("(() => { function getOrderId() { return 1; } return getOrderId(); })() + getOrderId()")]
-    [InlineData("(() => { try { return 1; } catch (Date) { return 2; } })() + Date.now()")]
+    [InlineData("(() => { try { return 1; } catch (DateTime) { return 2; } })() + DateTime.Now")]
     public async Task Constructs_elsa4_cannot_run_are_refused(string expression)
     {
         var result = await ConvertTextAsync(expression);

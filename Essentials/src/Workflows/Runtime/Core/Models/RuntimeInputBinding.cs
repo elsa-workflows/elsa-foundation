@@ -334,7 +334,7 @@ public sealed class RuntimeExpressionBinding
         if (Options.ValueKind != JsonValueKind.Object)
             throw new ArgumentException("Runtime expression evaluator options must be a JSON object.", nameof(options));
         CapabilityProfile = string.IsNullOrWhiteSpace(capabilityProfile)
-            ? ExpressionCapabilityProfiles.BindingPureV1
+            ? ExpressionCapabilityProfiles.BindingReadonlyV1
             : capabilityProfile;
         VariableReadFallback = variableReadFallback;
     }

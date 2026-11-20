@@ -77,7 +77,7 @@ public sealed class SetVariableDurabilityExecutionTests
 
         var persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
         Assert.Equal("initial:updated", persistedWorkflow!.RootVariableFrame!.Values["greeting"].InlineValue!.Value.GetString());
-        Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, evaluator.Request!.Capabilities.Profile);
+        Assert.Equal(ExpressionCapabilityProfiles.BindingReadonlyV1, evaluator.Request!.Capabilities.Profile);
         Assert.Equal(["current", "suffix"], evaluator.Request.ParameterValues.Keys);
         Assert.Equal("initial", evaluator.Request.ParameterValues["current"].GetString());
         Assert.Equal("updated", evaluator.Request.ParameterValues["suffix"].GetString());
@@ -272,7 +272,7 @@ public sealed class SetVariableDurabilityExecutionTests
                 ["suffix"] = new LiteralExpressionParameterBinding(JsonSerializer.SerializeToElement("updated"))
             },
             options: JsonSerializer.SerializeToElement(new { }),
-            capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1);
+            capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1);
         return new ExecutableNode(
             "node-set-expression",
             "authored-set-expression",
@@ -310,7 +310,7 @@ public sealed class SetVariableDurabilityExecutionTests
                 {
                     ["variables.greeting"] = new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, "greeting", ExpressionParameterSurfaces.Variables)
                 },
-            capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1,
+            capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1,
             variableReadFallback: computed
                 ? new VariableReadFallback([new VariableReadCandidate("greeting", VariableReference.WorkflowScopeId, "greeting")])
                 : null);
