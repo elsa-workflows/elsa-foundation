@@ -155,12 +155,14 @@ set. #3801's `ActivityResultRoundTripTests` already covers this; it stays green.
 4. **Given** a 20-digit integer and a 29-digit decimal, **When** they pass through ForEach and an activity input,
    **Then** their text is unchanged unless the target type narrows them.
 5. **Given** `"2026-10-28T09:15:00+05:00"` read into a `DateTime` or `DateTimeOffset`, **When** it runs on a UTC and a
-   non-UTC server, at run time and in a publish-time literal, **Then** both give the same instant (its own offset).
+   non-UTC server, at run time and in a publish-time literal, **Then** both give the same instant: a `DateTime` holds it in UTC and is written with `Z`, a `DateTimeOffset`
+   keeps `+05:00`. `"2026-10-28T23:30:00-02:00"` into a `DateOnly` gives 29 October; `"2026-10-28"` gives 28 October.
    **Given** `"2026-10-28T09:15:00"` (no offset), **When** it is converted to an instant with no source time zone and
    no assume-UTC policy in the conversion contract, **Then** the conversion is refused with guidance; with an explicit
    assume-UTC policy it is UTC, and with a declared source time zone it is that zone's instant, on any server.
 6. **Given** `"5"` read into an `Int32`, **When** it is read on any path, **Then** every path gives the same result
-   (numbers are never read from strings).
+   (numbers are never read from strings). `"true"` into `Boolean` and `5.0` into `Int32` are refused; `PT1H30M` and
+   `01:30:00` into `TimeSpan` both give 90 minutes, written `PT1H30M`, and `P1M` is refused (FR-014a).
 7. **Given** a scoped conversion contract that selects case-insensitive matching or an explicit mapping, **When**
    `{"CustomerName":…}` is read, **Then** the member is filled with no warning, a key consumed by a mapping, dictionary
    or extension-data member is not reported, and no host-wide option changes.
@@ -361,7 +363,8 @@ faithful-or-refuse.
 **Raw passthrough (decision 3)**
 - **FR-007**: The baseline MUST write a `JsonElement` as its original text, without re-encoding or re-indenting it.
 - **FR-008**: A value an endpoint accepted MUST be stored and returned byte-identical while nothing changed it, in
-  every API and store, including the runtime durable state (FR-023).
+  every API and store: the design store, the runtime store (durable state and bookmarks, FR-023), the activities
+  design store, Git definition files and exports.
 
 **One output format (decision 4)**
 - **FR-009**: Everything FR-007 does not cover (Elsa's own strings and member names, created or changed values) MUST
@@ -380,10 +383,15 @@ faithful-or-refuse.
   conversion contract for that type (FR-004): a copy of the baseline with the naming and matching the contract
   selects and the protected settings unchanged, so a value written by one activity reads back the same in the next.
   This covers activity inputs, expression results coerced to a declared type, publish-time literals and variable
-  defaults, workflow-input validation, activity results, stateful activity state, transitions, seeded values and
-  code-first literals.
+  defaults, workflow-input validation, activity results, stateful activity state, background completions
+  (`BackgroundActivityCompletionCodec`), parent resumes (`ParentResumeExecutor`), seeded state
+  (`RuntimeWorkflowStateSeed`) and code-first literals (`WorkflowBuilder`); research R-10 lists every site.
 - **FR-013**: No conversion MUST narrow a number to `long` or `double` unless the target type asks for it.
 - **FR-014**: No path MUST read a number from a string.
+- **FR-014a**: The remaining activity-input rules of ADR 0046 *Adapter rules* MUST hold on every path: `"true"` into
+  `Boolean` and `5.0` into `Int32` are refused (no text parsing or truthiness); an upper-case GUID is accepted and
+  written lower case; a `TimeSpan` reads an ISO 8601 duration (`PT1H30M`) and `hh:mm:ss` (for Elsa 3), is written as
+  ISO 8601, and `P1M` and `P1Y` are refused (no fixed length).
 - **FR-015**: The Elsa 3 converter MUST rewrite a literal key that differs from the exact JSON name only in case to
   that name, and MUST refuse with guidance when the rewrite is ambiguous.
 - **FR-016**: Converting a date/time value into an instant at a conversion of FR-012 (supported literals, inputs and
@@ -395,8 +403,11 @@ faithful-or-refuse.
     one, the conversion MUST be refused with a diagnostic naming the path and target type and saying to add an offset
     or declare the interpretation. The default contract declares none, so it refuses. There is no host-wide run-time
     date setting (Q10);
-  - normalizing to UTC after the instant is established is separate; a calendar-only value is not made an instant by
-    this rule; a raw JSON date string is carried unchanged until a conversion is requested.
+  - once the instant is established, a `DateTime` is normalized to UTC and written with `Z`; a `DateTimeOffset` keeps
+    its offset;
+  - a `DateOnly` takes the date as written; a value with a time and an offset takes its date in UTC. A `TimeOnly`
+    takes the time as written. Neither is made an instant;
+  - a raw JSON date string is carried unchanged until a conversion is requested.
 
   S-9 implements this at the JSON-to-.NET boundary; S-8 uses it and adds no second rule.
 - **FR-016a**: The Elsa 3 converter MUST apply ADR 0046 *Dates* (*Converted Elsa 3 workflows*) to every literal and
@@ -411,7 +422,9 @@ faithful-or-refuse.
   - a value with `Z` or an offset converts as written, with a behaviour warning on a `DateTime` or `DateOnly` member;
     a non-literal expression bound to a date member gets a behaviour warning.
 
-  The converted value carries its offset, so nothing is recorded for run time.
+  The converter records the interpretation on the converted workflow, as S-1 does for scripts (the
+  `DateInterpretationApplied` import diagnostic). The converted value carries its offset, so run time needs nothing
+  more.
 - **FR-016b**: Studio's Run dialog (`WorkflowRunInputDialog`) MUST send a `DateTime` or `DateTimeOffset` input with an
   offset. It uses a `datetime-local` control, whose text has none (`2026-10-28T09:15`), which FR-016 would refuse. The
   dialog sends the value as that wall-clock time in the browser's time zone, with its offset
@@ -464,13 +477,15 @@ faithful-or-refuse.
   whitespace, research R-7), frozen and registered, so a Git round trip keeps every hash. Any change to that input is
   an explicit decision under FR-021, not part of adopting the baseline. The design-store fingerprint is already
   canonical, is registered and MUST stay so. No stored hash is recomputed.
-- **FR-022a**: Two existing hashes are taken over `IPayloadSerializer` output: the Git content hash (over the exported
-  file) and the design-store operation fingerprint (`EfDesignSupport.FingerprintJson`). Their functions stay frozen.
-  Both already ignore escaping and whitespace, and the fingerprint also ignores member order. Neither ignores null
-  members. So once `IPayloadSerializer` keeps nulls (FR-018), an unchanged definition re-exported after S-9 writes its
-  null members, for example `"description": null`, and its file and content hash change once. Files already in Git
-  hash as before. Before the first stable release this is accepted with no shim, and the affected fixtures are
-  regenerated in place.
+- **FR-022a**: One existing hash is taken over `IPayloadSerializer` output: the Git content hash, over the exported
+  file. Its function stays frozen. It already ignores escaping and whitespace, but not null members. So once
+  `IPayloadSerializer` keeps nulls (FR-018), an unchanged definition re-exported after S-9 writes its null members, for
+  example `"description": null`, and its file and content hash change once. Files already in Git hash as before.
+  Before the first stable release this is accepted with no shim, and the affected fixtures are regenerated in place.
+  The design-store operation fingerprints (`EfDesignSupport.Fingerprint`, `LegacyFingerprint`) and
+  `EfWorkflowLibraryStore`'s operation fingerprint serialize with `JsonSerializerOptions.Web`, not
+  `IPayloadSerializer`; they keep those options frozen as registered hash inputs (FR-021), separate from the
+  design store's data reads and writes.
 
 **Runtime durable state (decision 7, question 6)**
 - **FR-023**: The runtime EF writers MUST adopt FR-007 and FR-018 (Q7, card 10). Compatibility and meaning, not a
@@ -516,7 +531,7 @@ answers them when approving this spec.
 
 | # | Question | Concrete problem and example | Recommendation, as applied |
 |---|---|---|---|
-| Q9 | Where does a scoped conversion contract live, and is it recorded with a version? | ADR 0091 decision 2 says the selected behaviour is explicit and stable "in the published conversion contract and its version", and ADR 0046 *Dates* records a date interpretation there. No such artifact exists in code, and S-8 FR-028 was amended on 19 Nov to stamp and check nothing. Example: a connector's `Invoice` input selects case-insensitive matching; a published workflow passes `{"InvoiceNo":…}`. If the connector later drops that option, the same workflow leaves `InvoiceNo` unset with a warning. | The contract is code on the type or input member (FR-004a), so it changes only with that package, like the type's members; nothing is stamped into the executable and nothing is checked at run time. Rejected: a contract hash in each executable's activity contract, which would move the activity contract fingerprint and every ADR 0038 artifact hash (FR-021). |
+| Q9 | Where does a scoped conversion contract live, and is it recorded with a version? | ADR 0091 decision 2 says the selected behaviour is explicit and stable "in the published conversion contract and its version", and ADR 0046 *Dates* records a date interpretation there. No such artifact exists in code, and S-8 FR-028 was amended on 19 Nov to stamp and check nothing. Example: a connector's `Invoice` input selects case-insensitive matching; a published workflow passes `{"InvoiceNo":…}`. If the connector later drops that option, the same workflow leaves `InvoiceNo` unset with a warning. | The contract is code on the type or input member (FR-004a), so it changes only with that package, like the type's members; nothing is stamped into the executable and nothing is checked at run time. Rejected: a contract hash in each executable's activity contract, which would move the activity contract fingerprint and every ADR 0038 artifact hash (FR-021). This reads ADR 0091 decision 2's "published conversion contract and its version" as the type's published package; if the coordinator reads it as an executable record, the ADR wording goes through the spec-to-ADR loop instead. |
 | Q10 | Is there a host-wide date interpretation for run-time values? | A value without an offset is refused unless an interpretation is declared (ADR 0046 *Dates*). Browsers send `datetime-local` text without one. Example: a form posts `{"startAt":"2026-10-28T09:15"}` to a workflow whose input is a `DateTime`; under FR-016 the start is refused with guidance to add an offset. A host setting such as "assume Europe/Amsterdam" would accept it, but would read the same published workflow differently on a host with another setting, which is the problem ADR 0046 *Dates* removes. | No host-wide run-time setting. An activity or type that wants one declares it in its conversion contract (FR-004a), Studio sends an offset (FR-016b), and converted Elsa 3 literals get their offset at conversion from S-1's one setting (FR-016a). A host-wide default can be added later if users ask for it. |
 
 **Answered**
@@ -538,7 +553,7 @@ answers them when approving this spec.
 
 - **SC-001**: No authored name key (output, input, variable, parameter, node id) changes casing between request and
   response on any API.
-- **SC-002**: Both round trips of US2 return byte-identical text, through every store a value is persisted in.
+- **SC-002**: Both round trips of US2 return byte-identical text, through every store FR-008 lists.
 - **SC-003**: Zero properties are lost when a .NET-typed result is bound to an input of the same type.
 - **SC-004**: Zero content hashes change in a Git round trip of every definition in the repository's fixtures.
 - **SC-005**: The architecture test reports zero unregistered deviations, and fails on each scanned kind when one is

@@ -25,14 +25,16 @@ shows each new test failing without the change.
 - [ ] T002 Confirm that the shared-baseline pattern passed the framework §2.24.3 gate with ADR 0091 and is listed in
   §2.24.2 (`.specify/memory/constitution-framework.md`). If not, stop and raise it
 - [ ] T003 Record the current hashes as a baseline for SC-004 and US4 scenario 3: every ADR 0038 artifact hash in the
-  workflow fixtures (`Essentials/tests/Workflows/Fixtures/legacy-set-v1.json`, `WorkflowExecutableCompilerGoldenTests`)
-  and every `ActivityContract.SchemaFingerprint` in them
+  workflow fixtures (`Essentials/tests/Workflows/Fixtures/legacy-set-v1.json`, `WorkflowExecutableCompilerGoldenTests`),
+  every `ActivityContract.SchemaFingerprint` in them, and the output of every other registered hash input (R-1, R-14)
+  for a fixed input
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T004 Add `JsonBaseline` (read-only `Options`, `CreateCopy()`, `DataBoundary`) and `RawJsonElementConverter` in
+- [ ] T004 Add `JsonBaseline` (read-only `Options`, `CreateCopy()`) and `RawJsonElementConverter` in
   `Serialization/Core/` (data-model.md). Unit tests: read-only, no key policy, nulls kept, exact reads, relaxed
   encoder, a `JsonElement` written byte-identical, an indented writer leaving a value's inner whitespace alone
+  (FR-001, FR-003, FR-007, FR-009)
 - [ ] T005 Add `JsonBaselineArchitectureTests` in `Essentials/tests/Architecture/Tests/` with a source scan of every
   source root (Essentials, Extensions, Studio C#; Q2) for:
   - `new JsonSerializerOptions`;
@@ -42,13 +44,17 @@ shows each new test failing without the change.
   - `JsonSerializer` calls without options or type info.
 
   It reads the register table in `docs/serialization.md` and `Baselines/json-optionless-calls.txt`. Write its
-  negative tests first: an unregistered deviation of each kind fails, and a register entry passes
+  negative tests first (FR-020, FR-002a): an unregistered deviation of each kind fails, and a register entry passes;
+  a new option-less call not on the legacy list fails, removing a migrated entry passes, and a workflow-data path on
+  the list fails
 - [ ] T006 Add the reflection half of T005: every `MapEndpointGroup` context, every module's constructed contexts and
   the composed host HTTP options (`Essentials/apps/Elsa.Foundation.Host`, Workbench) checked against the baseline,
-  and host resolvers checked for describing owned types only, with no overlap
+  and host resolvers checked for describing owned types only, with no overlap. Add the FR-011 check: no member of an
+  API, store or message contract that carries data is a dictionary, `ExpandoObject`, `object` or POCO; data members
+  are `JsonElement` or `JsonNode`
 - [ ] T007 Add the "Baseline deviations" register to `docs/serialization.md`, with the ADR 0091 decision 7 rows and
-  every hash preimage from research R-1 (Q4). Generate `Baselines/json-optionless-calls.txt` from today's option-less
-  calls, excluding the value-path sites of research R-10 (Q3)
+  every hash preimage from research R-1 and R-14 (Q4, FR-019). Generate `Baselines/json-optionless-calls.txt` from
+  today's option-less calls, excluding the value-path sites of research R-10 (Q3, FR-002a)
 - [ ] T008 Add `JsonCanonicalForm` in `Serialization/Core/` (FR-021a): move the canonical writer out of
   `Workflows/Runtime/Core/Models/VariableValueDigest.cs` and add `Equals(JsonElement, JsonElement)`. Unit tests with
   ADR 0091's examples: `{"total":1.0,"name":"Ren\u00e9"}` equals `{"name":"René","total":1}`; `9007199254740993` is
@@ -56,7 +62,8 @@ shows each new test failing without the change.
   (FR-021)
 - [ ] T008a Make `VariableValueDigest` call `JsonCanonicalForm` and pin its output: a test computes digests of fixed
   envelopes before the move (record them first) and asserts they are unchanged, and asserts the digest agrees with
-  `JsonCanonicalForm.Equals` on every T008 pair
+  `JsonCanonicalForm.Equals` on every T008 pair. Assigning one T008 value over its equal partner writes nothing: use
+  S-7's no-op write test (spec 1231 FR-012) if it exists on the branch, else add one
 
 ## Phase 3: User Story 1 - Names keep their casing (P1) 🎯 MVP
 
@@ -86,7 +93,7 @@ shows each new test failing without the change.
 
 - [ ] T013 [US3] Keep #3801's `ActivityResultRoundTripTests` and `ActivityValueJsonTests` green through the move to
   the default conversion contract. Add a case for a key that differs only in case: it now gives `json-unmatched-member`, where
-  `ActivityValueJson.Options` filled the member (research R-10)
+  `ActivityValueJson.Options` filled the member (research R-10; FR-012)
 - [ ] T014 [US3] Add `UnmatchedMemberScanner` in `Serialization/Core/` (Q1, research R-13), contract-aware, emitting
   the FR-005 codes (contract). Unit tests: top-level and nested keys, arrays of objects, annotated names, a scoped
   case-insensitive contract, explicit mappings, dictionaries, extension data (not reported), a custom converter
@@ -98,7 +105,7 @@ shows each new test failing without the change.
   offset → the declared source time zone or explicit assume-UTC policy, else `json-datetime-interpretation-missing`;
   never server-local or implicit UTC (FR-016, Q8, Q10)
 - [ ] T016 [US3] Move every value-path conversion of research R-10 to the target type's conversion contract, calling
-  the scanner on reads:
+  the scanner on reads (FR-012 to FR-014a, FR-025 codes from the contract):
   - `ActivityValueJson.Options` (used by `ActivityCompletionProjector.cs` L61 and `ActivityInputHydrator.cs` L109):
     replace it with the default conversion contract, and delete it;
   - `RuntimeActivityInputMaterializer.cs` L316, L679, L702;
@@ -117,7 +124,8 @@ shows each new test failing without the change.
   Replace `Convert.ChangeType` at `RuntimeInputBindingCompiler.cs` L1044 with a conversion-contract read
 - [ ] T017 [US3] Add tests for US3 scenarios 1–10. Scenario 4 (numbers through ForEach) is a regression test for #3424.
   Scenario 5 (dates) runs under a non-UTC `TimeZoneInfo` at run time and in a publish-time literal, with and without
-  an offset, and with no interpretation, a source time zone and an explicit assume-UTC policy. Scenario 2 pins the
+  an offset, and with no interpretation, a source time zone and an explicit assume-UTC policy, plus the UTC
+  normalization and `DateOnly` cases. Scenario 6 covers FR-014a (`Boolean`, `Int32`, GUID case, `TimeSpan`). Scenario 2 pins the
   camelCase default (`customerName` fills `CustomerName`)
 - [ ] T017a [US3] Studio Run dialog (FR-016b, scenario 11): in
   `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowRunInputs.ts` turn `datetime-local` text into ISO
@@ -130,8 +138,9 @@ shows each new test failing without the change.
 - [ ] T018 [US2] Derive `JsonPayloadSerializer` (`Serialization/SystemText/Services/JsonPayloadSerializer.cs`
   L103–137) from the baseline, keeping `DeterministicDictionaryConverter` and `SortObjectMembers` as register entries
 - [ ] T019 [US2] Derive `EfDesignSupport.Json` / `ReadJson`
-  (`Workflows/Design/Persistence/EntityFrameworkCore/Stores/EfDesignSupport.cs` L198–199) from the baseline, keeping
-  `FingerprintJson` as a registered preimage
+  (`Workflows/Design/Persistence/EntityFrameworkCore/Stores/EfDesignSupport.cs`) from the baseline for data reads and
+  writes, and give `Fingerprint`, `LegacyFingerprint` and `EfWorkflowLibraryStore.Fingerprint` their own frozen
+  `JsonSerializerOptions.Web` copy, registered as hash inputs, so existing markers still replay (FR-021, FR-022a)
 - [ ] T019a [US2] Add the FR-024a test: every stored-format fixture and seed JSON read through `IPayloadSerializer`
   in the repository uses the camelCase names it writes (exact reads lose nothing)
 - [ ] T020 [US2] Derive `RuntimeArtifactJson`, `EfBookmarkStateStore.CreateJsonOptions` and the five other runtime
@@ -153,6 +162,7 @@ shows each new test failing without the change.
   equality check to `JsonCanonicalForm`; keep each direct-text hash as it is, registered with its input contract (changing
   one is a separate decision, FR-021):
   - `EfWorkflowTriggerBindingStore.cs` L44, L68;
+  - `EfWorkflowLibraryStore.cs` (operation fingerprint, Web text, compared `Ordinal`): frozen and registered;
   - `EfDesignAtomicWrite.cs` L257;
   - `ActivitiesDesignDbContext.cs` L548;
   - `EfClusterMembershipStore.cs` L182;
@@ -195,14 +205,15 @@ shows each new test failing without the change.
 
 ## Phase 10: User Story 8 - Converted Elsa 3 literals keep binding (P3)
 
-- [ ] T032 [US8] Rewrite case-only key differences in literal lowering in `Extensions/Elsa3/src/Mapping/`, refusing
+- [ ] T032 [US8] FR-015: rewrite case-only key differences in literal lowering in `Extensions/Elsa3/src/Mapping/`, refusing
   ambiguous ones with `ELS3-LITERAL-KEY-AMBIGUOUS` and reporting rewrites with `ELS3-LITERAL-KEY-REWRITTEN`. Align
   the codes with `Elsa3ActivityDiagnosticCodes.cs`
 - [ ] T032a [US8] Date literals (FR-016a) in `Extensions/Elsa3/src/Mapping/Services/Elsa3ValueFlowLowerer.cs`: for a
   literal or variable default bound to a `DateTime`, `DateTimeOffset` or `DateOnly` member, read
   `Elsa3ConversionOptions.DateInterpretation` (S-1) and refuse (`ELS3-LITERAL-DATE-OFFSET-MISSING`), write the source
   zone's offset for that date, or write `Z` with a warning (`ELS3-LITERAL-DATE-INTERPRETED`); add
-  `ELS3-LITERAL-DATE-WALL-CLOCK` for offset-carrying or non-literal values on `DateTime` and `DateOnly` members
+  `ELS3-LITERAL-DATE-WALL-CLOCK` for offset-carrying or non-literal values on `DateTime` and `DateOnly` members;
+  record the interpretation on the converted workflow with S-1's `DateInterpretationApplied` diagnostic
 - [ ] T033 [US8] Add converter tests for US8 scenarios 1 to 3 (scenario 3 under all three interpretations, with a
   winter and a summer date), and re-run the #3052 JTest measurement (no definition may stop converting)
 

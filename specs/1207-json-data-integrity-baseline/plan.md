@@ -8,7 +8,7 @@ branch. Implementation starts on its own branch once the spec is approved and me
 ## Summary
 
 Make "data passes through unchanged" a rule the code enforces, as ADR 0091 says. The technical approach (research
-R-1 to R-13):
+R-1 to R-14):
 
 - **One baseline.** A read-only `JsonBaseline.Options` lives in `Elsa.Serialization.Core`. It has camelCase member
   names, no key policy, no number handling, nulls kept, exact member reads, the relaxed encoder, and a raw
@@ -93,7 +93,7 @@ spec. The remaining option-less calls on Elsa's own contracts are listed in the 
 | P-5 | Hash inputs frozen | FR-021, FR-022a, Q4, R-1. Each existing hash input keeps its options and preimage and gets a register entry with its input contract. Equality checks that compare serialized text move to `JsonCanonicalForm` (FR-021a). Direct-text hashes are listed and stay as they are; changing one is a separate decision. The Git content hash and the design fingerprint keep their functions; fixtures whose `IPayloadSerializer` text gains null members are regenerated in place. |
 | P-5a | One canonical form | FR-021a. `JsonCanonicalForm` in `Serialization/Core/` writes the canonical form (members ordered by unescaped UTF-8 name, strings unescaped, numbers as coefficient and exponent, arrays in order, `null` members kept) and offers `Equals(JsonElement, JsonElement)`. The writer moves from `VariableValueDigest`, which then calls it; a test pins every existing digest. |
 | P-6 | Git files keep data text | FR-008, FR-022, Q5, R-7. The exporter indents with a writer that writes `JsonElement` raw. `GitCanonicalJson.HashFile` keeps its current input and is registered. |
-| P-7 | Runtime durable writers | FR-023, Q7, R-9. `RuntimeArtifactJson` and the five store option sets derive from the baseline and register their frozen converters. Fixed serialized examples and compatibility checks show old and new code read old and new rows with the same meaning; then no stamp bump, otherwise a stamped format change. A byte-level golden pins one stored value. |
+| P-7 | Runtime durable writers | FR-023, Q7, R-9. `RuntimeArtifactJson` and the five store option sets derive from the baseline and register their frozen converters. Fixed serialized examples and compatibility checks show old and new code read old and new rows with the same meaning; then no migration, otherwise regenerated migrations and fixtures in place. A byte-level golden pins one stored value. |
 | P-8 | Content type | FR-010, Q6, R-12. Elsa's JSON APIs send `application/json` and `nosniff`. A workflow-authored response uses its author's content type; with none, text is `text/plain`, anything else `application/json`. |
 | P-9 | Guard and register | FR-019, FR-020, Q2, Q3. `JsonBaselineArchitectureTests` scans every source root and reads the register table in `docs/serialization.md` and the legacy list `Baselines/json-optionless-calls.txt` (may only shrink, never a workflow-data path; a new unlisted call fails). |
 | P-10 | Elsa 3 literals | FR-015, FR-016a. Both rewrites happen at literal lowering in `Extensions/Elsa3` (`Elsa3ValueFlowLowerer`, which already parses literals bound to date members). Case-only keys: the ambiguous case is refused with `ELS3-LITERAL-KEY-AMBIGUOUS`. Dates: the lowerer reads `Elsa3ConversionOptions.DateInterpretation` and `SourceTimeZone` (S-1) and writes the offset, `Z`, or refuses. |
@@ -120,7 +120,7 @@ specs/1207-json-data-integrity-baseline/
 
 ```text
 Essentials/src/Serialization/Core/
-  ├── JsonBaseline.cs                      # new: baseline, CreateCopy, DataBoundary
+  ├── JsonBaseline.cs                      # new: baseline, CreateCopy
   ├── RawJsonElementConverter.cs           # new
   ├── JsonCanonicalForm.cs                 # new: canonical form (moved from VariableValueDigest)
   ├── JsonConversionAttribute.cs           # new: scoped conversion contract

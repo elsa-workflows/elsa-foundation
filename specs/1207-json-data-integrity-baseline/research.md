@@ -281,7 +281,7 @@ in every store. → **Finding F-1**, **Q5**.
   (`Essentials/tests/Workflows/Runtime/Distributed/Tests/Fixtures/v1/*.json`), and they are compared semantically.
 - `docs/serialization.md` L116–124 states that the rest of the Runtime module has no fixture.
 
-**Why no migration and no stamp bump is needed**:
+**Why no migration and no migration is needed**:
 
 - Raw passthrough and keeping nulls change only the text a writer produces. Old rows keep reading the same, and new
   rows stay readable by older code: the JSON is equivalent, and a missing member still reads as null.
@@ -344,7 +344,7 @@ defect **G-1**, [#3799](https://github.com/elsa-workflows/elsa-foundation/issues
 now use `ActivityValueJson.Options` (`Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityValueJson.cs`: Web,
 camelCase, strict numbers), at `ActivityCompletionProjector.cs` L61 and `ActivityInputHydrator.cs` L109. Its tests are
 `ActivityResultRoundTripTests` and `ActivityValueJsonTests`. S-9 replaces `ActivityValueJson.Options` with
-`JsonBaseline.DataBoundary` (T016). The reads then become exact (decision 2), where they are case-insensitive today.
+the default conversion contract (T016). The reads then become exact (decision 2), where they are case-insensitive today.
 
 **Admission now runs on every start.** [#3731](https://github.com/elsa-workflows/elsa-foundation/pull/3731)
 (`4c002dadb`, #3728) makes `WorkflowStartDispatcher` apply the input contract to every new start through
@@ -429,11 +429,16 @@ System.Text.Json has no "warn on unmapped member" mode. It ignores unmapped memb
 - **Canonical form.** `VariableValueDigest` (spec 1221) already orders members by unescaped UTF-8 name, unescapes
   strings, writes numbers as coefficient and exponent and keeps `null` members; its remarks wait for ADR 0091's
   definition. → FR-021a, one shared implementation.
-- **Dates.** S-1 (spec 1223 FR-034) added `Elsa3ConversionOptions.DateInterpretation` (`Refuse`, `AssumeUtc`,
-  `SourceTimeZone`) and applies it to scripts only; literal date lowering is not built. Studio's Run dialog
+- **Dates.** Spec 1223 FR-034 defines the converter's one date interpretation setting (`Refuse`, `AssumeUtc`,
+  `SourceTimeZone`); its implementation, #4855 (not merged yet), adds `Elsa3ConversionOptions.DateInterpretation`,
+  applies it to scripts and records it on the converted workflow as an import diagnostic. Literal date lowering is
+  not built. Studio's Run dialog
   (`WorkflowRunInputDialog.tsx`) uses `datetime-local` and sends its text without an offset
   (`workflowRunInputs.ts`). → FR-016a, FR-016b, Q10.
 - **Conversion contract record.** No code has a "published conversion contract"; S-8 FR-028 was amended to stamp
   and check nothing. → FR-004a, Q9.
+- **Hash inputs missed by R-1.** `EfWorkflowLibraryStore.Fingerprint` hashes `JsonSerializerOptions.Web` text and
+  compares it `Ordinal` with the stored `OperationFingerprint`; `EfDesignSupport.Fingerprint` and `LegacyFingerprint`
+  serialize with `EfDesignSupport.Json` (Web), not `IPayloadSerializer`. Both stay frozen and registered.
 - **#4832 and S-8.** `JsonElement`-backed aliases are `StructuredValue`, and `Any` is the one dynamic kind held as
   `JsonElement`; both fit decision 5. No change.

@@ -11,7 +11,7 @@ No stored schema changes. These are the in-code entities the plan introduces or 
 | **Unmatched-member warning** | `UnmatchedMemberScanner` | `code`, `path` (JSON path of the key), `targetType` | One per unmatched key, judged against the effective contract. It fails a step only under a strict scoped contract. |
 | **Deviation register entry** | `docs/serialization.md`, "Baseline deviations" table | `File`, `Setting`, `Reason`, `Approved by` (ADR or issue) | The guard parses the table. A data-touching API deviation must cite an ADR. |
 | **Legacy list** (option-less call ratchet) | `Essentials/tests/Architecture/Tests/Baselines/json-optionless-calls.txt` | One `path:symbol` per line | It may only shrink. Workflow-data paths may not appear in it. It is not the register. |
-| **Durable format** | `[EfSchemaFamily]` `SchemaVersion` (existing) | unchanged | Not bumped. Before the first stable release a failed compatibility example means regenerated migrations and fixtures in place (FR-023). |
+| **Durable format** | `[EfSchemaFamily]` `SchemaVersion` (existing) | unchanged | Not bumped. Before the first stable release a failed compatibility example means regenerated migrations and fixtures in place, not a format-version change (FR-023). |
 
 ## State: a data value's text
 
