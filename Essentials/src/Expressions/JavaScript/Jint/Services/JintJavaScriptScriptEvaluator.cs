@@ -51,7 +51,10 @@ internal sealed class JintJavaScriptScriptEvaluator(
             : null;
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
 
+        EvaluationLimits.Start(engine);
         var returned = engine.Evaluate(PreparedJavaScript.Script(request.Source));
+        // Writing the result and the variables runs the script's own toJSON and getters: a phase of its own, as before.
+        EvaluationLimits.Start(engine);
 
         // Only the script's own top-level returned value selects, wherever it was created (a `return f()` counts).
         JavaScriptScriptEvaluationResult result;

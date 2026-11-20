@@ -35,8 +35,8 @@ internal static class IsolatedJintEngine
         // Intl and Temporal take their default zone from the Temporal zone provider, not TimeZone: UTC there too.
         options.Temporal.TimeZoneProvider = UtcDefaultTimeZoneProvider.Instance;
 
-        // One count for the whole evaluation: Jint's own limits restart on every call from .NET back into the engine,
-        // which every host function makes (EvaluationLimits).
+        // Counted across the script: Jint's own limits restart on every call from .NET back into the engine, which every
+        // host function makes. The evaluator starts the count (EvaluationLimits.Start).
         var timeout = configured.ExecutionTimeout is { } interval && interval > TimeSpan.Zero ? interval : (TimeSpan?)null;
         var maxStatements = configured.MaxStatements is { } statements && statements > 0 ? statements : (int?)null;
         var maxMemoryBytes = configured.MaxMemoryBytes is { } bytes && bytes > 0 ? bytes : (long?)null;

@@ -45,7 +45,10 @@ internal sealed class JintPortableJavaScriptEvaluator(
         IsolatedJintEngine.SetArgs(engine, values, request.ArgumentValues(), featureOptions.Value);
         var variables = IsolatedJintEngine.SetVariables(engine, values, request.PinnedVariableValues(), request.VariableReader, featureOptions.Value);
 
+        EvaluationLimits.Start(engine);
         var result = engine.Evaluate(prepared);
+        // Writing the result and checking the variables runs the script's own toJSON and getters: a phase of its own.
+        EvaluationLimits.Start(engine);
 
         // Spec 1228 FR-006a, ADR 0083 binding-readonly-v1: an input expression only reads. Any change the bridge finds
         // fails the evaluation, so nothing is written and nothing is dropped silently.

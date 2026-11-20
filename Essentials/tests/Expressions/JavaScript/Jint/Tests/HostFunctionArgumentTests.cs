@@ -208,6 +208,25 @@ public sealed class HostFunctionArgumentTests
             }));
     }
 
+    // A function's own timeout (a lock, a remote call) is its error, which the script can catch; only the evaluation's
+    // timeout stops the evaluation.
+    [Fact]
+    public async Task A_function_s_own_timeout_is_a_catchable_error()
+    {
+        var (result, _) = await RunAsync("try { acme.slow(); return 'no'; } catch (e) { return e.message; }");
+
+        Assert.Equal("acme.slow: lock wait timed out", result!.Value.GetString());
+    }
+
+    // TimeSpan.MaxValue means no timeout.
+    [Fact]
+    public async Task The_longest_timeout_never_comes()
+    {
+        var (result, _) = await RunAsync("return acme.echo(1);", configure: feature => feature.ExecutionTimeout = TimeSpan.MaxValue);
+
+        Assert.Equal(1, result!.Value.GetInt32());
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {
@@ -221,6 +240,7 @@ public sealed class HostFunctionArgumentTests
     {
         var services = new ServiceCollection();
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.echo", call => call.Arguments[0].Clone()));
+        services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.slow", _ => throw new TimeoutException("lock wait timed out")));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.big", _ => JsonSerializer.Deserialize<JsonElement>("9007199254740993")));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookup", call => JsonSerializer.Deserialize<JsonElement>(
             call.Arguments[0].GetString() == "a" ? """{"n":9007199254740993}""" : """{"m":1}""")));
