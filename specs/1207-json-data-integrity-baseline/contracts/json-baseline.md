@@ -30,7 +30,7 @@ Keys that start with a lowercase letter are byte-identical before and after.
 | `json-unmatched-member` | warning | A JSON key matches no member under the effective conversion contract (FR-005) | key path, target type |
 | `json-unmatched-member-refused` | refusal | The same, under a scoped contract that selects strict handling (FR-005) | key path, target type |
 | `json-unmatched-coverage-unavailable` | info | A custom converter gives no matching information, so unmatched keys are not checked for that type (FR-005) | target type, converter |
-| `json-datetime-offset-missing` | refusal (400 at an API) | A date-time without `Z` or an offset reaches an Elsa API or a conversion to an instant (FR-016, FR-016c) | path, target type |
+| `json-datetime-offset-missing` | refusal (400 at an API) | A date-time without `Z` or an offset reaches an Elsa API or a conversion to an instant, or an `Unspecified` `DateTime` is written through a conversion contract (FR-016, FR-016c) | path, target type |
 | `ELS3-LITERAL-KEY-AMBIGUOUS` | refusal | An Elsa 3 literal has keys that differ only in case and both fit one member (FR-015) | node, input, the keys |
 | `ELS3-LITERAL-KEY-REWRITTEN` | info | An Elsa 3 literal key was rewritten to the exact JSON name (FR-015) | node, input, old and new key |
 | `ELS3-LITERAL-DATE-OFFSET-MISSING` | refusal | An Elsa 3 date literal or default has no offset and the date interpretation is `Refuse` (FR-016a) | node, input or variable, the value |
