@@ -416,9 +416,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             throw new NotSupportedException("This provider cannot enforce the requested commit window.");
         var waits = Waits(batch);
         var careful = false;
+        // The commit-step deadline counts from the first send: the careful retry below is the same batch, sent again.
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         while (true)
         {
-            try { return await CommitOnceAsync(batch, waits, careful, cancellationToken); }
+            try { return await CommitOnceAsync(batch, waits, careful, sentAt, cancellationToken); }
             catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
             {
                 throw new StoreException(Failure.WindowExpired, "Database commit window expired.", error);
@@ -482,9 +484,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         return waits;
     }
 
-    private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, CancellationToken cancellationToken)
+    private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, long sentAt, CancellationToken cancellationToken)
     {
-        if (OwnedCommit) return await CommitOwnedAsync(batch, waits, cancellationToken);      // EfStore.Owned.cs
+        if (OwnedCommit) return await CommitOwnedAsync(batch, waits, sentAt, cancellationToken);      // EfStore.Owned.cs
         await using var db = create();
         foreach(var turn in batch.Turns.Where(t=>t.Row is {} r && t.Instance!=r.Id))
         {
@@ -604,6 +606,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (turn.Delete)
                 await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
         }
+        if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
         return new Committed(true, now, sent.Select(m => m.Seq).ToList());
     }

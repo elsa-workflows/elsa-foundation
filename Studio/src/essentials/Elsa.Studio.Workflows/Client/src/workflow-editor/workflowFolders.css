@@ -171,7 +171,7 @@ label.wf-move-folder-row:has(input:focus-visible) {
   padding: 10px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel);
+  background: transparent;
 }
 
 .wf-folder-nav[data-collapsed="true"] {

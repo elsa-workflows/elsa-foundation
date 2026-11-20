@@ -1,13 +1,16 @@
 import { describeWorkflowError } from "../workflow-editor/editorHelpers";
 import { describeNativeBlockChange } from "./nativeBlockPreview";
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { Boxes, ChevronDown } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { AnchoredPopover, StudioField } from "@elsa-workflows/studio-ui";
 import { getChildSlots, resolveScope, sequenceStructureKind, flowchartStructureKind } from "../workflowAdapter";
 import { bpmnStructureKind, type BpmnElement } from "../bpmn/bpmnTypes";
 import { useDialogFocus } from "../workflow-editor/useDialogFocus";
 import { applyNativeBlockPlan, planCreateNativeBlock, planExtractNativeBlock, planUngroupNativeBlock, type NativeBlockContext, type NativeBlockDocument, type NativeBlockKind, type NativeBlockPlan } from "./nativeBlocks";
 import { nativeBlockEditorDocument, nativeBlockPlannerContext } from "./nativeBlockEditorContext";
+import { useNativeBlockAuthority } from "./nativeBlockAuthority";
 import type { BlockPromotionHost } from "./BlockPromotionDialog";
 import type { ActivityNode } from "../workflowTypes";
 import "./nativeBlockCommands.css";
@@ -34,8 +37,10 @@ export interface NativeBlockCommandProps {
   open(nodeId: string): void;
   /** Present when the owning resource can author reusable activities; it owns promotion's validation and history too. */
   promotion?: BlockPromotionHost;
+  toolbarHost?: HTMLElement | null;
 }
 export function NativeBlockCommands(props: NativeBlockCommandProps) {
+  const authority = useNativeBlockAuthority();
   const current = useRef(props);
   current.current = props;
   const [action, setAction] = useState<Action | null>(null);
@@ -52,9 +57,37 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
   const [promoting, setPromoting] = useState<string | null>(null);
   const [promotionStatus, setPromotionStatus] = useState<{ message: string; nodeId: string; versionId: string } | null>(null);
   const promotionReasonId = useId();
+  const [commandsOpen, setCommandsOpen] = useState(false);
+  const commandsTriggerRef = useRef<HTMLButtonElement>(null);
+  const commandsMenuRef = useRef<HTMLDivElement>(null);
+  const commandsOpenAtEndRef = useRef(false);
+  const commandsMenuId = useId();
   const committingRef = useRef(false);
   const request = useRef(0);
   const close = () => { if (committingRef.current) return; request.current++; setAction(null); setPlan(null); setMessages([]); setBusy(false); setRetryValidation(false); validating.current = false; };
+  const closeCommands = (restoreFocus = true) => {
+    setCommandsOpen(false);
+    if (restoreFocus) commandsTriggerRef.current?.focus();
+  };
+  const focusInitialCommand = () => {
+    const items = commandsMenuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
+    items?.[commandsOpenAtEndRef.current ? items.length - 1 : 0]?.focus();
+  };
+  const handleCommandsMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape" || event.key === "Tab") {
+      if (event.key === "Escape") event.preventDefault();
+      closeCommands();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const items = Array.from(commandsMenuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
+    if (!items.length) return;
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+      : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    items[next]?.focus();
+  };
   useEffect(() => () => { request.current++; }, []);
   // The replacement notice holds only while the call it describes is in the document; Undo restores the block and retires it.
   const promotedCallPresent = promotionStatus ? findNode(props.context.document.rootActivity, promotionStatus.nodeId, props.context.catalog)?.activityVersionId === promotionStatus.versionId : false;
@@ -86,12 +119,14 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
   const isBlock = selectedKind === sequenceStructureKind || selectedKind === flowchartStructureKind || selectedKind === bpmnStructureKind;
   const supported = scope?.slot.cardinality === "many" && scope.slot.property === "activities" &&
     (scope.owner.structure?.kind === sequenceStructureKind || scope.owner.structure?.kind === flowchartStructureKind || bpmnScope);
-  const unavailable = !props.context.canEdit ? "Block editing is unavailable in this view. Open an editable draft."
+  const canStartEditing = !props.context.canEdit && Boolean(authority?.startEditing);
+  const startEditingGuidance = authority?.startingEditing ? "Preparing your draft…" : "Start editing to use block commands. Other edits create a draft automatically.";
+  const unavailable = !props.context.canEdit ? canStartEditing ? startEditingGuidance : "Block editing is unavailable in this view. Open an editable draft."
     : !supported ? "Open a Sequence, Flowchart or BPMN body to create or extract native blocks." : undefined;
   // Promotion acts on one named block, so its command appears beside "Open block" only then; an always-present
   // command wraps the toolbar and takes a row from the canvas.
   const promotion = isBlock && selected ? props.promotion : undefined;
-  const promotionUnavailable = !promotion ? undefined : !props.context.canEdit ? "Open an editable draft to promote a block."
+  const promotionUnavailable = !promotion ? undefined : !props.context.canEdit ? canStartEditing ? startEditingGuidance : "Open an editable draft to promote a block."
     : promotion.capabilitiesState === "loading" ? "Loading reusable activity authoring…"
     : promotion.capabilitiesState === "failed" ? "Reusable activity authoring is unavailable on this server." : undefined;
   const kind: NativeBlockKind | "bpmn" = bpmnScope ? "bpmn" : action === "flowchart" ? "flowchart" : action === "extract" && scope?.owner.structure?.kind === flowchartStructureKind ? "flowchart" : "sequence";
@@ -101,6 +136,7 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
   const begin = (next: Action) => {
     setAction(next); setPlan(null); setMessages([]); setName(""); setDescription(""); setVersion(""); setRetryValidation(false);
   };
+  const beginFromMenu = (next: Action) => { closeCommands(); begin(next); };
   const refuseStale = () => setMessages(["The document, selection, scope, permissions or installed modules changed. Preview this change again."]);
   const preview = async () => {
     if (!action || busy || validating.current) return;
@@ -157,22 +193,48 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
   const title = action === "extract" ? "Extract named block" : action === "ungroup" ? "Ungroup block" : action === "bpmn" ? "Create BPMN subprocess" : `Create ${kindLabel} block`;
   const label = selected && props.context.document.activityPresentation.find(item => item.nodeId === selected.nodeId)?.displayName;
   const childCount = selected ? getChildSlots(selected, props.context.catalog).reduce((sum, slot) => sum + slot.activities.length, 0) : 0;
+  const commandGroup = <div className="wf-block-commands" role="group" aria-label="Named block commands">
+    {canStartEditing ? <button type="button" disabled={authority?.startingEditing} onClick={() => authority?.startEditing?.()}>{authority?.startingEditing ? "Starting…" : "Start editing"}</button> : null}
+    <button ref={commandsTriggerRef} type="button" className="wf-block-menu-trigger" title="Named block commands"
+      aria-haspopup="menu" aria-expanded={commandsOpen} aria-controls={commandsOpen ? commandsMenuId : undefined}
+      onClick={() => { commandsOpenAtEndRef.current = false; if (commandsOpen) closeCommands(); else setCommandsOpen(true); }}
+      onKeyDown={event => {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          commandsOpenAtEndRef.current = event.key === "ArrowUp";
+          setCommandsOpen(true);
+        }
+      }}>
+      <Boxes size={15} aria-hidden="true" /><span>Blocks</span><ChevronDown size={14} aria-hidden="true" />
+    </button>
+    {bpmnScope && props.endpoint ? <Suspense fallback={<span role="status">Loading BPMN interchange…</span>}><BpmnInterchangeCommands {...props} endpoint={props.endpoint} /></Suspense> : null}
+  </div>;
   return <>
-    <div className="wf-block-commands" role="group" aria-label="Named block commands" title={unavailable}>
-      {bpmnScope ? <button type="button" disabled={!props.context.canEdit || !supported} onClick={() => begin("bpmn")}>Create BPMN subprocess</button> : <>
-        <button type="button" disabled={!props.context.canEdit || !supported} onClick={() => begin("sequence")}>Create Sequence block</button>
-        <button type="button" disabled={!props.context.canEdit || !supported} onClick={() => begin("flowchart")}>Create Flowchart block</button>
-      </>}
-      <button type="button" disabled={!props.context.canEdit || !supported || !props.selectedNodeIds.length} onClick={() => begin("extract")}>Extract block…</button>
-      <button type="button" disabled={!props.context.canEdit || !supported || !isBlock} onClick={() => begin("ungroup")}>Ungroup…</button>
-      {isBlock && selected ? <button type="button" onClick={() => props.open(selected.nodeId)}>Open {label || "block"} ({childCount} steps)</button> : null}
-      {promotion ? <button type="button" disabled={!props.context.canEdit || promotion.capabilitiesState !== "ready"}
-        title={promotionUnavailable} aria-describedby={promotionUnavailable && props.context.canEdit ? promotionReasonId : undefined}
-        onClick={() => { if (selected) { setPromotionStatus(null); setPromoting(selected.nodeId); } }}>Promote to reusable activity…</button> : null}
-      {bpmnScope && props.endpoint ? <Suspense fallback={<span role="status">Loading BPMN interchange…</span>}><BpmnInterchangeCommands {...props} endpoint={props.endpoint} /></Suspense> : null}
-    </div>
-    {unavailable ? <p className="wf-muted wf-block-command-notice">{unavailable}</p> : null}
-    {promotionUnavailable && props.context.canEdit ? <p id={promotionReasonId} className="wf-muted wf-block-command-notice">{promotionUnavailable}</p> : null}
+    {props.toolbarHost === undefined ? commandGroup : props.toolbarHost ? createPortal(commandGroup, props.toolbarHost) : null}
+    <AnchoredPopover anchorRef={commandsTriggerRef} open={commandsOpen} className="wf-block-commands-popover" minWidth={240} maxHeight={480}
+      onDismiss={() => closeCommands(false)} onPositioned={focusInitialCommand}>
+      <div ref={commandsMenuRef} id={commandsMenuId} className="wf-block-menu" role="menu" aria-label="Block commands" onKeyDown={handleCommandsMenuKeyDown}>
+        <div role="group" aria-label="Create and organize blocks">
+          {bpmnScope ? <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported} onClick={() => beginFromMenu("bpmn")}>Create BPMN subprocess</button> : <>
+            <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported} onClick={() => beginFromMenu("sequence")}>Create Sequence block</button>
+            <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported} onClick={() => beginFromMenu("flowchart")}>Create Flowchart block</button>
+          </>}
+          <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported || !props.selectedNodeIds.length} onClick={() => beginFromMenu("extract")}>Extract block…</button>
+          <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported || !isBlock} onClick={() => beginFromMenu("ungroup")}>Ungroup…</button>
+        </div>
+        {isBlock && selected ? <div role="group" aria-label="Selected block">
+          <button type="button" role="menuitem" tabIndex={-1} onClick={() => { closeCommands(); props.open(selected.nodeId); }}>Open {label || "block"} ({childCount} steps)</button>
+          {promotion ? <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || promotion.capabilitiesState !== "ready"}
+            aria-describedby={promotionUnavailable ? promotionReasonId : undefined}
+            onClick={() => { closeCommands(); setPromotionStatus(null); setPromoting(selected.nodeId); }}>Promote to reusable activity…</button> : null}
+        </div> : null}
+        {(unavailable && !authority?.startingEditing) || promotionUnavailable ? <div className="wf-block-menu-notes">
+          {unavailable && !authority?.startingEditing ? <p className="wf-muted wf-block-menu-note">{unavailable}</p> : null}
+          {promotionUnavailable ? <p id={promotionReasonId} className="wf-muted wf-block-menu-note">{promotionUnavailable}</p> : null}
+        </div> : null}
+      </div>
+    </AnchoredPopover>
+    {authority?.startingEditing ? <p className="wf-block-command-notice" role="status">{startEditingGuidance}</p> : null}
     {promotionStatus ? <p className="wf-block-command-notice" role="status">{promotionStatus.message}</p> : null}
     {promoting && props.promotion && props.endpoint ? <Suspense fallback={<span role="status">Loading reusable activity promotion…</span>}>
       <BlockPromotionDialog endpoint={props.endpoint} context={props.context} createPosition={props.createPosition} host={props.promotion} blockNodeId={promoting}

@@ -64,7 +64,8 @@
   }
 
   html[data-theme-layout="workbench"] .content {
-    padding: 24px 28px;
+    --studio-content-padding-block: 24px;
+    --studio-content-padding-inline: 28px;
   }
 
   html[data-theme-layout="workbench"] .bottom-panel-tab-list button,
@@ -146,7 +147,8 @@
 
   html[data-theme-layout="editorial"] .content {
     background: var(--card);
-    padding: 28px clamp(16px, 2vw, 36px);
+    --studio-content-padding-block: 28px;
+    --studio-content-padding-inline: clamp(16px, 2vw, 36px);
   }
 
   html[data-theme-layout="editorial"] .bottom-panel {

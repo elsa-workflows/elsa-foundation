@@ -1,5 +1,7 @@
 # Elsa Foundation architecture tour
 
+> **Current core.** This page describes the current Elsa core, which stays the default until the switch to the clean-slate kernel (milestone K13). The kernel is in development, tracked in [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229); its design is in the [kernel architecture pages](architecture/README.md). This page will be rewritten for the new core as part of that switch.
+
 A short orientation for developers new to this repository: what Elsa 4 is made of, the few patterns that hold it together, and where to go next. You do not need to read the project's rulebooks (the "constitution", explained below) first.
 
 ## What Elsa 4 is made of

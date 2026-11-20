@@ -21,7 +21,7 @@
 .ad-dependency-table th { position: sticky; z-index: 1; top: 0; padding: .65rem; border-bottom: 1px solid var(--studio-border); color: var(--studio-text-muted); text-align: left; background: var(--studio-surface-muted); }
 .ad-dependency-table td { height: 7.25rem; padding: .65rem; border-top: 1px solid var(--studio-border); overflow-wrap: anywhere; vertical-align: top; }
 .ad-dependency-table tbody tr:first-child td { border-top: 0; }
-.ad-dependency-table tr.is-selected td { background: var(--studio-accent-soft); }
+.ad-dependency-table tr.is-selected { background: var(--studio-row-selected); box-shadow: inset 2px 0 0 var(--studio-selection-mark); }
 .ad-dependency-table td > strong, .ad-dependency-table td > code, .ad-dependency-table td > span { display: block; margin-bottom: .25rem; }
 .ad-dependency-table td > code, .ad-dependency-table td > span { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .ad-dependency-table td > button, .ad-dependency-table td > a { display: inline-flex; min-height: 2.2rem; margin: 0 .3rem .3rem 0; padding: .35rem .55rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); background: var(--studio-surface); cursor: pointer; }

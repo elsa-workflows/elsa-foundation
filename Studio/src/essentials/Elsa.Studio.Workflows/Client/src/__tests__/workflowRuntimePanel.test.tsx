@@ -61,9 +61,9 @@ describe("Runtime panel information hierarchy", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     flushSync(() => root.render(<WorkflowRuntimePanel testRun={receipt} observation={observation("Completed")} onOpenRun={() => {}} />));
     expect(container.querySelector(".wf-runtime-outcome")?.textContent).toContain("completed");
-    expect(container.querySelector(".wf-runtime-card h3")?.textContent).toBe("Latest test run");
-    const disclosure = container.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-runtime-details button[aria-expanded]")!;
     expect(disclosure).not.toBeNull();
+    expect(disclosure.textContent).toContain("Run details");
     expect(disclosure.getAttribute("aria-expanded")).toBe("false");
     const body = document.getElementById(disclosure.getAttribute("aria-controls")!)!;
     expect(body.hidden).toBe(true);

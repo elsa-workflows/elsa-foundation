@@ -1,5 +1,5 @@
 import { getNotifications } from "./notifications";
-import { RunObservationControls, RunObservationNotice } from "./RunObservationControls";
+import { StudioHttpError, useStudioWorkspaceTab } from "@elsa-workflows/studio-sdk";
 import { loadExecutionScope, activityExecutionSummaryFromInspection, type IncidentActivityInspection } from "./executionScope";
 import { useExecutionFocusRequest } from "./executionFocus";
 export { activityExecutionSummaryFromInspection } from "./executionScope";
@@ -16,7 +16,7 @@ import { runtimeValueContextId } from "./RuntimeValueEvidence";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ReactFlow, Background, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
-import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RefreshCw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution, StudioIncidentRootCauseProviderContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
@@ -80,7 +80,7 @@ import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
-import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import "./cleanListTables.css";
@@ -142,6 +142,8 @@ export function WorkflowInstances({ context, navigate }: {
   const refreshButton = useRef<HTMLButtonElement>(null);
   const [deleteFeedback, setDeleteFeedback] = useState<{ message: string; failures: Array<{ id: string; message: string }> } | null>(null);
   const requestSequence = useRef(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const workspaceTab = useStudioWorkspaceTab();
   const definitionNamesAbort = useRef<AbortController | null>(null);
   const deletionSequence = useRef(0);
   const deletionController = useRef<AbortController | null>(null);
@@ -186,10 +188,11 @@ export function WorkflowInstances({ context, navigate }: {
     };
   }, [context]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (background = false) => {
     const requestId = ++requestSequence.current;
     definitionNamesAbort.current?.abort();
-    setState("loading");
+    if (!background) setState("loading");
+    setRefreshing(true);
     setError("");
     try {
       const filters = location.filters;
@@ -244,8 +247,11 @@ export function WorkflowInstances({ context, navigate }: {
     } catch (e) {
       if (requestId !== requestSequence.current) return;
       setError(e instanceof Error ? e.message : String(e));
-      setPage(emptyRunHistoryPage);
-      setState(e instanceof WorkflowInstanceHealthFilterUnavailableError ? "unsupported" : "failed");
+      const accessDenied = e instanceof StudioHttpError && (e.status === 401 || e.status === 403);
+      if (!background || accessDenied) setPage(emptyRunHistoryPage);
+      setState(current => e instanceof WorkflowInstanceHealthFilterUnavailableError ? "unsupported" : background && !accessDenied && current === "ready" ? current : "failed");
+    } finally {
+      if (requestId === requestSequence.current) setRefreshing(false);
     }
   }, [context, location]);
 
@@ -396,7 +402,16 @@ export function WorkflowInstances({ context, navigate }: {
 
   return (
     <>
-      <StudioPageHeader title="Runs" headingLevel={2} description="Inspect workflow runs, their progress, and execution evidence." actions={<StudioButton ref={refreshButton} onClick={() => void load()}>Refresh</StudioButton>} />
+      <StudioPageHeader title="Runs" headingLevel={2} description="Inspect workflow runs, their progress, and execution evidence." refresh={{
+        id: `workflow-runs:${context.baseUrl}`,
+        label: "Refresh workflow runs",
+        onRefresh: () => load(true),
+        refreshing,
+        disabled: deletingRuns,
+        autoRefresh: true,
+        active: workspaceTab?.active ?? true,
+        buttonRef: refreshButton
+      }} />
       <form className="wf-run-filters" aria-label="Workflow run filters" onSubmit={event => {
         event.preventDefault();
         applyFilters();
@@ -468,6 +483,7 @@ export function WorkflowInstances({ context, navigate }: {
         </AdvancedSection>
       </form>
       {state === "failed" ? <WfErrorCard headingLevel={3} message={error} action={<StudioButton type="button" onClick={() => void load()}>Retry</StudioButton>} /> : null}
+      {state === "ready" && error ? <WfErrorCard headingLevel={3} message={error} /> : null}
       {state === "unsupported" ? <p className="wf-run-health-unavailable" role="status">{error} No workflow runs were loaded. Clear the incident-health filter to search without it.</p> : null}
       {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><WfListSkeleton /></div> : null}
       {canDeleteRuns && state === "ready" && selectedRunIds.size > 0 ? (
@@ -537,21 +553,10 @@ export function WorkflowInstances({ context, navigate }: {
             <div
               className="wf-grid-row"
               role="row"
-              tabIndex={0}
+              {...studioRowInteraction<HTMLDivElement>(() => openInstance(instance.workflowExecutionId))}
               aria-selected={selectedRunIds.has(instance.workflowExecutionId)}
               aria-label={`Inspect workflow run ${instance.workflowExecutionId} · ${workflowName} · ${instance.status}${instance.subStatus ? ` · ${instance.subStatus}` : ""} · ${formatCurrentIncidentHealth(instance)}`}
               key={instance.workflowExecutionId}
-              onClick={event => {
-                if ((event.target as HTMLElement).closest("button, input, label")) return;
-                openInstance(instance.workflowExecutionId);
-              }}
-              onKeyDown={event => {
-                if (event.target !== event.currentTarget) return;
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  openInstance(instance.workflowExecutionId);
-                }
-              }}
             >
               <div role="cell" className="wf-run-identity-cell">
                 {canDeleteRuns ? <label className="wf-run-select"><input
@@ -1616,10 +1621,6 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     void restoreExecutionContext(activity, false);
   }, [associationActivities, data, focusNodePath, initialActivityExecutionId, restoreExecutionContext]);
 
-  const openIncidents = () => {
-    const active = choosePreferredIncident((data?.details.incidents ?? []).filter(isActiveIncident));
-    openIncidentInIssues(active?.incidentId ?? selectedEvidenceId);
-  };
   const refreshWorkspace = () => {
     loadGeneration.current++;
     scopeRequest.current?.abort(); incidentNavigationRequest.current++;
@@ -1640,11 +1641,9 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
           {data ? <WorkflowStatusBadge status={data.details.instance.status} subStatus={data.details.instance.subStatus} /> : null}
         </div>
         <div className="wf-run-actions">
+          <button type="button" className="wf-run-tool wf-run-icon-tool" aria-label="Refresh execution" title="Refresh execution" onClick={refreshWorkspace}><RefreshCw size={15} aria-hidden="true" /></button>
           {selectedDefinitionCanBeReviewed && selectedDefinitionId ? <button type="button" className="wf-run-tool"
             onClick={() => openDefinitionDesigner(selectedDefinitionId)}><WorkflowIcon size={14} aria-hidden="true" /> Open definition</button> : null}
-          <IncidentHealthAction incidents={data?.details.incidents} onClick={openIncidents} />
-          <RunObservationControls following={observation.following} onFollowingChange={observation.setFollowing}
-            onRefresh={refreshWorkspace} complete={observation.status === "connected" && isTerminalExecution(data?.details.instance.status)} />
           {data && instanceAction ? <OverflowMenu ariaLabel="More run actions" items={[{
             id: "explain-run", label: <><Sparkles size={13} aria-hidden="true" /> Explain</>,
             onSelect: () => dispatchAiAction(ai, instanceAction, {
@@ -1655,7 +1654,6 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             })
           }]} /> : null}
         </div>
-        <RunObservationNotice status={observation.status} error={observation.error} />
         {operator.status}
       </div>
       {operator.dialog}
@@ -2334,15 +2332,6 @@ export function getIncidentHealthActionState(incidents?: IncidentStateSummary[] 
   return { health, label };
 }
 
-function IncidentHealthAction({ incidents, onClick }: { incidents?: IncidentStateSummary[] | null; onClick(): void }) {
-  const { health, label } = getIncidentHealthActionState(incidents);
-
-  return (
-    <button type="button" className="wf-run-incident-action" data-health={health} aria-label={`Open run incidents: ${label}`} onClick={onClick}>
-      <AlertCircle size={14} aria-hidden="true" /> {label}
-    </button>
-  );
-}
 
 function WorkflowInstanceInspector({
   activityContent,
@@ -2670,11 +2659,6 @@ export function resolveIncidentActivityAssociation(
   return incidentNodeIds.length === 1
     ? { nodeId: incidentNodeIds[0]!, activityExecution: null }
     : null;
-}
-
-function choosePreferredIncident(incidents: IncidentStateSummary[]) {
-  return [...incidents].sort((left, right) =>
-    Number(right.isBlocking) - Number(left.isBlocking) || Date.parse(right.createdAt) - Date.parse(left.createdAt))[0] ?? null;
 }
 
 function readIncidentInputKey(incident: IncidentStateSummary) {

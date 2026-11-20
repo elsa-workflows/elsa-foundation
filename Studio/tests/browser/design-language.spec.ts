@@ -88,12 +88,34 @@ test("public identifier styles keep exact copying accessible without changing la
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test("nested copy controls keep native keyboard activation without selecting their row", async ({ page, context }) => {
+test("selectable rows highlight and keep copy and text selection independent", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.route("**/samples/weather-forecast", route => route.fulfill({ json: [] }));
   await page.goto("/module-ui.html");
   const table = page.getByRole("region", { name: "Selectable public collection" }).getByRole("table");
   const row = table.getByRole("row").nth(2);
+  const resting = await row.evaluate(node => getComputedStyle(node).backgroundColor);
+  const value = row.getByText("second-row", { exact: true });
+  await value.hover();
+  await expect(row).not.toHaveCSS("background-color", resting);
+  await expect(row).toHaveCSS("cursor", "pointer");
+
+  const text = await value.evaluate(node => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const { left, right, top, height } = range.getBoundingClientRect();
+    return { left, right, y: top + height / 2 };
+  });
+  await page.mouse.move(text.left + 1, text.y);
+  await page.mouse.down();
+  await page.mouse.move(text.right - 1, text.y, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => document.getSelection()?.toString())).toContain("second");
+  await expect(row).toHaveAttribute("aria-selected", "false");
+  await page.evaluate(() => document.getSelection()?.removeAllRanges());
+  await value.click({ modifiers: ["Control"] });
+  await expect(row).toHaveAttribute("aria-selected", "false");
+
   const copy = row.getByRole("button", { name: "Copy Row ID" });
   for (const key of ["Enter", "Space"]) {
     await page.evaluate(() => navigator.clipboard.writeText(""));
@@ -104,13 +126,20 @@ test("nested copy controls keep native keyboard activation without selecting the
   }
   await copy.click();
   await expect(row).toHaveAttribute("aria-selected", "false");
-  await row.focus();
-  await row.press("Enter");
-  await expect(row).toHaveAttribute("aria-selected", "true");
   const firstRow = table.getByRole("row").nth(1);
   await firstRow.focus();
+  await firstRow.press("ArrowDown");
+  await expect(row).toBeFocused();
+  await expect(row).toHaveAttribute("tabindex", "0");
+  await expect(row).toHaveAttribute("aria-selected", "false");
+  await row.press("Enter");
+  await expect(row).toHaveAttribute("aria-selected", "true");
+  await row.press("ArrowUp");
+  await expect(firstRow).toBeFocused();
   await firstRow.press("Space");
   await expect(firstRow).toHaveAttribute("aria-selected", "true");
+  await value.click();
+  await expect(row).toHaveAttribute("aria-selected", "true");
 });
 
 for (const width of [320, 1440]) {

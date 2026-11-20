@@ -182,6 +182,15 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
         return taken;
     });
 
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) => Call(async () =>
+    {
+        var taken = await inner.RetakeAsync(partition, node, epoch, lease, countDeaths, cancellationToken);
+        if (taken is not null) _retaken[partition] = taken.Epoch;
+        return taken;
+    });
+    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) => Call(() => inner.NodeHeartbeatAsync(node, lease, window, cancellationToken));
+
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, long> _retaken = new();
 
     /// <summary>The epoch at which the node last took the partition back by a guarded retake (after a reset), if it ever did.</summary>

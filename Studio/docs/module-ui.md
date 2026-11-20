@@ -83,6 +83,38 @@ Do not override field borders with module card styles. The Outlined width and ga
 continue to use semantic theme tokens. A real legend gap supports transparent surfaces without
 painting an opaque patch behind the label.
 
+## Contextual refresh
+
+The shared `StudioPageHeader` owns the `studio.page-header.refresh` Slot. Supply a
+`StudioRefreshContribution` through its `refresh` prop; omit it on views that cannot
+refresh. Do not add a separate refresh button or reload the workspace.
+
+```tsx
+<StudioPageHeader title="Orders" refresh={{
+  id: `orders:${context.baseUrl}`,
+  label: "Refresh orders",
+  onRefresh: refreshOrders,
+  refreshing: loading,
+  autoRefresh: true,
+  active: workspaceTab?.active ?? true,
+  disabled: saving
+}} />
+```
+
+The Contribution's `id` identifies the view/backend: changing it resets the control
+to Manual. `label` names the refresh target accessibly. Return the complete request
+promise from `onRefresh`, or report its lifetime through `refreshing` for effect-driven
+requests. Preserve local filters, paging, selection and edits in that callback, and
+retain existing results during refresh where safe. Authorization failures must still
+remove protected data. `buttonRef` optionally preserves focus-return targets.
+
+`autoRefresh: true` opts into the split-button interval menu; it is never assumed.
+The initial mode is Manual, with 15-second, 30-second, 1-minute and 5-minute options.
+The shared control prevents repeated clicks/overlapping refreshes and pauses polling
+while the document is hidden, `active` is false, or the Contribution is disabled or
+refreshing. Pass workspace-tab activity explicitly; this UI package does not require
+an SDK provider. Intervals are view-local and not persisted.
+
 ## Module stylesheet loading
 
 Use the shared `defineModuleConfig` for installed module builds. It emits an ESM
@@ -181,6 +213,12 @@ scrolling regions an accessible name and keyboard focus. `StudioDataGrid` provid
 selectable rows; existing ARIA tables can use `studio-collection-table` for the same
 visual recipe while retaining their column geometry and interaction code.
 
+Use `studioRowInteraction` on rows that open or select a resource. It provides
+whole-row hover, keyboard focus and activation with Enter or Space. Keep native
+links and buttons for their own actions. Use `studio-row-link` for a text-only
+name link or button in the row. Tables used for display and rows with no default
+destination can keep their existing controls.
+
 ## States and behavior
 
 - Use `SkeletonRows` for initial loading, `StudioResultState` for an empty collection,
@@ -243,6 +281,21 @@ module stylesheet, and the standalone React example uses published package impor
 ## Delivery acceptance
 
 For visible or interaction changes, use the repository's [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md) workflow. Choose an existing reference and observable states before implementation; verify the actual composed host and independently inspect its screenshots. Reuse shared controls and fix recurring defects in their owning primitive. A component fixture or successful build alone does not establish product acceptance.
+
+## Clickable table rows
+
+For a resource row with one default open or inspect action, spread
+`studioRowInteraction<HTMLElement>(open)` onto the row and keep its table semantics.
+It supplies whole-row hover/focus feedback and Enter/Space activation while preserving
+embedded controls, portal content, modified clicks and text selection. Pass no action
+when the row is unavailable, stale or disabled. `StudioDataGrid` uses this behavior
+automatically when `onSelect` is provided.
+
+Use `studio-row-link` for a compact name link or button: transparent at rest, accent
+and underline on hover. Keep real anchors and their native modified-click behavior
+when a URL exists. A separate destination (such as an executable's source definition)
+remains its own named link. Tables with multiple commands and no clear default action
+keep explicit controls rather than making the entire row run a command.
 
 ## Navigation and focused editors
 

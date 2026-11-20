@@ -15,6 +15,9 @@ public sealed record MongoStoreOptions
     /// fence when this store instance did not take the partition at this epoch itself.
     /// </summary>
     public bool FenceInBatch { get; init; }
+
+    /// <summary>K1b: the node lease (<see cref="IKernelStore.NodeLeaseAvailable"/>). Off, the per-partition lease stands. MongoStore.NodeLease.cs.</summary>
+    public bool NodeLease { get; init; }
 }
 
 /// <summary>
@@ -27,7 +30,7 @@ public sealed record MongoStoreOptions
 /// gets a larger key whoever owns the partition and whatever its clock says.
 /// </para>
 /// </summary>
-public sealed class MongoStore : IKernelStore
+public sealed partial class MongoStore : IKernelStore
 {
     private static readonly TransactionOptions Transaction = new(ReadConcern.Snapshot, ReadPreference.Primary, WriteConcern.WMajority);
     private static readonly BsonDocument NowMs = new("$toLong", "$$NOW");
@@ -146,6 +149,7 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
+        if (_options.NodeLease) return await NodeTakeAsync([partition], node, lease, cancellationToken) is { Taken: [var one] } set ? new Lease(one.Epoch, one.Position, set.Now) : null;
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
         session.StartTransaction(Transaction);
         var doc = await _partitions.FindOneAndUpdateAsync(session, Takeable(partition, node), TakeUpdate(node, lease), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
@@ -171,6 +175,7 @@ public sealed class MongoStore : IKernelStore
     public async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
         var set = partitions.Distinct().Order().ToList();
+        if (_options.NodeLease) return set.Count == 0 ? new([], 0) : await NodeTakeAsync(set, node, lease, cancellationToken);
         if (set.Count <= 1)
             return set.Count == 1 && await TakeAsync(set[0], node, lease, cancellationToken) is { } one ? new([one.For(set[0])], one.Now) : new([], 0);
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
@@ -208,6 +213,7 @@ public sealed class MongoStore : IKernelStore
     /// <summary>The retake after a reset: one conditional update on owner and epoch. One more epoch, a renewed lease, the position kept, no death.</summary>
     public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default)
     {
+        if (_options.NodeLease) return await RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths: false, cancellationToken);
         var update = Builders<BsonDocument>.Update.Pipeline(new BsonDocument[]
         {
             new("$set", new BsonDocument
@@ -254,6 +260,7 @@ public sealed class MongoStore : IKernelStore
         CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
         if (batch.Window is not null) throw new NotSupportedException("MongoDB cannot enforce the requested commit window.");
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
         try
         {
@@ -288,7 +295,7 @@ public sealed class MongoStore : IKernelStore
                         new("$set", new BsonDocument
                         {
                             { "position", fence.Position + batch.PositionsIn(fence.Partition) }, { "clock", clock }, { "now", NowMs },
-                            { "leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, leaseMs }) },
+                            Renewal(leaseMs),
                         }),
                     }), isUpsert: true));
                 }
@@ -307,7 +314,7 @@ public sealed class MongoStore : IKernelStore
                         {
                             { "position", fence.Position + batch.PositionsIn(fence.Partition) },
                             { "now", NowMs },
-                            { "leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, leaseMs }) },
+                            Renewal(leaseMs),
                             { "clock", new BsonDocument("$add", new BsonArray { new BsonDocument("$max", new BsonArray { "$clock", NowUs }), (long)sends[fence.Partition] }) },
                         }),
                     ];
@@ -440,6 +447,13 @@ public sealed class MongoStore : IKernelStore
                     await session.AbortTransactionAsync(cancellationToken);
                     return new Committed(false, 0, []);
                 }
+            }
+            if (_options.NodeLease && System.Diagnostics.Stopwatch.GetElapsedTime(sentAt) > batch.Lease)
+            {
+                // The commit-step deadline (the node lease): past the lease since the batch was sent, the owner's guard has
+                // expired too; abort instead of committing.
+                await session.AbortTransactionAsync(cancellationToken);
+                return new Committed(false, 0, []);
             }
             await session.CommitTransactionAsync(cancellationToken);
             if (_options.FenceInBatch) foreach (var fence in fences) _known[(fence.Partition, fence.Epoch)] = clocks[fence.Partition];
@@ -698,11 +712,7 @@ public sealed class MongoStore : IKernelStore
         // against that same time.
         var beat = await _nodes.FindOneAndUpdateAsync(new BsonDocument("_id", node), Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", new BsonDocument("seenAt", NowMs)) }),
             new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After }, cancellationToken);
-        var now = beat["seenAt"].AsInt64;
-        var nodes = await _nodes.CountDocumentsAsync(new BsonDocument("seenAt", new BsonDocument("$gte", now - (long)window.TotalMilliseconds)), cancellationToken: cancellationToken);
-        var free = await _partitions.Find(new BsonDocument("$or", new BsonArray { new BsonDocument("owner", BsonNull.Value), new BsonDocument("leaseUntil", new BsonDocument("$lt", now)) }))
-            .Project(new BsonDocument("_id", 1)).ToListAsync(cancellationToken);
-        return new Cluster((int)nodes, free.Select(d => d["_id"].AsInt32).Order().ToList(), now);
+        return await MembershipAsync(beat["seenAt"].AsInt64, window, cancellationToken);
     }
 
     /// <summary>A subscription of kind start, upserted by its id, so registering it twice keeps one.</summary>

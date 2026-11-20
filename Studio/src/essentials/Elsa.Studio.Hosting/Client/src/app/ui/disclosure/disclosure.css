@@ -325,8 +325,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 24px;
+  gap: 4px;
+  min-height: 20px;
 }
 
 .studio-expression-field-label {
@@ -337,8 +337,8 @@
 .studio-peer-view-switch {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap: 1px;
+  padding: 1px;
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius);
   background: var(--studio-surface);
@@ -356,9 +356,9 @@
 
 .studio-expression-toggle button,
 .studio-peer-view-switch button {
-  min-height: 24px;
+  min-height: 22px;
   margin: 0;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 0;
   border-radius: var(--studio-radius-sm);
   background: transparent;
