@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openExecutionInputs, openExecutionOutputs } from "./executionDetails";
 import axe from "axe-core";
 
 for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
@@ -17,6 +18,7 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     const narrowInstance = host === "instance" && width === 390;
     await expect(source).toHaveAccessibleName(/Run state: Completed/);
     await source.press("Enter");
+    await openExecutionInputs(page);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     if (narrowInstance) {
       await page.getByRole("button", { name: "Back to workflow run canvas", exact: true }).press("Enter");
@@ -37,9 +39,12 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await expect(canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ })).toHaveAccessibleName(/Run state: Completed/);
     await expect(source).toHaveAccessibleName(/Selected/);
     await source.press(" ");
+    // The narrow run details panel reopens on its Overview tab.
+    if (narrowInstance) await openExecutionInputs(page);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
-    await expect(page.getByText("Completion receipt: 1", { exact: true })).toBeVisible();
     if (!narrowInstance) await expect(source).toBeFocused();
+    await openExecutionOutputs(page);
+    await expect(page.getByText("Completion receipt: 1", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
 
     await page.addScriptTag({ content: axe.source });

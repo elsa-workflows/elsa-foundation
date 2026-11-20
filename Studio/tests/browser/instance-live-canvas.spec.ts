@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openExecutionInputs, openExecutionOutputs } from "./executionDetails";
 
 for (const theme of ["light", "dark"]) {
   test(`follows a directly opened instance and retains selection and viewport through reconnect (${theme})`, async ({ page }) => {
@@ -8,6 +9,7 @@ for (const theme of ["light", "dark"]) {
     const node = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
     await expect(node).toHaveAccessibleName(/Run state: Running/);
     await node.click();
+    await openExecutionInputs(page);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     const viewport = canvas.locator(".react-flow__viewport");
     const bounds = (await canvas.boundingBox())!;
@@ -28,6 +30,7 @@ for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
     await expect(node).toHaveAccessibleName(/Run state: Completed\. Selected/);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
+    await openExecutionOutputs(page);
     await expect(page.getByText("Completion receipt: 1", { exact: true })).toBeVisible();
     expect(await viewport.getAttribute("style")).toBe(transform);
     expect(page.url()).toBe(route);
@@ -42,10 +45,12 @@ for (const theme of ["light", "dark"]) {
     await node.click();
     await page.getByRole("button", { name: "10 recorded executions", exact: false }).click();
     await page.getByRole("list", { name: "Recorded activity executions" }).getByRole("button", { name: /^Execution 4 Running/ }).click();
+    await openExecutionInputs(page);
     await expect(page.getByText("Current: 4", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
     await expect(node).toHaveAccessibleName(/Run state: Completed\. Selected/);
     await expect(page.getByText("Current: 4", { exact: true })).toBeVisible();
+    await openExecutionOutputs(page);
     await expect(page.getByText("Completion receipt: 4", { exact: true })).toBeVisible();
     await expect(page.getByText("Current: 10", { exact: true })).toHaveCount(0);
   });

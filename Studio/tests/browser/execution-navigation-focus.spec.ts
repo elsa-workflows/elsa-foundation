@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openExecutionInputs, openRunData } from "./executionDetails";
 import { isActivityHeadingReadable } from "../visibleContent";
 
 for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
@@ -12,6 +13,7 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     const canvas = host === "instance" ? page.getByRole("region", { name: "Workflow run canvas", exact: true })
       : page.getByLabel("Workflow canvas", { exact: true });
     await canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ }).click();
+    if (host === "editor") await openRunData(page);
     const details = page.getByRole("complementary", { name: host === "instance" ? "Run details panel" : "Inspector panel", exact: true });
     const chooser = details.locator(".wf-execution-choice");
     const next = details.getByRole("button", { name: "Next activity execution", exact: true });
@@ -24,19 +26,23 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     // The editor fixture omits a chosen publication sidecar; it deliberately uses the catalog label.
     await expect(selectedName).toHaveText(host === "instance" ? "Notify buyer" : "Write Line");
     await expect.poll(() => selectedName.evaluate(isActivityHeadingReadable)).toBe(true);
+    await openExecutionInputs(details);
     for (let occurrence = 2; occurrence <= 10; occurrence++) {
       await next.press("Enter");
       await expect(chooser).toContainText(`Execution ${occurrence} of 10`);
-      await expect(details.getByText(`Current: ${occurrence}`, { exact: true })).toBeVisible();
       await expect(occurrence === 10 ? chooser : next).toBeFocused();
+      // The run details panel opens each occurrence on its Overview tab.
+      await openExecutionInputs(details);
+      await expect(details.getByText(`Current: ${occurrence}`, { exact: true })).toBeVisible();
     }
     await expect(next).toBeDisabled();
     await page.screenshot({ path: info.outputPath("last-occurrence-focus.png"), fullPage: true });
     for (let occurrence = 9; occurrence >= 1; occurrence--) {
       await previous.press("Enter");
       await expect(chooser).toContainText(`Execution ${occurrence} of 10`);
-      await expect(details.getByText(`Current: ${occurrence}`, { exact: true })).toBeVisible();
       await expect(occurrence === 1 ? chooser : previous).toBeFocused();
+      await openExecutionInputs(details);
+      await expect(details.getByText(`Current: ${occurrence}`, { exact: true })).toBeVisible();
     }
     await expect(previous).toBeDisabled();
     await page.screenshot({ path: info.outputPath("first-occurrence-focus.png"), fullPage: true });

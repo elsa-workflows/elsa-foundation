@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openExecutionInputs, openExecutionOutputs, openRunData } from "./executionDetails";
 import axe from "axe-core";
 
 for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]) for (const width of [320, 390, 1440]) {
@@ -59,10 +60,13 @@ for (const theme of ["light", "dark"]) test(`retains expanded evidence through R
   await page.goto(`/?mode=activity-duplicate-editor&run-canvas=repeated&execution-motion=causal&theme=${theme}`);
   await page.getByRole("button", { name: "Test Run", exact: true }).click();
   await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+  await openRunData(page);
   await page.getByLabel("Workflow canvas", { exact: true }).getByRole("button", { name: /^Notify buyer\. Node ID:/ }).click();
   await page.locator(".wf-execution-choice").click();
   await page.getByRole("list", { name: "Recorded activity executions", exact: true }).getByRole("button", { name: /^Execution 4 (Running|Completed)/ }).click();
+  await openExecutionInputs(page);
   await expect(page.getByText("Current: 4", { exact: true })).toBeVisible();
+  await page.getByRole("tablist", { name: "Activity execution details", exact: true }).getByRole("tab", { name: "Overview", exact: true }).click();
   const details = page.locator(".wf-activity-execution-details");
   await details.locator("summary").click();
   const original = await details.elementHandle();
@@ -78,7 +82,9 @@ for (const theme of ["light", "dark"]) test(`retains expanded evidence through R
   await page.getByRole("tab", { name: "Inspector", exact: true }).click();
   expect(await original!.evaluate(element => element.isConnected)).toBe(true);
   await expect(details).toHaveAttribute("open", "");
+  await openExecutionInputs(page);
   await expect(page.getByText("Current: 4", { exact: true })).toBeVisible();
+  await openExecutionOutputs(page);
   await expect(page.getByText("Completion receipt: 4", { exact: true })).toBeVisible();
 });
 
