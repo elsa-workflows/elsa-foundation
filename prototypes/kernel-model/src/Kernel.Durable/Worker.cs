@@ -724,7 +724,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private bool TakesClosed => NodeLease && TakesOpen is { } open && !open();
 
     /// <summary>Test-only (N1, N6): how many times <see cref="ClaimedPartitions"/> ran. One answer asks each Worker once.</summary>
-    public long ClaimedLookups { get; private set; }
+    internal long ClaimedLookups { get; private set; }
 
     /// <summary>
     /// The partitions this Worker claims: held, pending, or being taken. A host with several Workers divides an answer by
