@@ -168,13 +168,14 @@ heartbeat answer lists the partition at another owner or epoch (a forced take, o
 lease expired). A retake whose answer is lost is judged by the next answer, as any retake is. A pending partition the
 host gives up also moves only through its counting retake, and is then released at the epoch the retake returned. On a
 hand-over it stays pending, marked given up, until the next answer's retake. On a full release (dispose) the counting
-retake runs at once (owner card, 20 November). A refused retake means another owner holds the partition: the pending
-entry ends, as above, and nothing is released. A retake that fails, or whose answer is lost, leaves the partition
-pending and given up. The dispose does not wait for it: the host keeps passing that Worker while the process lives,
-and the next answer's counting retake releases it; if the process ends first, its node lease lapses and the next taker
-counts the deaths (NL-6). The order within a Worker is fixed: a pass completes without the pending partitions, then
-the heartbeat, then the retake, so the retake is never a precondition of the pass. The host therefore keeps passing a
-Worker whose only partitions are pending.
+retake runs at once; a partition that cannot be retaken then stays pending and given up, and the host keeps passing
+that Worker until its pending set is empty (owner card, 20 November). In the coordinator's reading of that card, a
+refused retake means another owner holds the partition, so the pending entry ends, as above, and nothing is released;
+a retake that fails, or whose answer is lost, leaves the partition pending and given up. This holds while the process
+lives. A dispose does not wait for it, and if the process ends with a partition still pending, the node lease lapses
+and the next taker counts the deaths (NL-6). The order within a Worker is fixed: a pass completes without the pending
+partitions, then the heartbeat, then the retake, so the retake is never a precondition of the pass. The host therefore
+keeps passing a Worker whose only partitions are pending.
 A Worker whose pass does not complete, because a commit, poll or load hangs (a dead
 connection), stops the renewal: the lease expires, another process takes the partitions, and the takeover counts the
 death the trial protocol needs, as the per-partition beat did, since that beat ran inside the same pass. A host that
