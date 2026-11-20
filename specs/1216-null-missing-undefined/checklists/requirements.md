@@ -8,12 +8,12 @@
 
 - [x] No implementation details beyond the contract names the ADRs already fix (`ValueEnvelope`, `VF-ACT-*`)
 - [x] Focused on behaviour workflow authors and hosts observe
-- [x] Written for the initiative's approvers
+- [x] Written for the coordinator, who approves specs
 - [x] All mandatory sections completed
 
 ## Requirement Completeness
 
-- [x] No [NEEDS CLARIFICATION] markers remain; the four choices ADR 0045 §2 leaves open are proposals (Q1–Q4)
+- [x] No [NEEDS CLARIFICATION] markers remain; Q1–Q5 are accepted, Q6 and Q7 carry a recommendation
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] All acceptance scenarios are defined
@@ -24,9 +24,10 @@
 ## Feature Readiness
 
 - [x] All functional requirements have clear acceptance criteria
-- [x] User scenarios cover the four issues and row 10
-- [x] Provisional status and the ADR PRs it waits on are stated at the top
+- [x] User scenarios cover the four issues and ADR 0089 R3
+- [x] The ADRs it applies are merged; the dependencies on S-4 (delivered) and S-8 (US4) are stated at the top
 
 ## Notes
 
-- Provisional: approval waits on #3388, #3390, #3408 and #3420.
+- Rechecked against the merged ADRs and specs 1221, 1222, 1223, 1228 and 1231; Studio presentation added (FR-031 to
+  FR-033).

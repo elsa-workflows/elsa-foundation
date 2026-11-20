@@ -1,35 +1,35 @@
 # Tasks: Null, missing and undefined
 
-**Input**: Design documents from `specs/1201-null-missing-undefined/`
+**Input**: Design documents from `specs/1216-null-missing-undefined/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/null-policies.md, quickstart.md
 
-**Provisional**: do not start any task before this spec is approved (its ADR PRs agreed, see spec *Approval*) and
-#3052's specs are defined. T001 is the gate.
+**Gate**: start once the coordinator has approved and merged this spec (D-18). Phase 7 (User Story 4) also waits for
+S-8's implementation (#4838) to merge, because it builds in S-8's value bridge.
 
 **Tests**: required by framework §2.23 for every logic-bearing change, and by SC-004 to SC-006. The application
 declares no TDD cadence, so tests follow implementation within each story; the PR's bite-proof shows each new test
-red without the change.
+red without the change. xUnit only.
 
 **Build rule**: build and test only the projects a task touches (shared machine); CI runs the rest.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm #3388, #3390, #3408 and #3420 are agreed, diff their agreed text against spec.md, and amend spec,
-  plan and these tasks for any change before starting
-- [ ] T002 Align the proposed diagnostic codes in contracts/null-policies.md with the existing code catalogs
-  (`VF-ACT-*` in `RuntimeInputBindingCompiler.cs`, `Elsa3ActivityDiagnosticCodes.cs`, Jint diagnostics) and fix the
-  final names in the contract
-- [ ] T003 Run the #3052 JTest measurement on this branch before any change and record the baseline in the PR
+- [x] T001 Confirm the ADRs this spec applies are merged and diff their text against spec.md. Done in the readiness
+  recheck: ADR 0045 §2, ADR 0083, ADR 0091 decisions 3 and 8, ADR 0046 V8 and ADR 0089 R3 are on the initiative branch
+  and the spec applies them as merged
+- [x] T002 Align the proposed diagnostic codes with the existing catalogs (`VF-ACT-*`, `VF-READ-*`, S-8's
+  `VF-PREC-*`, `runtime.input.*`). Done: final names in contracts/null-policies.md
+- [ ] T003 Run the #3052 JTest measurement on the implementation branch before any change and record the baseline in
+  the PR
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T004 Verify D-2 (variable nullability from the type alias) against spec 264's aliases in
-  `Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs` (`WorkflowVariables`) and record the table in
-  research.md R-5
+- [ ] T004 Verify D-2 (variable nullability by kind: nullable unless a non-nullable value type; `Any` and every JSON
+  alias nullable) against the alias registry and record the table in research.md R-5
 - [ ] T005 [P] Add `NullPolicyDefaults.TryGetTypeDefault(alias)` in
   `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs`, with unit tests for value types, enums and
-  types without a type default
+  types without a type default (`String`, `Any`, `JsonElement`)
 - [ ] T006 Add `NullHandling` (`DefaultOnNull`, `UndefinedAsNull`) to
   `Essentials/src/Workflows/Design/Core/Models/WorkflowStrategyOptions.cs`, `ValuePolicies` to
   `Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs`, and compile one into the other in
@@ -38,11 +38,11 @@ red without the change.
   `WorkflowExecutableCompiler.BuildInputContract` from `InputDefinition.IsNullable` (R-4). Publication refuses an
   optional, non-nullable workflow input whose type has no non-null default and that declares no default
   (`VF-ACT-003`, FR-006), as it already does for activity inputs
-- [ ] T008 Add `UndefinedPolicy` to `RuntimeExpressionBinding` in `RuntimeInputBinding.cs` and pin it on JavaScript
-  bindings at publication from `ValuePolicies` (R-2)
-- [ ] T009 Write `valuePolicies`, input `isNullable` and binding `undefinedPolicy` in
-  `WorkflowExecutableHasher.WriteBehavioralPayload` only when set; add hash-stability tests proving unchanged hashes
-  for workflows without them, and changed hashes when each is set (ADR 0038, US5 scenario 3)
+- [ ] T008 Hand the executable's pinned `UndefinedAsNull` to every JavaScript evaluation (binding and `Run
+  JavaScript`) from the callers that already hold the executable; no per-binding field (R-2)
+- [ ] T009 Write `valuePolicies` and input `isNullable` in `WorkflowExecutableHasher.WriteBehavioralPayload` only when
+  set; test that each one changes the hash when set (ADR 0038, US5 scenario 3). Regenerate in place any stored fixture
+  whose hash moves
 
 ## Phase 3: User Story 1 - Set a variable or output to null (P1) 🎯 MVP
 
@@ -60,14 +60,13 @@ red without the change.
 
 **Independent test**: `composition-bulk-dispatch-sub-workflow` starts with no input and completes.
 
-- [ ] T013 [US2] Extend #3731's admission (R-3); the contract check on every start, declared defaults and the
-  missing-required refusal are on `main` already. In `WorkflowExecutableInputValidator`'s complete-bag normalization:
+- [ ] T013 [US2] Extend #3731's admission (R-3). In `WorkflowExecutableInputValidator`'s complete-bag normalization:
   complete an omitted optional input without a declared default with JSON `null` when nullable, otherwise its type
-  default (`NullPolicyDefaults`); refuse an explicit `null` for a non-nullable input with `VF-WF-REQ-002`; accept an
-  explicit `null` for a nullable input without running the L119 conversion, and leave that conversion as it is (S-9
-  owns it). In `WorkflowStartDispatcher.ApplyInputContract`, and in the early checks of
-  `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow`, substitute the type default for such a `null` before
-  validating when the pinned `DefaultOnNull` is on
+  default (`NullPolicyDefaults`); refuse an explicit `null` for a non-nullable input with
+  `runtime.input.null-not-allowed`; accept an explicit `null` for a nullable input without running the type
+  conversion, and leave that conversion as it is (S-9 owns it). In `WorkflowStartDispatcher.ApplyInputContract`, and
+  in the early checks of `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow`, substitute the type default for
+  such a `null` before validating when the pinned `DefaultOnNull` is on, and record `VF-NULL-001`
 - [ ] T014 [US2] Check that `RuntimeWorkflowStateSeed.BuildSeedChanges` stores a completed JSON `null` as an explicit
   null envelope, not a present JSON `null`, and fix it if not
 - [ ] T015 [US2] Tests for S-2's additions (US2 scenarios 2, 3 and 5, and the `null` refusal) on the API, trigger,
@@ -83,8 +82,9 @@ red without the change.
 
 - [ ] T017 [P] [US7] Round-trip tests for `ExplicitNull` and `Absent` envelopes in every runtime store provider
   (in-memory and each EF provider), covering invocation records, workflow request rows, variables and outputs
-- [ ] T018 [US7] Fix any store that loses the difference; confirm `RuntimeInputBinding.LiteralValue` keeps
-  `Absent` and `ExplicitNull` apart wherever it is read back
+- [ ] T018 [US7] Fix any store that loses the difference; confirm `RuntimeInputBinding.LiteralValue` keeps `Absent`
+  and `ExplicitNull` apart wherever it is read back. A fix that needs a serializer option change goes to S-9 (message
+  its session first; S-2 does not edit the baseline)
 
 ## Phase 6: User Story 3 - Null into a non-nullable input, by policy (P2)
 
@@ -93,70 +93,88 @@ red without the change.
 - [ ] T019 [US3] Publication: in `RuntimeInputBindingCompiler.ValidateNull`, pin the type default when the workflow's
   `DefaultOnNull` is on and the type has one (R-6)
 - [ ] T020 [US3] Run time: in `RuntimeActivityInputMaterializer.ValidatePresence`, substitute the type default for
-  `ExplicitNull` under the policy and record the substitution diagnostic on the invocation
+  `ExplicitNull` under the policy and record `VF-NULL-001` on the invocation
 - [ ] T021 [US3] Tests for each US3 acceptance scenario, including a non-nullable `String` that still fails, and
   update `ValueDurabilityPolicyTests.Snapshot_materialization_rejects_nullish_value_for_non_nullable_contract` to
   cover the policy off and on
 
 ## Phase 7: User Story 4 - `undefined` at the JavaScript boundary (P2)
 
-**Independent test**: `({ a: undefined, b: NaN })` with and without the policy.
+**Gate**: S-8's implementation (#4838) is merged into the initiative branch.
 
-- [ ] T022 [US4] Install a path-tracking replacer in `JintResultMaterializer` beside `__elsaCanonicalJsonStringify`:
-  dropped `undefined` and non-finite numbers record warnings; under the pinned `AsNull` policy `undefined` becomes
-  `null` (R-7). Check that the byte, depth and node limits still count the output
-- [ ] T023 [US4] Under `AsNull`, an `undefined` binding result materializes as `null` in
+**Independent test**: `({ a: undefined, b: NaN, c: [1, , undefined] })` with and without the policy.
+
+- [ ] T022 [US4] In S-8's bridge writer (`CopyComparePatchValueBridge`), extend its replacer (R-7): a dropped
+  `undefined` property records `VF-UNDEF-002`; an `undefined` array element or hole becomes a `null` placeholder with
+  `VF-UNDEF-003` (holes checked by index); a computed `NaN` or `±Infinity` becomes `null` with `VF-NUM-001`, after
+  S-8's precision check; under `UndefinedAsNull` an `undefined` property is kept as `null`. Add the codes to
+  `JavaScriptValueDiagnostics`; warnings go through `IExecutionWarningSink`. Check that the byte, depth and node
+  limits still count the output
+- [ ] T023 [US4] Under `UndefinedAsNull`, an `undefined` binding result materializes as `null` in
   `JintPortableJavaScriptEvaluator` for both binding forms; without it the ADR 0083 error stays
-- [ ] T024 [US4] Script with a consumed result (R-8): identify the function-body forms; refuse a function-body script
-  without a `return` statement at publication, never an expression script or completion value; fault the step in
-  `JintJavaScriptScriptEvaluator` when a consumed result is `undefined`, with a fix instruction; `ExplicitNull` under
-  the policy; an unconsumed result writes nothing
-- [ ] T025 [US4] Tests for each US4 acceptance scenario, including a `JSON.stringify` string that is not rewritten,
-  `undefined` at depth three, and a script that returns on some paths only
+- [ ] T024 [US4] `Run JavaScript` with a bound result (R-8): refuse a body with no `return` statement at publication
+  (`VF-UNDEF-001`, from the publish-time JavaScript parse); never refuse a binding for lacking one; fault the step when
+  a bound result is `undefined` at run time, `ExplicitNull` under the policy; an unbound result writes nothing
+- [ ] T025 [US4] `undefined` assigned to a whole variable (FR-030, Q7): the bridge's change report marks it; the step
+  faults with `VF-UNDEF-001` naming the variable, or writes `ExplicitNull` under the policy. A member set to
+  `undefined` follows T022. If S-7 part 2 (script writes) is not merged yet, test at the bridge and leave the
+  end-to-end test to whichever lands second
+- [ ] T026 [US4] Tests for each US4 acceptance scenario, including a `JSON.stringify` string that is not rewritten,
+  `undefined` at depth three, a hole, and a `Run JavaScript` body that returns on some paths only
 
 ## Phase 8: User Story 5 - Converted workflows carry their policies (P2)
 
 **Independent test**: convert, export, import on a host without the converter, run: same outputs.
 
-- [ ] T026 [US5] Add `Elsa3MappingOptions.ApplyElsa3NullPolicies` (default `true`) in
+- [ ] T027 [US5] Add `Elsa3MappingOptions.ApplyElsa3NullPolicies` (default `true`) in
   `Extensions/Elsa3/src/Mapping/Elsa3MappingOptions.cs`, bind it in `Elsa3MappingFeature`, with a feature
   registration test (options binding carries logic)
-- [ ] T027 [US5] Set `StrategyOptions.NullHandling` in `Elsa3WorkflowDefinitionToState.Map` when the option is on, and
+- [ ] T028 [US5] Set `StrategyOptions.NullHandling` in `Elsa3WorkflowDefinitionToState.Map` when the option is on, and
   list the policies in the conversion report; say the stricter Elsa 4 rules apply when it is off
-- [ ] T028 [US5] Remove `AddNullCoalescing` from `Elsa3ExpressionRewriter` (FR-023) and update the spec 262 tests
-- [ ] T029 [US5] Narrow spec 267's `NullRefused` for SetVariable `Value` and SetOutput `OutputValue` in
+- [ ] T029 [US5] Remove `AddNullCoalescing` from `Elsa3ExpressionRewriter` (FR-023) and update the spec 262 tests
+- [ ] T030 [US5] Narrow spec 267's `NullRefused` for SetVariable `Value` and SetOutput `OutputValue` in
   `Elsa3BuiltInActivityMap.Entries.cs`: emit a typed `Literal` null for a nullable target, or when `DefaultOnNull` is
   recorded; refuse otherwise; update `Elsa3NullMemberTests`
-- [ ] T030 [US5] Verify Elsa 3 3.6.3 input requiredness (R-11) and map converted inputs' requiredness and nullability
+- [ ] T031 [US5] Verify Elsa 3 3.6.3 input requiredness (R-11) and map converted inputs' requiredness and nullability
   accordingly
-- [ ] T031 [US5] Export/import round-trip test: `nullHandling` survives, and a native workflow with the same policies
+- [ ] T032 [US5] Export/import round-trip test: `nullHandling` survives, and a native workflow with the same policies
   gives the same outputs (SC-004)
 
-## Phase 9: User Story 6 - A computed variable name that matches nothing (P3)
+## Phase 9: Studio (Q6; US5 scenarios 5 and 6)
 
-**Independent test**: `getVariable('no' + 'pe') === undefined` and a warning is recorded.
+- [ ] T033 [P] Add `NullHandlingSection.tsx` beside `PersistenceModeSection` in `WorkflowPropertiesView.tsx`: two
+  switches, *Default on null* and *Undefined as null*, each with a one-line explanation, read from and written to
+  `strategyOptions.nullHandling` (FR-031); read and write helpers in `workflowProperties.ts`
+- [ ] T034 [P] Add an *Allow null* column beside *Required* on the workflow inputs table in `WorkflowPropertiesView.tsx`,
+  disabled for a type that cannot hold null, as the activity contract editor does (FR-032)
+- [ ] T035 Studio client tests for both, and a check that the `VF-UNDEF-*`, `VF-NUM-001` and `VF-NULL-001` warnings
+  show in the existing instance diagnostics with no new surface (FR-033)
 
-- [ ] T032 [US6] In `IsolatedJintEngine`, always install `getVariable`; on a miss record the not-found warning and
-  mark the read absent in the read set; JavaScript still sees `undefined` (R-10)
-- [ ] T033 [US6] Record the same for a computed `variables[name]` miss through a proxy over the frozen snapshot
-- [ ] T034 [US6] Tests for US6 scenarios 1 and 2; add the shared diagnostic code for Liquid without behaviour (R-10)
+## Phase 10: User Story 6 - A computed variable name that matches nothing (P3)
 
-## Phase 10: Polish
+Built by S-4 (spec 1222 FR-011, FR-012; `VF-READ-001`).
 
-- [ ] T035 [P] Docs: workflow settings authoring reference (`nullHandling`), glossary rows for *default-on-null* and
+- [ ] T036 [US6] Confirm S-4's tests (`ScriptVariableReadMaterializationTests`, `VariablesRootEvaluationTests`) still
+  cover US6 scenarios 1 to 3 after this spec's changes; no new code
+
+## Phase 11: Polish
+
+- [ ] T037 [P] Docs: workflow settings authoring reference (`nullHandling`), glossary rows for *default-on-null* and
   *undefined-as-null*, Elsa 3 Mapping README and migration readiness guide (spec 262 and 267 sections), and the
   `IWorkflowExecutableInputValidator` and `IWorkflowStartDispatcher` *Usage* lines in the Runtime `EXTENSION_POINTS.md`
   (completion, `null` refusal, default-on-null at admission)
-- [ ] T036 Rerun the #3052 JTest measurement and post it on #3052 (SC-002, SC-003)
 - [ ] T038 [P] Q5 audit (R-12): list built-in activity inputs that cannot hold `null` and whose Elsa 3 counterparts
   accepted it; declare each nullable where the Elsa 4 activity handles `null`, with a test, and record the rest in the
   Elsa 3 migration readiness guide
-- [ ] T037 Close #3280, #3288, #3172 and #3170 from the delivery PR; set this spec's **Status** to `Implemented` in
-  that PR
+- [ ] T039 Rerun the #3052 JTest measurement and post it on #3052 (SC-002, SC-003)
+- [ ] T040 Close #3280, #3288, #3172 and #3170 after the merge (initiative branch: they do not auto-close); set this
+  spec's **Status** to `Implemented` in the delivery PR
 
 ## Dependencies
 
-- T001 gates everything. Phase 2 blocks every story. T013 builds on #3731 (merged 2026-11-04, `4c002dadb`).
-- US1, US2 and US7 (P1) can run in parallel after Phase 2. US3 needs T019/T020's policy from T006. US4 needs T008.
-  US5 needs US3 and US4 (the policies it records must work). US6 is independent after Phase 2.
+- Phase 2 blocks every story. T013 builds on #3731.
+- US1, US2 and US7 (P1) can run in parallel after Phase 2. US3 needs T006. US4 needs T008 and S-8's merge (#4838).
+  US5 needs US3 and US4 (the policies it records must work). Studio (Phase 9) needs T006 and T007 only.
 - MVP: Phases 1–5.
+- If US4 has to wait for #4838, the rest can land first and US4 follows in a second PR; the spec is set Implemented
+  only with the last one.

@@ -10,7 +10,8 @@
 | `Withheld` | Unchanged; out of scope. |
 
 ADR 0091 decision 8: these two states are the null representation for declared members. Every store already writes
-`Presence`; T017 verifies round-trips per provider.
+`Presence`; T017 verifies round-trips per provider. A variable or workflow-input change that the S-8 bridge writes
+as JSON `null` is stored as `ExplicitNull`.
 
 ## `WorkflowStrategyOptions.NullHandling` (new, authored)
 
@@ -27,10 +28,11 @@ Same two fields. Written in the hash payload as `valuePolicies` only when at lea
 
 From `InputDefinition.IsNullable`. Written in `inputContract` only when `true`.
 
-## `RuntimeExpressionBinding.UndefinedPolicy` (new, pinned)
+## Undefined policy at evaluation (no new pinned field)
 
-`Error` (default) or `AsNull`, copied from `ValuePolicies.UndefinedAsNull` for JavaScript bindings at publication.
-Hashed with the binding only when `AsNull`.
+The JavaScript evaluator receives the executable's pinned `ValuePolicies.UndefinedAsNull` with each evaluation (the
+caller already holds the executable), and passes it to S-8's value bridge writer. No per-binding copy is pinned: the
+workflow-level value is already in the hash, and a second copy would only have to agree with it.
 
 ## Admission (state transition)
 

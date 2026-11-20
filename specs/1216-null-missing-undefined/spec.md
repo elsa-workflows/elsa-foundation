@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Draft — **provisional**. Approval waits on the ADR PRs listed under *Approval*.
+**Status**: Draft — ready for the coordinator's approval. Every ADR it applies is merged into the initiative branch.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-2**.
 
@@ -18,23 +18,28 @@ converted workflows alike, as decisions D-10 and D-11 of #3052 and the ADRs belo
 
 ## Approval
 
-> **Provisional.** This spec may be drafted now (see [initiatives](../../docs/contributing/initiatives.md#phases)).
-> It cannot be approved until every ADR it applies is agreed. If an ADR changes before agreement, this spec follows it.
+> **Ready for approval.** Every ADR this spec applies is merged into the initiative branch. The approval plan is the
+> coordinator alone (initiatives guide, *Spec approval once the ADRs are agreed*). A later change to an ADR it applies
+> is rechecked here.
 
-| ADR PR | What this spec takes from it | State on 2026-11-03 |
+| ADR | What this spec takes from it | Text applied |
 |---|---|---|
-| [#3388](https://github.com/elsa-workflows/elsa-foundation/pull/3388), ADR 0045 §2 amendment (D-10, D-11) | Null, omission and `undefined` rules; the default-on-null and undefined-as-null policies; recording them on the workflow | Approved by @FransVanEk; waiting for @sfmskywalker |
-| [#3390](https://github.com/elsa-workflows/elsa-foundation/pull/3390), ADR 0083 amendment (D-11 part) | Undefined-as-null at the binding boundary, for both binding forms | In review |
-| [#3408](https://github.com/elsa-workflows/elsa-foundation/pull/3408), ADR 0091 decision 8 (A-5 P-8) | Explicit null stays distinct from missing; S-2 chooses the representation, the serializer keeps it | In review |
-| [#3420](https://github.com/elsa-workflows/elsa-foundation/pull/3420), ADR 0089 amendment question 3 (row 10) | A computed variable name that matches nothing reads `undefined` with a warning | Row 10 agreed by all three (a8e138dff); the PR is in review |
+| ADR 0045 §2 amendment (D-10, D-11) | Null, omission and `undefined` rules; the default-on-null and undefined-as-null policies; recording them on the workflow | on the initiative branch |
+| ADR 0083 amendment, `binding-readonly-v1` (D-11 part) | Undefined-as-null at the binding boundary, for both binding forms; array positions kept under either policy | on the initiative branch |
+| ADR 0091, decisions 3 and 8 | Explicit null stays distinct from missing: S-2 chooses the representation, the serializer keeps it; a missing member is not equal to a `null` member | on the initiative branch |
+| ADR 0046 amendment, V8 and the JavaScript adapter rules | `ExplicitNull` and `Absent` are core-model states; `undefined` is a rule of the JavaScript adapter; a lossy conversion is declared with a diagnostic | on the initiative branch |
+| ADR 0089 as amended, R3 | A computed variable name that matches nothing reads `undefined` with a warning | on the initiative branch |
 
-**Related, not blocking:** [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422) (ADR 0046 amendment,
-V8) is where the JavaScript adapter contract will hold the boundary diagnostics. ADR 0045 §2 states the rules this
-spec applies; if V8 moves them, FR-015 to FR-018 follow V8.
+**Delivered elsewhere already.** S-4 (spec 1222, its FR-011 and FR-012) built FR-025 to FR-027: a computed name that
+matches nothing reads `undefined` in JavaScript and nil in Liquid, records `VF-READ-001` and marks the read absent; a
+literal name that matches nothing stays a publish diagnostic. This spec keeps those requirements as the rule and adds
+no work for them.
 
-**Approval plan**: the initiative's approvers, @sfmskywalker and @FransVanEk (technical architects), approve the final
-text; @j03y-nxxbz is the author and records agreement in a PR comment. **Implementation**: not before every spec of
-#3052 it depends on is defined, as #3052 agreed.
+**Builds on S-8 (spec 1228).** S-8's script value bridge (copy, compare, patch) is the one place a JavaScript value
+leaves a script: a binding result, a script result and a script's variable changes. FR-015 to FR-018 and FR-030 act in
+that bridge's writer. User Story 4 is built after S-8's implementation is merged.
+
+**Implementation** starts once this spec is approved (D-18: per spec).
 
 ## Rule and boundary
 
@@ -47,21 +52,29 @@ variable reads; the Elsa 3 converter option; the stored representation of explic
 
 **Out of scope**:
 - Inside a JSON value (`Any`), a missing property and a `null` property stay distinct, because the data is stored as
-  received (ADR 0091 decision 3). Nothing here rewrites JSON data.
+  received (ADR 0091 decision 3). Nothing here rewrites JSON data. A value the JavaScript adapter writes is the
+  exception, by the adapter rules of ADR 0046 (FR-016 to FR-018).
 - Literal and computed variable names in general (S-4, ADR 0089). This spec defines only the outcome of a computed name
-  that matches nothing.
+  that matches nothing, and S-4 has built it.
+- A number that enters a script exactly and leaves it with lost digits, or as `Infinity` because it was too large for
+  a JavaScript number: that is a precision loss, refused at the write by S-8 (spec 1228, FR-011 to FR-013). FR-017
+  covers `NaN` and `Infinity` that the script computes.
+- Values passed to a .NET-implemented host function: S-1 (spec 1223, FR-011) maps them, not this boundary.
+- The step write path for script writes (building the intent, committing, conflicts): S-7 (spec 1231). This spec only
+  says what an `undefined` written to a variable becomes (FR-030).
 - Absent or blank Elsa 3 members whose converted value differs (#3281, S-0).
 - Applying the input contract on every start: fixed by
-  [#3731](https://github.com/elsa-workflows/elsa-foundation/pull/3731) (#3728, merged 2026-11-04 as `4c002dadb`).
+  [#3731](https://github.com/elsa-workflows/elsa-foundation/pull/3731) (#3728).
   `WorkflowStartDispatcher` validates every new start (API, triggers, BPMN, test runs, child workflows) with
   `IWorkflowExecutableInputValidator` in complete-bag mode, before the start policy and before the start command is
   enqueued. It fills declared defaults into the start payload and refuses a blank, unknown, duplicate or mistyped
   input, or a missing required one, with `WorkflowExecutableStartRejectedException` (category `Input`, rendered as
   `400`); the stimulus router reports such a start as `Refused`. S-2 extends that admission and does not add another
   one (see *Admission* below).
-- The validator's type conversion (`WorkflowExecutableInputValidator` L119, System.Text.Json defaults today). S-9
-  (spec 1207) moves it onto the shared data-boundary options; S-2 does not change it.
-- Studio editing surfaces beyond what FR-024 names.
+- The validator's type conversion (System.Text.Json defaults today). S-9 (spec 1207) moves it onto the shared
+  data-boundary options; S-2 does not change it.
+- The serializer baseline: S-9 makes `IPayloadSerializer` keep explicit nulls (its FR-018). S-2 changes no serializer
+  options; it keeps `ValueEnvelope`'s `Presence`, which is a field of its own, and tests the round trip (FR-011).
 
 **Admission**: "admission" in this spec is #3731's input-contract step in `WorkflowStartDispatcher`. It already
 delivers FR-008 for an omitted required input and the declared-default half of FR-006 for workflow inputs, on every
@@ -169,7 +182,7 @@ properties become `null` too (#3170, #3172).
    an element already `null` needs no diagnostic.
 6. **Given** the policy, **When** a script returns a string from `JSON.stringify`, **Then** that string is not
    rewritten.
-7. **Given** no policy and a function-body script (its result is only what `return` gives) whose result is bound to a
+7. **Given** no policy and a function-body script (a `Run JavaScript` activity: its result is only what `return` gives) whose result is bound to a
    variable or output, **When** the script has no `return` statement, **Then** publication refuses it with a fix
    instruction; **When** any script form with a bound result produces `undefined` at run time, **Then** the step faults
    with the same instruction.
@@ -177,9 +190,13 @@ properties become `null` too (#3170, #3172).
    is written.
 9. **Given** the policy and a bound result, **When** the script produces `undefined`, **Then** the result is `null` and
    the binding writes it (what Elsa 3 did).
-10. **Given** a bound result, **When** an expression script or a Script activity produces its value as a completion
-    value (for example a last expression statement `a + b`) without a `return` statement, **Then** publication accepts
-    it and the completion value is written; no `return` is required.
+10. **Given** an input binding written as a statement body, **When** it produces its value as a completion value (for
+    example a last expression statement `a + b`) without a `return` statement, **Then** publication accepts it and the
+    completion value is used; no `return` is required (ADR 0083).
+11. **Given** no policy, **When** a script runs `variables.discount = undefined`, **Then** the step faults, naming
+    `discount`; **Given** the policy, **Then** `discount` is written as `null` (FR-030).
+12. **Given** no policy, **When** a script runs `variables.order.discount = undefined`, **Then** `discount` is
+    removed from `order` with a warning naming `order.discount`; **Given** the policy, **Then** it is kept as `null`.
 
 ---
 
@@ -202,17 +219,24 @@ converter, publish, and run; the same inputs give the same outputs.
 3. **Given** a converted workflow, **When** its policies change, **Then** its artifact hash changes (ADR 0038).
 4. **Given** a native workflow, **When** an author selects a policy, **Then** it behaves exactly like a converted
    workflow with that policy.
+5. **Given** a converted workflow open in Studio, **When** the author opens the workflow properties, **Then** the
+   *Null handling* section shows both switches on; **When** the author turns one off and publishes, **Then** the
+   executable no longer pins it (FR-031).
+6. **Given** a workflow input in Studio's inputs table, **When** the author ticks *Allow null* and publishes, **Then**
+   a start with an explicit `null` for that input is admitted (FR-032).
 
 ---
 
 ### User Story 6 - A computed variable name that matches nothing (Priority: P3)
 
-A script reads a variable by a computed name (`getVariable(expr)`) that resolves to no variable. It reads `undefined`
-with a warning instead of failing or reading `null` (reconciliation row 10).
+A script reads a variable by a computed name (`getVariable(expr)` or `variables[expr]`) that resolves to no variable.
+It reads `undefined` with a warning instead of failing or reading `null` (ADR 0089 R3).
 
-**Why this priority**: agreed by all three approvers; small, and S-4 builds on it.
+**Why this priority**: the rule is agreed and S-4 (spec 1222, FR-011 and FR-012) has built it, with `VF-READ-001`.
+This spec keeps the story so the null, missing and undefined rules stay in one place; it adds no work.
 
-**Independent Test**: run `getVariable('no' + 'pe') === undefined`; the result is `true` and a warning is recorded.
+**Independent Test**: run `getVariable('no' + 'pe') === undefined`; the result is `true` and a warning is recorded
+(S-4's tests cover it).
 
 **Acceptance Scenarios**:
 
@@ -246,7 +270,7 @@ omitted; after resume, the first reads explicit null and the invocation record s
   distinct cases (FR-019, FR-020).
 - A function-body script that returns on some paths only (`if (x) return y;`) passes publication; the run-time check
   of FR-020 catches the path without a value.
-- An expression script or a Script activity whose result is its completion value never needs a `return` statement;
+- An input binding, as an expression or as a statement body ending in a completion value, never needs a `return` statement;
   the undefined policy applies to the value it actually produces (FR-020).
 - The default-on-null policy applies to a `null` produced by any source: a literal, a variable, an expression, or a
   request member.
@@ -257,6 +281,9 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - A workflow edited after conversion keeps its recorded policies until the author changes them.
 - Under undefined-as-null, a `null` that then reaches a non-nullable input still fails unless default-on-null is also
   selected.
+- `{}` and `{"discount":null}` are different values (ADR 0091 decision 3). Turning undefined-as-null on or off
+  therefore changes what a script writes, and a script that drops `discount` from a stored `{"discount":null}` makes
+  a real change, not a no-op.
 
 ## Requirements *(mandatory)*
 
@@ -317,9 +344,11 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-019**: An input binding that produces no value MUST be governed by FR-015 and FR-018.
 - **FR-020**: A script whose result is consumed (bound to a variable or output) MUST produce a value (Q3), and the
   undefined policy MUST apply to the value each script form actually produces. The forms differ:
-  - an **expression script** (a binding, governed by FR-015 and FR-018) and a **Script activity whose result is its
-    completion value** produce a value without a `return` statement, and MUST NOT be refused for lacking one;
-  - only a **function-body script** (its result is only what a `return` statement gives) whose result is consumed and
+  - an **input binding**, in either ADR 0083 form (an expression, or a statement body whose value is its completion
+    value or a top-level `return`), produces a value without a `return` statement, is governed by FR-015 and FR-018,
+    and MUST NOT be refused for lacking one;
+  - only a **function-body script** (the `Run JavaScript` activity, whose result is only what a `return` statement
+    gives, ADR 0083) whose result is consumed and
     that has no `return` statement MUST be refused at publication.
 
   In every form, a consumed result that is `undefined` at run time (a path without a value, `return undefined`, or a
@@ -338,12 +367,29 @@ omitted; after resume, the first reads explicit null and the invocation record s
   switch either on per workflow.
 - **FR-023**: The undefined-to-null lowering spec 262 added to converted expressions MUST be replaced by the recorded
   policy, so the converter no longer rewrites scripts for this purpose.
-- **FR-024**: The workflow definition API and the exported workflow JSON MUST expose both policies, so Studio and
-  export show them. A dedicated Studio editor is out of scope.
+- **FR-024**: The workflow definition API and the exported workflow JSON MUST expose both policies, and a workflow
+  input's nullability, so Studio and export show them.
 
-**Computed variable reads (row 10)**
+**Studio (Q6)**
+- **FR-031**: Studio's workflow properties MUST show both policies as two switches in a *Null handling* section beside
+  the persistence and incident settings, each with a one-line explanation of what it changes. A converted workflow
+  shows the switches its conversion turned on. Changing a switch changes the definition like any other workflow
+  setting.
+- **FR-032**: Studio's workflow inputs table MUST show and edit a workflow input's nullability (*Allow null*) beside
+  *Required*, as the activity contract editor already does for activity inputs.
+- **FR-033**: The boundary warnings of FR-016 and FR-017 and the substitution of FR-013 MUST reach Studio through the
+  existing instance diagnostics; no new Studio surface is added for them.
+
+**`undefined` written to a variable (Q7)**
+- **FR-030**: A script that assigns `undefined` as a variable's whole value (`variables.discount = undefined`,
+  `setVariable('discount', undefined)`) MUST fault the step without undefined-as-null, naming the variable and saying
+  to assign a value or `null`; under undefined-as-null the variable MUST be written as `null`. A member set to
+  `undefined` inside a variable's value (`variables.order.discount = undefined`) follows FR-016 and FR-018 like any
+  other property.
+
+**Computed variable reads (ADR 0089 R3; built by S-4)**
 - **FR-025**: A computed variable name that matches no variable MUST read as `undefined` in JavaScript, never `null`,
-  and MUST record a warning with the read marked absent.
+  and MUST record a warning (`VF-READ-001`) with the read marked absent.
 - **FR-026**: In Liquid, a missing variable MUST read as nil, and the same warning MUST be recorded.
 - **FR-027**: A literal variable name that matches nothing MUST remain a publish diagnostic.
 
@@ -368,21 +414,34 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **Boundary diagnostic**: a warning for a dropped `undefined` property, a `NaN` or `Infinity` made `null`, a
   substituted default, or a computed read that matched nothing.
 
-## Open questions for the approvers
+## Spec decisions
 
-ADR 0045 §2 leaves Q1 to Q4 to this spec; Q5 came from the code survey. Each has a proposal and @j03y-nxxbz's position.
-All three approvers answer them on the PR, and the PR's reconciliation table records the answers. @sfmskywalker's
-answers were given on his behalf (delegated) on 5 Nov
-([comment](https://github.com/elsa-workflows/elsa-foundation/pull/3726#issuecomment-6646543334)), following his
-review of #3388; @j03y-nxxbz accepts them and the text applies them. @FransVanEk has not answered on this PR yet.
+These are about how this spec builds the settled decisions above. ADR 0045 §2 left Q1 to Q4 to this spec; Q5 came
+from the code survey; Q6 and Q7 came from the recheck against the merged specs. The requirements follow the answers.
 
-| # | Question | Proposal (as applied) | @j03y-nxxbz | @sfmskywalker |
-|---|---|---|---|---|
-| Q1 | Where is default-on-null set: workflow, per input, or both? | Workflow only, until a case needs per input (simplest default, advanced later). | Agrees | Agrees: workflow-level |
-| Q2 | Which default does it use: declared or type default? | Type default, independently of declared defaults: it is what Elsa 3 did, and a declared default is about omission, not about a null value. A nullable target keeps explicit `null`; no usable type default means refusal; requiredness precedes defaults. | Agrees | Agrees, with those three conditions (applied in FR-013, FR-014) |
-| Q3 | A script whose result is consumed produces nothing: what happens? | Distinguish the forms. An expression script or a Script activity's completion value needs no `return`; only a function-body script with a consumed result and no `return` is refused at publication. The undefined policy applies to the value each form actually produces: a fault without undefined-as-null, `null` under it. An unconsumed result may produce nothing. | Accepts @sfmskywalker's answer (replaces "refuse any bound script without `return`") | Proposed the form distinction |
-| Q4 | Is the converter option on by default? | On, for workflows the converter produces only. Native Elsa 4 workflows always start with both policies off; the policies travel with the workflow and are pinned in its executable. | Agrees, with that scope | Agrees |
-| Q5 | A `null` for an input that cannot hold null and has no type default (non-nullable `String`): what happens? | Refuse (`VF-ACT-004`) with guidance under any policy; declare the input nullable where an Elsa 4 activity handles `null`; an omitted optional input without a usable type default needs a declared default (FR-006); audit the built-in activities. Rejected: substituting `""` (changes what Elsa 3 did) and passing `null` through (breaks the contract). | Agrees | Agrees |
+- **Q1 — Where is default-on-null set?** **Accepted: workflow only**, until a case needs per input.
+- **Q2 — Which default does it use?** **Accepted: the type default**, independently of declared defaults: it is what
+  Elsa 3 did, and a declared default is about omission, not about a null value. A nullable target keeps explicit
+  `null`; no usable type default means refusal; requiredness precedes defaults (FR-013, FR-014).
+- **Q3 — A script whose result is consumed produces nothing.** **Accepted: distinguish the forms.** An expression
+  script or a statement-body binding's completion value needs no `return`; only a function-body script (`Run JavaScript`) with a consumed
+  result and no `return` is refused at publication. The undefined policy applies to the value each form actually
+  produces: a fault without undefined-as-null, `null` under it. An unconsumed result may produce nothing (FR-020).
+  Rejected: refusing any bound script without `return`.
+- **Q4 — Is the converter option on by default?** **Accepted: on, for workflows the converter produces only.** Native
+  Elsa 4 workflows always start with both policies off; the policies travel with the workflow and are pinned in its
+  executable (FR-022).
+- **Q5 — A `null` for an input that cannot hold null and has no type default (non-nullable `String`).**
+  **Accepted: refuse** (`VF-ACT-004`) with guidance under any policy; declare the input nullable where an Elsa 4
+  activity handles `null`; audit the built-in activities (FR-029). Rejected: substituting `""` (changes what Elsa 3
+  did) and passing `null` through (breaks the contract).
+- **Q6 — How does Studio show the policies and a workflow input's nullability?** *Recommended:* two switches in the
+  workflow properties beside persistence and incident handling, and an *Allow null* column on workflow inputs
+  (FR-031 to FR-033). The policies are workflow-level value semantics that D-11 says must be visible, not per-node
+  runtime knobs. Alternative: show the policies read-only and change them only through the API or the converter.
+- **Q7 — A script assigns `undefined` to a whole variable.** *Recommended:* the same rule as a consumed result: a
+  fault naming the variable without undefined-as-null, `null` under it (FR-030). Rejected: writing nothing (the
+  assignment silently keeps the old value) and always writing `null` (hides the bug in native workflows).
 
 ## Success Criteria *(mandatory)*
 
@@ -395,7 +454,8 @@ review of #3388; @j03y-nxxbz accepts them and the text applies them. @FransVanEk
   null `SetVariable` / `SetOutput` refusal from spec 267 with a nullable target is gone.
 - **SC-004**: A native workflow and a converted workflow with the same policies give the same outputs for the same
   inputs, in a test that covers every acceptance scenario of US3 and US4.
-- **SC-005**: No `undefined` property, `NaN` or `Infinity` is changed at the boundary without a recorded diagnostic.
+- **SC-005**: No `undefined` property, array element, `NaN` or `Infinity` is changed at the boundary without a
+  recorded diagnostic, except an `undefined` kept as `null` under the recorded undefined-as-null policy.
 - **SC-006**: Explicit null and absent round-trip through every store a declared member is persisted in, in tests for
   each provider.
 
@@ -405,6 +465,5 @@ review of #3388; @j03y-nxxbz accepts them and the text applies them. @FransVanEk
   research in the plan finds otherwise.
 - `ValueEnvelope` already distinguishes absent and explicit null (ADR 0091 decision 8); the plan verifies every store
   keeps the distinction.
-- Elsa 4 has no released executables, so changing the executable shape for the policies needs no migration path
-  (as ADR 0083's amendment states for profiles).
-- S-4 keeps FR-025 to FR-027 when it replaces `getVariable` with run-time reads by name.
+- Compatibility is owed only from Elsa 4's first stable release. Changing the executable shape for the policies needs
+  no migration path or run-time shim; stored fixtures whose hashes change are regenerated in place.
