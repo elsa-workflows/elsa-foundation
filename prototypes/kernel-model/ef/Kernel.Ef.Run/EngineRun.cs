@@ -12,7 +12,7 @@ using Npgsql;
 
 /// <summary>
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
-///   x stress|cost|probe|block|definite|deadlock|fence|lockorder|nodelease|setcost|setidle postgres|sqlserver|mysql|sqlite "connection" [key=value ...]   (setcost, setidle: SetCost.cs)
+///   x stress|cost|probe|block|definite|deadlock|fence|lockorder|nodelease|locktimeout|setcost|setidle postgres|sqlserver|mysql|sqlite "connection" [key=value ...]   (setcost, setidle: SetCost.cs)
 /// Options: fence=checked|batch (default: the engine's, batch on every engine since 16 November for the owned commit; checked is SQL Server's 13 November fallback and its default with commit=ef, E9)  commit=ef|owned (default: the engine's; COMMIT-SQL.md)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  fencecount=0 (the owned fence ignores its matched count)  unordered=1 (lockorder: the k fence rows locked in the batch's order, the negative)  case=heartbeat|mutual|heartbeats mutation=subquery|rr|membership expect=none|deadlock (nodelease: NL-9, NodeLeaseRun.cs)  stalelease=1 (the Worker commits past its local lease deadline: stale owners reach the fence; a pin's harness)  seconds=40  messages=5000  partitions=2  nodes=3
 ///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc takerr=1 (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
@@ -46,6 +46,7 @@ static class EngineRun
                 }
             options["nodelease"] = "1";
         }
+        if (args[0] == "locktimeout") (options["nodelease"], options["pool"]) = ("1", "1");     // one pooled session: LockTimeout.cs
         var target = new Target(args[1], args[2], options);
         return args[0] switch
         {
@@ -58,6 +59,7 @@ static class EngineRun
             "fence" => await Fence(target),
             "lockorder" => await LockOrder(target),
             "nodelease" => await NodeLeaseRun.RunAsync(target),
+            "locktimeout" => await LockTimeout.RunAsync(target),
             "setcost" => await SetCost.RunAsync(target),
             "setidle" => await SetCost.IdleAsync(target),
             _ => 2,
@@ -749,8 +751,8 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     private string Worker => engine switch
     {
         "postgres" => (Proxy?.Rewrite(connection) ?? connection) + ";Application Name=kernel-worker;Maximum Pool Size=40",
-        "sqlserver" => (Proxy?.Rewrite(connection) ?? connection) + ";Application Name=kernel-worker;Max Pool Size=40",
-        "mysql" => (Proxy?.Rewrite(connection) ?? connection) + ";uid=kernel_worker;pwd=kernel;maximumpoolsize=40",
+        "sqlserver" => (Proxy?.Rewrite(connection) ?? connection) + ";Application Name=kernel-worker;Max Pool Size=" + Get("pool", "40"),
+        "mysql" => (Proxy?.Rewrite(connection) ?? connection) + ";uid=kernel_worker;pwd=kernel;maximumpoolsize=" + Get("pool", "40"),
         _ => connection + (options.TryGetValue("timeout", out var timeout) ? ";Default Timeout=" + timeout : ""),
     };
 
@@ -839,7 +841,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
         };
     }
 
-    private static async Task<string> Text(KernelDb db, string sql)
+    public static async Task<string> Text(KernelDb db, string sql)
     {
         var connection = db.Database.GetDbConnection();
         if (connection.State != System.Data.ConnectionState.Open) await db.Database.OpenConnectionAsync();

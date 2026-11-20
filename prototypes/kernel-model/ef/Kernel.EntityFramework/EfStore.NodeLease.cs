@@ -28,7 +28,8 @@ public sealed partial class EfStore
     /// engine's lock timeout (whole milliseconds; MySQL's in whole seconds, at least one) and the command timeout (whole
     /// seconds, at least one), which is also how long SQLite's provider retries a busy database. A timeout fails the
     /// statement; disposing the transaction rolls the take back, and the caller takes again at its next round. SQL Server's
-    /// and MySQL's settings persist on the session, so a pooled connection keeps them after the take (coordinator decision).
+    /// pool resets the session's LOCK_TIMEOUT when the connection is next taken; MySQL's session keeps its setting, so the
+    /// take puts it back (<see cref="LockTimeoutReset"/>). Both read back by <c>x locktimeout</c> (slice 6a).
     /// </summary>
     private async Task<IDbContextTransaction> BeginNodeTakeAsync(KernelDb db, TimeSpan lease, CancellationToken cancellationToken)
     {
@@ -44,6 +45,22 @@ public sealed partial class EfStore
         };
         if (bound is not null) await db.Database.ExecuteSqlRawAsync(bound, cancellationToken);
         return transaction;
+    }
+
+    /// <summary>
+    /// #4880 section 3, item 4: on MySQL the take's lock timeout stayed on the pooled session after the take (read back 9
+    /// for a 9 s lease, against the default 50). The take sets it back to the default as its last step, before its
+    /// transaction ends whether it committed or not; a reset that fails is on a broken session, which leaves the pool.
+    /// </summary>
+    private IAsyncDisposable? LockTimeoutReset(KernelDb db) => NodeLease && Engine is MySqlEngine ? new Reset(db) : null;
+
+    private sealed class Reset(KernelDb db) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            try { await db.Database.ExecuteSqlRawAsync("SET SESSION innodb_lock_wait_timeout = DEFAULT"); }
+            catch (Exception) { }
+        }
     }
 
     /// <summary>
@@ -156,6 +173,7 @@ public sealed partial class EfStore
     {
         await using var db = create();
         await using var transaction = await (NodeLease ? BeginNodeTakeAsync(db, lease, cancellationToken) : Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        await using var reset = LockTimeoutReset(db);       // disposed before the transaction, on its open connection
         if (NodeLease) await ReadAndRenewAsync(db, null, node, lease, cancellationToken);
         var update = $"""UPDATE "Partitions" SET "Epoch" = "Epoch" + 1{(NodeLease ? "" : $", \"LeaseUntil\" = {Now} + {"{3}"}")}""";
         const string mine = """ "Id" = {0} AND "Owner" = {1} AND "Epoch" = {2}""";

@@ -109,7 +109,7 @@ public sealed class Watchdog
 /// <summary>
 /// A store whose owner-path calls the <see cref="Watchdog"/> watches: commits, takes and retakes, polls, loads and both
 /// heartbeats. Every member of <see cref="IKernelStore"/> is its own, so no default of the interface stands in for the
-/// inner store's (a check in <c>--lease-check</c> holds it to that).
+/// inner store's (a reflection check in the runtime conformance's <c>WatchdogChecks</c>, run by <c>semantic</c>, holds it to that).
 /// </summary>
 public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKernelStore
 {
