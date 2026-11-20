@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using Elsa.Expressions.JavaScript.Core.Services;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Elsa.Expressions.JavaScript.Jint.Services;
 using Jint;
