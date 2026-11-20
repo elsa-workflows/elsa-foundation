@@ -698,11 +698,37 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// <summary>The names the script assigns anywhere after declaring them (an assignment, an update, a for-in/of head).</summary>
         private readonly HashSet<string> _reassigned = new(StringComparer.Ordinal);
 
-        public void CollectReassignedNames(Node node)
+        public void CollectReassignedNames(Node root)
         {
-            _reassigned.UnionWith(WrittenNames(node));
-            foreach (var child in node.ChildNodes)
-                CollectReassignedNames(child);
+            var declared = new HashSet<string>(StringComparer.Ordinal);
+            Collect(root);
+
+            void Collect(Node node)
+            {
+                _reassigned.UnionWith(WrittenNames(node));
+                switch (node)
+                {
+                    // A declaring loop head assigns on every iteration.
+                    case ForInStatement { Left: VariableDeclaration loopHead }:
+                        foreach (var head in loopHead.Declarations)
+                            CollectBindings(head.Id, _reassigned);
+                        break;
+                    case ForOfStatement { Left: VariableDeclaration loopHead }:
+                        foreach (var head in loopHead.Declarations)
+                            CollectBindings(head.Id, _reassigned);
+                        break;
+                    // A name declared twice (var d = new Date(); ... var d = 'x') is assigned again by the second declaration.
+                    case VariableDeclarator declarator:
+                        var names = new HashSet<string>(StringComparer.Ordinal);
+                        CollectBindings(declarator.Id, names);
+                        foreach (var name in names.Where(name => !declared.Add(name)))
+                            _reassigned.Add(name);
+                        break;
+                }
+
+                foreach (var child in node.ChildNodes)
+                    Collect(child);
+            }
         }
 
         /// <summary>The innermost visible scope that declares <paramref name="name"/>, or null for a global.</summary>
@@ -990,6 +1016,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                         CollectBindings(parameter, names);
                     CollectVarDeclarations(function.Body, names);
                     break;
+                // A class static block is its own var scope.
+                case StaticBlock staticBlock:
+                    CollectVarDeclarations(staticBlock, names);
+                    CollectLexicalDeclarations(staticBlock.Body, names);
+                    break;
                 case BlockStatement block:
                     CollectLexicalDeclarations(block.Body, names);
                     break;
@@ -1023,7 +1054,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         {
             foreach (var child in node.ChildNodes)
             {
-                if (child is IFunction)
+                if (child is IFunction or StaticBlock)
                     continue;
                 if (child is VariableDeclaration { Kind: VariableDeclarationKind.Var } declaration)
                 {
