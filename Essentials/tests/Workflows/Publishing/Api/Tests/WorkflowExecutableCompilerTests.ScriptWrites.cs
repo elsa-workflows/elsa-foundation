@@ -45,6 +45,17 @@ public sealed partial class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task An_engine_script_activitys_body_decides_its_may_write_set_over_its_type_marker()
+    {
+        // The probe is an engine script activity, pinned as accessing any visible variable by name (the runtime lets its
+        // computed names resolve, and C9 refuses it in the background); a body with only literal writes still pins only those.
+        var executable = await CompileBodyAsync("variables.greeting = 'hi'; return 1;");
+
+        Assert.True(executable.RootActivity.ActivityContract!.AccessesUndeclaredVariables);
+        Assert.False(executable.RootActivity.Metadata.ContainsKey(RuntimeMetadataKeys.MayWriteEveryVisibleVariable));
+    }
+
+    [Fact]
     public async Task A_body_that_only_reads_pins_no_write()
     {
         var executable = await CompileBodyAsync("return variables.greeting + '!';");

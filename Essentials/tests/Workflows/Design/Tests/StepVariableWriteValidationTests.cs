@@ -223,7 +223,10 @@ public sealed class StepVariableWriteValidationTests
             ])
             .Add(ScriptVersion, designFacets:
             [
-                new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new { ports = Array.Empty<object>(), scriptInput = "script" }))
+                // An engine script activity carries the type-level marker too, as Run JavaScript does; its body decides.
+                new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new { ports = Array.Empty<object>(), scriptInput = "script" })),
+                new ActivityDesignFacet(VariableAccessDesignFacet.Kind, VariableAccessDesignFacet.SchemaVersion,
+                    JsonSerializer.SerializeToElement(new Dictionary<string, bool> { [VariableAccessDesignFacet.AccessesUndeclaredVariablesMember] = true }))
             ]);
         using var services = ActivityDataSelectionTestSupport.Provider(catalog,
             configure: collection => new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(collection));

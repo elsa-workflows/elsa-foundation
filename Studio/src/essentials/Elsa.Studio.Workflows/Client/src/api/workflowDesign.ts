@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
-import { scopedVariableSignature } from "../scopedVariables";
+import { scopedVariableSignature, selectedNodeSignature } from "../scopedVariables";
 import { normalizeActivityPresentation } from "../activityPresentation";
 import type { ActivityCatalogLookup } from "../workflowAdapter";
 import type {
@@ -11,6 +11,8 @@ import type {
   DefinitionListState,
   PromoteDraftResponse,
   ScopedVariableAnalysisResponse,
+  ScriptBodyWriteSet,
+  ScriptBodyWriteTarget,
   WorkflowDefinitionDetails,
   WorkflowDefinitionState,
   WorkflowDefinitionsResponse,
@@ -488,8 +490,22 @@ export async function analyzeScopedVariables(
     { signal });
   return {
     visibleVariables: Array.isArray(response?.visibleVariables) ? response.visibleVariables : [],
-    shadowingWarnings: Array.isArray(response?.shadowingWarnings) ? response.shadowingWarnings : []
+    shadowingWarnings: Array.isArray(response?.shadowingWarnings) ? response.shadowingWarnings : [],
+    scriptWrites: readScriptWrites(response?.scriptWrites)
   };
+}
+
+// A script body's may-write set (spec 1231 FR-036), or null when the server sent none or an unreadable one.
+function readScriptWrites(value: unknown): ScriptBodyWriteSet | null {
+  if (!value || typeof value !== "object") return null;
+  const { variables, mayWriteEveryVisibleVariable } = value as { variables?: unknown; mayWriteEveryVisibleVariable?: unknown };
+  if (!Array.isArray(variables) || typeof mayWriteEveryVisibleVariable !== "boolean") return null;
+  const targets = variables.filter((item): item is ScriptBodyWriteTarget =>
+    !!item && typeof item === "object" &&
+    typeof (item as ScriptBodyWriteTarget).name === "string" &&
+    typeof (item as ScriptBodyWriteTarget).scopeId === "string" &&
+    typeof (item as ScriptBodyWriteTarget).referenceKey === "string");
+  return { variables: targets, mayWriteEveryVisibleVariable };
 }
 
 export async function getActivityInputOptions(
@@ -525,7 +541,7 @@ export interface ScopedVariableAnalysis extends ScopedVariableAnalysisResponse {
 }
 
 const emptyAnalysis = (status: ScopedVariableAnalysisStatus): ScopedVariableAnalysis =>
-  ({ visibleVariables: [], shadowingWarnings: [], status });
+  ({ visibleVariables: [], shadowingWarnings: [], scriptWrites: null, status });
 
 export function useScopedVariableAnalysis(
   context: StudioEndpointContext,
@@ -534,8 +550,13 @@ export function useScopedVariableAnalysis(
   catalog?: ActivityCatalogLookup
 ): ScopedVariableAnalysis {
   const signature = useMemo(() => scopedVariableSignature(state, catalog), [catalog, state]);
+  // A script activity's may-write set follows its own script (spec 1231 FR-036), so the selected node's own state is
+  // part of what refetches the analysis.
+  const nodeSignature = useMemo(() => selectedNodeSignature(state, nodeId, catalog), [catalog, nodeId, state]);
   const [result, setResult] = useState<ScopedVariableAnalysis>(() => emptyAnalysis("loading"));
   const [retryVersion, setRetryVersion] = useState(0);
+  // The node whose script writes the result holds: while another node's analysis loads, its writes are not shown.
+  const analyzedNode = useRef<string | null>(null);
   const retry = useCallback(() => {
     clearApiCapabilityCache();
     setRetryVersion(version => version + 1);
@@ -544,7 +565,11 @@ export function useScopedVariableAnalysis(
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
-    setResult(previous => ({ ...previous, status: "loading" }));
+    setResult(previous => ({
+      ...previous,
+      status: "loading",
+      scriptWrites: analyzedNode.current === nodeId ? previous.scriptWrites : null
+    }));
 
     if (!state) {
       // Capability discovery still runs so the shell performs one predictable bootstrap.
@@ -562,7 +587,7 @@ export function useScopedVariableAnalysis(
     }
 
     analyzeScopedVariables(context, state, nodeId, controller.signal).then(
-      data => { if (active) setResult({ ...data, status: "ready" }); },
+      data => { if (active) { analyzedNode.current = nodeId; setResult({ ...data, status: "ready" }); } },
       error => { if (active) setResult(previous => ({
         ...previous,
         status: error instanceof ApiCapabilityUnavailableError ? "unavailable" : "error"
@@ -571,7 +596,7 @@ export function useScopedVariableAnalysis(
     return () => { active = false; controller.abort(); };
     // `signature` captures visibility-affecting state; full state would refetch on unrelated edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context, nodeId, retryVersion, signature]);
+  }, [context, nodeId, retryVersion, signature, nodeSignature]);
 
   return { ...result, retry };
 }

@@ -206,8 +206,9 @@ public sealed partial class WorkflowExecutableCompilerTests
             };
     }
 
+    // An engine script activity, as Run JavaScript is: its type carries the free-name marker (spec 1231).
     [ActivityScriptOutcomes("script")]
-    private sealed class ScriptProbe : Activity
+    private sealed class ScriptProbe : Activity, Elsa.Activities.Runtime.Core.Contracts.IStepVariableSessionConsumer
     {
         [ActivityInput(Key = "script")]
         public string? Script { get; set; }

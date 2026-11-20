@@ -31,6 +31,11 @@ internal sealed class DataSelectionAnalyzerCompositionCheck(DataSelectionComposi
             descriptor.ServiceType == typeof(IScriptVariableRenamePlanner) && !descriptor.IsKeyedService).ToArray();
         if (renamePlanners.Length != 1 || renamePlanners[0].Lifetime != ServiceLifetime.Scoped)
             throw new InvalidOperationException("Exactly one scoped IScriptVariableRenamePlanner must be composed.");
+        // The script body write analyzer (spec 1231 FR-036) is a replacement contract consumed by the Design API: exactly one scoped.
+        var writeAnalyzers = composition.Services.Where(descriptor =>
+            descriptor.ServiceType == typeof(IScriptBodyWriteAnalyzer) && !descriptor.IsKeyedService).ToArray();
+        if (writeAnalyzers.Length != 1 || writeAnalyzers[0].Lifetime != ServiceLifetime.Scoped)
+            throw new InvalidOperationException("Exactly one scoped IScriptBodyWriteAnalyzer must be composed.");
         // The read resolver refuses two analyzers of different types for one language; resolving it here makes that a
         // start-up failure rather than a failure of the first publish.
         using (var scope = services.CreateScope())

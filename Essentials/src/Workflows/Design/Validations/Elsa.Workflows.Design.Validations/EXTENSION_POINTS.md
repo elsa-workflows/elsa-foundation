@@ -2,7 +2,7 @@
 
 The per-domain catalog (framework §2.22.1) of everything you can implement or override in the draft-validation sub-domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Validations` — the composition root where `WorkflowDesignValidationsFeature` wires the aggregating handler `ExecuteValidations` and its baseline validators. Three sections:
 
-- **Overridable contracts**: `ICredentialLiteralValidator`, the scoped `IActivityDataSelectionAnalyzer` authority and the `IUnorderedVariableWriteAnalyzer` (spec 266).
+- **Overridable contracts**: `ICredentialLiteralValidator`, the scoped `IActivityDataSelectionAnalyzer` authority, the `IUnorderedVariableWriteAnalyzer` (spec 266), the `IScriptVariableRenamePlanner` (spec 1222) and the `IScriptBodyWriteAnalyzer` (spec 1231).
 - **Implementable contributor interfaces** — draft validators, provider-owned analysis projections and input-source restrictions.
 - **Events** — validation, input-constraint collection and outcome notification.
 
@@ -50,6 +50,17 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
   each resolvable literal read on a renamed variable and the references it cannot safely update (spec 1222 FR-021,
   FR-022). It never changes the draft or a published version.
 - **Consumer:** the Design API endpoint `POST design/workflows/scoped-variables/rename-plan`.
+
+### `IScriptBodyWriteAnalyzer` *(Core — `Elsa.Workflows.Design.Core`)*
+
+- **Kind:** replacement contract, exactly one per host. `ScriptBodyWriteAnalyzer` is the default, registered with
+  `TryAddScoped` by this feature, so a host's own scoped registration made earlier replaces it; a second registration
+  fails the shell at start (`DataSelectionAnalyzerCompositionCheck`), so none wins silently.
+- **Contract:** `AnalyzeAsync(state, nodeId, scriptInputKeyOf)` returns the variables a script activity's literal body
+  may write, resolved as publication pins them, or that it may write every visible variable (a computed or opaque
+  write); null for a node without a literal script body (spec 1231 FR-019, FR-020a, FR-036).
+- **Consumer:** the Design API endpoint `POST design/workflows/scoped-variables/analyze`, which returns it as
+  `scriptWrites` for the selected node; Studio shows it as the node's may-write set.
 
 
 ## Implementable contributor interfaces

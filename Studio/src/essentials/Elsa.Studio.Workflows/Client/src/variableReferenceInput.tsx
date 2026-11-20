@@ -6,7 +6,7 @@ import { optionKey, selectedOptionKey, VariableTargetSelect } from "./variableTa
 import { indexVariableDeclarations, variableOptionKey } from "./variableReferenceContribution";
 import { readArgumentType } from "./workflowProperties";
 import { formatArgumentType, useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
-import type { ActivityNode, ArgumentType, VariableReference, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
+import type { ActivityNode, ArgumentType, ScriptBodyWriteSet, VariableReference, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 
 /**
  * Variable-reference inputs (spec 1231 FR-022, FR-036): an activity input of CLR type `VariableReference<T>` or
@@ -222,20 +222,50 @@ export function VariableReferenceInputRow({
   );
 }
 
-/** The node's may-write set, or the marker for an activity that may write any visible variable. */
+/**
+ * The names of the variables a script body may write, as the server resolved them (spec 1231 FR-036); two of one name
+ * in different scopes are told apart by scope.
+ */
+export function readScriptWriteNames(scriptWrites: ScriptBodyWriteSet): string[] {
+  const entries = scriptWrites.variables.map(target => ({
+    name: target.name,
+    scope: !target.scopeId || target.scopeId === "workflow" ? "workflow" : "container"
+  }));
+  return entries.map(entry => {
+    const shared = entries.filter(other => other.name === entry.name).length > 1;
+    return `${entry.name}${shared ? ` · ${entry.scope}` : ""}`;
+  });
+}
+
+/**
+ * The node's may-write set, or the marker for an activity that may write any visible variable. For a script activity
+ * the server's analysis of its body (`scriptWrites`) decides: the variables it writes or lets escape, or any visible
+ * variable when it writes by a computed name. The type-level marker it also carries says only that it may.
+ */
 export function VariableWritesSummary({
   activity,
   descriptor,
   visibleVariables,
   scopeReady = true,
-  workflowState
+  workflowState,
+  scriptWrites
 }: {
   activity: ActivityNode;
   descriptor: StudioActivityDescriptor;
   visibleVariables: VisibleVariableView[];
   scopeReady?: boolean;
   workflowState?: WorkflowDefinitionState;
+  scriptWrites?: ScriptBodyWriteSet | null;
 }) {
+  if (scriptWrites) {
+    if (scriptWrites.mayWriteEveryVisibleVariable) {
+      return <p className="wf-variable-writes" role="note">May write any visible variable (its script writes by a computed name)</p>;
+    }
+    const scriptNames = readScriptWriteNames(scriptWrites);
+    return scriptNames.length === 0
+      ? null
+      : <p className="wf-variable-writes" role="note">May write: {scriptNames.join(", ")}</p>;
+  }
   if (descriptor.accessesUndeclaredVariables === true) {
     return <p className="wf-variable-writes" role="note">May write any visible variable</p>;
   }

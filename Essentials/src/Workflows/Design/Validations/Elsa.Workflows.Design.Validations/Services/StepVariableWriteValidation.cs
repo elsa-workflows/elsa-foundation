@@ -107,13 +107,15 @@ internal static class StepVariableWriteValidation
             }
 
             if (scriptReads is not null && ScriptInputKey(version) is { } scriptInput &&
-                LiteralScript(node, scriptInput) is { Length: > 0 } script)
+                ScriptBodyWriteAnalyzer.LiteralScript(node, scriptInput) is { Length: > 0 } script)
             {
                 visibility ??= new ScopedVariableResolver(structures)
                     .Resolve(workflowVariables, root, ScopedVariablePicker.DefaultMaxDepth, includeIterationScopes: true);
                 if (scriptReads.Resolve("JavaScript", script, visibility.GetVisibleScopes(node.NodeId), scriptBody: true) is { } plan)
                 {
-                    everyVisible |= plan.HasComputedWrite;
+                    // An engine script activity carries the type-level marker (it can reach any visible variable by name);
+                    // its analyzed body says which it may write: every visible variable only for a computed or opaque write.
+                    everyVisible = plan.HasComputedWrite;
                     foreach (var write in plan.MayWrite())
                     {
                         var scopeId = UnorderedVariableWriteAnalyzer.NormalizeScopeId(write.ScopeId);
@@ -142,20 +144,6 @@ internal static class StepVariableWriteValidation
                scriptInput.GetString() is { Length: > 0 } key
             ? key
             : null;
-    }
-
-    // The script body when it is authored as a literal; a script from an expression has no body to analyze.
-    private static string? LiteralScript(ActivityNode node, string scriptInput)
-    {
-        var value = node.Inputs?.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, scriptInput))?.Value;
-        if (value is null || value.ExpressionType is { } type && !string.Equals(type, "Literal", StringComparison.OrdinalIgnoreCase))
-            return null;
-        return value.Value switch
-        {
-            string text => text,
-            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
-            _ => null
-        };
     }
 
     // FR-029: a step that writes a variable in its session and also captures an output into it. Both commit; the capture

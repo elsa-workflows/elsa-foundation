@@ -28,7 +28,7 @@ public sealed class AuthoringEndpointContractTests
     public void Scoped_variable_analysis_request_and_response_match_the_management_contract()
     {
         AssertProperties(typeof(AnalyzeScopedVariablesRequest), "State", "NodeId");
-        AssertProperties(typeof(ScopedVariableAnalysisResponse), "VisibleVariables", "ShadowingWarnings");
+        AssertProperties(typeof(ScopedVariableAnalysisResponse), "VisibleVariables", "ShadowingWarnings", "ScriptWrites");
     }
 
     [Fact]

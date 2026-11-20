@@ -203,6 +203,40 @@ run inline. Input bindings, structural evaluations and background workers have n
   of every visible variable, and a step write that overlaps the node's own capture is warned about
   (`ValueFlow/StepWriteOverlapsCapture`).
 
+### Script writes
+
+A `RunJavaScript` body reads and writes variables through `variables` and `getVariable`/`setVariable`, over the same
+session ([spec 1231](../specs/1231-step-variable-writes/spec.md) User Story 1, ADR 0090 decision 3).
+
+| Form | What it is |
+|---|---|
+| `variables.total = v`, `variables['total'] = v`, `setVariable('total', v)` | A whole assignment of `total`. |
+| `variables.total += v`, `variables.count++` | A read and a whole assignment. |
+| `variables.order.status = 'Paid'`, `getVariable('order').lines.push(l)` | A member change of `order`: written as the stored value with that change, so the members the script did not touch keep their stored text (ADR 0090 C3). A change made without assigning the variable is still written, with the warning `VF-WRITE-001` (C2). |
+| `variables[k] = v`, `setVariable(k, v)`, or `variables`, `getVariable`, `setVariable` used as a value (`const v = variables; v.total = 1`) | A computed or opaque write: the name resolves when the script runs, nearest scope first. |
+| `setTotal(v)` | Not provided: there are no generated setters. |
+
+To change a copy only, copy the value explicitly: `const draft = { ...variables.order }` (a shallow copy; nested objects
+are still the variable's).
+
+- **Publish.** Every name a script writes literally must resolve to a declared, durable, writable variable visible
+  from the node. A refusal names the script position and the target: an undeclared name (`VF-WRITE-002`), a transient
+  variable (`VF-WRITE-003`), or a loop's item or index, which is read-only (`VF-WRITE-004`). Draft validation reports the
+  same, and warns about a computed or opaque write (`VF-WRITE-005`).
+- **The may-write set.** Publish pins the variables a script may write as `runtime.mayWriteVariables`: each variable it
+  writes literally, and each variable whose value it lets escape (into a local, an argument, a closure, or a method call
+  on it, such as `push`), unless the variable is a scalar a script cannot change in place. A loop's item or index is
+  frozen, so it never counts. A computed or opaque write pins `runtime.mayWriteEveryVisibleVariable` instead. The
+  concurrent-write warning and the overlap warning count these, and Studio shows the set in the node's properties
+  (from the scoped-variable analysis). Run JavaScript, an engine script activity, carries the type-level free-name
+  marker as well (its computed names resolve at run time, and C9 refuses it in the background), but its analyzed body,
+  not the marker, decides its may-write set. A script that is not a literal (bound to an expression) cannot be analyzed,
+  so it counts as writing every visible variable.
+- **Run time.** Writes commit with the step like any session write: nothing on a fault or cancel, read-your-writes
+  inside the script, nothing written for an equal value (C4). A computed write to an undeclared name faults the step
+  before its commit; nothing is created. A write to a transient variable faults the step; a write to a loop's item or
+  index throws where the script makes it.
+
 ## Inspecting the lifecycle
 
 Spec 1229 (S-6) reads the write history back. No projection or history table is added: the read model is derived
@@ -268,8 +302,9 @@ lost updates. Values appear only through their states and the payload read.
   session write to a reusable activity's body variable faults the step.
 - A step session cannot read or write a variable that requires encryption or is stored externally yet; it faults the
   step and names the variable.
-- `RunJavaScript` script writes (`variables.x = v`, `setVariable`) and the Elsa 3 converter's rewrite of `setVariable`
-  and generated setters are not built yet (spec 1231 Phases 5 and 8).
+- A script inside a reusable activity's body cannot write the body's variables yet (closed scopes, above); graph bodies
+  are not checked for step writes at publish yet (#4805), so the Elsa 3 converter refuses a variable write in a
+  reusable workflow's script.
 - A value snapshot is kept for captures of a leaf (on completion and on resume, including background results), for
   step-session writes (on completion and on suspension) and for intrinsic writes to the root and container frames. Captures into closed-scope rows, captures made while a
   composite completes and accepted overrides have their write record, but no value snapshot yet. (Loop iteration

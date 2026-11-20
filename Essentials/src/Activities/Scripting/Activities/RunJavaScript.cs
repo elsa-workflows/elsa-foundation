@@ -15,7 +15,8 @@ namespace Elsa.Activities.Scripting.Activities;
 /// <para>
 /// The script receives <c>args</c>, plain JavaScript values built from JSON; changing them is local to the run
 /// (spec 1228). It reads and writes workflow variables through <c>variables</c> (<c>variables.order</c>,
-/// <c>variables['order']</c>) and <c>getVariable(name)</c>, over the step's variable session (spec 1222 FR-033, ADR 0090):
+/// <c>variables['order']</c>), <c>getVariable(name)</c> and <c>setVariable(name, value)</c>, over the step's variable
+/// session (spec 1222 FR-033, spec 1231, ADR 0090):
 /// a read returns the committed value plus the step's own changes and is recorded; a change it makes, by assigning the
 /// variable or a member of a value it read, is written with the step, and a change made without assigning the
 /// variable is written too, with a warning (ADR 0090 C2). It cannot reach inputs, outputs, services, configuration or the

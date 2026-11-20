@@ -462,6 +462,12 @@ and run the converted scripts.
   production consumer is spec 1231 Phase 5 (`RunJavaScript`, an engine script activity shown as "May write any visible
   variable"); a feature-specific journey lands with it. Until then FR-036's UX acceptance is incomplete, recorded here and
   in the PR.
+- **Phase 5 (second PR).** A Run JavaScript node shows the may-write set of its own script, from the scoped-variable
+  analysis (`scriptWrites`): "May write: total, order", "May write any visible variable (its script writes by a computed
+  name)", or nothing for a script that writes nothing; the type-level marker shows only for an activity without an analyzed
+  script. Covered in `variableReferenceInputUi.test.tsx` (the four states and two variables of one name). The composed-host
+  journey is still not run: the Workbench host does not enable the scripting feature, so no composed journey reaches a
+  Run JavaScript node; recorded in the PR.
 
 ### Key Entities
 

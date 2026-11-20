@@ -75,6 +75,7 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<IDraftValidator, ScriptOutcomeValidator>();
         services.TryAddScoped<ScriptVariableReadResolver>();
         services.TryAddScoped<IScriptVariableRenamePlanner, ScriptVariableRenamePlanner>();
+        services.TryAddScoped<IScriptBodyWriteAnalyzer, ScriptBodyWriteAnalyzer>();
         services.AddScoped<IDraftValidator, ScriptVariableReadValidator>();
         services.AddScoped<IDraftValidator, UnhandledActivityStructureValidator>();
         services.AddScoped<IDraftValidator, StartActivityValidator>();

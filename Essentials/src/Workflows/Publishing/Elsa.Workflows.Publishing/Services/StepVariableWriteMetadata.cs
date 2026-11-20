@@ -50,7 +50,9 @@ internal static class StepVariableWriteMetadata
 
         if (targets.Count > 0)
             metadata[RuntimeMetadataKeys.MayWriteVariables] = JsonSerializer.Serialize(targets, SerializerOptions);
-        if (contract?.AccessesUndeclaredVariables == true || scriptBody?.HasComputedWrite == true)
+        // An engine script activity carries the type-level marker; its analyzed body says whether it may write every
+        // visible variable (a computed or opaque write) or only its may-write set.
+        if (scriptBody is not null ? scriptBody.HasComputedWrite : contract?.AccessesUndeclaredVariables == true)
             metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable] = "true";
         return metadata;
     }

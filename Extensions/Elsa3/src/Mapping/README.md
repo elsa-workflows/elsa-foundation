@@ -235,6 +235,8 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 | A statement-form expression | A function that returns its last expression |
 | A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return`. A body whose last line is a `//` comment ends with a newline, so the comment cannot break Elsa 4's script wrapper (#3171) |
 | An expression whose value is `undefined` (a missing property, a function that returns nothing) | `null`, as in Elsa 3: every value that leaves a bound expression ends in `?? null`, which leaves `0`, `""` and `false` alone. A RunJavaScript body needs nothing, because Elsa 4 already turns its `undefined` into `null` |
+| `setVariable('x', v)`, a generated `setX(v)` in a RunJavaScript body of a regular workflow | `variables.x = v` (`variables["x"] = v` when the name is not an identifier), a whole assignment written with the step (spec 1231 FR-032, Q6). Where the call's value could be read (the script's last statement, or inside an expression) it becomes `void (variables.x = v)`, since Elsa 3's setters returned nothing |
+| `getVariable('x').m = v`, `getX().m++`, `variables.x.m = v` in a RunJavaScript body of a regular workflow | The same member change through `variables.x`: written as the stored value with that change (ADR 0090 C2, C3) |
 | `setOutcome(…)`, `setOutcomes(…)` in a RunJavaScript body | The body returns `complete(<value>, <pending selection>)` (spec 1208). Each call replaces the pending selection, and a body that sets nothing completes with `Done`. Literal names join the possible outcomes. A computed name, when the activity lists possible outcomes, selects any name outside them as a converter-declared outcome "Unlisted outcome" with no connection, so that path ends as in Elsa 3 (info `ELS3-SCRIPT-OUTCOME-CATCHALL`) |
 
 ### What is refused, and what to change in Elsa 3
@@ -250,7 +252,11 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 | `parseGuid(s)` | `VF-IMP-005` | Keep the GUID as a string |
 | Byte, stream and Base64 helpers | `VF-IMP-005` | Move the conversion into an activity |
 | `getConfig(…)`, definition and instance-name readers, `getLastResult()` | `VF-IMP-005` | Pass the value in as a workflow input, or capture the producing output into a variable |
-| `setVariable`, `set{Name}(…)`, mutating a value read from the workflow | `VF-IMP-005` | Use a Set Variable activity |
+| `setVariable`, `set{Name}(…)`, mutating a value read from the workflow, in an input expression | `VF-IMP-005` | Move the assignment into a Set Variable activity, or into a RunJavaScript, whose script can set variables. Elsa 4 input expressions only read |
+| The same in a RunJavaScript body of a reusable workflow | `VF-IMP-005` | Return the value from the script and capture the result. A step cannot write a reusable workflow's variables yet (#4805) |
+| `setVariable(name, v)` with a computed name in a RunJavaScript body | `ELS3-SETTER-COMPUTED-NAME` | Name the variable with a string literal |
+| `setVariable('x', v)` for a variable the workflow does not declare (Elsa 3 created it on its first write) | `ELS3-SETTER-UNDECLARED-VARIABLE` | Declare the variable in the Elsa 3 workflow |
+| `setVariable` or a setter for a loop's current value, a whole assignment `variables.x = v` or `getVariable('x')++` in a RunJavaScript body | `VF-IMP-005` | Use `setVariable('x', v)`; copy a loop's current value into another variable and set that |
 | `setCorrelationId`, `setWorkflowInstanceName` | `VF-IMP-005` | Use a Correlate or Set Name activity |
 | `get{Output}From{Activity}()`, `getOutputFrom`, a computed input or output name, a computed variable name in a RunJavaScript body | `VF-IMP-005` / `VF-IMP-006` | Capture the output into a variable and read the variable; name the variable literally in a body |
 | A literal variable read that an enclosing container's or loop's declaration of the same name would capture in Elsa 4, or an outer loop's value read inside a nested loop of the same kind | `VF-IMP-010` | Rename one of the two, or copy the outer value into another variable first |
