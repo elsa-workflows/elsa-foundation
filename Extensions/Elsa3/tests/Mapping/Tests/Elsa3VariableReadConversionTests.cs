@@ -257,6 +257,19 @@ public sealed class Elsa3VariableReadConversionTests
     }
 
     [Fact]
+    public async Task A_workflow_variable_named_like_a_loop_value_is_read_through_the_variables_root()
+    {
+        // Only a loop's own item or index stays args; a workflow variable named index keeps read-your-writes.
+        var index = new Elsa3Variable { Id = "index", Name = "index", TypeName = "Int32" };
+        var script = Activity("node", "Elsa.RunJavaScript", ("script", Literal("getVariable('index') + 1")));
+
+        var result = await ConvertAsync(Sequence("root", script), index);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("return variables.index + 1", Text(Input(Node(result.Value!.State, "node"), "script")));
+    }
+
+    [Fact]
     public async Task A_run_javascript_body_keeps_a_computed_read()
     {
         // FR-027: the body serves a computed read through its session's run-time lookup.

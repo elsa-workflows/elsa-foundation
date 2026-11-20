@@ -1307,7 +1307,9 @@ public sealed class Elsa3ExpressionRewriter
             // body (spec 1231 FR-006), and an Elsa 3 body that changed its item would fault where Elsa 3 ran.
             if (resolution.VariableName is { } variableName &&
                 resolution.Binding is VariableExpressionParameterBinding variable &&
-                !(Mode == Elsa3JavaScriptMode.Script && Elsa3.Mapping.ActivityMap.Rewrites.Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(variable.VariableKey)))
+                !(Mode == Elsa3JavaScriptMode.Script &&
+                  !StringComparer.Ordinal.Equals(variable.DeclaringScopeNodeId, Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId) &&
+                  Elsa3.Mapping.ActivityMap.Rewrites.Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(variable.VariableKey)))
             {
                 if (!EnsureRootFree(ExpressionParameterSurfaces.Variables, node))
                     return;

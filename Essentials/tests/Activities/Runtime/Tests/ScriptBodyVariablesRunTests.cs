@@ -249,7 +249,9 @@ public sealed class ScriptBodyVariablesRunTests
 
         var fault = run.State("node-js").Fault!.Message;
         Assert.DoesNotContain("k10.5", fault);
-        Assert.Contains("withheld", fault);
+        // The host's own refusal passes through: it says what went wrong and names no value.
+        Assert.Contains("not declared in any scope", fault);
+        Assert.Contains("name is withheld", fault);
     }
 
     [Theory]

@@ -190,6 +190,9 @@ internal static class Elsa3ScriptResultKinds
 
     private static Elsa3ScriptResultKind Binary(BinaryExpression binary)
     {
+        // Arithmetic on literals is folded, so its value is classified like a literal (1e8 * 1e8 is past 2^53 - 1).
+        if (TryFold(binary, out var folded))
+            return NumberLiteral(folded);
         switch (binary.Operator)
         {
             case Operator.Equality or Operator.Inequality or Operator.StrictEquality or Operator.StrictInequality
@@ -226,9 +229,38 @@ internal static class Elsa3ScriptResultKinds
     private static bool IsInteger(Elsa3ScriptResultKind kind) =>
         kind is Elsa3ScriptResultKind.Integer or Elsa3ScriptResultKind.ExactIntegerLiteral;
 
-    // A number literal: exact when Elsa 3's double-to-decimal conversion (15 significant digits) and Elsa 4's reading of
-    // the JSON text agree. An integer beyond ±(2^53 − 1) is not held exactly by a double at all (Elsa 3's conversion
-    // into an integral input and Elsa 4's JSON text differ), so it is a plain number.
+    // The value of arithmetic on number literals (+, -, *, /, unary minus), when the source fixes it.
+    private static bool TryFold(Node node, out double value)
+    {
+        switch (node)
+        {
+            case Literal { Kind: TokenKind.NumericLiteral, Value: double number }:
+                value = number;
+                return true;
+            case ParenthesizedExpression parenthesized:
+                return TryFold(parenthesized.Expression, out value);
+            case NonUpdateUnaryExpression { Operator: Operator.UnaryNegation } negation when TryFold(negation.Argument, out var operand):
+                value = -operand;
+                return true;
+            case BinaryExpression { Operator: Operator.Addition or Operator.Subtraction or Operator.Multiplication or Operator.Division } binary
+                when TryFold(binary.Left, out var left) && TryFold(binary.Right, out var right):
+                value = binary.Operator switch
+                {
+                    Operator.Addition => left + right,
+                    Operator.Subtraction => left - right,
+                    Operator.Multiplication => left * right,
+                    _ => left / right
+                };
+                return double.IsFinite(value);
+            default:
+                value = 0;
+                return false;
+        }
+    }
+
+    // A number: exact when Elsa 3's double-to-decimal conversion (15 significant digits) and Elsa 4's reading of the JSON
+    // text agree. An integer beyond ±(2^53 − 1) is refused by Elsa 4's precision policy when written, where Elsa 3 ran
+    // it, so it is a plain number. A computed integer from values the source does not fix is not range-checked.
     private static Elsa3ScriptResultKind NumberLiteral(double number)
     {
         var integer = double.IsInteger(number);
@@ -276,8 +308,8 @@ internal enum Elsa3ScalarTarget
     Integer,
     Number,
     /// <summary>
-    /// A decimal input: only an integer, or a fraction literal of at most 15 significant digits, converts to the value
-    /// Elsa 3 gave.
+    /// A decimal input: only an integer literal, or a fraction literal, of at most 15 significant digits converts to the
+    /// value Elsa 3 gave.
     /// </summary>
     Decimal
 }

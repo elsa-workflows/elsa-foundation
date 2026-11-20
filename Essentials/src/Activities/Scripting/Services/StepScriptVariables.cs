@@ -20,10 +20,14 @@ internal sealed class StepScriptVariables : IScriptVariableSession
     private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null);
     private readonly IStepVariableSession _session;
     private readonly List<string> _missing = [];
+    private readonly bool _protectedInputs;
 
-    public StepScriptVariables(IStepVariableSession session)
+    /// <param name="session">The step's variable session.</param>
+    /// <param name="protectedInputs">Whether an input of the step holds a protected value (a computed name can come from it).</param>
+    public StepScriptVariables(IStepVariableSession session, bool protectedInputs = false)
     {
         _session = session;
+        _protectedInputs = protectedInputs;
         // A body with a computed or opaque read may enumerate `variables`: it sees every visible name. Otherwise only the
         // names it reads literally are own properties; any other name is still looked up when read.
         CandidateNames = session.ReadsComputedNames
@@ -37,6 +41,12 @@ internal sealed class StepScriptVariables : IScriptVariableSession
     public IReadOnlyList<string> MissingNames => _missing;
 
     public bool HasReadProtectedValue => _session.HasReadProtectedValue;
+
+    /// <summary>
+    /// The first read the session refused (a withheld or transient value, a variable it cannot read). Its message is the
+    /// session's and names no value; the step faults with it even when the script caught the error (FR-017a).
+    /// </summary>
+    public string? Refusal { get; private set; }
 
     public bool IsReadOnly(string name) => TryTarget(name, out var target) && _session.IsReadOnly(target);
 
@@ -58,6 +68,7 @@ internal sealed class StepScriptVariables : IScriptVariableSession
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // The session recorded the fault on the host side; the script sees an error it cannot catch away.
+            Refusal ??= exception.Message;
             return ExpressionVariableRead.Refused(exception.Message);
         }
 
@@ -68,8 +79,8 @@ internal sealed class StepScriptVariables : IScriptVariableSession
     {
         ArgumentNullException.ThrowIfNull(name);
         if (!TryTarget(name, out var target))
-            // The name can be computed from a value the script read; when that value is protected, it is not named.
-            throw new InvalidOperationException(_session.HasReadProtectedValue
+            // The name can be computed from a value the script read or an input; when that is protected, it is not named.
+            throw new ScriptVariableWriteRefusedException(_session.HasReadProtectedValue || _protectedInputs
                 ? "The script writes a variable that is not declared in any scope visible to it; a script never creates a variable. " +
                   "The name is withheld because a value it read is protected."
                 : $"The script writes variable '{name}', which is not declared in any scope visible to it; a script never creates a variable.");
@@ -107,3 +118,6 @@ internal sealed class StepScriptVariables : IScriptVariableSession
     // The code of an absent computed read, as recorded for input expressions (VariableComputedRead.MissingNameWarning).
     private const string MissingNameWarning = "VF-READ-001";
 }
+
+/// <summary>A script's write the host refused (an undeclared name); its message names no protected value.</summary>
+internal sealed class ScriptVariableWriteRefusedException(string message) : InvalidOperationException(message);
