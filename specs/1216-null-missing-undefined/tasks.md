@@ -43,7 +43,12 @@ red without the change. xUnit only.
 - [ ] T007 Add `IsNullable` to `WorkflowDeclaredInput` in `WorkflowExecutableInputContract.cs` and fill it in
   `WorkflowExecutableCompiler.BuildInputContract` from the input's type (T004, FR-001a; R-4). Publication refuses an
   optional, non-nullable workflow input whose type has no non-null default and that declares no default
-  (`VF-ACT-003`, FR-006), as it already does for activity inputs
+  (`VF-ACT-003`, FR-006)
+- [ ] T007a Activity inputs (FR-006, FR-001b): in `RuntimeInputBindingCompiler.CompileOmitted`, replace
+  `TryCreateClrDefault` (any value type's CLR zero value) with `NullPolicyDefaults.TryGetTypeDefault`, so an omitted
+  optional date, time, `TimeSpan` or `Guid` input without a declared default fails `VF-ACT-003`. Audit built-in
+  activities for such inputs (`Delay.Duration` declares a default and is unaffected), declare a default where one is
+  meant, and test
 - [ ] T008 Hand the executable's pinned `UndefinedAsNull` to every JavaScript evaluation (binding and `Run
   JavaScript`) from the callers that already hold the executable; no per-binding field (R-2)
 - [ ] T008a Expose `strategyOptions.nullHandling` through the workflow definition API (read and write) and the
@@ -170,8 +175,9 @@ red without the change. xUnit only.
   checkbox and its rules from `ActivityDefinitionContractEditor.tsx`, `activityContractAuthoring.ts` and
   `activityContractComparison.ts` (a nullability change becomes a type change), the "Allows null" fact in
   `activityContractProposalModel.ts`, and the flag from `activityDefinitionTypes.ts` and `activityInputWire.ts`; the
-  activity definition test run (`ActivityDefinitionTestRunDialog.tsx`, `activityDefinitionTestRuns.ts`) takes
-  nullability from the type. On the backend, authored members stop carrying the flag; for .NET
+  activity definition test run (`ActivityDefinitionTestRunDialog.tsx`, `activityDefinitionTestRuns.ts`), the
+  "Allows null" / "Non-null" labels in `ActivityDefinitionWorkbench.tsx` and the read in
+  `ActivityGraphImplementationEditor.tsx` take nullability from the type. On the backend, authored members stop carrying the flag; for .NET
   activities the descriptor's nullability is derived from the C# type, not authored. Regenerate any stored fixture
   that carried it
 - [ ] T034 [P] Activity definition contract editor (`ActivityDefinitionContractEditor.tsx`): setting a default turns

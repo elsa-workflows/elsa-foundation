@@ -165,7 +165,8 @@ Line numbers are from that initiative head.
   through the `Elsa3Mapping` shell feature's configuration section. When on, `Elsa3WorkflowDefinitionToState.Map`
   sets `StrategyOptions.NullHandling` to both policies, and the conversion report says so. Remove
   `AddNullCoalescing` from `Elsa3ExpressionRewriter`. Change spec 267's `NullRefused` for SetVariable / SetOutput to
-  emit a typed `Literal` null when the target is nullable, and keep the refusal otherwise.
+  emit a typed `Literal` null when the target is nullable, or when `DefaultOnNull` is recorded and the target type
+  has a type default, and keep the refusal otherwise (T030).
 - **Rationale**: FR-022, FR-023, FR-004; ADR 0045 §2 ("one option").
 - **Check**: the shell feature options pattern (framework §2.24.2 sanctioned patterns): an options class bound by the
   feature is in the catalog.

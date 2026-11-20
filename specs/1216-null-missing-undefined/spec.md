@@ -121,8 +121,7 @@ A caller starts a workflow without supplying a declared optional input. The work
 **Why this priority**: today the run starts, then a scheduler work item is poisoned and the instance stays `Running`.
 
 **Independent Test**: start `composition-bulk-dispatch-sub-workflow` from the JTest corpus with no input; the
-FlowDecision reads `ShouldFault` as its type default (`null` for `Any`, `false` for `Boolean`) and the flow
-continues.
+FlowDecision reads `ShouldFault` as `null` (an `Any` input) or `false` (a `Boolean` input) and the flow continues.
 
 **Acceptance Scenarios**:
 
@@ -327,7 +326,9 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-006**: An omitted member MUST take its declared default; an optional member without one MUST materialize as
   `null` when nullable, and otherwise as its type's default. A non-nullable type without a type default (FR-001b:
   dates, times, `TimeSpan`, `Guid`, or a non-nullable `string` on a .NET activity) has none to give: such an optional
-  member needs a declared default, as publication requires today for activity inputs (`VF-ACT-003`).
+  member needs a declared default, or publication refuses it (`VF-ACT-003`). Today publication pins the CLR zero
+  value for an omitted optional value-type activity input (`0001-01-01` for a `DateTime`); S-2 replaces that with the
+  type default of FR-001b.
 - **FR-007**: An omitted required activity input MUST fail publication (`VF-ACT-003`).
 - **FR-034**: A member declared both required and with a default (an activity input, an authored activity
   definition's input, a workflow input) MUST fail publication with `VF-ACT-013`, naming the member and saying to set
@@ -511,7 +512,8 @@ the coordinator's review. All are accepted. The requirements follow the answers.
 - **SC-004**: A native workflow and a converted workflow with the same policies give the same outputs for the same
   inputs, in a test that covers every acceptance scenario of US3 and US4.
 - **SC-005**: No `undefined` property, array element, `NaN` or `Infinity` is changed at the boundary without a
-  recorded diagnostic, except an `undefined` kept as `null` under the recorded undefined-as-null policy.
+  recorded diagnostic, except an `undefined` object property kept as `null` under the recorded undefined-as-null
+  policy.
 - **SC-006**: Explicit null and absent round-trip through every store a declared member is persisted in, in tests for
   each provider.
 
