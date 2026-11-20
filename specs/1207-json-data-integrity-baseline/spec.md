@@ -487,8 +487,9 @@ faithful-or-refuse.
     activity definition hash, the template behaviour hash, the design-store and library operation fingerprints, the
     Git content hash, the ETL artifact hash, the fork-material and authoring-schema fingerprints, and every other site
     research R-1 and R-14 list. Hand-written writers keep their writer and hash its output through it.
-  - The values of those hashes change once. Before the first stable release that costs regenerated fixtures and
-    goldens in place, and no run-time shim. The paths kept only to verify older hashes go: `EfDesignSupport.LegacyFingerprint`
+  - The values of those hashes change once. Before the first stable release that costs regenerated fixtures, goldens
+    and stored executables (seeds and sample stores are republished or reset) in place, and no run-time shim: nothing
+    verifies an old value. The paths kept only to verify older hashes go: `EfDesignSupport.LegacyFingerprint`
     and the V1 ("historical") verification in `WorkflowExecutableHasher.MatchesHash`.
   - A golden test pins each hash for a fixed input, so any later change to `JsonHashInput` or to a hashed type shows
     up as a failing test, not as a silent mismatch. The goldens cover every variant the canonical form absorbs
@@ -540,7 +541,10 @@ faithful-or-refuse.
 
 **Docs and housekeeping**
 - **FR-024**: `docs/serialization.md` MUST state the baseline and the data rule; its "camelCase, case-insensitive on
-  read" note MUST say exact reads; its "HTTP boundary" exception MUST stop naming FastEndpoints.
+  read" note MUST say exact reads; its "HTTP boundary" exception MUST stop naming FastEndpoints; its
+  `DefaultActivityDefinitionHasher` exception (own sorted-key serialization) MUST be replaced by the hash input
+  (FR-021); and its rule that an identity-hashed format never changes in place MUST say it applies from the first
+  stable release (ADR 0091 *Consequences*).
 - **FR-024a**: `IPayloadSerializer` reads Elsa's own contracts case-insensitively today and exactly once it derives
   from the baseline (ADR 0091 *Consequences*). S-9 MUST confirm with a test that every stored-format fixture and seed
   file in the repository uses the camelCase names it writes. A hand-written file with `"Name"` instead of `"name"`

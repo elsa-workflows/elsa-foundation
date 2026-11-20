@@ -201,7 +201,8 @@ shows each new test failing without the change.
 - [ ] T025 [US4] Git: the exporter (`GitWorkflowExporter.cs` L153) indents with a writer that writes `JsonElement`
   raw; `GitCanonicalJson.HashFile` is `JsonHashInput` over the parsed file. Add a round trip (write files, read them
   back, compare hashes) that also asserts the data text in the file (FR-022, Q5)
-- [ ] T026 [US4] Regenerate in place every fixture and golden whose hash moved (for example
+- [ ] T026 [US4] Regenerate in place every fixture, golden and stored executable (seeds, sample stores: republished
+  or reset) whose hash moved, with nothing verifying an old value (for example
   `Essentials/tests/Workflows/Fixtures/legacy-set-v1.json`, `WorkflowExecutableCompilerGoldenTests`, the response-replay
   manifests), list them in the PR, and test that equal inputs with other escaping, whitespace, member order or number
   notation hash the same (SC-004, US4 scenario 3)
@@ -252,7 +253,8 @@ shows each new test failing without the change.
 - [ ] T034 [P] Update `docs/serialization.md`: the baseline and the data rule; the canonical form; the default
   conversion contract and `[JsonConversion]`; "camelCase, case-insensitive on read" → exact reads; the "HTTP boundary"
   exception without FastEndpoints (FR-024); a *Hash inputs* section with `JsonHashInput` and the first-stable freeze
-  rule (FR-021)
+  rule (FR-021); replace the `DefaultActivityDefinitionHasher` exception with the hash input, and make the
+  "identity-hashed format never changes in place" rule apply from the first stable release (FR-024)
 - [ ] T034a Add one line to `AGENTS.md` that routes to that rule: until Elsa 4's first stable release, stored formats
   and hashes may change with regenerated fixtures; from it on, they are frozen and change only by an explicit
   decision (FR-021)
