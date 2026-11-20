@@ -85,7 +85,7 @@ Plan decisions are numbered P-n, apart from the board's D-n.
 | P-7 | In S-8's bridge writer | R-7. `VF-UNDEF-002` (property dropped), `VF-UNDEF-003` (array element or hole as a `null` placeholder, either policy), `VF-NUM-001` (computed `NaN`/`Infinity`); the policy keeps `undefined` properties as `null`. |
 | P-8 | Script without a value | R-8, Q3. Bindings (expression or statement body) need no `return`; only `Run JavaScript` (a function body) with a bound result and no `return` is refused at publication (`VF-UNDEF-001`). A consumed `undefined` faults the step at run time; `null` under the policy. Unbound: nothing written. |
 | P-13 | `undefined` assigned to a variable | R-8, Q7. `VF-UNDEF-001` fault naming the variable; `null` under the policy. |
-| P-14 | Studio | Q6. No controls: engineers set the policies through the converter option or the definition API, and the documentation explains them. Warnings show through the existing instance diagnostics. |
+| P-14 | Studio | Q6. No controls: engineers set the policies through the converter option or the definition API, and the documentation explains them. Warnings show through the existing activity execution warnings. |
 | P-9 | Converter option | R-9, Q4. `Elsa3MappingOptions.ApplyElsa3NullPolicies`, default `true`. |
 | P-10 | Computed read miss | R-10. Built by S-4 (`VF-READ-001`); no work here. |
 | P-15 | Required with a default | Q9, FR-034. Publication refuses a member declared both required and with a default (`VF-ACT-013`); Studio's contract editor turns *Required* off when a default is set; built-in inputs declared that way become optional. |
