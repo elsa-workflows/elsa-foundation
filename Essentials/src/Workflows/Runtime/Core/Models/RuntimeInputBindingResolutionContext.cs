@@ -37,6 +37,9 @@ public sealed class RuntimeInputBindingResolutionContext
     /// </summary>
     public RuntimeVariableReadRecorder? VariableReadRecorder { get; }
 
+    /// <summary>Where input expressions report warnings during this materialization (spec 1228); <see langword="null"/> drops them.</summary>
+    public Elsa.Expressions.Core.Models.ExecutionWarningCollector? Warnings { get; init; }
+
     public string WorkflowExecutionId { get; }
     public string ActivityExecutionId { get; }
 

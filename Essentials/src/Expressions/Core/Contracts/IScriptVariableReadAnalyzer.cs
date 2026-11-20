@@ -48,6 +48,13 @@ public sealed record ScriptVariableReadAnalysis
     /// <summary>Whether the script reads any variable.</summary>
     public bool ReadsVariables => LiteralNames.Count > 0 || HasComputedRead;
 
+    /// <summary>
+    /// The writes the source shows (spec 1228 FR-006a): an assignment, a compound assignment, <c>++</c>, <c>--</c> or
+    /// <c>delete</c> whose target is rooted at <c>variables.X</c>, <c>variables['X']</c> or <c>getVariable('X')</c>.
+    /// An input expression with one is refused at publish; other writes are caught at run time.
+    /// </summary>
+    public IReadOnlyList<ScriptVariableWrite> Writes { get; init; } = [];
+
     public static ScriptVariableReadAnalysis None { get; } = new([], false);
 }
 
@@ -58,3 +65,6 @@ public sealed record ScriptVariableReadAnalysis
 /// <c>getVariable('X')</c>.
 /// </summary>
 public sealed record ScriptVariableLiteralRead(string Name, int Start, int End, bool IsMemberName);
+
+/// <summary>One write to a variable the source shows: the variable's name and the path written, such as <c>variables.order.total</c>.</summary>
+public sealed record ScriptVariableWrite(string Name, string Path);

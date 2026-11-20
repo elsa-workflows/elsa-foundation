@@ -207,6 +207,20 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 contract.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal) &&
                 contract.StablePropertyKey.Equals(producer.StablePropertyKey, StringComparison.Ordinal));
             if (property.InputContract is not null && producerContract is not null &&
+                UntypedResultRefusal(properties, producer, producerContract.Type, property) is { } refusal)
+            {
+                diagnostics.Add(CreateDiagnostic(
+                    input,
+                    property,
+                    Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput,
+                    refusal.Message,
+                    refusal.Guidance,
+                    $"{property.JsonPath}.memoryReference",
+                    property.MemoryReferenceId));
+                continue;
+            }
+
+            if (property.InputContract is not null && producerContract is not null &&
                 !TypesMatch(producerContract.Type, property.InputContract.Type))
             {
                 diagnostics.Add(CreateDiagnostic(
@@ -474,8 +488,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
     /// <summary>
     /// A RunJavaScript body (plan D-16). Elsa 3 stores it as a literal and runs it with its host functions; Elsa 4 runs
-    /// it as a function body that sees only <c>args</c>. The body is rewritten in script mode: its reads become
-    /// <c>args.&lt;name&gt;</c>, bound by an <c>arguments</c> object expression, and its completion value is returned.
+    /// it as a function body. The body is rewritten in script mode: its variable reads become <c>variables.&lt;name&gt;</c>,
+    /// read over the step's variable session and pinned at publish from the script itself (spec 1222 FR-026a, FR-033);
+    /// its other reads (inputs, activity results, metadata) become <c>args.&lt;name&gt;</c>, bound by an
+    /// <c>arguments</c> object expression; and its completion value is returned.
     /// The <c>arguments</c> expression declares the type of the activity's own <c>arguments</c> input, because
     /// publication requires the two to match exactly (#3287: Elsa 4's <c>RunJavaScript.Arguments</c> is a
     /// <c>JsonElement</c>). Without a known contract it declares <c>Object</c>.
@@ -501,7 +517,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var rewrite = expressionRewriter.Rewrite(
             "JavaScript",
             expression.Value,
-            new TypeReference("Object"),
+            new TypeReference(TypeAliasConvention.AnyAlias),
             ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient),
             Elsa3JavaScriptMode.Script,
             new Elsa3ScriptOutcomeContext(possibleOutcomes is null ? [] : PossibleOutcomeItems(property.Activity.AdditionalProperties[possibleOutcomes])));
@@ -530,18 +546,22 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             Elsa3Literal(property.Value, definitionResult.Source));
         if (rewrite.ScriptOutcomes is { } scriptOutcomes)
             DeclareScriptOutcomes(input, property, possibleOutcomes, scriptOutcomes, diagnostics);
-        if (definitionResult.Parameters.Count == 0)
+        // The body's variable reads are not arguments: it reads them itself.
+        var argumentParameters = definitionResult.Parameters
+            .Where(parameter => !parameter.Key.StartsWith(ExpressionParameterSurfaces.VariablesKeyPrefix, StringComparison.Ordinal))
+            .ToDictionary(parameter => parameter.Key, parameter => parameter.Value, StringComparer.Ordinal);
+        if (argumentParameters.Count == 0)
             return;
 
-        var members = definitionResult.Parameters.Keys
+        var members = argumentParameters.Keys
             .Order(StringComparer.Ordinal)
             .Select(name => $"{JsonSerializer.Serialize(name)}: {ArgumentAccess(name)}");
-        var argumentsType = inputTypeOf?.Invoke(property.Activity, ScriptArgumentsKey) ?? new TypeReference("Object");
+        var argumentsType = inputTypeOf?.Invoke(property.Activity, ScriptArgumentsKey) ?? new TypeReference(TypeAliasConvention.AnyAlias);
         var arguments = new ExpressionDefinition(
             "JavaScript",
             $"({{ {string.Join(", ", members)} }})",
             argumentsType,
-            definitionResult.Parameters,
+            argumentParameters,
             JsonSerializer.SerializeToElement(new { }),
             ExpressionCapabilityProfiles.BindingPureV1);
         property.Activity.AdditionalProperties[ScriptArgumentsKey] = JsonSerializer.SerializeToElement(new JsonObject
@@ -1027,8 +1047,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     private static TypeReference ReadType(JsonElement value)
     {
         if (!value.TryGetProperty("typeName", out var typeName) || typeName.ValueKind != JsonValueKind.String)
-            return new TypeReference("Object");
-        var alias = typeName.GetString() ?? "Object";
+            return new TypeReference(TypeAliasConvention.AnyAlias);
+        var alias = typeName.GetString() ?? TypeAliasConvention.AnyAlias;
         var comma = alias.IndexOf(',');
         if (comma >= 0)
             alias = alias[..comma];
@@ -1059,8 +1079,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     private static readonly IReadOnlyDictionary<string, TypeReference> Elsa3TypeShapes = new Dictionary<string, TypeReference>(StringComparer.Ordinal)
     {
         ["HttpStatusCode"] = new("Int32"),
-        ["HttpHeaders"] = new("String[]", CollectionKind.Dictionary),
-        ["ObjectDictionary"] = new("Object", CollectionKind.Dictionary),
+        // A dictionary of string arrays, named in full (spec 1228 FR-022), as WriteHttpResponse.Headers declares it.
+        ["HttpHeaders"] = new("String", CollectionKind.Dictionary, new TypeReference("String", CollectionKind.Array)),
+        // A dictionary of any JSON value: Any, the dynamic kind (spec 1228 FR-019).
+        ["ObjectDictionary"] = new(TypeAliasConvention.AnyAlias, CollectionKind.Dictionary),
     };
 
     /// <summary>
@@ -1082,8 +1104,57 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             value.CollectionKind == CollectionKind.Single &&
             member.CollectionKind == CollectionKind.Single)
             return true;
-        return valueName.Equals(memberName, StringComparison.OrdinalIgnoreCase) && value.CollectionKind == member.CollectionKind;
+        return valueName.Equals(memberName, StringComparison.OrdinalIgnoreCase) && value.CollectionKind == member.CollectionKind &&
+               ElementsMatch(value.Element, member.Element);
     }
+
+    /// <summary>
+    /// Spec 1228 US6 (FR-023, FR-024, research R-5): an untyped activity result bound to a boolean, string or number input.
+    /// Elsa 3 coerced whatever the producer returned (<c>ObjectConverter.ConvertTo</c>: <c>"true"</c> and <c>1</c> became
+    /// <c>true</c>, a fraction was rounded into an integer, a boolean became <c>"True"</c>); Elsa 4 converts only a JSON
+    /// value of the matching kind and refuses the rest at run time. So a script's result is kept only when the script's
+    /// source shows a matching kind, and refused at import otherwise: it is never compatible on its own. Null when the
+    /// binding is not such a case or is kept.
+    /// </summary>
+    private static (string Message, string Guidance)? UntypedResultRefusal(
+        IReadOnlyList<ActivityProperty> properties,
+        Elsa3MemoryOccurrence producer,
+        TypeReference producerType,
+        ActivityProperty consumer)
+    {
+        var target = consumer.InputContract!.Type;
+        if (!IsUntyped(producerType, SimpleName(producerType.Alias)) || target.CollectionKind != CollectionKind.Single ||
+            Elsa3ScriptResultKinds.ScalarTarget(SimpleName(target.Alias)) is not { } scalar)
+            return null;
+
+        // Only a script's result is checked: its source can show the kind. Other untyped producers (a loop item, an event
+        // payload) keep today's binding; their kind is not in the definition at all.
+        var scriptProperty = properties.FirstOrDefault(property =>
+            property.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal) &&
+            property.Activity.Type.Equals("Elsa.RunJavaScript", StringComparison.Ordinal) &&
+            property.PropertyName.Equals("script", StringComparison.OrdinalIgnoreCase));
+        if (scriptProperty is null)
+            return null;
+        var script = scriptProperty.Expression;
+        var kind = script is { Type: var type, Value: { } source } && type.Equals("Literal", StringComparison.OrdinalIgnoreCase)
+            ? Elsa3ScriptResultKinds.Infer(source)
+            : Elsa3ScriptResultKind.Unknown;
+        if (Elsa3ScriptResultKinds.Fits(kind, scalar))
+            return null;
+
+        var message =
+            $"Input '{consumer.PropertyName}' ({target.Alias}) of activity '{consumer.ActivityNodeId}' reads the untyped result of activity '{producer.ActivityNodeId}', " +
+            $"which returns {Elsa3ScriptResultKinds.Describe(kind)}. {Elsa3ScriptResultKinds.Difference(scalar)}.";
+        return (message, Elsa3ScriptResultKinds.Guidance(scalar));
+    }
+
+    // The nested element of a collection of collections (spec 1228 FR-022), compared by simple name like the alias.
+    private static bool ElementsMatch(TypeReference? value, TypeReference? member) =>
+        value is null || member is null
+            ? value is null && member is null
+            : SimpleName(value.Alias).Equals(SimpleName(member.Alias), StringComparison.OrdinalIgnoreCase) &&
+              value.CollectionKind == member.CollectionKind &&
+              ElementsMatch(value.Element, member.Element);
 
     /// <summary>
     /// Whether the property's declared value may bind the member. A literal must also parse as the member's scalar type

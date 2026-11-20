@@ -46,12 +46,6 @@ the innermost element.
 | Outcome | Allow or refuse |
 | Diagnostics | Per lossy path: path, stored value, written value, reason, remedy; severity warning or error |
 
-## Executable additions
-
-| Field | Meaning |
-|---|---|
-| JavaScript adapter version | Pinned at publish (FR-028) |
-
 ## Script value bridge (new, replaceable contract)
 
 | Operation | Meaning |

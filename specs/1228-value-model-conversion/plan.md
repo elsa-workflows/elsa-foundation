@@ -23,7 +23,7 @@ import. A script result inherits the protection of what it read.
 
 **Primary Dependencies**: Jint (already used), System.Text.Json; no new external dependency.
 
-**Storage**: none new. The executable records the pinned JavaScript adapter version (FR-028). Elsa 4 has no released definitions, so the `Object` → `Any` reading needs no data migration.
+**Storage**: none new. Nothing records an adapter version (FR-028 as amended). Elsa 4 has no released definitions, so the `Object` → `Any` reading needs no data migration.
 
 **Testing**: xUnit (no FluentAssertions). A precision suite (numbers beyond 2^53, long decimals, `10.50`, `2.0`,
 `1e21`, negatives), change-detection unit tests, end-to-end publish-and-run tests, the Elsa 3 fixture
@@ -39,7 +39,7 @@ input (SC-007). The bridge time is a metric per evaluation (FR-010), so a later 
 **Constraints**:
 - No CLR surface in scripts (D-16); the S-1 detector stays the refusal for Elsa 3 scripts that need one.
 - Runtime takes no Design reference.
-- An adapter rule never changes in place: the JavaScript adapter's new behaviour is a new pinned version.
+- An adapter rule never changes in place (ADR 0046 V3); a change after 4.0 comes with its own plan (FR-028 as amended).
 - Date interpretation, unmatched keys and the serializer baseline are S-9's; nothing here adds a second rule.
 
 **Scale/Scope**: the Jint engine and result materializer; one new policy seam; the alias registry and Studio's
@@ -56,8 +56,8 @@ type check; the Elsa 3 lowerer and its type shapes.
 | §2.24.2 / §2.24.3 sanctioned patterns | PASS | The script value bridge and the precision policy are replacement contracts (one active implementation per host), a sanctioned pattern. No new pattern. |
 | §E2.2 Runtime takes no Design reference | PASS | Engine, policy and change detection are runtime-side. Studio's type list and the converter are design-side. |
 | §2.17 duplication beats dependency | PASS | The dynamic-kind check lives once, in the alias convention, replacing about ten string comparisons. |
-| §E2.6.1 executable-always-runs | PASS | Before 4.0, reset and republish (ADR 0046 V3). The new adapter version is pinned in new executables. |
-| §E5 / §4.2 versioning | ACTION | `TypeReference` gains a nested element; the executable gains the adapter version. Document and schema versions increase. |
+| §E2.6.1 executable-always-runs | PASS | Before 4.0, reset and republish (ADR 0046 V3). Nothing is refused at run time for its adapter version (FR-028 as amended). |
+| §E5 / §4.2 versioning | ACTION | `TypeReference` gains a nested element. Document and schema versions increase. |
 | Extension-point catalog | ACTION | The bridge and the precision policy are new replacement contracts: `EXTENSION_POINTS.md` and the generated map change. |
 | §2.22 docs | ACTION | The adapter contracts (FR-027) and the JavaScript value docs. |
 | §2.23 tests | PASS | One test per acceptance scenario, the precision suite, the registration test for the policy feature. |
@@ -122,7 +122,7 @@ modules. The kinds live in Primitives. Publication and the Elsa 3 converter chan
 | P-4 | Change detection | FR-003–FR-005. After the run, convert each original JSON afresh and compare it with the script's value, JavaScript with JavaScript (ADR 0090 C2): equal → unchanged; a changed member → member change; a reassigned variable → whole assignment; a changed array → whole. Unchanged members come from the original JSON. |
 | P-5 | Cost metric | FR-010. The bridge records enter and collect durations and the bytes converted per evaluation as a histogram on the JavaScript expression meter; the benchmark of SC-007 uses the same numbers. |
 | P-6 | Precision policy | FR-012–FR-015. `IJavaScriptPrecisionPolicy` is a replacement contract with one built-in `RefusingPrecisionPolicy`, installed by the JavaScript feature, with no options and no node or workflow override. Called at a write with the lossy paths it carries. Computing and host-function arguments only warn. |
-| P-6a | Old executables | FR-028. An executable without a JavaScript adapter version is refused at run time with a republish diagnostic. |
+| P-6a | Old executables | FR-028 as amended. Nothing is stamped or checked at run time; before 4.0, reset and republish. |
 | P-7 | Hand-off to S-7 | FR-006, FR-007, Q1. A script activity passes its changes to the step write path (S-7) with the read-set base (ADR 0092); the bridge raises the C2 visibility warning. Until S-7's path is on the branch, User Story 3 is tested at the bridge level. |
 | P-7a | Input expressions never write | FR-006a, Q6. Publish: the JavaScript binding compiler (ADR 0083 grammar) refuses an assignment whose target is `variables.<name>` or a member path under it, with a new stable `VF-` code. Run time: `JintPortableJavaScriptEvaluator` fails the evaluation when the bridge reports any change, with the same code and the path. |
 | P-8 | One dynamic kind | FR-017–FR-020. `TypeAliasConvention` registers `Any` and resolves `Object`, `System.Object` and `Elsa.Any` to it; `object` is no longer a variable type. The `Elsa.Any` constants and the `Alias is "Object" or "Elsa.Any"` checks go through one `IsDynamicKind`. `DateOnly` and `TimeOnly` register as bare aliases. |
@@ -131,7 +131,7 @@ modules. The kinds live in Primitives. Publication and the Elsa 3 converter chan
 | P-11 | JSON to scalar | FR-025. With #3167 fixed (S-0), the `elsa.json@1` route converts a JSON boolean, number or string to a matching scalar. Text is never parsed. |
 | P-12 | Elsa 3 conversion | FR-019, FR-023, FR-024. The converter emits `Any` for its `Object` cases. `TypesMatch` stops treating an untyped producer as compatible with a typed input; a per-kind table from Elsa 3.6.3 (research R-5) decides convert or refuse with a new `ELS3-` code. |
 | P-13 | Protection | FR-026. At result materialization, take the strongest protection policy among the read set's values (ADR 0092) and attach it to the result. |
-| P-14 | Adapter contracts | FR-027, FR-028. `docs/reference/value-adapters.md`; the JavaScript adapter gets a version that new executables pin. |
+| P-14 | Adapter contracts | FR-027, FR-028. `docs/reference/value-adapters.md` names the JavaScript adapter's JSON profile; a rule change after 4.0 comes with its own plan. |
 
 ## Complexity Tracking
 

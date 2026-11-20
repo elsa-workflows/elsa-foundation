@@ -235,6 +235,48 @@ public sealed class ActivityExecutionVariableLifecycleInspectionTests
             JsonSerializer.SerializeToElement(value),
             sensitive ? new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true) : ValueProtectionPolicy.InstanceInline);
 
+    [Fact]
+    public async Task Warnings_of_the_input_expressions_and_of_the_step_are_shown_in_order_without_values()
+    {
+        // Spec 1228: the shared run-time warning channel. A warning carries paths, never values (spec 1229 FR-006).
+        var inputWarning = new Elsa.Expressions.Core.Models.ExecutionWarning(
+            "VF-PREC-002", "The script read numbers a JavaScript number cannot hold exactly.",
+            Details: new Dictionary<string, string> { ["input"] = "arguments", ["paths"] = "variables.order.id" });
+        var stepWarning = new Elsa.Expressions.Core.Models.ExecutionWarning(
+            "VF-PREC-002", "The script read numbers a JavaScript number cannot hold exactly.",
+            Details: new Dictionary<string, string> { ["paths"] = "args.order.id" });
+        var state = State();
+        await SaveAsync(state with
+        {
+            InputSnapshot = new ActivityInputSnapshot("inv-1", "schema", "binding", new Dictionary<string, ValueEnvelope>(), Now) { Warnings = [inputWarning] },
+            Warnings = [stepWarning]
+        });
+
+        var view = await ViewAsync(canInspectSensitiveValues: false, canResolve: false);
+
+        Assert.Collection(
+            view.Warnings!,
+            warning =>
+            {
+                Assert.Equal(("VF-PREC-002", "Warning", "input", "arguments"), (warning.Code, warning.Severity, warning.Source, warning.InputKey));
+                Assert.Equal(("node-1", ActivityExecutionId), (warning.ExecutableNodeId, warning.ActivityExecutionId));
+                Assert.Equal(new Dictionary<string, string> { ["paths"] = "variables.order.id" }, warning.Details);
+            },
+            warning =>
+            {
+                Assert.Equal(("step", (string?)null), (warning.Source, warning.InputKey));
+                Assert.Equal("args.order.id", warning.Details["paths"]);
+            });
+    }
+
+    [Fact]
+    public async Task An_execution_without_warnings_has_none()
+    {
+        await SaveAsync(State());
+
+        Assert.Null((await ViewAsync()).Warnings);
+    }
+
     private static ActivityExecutionState State() =>
         new(
             new ActivityExecution(ActivityExecutionId, WorkflowExecutionId, "node-1", "authored-1", "Test.Activity", "1.0.0"),

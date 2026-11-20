@@ -231,7 +231,7 @@ public static class RuntimeInputBindingStateProjection
 
     private static ValueEnvelope ToEnvelope(DurableValueState value)
     {
-        var type = new Elsa.Primitives.Models.ValueTypeDescriptor("Elsa.Any");
+        var type = new Elsa.Primitives.Models.ValueTypeDescriptor(Elsa.Primitives.Models.TypeAliasConvention.AnyAlias);
         var policy = new ValueProtectionPolicy(
             value.Lifecycle,
             value.Storage,

@@ -16,9 +16,19 @@ public static class TypeReferenceFactory
     /// <paramref name="aliasResolver"/>. The element/collection inspection is name-based so it works on
     /// reflection-only types loaded in a <see cref="System.Reflection.MetadataLoadContext"/>.
     /// </summary>
+    /// <remarks>
+    /// A collection whose element is itself a collection recurses: the result names the nested
+    /// <see cref="TypeReference.Element"/>, and its alias is the innermost element's (spec 1228 FR-022).
+    /// </remarks>
     public static TypeReference FromClrType(Type type, Func<Type, string> aliasResolver)
     {
         var (elementType, kind) = Decompose(type);
+        if (kind != CollectionKind.Single && Decompose(elementType).Kind != CollectionKind.Single)
+        {
+            var element = FromClrType(elementType, aliasResolver);
+            return new TypeReference(element.Alias, kind, element);
+        }
+
         return new TypeReference(aliasResolver(elementType), kind);
     }
 
@@ -32,7 +42,22 @@ public static class TypeReferenceFactory
     /// </summary>
     public static Type Resolve(TypeReference reference, Func<string, Type> aliasResolver)
     {
-        var elementType = aliasResolver(reference.Alias);
+        var elementType = reference.Element is { } element
+            ? Resolve(element, aliasResolver)
+            : aliasResolver(reference.Alias);
+        return Close(elementType, reference.CollectionKind);
+    }
+
+    /// <summary>
+    /// Closes a <see cref="TypeReference"/> around an already resolved innermost element type, applying every nested
+    /// collection shape from the inside out. For a reference without <see cref="TypeReference.Element"/> this is
+    /// <see cref="Close(Type, CollectionKind)"/>.
+    /// </summary>
+    public static Type Close(Type innermostElementType, TypeReference reference)
+    {
+        var elementType = reference.Element is { } element
+            ? Close(innermostElementType, element)
+            : innermostElementType;
         return Close(elementType, reference.CollectionKind);
     }
 

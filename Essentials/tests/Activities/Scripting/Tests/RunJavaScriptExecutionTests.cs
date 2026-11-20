@@ -62,21 +62,22 @@ public sealed class RunJavaScriptExecutionTests
     }
 
     [Fact]
-    public async Task Program_cannot_mutate_pinned_arguments_or_discover_workflow_hosts()
+    public async Task Program_changes_its_arguments_locally_and_cannot_discover_workflow_hosts()
     {
         await using var provider = BuildProvider();
         await using var scope = provider.CreateAsyncScope();
         var arguments = JsonSerializer.SerializeToElement(new { order = new { total = 42 } });
         var activity = new RunJavaScript(scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>())
         {
-            Script = "try { args.order.total = 0; } catch { } return [args.order.total, typeof getVariable, typeof services];",
+            Script = "args.order.total = 0; return [args.order.total, typeof getVariable, typeof services];",
             Arguments = arguments
         };
 
         var transition = await ExecuteAsync(activity);
 
         var result = Assert.IsAssignableFrom<IActivityCompletionTransition<RunJavaScriptResult>>(transition).Result.Value!.Value;
-        Assert.Equal(42, result[0].GetInt32());
+        // Spec 1228 FR-001: args are plain, changeable values; the change is local and never reaches the pinned input.
+        Assert.Equal(0, result[0].GetInt32());
         Assert.Equal("undefined", result[1].GetString());
         Assert.Equal("undefined", result[2].GetString());
         Assert.Equal(42, arguments.GetProperty("order").GetProperty("total").GetInt32());

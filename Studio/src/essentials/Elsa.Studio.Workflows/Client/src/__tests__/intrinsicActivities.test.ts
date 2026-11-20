@@ -47,7 +47,7 @@ describe("intrinsic node materialization", () => {
       outputs: [],
       intrinsic: {
         kind: "Set",
-        valueType: { alias: "Elsa.Any", collectionKind: "Single" },
+        valueType: { alias: "Any", collectionKind: "Single" },
         variable: { referenceKey: "", declaringScopeId: "workflow" }
       }
     });
@@ -61,14 +61,14 @@ describe("intrinsic node materialization", () => {
     expect(node.activityVersionId).toBe("elsa.intrinsic.set-output@1");
     expect(node.intrinsic).toEqual({
       kind: "SetOutput",
-      valueType: { alias: "Elsa.Any", collectionKind: "Single" }
+      valueType: { alias: "Any", collectionKind: "Single" }
     });
     expect(node.intrinsic).not.toHaveProperty("variable");
   });
 
   it("seeds Set Variable with a value type and a (blank) variable so the backend accepts the draft", () => {
     const block = buildIntrinsicWireBlock(readIntrinsicDescriptor(setVariableActivity)!);
-    expect(block.valueType).toEqual({ alias: "Elsa.Any", collectionKind: "Single" });
+    expect(block.valueType).toEqual({ alias: "Any", collectionKind: "Single" });
     expect(block.variable).toEqual({ referenceKey: "", declaringScopeId: "workflow" });
   });
 });
@@ -119,7 +119,7 @@ describe("intrinsic node serialization round-trip", () => {
       outputs: [],
       intrinsic: {
         kind: "Set",
-        valueType: { alias: "Elsa.Any", collectionKind: "Single" },
+        valueType: { alias: "Any", collectionKind: "Single" },
         variable: { referenceKey: "counter", declaringScopeId: "workflow" }
       },
       value: { typeName: "", expression: { type: "Literal", value: "42" } }
@@ -143,7 +143,7 @@ describe("intrinsic node serialization round-trip", () => {
     expect(wireNode.inputs).toEqual([{ referenceKey: "value", value: { value: "42", expressionType: "Literal" } }]);
     expect(wireNode.intrinsic).toEqual({
       kind: "Set",
-      valueType: { alias: "Elsa.Any", collectionKind: "Single" },
+      valueType: { alias: "Any", collectionKind: "Single" },
       variable: { referenceKey: "counter", declaringScopeId: "workflow" }
     });
     expect(wireNode).not.toHaveProperty("value");

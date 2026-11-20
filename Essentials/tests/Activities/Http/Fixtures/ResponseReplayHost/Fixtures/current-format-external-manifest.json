@@ -145,10 +145,10 @@
     "workflowDraftId": "14C9KTKX9bq",
     "workflowDefinitionVersionId": "14C9KTQmMAR",
     "sourceReferenceId": "activation-ref:publication-14C9KVSBH9L",
-    "artifactId": "artifact-891114bb41f3",
-    "artifactHash": "sha256:891114bb41f3da0dc7f6087de62f38db64284c8d741b5b1223bf765cdcfd3811",
+    "artifactId": "artifact-b120677b108b",
+    "artifactHash": "sha256:b120677b108b4a28596caa33fa606888e7e0b113ca15c186050035ae6ac30d52",
     "artifactVersion": "1.0.0",
-    "rootArtifactId": "artifact-891114bb41f3",
+    "rootArtifactId": "artifact-b120677b108b",
     "responseNodeId": "write-response",
     "responseActivityType": "Elsa.Activities.Http.Activities.WriteHttpResponse",
     "resolvedWriteHttpResponseProfile": "External",
@@ -181,8 +181,8 @@
     "route": "/publishing/workflows/{versionId}/executable-export",
     "formatVersion": 1,
     "fileName": "current-format-external-closure.json",
-    "byteLength": 29963,
-    "sha256": "832edc392bfdc3385d6374dbb7be22fb2035d9cd3af872f34d1dec86429a1df2",
+    "byteLength": 30195,
+    "sha256": "22f19eb2f53726a9afdb4a6818f37b65f87df1a72c65a2c6813159bb229ef228",
     "responseStatus": 200
   }
 }

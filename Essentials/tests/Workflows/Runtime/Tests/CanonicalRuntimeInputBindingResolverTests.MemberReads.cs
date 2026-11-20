@@ -86,7 +86,7 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
         var store = new ExternalResultStore();
         var producer = ExternallyCompletedProducer();
         var consumer = RunningConsumer(producer.InvocationId);
-        var any = new ValueTypeDescriptor("Elsa.Any");
+        var any = new ValueTypeDescriptor("Any");
         var binding = new RuntimeInputBinding("customer-id", any, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.ActivityResult,
             activityResult: new RuntimeActivityResultReference("producer", "customer-id", producerScopeId: null));
         var context = NewContext(consumer: consumer, runtimeView: [producer, consumer],
@@ -106,7 +106,7 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
         var context = NewContext(
             consumer: consumer,
             runtimeView: [producer, consumer],
-            executable: NewProducerExecutable(SensitiveExternalProjection, new ValueTypeDescriptor("Elsa.Any"), projectionPath));
+            executable: NewProducerExecutable(SensitiveExternalProjection, new ValueTypeDescriptor("Any"), projectionPath));
         return new RuntimeActivityInputMaterializer(MemberSourceResolver, new TestTypeRegistry(), store)
             .MaterializeSnapshotAsync(NewConsumerNode(ExternalResultMemberBinding()), consumer.InvocationId, context, DateTimeOffset.UnixEpoch);
     }

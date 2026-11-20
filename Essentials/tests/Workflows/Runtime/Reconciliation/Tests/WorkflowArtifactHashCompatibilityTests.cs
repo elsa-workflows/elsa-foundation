@@ -32,7 +32,8 @@ public sealed class WorkflowArtifactHashCompatibilityTests : IDisposable
         var stored = await harness.Services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(legacy.Identity.ArtifactId);
         Assert.NotNull(stored);
         Assert.Equal(legacy.Identity.ArtifactHash, stored.Identity.ArtifactHash);
-        Assert.Equal("Elsa.Any", stored.RootActivity.InputBindings["value"].TargetType.Alias);
+        // Elsa.Any reads as Any, the dynamic kind (spec 1228 FR-018).
+        Assert.Equal("Any", stored.RootActivity.InputBindings["value"].TargetType.Alias);
         Assert.Equal(legacy.CreatedAt, stored.CreatedAt);
     }
 

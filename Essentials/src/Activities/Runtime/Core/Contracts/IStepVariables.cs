@@ -58,6 +58,30 @@ public interface IStepVariableSession : IStepVariables
 
     /// <summary>Records a whole-value write of a pinned target, as JSON.</summary>
     void WriteJson(StepVariableTarget target, JsonNode? value);
+
+    /// <summary>
+    /// The variables the script body names literally, pinned at publish to their declaring scope (spec 1222 FR-004, the
+    /// body read plan), by name. A literal read reads its pinned target, never the run-time lookup.
+    /// </summary>
+    IReadOnlyDictionary<string, StepVariableTarget> PinnedReads { get; }
+
+    /// <summary>Whether the script body also reads variables by a computed or opaque name (the plan's fallback marker).</summary>
+    bool ReadsComputedNames { get; }
+
+    /// <summary>The names of the variables visible to the step, nearest scope first, each once.</summary>
+    IReadOnlyList<string> VisibleNames { get; }
+
+    /// <summary>
+    /// Whether a read this session recorded held a protected value (sensitive, encrypted or redacted): the step's
+    /// diagnostics then use their value-free form (spec 1229 FR-006), and its result takes that protection (spec 1228 US7).
+    /// </summary>
+    bool HasReadProtectedValue { get; }
+
+    /// <summary>
+    /// Whether a target is read-only to a step: a loop's item or index (spec 1231 FR-006). A script gets it frozen, so a
+    /// change throws where the script makes it.
+    /// </summary>
+    bool IsReadOnly(StepVariableTarget target);
 }
 
 /// <summary>A variable a session reads or writes: its declaring scope and key, and its declared name.</summary>

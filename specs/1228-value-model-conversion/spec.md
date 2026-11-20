@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Approved — by the coordinator on 2026-11-16. The ADR 0046 amendment it applies is merged into the initiative branch.
+**Status**: Implemented — PR #4838 (with spec 1222's Phase 8, the script body's read surface it builds on). Approved by the coordinator on 2026-11-16; the ADR 0046 amendment it applies is merged into the initiative branch.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-8**,
 analysis **A-1**, decisions **D-12**, **D-15**, **D-16** and **D-17**.
@@ -298,7 +298,7 @@ sensitive and redacted where the variable is.
 - Negative integers below −(2^53 − 1) lose like positive ones.
 - `1e21` and `2.0` come back as `1e+21` and `2`. The notation changes, the number does not; no loss.
 - A script that deletes a member reports a member change.
-- Key order and key casing are kept.
+- Key order and key casing are kept for a value that is unchanged or changes in a member: untouched members keep their stored text and place. A value the script builds or changes as a whole, or returns changed, has JavaScript's key order (integer-like keys first), as JavaScript holds it.
 - A changed array with no lossy element is reported as a whole with no diagnostic.
 - Liquid reads JSON numbers as decimals and does not narrow; it needs no precision policy.
 - A local copy (`{...variables.order}`) changed by a script or an input expression is not a change to `order`.
@@ -403,10 +403,12 @@ sensitive and redacted where the variable is.
 
 - **FR-027**: The adapter contracts for JavaScript, activity inputs and outputs, and Liquid MUST be written down: what
   each accepts, what it produces, what is lossless, lossy or refused, and the diagnostic for each refusal.
-- **FR-028**: A change to an adapter rule MUST ship as a new pinned version, never as an edit of an existing one. A
-  published executable keeps the version it was published with. An executable published before this spec (no
-  JavaScript adapter version) MUST be refused at run time with a diagnostic that asks to republish it. Before 4.0,
-  reset and republish is enough (ADR 0046 V3); Elsa does not keep the old frozen adapter.
+- **FR-028**: An adapter rule MUST never change in place (ADR 0046 V3). Today there is one version of each adapter;
+  nothing is stamped into an executable or checked at run time. A future rule change after 4.0 comes with its own plan
+  for executables already published. Before 4.0, reset and republish is enough; Elsa does not keep the old frozen
+  adapter. *(Amended 2026-11-19 by the coordinator: the run-time refusal and the per-executable version stamp are
+  removed, because refusing an unstamped executable would break workflows on every adapter change, and ADR 0046 V3
+  asks only that a rule never change in place.)*
 
 ### Key Entities
 

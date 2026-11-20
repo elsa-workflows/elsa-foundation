@@ -57,17 +57,23 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 
 ## R-2 Checking a number for loss (ADR 0046 V9, settled)
 
-- **Decision**: parse the JSON number text exactly, as a big-integer mantissa and a base-10 exponent; take the
-  double the engine would hold and its exact value; compare the two exact values. Different value → lossy. A number
-  that becomes `Infinity` is lossy.
-- **Rationale**: `10.50` and `10.5` are the same value; `9007199254740993` and `9007199254740992` are not. `System.Decimal`
-  is not enough: it keeps about 28 digits and does not parse `1e30` or `1e400`. The check runs once per number at
-  entry.
+- **Decision**: read the stored JSON number text exactly, as a big-integer mantissa and a base-10 exponent; take the
+  double the engine would hold and the JSON text JavaScript writes for it (`Number.prototype.toString`), read exactly
+  the same way; compare the two values. Different value → lossy. A number that becomes `Infinity`, or a non-zero
+  number that becomes `0`, is lossy.
+- **Rationale**: this is V9 as written ("the JavaScript number, written as JSON, differs in value from the stored
+  one"). `10.50` and `10.5`, `0.1` and `0.1`, `1e30` and `1e+30` have the same value; `9007199254740993` and
+  `9007199254740992` do not, nor do `0.1000000000000000055511151231257827` and `0.1`. `System.Decimal` is not enough:
+  it keeps about 28 digits and does not parse `1e30` or `1e400`. The check runs once per number at entry.
+- **Amended in implementation (2026-11-19)**: the defined draft compared the stored value with the double's exact
+  binary value. That would make every decimal that a double does not hold in binary (`0.1`, `0.2`) lossy, so an
+  ordinary price would be refused at a write; it also contradicted V9. The implementation follows V9.
 - **Matching in a written value (FR-011a)**: an unchanged entered value is written from its original JSON, so a pass-
   through never loses. Otherwise a written number that equals, as a double, the double of a lossy entered number
   carries that loss.
 - **Alternatives considered**: a plain magnitude check (`|n| > 2^53 − 1`) misses long decimals such as
-  `0.1000000000000000055511151231257827`; comparing texts flags `10.50` falsely.
+  `0.1000000000000000055511151231257827`; comparing texts flags `10.50` falsely; comparing with the double's exact
+  binary value flags `0.1` falsely.
 
 ## R-3 Precision handling (settled, D-17)
 
@@ -91,8 +97,25 @@ All facts are from the initiative branch at `2c84e802f` unless stated.
 
 - **Decision**: record, per JSON kind and per typed target, what Elsa 3.6.3's `ObjectConverter.ConvertTo` produced.
   Convert where Elsa 4 gives the same value; refuse at import otherwise.
-- **To do in implementation**: read the Elsa 3 source (release/3.6.3, checked against 3.5.3), as spec 267 did, and
-  fill the table here (task T036). Fix #3167 first and re-measure; it may make the JSON route work for more cases.
+- **Source read** (T036): Elsa 3.6.3 (`d6a57f5f88`), `src/modules/Elsa.Expressions/Helpers/ObjectConverter.cs`.
+  A Jint script result reaches `ConvertTo` as a CLR value: `bool`, `double`, `string`, `null`, `ExpandoObject` (an
+  object) or `object[]` (an array). Elsa 4 hands the same result on as JSON, and the `elsa.json@1` route converts only
+  a JSON value of the matching kind (FR-025, D-12; `RuntimeValueConversionExecutor.ValidateJsonForType`).
+
+  | JSON kind of the result | `Boolean` | `String` | integral (`Int32`, `Int64`, …) | `Double`, `Decimal` |
+  |---|---|---|---|---|
+  | boolean | same (assignable) | Elsa 3: `"True"`/`"False"` (`BooleanConverter`); Elsa 4 refuses | Elsa 3: 1 or 0 (`Convert.ChangeType`); Elsa 4 refuses | Elsa 3: 1 or 0; Elsa 4 refuses |
+  | number | Elsa 3: non-zero is `true` (`Convert.ChangeType`); Elsa 4 refuses | Elsa 3: the number as text, current culture (`DoubleConverter`); Elsa 4 refuses | integer: same; a fraction: Elsa 3 rounds half to even, Elsa 4 refuses | `Double`: same; `Decimal`: an integer, or a fraction literal of at most 15 significant digits, is the same; a computed fraction may not be (Elsa 3 converted the double at 15 significant digits, Elsa 4 reads the JSON text exactly: `0.1 + 0.2` gives 0.3 against 0.30000000000000004) |
+  | string | Elsa 3: `bool.Parse` (`"true"` → `true`, other text fails); Elsa 4 refuses (no text parsing) | same | Elsa 3: parsed (`Int32Converter`); Elsa 4 refuses | Elsa 3: parsed; Elsa 4 refuses |
+  | null | Elsa 3: `null` (the input's default); Elsa 4: no value of the kind | Elsa 3: `null` | Elsa 3: `null` | Elsa 3: `null` |
+  | object, array | Elsa 3: fails (`InvalidCastException`); Elsa 4 refuses | Elsa 3: the JSON text (dictionary branch); Elsa 4 refuses | Elsa 3: fails; Elsa 4 refuses | Elsa 3: fails; Elsa 4 refuses |
+
+- **Result**: Elsa 4 gives the value Elsa 3 did exactly when the result's kind matches the target, and, for an integral
+  target, the number is an integer; for a decimal target, an integer or a fraction literal Elsa 3 kept exactly. The import therefore infers the kind from the script's source (decided by Joey
+  2026-11-19: infer, refuse unknown) and keeps the binding only then; any other or unknown kind is refused at import
+  with `ELS3-UNTYPED-RESULT` and guidance to state the kind (`Boolean(…)`, `String(…)`, `Number(…)`, `Math.round(…)`).
+  Only a script's result is checked: other untyped producers (a loop item, an event payload) carry no source that
+  shows a kind and keep today's binding (follow-up).
 
 ## R-6 One dynamic kind (settled)
 
