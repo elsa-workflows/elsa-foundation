@@ -50,11 +50,16 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private Task? _loop, _halted;
     private TimeSpan? _heartbeatEvery;
+    private readonly Func<CancellationToken, Task>? _beside;
     private readonly object _halting = new();
     private volatile bool _gone;
 
-    public RuntimeNode(string node, IMembership membership, int partitions, LoopOptions? options = null, IWakeSignal? wake = null)
+    /// <param name="beside">K1b slice 5b: a loop of the host's own that runs beside the node's loops, off the node's
+    /// scheduler, and ends with a stop or kill: layer 2's watchdog (<c>Watchdog.RunAsync</c>), which closes a stuck
+    /// owner-path call's connection at twice the lease and ends the process, by the host's policy, only when it cannot.</param>
+    public RuntimeNode(string node, IMembership membership, int partitions, LoopOptions? options = null, IWakeSignal? wake = null, Func<CancellationToken, Task>? beside = null)
     {
+        _beside = beside;
         _options = options ?? new LoopOptions();
         _runtime = new PartitionRuntime(node, membership, partitions, _options.Window, wake);
         _due = new long[partitions];
@@ -79,7 +84,8 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         if (_runtime.NodeLease is { } lease) _heartbeatEvery = Cadence(lease, _options);
         lock (_halting)
             if (_halted is null)     // a stop or kill that came first leaves the node unstarted
-                _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync), _heartbeatEvery is { } every ? Task.Run(() => HeartbeatLoopAsync(every)) : Task.CompletedTask);
+                _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync), _heartbeatEvery is { } every ? Task.Run(() => HeartbeatLoopAsync(every)) : Task.CompletedTask,
+                    _beside is { } beside ? Task.Run(() => Beside(beside)) : Task.CompletedTask);
     }
 
     /// <summary>The heartbeat's cadence: at least three per lease and at most half the window apart, a second at most by default.</summary>
@@ -116,6 +122,17 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             }
             try { await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, (long)every.TotalMilliseconds - (Now - started))), exit); }
             catch (OperationCanceledException) { break; }
+        }
+    }
+
+    private async Task Beside(Func<CancellationToken, Task> loop)
+    {
+        try { await loop(_exit.Token); }
+        catch (OperationCanceledException) when (_exit.IsCancellationRequested) { }
+        catch (Exception e)
+        {
+            Interlocked.Increment(ref _errors);
+            LastError = e;
         }
     }
 

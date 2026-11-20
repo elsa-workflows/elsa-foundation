@@ -33,6 +33,51 @@ internal static class NodeLeaseChecks
         await DisposeOfAPendingPartition(check);
         await HandOverOfAPendingPartition(check);
         await HungResetRetakeClosesTheGate(check);
+        await WatchdogClosesAStuckCommit(check, abortable: true);
+        await WatchdogClosesAStuckCommit(check, abortable: false);
+        WatchedStoreForwardsEverything(check);
+    }
+
+    // K1b slice 5b, the watchdog: p's commit is stuck on a live connection. At twice the lease since it was sent the
+    // watchdog closes that call's connection (its token); a call that aborts on it ends, and the process lives on. One whose
+    // client never resumes is still in flight a third of a lease later: then, and only then, the process ends.
+    private static async Task WatchdogClosesAStuckCommit(Action<bool, string> check, bool abortable)
+    {
+        var (store, clock, advance) = World(1, out _);
+        var wire = new DelayedCommit(store) { AbortOnToken = abortable };
+        var ended = new List<string>();
+        var watchdog = new Watchdog(Lease, ended.Add, clock);
+        var worker = Owner(watchdog.Watch(wire), [0], clock);
+        await new DurableHost([worker]).ActivateAsync(0);
+        await store.AddAsync(new Message("m", InstanceRef.In(0, "x"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
+        await worker.WokenAsync(null);
+        wire.DelayNext = true;          // the pass's commit lands and its answer never comes
+        var pass = worker.RunAsync().AsTask();
+        await wire.Landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        advance(19_000);
+        var early = watchdog.Check();       // 19 s: under twice the lease, untouched
+        advance(1_000);
+        var closed = watchdog.Check();      // 20 s: closed
+        if (abortable) await Task.WhenAny(pass, Task.Delay(TimeSpan.FromSeconds(5)));
+        advance(1_000);
+        watchdog.Check();                   // within a third of a lease of the close: the process waits for the call
+        var waited = watchdog.Ended == 0;
+        advance(2_400);
+        watchdog.Check();                   // a third of a lease after the close
+        var passEnded = pass.IsCompleted;
+        wire.Reply.TrySetResult();
+        await pass.WaitAsync(TimeSpan.FromSeconds(5));
+        check(early == 0 && closed == 1 && waited && passEnded == abortable && (abortable ? ended.Count == 0 && watchdog.Ended == 0 : ended.Count == 1 && ended[0].Contains("commit", StringComparison.Ordinal)),
+            abortable ? $"the watchdog closes a stuck commit's connection at twice the lease, and the process lives on: closed {closed}, pass ended {passEnded}, ended {watchdog.Ended}"
+                      : $"the watchdog ends the process only when the stuck call outlives its closed connection: closed {closed}, waited {waited}, ended [{string.Join("; ", ended)}]");
+    }
+
+    // The watched store implements every member of the store contract itself: none falls back to an interface default.
+    private static void WatchedStoreForwardsEverything(Action<bool, string> check)
+    {
+        var missing = new[] { typeof(IKernelStore), typeof(IMembership) }
+            .SelectMany(i => typeof(WatchedStore).GetInterfaceMap(i).TargetMethods).Where(m => m.DeclaringType != typeof(WatchedStore)).Select(m => m.Name).ToList();
+        check(missing.Count == 0, $"the watched store implements the whole store contract itself: missing [{string.Join(", ", missing)}]");
     }
 
     // Review round 2 of #4870, the coordinator's rule: a fixed Worker's pending partition, with a trial on it, is given up by

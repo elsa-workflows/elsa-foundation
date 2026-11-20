@@ -748,6 +748,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => !WithoutOwnedSets && inner.OwnedSetsAvailable;   // the set operations go through this wrapper's own calls
     public bool DelayNext, DelayTake, LoseNext, WithoutOwnedSets, DelayRetake;
+    public bool AbortOnToken;       // K1b slice 5b: the delayed commit aborts on its token, as a store whose connection is closed does
     public int FailJournalReads, JournalReadsFailed;     // the next reads of the journal throw, as a broken connection would
     public TaskCompletionSource Retaken = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource RetakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -763,7 +764,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
         CommitCalls++;
         Batches.Add(batch);
         var result = await inner.CommitAsync(batch, cancellationToken);
-        if (DelayNext) { DelayNext = false; Landed.TrySetResult(); await Reply.Task; }
+        if (DelayNext) { DelayNext = false; Landed.TrySetResult(); await (AbortOnToken ? Reply.Task.WaitAsync(cancellationToken) : Reply.Task); }
         if (LoseNext) { LoseNext = false; throw new IOException("the commit executed and its answer was lost"); }
         return result;
     }
