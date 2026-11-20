@@ -85,8 +85,6 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         public ScriptValueChange Collect(string key, JsValue current, bool assigned)
         {
             ArgumentException.ThrowIfNullOrEmpty(key);
-            // The bridge's own work: its memory is not the script's, unless the script's code (a toJSON, a getter) runs.
-            using var hostWork = EvaluationLimits.ExcludeHostWork(_engine);
             var started = Stopwatch.GetTimestamp();
             try
             {
@@ -111,12 +109,18 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 var changed = new List<string>();
                 var losses = new List<JavaScriptPrecisionLoss>();
                 var buffer = new ArrayBufferWriter<byte>();
-                using (var writer = NewWriter(buffer))
+                // Plain .NET over JSON: no script code runs here, so its memory is not the script's.
+                JsonElement patched;
+                using (EvaluationLimits.ExcludeHostWork(_engine))
                 {
-                    Patch(entry.Element, marked.Root, key, writer, changed, losses, marked.Markers);
+                    using (var writer = NewWriter(buffer))
+                    {
+                        Patch(entry.Element, marked.Root, key, writer, changed, losses, marked.Markers);
+                    }
+
+                    patched = JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
                 }
 
-                var patched = JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
                 _bytes += buffer.WrittenCount;
                 return new ScriptValueChange(key, ScriptValueChangeKind.MemberChange, patched, changed, losses);
             }
@@ -155,7 +159,6 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         public ScriptValueWrite Write(JsValue value, string path)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-            using var hostWork = EvaluationLimits.ExcludeHostWork(_engine);
             var started = Stopwatch.GetTimestamp();
             try
             {
@@ -195,16 +198,22 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             var losses = new List<JavaScriptPrecisionLoss>();
             var buffer = new ArrayBufferWriter<byte>();
             _wroteInfinity = false;
-            using (var writer = NewWriter(buffer))
+            // Plain .NET over JSON: no script code runs here, so its memory is not the script's.
+            JsonElement json;
+            using (EvaluationLimits.ExcludeHostWork(_engine))
             {
-                WriteMarked(marked.Root, path, arrayPath: null, writer, losses, marked.Markers);
+                using (var writer = NewWriter(buffer))
+                {
+                    WriteMarked(marked.Root, path, arrayPath: null, writer, losses, marked.Markers);
+                }
+
+                // The serialized value is returned as is only when nothing in it was replaced: no marker, no loss and no
+                // Infinity, which is written as null even when no lossy entered number has its sign.
+                json = marked.Markers.Count == 0 && losses.Count == 0 && !_wroteInfinity
+                    ? marked.Root
+                    : JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
             }
 
-            // The serialized value is returned as is only when nothing in it was replaced: no marker, no loss and no
-            // Infinity, which is written as null even when no lossy entered number has its sign.
-            var json = marked.Markers.Count == 0 && losses.Count == 0 && !_wroteInfinity
-                ? marked.Root
-                : JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
             _bytes += buffer.WrittenCount;
             return new ScriptValueWrite(json, losses);
         }
@@ -222,7 +231,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             {
                 var plain = JintResultMaterializer.Stringify(_engine, value)
                     ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
-                return (JintResultMaterializer.ParseResult(plain, _options), markers);
+                using (EvaluationLimits.ExcludeHostWork(_engine))
+                    return (JintResultMaterializer.ParseResult(plain, _options), markers);
             }
 
             _replacer ??= NewReplacer();
@@ -233,7 +243,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             {
                 var text = JintResultMaterializer.Stringify(_engine, value, _replacer)
                     ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
-                return (JintResultMaterializer.ParseResult(text, _options), markers);
+                using (EvaluationLimits.ExcludeHostWork(_engine))
+                    return (JintResultMaterializer.ParseResult(text, _options), markers);
             }
             finally
             {
@@ -335,6 +346,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 unchanged = false;
             else
             {
+                using var hostWork = EvaluationLimits.ExcludeHostWork(_engine);
                 using var document = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = Math.Max(_options.MaxResultDepth, _options.MaxInputDepth) + 1 });
                 unchanged = SameJavaScriptValue(origin, document.RootElement, null);
             }

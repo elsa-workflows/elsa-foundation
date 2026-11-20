@@ -227,8 +227,8 @@ public sealed class HostFunctionArgumentTests
         Assert.Equal(1, result!.Value.GetInt32());
     }
 
-    // The memory limit is the script's: comparing and writing a large changed variable, and previewing it for each
-    // function read, is the bridge's work and does not add up against it.
+    // The memory limit is the script's: the bridge's plain .NET work on a large changed variable (parsing, comparing and
+    // patching its JSON) does not count against it. Converting the script's value does, for each function read too.
     [Fact]
     public async Task Bridge_work_on_a_large_variable_does_not_count_against_the_memory_limit()
     {
@@ -236,7 +236,7 @@ public sealed class HostFunctionArgumentTests
         var session = new Session("{" + members + "}");
 
         var (result, _) = await RunAsync(
-            "variables.order.updatedAt = 1; for (var i = 0; i < 4; i++) acme.readOrderText(); return 1;",
+            "variables.order.updatedAt = 1; for (var i = 0; i < 2; i++) acme.readOrderText(); return 1;",
             session: session,
             configure: feature => feature.MaxMemoryBytes = 64 * 1024 * 1024);
 
@@ -260,6 +260,16 @@ public sealed class HostFunctionArgumentTests
         await Assert.ThrowsAsync<global::Jint.Runtime.MemoryLimitExceededException>(() => RunAsync(
             "var keep = []; for (var i = 0; i < 20; i++) acme.echo({ toJSON: function () { keep.push('x'.repeat(20000000) + i); return 1; } }); return keep.length;",
             configure: feature => { feature.MaxMemoryBytes = 64 * 1024 * 1024; feature.ExecutionTimeout = null; }));
+    }
+
+    // A native toJSON runs no statement, and a function's result is built for the script: both are the script's memory.
+    [Theory]
+    [InlineData("var src = Array.from({ length: 60000 }); var all = []; for (var i = 0; i < 300; i++) { var k = []; all.push(k); acme.echo({ toJSON: Function.prototype.apply.bind(Array.prototype.push, k, src) }); } return 1;")]
+    [InlineData("var s = 'x'.repeat(400000); var keep = []; for (var i = 0; i < 300; i++) keep.push(acme.echo(s)); return 1;")]
+    public async Task Memory_the_script_keeps_from_host_work_counts(string source)
+    {
+        await Assert.ThrowsAsync<global::Jint.Runtime.MemoryLimitExceededException>(() =>
+            RunAsync(source, configure: feature => { feature.MaxMemoryBytes = 64 * 1024 * 1024; feature.ExecutionTimeout = null; }));
     }
 
     [Fact]

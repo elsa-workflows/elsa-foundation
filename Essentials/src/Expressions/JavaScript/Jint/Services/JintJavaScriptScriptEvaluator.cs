@@ -103,6 +103,8 @@ internal sealed class JintJavaScriptScriptEvaluator(
 
         public Elsa.Expressions.Core.Contracts.ExpressionVariableRead Read(string name)
         {
+            // Converting the script's value counts, even inside the function's host work.
+            using var scriptWork = EvaluationLimits.CountScriptWork(engine);
             if (current() is not { } variables || !variables.TryGet(name, out var held))
                 return session.Read(name);
             if (held.IsUndefined())

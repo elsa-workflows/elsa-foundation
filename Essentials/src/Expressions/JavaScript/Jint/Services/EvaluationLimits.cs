@@ -12,11 +12,12 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// <list type="bullet">
 /// <item>The evaluator starts the count right before the script runs and again before its result and variables are
 /// written, so the engine setup, the input conversion and the parse before them never count.</item>
-/// <item>Every statement counts, wherever it runs: a toJSON, getter or Proxy trap met while a value is converted is the
-/// script's own code.</item>
-/// <item>The memory the value bridge allocates in plain .NET work — parsing, comparing and patching JSON, where no script
-/// code can run — does not count against the script (<see cref="ExcludeHostWork"/>). Should script code run inside such
-/// a section after all, its memory counts.</item>
+/// <item>Every statement counts, wherever it runs.</item>
+/// <item>Every byte counts, except in host work (<see cref="ExcludeHostWork"/>): .NET code that cannot run the script's
+/// code and builds nothing the script keeps — parsing, comparing and patching JSON, a host function's own
+/// implementation. Converting a script value (a stringify, which can call the script's toJSON, getters or Proxy traps,
+/// native ones included) and building a value the script gets are counted (<see cref="CountScriptWork"/>), also inside
+/// host work. Should a statement run in host work after all, that host work counts.</item>
 /// </list>
 /// The exceptions are the ones Jint throws for the same limits; a timeout is marked so a host function's own timeout stays
 /// its own error.
@@ -34,19 +35,26 @@ internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, lo
     private long _memoryBaseline;
     private long _excludedBytes;
 
-    // The current host-work section.
-    private int _hostWorkDepth;
-    private long _hostWorkBaseline;
-    private bool _scriptRanInHostWork;
+    // Whether bytes are being excluded now, with the modes of the enclosing sections; the open excluded stretch.
+    private readonly Stack<bool> _modes = new();
+    private bool _excluding;
+    private long _stretchStarted;
+    private bool _statementInStretch;
 
     /// <summary>Starts the count for one phase of the evaluation: the script, or writing what it left.</summary>
     public static void Start(Engine engine) => engine.Constraints.Find<EvaluationLimits>()?.Start();
 
     /// <summary>
-    /// Marks plain .NET work of the host (parsing, comparing, patching JSON): the memory it allocates does not count against
-    /// the script, unless script code runs inside it. Dispose to end the section.
+    /// Host work: .NET code that cannot run the script's code and builds nothing the script keeps. Its memory does not
+    /// count against the script. Dispose to end the section.
     /// </summary>
-    public static HostWork ExcludeHostWork(Engine engine) => new(engine.Constraints.Find<EvaluationLimits>());
+    public static Section ExcludeHostWork(Engine engine) => new(engine.Constraints.Find<EvaluationLimits>(), excluding: true);
+
+    /// <summary>
+    /// Work on the script's values inside host work (converting one, building one the script gets): its memory counts.
+    /// Dispose to end the section.
+    /// </summary>
+    public static Section CountScriptWork(Engine engine) => new(engine.Constraints.Find<EvaluationLimits>(), excluding: false);
 
     /// <summary>Whether an exception is a limit this constraint raised.</summary>
     public static bool IsLimit(Exception exception) => exception.Data.Contains(LimitMark);
@@ -55,8 +63,8 @@ internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, lo
     {
         if (!_started)
             return;
-        if (_hostWorkDepth > 0)
-            _scriptRanInHostWork = true;
+        if (_excluding)
+            _statementInStretch = true;
         if (maxStatements is { } max && ++_statements > max)
             throw new StatementsCountOverflowException();
         if (_timeoutTicks is { } limitTicks && Stopwatch.GetTimestamp() - _phaseStarted > limitTicks)
@@ -86,35 +94,53 @@ internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, lo
         _statements = 0;
         _excludedBytes = 0;
         _memoryBaseline = GC.GetAllocatedBytesForCurrentThread();
+        if (_excluding)
+            OpenStretch();
     }
 
-    private void EnterHostWork()
+    private void Enter(bool excluding)
     {
-        if (_hostWorkDepth++ > 0)
-            return;
-        _hostWorkBaseline = GC.GetAllocatedBytesForCurrentThread();
-        _scriptRanInHostWork = false;
+        _modes.Push(_excluding);
+        Switch(excluding);
     }
 
-    private void ExitHostWork()
+    private void Exit() => Switch(_modes.Pop());
+
+    private void Switch(bool excluding)
     {
-        if (--_hostWorkDepth > 0)
+        if (excluding == _excluding)
             return;
-        if (!_scriptRanInHostWork)
-            _excludedBytes += GC.GetAllocatedBytesForCurrentThread() - _hostWorkBaseline;
+        if (_excluding)
+            CloseStretch();
+        _excluding = excluding;
+        if (_excluding)
+            OpenStretch();
     }
 
-    /// <summary>A host-work section; a no-op when the engine has no limits.</summary>
-    public readonly struct HostWork : IDisposable
+    private void OpenStretch()
+    {
+        _stretchStarted = GC.GetAllocatedBytesForCurrentThread();
+        _statementInStretch = false;
+    }
+
+    // A stretch in which a statement ran was not host work after all: its bytes count.
+    private void CloseStretch()
+    {
+        if (!_statementInStretch)
+            _excludedBytes += GC.GetAllocatedBytesForCurrentThread() - _stretchStarted;
+    }
+
+    /// <summary>A host-work or script-work section; a no-op when the engine has no limits.</summary>
+    public readonly struct Section : IDisposable
     {
         private readonly EvaluationLimits? _limits;
 
-        internal HostWork(EvaluationLimits? limits)
+        internal Section(EvaluationLimits? limits, bool excluding)
         {
             _limits = limits;
-            _limits?.EnterHostWork();
+            _limits?.Enter(excluding);
         }
 
-        public void Dispose() => _limits?.ExitHostWork();
+        public void Dispose() => _limits?.Exit();
     }
 }

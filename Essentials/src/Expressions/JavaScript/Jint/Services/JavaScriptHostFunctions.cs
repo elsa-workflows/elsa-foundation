@@ -133,9 +133,6 @@ internal sealed class JavaScriptHostFunctions
         CancellationToken cancellationToken) =>
         new(engine, name, (_, arguments) =>
         {
-            // The call is the host's work: its memory is not the script's, unless the script's code (a toJSON, a getter met
-            // converting an argument) runs in it. Every statement and the evaluation's timeout still count.
-            using var hostWork = EvaluationLimits.ExcludeHostWork(engine);
             var values = new JsonElement[arguments.Length];
             for (var index = 0; index < arguments.Length; index++)
                 values[index] = Argument(engine, options, declaration.Name, index, arguments[index]);
@@ -144,7 +141,9 @@ internal sealed class JavaScriptHostFunctions
             JsonElement result;
             try
             {
-                result = declaration.Implementation(new JavaScriptHostFunctionCall(values, context.Variables, cancellationToken));
+                // The function's own work is the host's; converting its arguments and entering its result are counted.
+                using (EvaluationLimits.ExcludeHostWork(engine))
+                    result = declaration.Implementation(new JavaScriptHostFunctionCall(values, context.Variables, cancellationToken));
             }
             // An engine limit reached inside the function (reading a variable runs the engine) stops the evaluation; a
             // script cannot catch it as the function's error.
