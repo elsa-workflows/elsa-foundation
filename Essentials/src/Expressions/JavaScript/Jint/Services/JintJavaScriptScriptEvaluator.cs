@@ -35,13 +35,18 @@ internal sealed class JintJavaScriptScriptEvaluator(
         var engine = IsolatedJintEngine.Create(options, request.CancellationToken, timeProvider);
         using var values = valueBridge.Begin(engine);
         // A host function reads variables through the body's session, as it does through an input binding's reader
-        // (spec 1223 FR-003, FR-029; spec 1222 T047).
-        var functions = new JavaScriptHostFunctionContext(values, request.Variables, logger);
+        // (spec 1223 FR-003, FR-029; spec 1222 T047), and sees what the script holds for a variable it already read or
+        // changed, so every read path to one variable gives the same value within the run (spec 1222 FR-034).
+        IsolatedJintEngine.ScriptVariables? variables = null;
+        var functionReader = request.Variables is { } reader
+            ? new CurrentVariableReader(reader, () => variables, engine, options)
+            : null;
+        var functions = new JavaScriptHostFunctionContext(values, functionReader, logger);
         hostFunctions.Install(engine, options, functions, request.CancellationToken);
         IsolatedJintEngine.SetArgs(engine, values, request.Arguments, options);
         // Spec 1222 FR-033: the body reads and writes the step's variables through its session; every read is recorded
         // there, literal or computed, so nothing is pinned into the engine.
-        var variables = request.Variables is { } session
+        variables = request.Variables is { } session
             ? IsolatedJintEngine.SetVariables(engine, values, NoPinnedValues, session, options)
             : null;
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
@@ -75,6 +80,31 @@ internal sealed class JintJavaScriptScriptEvaluator(
     }
 
     private static readonly IReadOnlyDictionary<string, JsonElement> NoPinnedValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// A host function's view of the body's variables: the value the script holds now for a variable it has read or
+    /// changed (its changes are written to the session only after the run), otherwise the session's value, read and
+    /// recorded by the session.
+    /// </summary>
+    private sealed class CurrentVariableReader(
+        IScriptVariableSession session,
+        Func<IsolatedJintEngine.ScriptVariables?> current,
+        Engine engine,
+        FeatureOptions options) : Elsa.Expressions.Core.Contracts.IExpressionVariableReader
+    {
+        public IReadOnlyList<string> CandidateNames => session.CandidateNames;
+
+        public Elsa.Expressions.Core.Contracts.ExpressionVariableRead Read(string name)
+        {
+            if (current() is not { } variables || !variables.TryGet(name, out var held))
+                return session.Read(name);
+            if (held.IsUndefined())
+                return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Missing;
+            return JintResultMaterializer.Stringify(engine, held) is { } json
+                ? Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Present(JintResultMaterializer.ParseResult(json, options))
+                : throw new JavaScriptException(engine.Intrinsics.TypeError, $"Variable '{name}' holds a value with no JSON form.");
+        }
+    }
 
     // Reports each warning's protected form, when it has one.
     private sealed class ProtectingWarningSink(Elsa.Expressions.Core.Contracts.IExecutionWarningSink inner) : Elsa.Expressions.Core.Contracts.IExecutionWarningSink

@@ -101,11 +101,9 @@ internal sealed class JavaScriptHostFunctions
         if (_globals.Count == 0 && _namespaces.Count == 0)
             return;
 
-        // The intrinsic parser, captured before user code runs: a script replacing JSON.parse changes nothing here.
-        var parse = engine.GetValue("JSON").AsObject().Get("parse");
         foreach (var declaration in _globals)
         {
-            Define(engine, declaration.Name, Function(engine, options, parse, declaration, declaration.Name, context, cancellationToken));
+            Define(engine, declaration.Name, Function(engine, options, declaration, declaration.Name, context, cancellationToken));
         }
 
         foreach (var (root, members) in _namespaces)
@@ -114,7 +112,7 @@ internal sealed class JavaScriptHostFunctions
             foreach (var (member, declaration) in members)
             {
                 target.DefineOwnProperty(member, new PropertyDescriptor(
-                    Function(engine, options, parse, declaration, member, context, cancellationToken),
+                    Function(engine, options, declaration, member, context, cancellationToken),
                     writable: false, enumerable: true, configurable: false));
             }
 
@@ -126,7 +124,6 @@ internal sealed class JavaScriptHostFunctions
     private static ClrFunction Function(
         Engine engine,
         FeatureOptions options,
-        JsValue parse,
         JavaScriptHostFunctionDeclaration declaration,
         string name,
         JavaScriptHostFunctionContext context,
@@ -150,7 +147,9 @@ internal sealed class JavaScriptHostFunctions
 
             return result.ValueKind == JsonValueKind.Undefined
                 ? JsValue.Undefined
-                : engine.Invoke(parse, JsValue.Undefined, [result.GetRawText()]);
+                // The result enters through the value bridge, as variables and arguments do: a number JavaScript cannot
+                // hold exactly is tracked like any lossy entered number (spec 1228; reported if read, refused if written).
+                : context.Values.Enter($"{declaration.Name}()", result);
         });
 
     /// <summary>
@@ -167,13 +166,14 @@ internal sealed class JavaScriptHostFunctions
             return;
 
         var where = string.Join(", ", paths.Distinct(StringComparer.Ordinal));
-        if (context.Warnings.Any(warning => warning.Details is { } details &&
-                                            details.TryGetValue("function", out var known) && known == function &&
-                                            details.TryGetValue("paths", out var knownPaths) && knownPaths == where))
-            return;
-
         // A member path can name keys of the value: the protected form names the arguments only.
         var roots = string.Join(", ", paths.Select(path => path.Split('.')[0]).Distinct(StringComparer.Ordinal));
+        // One warning per function and arguments: calls whose member paths differ under the same arguments would
+        // otherwise give the same protected form and log line twice.
+        if (context.Warnings.Any(warning => warning.Details is { } details &&
+                                            details.TryGetValue("function", out var known) && known == function &&
+                                            details.TryGetValue("roots", out var knownRoots) && knownRoots == roots))
+            return;
         string Message(string at) =>
             $"JavaScript passed numbers it cannot hold exactly to '{function}' ({at}); the function received the nearest value JavaScript holds. " +
             "Hold such numbers as strings to keep every digit.";
@@ -181,7 +181,7 @@ internal sealed class JavaScriptHostFunctions
             JavaScriptValueDiagnostics.PrecisionLossRead,
             Message(where),
             ExecutionWarningSeverity.Warning,
-            new Dictionary<string, string>(StringComparer.Ordinal) { ["function"] = function, ["paths"] = where })
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["function"] = function, ["paths"] = where, ["roots"] = roots })
         {
             ProtectedForm = roots == where
                 ? null

@@ -68,6 +68,36 @@ public sealed class HostFunctionArgumentTests
     }
 
     [Fact]
+    public async Task Calls_with_different_member_paths_under_one_argument_warn_once()
+    {
+        var (_, warnings) = await RunAsync("acme.echo({ a: variables.order.id }); acme.echo({ b: variables.order.id }); return 1;");
+
+        Assert.Single(warnings.Warnings, warning => warning.Details?.ContainsKey("function") == true);
+    }
+
+    // Spec 1222 FR-034: a function sees what the script holds for a variable it changed, not the committed value.
+    [Theory]
+    [InlineData("variables.order = { price: 1 }; return [variables.order.price, acme.readOrder().price];", "[1,1]")]
+    [InlineData("variables.order.total = 2; return acme.readOrder().total;", "2")]
+    [InlineData("var p = variables.order.price; return acme.readOrder().price === p;", "true")]
+    public async Task A_function_sees_the_script_s_current_value_of_a_variable(string source, string expected)
+    {
+        var (result, _) = await RunAsync(source);
+
+        Assert.Equal(expected, result!.Value.GetRawText());
+    }
+
+    // A lossy number a function returns is tracked like any lossy entered number: reading it warns.
+    [Fact]
+    public async Task A_lossy_number_a_function_returns_is_tracked()
+    {
+        var (_, warnings) = await RunAsync("var n = acme.big(); return n > 0 ? 1 : 0;");
+
+        var warning = Assert.Single(warnings.Warnings, warning => warning.Code == JavaScriptValueDiagnostics.PrecisionLossRead);
+        Assert.Contains("acme.big()", warning.Details!["paths"], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {
         var (result, _) = await RunAsync("return acme.readOrder().price;");
@@ -79,6 +109,7 @@ public sealed class HostFunctionArgumentTests
     {
         var services = new ServiceCollection();
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.echo", call => call.Arguments[0].Clone()));
+        services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.big", _ => JsonSerializer.Deserialize<JsonElement>("9007199254740993")));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration(
             "acme.readOrder",
             call => call.Variables!.Read("order").Value,
