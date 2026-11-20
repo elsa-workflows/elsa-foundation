@@ -127,13 +127,16 @@ transformed. The risk sits where data becomes a .NET type and back:
 - A source-generated context is constructed with such a copy. Its `[JsonSourceGenerationOptions]` attribute settings
   apply only to its `Default` instance, so owner code uses the constructed instance, not `Default`.
 - Any project that works with JSON may reference `Elsa.Serialization.Core`, as it would `System.Text.Json`.
-- **Hashes have one input of their own.** Every hash or fingerprint whose input is JSON goes through one hash input in
-  `Elsa.Serialization.Core`. It serializes with its own option set, every setting written out, never derived from the
-  baseline, `JsonSerializerOptions.Web` or `.Default`, and it hashes the canonical form of decision 3. So a change to
+- **Hashes have one input of their own.** Every hash or fingerprint whose input is a JSON value, or a .NET value
+  serialized to JSON, goes through one hash input in `Elsa.Serialization.Core`. Hashes over strings or ids composed
+  without a JSON serializer are out of scope. The hash input serializes with its own option set, every setting
+  written out, never derived from the baseline, `JsonSerializerOptions.Web` or `.Default`. It hashes the canonical
+  form of decision 3 in one fixed byte encoding, which its goldens pin. So a change to
   the baseline, or to a framework default, never changes a hash, and escaping, whitespace, member order and number
   notation never move one.
   - Before Elsa 4's first stable release, every existing hash over JSON moves to it once. Its value changes once, and
-    the fixtures and goldens that pin it are regenerated; nothing verifies the old values.
+    the fixtures, goldens and stored executables that carry it are regenerated; nothing verifies the old values. With
+    no released executables yet, this is a regeneration, not an in-place change of a released identity-hashed format.
   - From the first stable release on, the hash input and every hashed type are frozen. Changing either is an explicit
     decision that assesses identity, versioning and migration; it is never done by regenerating a golden.
   - A golden test pins each hash, and the architecture test fails on any hash over JSON that bypasses the hash input.
@@ -303,7 +306,7 @@ type asks for it.
 
 | Deviation | Why it is legitimate | Condition |
 |---|---|---|
-| `IPayloadSerializer` sorts dictionary keys (`DeterministicDictionaryConverter`) and object members (`SortObjectMembers`) | Persisted output must be byte-stable for hashing, and neither a .NET dictionary nor reflection gives a meaningful order | Applies only to our own types and maps. By decision 5 no data is a .NET dictionary, and a `JsonElement` is written raw (decision 3). Keys are written verbatim |
+| `IPayloadSerializer` sorts dictionary keys (`DeterministicDictionaryConverter`) and object members (`SortObjectMembers`) | Persisted output must be byte-stable, and neither a .NET dictionary nor reflection gives a meaningful order; hashes do not read it (decision 1) | Applies only to our own types and maps. By decision 5 no data is a .NET dictionary, and a `JsonElement` is written raw (decision 3). Keys are written verbatim |
 | The hash input (decision 1): one option set for every hash or fingerprint over JSON, for example the artifact hash and the activity contract fingerprint it includes, `DefaultActivityDefinitionHasher`, `GitCanonicalJson` (Git reconciliation content hash), the design-store fingerprints and the ADR 0092 value digest | A hash must not move when the baseline or a framework default changes | Its settings are written out and it hashes the canonical form. Never on the wire. Before the first stable release existing hashes move to it once; from that release on, it and every hashed type are frozen, and changing either is an explicit decision that assesses identity, versioning and migration |
 | Runtime EF Core durability options (frozen, see [serialization rule](../serialization.md)) | The durable format of suspended state changes only through compatible writer changes or migrations and golden fixtures | Decision 3 applies there too. A writer change that is shown to be compatible and to keep the meaning, so old and new code read old and new rows with the same meaning, needs no format-version bump or migration. S-9 shows that with fixed serialized examples and compatibility checks; if that proof fails, S-9 makes the change a stamped format change through migrations and golden fixtures. A change to the meaning of rows, or to reader and writer compatibility, always takes that stamped path. Before 4.0 a stamped change means regenerated migrations and updated golden fixtures, not an upcaster |
 | Secrets `json`/`jsonb` columns | The database normalizes the text, not our serializer | Secret payloads are not workflow data |
@@ -349,7 +352,9 @@ that representation to each store. This ADR only requires that the serializer ke
     `DictionaryKeyPolicy`. Their test helpers, `CompatibilityJson` and `AddDefinitionDeserializationTests` follow.
 - **Docs.** [docs/serialization.md](../serialization.md) gains the baseline, the data rule and the deviation register.
   Its "case-insensitive on read" note changes to exact reads, and its "HTTP boundary" exception still names
-  FastEndpoints and is updated.
+  FastEndpoints and is updated. Its exception for `DefaultActivityDefinitionHasher`'s own sorted-key serialization is
+  replaced by the hash input, and the rule that an identity-hashed format never changes in place applies from the
+  first stable release.
 - **Constitution.** A shared baseline that all modules derive from is a new cross-cutting pattern. It goes through
   the framework constitution's §2.24.3 pattern gate together with this ADR.
 
@@ -364,7 +369,7 @@ That is exactly how the host-wide leak happened. Rejected in favour of a read-on
 
 **Canonical output: normalize escaping and order everywhere.** Byte-stable output for every value, which is useful for
 hashing. Rejected because it changes data the user sent. Canonicalization stays where it belongs: in comparisons
-and in new hashes over data (the canonical form, decision 3), never in data that is stored or sent.
+and in every hash over JSON, through the hash input (decision 1), never in data that is stored or sent.
 
 **Keep every existing hash input frozen with its own options.** No hash value changes. But about twenty hashes then
 depend on as many option sets, some of them framework defaults (`JsonSerializerOptions.Web`, or no options) that can
