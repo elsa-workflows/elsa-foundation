@@ -84,12 +84,48 @@ public sealed class Elsa3UntypedResultIntoTypedInputTests
     [Fact]
     public async Task A_typed_variable_is_not_an_untyped_result()
     {
-        // Elsa 3 converted the item when it wrote a typed variable; the read is the variable's declared type.
+        // Elsa 3 converted the payload when it wrote the typed variable, and Elsa 4 reads that variable.
+        var root = Sequence("root",
+            Activity("wait", "Elsa.Event", ("eventName", Literal("Approved")), ("result", Captured("payload"))),
+            Activity("write", "Elsa.WriteLine", ("text", Captured("payload"))));
+
+        var result = await ConvertAsync(root, new Elsa3Variable { Id = "payload", Name = "payload", TypeName = "String" });
+
+        Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput);
+    }
+
+    [Fact]
+    public async Task A_loop_item_captured_into_a_typed_variable_is_still_refused()
+    {
+        // Elsa 4 reads the loop's own currentItem, not the typed variable, so Elsa 3's conversion on capture is lost.
         var loop = ForEach(Activity("inside", "Elsa.WriteLine", ("text", Captured("item"))));
 
         var result = await ConvertAsync(Sequence("root", loop), new Elsa3Variable { Id = "item", Name = "item", TypeName = "String" });
 
-        Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput);
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput);
+    }
+
+    [Fact]
+    public async Task A_variable_with_no_type_is_untyped()
+    {
+        var root = Sequence("root",
+            Activity("wait", "Elsa.Event", ("eventName", Literal("Approved")), ("result", Captured("payload"))),
+            Activity("decide", "Elsa.FlowDecision", ("condition", Captured("payload", "Boolean"))));
+
+        var result = await ConvertAsync(root, new Elsa3Variable { Id = "payload", Name = "payload", TypeName = "" });
+
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput);
+    }
+
+    [Fact]
+    public async Task A_loop_slot_read_after_its_loop_into_a_typed_input_is_refused()
+    {
+        var loop = Activity("loop", "Elsa.ForEach", ("items", Literal("[1,2]", "Object")), ("currentValue", Captured("item-slot")));
+        var after = Activity("after", "Elsa.WriteLine", ("text", Captured("item-slot")));
+
+        var result = await ConvertAsync(Sequence("root", loop, after));
+
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput);
     }
 
     [Fact]

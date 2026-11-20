@@ -116,6 +116,18 @@ internal static class Elsa3ScriptResultKinds
              "value or fail at run time"
     };
 
+    /// <summary>
+    /// Why a value whose kind nothing shows (a loop item, an event payload, HTTP data) may not reach the input as Elsa 3
+    /// gave it (#4898): it may be of any kind, not only a number.
+    /// </summary>
+    public static string ReadDifference(Elsa3ScalarTarget target) => target switch
+    {
+        Elsa3ScalarTarget.Decimal =>
+            "Elsa 3 converted any value into it, a computed number at 15 significant digits; Elsa 4 converts only a number and " +
+            "reads it exactly, so the value could differ or fail at run time",
+        _ => Difference(target)
+    };
+
     /// <summary>What to change in the script, for the refusal's guidance.</summary>
     public static string Guidance(Elsa3ScalarTarget target) => target switch
     {
