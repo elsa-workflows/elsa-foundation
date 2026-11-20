@@ -37,6 +37,10 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("(function () { var ms = 1000; return new Date(Date.now() + ms).getTime(); })()")]
     [InlineData("(function () { var d = new Date(); d = d.getTime(); return 'ts=' + d; })()")]
     [InlineData("(function () { var now = new Date(); now = now.toISOString(); return 'Created ' + now; })()")]
+    [InlineData("(function () { var d; if (Math.random() > 2) d = new Date(); d = d ? d.getTime() : 0; return 'ms ' + d; })()")]
+    [InlineData("(function () { function f() { var d = new Date(); return d.getTime(); } var d = new Date(); d = d.getTime(); return 'ms ' + d + f(); })()")]
+    [InlineData("(function () { var d = new Date(); function fmt() { var d = 5; return 'n' + d; } return fmt() + d.toISOString(); })()")]
+    [InlineData("(function () { var d = new Date(); for (d = d.getTime(); d < 0;) {} return 'ms ' + d; })()")]
     [InlineData("new Date(5000) - new Date(1000)")]
     [InlineData("Math.random()")]
     [InlineData("newGuid()")]
@@ -105,6 +109,7 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("var t = '\"2026-10-28T09:15:00\"'; new Date(JSON.parse(t)).getTime()")]
     [InlineData("var s = 'x'; new Date(s + 'T09:15:00').getTime()")]
     [InlineData("var rest = '-03-01T10:00'; new Date(2026 + rest).getUTCHours()")]
+    [InlineData("var s = '2026-03-01'; var t = 'T10:00'; new Date(s.valueOf() + t).getUTCHours()")]
     [InlineData("Date.parse('1-7-2026')")]
     [InlineData("var parts = [2026, 0, 1]; new Date(...parts)")]
     public async Task Zone_dependent_usage_is_refused_under_refuse_naming_both_settings(string expression)
@@ -246,10 +251,8 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("`Started ${new Date()}`")]
     [InlineData("String(new Date())")]
     [InlineData("var d = new Date(); d.toString()")]
+    [InlineData("(function () { const d = new Date(); function inner() { return 'at ' + d; } return inner(); })()")]
     [InlineData("(function () { var d = new Date(0); var s = 'x'; s += d; return s; })()")]
-    [InlineData("(function () { var when = new Date(); if (Math.random() > 2) when = 'n/a'; return 'Due ' + when; })()")]
-    [InlineData("(function () { var d = new Date(); d ??= new Date(0); return 'at ' + d; })()")]
-    [InlineData("(function () { var d = new Date(); function f() { d = 1; } return '' + d; })()")]
     public async Task Local_text_is_refused_under_source_time_zone_and_warned_under_assume_utc(string expression)
     {
         var zoned = await ConvertAsync(expression, Elsa3DateInterpretation.SourceTimeZone, "Europe/Amsterdam");

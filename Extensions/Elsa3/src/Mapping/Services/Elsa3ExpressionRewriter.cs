@@ -150,6 +150,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             SourceTimeZone = _options.SourceTimeZone,
         };
         analyzerUsed = analyzer;
+        analyzer.CollectReassignedNames(script);
         analyzer.Visit(script);
         if (analyzer.Issues.Count > 0)
             return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
@@ -686,19 +687,38 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// <summary>Reads rewritten from a date-typed Elsa 3 value to a <c>Date</c> (FR-032): known dates.</summary>
         private readonly HashSet<Node> _dateReads = new(ReferenceEqualityComparer.Instance);
 
-        /// <summary><c>const</c>/<c>let</c> names holding a known date.</summary>
-        private readonly HashSet<string> _dateAliases = new(StringComparer.Ordinal);
-
         /// <summary>
-        /// The nesting each date alias was declared at: functions, branches and loops each add one. An assignment drops the
-        /// alias only at that nesting, so one that may not run (in a branch, a loop or an uncalled function) keeps it.
+        /// The names each scope declares as an alias of a known date (FR-022), keyed by that scope: an inner declaration
+        /// of the same name is another variable. Only a name the script never assigns again is an alias; a reassigned
+        /// name is not classified (a value reached indirectly, the recorded gap), so no guess about which assignment ran
+        /// is needed.
         /// </summary>
-        private readonly Dictionary<string, int> _dateAliasNesting = new(StringComparer.Ordinal);
+        private readonly Dictionary<HashSet<string>, HashSet<string>> _dateAliases = new(ReferenceEqualityComparer.Instance);
 
-        private int _nesting;
+        /// <summary>The names the script assigns anywhere after declaring them (an assignment, an update, a for-in/of head).</summary>
+        private readonly HashSet<string> _reassigned = new(StringComparer.Ordinal);
 
-        private static bool Nests(Node node) => node is IFunction or IfStatement or ConditionalExpression or LogicalExpression or
-            ForStatement or ForInStatement or ForOfStatement or WhileStatement or DoWhileStatement or SwitchStatement or TryStatement;
+        public void CollectReassignedNames(Node node)
+        {
+            _reassigned.UnionWith(WrittenNames(node));
+            foreach (var child in node.ChildNodes)
+                CollectReassignedNames(child);
+        }
+
+        /// <summary>The innermost visible scope that declares <paramref name="name"/>, or null for a global.</summary>
+        private HashSet<string>? DeclaringScope(string name)
+        {
+            for (var index = _scopes.Count - 1; index >= 0; index--)
+            {
+                if (_scopes[index].Contains(name))
+                    return _scopes[index];
+            }
+
+            return null;
+        }
+
+        private bool IsDateAlias(string name) =>
+            DeclaringScope(name) is { } scope && _dateAliases.TryGetValue(scope, out var aliases) && aliases.Contains(name);
 
         /// <summary>Whether the converted source reads variables by a computed name, which publish serves by the run-time fallback.</summary>
         public bool HasComputedVariableRead { get; private set; }
@@ -869,17 +889,12 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             };
             if (function is not null)
                 _functions.Add(function);
-            var nests = Nests(node);
-            if (nests)
-                _nesting++;
             try
             {
                 VisitNode(node);
             }
             finally
             {
-                if (nests)
-                    _nesting--;
                 if (function is not null)
                 {
                     _functions.RemoveAt(_functions.Count - 1);
@@ -1331,16 +1346,9 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             {
                 Visit(assignmentToName.Right);
                 Visit(assignmentToName.Left);
-                if (assignmentToName.Operator == Operator.AdditionAssignment &&
-                    (IsKnownDate(assignmentToName.Right) || _dateAliases.Contains(assigned.Name)))
+                // s += d joins the date's local text (FR-022). A reassigned name is never a date alias (see _dateAliases).
+                if (assignmentToName.Operator == Operator.AdditionAssignment && IsKnownDate(assignmentToName.Right))
                     ZoneDependent(assignmentToName, DateUse.LocalFormat, null);
-                // A plain = of something else drops the alias, but only where it surely runs: at the nesting the alias was
-                // declared at. A logical assignment (??=, ||=, &&=) may keep the date, so it never drops one.
-                if (IsKnownDate(assignmentToName.Right))
-                    AddDateAlias(assigned.Name);
-                else if (assignmentToName.Operator == Operator.Assignment &&
-                         _dateAliasNesting.TryGetValue(assigned.Name, out var declaredAt) && declaredAt == _nesting)
-                    _dateAliases.Remove(assigned.Name);
                 return;
             }
 
@@ -1358,13 +1366,14 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 foreach (var declarator in declaration.Declarations)
                 {
                     Visit(declarator);
-                    // An alias of a known date is a known date (FR-022). Elsa 3 scripts mostly declare with var, so var counts too.
-                    if (declarator.Id is Identifier alias)
+                    // An alias of a known date that is never assigned again is a known date (FR-022). Elsa 3 scripts mostly
+                    // declare with var, so var counts as well as const and let.
+                    if (declarator.Id is Identifier alias && declarator.Init is { } init && IsKnownDate(init) &&
+                        !_reassigned.Contains(alias.Name) && DeclaringScope(alias.Name) is { } scope)
                     {
-                        if (declarator.Init is { } init && IsKnownDate(init))
-                            AddDateAlias(alias.Name);
-                        else if (_dateAliasNesting.TryGetValue(alias.Name, out var declaredAt) && declaredAt == _nesting)
-                            _dateAliases.Remove(alias.Name);
+                        if (!_dateAliases.TryGetValue(scope, out var aliases))
+                            _dateAliases[scope] = aliases = new HashSet<string>(StringComparer.Ordinal);
+                        aliases.Add(alias.Name);
                     }
                 }
 
@@ -1963,7 +1972,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         private bool IsKnownDate(Node node) => node switch
         {
             NewExpression { Callee: Identifier { Name: "Date" } } => !IsDeclared("Date"),
-            Identifier alias => _dateAliases.Contains(alias.Name),
+            Identifier alias => IsDateAlias(alias.Name),
             _ => _dateReads.Contains(node),
         };
 
@@ -1994,21 +2003,17 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 IsEpoch(addition.Left) && MayBeNumber(addition.Right) ||
                 MayBeNumber(addition.Left) && IsEpoch(addition.Right),
             CallExpression { Callee: MemberExpression { Computed: false, Object: Identifier { Name: "Date" }, Property: Identifier { Name: "now" or "UTC" or "parse" } } } => !IsDeclared("Date"),
-            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" or "valueOf" } } } => true,
+            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" } } } => true,
+            CallExpression { Callee: MemberExpression { Computed: false, Object: var receiver, Property: Identifier { Name: "valueOf" } } } => IsKnownDate(receiver),
             _ => false,
         };
 
-        private void AddDateAlias(string name)
-        {
-            if (_dateAliases.Add(name) || !_dateAliasNesting.ContainsKey(name))
-                _dateAliasNesting[name] = _nesting;
-        }
-
-        /// <summary>Epoch milliseconds: <c>Date.now()</c>, <c>Date.UTC(...)</c>, <c>getTime()</c> or <c>valueOf()</c>.</summary>
+        /// <summary>Epoch milliseconds: <c>Date.now()</c>, <c>Date.UTC(...)</c>, <c>getTime()</c>, or <c>valueOf()</c> of a known date.</summary>
         private bool IsEpoch(Node node) => node switch
         {
             CallExpression { Callee: MemberExpression { Computed: false, Object: Identifier { Name: "Date" }, Property: Identifier { Name: "now" or "UTC" } } } => !IsDeclared("Date"),
-            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" or "valueOf" } } } => true,
+            CallExpression { Callee: MemberExpression { Computed: false, Property: Identifier { Name: "getTime" } } } => true,
+            CallExpression { Callee: MemberExpression { Computed: false, Object: var receiver, Property: Identifier { Name: "valueOf" } } } => IsKnownDate(receiver),
             _ => false,
         };
 
