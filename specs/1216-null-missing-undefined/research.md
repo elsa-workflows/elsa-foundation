@@ -39,7 +39,8 @@ Line numbers are from that initiative head.
 - **Rationale**: it follows how `IncidentStrategy` and `PersistenceMode` are authored, pinned and hashed. Writing the
   block only when set leaves the hashes of workflows without a policy as they are, so no stored fixture needs
   regenerating for them; compatibility is not owed before the first stable release, so this is a convenience, not a
-  constraint. The caller of every JavaScript evaluation already holds the executable, so a per-binding copy would only
+  constraint. The input materializer holds the executable and `Run JavaScript` gets the policies on its execution
+  context (T008), so a per-binding copy would only
   have to agree with the workflow-level value.
 - **Alternatives**: workflow metadata (not hashed, rejected by FR-021); per-binding only (no workflow-level record,
   rejected by D-11); a per-binding copy beside the capability profile (rejected: a second hashed copy of one setting);
