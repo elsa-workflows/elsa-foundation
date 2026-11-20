@@ -121,3 +121,13 @@ results, the cluster hook receipts and node logs trimmed to their first and last
 databases are excluded, and every file was checked for the database password and transfer token before upload.
 `two-host-custody.json` records the binary identities per series. `analyze-two-host.py` (run on the extracted archive)
 writes `two-host-summary.json`, which keeps every failed attempt and its cause.
+
+## Independent-machine cross-node Cancel (i69)
+
+`cancel-i69-evidence.tar.gz` (48 files plus `manifest.json`, 52,962 bytes, SHA-256
+`24448b6a591f8f007dc829eb2609705c5c319e4a110936036cef551c1bffcca9`) holds the third fixture: three task-owned D2s_v6
+machines on one private subnet, with PostgreSQL 16.15 on its own host and owner node A and sender node B on two more.
+It keeps the controller ledgers for series `x1`–`x3`, every sender receipt directory and the surviving node logs.
+Environment files are excluded, and every collected file was checked for the database password before download.
+`cancel-i69-custody.json` records the topology and binary identities, and `fixture-cleanup-i69.json` records the
+removal. `analyze-cancel-i69.py` (run on the extracted archive) prints the JSON committed as `cancel-i69-summary.json`.

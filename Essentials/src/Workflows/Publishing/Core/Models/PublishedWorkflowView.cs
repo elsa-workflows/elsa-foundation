@@ -21,6 +21,13 @@ public sealed record PublishedWorkflowView(
     int NodeCount,
     [property: JsonIgnore] bool WasCreated)
 {
+    /// <summary>
+    /// Non-blocking publication warnings, such as a script variable read that now resolves to another declaration than
+    /// in the version this publication replaces (spec 1222 FR-024, <c>VF-READ-005</c>). Omitted when there are none.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Warnings { get; init; }
+
     public static PublishedWorkflowView From(
         WorkflowExecutable executable,
         WorkflowExecutableSourceReference reference,

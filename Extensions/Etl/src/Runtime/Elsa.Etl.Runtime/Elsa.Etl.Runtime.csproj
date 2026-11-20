@@ -14,6 +14,7 @@
     <ProjectReference Include="../../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Connections/Core/Elsa.Connections.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Etl.Tests" />
+    <InternalsVisibleTo Include="Elsa.Etl.Persistence.ProviderTests" />
     <InternalsVisibleTo Include="Elsa.Etl.WorkerHost" />
     <InternalsVisibleTo Include="Elsa.Etl.Sql.ProviderTests" />
     <InternalsVisibleTo Include="Elsa.Etl.RabbitMq.ProviderTests" />

@@ -258,6 +258,7 @@ public sealed class RetryFaultedActivityAlterationHandlerTests
         Assert.Equal(
             [
                 new KeyValuePair<string, string>("runtime.alteration.jobId", "job"),
+                new KeyValuePair<string, string>("runtime.alteration.operatorAction", "Retry"),
                 new KeyValuePair<string, string>("runtime.alteration.planId", "plan"),
                 new KeyValuePair<string, string>("runtime.alteration.reason", "Delivery service restored"),
                 new KeyValuePair<string, string>("runtime.alteration.submittedBy", "operator-1")

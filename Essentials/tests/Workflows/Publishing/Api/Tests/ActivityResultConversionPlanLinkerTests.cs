@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-public sealed class ActivityResultConversionPlanLinkerTests
+public sealed partial class ActivityResultConversionPlanLinkerTests
 {
     [Fact]
     public void Link_pins_a_safe_widening_plan_from_the_producer_projection_contract()

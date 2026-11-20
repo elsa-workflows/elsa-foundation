@@ -1,0 +1,275 @@
+{
+  "id": "flow-switch-match-any-v1",
+  "definitionId": "flow-switch-match-any",
+  "name": "flow-switch-match-any",
+  "description": "Test-owned regular workflow (spec 1208 US5): a FlowSwitch in MatchAny mode whose cases a and c are true and b is false.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "flow-switch-match-any-root",
+    "nodeId": "flow-switch-match-any-root",
+    "name": "flow-switch-match-any-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "route",
+        "nodeId": "route",
+        "name": "route",
+        "type": "Elsa.FlowSwitch",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "cases": [
+          {
+            "label": "a",
+            "condition": {
+              "typeName": "Boolean",
+              "expression": {
+                "type": "JavaScript",
+                "value": "1 < 2"
+              }
+            }
+          },
+          {
+            "label": "b",
+            "condition": {
+              "typeName": "Boolean",
+              "expression": {
+                "type": "JavaScript",
+                "value": "1 > 2"
+              }
+            }
+          },
+          {
+            "label": "c",
+            "condition": {
+              "typeName": "Boolean",
+              "expression": {
+                "type": "Literal",
+                "value": "true"
+              }
+            }
+          }
+        ],
+        "mode": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "MatchAny"
+          }
+        }
+      },
+      {
+        "id": "on-a",
+        "nodeId": "on-a",
+        "name": "on-a",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "on-a"
+          }
+        }
+      },
+      {
+        "id": "on-b",
+        "nodeId": "on-b",
+        "name": "on-b",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "on-b"
+          }
+        }
+      },
+      {
+        "id": "on-c",
+        "nodeId": "on-c",
+        "name": "on-c",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "on-c"
+          }
+        }
+      },
+      {
+        "id": "on-default",
+        "nodeId": "on-default",
+        "name": "on-default",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "on-default"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "route",
+          "port": "a"
+        },
+        "target": {
+          "activity": "on-a",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "route",
+          "port": "b"
+        },
+        "target": {
+          "activity": "on-b",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "route",
+          "port": "c"
+        },
+        "target": {
+          "activity": "on-c",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "route",
+          "port": "Default"
+        },
+        "target": {
+          "activity": "on-default",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

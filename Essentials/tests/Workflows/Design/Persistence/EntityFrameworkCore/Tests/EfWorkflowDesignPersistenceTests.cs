@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Security.Cryptography;
@@ -134,6 +135,8 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
         await SeedSchemaVersionRowsAsync(db, new EfDesignAtomicWriter(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))));
 
+        await new EfSourceRevisions(db, new SourceScope("authoring", "tenant-a", "workflow", "workflow-design"))
+            .CaptureAsync("alpha", "draft", 0, "schema-capture");
         // Include the new template table in the same write-stamp proof.
         var templateType = db.Model.GetEntityTypes().Single(type => type.GetTableName() == "elsa_workflow_templates").ClrType;
         var template = (Elsa.Primitives.Entities.TenantEntity)Activator.CreateInstance(templateType)!;
@@ -168,6 +171,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     [InlineData("version")]
     [InlineData("draft")]
     [InlineData("draft layout")]
+    [InlineData("draft source")]
     [InlineData("version layout")]
     [InlineData("operation")]
     public async Task A_row_with_a_newer_schema_reports_skew_before_its_content_is_read(string table)
@@ -186,16 +190,19 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         {
             "definition" => (typeof(WorkflowDefinition), nameof(WorkflowDefinition.Name), new Func<Task>[] { () => definitions.FindByIdAsync("alpha"), () => definitions.ListAsync(new WorkflowDefinitionFilter()), () => versions.GetWithDefinitionAsync("version") }),
             "version" => (typeof(WorkflowDefinitionVersion), nameof(WorkflowDefinitionVersion.StateSource), [() => versions.FindByIdAsync("version"), () => versions.ListByDefinitionAsync("alpha"), () => list.ListByDefinitionIdsAsync(["alpha"])]),
-            "draft" => (typeof(WorkflowDefinitionDraft), nameof(WorkflowDefinitionDraft.StateSource), [() => drafts.FindByIdAsync("draft"), () => drafts.FindWithLayoutByIdAsync("draft"), () => list.ListByDefinitionIdsAsync(["alpha"])]),
+            "draft source" => (typeof(SourceWorkingCopy), nameof(SourceWorkingCopy.Content), [() => drafts.FindByIdAsync("draft"), () => drafts.FindWithLayoutByIdAsync("draft")]),
+            "draft" => (typeof(WorkflowDefinitionDraft), nameof(WorkflowDefinitionDraft.SourceVersionId), [() => drafts.FindByIdAsync("draft"), () => drafts.FindWithLayoutByIdAsync("draft"), () => list.ListByDefinitionIdsAsync(["alpha"])]),
             "draft layout" => (typeof(WorkflowDefinitionDraftLayout), nameof(WorkflowDefinitionDraftLayout.RecordsJson), [() => drafts.FindLayoutByDraftIdAsync("draft"), () => drafts.FindWithLayoutByIdAsync("draft")]),
             "version layout" => (typeof(WorkflowDefinitionVersionLayout), nameof(WorkflowDefinitionVersionLayout.RecordsJson), [() => new EfWorkflowDefinitionVersionLayoutStore(db, access).FindByVersionIdAsync("version")]),
             _ => (typeof(DesignOperationEntity), nameof(DesignOperationEntity.ResultJson), [() => ExecuteSchemaVersionOperationAsync(writer)])
         };
         await EfSchemaVersionSkewTestSupport.ArrangeSkewedTableAsync(db, entityType, content);
 
+        var family = entityType == typeof(SourceWorkingCopy) || entityType == typeof(SourceSnapshot)
+            ? EfSourceModel.Chain : WorkflowsDesignEfModule.Chain;
         foreach (var read in reads)
             EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(
-                await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read), "WorkflowsDesign", WorkflowsDesignEfModule.SchemaVersion);
+                await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read), family.Family, family.CurrentVersion);
     }
 
     /// <summary>
@@ -350,7 +357,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
             db.Model.FindEntityType(typeof(WorkflowDefinitionVersion))!.GetForeignKeys().Single().Properties.Select(property => property.Name));
         Assert.Equal(
             ["ScopeKey", "WorkflowDefinitionIdLookupHash"],
-            db.Model.FindEntityType(typeof(WorkflowDefinitionDraft))!.GetForeignKeys().Single().Properties.Select(property => property.Name));
+            db.Model.FindEntityType(typeof(WorkflowDefinitionDraft))!.GetForeignKeys().Single(key => key.PrincipalEntityType.ClrType == typeof(WorkflowDefinition)).Properties.Select(property => property.Name));
         Assert.Equal(
             ["ScopeKey", "IdLookupHash"],
             db.Model.FindEntityType(typeof(WorkflowDefinitionVersion))!.FindPrimaryKey()!.Properties.Select(property => property.Name));
@@ -1829,8 +1836,8 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         /// </summary>
         public Task StoreStateSourceDirectlyAsync(string? stateSource) =>
             Db.Database.ExecuteSqlRawAsync(
-                $"UPDATE {WorkflowsDesignEfModule.DraftTable} SET StateSource = {{0}} WHERE Id = {{1}}",
-                stateSource!,
+                "UPDATE elsa_workflow_sources_copies SET Content = {0} WHERE CopyId = {1}",
+                stateSource ?? string.Empty,
                 DraftId);
 
         public async Task<(int Versions, int Layouts)> CountVersionRowsAsync() =>

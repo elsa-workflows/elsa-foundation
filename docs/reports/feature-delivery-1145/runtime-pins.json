@@ -1,0 +1,8 @@
+[
+  {
+    "id": "System.Text.Json",
+    "version": "8.0.5",
+    "source": "https://api.nuget.org/v3/index.json",
+    "reason": "Microsoft.OpenApi's nuspec dependency is walked by Nuplane but omitted from the net10.0 restore closure because the framework supplies System.Text.Json."
+  }
+]

@@ -21,7 +21,7 @@ transitive lock. Source provenance is
 The package declares the MIT license. The dependency graph needs Microsoft.Extensions.AI.Abstractions
 10.10.1; M0 observed Foundation at 10.5.1; the normal central graph now pins 10.10.1 through
 [dependency enabler #3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544). Its
-compatibility lock template follows the real project dependencies. Full production specialist runtime/
+compatibility lock template follows the real project dependencies. Full production agent runtime/
 package qualification remains an implementation gate.
 
 The two JSON results name each actual SDK observation, including a second process restoring the

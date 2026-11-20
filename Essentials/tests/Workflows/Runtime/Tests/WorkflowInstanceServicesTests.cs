@@ -618,6 +618,21 @@ public sealed class WorkflowInstanceServicesTests
     }
 
     [Fact]
+    public async Task GetWorkflowInstance_ExposesThePolicySelectedOutputRepresentation()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
+        foreach (var change in RuntimeWorkflowStateSeed.BuildWorkflowOutputChanges("wf-1", new Dictionary<string, object?> { ["ReviewData"] = new { Note = "Approved" } }, Now(-1)))
+            await _durableValueStore.SaveAsync(change.State!);
+
+        var result = await NewGetInstanceHandler().GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+
+        var output = Assert.Single(result!.Outputs);
+        Assert.Equal("ReviewData", output.Key);
+        Assert.Equal("DiagnosticSnapshot", output.Value.CaptureMode);
+        Assert.False(output.Value.IsRedacted);
+    }
+
+    [Fact]
     public async Task GetWorkflowInstance_ReturnsActivitiesAndIncidents()
     {
         await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Faulted, "definition-1"));

@@ -296,6 +296,15 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<long>("ExecutionSequence")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("FirstCommitSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastCommitSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("LostUpdateWarningCount")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ParentActivityExecutionId")
                         .HasMaxLength(450)
                         .HasColumnType("TEXT");
@@ -348,6 +357,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "FirstCommitSequence", "LastCommitSequence")
+                        .HasDatabaseName("IX_elsa_runtime_activity_execution_state_commit_range");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ParentActivityExecutionIdHash");
 
@@ -1533,6 +1545,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ClaimDeliveredAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("ClaimableAtUtcTicks")
                         .HasColumnType("INTEGER");
 
@@ -2176,6 +2191,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "PlanIdHash", "CaptureOrdinal", "JobIdOrderKey");
 
                     b.HasIndex("ScopeKeyHash", "PlanIdHash", "Status", "ClaimableAtUtcTicks", "JobIdOrderKey");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash")
+                        .HasDatabaseName("IX_elsa_runtime_workflow_alteration_job_workflow");
 
                     b.ToTable("elsa_runtime_workflow_alteration_job", (string)null);
                 });

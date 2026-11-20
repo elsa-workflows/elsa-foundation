@@ -285,6 +285,19 @@ button.wf-node-slot-badge:focus-visible {
   pointer-events: auto;
 }
 
+/* A port the node no longer declares, kept so its connection can be repaired (FR-013). */
+.wf-node-port-label.wf-node-port-missing {
+  border-style: dashed;
+  border-color: var(--wf-danger);
+  color: var(--wf-danger);
+}
+
+.react-flow__edge.wf-edge-missing-port .react-flow__edge-path {
+  stroke: var(--wf-danger);
+  stroke-dasharray: 6 4;
+}
+
+
 .wf-node-port-label[data-side="right"] {
   left: calc(100% + 10px);
   transform: translateY(-50%);

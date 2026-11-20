@@ -62,6 +62,30 @@ describe("CompensationScopeDesigner", () => {
     expect(result[0].compensation).toBeNull();
   });
 
+  it("removes a step activity while retaining its name and current compensation", () => {
+    const { props } = mount({ selectedNodeId: "reserve" });
+    click(button("Remove activity from Reserve inventory"));
+    const edit = (props.onChangeSteps as ReturnType<typeof vi.fn>).mock.calls[0][0] as (steps: CompensationStep[]) => CompensationStep[];
+    const compensation = { ...leaf("release"), inputs: [{ referenceKey: "text", value: "edited meanwhile" }] } as unknown as ActivityNode;
+    const next = edit([
+      { name: "Reserve inventory", activity: leaf("reserve"), compensation },
+      { name: "Confirm order", activity: leaf("confirm"), compensation: null }
+    ]);
+    expect(next[0]).toEqual({ name: "Reserve inventory", activity: null, compensation });
+    expect(next[0].compensation).toBe(compensation);
+    expect(next[1].activity?.nodeId).toBe("confirm");
+    expect(props.onSelect).toHaveBeenCalledWith(null);
+    const empty = mount({ owner: scope(next) });
+    click(button("Choose the activity for Reserve inventory"));
+    expect(empty.props.onRequestActivity).toHaveBeenCalledWith({ kind: "step-activity", index: 0 }, expect.anything());
+  });
+
+  it("offers no activity removal when inspecting a run", () => {
+    mount({ readOnly: true });
+    expect(button("Remove activity from Reserve inventory")).toBeNull();
+    expect(button("Remove compensation for Reserve inventory")).toBeNull();
+  });
+
   it("renames, reorders, removes compensation and deletes steps", () => {
     const { props } = mount();
 

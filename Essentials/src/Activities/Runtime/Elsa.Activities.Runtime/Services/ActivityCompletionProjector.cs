@@ -51,8 +51,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
 
         if (transition is not IActivityCompletionTransition completion)
             throw new InvalidOperationException($"Transition '{transition.Kind}' cannot be projected as an activity completion.");
-        if (!contract.Outcomes.Contains(completion.Outcome, StringComparer.Ordinal))
-            throw new InvalidOperationException($"VF-ACT-006: Outcome '{completion.Outcome}' is not declared by activity contract '{contract.ActivityTypeKey}'.");
+        ActivityOutcomeSelectionRules.Validate(contract, completion.Selection);
         if (contract.Result.IsRequired && completion.Result is null)
             throw new InvalidOperationException($"VF-ACT-006: Activity contract '{contract.ActivityTypeKey}' requires a result.");
         if (!contract.Result.Policy.IsPersistable)
@@ -124,7 +123,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
             invocationId,
             attempt.AttemptId,
             resultEnvelope,
-            completion.Outcome,
+            completion.Selection,
             completedAt,
             contract.SchemaFingerprint);
         return new ActivityCompletionProjection(durableCompletion, projections);
@@ -161,7 +160,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
             invocationId,
             attempt.AttemptId,
             resultEnvelope,
-            completion.Outcome,
+            completion.Selection,
             completedAt,
             contract.SchemaFingerprint);
 

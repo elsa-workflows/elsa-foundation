@@ -26,7 +26,7 @@ internal static class CalledSnapshotReader
         var cs = new SqliteConnectionStringBuilder { DataSource = new Uri(Path.GetFullPath(snapshot)).AbsoluteUri + "?immutable=1", Mode = SqliteOpenMode.ReadOnly }.ToString();
         await using var connection = new SqliteConnection(cs); await connection.OpenAsync();
         await using (var command = connection.CreateCommand()) { command.CommandText = "PRAGMA query_only=ON"; await command.ExecuteNonQueryAsync(); }
-        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(await ReadOnlyRuntimeSnapshot.OptionsAsync(connection));
         var access = new ScopedAccess(new PersistenceScope(scopeName));
         var workflows = new EfWorkflowExecutionStateStore(context, access, new NoPaging());
         var activities = new EfActivityExecutionStateStore(context, access, new NoPaging());
@@ -102,7 +102,7 @@ internal static class CalledSnapshotReader
                     linked.Status == (fault ? WorkflowDispatchStatus.Faulted : WorkflowDispatchStatus.Completed) &&
                     physical.Count == 0 && parentIncidents.Count == 0 && call.Fault is null,
                     "Actual legacy ordinary-result completion or child truth differs.");
-                Require(call.Completion?.OutcomeKey == (fault ? "Faulted" : "Completed"), "Legacy call result outcome changed.");
+                Require(call.Completion?.OutcomeNames.SequenceEqual([fault ? "Faulted" : "Completed"]) == true, "Legacy call result outcome changed.");
                 var tail = childStates.Single(state => state.Execution.ExecutableNodeId == "node-child-tail");
                 Require(tail.ParentActivityExecutionId == childRoot.InvocationId && tail.Status == (fault ? ActivityExecutionStatus.Faulted : ActivityExecutionStatus.Completed), "The original child did not execute its intended tail.");
                 if (fault)

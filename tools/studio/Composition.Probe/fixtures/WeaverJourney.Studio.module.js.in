@@ -15,7 +15,7 @@ export function register(api) {
     target: { moduleId, resourceType: "weaver-journey-note", resourceId: note.id, revision: String(note.revision), displayName: "Qualification note" },
     content: { id: note.id, revision: String(note.revision), value: note.value }
   });
-  api.agent.contextProviders.add({
+  api.weaver.contextProviders.add({
     id: "weaver.journey.note-context", moduleId, displayName: "Qualification note", surfaces: [path], sensitivity: "internal",
     async collect() {
       try { const note = await refresh(); return { attachments: [attachment(note, `note:${note.id}`)], diagnostics: [] }; }
@@ -25,10 +25,10 @@ export function register(api) {
       }
     }
   });
-  api.agent.capabilities.add({ id: "weaver.journey.edit", moduleId, displayName: "Review note change", description: "Review a change to the selected qualification note.", kind: "proposal", risk: "review-required", surfaces: [path] });
-  api.agent.toolSlots.add({ id: "weaver.journey.tools", moduleId, displayName: "Qualification note", surfaces: [path], invocationModes: ["proposal"] });
-  api.agent.toolContracts.add({ id: "weaver_journey_set_note", slotId: "weaver.journey.tools", moduleId, contractVersion: "1", executionLocation: "server", displayName: "Set note", description: "Change the owning note through its server service.", surfaces: [path], inputSchema: { type: "object", required: ["value"], properties: { value: { type: "string" } }, additionalProperties: false }, resourceTargetSchema: { type: "object" }, resultSchema: { type: "object" }, risk: "review-required", invocationModes: ["proposal"], resultRendererIds: ["weaver.journey.note-result"] });
-  api.agent.resultRenderers.add({
+  api.weaver.capabilities.add({ id: "weaver.journey.edit", moduleId, displayName: "Review note change", description: "Review a change to the selected qualification note.", kind: "proposal", risk: "review-required", surfaces: [path] });
+  api.weaver.toolSlots.add({ id: "weaver.journey.tools", moduleId, displayName: "Qualification note", surfaces: [path], invocationModes: ["proposal"] });
+  api.weaver.toolContracts.add({ id: "weaver_journey_set_note", slotId: "weaver.journey.tools", moduleId, contractVersion: "1", executionLocation: "server", displayName: "Set note", description: "Change the owning note through its server service.", surfaces: [path], inputSchema: { type: "object", required: ["value"], properties: { value: { type: "string" } }, additionalProperties: false }, resourceTargetSchema: { type: "object" }, resultSchema: { type: "object" }, risk: "review-required", invocationModes: ["proposal"], resultRendererIds: ["weaver.journey.note-result"] });
+  api.weaver.resultRenderers.add({
     id: "weaver.journey.note-result", moduleId, displayName: "Qualification note result", resultTypes: ["weaver.journey.note-change"], schemaVersions: ["1"],
     component: function NoteResult({ preparedInvocation, toolResult }) {
       const [error, setError] = useState("");
@@ -47,7 +47,7 @@ export function register(api) {
     const propose = async () => {
       try {
         const selected = await refresh(); const requestId = crypto.randomUUID();
-        api.agent.dispatchPrompt({ message: JSON.stringify({ toolName: "weaver_journey_set_note", arguments: { value } }), mode: "enqueue", requestId,
+        api.weaver.dispatchPrompt({ message: JSON.stringify({ toolName: "weaver_journey_set_note", arguments: { value } }), mode: "enqueue", requestId,
           source: { moduleId, actionId: "weaver.journey.propose", label: "Review note change" }, attachments: [attachment(selected, `note-request:${requestId}`)] });
       } catch (failure) { setError(failure.message); }
     };

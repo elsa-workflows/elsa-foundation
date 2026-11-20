@@ -13,7 +13,7 @@ internal static class ActivityProviderDiscoveryContract
     public static async Task RunAsync(ActivitiesDesignDbContext db)
     {
         var marker = Guid.NewGuid().ToString("N").ToUpperInvariant();
-        var provider = $"specialists-{marker}";
+        var provider = $"agents-{marker}";
         var watermark = await db.ActivityManagementProjectionWatermarks.SingleOrDefaultAsync();
         var sequence = (watermark?.Sequence ?? 0) + 1;
         var previousRetention = watermark?.RetainedFromSequence ?? 0;
@@ -39,7 +39,7 @@ internal static class ActivityProviderDiscoveryContract
             ValidFromSequence = from ?? sequence, ValidToSequenceExclusive = to,
             ValidFromKey = (from ?? sequence).ToString("D20"), ValidToKey = to.ToString("D20"),
             VisibilityKey = tenant ?? "global", SortKey = Id(name), SearchText = marker,
-            ActivityTypeKey = "Acme.Specialist", Category = "Tests", ContentAuthority = new(ActivityContentAuthorityKind.Design, "design"),
+            ActivityTypeKey = "Acme.Agent", Category = "Tests", ContentAuthority = new(ActivityContentAuthorityKind.Design, "design"),
             ContentAuthorityKind = ActivityContentAuthorityKind.Design, HeadProviderKey = head, RecommendationProviderKey = recommendation,
             UpdatedAt = DateTimeOffset.UtcNow
         };

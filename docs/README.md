@@ -17,9 +17,10 @@ Read these roughly in order:
 2. [How a workflow executes](how-a-workflow-executes.md): one request followed from the server's entry point to a saved checkpoint.
 3. [Seams and bridges](seams.md): a worked example of how the activities and workflows domains connect.
 4. [Runtime fault behaviour](runtime-fault-behavior.md): what happens when an activity throws versus when a runtime handler throws, and the defaults behind each.
-5. [Recovering after a crash](runtime-durable-resumption.md): durable storage versus durable resumption, crash windows A/B/C, and the at-least-once delivery rule.
-6. [Durable timers](runtime-durable-timers.md): the `Delay` activity, the durable timer store and pump, why firing is safe to repeat, and the at-least-once guarantee of Timer/Cron start triggers.
-7. [Bookmark expiration](bookmark-expiration.md): the `ExpiresAt` cut-off, why it is not a timeout, and examples of finite and indefinite waits.
+5. [Variable lifecycle](runtime-variable-lifecycle.md): per-variable versions, read sets, the commit rule and lost-update warnings (spec 1221).
+6. [Recovering after a crash](runtime-durable-resumption.md): durable storage versus durable resumption, crash windows A/B/C, and the at-least-once delivery rule.
+7. [Durable timers](runtime-durable-timers.md): the `Delay` activity, the durable timer store and pump, why firing is safe to repeat, and the at-least-once guarantee of Timer/Cron start triggers.
+8. [Bookmark expiration](bookmark-expiration.md): the `ExpiresAt` cut-off, why it is not a timeout, and examples of finite and indefinite waits.
 
 ## Build human work into a workflow
 

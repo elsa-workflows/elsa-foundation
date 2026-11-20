@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Runtime.Core.Serialization;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -13,7 +14,7 @@ namespace Elsa.Activities.Runtime.Tests;
 /// The completion projector and the input hydrator use the same JSON options, so a .NET object one activity
 /// returns hydrates the next activity's input with every member set (#3799).
 /// </summary>
-public sealed class ActivityValueJsonTests
+public sealed partial class ActivityValueJsonTests
 {
     private static readonly ValueTypeDescriptor OrderType = new("Shop.Order");
 
@@ -64,6 +65,21 @@ public sealed class ActivityValueJsonTests
             Hydrate(JsonSerializer.SerializeToElement(new { customerName = "Ann", total = "5" })));
 
         Assert.Contains("cannot be materialized", exception.Message);
+    }
+
+    [Fact]
+    public void Public_profile_matches_actual_completion_bytes_and_does_not_mutate_cached_runtime_options()
+    {
+        var order = new Order { CustomerName = "Ann & Co", Total = 5m };
+        var expected = JsonSerializer.Serialize(order, ActivityValueJsonProfile.CreateOptions());
+        var separate = ActivityValueJsonProfile.CreateOptions();
+        separate.PropertyNamingPolicy = null;
+
+        var actual = Project(order).Completion.Result.InlineValue!.Value.GetRawText();
+
+        Assert.Equal(expected, actual);
+        Assert.Equal("Ann & Co", Hydrate(JsonSerializer.Deserialize<JsonElement>(actual)).Order!.CustomerName);
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Order>("{\"total\":\"5\"}", ActivityValueJsonProfile.CreateOptions()));
     }
 
     private static ActivityCompletionProjection Project(Order order) =>

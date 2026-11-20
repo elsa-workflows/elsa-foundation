@@ -22,7 +22,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     {
         cancellationToken.ThrowIfCancellationRequested();
         ValidateIdentity(tenantId, normalizedName);
-        var record = await FindRecordAsync(tenantId, normalizedName, cancellationToken);
+        var record = await FindRecordAsync(tenantId, normalizedName.ToLowerInvariant(), cancellationToken);
         return record is null ? null : Map(record, tenantId);
     }
 
@@ -33,7 +33,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     {
         cancellationToken.ThrowIfCancellationRequested();
         ValidateIdentity(tenantId, normalizedName);
-        var record = await FindRecordAsync(tenantId, normalizedName, cancellationToken);
+        var record = await FindRecordAsync(tenantId, normalizedName.ToLowerInvariant(), cancellationToken);
         if (record is null)
             return null;
         if (EfSchemaVersion.NotReadable(SecretsEfModule.Chain, record.SchemaVersion) ||
@@ -110,14 +110,16 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         var document = SecretDocument.FromSecret(secret);
         await UnconditionalSaves.RunAsync(context, async () =>
         {
-            var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name, document.Tombstone], cancellationToken);
+            var existing = await context.Secrets.FindAsync([secret.TenantId, document.NormalizedName, document.Tombstone], cancellationToken);
             if (existing is null)
                 context.Secrets.Add(NewRecord(document));
             else
             {
                 // A row this build cannot read is never overwritten in this build's format.
                 EfSchemaVersion.EnsureReadable(SecretsEfModule.Chain, existing.SchemaVersion);
+                var writeVersion = SecretsWriteVersion.For(context, secret, existing.SchemaVersion);
                 document.CopyProjectionsTo(existing);
+                existing.SchemaVersion = writeVersion;
             }
 
             if (document.Tombstone.Length > 0)
@@ -156,7 +158,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         // A revision guards the row holding the name: a deleted secret's row is history, and no revision saves over it.
         // A create, which has no revision, targets the row its document maps to.
         var tombstone = expectedToken is null ? document.Tombstone : "";
-        var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name, tombstone], cancellationToken);
+        var existing = await context.Secrets.FindAsync([secret.TenantId, document.NormalizedName, tombstone], cancellationToken);
         // Settled before the stored revision is compared, and before a row this build cannot read is replaced.
         if (existing is not null)
             EfSchemaVersion.EnsureReadable(SecretsEfModule.Chain, existing.SchemaVersion);
@@ -179,7 +181,9 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         }
         else if (document.Tombstone.Length == 0)
         {
+            var writeVersion = SecretsWriteVersion.For(context, secret, existing.SchemaVersion);
             document.CopyProjectionsTo(existing);
+            existing.SchemaVersion = writeVersion;
             saved = existing;
         }
         else
@@ -187,7 +191,8 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             // Deleting frees the name. The row that held it goes in the same save that adds the secret's tombstoned row,
             // so the delete is one atomic change, and the delete of the old row still carries the revision compared above.
             context.Secrets.Remove(existing);
-            saved = document.ToRecord();
+            saved = NewRecord(document);
+            saved.SchemaVersion = SecretsWriteVersion.For(context, secret, existing.SchemaVersion);
             context.Secrets.Add(saved);
         }
 
@@ -233,11 +238,13 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     /// The row a write adds for <paramref name="document"/>. A row that holds a name is added only when the row its delete
     /// will write under the secret's id fits the key as well, so a secret this store accepts can always be deleted.
     /// </summary>
-    private static SecretRecord NewRecord(SecretDocument document)
+    private SecretRecord NewRecord(SecretDocument document)
     {
         if (document.Tombstone.Length == 0)
             SecretNameConstraints.ValidateKeyLength(document.TenantId, document.NormalizedName, document.Secret.Id);
-        return document.ToRecord();
+        var record = document.ToRecord();
+        record.SchemaVersion = SecretsWriteVersion.For(context, document.Secret);
+        return record;
     }
 
     /// <summary>
@@ -247,7 +254,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     /// </summary>
     private async Task FreeNameAsync(Secret secret, CancellationToken cancellationToken)
     {
-        var live = await context.Secrets.FindAsync([secret.TenantId, secret.Name, ""], cancellationToken);
+        var live = await context.Secrets.FindAsync([secret.TenantId, secret.Name.ToLowerInvariant(), ""], cancellationToken);
         if (live is not null && string.Equals(Map(live, secret.TenantId).Id, secret.Id, StringComparison.Ordinal))
             context.Secrets.Remove(live);
     }

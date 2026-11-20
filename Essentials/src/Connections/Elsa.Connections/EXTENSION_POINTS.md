@@ -9,7 +9,8 @@ Use `services.AddConnections()` to register defaults, then replace these service
 
 - `IConnectionRepository` for persistence. The default `InMemoryConnectionRepository` drops metadata
   on restart. Opt into [EF persistence](../Persistence/EntityFrameworkCore/README.md) to retain it;
-  choose durable Secrets storage separately for owned credentials (`connection:<name>:<field>`).
+  choose durable Secrets storage separately for owned credentials (`connection:<name>:<field>`),
+  which are created in the store named by `Elsa:Secrets:DefaultWritableStoreName` (default `encrypted`).
   `GetCapabilitiesAsync` identifies the actual configured metadata profile; unspecified contributions
   do not claim durability. A replacement must keep
   the compare-and-swap contract on `SaveAsync`: it saves only when the stored `State.Version` equals
@@ -51,9 +52,10 @@ Use `services.AddConnections()` to register defaults, then replace these service
 ## Extend
 
 - `IConnectionTypeProvider` for a new connection type.
-  Known cross-domain contributions: `SpecialistModelConnectionTypeProvider` configured by
-  [AnthropicSpecialists](../../../../Extensions/Agent/src/Specialists/Anthropic/README.md) and
-  [AzureOpenAISpecialists](../../../../Extensions/Agent/src/Specialists/AzureOpenAI/README.md).
+  Known cross-domain contributions: `AgentModelConnectionTypeProvider` configured by
+  [AnthropicAgents](../../../../Extensions/Agent/src/Anthropic/README.md),
+  [OpenAIAgents](../../../../Extensions/Agent/src/OpenAI/README.md) and
+  [AzureOpenAIAgents](../../../../Extensions/Agent/src/AzureOpenAI/README.md).
   They contribute immutable type metadata without capturing a scoped model client factory.
 - `IAuthenticationSchemeProvider` for a new auth scheme (OAuth2 plugs in here; see #2728).
 - `IHttpRequestAuthenticator` for applying a scheme to `HttpRequestMessage`.

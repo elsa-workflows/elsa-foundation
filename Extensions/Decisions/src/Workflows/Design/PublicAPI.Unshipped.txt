@@ -1,0 +1,6 @@
+#nullable enable
+Elsa.Decisions.Workflows.Design.DecisionsWorkflowsDesignFeature
+Elsa.Decisions.Workflows.Design.DecisionsWorkflowsDesignFeature.DecisionsWorkflowsDesignFeature() -> void
+Elsa.Decisions.Workflows.Design.IDecisionPublicationAuthorizer
+Elsa.Decisions.Workflows.Design.IDecisionPublicationAuthorizer.EnsureAsync(string! tenantId, string! assetId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+virtual Elsa.Decisions.Workflows.Design.DecisionsWorkflowsDesignFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

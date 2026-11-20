@@ -13,7 +13,7 @@
     <ProjectReference Include="..\Core\Elsa.Studio.Preferences.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="NativeEndpoints" />
+    <PackageReference Include="ValenceWorks.MinimalEndpoints" />
   </ItemGroup>
 
 </Project>

@@ -91,7 +91,7 @@ Two additional Anthropic cases matter for the production design:
 
 SDK transport success does not establish business acceptance. Elsa must inspect refusal/content/finish
 signals, validate the complete result schema and enforce policy/usage limits before accepting a turn.
-The research fixture records these signals and deliberately accepts no specialist business result.
+The research fixture records these signals and deliberately accepts no agent business result.
 
 ## Provider schema compatibility
 
@@ -143,4 +143,4 @@ Reasoning flattening applies only to the Anthropic thinking fixture.
 
 No live model, streaming, Responses API, hosted tool, model capability inventory, credential rotation,
 Elsa journal, restart/replay, production session codec or packaged/custom host is qualified here.
-Those remain M3 and later acceptance obligations in the [spec research](../../../../specs/1179-specialist-agents/research.md).
+Those remain M3 and later acceptance obligations in the [spec research](../../../../specs/1179-agents/research.md).

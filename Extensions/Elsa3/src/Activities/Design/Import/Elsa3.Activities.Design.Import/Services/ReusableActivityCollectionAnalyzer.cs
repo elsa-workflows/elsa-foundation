@@ -9,8 +9,16 @@ namespace Elsa3.Activities.Design.Import.Services;
 /// Which flagged activities are triggers (spec 246 D-6, spec 248). Without it, every activity marked
 /// <c>canStartWorkflow</c> in a reusable workflow counts as a start trigger.
 /// </param>
-public sealed class ReusableActivityCollectionAnalyzer(IReusableActivityTriggerClassifier? triggers = null) : IReusableActivityCollectionAnalyzer
+/// <param name="converterRevision">
+/// The converter revision the plan's versions are numbered and identified at (<c>{n}.{R}.0</c>, #3921). Without it,
+/// revision 0: the identities every import before revisions existed used.
+/// </param>
+public sealed class ReusableActivityCollectionAnalyzer(
+    IReusableActivityTriggerClassifier? triggers = null,
+    IElsa3ConverterRevision? converterRevision = null) : IReusableActivityCollectionAnalyzer
 {
+    private readonly int _converterRevision = converterRevision?.Current ?? 0;
+
     public ValueTask<ReusableActivityImportPlan> AnalyzeAsync(
         ReusableActivityImportCollection collection,
         CancellationToken cancellationToken = default)
@@ -172,7 +180,7 @@ public sealed class ReusableActivityCollectionAnalyzer(IReusableActivityTriggerC
                     continue;
                 }
 
-                var targetVersionId = ReusableActivityImportIdentity.Create("activity-version", target.Id);
+                var targetVersionId = ReusableActivityImportIdentity.ActivityVersion(target.Id, _converterRevision);
                 dependencies.Add(new(source.Id, target.DefinitionId, target.Id, targetVersionId, activity.NodeId));
                 rewrites.Add(new(source.Id, activity.NodeId, target.Id, targetVersionId));
             }
@@ -185,14 +193,15 @@ public sealed class ReusableActivityCollectionAnalyzer(IReusableActivityTriggerC
                 SourceFingerprint(source),
                 isReusable,
                 source.DefinitionId,
-                source.Id,
+                ReusableActivityImportIdentity.WorkflowVersion(source.Id, _converterRevision),
                 canCreateReusableIdentity ? ReusableActivityImportIdentity.Create("activity-definition", source.DefinitionId) : null,
-                canCreateReusableIdentity ? ReusableActivityImportIdentity.Create("activity-version", source.Id) : null,
+                canCreateReusableIdentity ? ReusableActivityImportIdentity.ActivityVersion(source.Id, _converterRevision) : null,
                 canCreateReusableIdentity ? ReusableActivityImportIdentity.ActivityTypeKey(source.DefinitionId) : null,
                 dependencies.OrderBy(x => x.NodeId, StringComparer.Ordinal).ThenBy(x => x.TargetSourceVersionId, StringComparer.Ordinal).ToArray(),
                 rewrites.OrderBy(x => x.NodeId, StringComparer.Ordinal).ThenBy(x => x.TargetSourceVersionId, StringComparer.Ordinal).ToArray(),
                 directStarts.OrderBy(x => x.NodeId, StringComparer.Ordinal).ToArray(),
-                OrderDiagnostics(itemDiagnostics));
+                OrderDiagnostics(itemDiagnostics),
+                _converterRevision);
             items.Add(item);
             diagnostics.AddRange(item.Diagnostics);
         }
@@ -223,7 +232,7 @@ public sealed class ReusableActivityCollectionAnalyzer(IReusableActivityTriggerC
 
         var orderedItems = items.OrderBy(x => x.SourceVersionId, StringComparer.Ordinal).ToArray();
         var orderedDiagnostics = OrderDiagnostics(diagnostics);
-        var planId = ComputePlanId(collection.CollectionId, orderedItems, orderedDiagnostics);
+        var planId = ComputePlanId(collection.CollectionId, orderedItems, orderedDiagnostics, _converterRevision);
         return ValueTask.FromResult(new ReusableActivityImportPlan(planId, collection.CollectionId, orderedItems, orderedDiagnostics));
     }
 
@@ -416,9 +425,13 @@ public sealed class ReusableActivityCollectionAnalyzer(IReusableActivityTriggerC
     private static string ComputePlanId(
         string collectionId,
         IReadOnlyList<ReusableActivityImportItem> items,
-        IReadOnlyList<Elsa3MigrationDiagnostic> diagnostics)
+        IReadOnlyList<Elsa3MigrationDiagnostic> diagnostics,
+        int converterRevision)
     {
         var fields = new List<string> { collectionId };
+        // Revision 0 keeps the plan ids of earlier releases; a later revision is a different plan for the same input.
+        if (converterRevision > 0)
+            fields.AddRange(["converter-revision", converterRevision.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
         foreach (var item in items)
         {
             fields.AddRange([item.SourceDefinitionId, item.SourceVersionId, item.SourceVersion.ToString(), item.SourceFingerprint, item.IsReusable.ToString(), item.ActivityDefinitionId ?? "", item.ActivityDefinitionVersionId ?? ""]);

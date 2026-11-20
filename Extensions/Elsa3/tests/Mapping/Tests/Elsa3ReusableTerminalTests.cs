@@ -72,11 +72,50 @@ public sealed class Elsa3ReusableTerminalTests
         Assert.Equal("end", error.Metadata["ActivityNodeId"]);
     }
 
+    /// <summary>
+    /// Spec 1208 FR-029 (US5 scenario 5): several literal outcomes become the graph Complete's literal <c>outcomes</c>
+    /// list of reference keys (<c>Done</c> → <c>done</c>), each declared on the contract, and the graph provider accepts
+    /// and compiles it.
+    /// </summary>
     [Theory]
-    [InlineData("[\"a\",\"b\"]", "Literal")]
+    [InlineData("[\"Approved\",\"Audit\"]", "Literal")]
+    [InlineData("[\"Approved\",\"Audit\",\"Approved\"]", "Literal")]
+    [InlineData("[\"Approved\",\"Audit\"]", "Object")]
+    public async Task Several_literal_outcomes_become_the_complete_outcomes_list(string outcomes, string expressionType)
+    {
+        var complete = Activity("complete", "Elsa.Complete", ("outcomes", Expression(expressionType, outcomes, "Object")));
+        var catalog = RealActivityCatalog.Create();
+
+        var result = await ConversionServices.ConvertAsync(catalog, Reusable(Sequence("root", complete), outcomes: ["Approved", "Audit"]), isReusable: true);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var node = Node(result.Value!.State, "complete");
+        Assert.Equal(catalog.VersionIdOf(CompleteKey), node.ActivityVersionId);
+        Assert.DoesNotContain(node.Inputs, input => input.ReferenceKey == "outcome");
+        Assert.Equal("[\"Approved\",\"Audit\"]", Text(Input(node, "outcomes")));
+        Assert.Equal([("Approved", "Approved"), ("Audit", "Audit"), ("done", "Done")], Outcomes(result.Value));
+        Assert.Empty(Errors(await GraphProviderProof.ValidateAsync(catalog, result.Value)));
+        GraphProviderProof.AssertCompiled(await GraphProviderProof.CompileAsync(catalog, result.Value));
+    }
+
+    [Fact]
+    public async Task Several_outcomes_with_done_name_its_reference_key()
+    {
+        var complete = Activity("complete", "Elsa.Complete", ("outcomes", Literal("[\"Done\",\"Audit\"]", "Object")));
+        var catalog = RealActivityCatalog.Create();
+
+        var result = await ConversionServices.ConvertAsync(catalog, Reusable(Sequence("root", complete), outcomes: ["Audit"]), isReusable: true);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("[\"done\",\"Audit\"]", Text(Input(Node(result.Value!.State, "complete"), "outcomes")));
+        Assert.Empty(Errors(await GraphProviderProof.ValidateAsync(catalog, result.Value)));
+    }
+
+    [Theory]
     [InlineData("pick()", "JavaScript")]
     [InlineData("done", "Literal")]
-    public async Task Several_outcomes_an_expression_or_a_done_collision_is_unconvertible(string outcomes, string expressionType)
+    [InlineData("[\"Approved\",\"done\"]", "Literal")]
+    public async Task An_expression_or_a_done_collision_is_unconvertible(string outcomes, string expressionType)
     {
         var complete = Activity("complete", "Elsa.Complete", ("outcomes", Expression(expressionType, outcomes, "Object")));
 

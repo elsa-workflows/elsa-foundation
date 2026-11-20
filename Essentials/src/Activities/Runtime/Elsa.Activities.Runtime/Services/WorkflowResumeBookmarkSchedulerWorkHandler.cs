@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services.StepVariables;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -104,6 +105,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, resumePayload.PinnedExecutable, executable.Identity);
+        // Before the bookmark is consumed, so a waiting run with member reads is not resumed on a runtime that cannot select.
+        SchedulerWorkHandlerHelpers.EnsureMemberSelectionSupported(executable, serviceProvider);
 
         var executableNode = SchedulerWorkHandlerHelpers.ResolveExecutableNode(workItem, executable, resumePayload.ExecutableNodeId, "ResumeBookmark");
         if (executableNode.ActivityContract is null)
@@ -317,6 +320,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
         IActivity activity;
         SimpleActivityExecutionContext context;
+        // Spec 1231: a resumed step gets a fresh variable session, with no session reads of the evaluation before the
+        // suspension (ADR 0092 decision 11); it commits with the resume's transition.
+        StepVariableSession? stepSession;
         ActivityActivationLease? activationLease = null;
         try
         {
@@ -362,6 +368,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 executionState,
                 variableScope: null,
                 scopedVariableEnvelopes: scopedVariableEnvelopes);
+            stepSession = await StepVariableSessions.CreateAsync(
+                serviceProvider, scopeService, activity, executable, executableNode, executionState, durableValues: null, cancellationToken,
+                attemptId: resumeAttempt.AttemptId);
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
@@ -402,7 +411,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 executionState,
                 resumeAttempt,
                 triggerDelivery,
-                cancellationToken));
+                cancellationToken,
+                (IStepVariables?)stepSession ?? UnavailableStepVariables.Instance));
+            // A fault the session raised faults the step even when the body caught it (spec 1231 FR-006b, FR-014).
+            if (stepSession?.PendingFault is { } sessionFault)
+                throw sessionFault;
             if (transition is IStatefulActivitySuspensionTransition suspension)
             {
                 StatefulSuspensionSupport.ValidateRegistrations(executable, executableNode, suspension);
@@ -457,7 +470,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ActivityResumeFaulted" : "ActivityDisposalFailed";
-            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload, executionState, fault, subStatus, valueSnapshots, cancellationToken);
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload, WithSessionReads(executionState, stepSession), fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
 
@@ -485,7 +498,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // Masked once, here: the durable fault and the incident both read this text, so masking the exception built
             // from it again would mask a value occurring inside an inserted marker and make the two differ.
             returnedFault = faultMasking.Mask(returnedFault);
-            var faultedState = executionState with
+            var faultedState = WithSessionReads(executionState, stepSession) with
             {
                 Fault = returnedFault.ToNormalized()
             };
@@ -510,7 +523,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>(),
                 _timeProvider,
                 workItem,
-                executionState,
+                WithSessionReads(executionState, stepSession),
                 returnedCancellationReason,
                 valueSnapshots,
                 cancellationToken: cancellationToken);
@@ -537,6 +550,30 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         if (replacementSuspendedState is not null)
         {
+            // A step that suspends again commits its session changes so far with the suspension (spec 1231 FR-015).
+            var suspendedAt = _timeProvider.GetUtcNow();
+            var suspensionWrites = await StepVariableCommit.TryApplyAsync(
+                stepSession, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
+                workItem.WorkflowExecutionId, executableNode, replacementSuspendedState, suspendedAt, cancellationToken);
+            if (suspensionWrites.LostUpdateFault is { } suspensionLostUpdate)
+            {
+                await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
+                    WithSessionReads(executionState, stepSession).WithVariableWrites([suspensionLostUpdate]), new VariableLostUpdateException(suspensionLostUpdate),
+                    VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+                return;
+            }
+
+            if (suspensionWrites.Failure is { } suspensionFailure)
+            {
+                await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
+                    WithSessionReads(executionState, stepSession), suspensionFailure, "ActivityResumeFaulted", valueSnapshots, cancellationToken);
+                return;
+            }
+
+            valueSnapshots.AddRange(Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
+                payloadCapturePolicy, workItem.WorkflowExecutionId, resumePayload.ActivityExecutionId, resumePayload.ExecutableNodeId,
+                suspensionWrites.Records, suspensionWrites.Written, suspendedAt));
+            replacementSuspendedState = suspensionWrites.Apply(replacementSuspendedState);
             var replacementWorkItems = NewReplacementBookmarkWorkItems(workItem, resumePayload, replacementSuspendedState).ToArray();
             await bookmarkConsumptionCheckpointService.CommitAsync(
                 BookmarkConsumptionCheckpointRequest.ForSuspension(
@@ -545,14 +582,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     replacementSuspendedState,
                     replacementWorkItems,
                     valueSnapshots,
-                    []),
+                    [],
+                    StepWorkflowChange(suspensionWrites, workItem, RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason))
+                    .WithVariableOwnerChanges(suspensionWrites.Owners),
                 cancellationToken);
             return;
         }
 
-        IReadOnlyCollection<string> outcomeNames = typedCompletion is null
-            ? [ActivityOutcomes.Done]
-            : [typedCompletion.Completion.OutcomeKey];
+        var outcomeNames = typedCompletion is null
+            ? OutcomeSelection.Unspecified.ResolveNames()
+            : typedCompletion.Completion.OutcomeNames;
         var completedState = CompleteActivity(workItem, resumePayload, executionState, outcomeNames);
         if (typedCompletion is not null)
         {
@@ -565,6 +604,29 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             };
         }
         completedState = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(completedState);
+
+        // Spec 1231 FR-011-FR-013: the resumed step's session writes apply first, in this commit, under the commit rule;
+        // its own earlier writes advanced its base (FR-010), so a capture of the same variable does not conflict with them.
+        var completedAt = _timeProvider.GetUtcNow();
+        var stepWrites = await StepVariableCommit.TryApplyAsync(
+            stepSession, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
+            workItem.WorkflowExecutionId, executableNode, completedState, completedAt, cancellationToken);
+        if (stepWrites.LostUpdateFault is { } stepLostUpdate)
+        {
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
+                WithSessionReads(executionState, stepSession).WithVariableWrites([stepLostUpdate]), new VariableLostUpdateException(stepLostUpdate),
+                VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        if (stepWrites.Failure is { } stepFailure)
+        {
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
+                WithSessionReads(executionState, stepSession), stepFailure, "ActivityResumeFaulted", valueSnapshots, cancellationToken);
+            return;
+        }
+
+        completedState = stepWrites.Apply(completedState);
         var captureProjection = typedCompletion is null
             ? RuntimeOutputCaptureProjection.Empty
             : await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
@@ -576,20 +638,56 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 _timeProvider.GetUtcNow(),
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken));
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken),
+                invocation: completedState, durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>());
+        // Spec 1221 T003: a refused write into a closed scope's variable row refuses the completion, as a frame write does.
+        if (captureProjection.LostUpdateFault is { } rowLostUpdate)
+        {
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
+                WithSessionReads(executionState, stepSession).WithVariableWrites([rowLostUpdate]), new VariableLostUpdateException(rowLostUpdate),
+                VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        completedState = completedState.WithVariableWrites(captureProjection.VariableWrites);
         // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
-        // completion (#972), mirroring how the Set intrinsic commits its changed frame.
-        var workflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+        // completion (#972), mirroring how the Set intrinsic commits its changed frame. A resumed step keeps the input
+        // snapshot and read set it committed before it suspended (spec 1221 FR-022): its captures meet the commit rule
+        // against those bases, so a variable it only read never produces a lost update.
+        var captureCommit = await RuntimeWorkflowVariableCaptureWriteBack.CommitCapturesAsync(
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
             workItem.WorkflowExecutionId,
-            executableNode.ExecutableNodeId,
+            executableNode,
+            completedState,
             captureProjection.WorkflowVariableWrites,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CheckpointReason] = RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason
             },
-            cancellationToken);
+            VariableWriteSource.Capture,
+            _timeProvider.GetUtcNow(),
+            cancellationToken,
+            stepWrites.Workflow);
+        if (captureCommit.LostUpdateFault is { } lostUpdate)
+        {
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
+                WithSessionReads(executionState, stepSession).WithVariableWrites(captureCommit.Records), new VariableLostUpdateException(lostUpdate),
+                VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        completedState = completedState.WithVariableWrites(captureCommit.Records);
+        // FR-025: each value written joins the write history as an inspection value, under the capture policy: the step's
+        // session writes (spec 1231) and its captures, once nothing refused the completion.
+        valueSnapshots.AddRange(Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
+            payloadCapturePolicy, workItem.WorkflowExecutionId, resumePayload.ActivityExecutionId, resumePayload.ExecutableNodeId,
+            stepWrites.Records, stepWrites.Written, completedAt));
+        valueSnapshots.AddRange(Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
+            payloadCapturePolicy, workItem.WorkflowExecutionId, resumePayload.ActivityExecutionId, resumePayload.ExecutableNodeId,
+            captureCommit.Records, captureCommit.RecordedWrites, _timeProvider.GetUtcNow()));
+        var workflowVariableWriteBack = captureCommit.Change
+            ?? StepWorkflowChange(stepWrites, workItem, RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
         await bookmarkConsumptionCheckpointService.CommitAsync(
             BookmarkConsumptionCheckpointRequest.ForCompletion(
                 workItem,
@@ -599,9 +697,28 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     _timeProvider, workItem, resumePayload.PinnedExecutable, resumePayload.ExecutableNodeId, resumePayload.ActivityExecutionId, completedState),
                 valueSnapshots,
                 captureProjection.DurableValues,
-                workflowVariableWriteBack),
+                workflowVariableWriteBack)
+                .WithVariableOwnerChanges(stepWrites.Owners),
             cancellationToken);
     }
+
+    // Spec 1231 FR-007: a faulted attempt keeps the session reads it made, for inspection.
+    private static ActivityExecutionState WithSessionReads(ActivityExecutionState state, StepVariableSession? session) =>
+        session is null ? state : state.WithSessionReads(session.Reads);
+
+    /// <summary>The checkpoint change of a step's session writes to workflow variables when no capture also wrote one.</summary>
+    private static RuntimeStateChange<WorkflowExecutionState>? StepWorkflowChange(StepVariableCommitResult writes, RuntimeSchedulerWorkItem workItem, string reason) =>
+        writes.Workflow is { } workflow
+            ? new RuntimeStateChange<WorkflowExecutionState>(
+                StateId: workflow.WorkflowExecutionId,
+                Operation: RuntimeStateChangeOperation.Upsert,
+                State: workflow,
+                Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+                    [RuntimeMetadataKeys.CheckpointReason] = reason
+                }))
+            : null;
 
     private static async ValueTask<IReadOnlyCollection<BookmarkState>> LoadOwnedSiblingBookmarksAsync(
         IBookmarkStateStore bookmarkStateStore,
@@ -821,7 +938,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState state,
         ActivityAttempt attempt,
         ActivityTriggerDelivery trigger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IStepVariables variables)
     {
         var privateState = state.PrivateState
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' has no committed private state.");
@@ -834,7 +952,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 state.InvocationId,
                 attempt.AttemptId,
                 resumePayload.ExecutableNodeId,
-                cancellationToken).WithResolvedOperationKeys(state),
+                cancellationToken).WithResolvedOperationKeys(state).WithVariables(variables),
             privateState.Value.Type,
             RequireInlinePayload(privateState.Value, "private state"),
             trigger.PayloadType,

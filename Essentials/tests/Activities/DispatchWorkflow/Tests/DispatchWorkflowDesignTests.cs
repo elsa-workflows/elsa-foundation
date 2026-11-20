@@ -7,6 +7,7 @@ using Elsa.Activities.DispatchWorkflow.Design.Services;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -177,6 +178,8 @@ public sealed class DispatchWorkflowDesignTests
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(sourceStore);
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         new EventsFeature().ConfigureServices(services);
+        new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
+        services.AddSingleton<IActivityDefinitionLookup>(new SourceCatalog(activityVersion));
         // The executable compiler + the ExecutableCompilationCollecting handler moved to the
         // endpoint-free WorkflowsPublishing engine feature, which the Api feature pulls in via DependsOn at
         // shell composition. This test invokes ConfigureServices directly (bypassing DependsOn), so it composes
@@ -804,6 +807,21 @@ public sealed class DispatchWorkflowDesignTests
 
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) =>
             Task.FromResult(version.DefinitionId == definitionId && version.SemVerSortKey == semVerSortKey);
+    }
+
+    private sealed class SourceCatalog(ActivityDefinitionVersion version) : IActivityDefinitionLookup
+    {
+        public Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IActivityDefinitionVersion?>(versionId == version.Id ? version : null);
+        public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) =>
+            versionId == version.Id ? Task.FromResult<IActivityDefinitionVersion>(version) : throw new ArgumentException("Unknown fixture version.");
+        public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IActivityDefinition>(version.Definition);
+        public Task<IEnumerable<IActivityDefinition>> ListDefinitions(string? id = null, string? category = null, string? searchTerm = null,
+            string? displayName = null, string? description = null, bool? tenantAgnostic = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+        public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class StubActivityVersionStore(ActivityDefinitionVersion version) : IActivityDefinitionVersionStore

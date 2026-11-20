@@ -7,7 +7,7 @@
 
 Restore organization in the normal EF-backed Workflow Design host and extend existing Studio browsing with marker/controlled tags, combined queries, private/shared views and favorites. Preserve the legacy all-results route and existing folder UI relations. Fix shared persistence/wire contracts before independent persistence, API and Studio tasks execute in parallel.
 
-- .NET 10/C#, TypeScript/React; existing NativeEndpoints, Studio SDK, identity/auth session, distributed locking and EF Core. No new production project/package.
+- .NET 10/C#, TypeScript/React; existing MinimalEndpoints, Studio SDK, identity/auth session, distributed locking and EF Core. No new production project/package.
 - Existing Workflow Design EF module and provider-derived SQLite/PostgreSQL/SQL Server/MySQL contexts; regenerate Initial migrations under current pre-GA policy.
 - Existing API TestServer, SQLite durable/native-provider suites, whole Workflows frontend suite, fixture browsers, owned normal-host live journey and package consumers.
 - Scale: 10,000 workflows, bounded queries and deterministic database-work budgets; timing benchmarks remain retired.

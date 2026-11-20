@@ -9,7 +9,7 @@ Three dedicated principals in the admin's tenant run one read-graph turn each ag
 manager, a read-only reader and a reader without activity design read. A fourth, in a second tenant, compares catalogs
 only: the packaged consumer's workflow persistence has one scope, so a definition that tenant created would be stored
 under "default" and rightly refused to it; its Weaver catalog is the collection admitted with a target-free workflow
-request. The host's generation observation also reports its loaded Agent Workflows package types and
+request. The host's generation observation also reports its loaded Weaver Workflows package types and
 composed catalog, so the packaged consumer is shown to ship and compose no placeholder. Finally the reader runs the
 actual packaged Studio journey (browser.mjs, workflow-read-only) with a fresh normal-login state: explanation completes
 through the owning catalog and permissions, and a layout request is never offered to the actual adapter, so no proposal,
@@ -57,7 +57,7 @@ PERMISSIONS_KIND = "workflow.permissions"
 
 # The four dedicated principals, appended after the original five so every earlier index keeps its meaning.
 READER, MANAGER, TENANT_READER, CATALOG_DENIED = 5, 6, 7, 8
-# Exactly what each actor's journey reaches, beyond the agent and preferences BASE_GRANTS:
+# Exactly what each actor's journey reaches, beyond the Weaver and preferences BASE_GRANTS:
 # - api-capabilities:read: GET /capabilities, through which every owner link (activity catalog, workflow definitions,
 #   drafts, validations, expressions) is discovered, by the driver and by Studio alike;
 # - workflows/design:read: the definition GET, its draft validations and the read-graph tool;
@@ -292,17 +292,17 @@ LEGACY_PLACEHOLDERS = frozenset({
 
 
 def require_no_placeholders(generation):
-    """SC-003 for the packaged consumer: its loaded Agent Workflows package ships no placeholder type, and the shell
+    """SC-003 for the packaged consumer: its loaded Weaver Workflows package ships no placeholder type, and the shell
     composes exactly the owning activity catalog, as the host's generation observation reports them."""
-    agent = generation.get("workflowAgent") if isinstance(generation, dict) else None
-    check(isinstance(agent, dict) and isinstance(agent.get("types"), list) and agent["types"], "The host does not report its workflow agent package")
-    types = set(agent["types"])
-    check("DefaultWorkflowAgentContextProvider" in types and "WorkflowActivityCatalog" in types,
-          "The reported types are not the loaded Agent Workflows package")
+    observed = generation.get("workflowWeaver") if isinstance(generation, dict) else None
+    check(isinstance(observed, dict) and isinstance(observed.get("types"), list) and observed["types"], "The host does not report its Weaver Workflows package")
+    types = set(observed["types"])
+    check("DefaultWorkflowWeaverContextProvider" in types and "WorkflowActivityCatalog" in types,
+          "The reported types are not the loaded Weaver Workflows package")
     check(not types & LEGACY_PLACEHOLDERS, "The packaged consumer still ships a legacy workflow placeholder")
-    check(agent.get("activityAuthoringCatalogs") == ["HttpActivityAuthoringCatalog"],
+    check(observed.get("activityAuthoringCatalogs") == ["HttpActivityAuthoringCatalog"],
           "The packaged consumer does not compose exactly the owning activity authoring catalog")
-    return {"package": agent.get("assembly"), "placeholders": [], "activityAuthoringCatalogs": agent["activityAuthoringCatalogs"]}
+    return {"package": observed.get("assembly"), "placeholders": [], "activityAuthoringCatalogs": observed["activityAuthoringCatalogs"]}
 
 
 @contextmanager
@@ -367,7 +367,7 @@ def _actor(runtime, name, http, seed, *, manage, tenant_only):
 
 def admitted_context(response):
     """The context admitted with an accepted message: the wire is {data: {message: {context: [...]}, warnings}}, the
-    shape Studio's agent client reads (agentClient.ts, message.context)."""
+    shape Studio's Weaver client reads (weaverClient.ts, message.context)."""
     data = response.get("data") if isinstance(response, dict) else None
     message = data.get("message") if isinstance(data, dict) else None
     context = message.get("context") if isinstance(message, dict) else None
@@ -532,4 +532,4 @@ def synthetic_browser():
 
 def synthetic_registrations():
     """The minimal registrations shape the final gate checks; for synthetic self-tests only."""
-    return {"package": "Elsa.Agent.Workflows", "placeholders": [], "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"]}
+    return {"package": "Elsa.Weaver.Workflows", "placeholders": [], "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"]}

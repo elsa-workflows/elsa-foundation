@@ -48,7 +48,7 @@ public sealed class StatefulActivityContractTests
         Assert.Equal("activation-2", resumedActivity.ActivationMarker);
         Assert.Equal("attempt-2", resumedActivity.ObservedResumeContext!.AttemptId);
         Assert.Equal(new ApprovalResult(true), completion.Result);
-        Assert.Equal("Approved", completion.Outcome);
+        Assert.Equal(new[] { "Approved" }, completion.Selection.ResolveNames());
     }
 
     [Fact]

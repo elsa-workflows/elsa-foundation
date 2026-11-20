@@ -49,6 +49,116 @@ afterEach(() => {
 });
 
 describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
+  it("keeps first-time naming undoable after the server normalizes an absent description to null", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const rendered = renderControlledDesigner(sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]));
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
+    const input = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    setInput(input, "First saved name");
+    const saved = rendered.onChange.mock.calls.at(-1)![0];
+    rendered.acknowledge({ ...saved, activityPresentation: [{ nodeId: "write-line-1", displayName: "First saved name", description: null }] });
+    const undo = rendered.container.querySelector<HTMLButtonElement>("button[aria-label='Undo Activity Graph edit']")!;
+    expect(undo.disabled).toBe(false);
+    click(undo);
+    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation ?? []).toEqual([]);
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Write line");
+    click(rendered.container.querySelector("button[aria-label='Redo Activity Graph edit']")!);
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("First saved name");
+  });
+
+  it("retains an in-progress word separator across a canonical autosave acknowledgement", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const rendered = renderControlledDesigner(sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]));
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
+    const input = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    setInput(input, "Approve ");
+    const saved = rendered.onChange.mock.calls.at(-1)![0];
+    rendered.acknowledge({ ...saved, activityPresentation: [{ nodeId: "write-line-1", displayName: "Approve", description: null }] });
+    expect(input.value).toBe("Approve ");
+    setInput(input, input.value + "order");
+    expect(input.value).toBe("Approve order");
+  });
+
+  it("keeps clearing a description undoable but resets history for a different incoming document", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const rendered = renderControlledDesigner({
+      ...sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]),
+      activityPresentation: [{ nodeId: "write-line-1", displayName: "Named step", description: "Original context" }]
+    });
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
+    const description = rendered.container.querySelector<HTMLTextAreaElement>(".wf-activity-presentation-fields textarea")!;
+    setInput(description, "");
+    const saved = rendered.onChange.mock.calls.at(-1)![0];
+    rendered.acknowledge({ ...saved, activityPresentation: [{ nodeId: "write-line-1", displayName: "Named step", description: null }] });
+    const undo = () => rendered.container.querySelector<HTMLButtonElement>("button[aria-label='Undo Activity Graph edit']")!;
+    expect(undo().disabled).toBe(false);
+    click(undo());
+    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation?.[0].description).toBe("Original context");
+    rendered.acknowledge({ ...saved, activityPresentation: [{ nodeId: "write-line-1", displayName: "External name", description: "External context" }] });
+    expect(undo().disabled).toBe(true);
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("External name");
+    expect(rendered.container.querySelector<HTMLTextAreaElement>(".wf-activity-presentation-fields textarea")?.value).toBe("External context");
+  });
+
+  it("retains spaces while typing a multiword display name", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const rendered = renderControlledDesigner({
+      ...sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]),
+      activityPresentation: [{ nodeId: "write-line-1", displayName: "Original name" }]
+    });
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
+    const input = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    setInput(input, "Approve ");
+    expect(input.value).toBe("Approve ");
+    setInput(input, input.value + "order");
+    expect(input.value).toBe("Approve order");
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Approve order");
+  });
+
+  it("renames a selected activity with one undo/redo and prunes presentation on delete without losing history", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const value = {
+      ...sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]),
+      activityPresentation: [{ nodeId: "write-line-1", displayName: "Review order", description: "Keep this context" }]
+    };
+    const rendered = renderControlledDesigner(value);
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Review order");
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
+    const displayName = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    setInput(displayName, "Approve order");
+    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([{ nodeId: "write-line-1", displayName: "Approve order", description: "Keep this context" }]);
+    click(rendered.container.querySelector("button[aria-label='Undo Activity Graph edit']")!);
+    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual(value.activityPresentation);
+    click(rendered.container.querySelector("button[aria-label='Redo Activity Graph edit']")!);
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Approve order");
+    confirmOnce();
+    click(buttonByText(rendered.container, "Remove"));
+    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([]);
+    click(rendered.container.querySelector("button[aria-label='Undo Activity Graph edit']")!);
+    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([{ nodeId: "write-line-1", displayName: "Approve order", description: "Keep this context" }]);
+    expect(rendered.container.querySelector("[data-graph-node-id='write-line-1']")).not.toBeNull();
+  });
+
+  it("copies node names and descriptions when duplicating a Sequence child", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const rendered = renderControlledDesigner({
+      ...sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]),
+      activityPresentation: [{ nodeId: "write-line-1", displayName: "Named step", description: "Useful context" }]
+    });
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    click(rendered.container.querySelector("button[aria-label='Duplicate Named step']")!);
+    const next = rendered.onChange.mock.calls.at(-1)![0];
+    expect(next.activityPresentation).toHaveLength(2);
+    expect(next.activityPresentation[0]).toMatchObject({ nodeId: "write-line-1", displayName: "Named step" });
+    expect(next.activityPresentation[1]).toMatchObject({ displayName: "Named step (copy)", description: "Useful context" });
+    expect(next.activityPresentation[1].nodeId).not.toBe("write-line-1");
+  });
+
   it("adds a stable root-outcome mapping and preserves existing mappings", () => {
     const onChange = vi.fn();
     const rendered = renderEditor({
@@ -1022,8 +1132,10 @@ function renderControlledDesigner(initialValue: StudioActivityDefinitionImplemen
   const root = createRoot(container);
   const onChange = vi.fn();
   const props = designerProps({ value: initialValue });
+  let acknowledge: (value: typeof initialValue) => void;
   function ControlledDesigner() {
     const [value, setValue] = React.useState(initialValue);
+    acknowledge = next => flushSync(() => setValue(next));
     const handleChange = React.useCallback((next: typeof initialValue) => {
       onChange(next);
       setValue(next);
@@ -1031,7 +1143,7 @@ function renderControlledDesigner(initialValue: StudioActivityDefinitionImplemen
     return <ActivityGraphImplementationEditor {...props} value={value} onChange={handleChange} />;
   }
   flushSync(() => root.render(<ControlledDesigner />));
-  const rendered = { root, container, onChange };
+  const rendered = { root, container, onChange, acknowledge: (value: typeof initialValue) => acknowledge(value) };
   mounted.push(rendered);
   return rendered;
 }
@@ -1275,9 +1387,10 @@ function lastPayload(onChange: ReturnType<typeof vi.fn>) {
   };
 }
 
-function setInput(element: HTMLInputElement, value: string) {
+function setInput(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
   flushSync(() => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(element, value);
+    const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(element, value);
     element.dispatchEvent(new Event("input", { bubbles: true }));
     element.dispatchEvent(new Event("change", { bubbles: true }));
   });

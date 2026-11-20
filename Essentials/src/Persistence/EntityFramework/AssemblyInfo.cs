@@ -12,3 +12,8 @@ using Elsa.Persistence.EntityFramework.SchemaFinalization;
 [assembly: EfSchemaContent(EfSchemaFinalization.SchemaFamily, typeof(EfSchemaFinalizationRecordRow),
     nameof(EfSchemaFinalizationRecordRow.IntentJson), nameof(EfSchemaFinalizationRecordRow.HoldsJson), nameof(EfSchemaFinalizationRecordRow.HistoryJson),
     nameof(EfSchemaFinalizationRecordRow.FinishJson), nameof(EfSchemaFinalizationRecordRow.FinishHistoryJson))]
+
+[assembly: EfSchemaFamily(Elsa.Persistence.EntityFramework.EfSourceModel.SchemaFamily, Elsa.Persistence.EntityFramework.EfSourceModel.SchemaVersion)]
+
+[assembly: EfSchemaContent(Elsa.Persistence.EntityFramework.EfSourceModel.SchemaFamily, typeof(Elsa.Persistence.Core.SourceWorkingCopy), nameof(Elsa.Persistence.Core.SourceWorkingCopy.Content))]
+[assembly: EfSchemaContent(Elsa.Persistence.EntityFramework.EfSourceModel.SchemaFamily, typeof(Elsa.Persistence.Core.SourceSnapshot), nameof(Elsa.Persistence.Core.SourceSnapshot.Content))]

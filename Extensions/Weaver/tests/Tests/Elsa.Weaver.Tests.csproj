@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Elsa.Weaver\Elsa.Weaver.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Events\Elsa.Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\src\Core\Elsa.Weaver.Core.csproj" />
+    <ProjectReference Include="..\..\src\Anthropic\Elsa.Weaver.Anthropic.csproj" />
+    <ProjectReference Include="..\..\src\Api\Elsa.Weaver.Api.csproj" />
+    <ProjectReference Include="..\..\src\GitHubCopilot\Elsa.Weaver.GitHubCopilot.csproj" />
+    <ProjectReference Include="..\..\src\Workflows\Elsa.Weaver.Workflows\Elsa.Weaver.Workflows.csproj" />
+    <!-- The combined Design + Runtime shape (spec 1193 SC-009); the Runtime-only proof lives in Elsa.Weaver.Workflows.Runtime.Tests. -->
+    <ProjectReference Include="..\..\src\Workflows\Runtime\Elsa.Weaver.Workflows.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
+    <!-- The started Design-only host composes the Design API's real validations dependency. -->
+    <ProjectReference Include="..\..\..\..\Essentials\src\Workflows\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\tests\Testing\Elsa.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

@@ -22,7 +22,7 @@ internal static partial class OptedCalledSnapshotReader
         var cs = new SqliteConnectionStringBuilder { DataSource = new Uri(Path.GetFullPath(snapshot)).AbsoluteUri + "?immutable=1", Mode = SqliteOpenMode.ReadOnly }.ToString();
         await using var connection = new SqliteConnection(cs); await connection.OpenAsync();
         await using (var query = connection.CreateCommand()) { query.CommandText = "PRAGMA query_only=ON"; await query.ExecuteNonQueryAsync(); }
-        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(await ReadOnlyRuntimeSnapshot.OptionsAsync(connection));
         var access = new ScopedAccess(new PersistenceScope(scopeName));
         var workflows = new EfWorkflowExecutionStateStore(context, access, new NoPaging());
         var activities = new EfActivityExecutionStateStore(context, access, new NoPaging());
@@ -40,7 +40,7 @@ internal static partial class OptedCalledSnapshotReader
         foreach (var id in new[] { "node-host-a", "node-host-b" })
         {
             var state = Exact(states, view, id);
-            Require(state.Status == ActivityExecutionStatus.Completed && state.Completion?.OutcomeKey == "Done" && state.Fault is null &&
+            Require(state.Status == ActivityExecutionStatus.Completed && state.Completion?.OutcomeNames is ["Done"] && state.Fault is null &&
                 state.ParentActivityExecutionId == root.InvocationId && state.Provenance.ParentActivityExecutionId == root.InvocationId && state.IterationId is null,
                 "An ordinary bound task lost its exact successful completion.");
         }
@@ -62,7 +62,7 @@ internal static partial class OptedCalledSnapshotReader
                 var state = Exact(states, view, id);
                 Require(matching.Length == 1 && state.Status == expected && state.Fault is null && state.ParentActivityExecutionId == root.InvocationId &&
                     state.Provenance.ParentActivityExecutionId == root.InvocationId && state.IterationId is null &&
-                    (expected != ActivityExecutionStatus.Completed || state.Completion?.OutcomeKey == "Done"), "Actual compensation handler ancestry/result/order changed.");
+                    (expected != ActivityExecutionStatus.Completed || state.Completion?.OutcomeNames is ["Done"]), "Actual compensation handler ancestry/result/order changed.");
                 if (id != "node-hold") Require(state.Provenance.SchedulingCause == "compensation" &&
                     state.Provenance.Metadata.GetValueOrDefault("bpmn.targetNodeId") == id &&
                     state.Provenance.Metadata.GetValueOrDefault("bpmn.elementId") == (id == "node-handler-b" ? "handler-b" : "handler-a"),

@@ -1,4 +1,4 @@
-# Specialist kernel package qualification
+# Agent kernel package qualification
 
 This is the bounded M2 consumer proof for [Program #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519).
 It builds actual committed product packages, an independent deterministic model package, an authoring
@@ -9,8 +9,8 @@ Run with the bundled Python 3.12+ runtime and the normal build-slot-wrapped .NET
 
 ```bash
 python3 tools/agents/conformance/qualify.py \
-  --source HEAD --version 4.0.0-specialist3548.kernel1 \
-  --output /private/tmp/elsa-specialist-kernel-proof
+  --source HEAD --version 4.0.0-agent3548.kernel1 \
+  --output /private/tmp/elsa-agent-kernel-proof
 ```
 
 The new output directory must be outside the checkout. Producer source, including every fixture,
@@ -22,7 +22,7 @@ Only serialized placement material crosses that process boundary.
 
 The Runtime consumer activates the real CShells lifecycle, including Tasks, Events, Serialization,
 and the background feature dependencies, then resolves its scoped runtime services. It
-checks that ordinary startup registered the specialist alias without manually calling product tasks.
+checks that ordinary startup registered the agent alias without manually calling product tasks.
 Native activity startup also registers its declared business types, and the shared chat assembly and
 resolved shared dependency pins are checked. The optional Expressions implementation is unnecessary
 for this literal-input profile and would import Design packages, which the closure guard refuses.
@@ -36,7 +36,7 @@ archives and extracted DLL bytes are verified against the consumed packages.
 model-result case must produce a Faulted workflow with no successful completion. A passed bounded
 profile is not the final Program acceptance: the journal remains explicitly process-local; real
 providers, durable recovery, native/BPMN authoring journeys, Studio and the complete matrix remain
-subsequent qualification work. The executable is seeded from the real placed specialist; this does
+subsequent qualification work. The executable is seeded from the real placed agent; this does
 not claim M4's ordinary workflow/BPMN publication journey.
 
 
@@ -44,14 +44,14 @@ not claim M4's ordinary workflow/BPMN publication journey.
 
 Run `qualify.py --profile bpmn-boundary --source HEAD --version <unique-local-version>
 --output <new-absolute-directory>` with the same Python and .NET prerequisites.
-This profile builds the committed BPMN Core, Design and runtime packages alongside the specialist
-packages. After real specialist publication/placement, an independent authoring process activates
-the Design feature, projects the exact specialist child and lowers/remaps its BPMN graph through
+This profile builds the committed BPMN Core, Design and runtime packages alongside the agent
+packages. After real agent publication/placement, an independent authoring process activates
+the Design feature, projects the exact agent child and lowers/remaps its BPMN graph through
 the public structure handler. Only the compiled graph and immutable placement enter the runtime.
 The authoring package closure and loaded assemblies exclude the concrete BPMN runtime/interpreter.
 
 A separate runtime-only package consumer activates the normal CShells lifecycle and executes that
-graph with the real specialist facade/background worker and deterministic MAF contribution. Its
+graph with the real agent facade/background worker and deterministic MAF contribution. Its
 resolved packages and loaded assemblies must contain zero Design/Publishing assemblies. Another
 consumer activates the combined runtime/Design features and proves the same execution retains one
 authoring handler and one publication pin contribution. Every candidate archive/extracted DLL is
@@ -64,12 +64,12 @@ Run the separate profile with the bundled Python runtime:
 
 ```bash
 python3 tools/agents/conformance/qualify.py \
-  --profile durable-recovery --source HEAD --version 4.0.0-specialist3523.durable \
-  --output /private/tmp/elsa-specialist-durable-proof
+  --profile durable-recovery --source HEAD --version 4.0.0-agent3523.durable \
+  --output /private/tmp/elsa-agent-durable-proof
 ```
 
 This also runs the kernel consumers, then builds an independent Runtime consumer using actual
-Specialist EF and complete Runtime EF packages. Normal CShell activation applies/validates module
+Agent EF and complete Runtime EF packages. Normal CShell activation applies/validates module
 migrations. The host composes `AddEfSchemaReadability` once on its root container and checks observed
 `RuntimePostCommitOutbox` schema2 readiness before work. Without normal host readability the EF gate
 retains schema1 and refuses required-source data; this is a refusal, not permission to force a version.
@@ -120,7 +120,7 @@ publications remain unchanged.
 When the newer ordinary runtime has finalized `RuntimeWorkflowExecution` at 2.0.0 and the older binary
 reads only 1.0.0, use `--expect-runtime-schema-rollback-refusal`. This profile still requires successful
 old-to-new recovery in both modes. For new writes it requires the old binary's exact schema activation
-refusal, read-only proof that accepted specialist/native/source state and the finalized version remain
+refusal, read-only proof that accepted agent/native/source state and the finalized version remain
 unchanged, then successful recovery/settlement with the compatible new binary and one model dispatch.
 The resulting status is `PassedUpgradeAndRollbackRefusal`, never bidirectional recovery. A refusal for
 another cause, a successful incompatible rollback, changed state or repeated inference fails the driver.

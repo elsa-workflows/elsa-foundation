@@ -95,7 +95,7 @@ for (const theme of ["light", "dark"]) {
 
 test("edits a reusable activity interface without losing unapplied defaults or saved bindings", async ({ page }) => {
   await page.goto("/?mode=activity-authoring&theme=dark");
-  await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await expect(page.getByText("Advanced interface details", { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Stable reference key" })).toHaveCount(0);
   await page.getByRole("button", { name: "Add input", exact: true }).click();
@@ -117,7 +117,7 @@ test("edits a reusable activity interface without losing unapplied defaults or s
   await member.getByRole("button", { name: "Apply default", exact: true }).click();
   await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
   await page.reload();
-  await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await page.getByRole("button", { name: "Discount Number", exact: true }).click();
   await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("2.5");
   await page.locator(".ad-authoring-advanced > summary").click();
@@ -132,9 +132,10 @@ for (const theme of ["light", "dark"]) {
   test(`keeps focused interface editing inside a narrow ${theme} viewport`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/?mode=activity-authoring&theme=${theme}`);
-    await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();
+    await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
     await expect(page.getByRole("region", { name: "Subtotal", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.getByRole("tab", { name: /^Outputs \(\d+\)$/ }).click();
     await page.getByRole("button", { name: "Add output", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Output name", exact: true })).toBeFocused();
     await page.getByRole("textbox", { name: "Output name", exact: true }).press("Escape");
@@ -144,7 +145,7 @@ for (const theme of ["light", "dark"]) {
 
 test("keeps existing members visible without misclassifying a capability outage", async ({ page }) => {
   await page.goto("/?mode=activity-authoring&theme=dark&capabilities=unavailable");
-  await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await expect(page.getByText("Contract options unavailable", { exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Subtotal", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add input", exact: true })).toBeDisabled();
@@ -189,9 +190,9 @@ for (const theme of ["light", "dark", "material"]) for (const width of [390, 144
 }
 
 for (const theme of ["light", "dark"]) {
-  test(`workflow Properties uses the same add-variable button (${theme})`, async ({ page }) => {
+  test(`workflow Variables tab uses the same add-variable button (${theme})`, async ({ page }) => {
     await page.goto(`/?mode=activity-duplicate-editor&theme=${theme}`);
-    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    await page.getByRole("tablist", { name: "Editor view tabs" }).getByRole("tab", { name: "Variables", exact: true }).click();
     const variables = page.locator(".wf-properties-section").filter({ has: page.getByRole("heading", { name: "Variables", exact: true }) });
     const add = variables.getByRole("button", { name: "Add variable", exact: true });
     await expect(add).toBeVisible();

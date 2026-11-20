@@ -200,12 +200,13 @@ public sealed class GraphBodyScopeTests
     [Fact]
     public async Task Sequential_captures_into_one_graph_variable_leave_the_last_value()
     {
-        // No concurrency rule applies to graph-variable captures yet; the last committed capture wins.
+        // Graph-variable captures follow the commit rule (spec 1221 T003); unordered blind writes: the last commit wins.
         await using var harness = ScriptingHarness();
         var body = GraphBoundaryCompleteTests.Sequence(
             "node-body",
             CaptureInto(Echo("node-first", Literal("Value", 5)), "total"),
             CaptureInto(Echo("node-second", Literal("Value", 7)), "total"),
+            CaptureInto(Echo("node-third", Variable("total", BoundaryNodeId)), "total"),
             Echo("node-read-total", Variable("total", BoundaryNodeId)));
         var boundary = Boundary(
             body,
@@ -221,6 +222,25 @@ public sealed class GraphBodyScopeTests
             .ListAllDurableValueStatesAsync(run.WorkflowState!.WorkflowExecutionId);
         var output = Assert.Single(durableValues, value => value.DurableValueId.EndsWith(":output:3:sum", StringComparison.Ordinal));
         Assert.Equal(7, output.InlineValue!.Value.GetInt32());
+
+        // Spec 1221 T003: a graph variable row is versioned like a frame variable. Each capture is a blind write (neither
+        // node read total), recorded on its writer, and the row carries the version the last one produced.
+        var first = Assert.Single(run.State("node-first").VariableWrites!);
+        var second = Assert.Single(run.State("node-second").VariableWrites!);
+        Assert.Equal(VariableCommitOutcome.Blind, first.Outcome);
+        Assert.Equal(BoundaryNodeId, first.ScopeId);
+        Assert.Equal("total", first.VariableKey);
+        Assert.True(second.NewVersion > first.NewVersion);
+        // A node reading total records the row's version in its read set. Writing the same value back changes nothing,
+        // so it leaves no record and the version stays.
+        var read = Assert.Single(run.State("node-third").InputSnapshot!.InputReadSet!.Entries);
+        Assert.Equal(second.NewVersion, read.Version);
+        Assert.Null(run.State("node-third").VariableWrites);
+        var row = Assert.Single(durableValues, value => value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BoundaryReferenceKey) == "total" &&
+                                                       value.Metadata.ContainsKey(RuntimeMetadataKeys.RowVariableVersion));
+        // The third node wrote back the value it read (7), which changes nothing: the version and writer stay the second's.
+        Assert.Equal(second.NewVersion.ToString(System.Globalization.CultureInfo.InvariantCulture), row.Metadata[RuntimeMetadataKeys.RowVariableVersion]);
+        Assert.Contains("node-second", row.Metadata[RuntimeMetadataKeys.RowVariableWriter], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -244,17 +264,29 @@ public sealed class GraphBodyScopeTests
     }
 
     [Theory]
-    [InlineData("variables.RunningTotal + 1")]
-    [InlineData("getVariable('RunningTotal') + 1")]
-    [InlineData("getRunningTotal() + 1")]
-    public async Task Body_javascript_reads_graph_variables_by_name_not_the_callers(string script)
+    [InlineData("variables.RunningTotal + 1", false)]
+    [InlineData("getVariable('RunningTotal') + 1", false)]
+    [InlineData("getVariable(['Running', 'Total'].join('')) + 1", true)]
+    public async Task Body_javascript_reads_graph_variables_by_name_not_the_callers(string script, bool computed)
     {
-        // The ambient variables surface below a closed scope is the graph's variables, named by their rows.
+        // Below a closed scope a script's variables are the graph's, named by their rows: a literal read is pinned to the
+        // boundary's variable at publish, and a computed one is looked up among the graph's variables (spec 1222).
         await using var harness = ScriptingHarness();
         var body = Echo("node-read-total", new RuntimeInputBinding(
             nameof(EchoActivity.Value), new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding("JavaScript", script)));
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                script,
+                parameters: computed
+                    ? null
+                    : new Dictionary<string, Elsa.Expressions.Core.Models.ExpressionParameterBinding>
+                    {
+                        ["variables.RunningTotal"] = new Elsa.Expressions.Core.Models.VariableExpressionParameterBinding(BoundaryNodeId, "total", Elsa.Expressions.Core.Models.ExpressionParameterSurfaces.Variables)
+                    },
+                variableReadFallback: computed
+                    ? new Elsa.Expressions.Core.Models.VariableReadFallback([new Elsa.Expressions.Core.Models.VariableReadCandidate("RunningTotal", BoundaryNodeId, "total")])
+                    : null)));
         var boundary = Boundary(
             body,
             variables: [new GraphActivityVariableDescriptor("total", "RunningTotal", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(10)))]);

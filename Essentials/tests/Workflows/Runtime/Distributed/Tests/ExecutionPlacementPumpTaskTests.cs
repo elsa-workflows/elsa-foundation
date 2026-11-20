@@ -197,9 +197,10 @@ public sealed class ExecutionPlacementPumpTaskTests
     }
 
     /// <summary>
-    /// A renewal that finds the placement taken passivates the local actor, which waits for the running drain's turn. The
-    /// sweep must not wait that out (#2831). Until the passivation ends, later sweeps leave the execution alone: a
-    /// command leased meanwhile would wait for the passivation, then run on a fresh actor.
+    /// A renewal that finds the placement taken passivates the local actor. The drain yields to it at its next step (#3678),
+    /// but the step it is in does not end here, as one blocked on I/O would not. The sweep must not wait that out (#2831).
+    /// Until the passivation ends, later sweeps leave the execution alone: a command leased meanwhile would wait for the
+    /// passivation, then run on a fresh actor.
     /// </summary>
     [Fact]
     public async Task Passivating_a_busy_actor_after_a_lost_renewal_does_not_hold_the_sweep()

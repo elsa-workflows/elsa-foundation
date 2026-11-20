@@ -223,7 +223,7 @@ function SequenceStep({
   const { data } = node;
   const { icon, fallback, tone } = resolveNodeActivityVisual(data);
   const availability = availabilityLookup?.({ activityVersionId: data.activityVersionId, activityTypeKey: data.activityTypeKey }) ?? null;
-  const availabilityLabel = availability ? `No longer available for new use · ${getAvailabilityStateLabel(availability.state)}` : null;
+  const availabilityLabel = data.ghost ? "Activity unavailable in this environment" : availability ? `No longer available for new use · ${getAvailabilityStateLabel(availability.state)}` : null;
   const activityType = shortTypeName(data.activityTypeKey ?? data.activityVersionId);
   const summary = data.summary?.trim() || data.description?.trim();
 

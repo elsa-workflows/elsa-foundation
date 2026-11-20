@@ -57,6 +57,20 @@ public sealed class ActivitySideEffectProfileReaderTests
     }
 
     [Fact]
+    public void The_publishing_composition_hands_the_compiler_the_script_read_resolver()
+    {
+        // Spec 1222: without the resolver the compiler pins nothing, and every variables.X read fails at run time.
+        // Publishing depends on the design validations feature, which registers it.
+        var attribute = (CShells.Features.ShellFeatureAttribute)Attribute.GetCustomAttribute(typeof(WorkflowsPublishingFeature), typeof(CShells.Features.ShellFeatureAttribute))!;
+        Assert.Contains("WorkflowDesignValidations", attribute.DependsOn!.Cast<object>().Select(dependency => dependency.ToString()));
+        var services = new ServiceCollection();
+        new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver));
+        Assert.Contains(typeof(ExecutableNodeCompiler).GetConstructors().Single().GetParameters(),
+            parameter => parameter.ParameterType == typeof(Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver));
+    }
+
+    [Fact]
     public void The_publishing_feature_registers_the_reader()
     {
         var services = new ServiceCollection();

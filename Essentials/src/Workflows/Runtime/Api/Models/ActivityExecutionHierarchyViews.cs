@@ -72,8 +72,10 @@ public sealed record ActivityExecutionLayoutView(
     IReadOnlyList<ActivityExecutionLayoutConnection> Connections,
     IReadOnlyList<ActivityExecutionNestedBoundaryLayout> NestedBoundaries)
 {
+    public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } = [];
+
     public static ActivityExecutionLayoutView From(ActivityExecutionLayout layout) => new(
         layout.WorkflowExecutionId, layout.ActivityExecutionId, layout.ArtifactId, layout.SourceReferenceId,
         layout.Selection.ToString(), layout.BoundaryOrigin.Segments.Select(ActivityInvocationOriginSegmentView.From).ToArray(), layout.TemplateHash, layout.Nodes, layout.Connections,
-        layout.NestedBoundaries);
+        layout.NestedBoundaries) { ActivityPresentation = layout.ActivityPresentation };
 }

@@ -19,6 +19,10 @@ internal static class RuntimeProblemWriting
     public static Task ProblemAsync(HttpContext context, int status, string detail) =>
         ProblemAsync(context, new RuntimeProblemDetails("https://elsa.dev/problems/runtime-request", "Runtime request failed", status, detail, null));
 
+    /// <summary>The generic runtime problem with a machine-readable code (for example a refused comparison's reason).</summary>
+    public static Task ProblemAsync(HttpContext context, int status, string code, string detail) =>
+        ProblemAsync(context, new RuntimeProblemDetails("https://elsa.dev/problems/runtime-request", "Runtime request failed", status, detail, null, Code: code));
+
     /// <summary>
     /// A schema write refusal in the generic runtime problem: a 409 carrying the refusal's code, and
     /// its entries, the family and both versions among them, as errors.

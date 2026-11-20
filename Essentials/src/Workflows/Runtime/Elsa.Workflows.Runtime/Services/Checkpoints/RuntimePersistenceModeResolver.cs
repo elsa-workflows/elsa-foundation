@@ -27,12 +27,27 @@ internal sealed class RuntimePersistenceModeResolver(
         "This host has no persistence-mode options, so no run has a mode to resolve. " +
         "Call AddPersistenceModes() after the workflows runtime and its persistence provider are registered.");
 
-    public async ValueTask<ResolvedPersistenceMode> ResolveAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+    public async ValueTask<ResolvedPersistenceMode> ResolveAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default) =>
+        (await ResolveWithRunStateAsync(envelope, cancellationToken)).Mode;
+
+    /// <summary>
+    /// Resolves the mode and also returns the workflow execution state it read to do so (<see langword="null"/> when
+    /// the run has none). The drain orchestrator hands that state to the drain, so the drain does not read it again.
+    /// </summary>
+    internal async ValueTask<(ResolvedPersistenceMode Mode, WorkflowExecutionState? RunState)> ResolveWithRunStateAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(envelope);
 
         var workflowExecutionId = envelope.WorkflowExecutionId;
         var state = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
+        return (await ResolveAsync(envelope, state, cancellationToken), state);
+    }
+
+    private async ValueTask<ResolvedPersistenceMode> ResolveAsync(WorkflowExecutionCommandEnvelope envelope, WorkflowExecutionState? state, CancellationToken cancellationToken)
+    {
+        var workflowExecutionId = envelope.WorkflowExecutionId;
         if (state is not null)
             return new(await ModeOfRecordedRunAsync(state, cancellationToken), RunHasRecord: true);
 

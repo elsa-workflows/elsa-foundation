@@ -38,7 +38,10 @@ internal static class TestSchedulerDrainer
         IRuntimeDomainRetryPolicy? retryPolicy = null,
         RuntimeSchedulerWorkClaimOptions? claimOptions = null,
         IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
-        bool hasResumptionRedriver = false) =>
+        bool hasResumptionRedriver = false,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor = null,
+        IRuntimeExecutionOwnershipService? ownershipService = null,
+        Elsa.Workflows.Runtime.Core.Diagnostics.IWorkflowEngineTracer? tracer = null) =>
         new(
             schedulerWorkQueue,
             handlers,
@@ -49,9 +52,14 @@ internal static class TestSchedulerDrainer
             pipelineDispatcher,
             faultCapturePolicy,
             retryPolicy,
+            tracer,
             claimOptions: claimOptions,
             consumedWorkClaimAccessor: consumedWorkClaimAccessor)
-        { HasResumptionRedriver = hasResumptionRedriver };
+        {
+            HasResumptionRedriver = hasResumptionRedriver,
+            OwnershipContextAccessor = ownershipContextAccessor,
+            OwnershipService = ownershipService
+        };
 
     // A real gate over an empty hold store: holds nothing, so it answers CanAdvance: true for every boundary.
     public static IWorkflowSchedulerPauseGate NewInertPauseGate(TimeProvider? timeProvider = null) =>

@@ -227,6 +227,93 @@ public sealed class GraphBoundaryCompleteTests
         Assert.Single(new[] { "node-on-failed", "node-on-succeeded" }, nodeId => run.States(nodeId).Count > 0);
     }
 
+    // Spec 1208 FR-032: a Complete node names several boundary outcomes; the boundary passes every one to its parent,
+    // which runs both outgoing paths. No multi-outcome declaration is involved.
+    [Fact]
+    public async Task CompleteNamingTwoOutcomes_TheParentRunsBothPaths()
+    {
+        var body = Sequence("node-body", Probe("node-first"), CompleteNodeWithOutcomes("node-exit", "fail", "succeed"), Probe("node-never"));
+
+        var run = await RunInParentAsync(Boundary(body, completeOutcomes: FailOrSucceed));
+
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes(BoundaryNodeId, "Failed", "Succeeded");
+        run.AssertRan("node-first", "node-on-failed", "node-on-succeeded");
+        run.AssertDidNotRun("node-never");
+        run.AssertCompleted("node-exit");
+    }
+
+    [Fact]
+    public async Task CompleteNamingAnUndeclaredOutcomeInItsList_FaultsTheBoundary()
+    {
+        var run = await RunInParentAsync(
+            Boundary(CompleteNodeWithOutcomes("node-exit", "fail", "missing"), completeOutcomes: FailOrSucceed),
+            allowPendingWork: true);
+
+        var boundary = run.State(BoundaryNodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, boundary.Status);
+        Assert.Equal(GraphActivity.CompleteOutcomeUnknownFaultCode, boundary.Fault!.Code);
+        run.AssertDidNotRun("node-on-failed", "node-on-succeeded");
+    }
+
+    [Fact]
+    public async Task CompleteNamingNoOutcome_FaultsWithAStableCode()
+    {
+        var run = await RunInParentAsync(
+            Boundary(Nodes.Leaf("node-exit", typeof(Complete)), completeOutcomes: FailOrSucceed),
+            allowPendingWork: true);
+
+        var exit = run.State("node-exit");
+        Assert.Equal(ActivityExecutionStatus.Faulted, exit.Status);
+        Assert.Equal(Complete.OutcomeRequiredFaultCode, exit.Fault!.Code);
+        run.AssertDidNotRun("node-on-failed", "node-on-succeeded");
+    }
+
+    // Local Code Review of PR #4314: a Complete node that sets both 'outcome' and 'outcomes' faults instead of
+    // silently dropping 'outcome' (publication refuses it with activity.graph.complete.outcome-conflict).
+    [Fact]
+    public async Task CompleteSettingBothOutcomeAndOutcomes_FaultsWithAStableCode()
+    {
+        var run = await RunInParentAsync(
+            Boundary(
+                Nodes.Leaf("node-exit", typeof(Complete), new Dictionary<string, object?> { ["outcome"] = "succeed", ["outcomes"] = new[] { "fail" } }),
+                completeOutcomes: FailOrSucceed),
+            allowPendingWork: true);
+
+        var exit = run.State("node-exit");
+        Assert.Equal(ActivityExecutionStatus.Faulted, exit.Status);
+        Assert.Equal(Complete.OutcomeConflictFaultCode, exit.Fault!.Code);
+        run.AssertDidNotRun("node-on-failed", "node-on-succeeded");
+    }
+
+    // A blank entry in 'outcomes' is not ignored: the node names no valid outcome and faults.
+    [Fact]
+    public async Task CompleteWithABlankEntryInOutcomes_FaultsWithAStableCode()
+    {
+        var run = await RunInParentAsync(
+            Boundary(CompleteNodeWithOutcomes("node-exit", "fail", " "), completeOutcomes: FailOrSucceed),
+            allowPendingWork: true);
+
+        var exit = run.State("node-exit");
+        Assert.Equal(ActivityExecutionStatus.Faulted, exit.Status);
+        Assert.Equal(Complete.OutcomeRequiredFaultCode, exit.Fault!.Code);
+        // The message names the blank entry, not a missing outcome (second local Code Review of PR #4314).
+        Assert.Contains("blank boundary outcome in 'outcomes'", exit.Fault.Message, StringComparison.Ordinal);
+        run.AssertDidNotRun("node-on-failed", "node-on-succeeded");
+    }
+
+    // An empty unused input is unset when Complete runs, as it is at publication.
+    [Fact]
+    public async Task CompleteWithABlankOutcomeAndAnOutcomesList_CompletesWithTheList()
+    {
+        var run = await RunInParentAsync(Boundary(
+            Nodes.Leaf("node-exit", typeof(Complete), new Dictionary<string, object?> { ["outcome"] = "", ["outcomes"] = new[] { "fail" } }),
+            completeOutcomes: FailOrSucceed));
+
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes(BoundaryNodeId, "Failed");
+    }
+
     [Fact]
     public async Task EntryIsComplete_TheBoundaryCompletesImmediately()
     {
@@ -379,6 +466,9 @@ public sealed class GraphBoundaryCompleteTests
 
     internal static ExecutableNode CompleteNode(string nodeId, string referenceKey) =>
         Nodes.Leaf(nodeId, typeof(Complete), new Dictionary<string, object?> { ["outcome"] = referenceKey });
+
+    private static ExecutableNode CompleteNodeWithOutcomes(string nodeId, params string[] referenceKeys) =>
+        Nodes.Leaf(nodeId, typeof(Complete), new Dictionary<string, object?> { ["outcomes"] = referenceKeys });
 
     internal static ExecutableNode Sequence(string nodeId, params ExecutableNode[] steps) =>
         Nodes.Structural(

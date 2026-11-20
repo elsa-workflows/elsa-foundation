@@ -21,7 +21,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 using Elsa.Workflows.Design.Api.Endpoints;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -63,7 +63,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.AddRequestHandlersFrom(assembly);
         // These services back the authoring API, which registers them itself rather than relying on the validation feature.
         services.AddScopedVariableAuthoring();
-        // Null-object so NativeEndpoints GetRequiredService does not fail on a design-only host.
+        // Null-object so MinimalEndpoints GetRequiredService does not fail on a design-only host.
         // Publishing replaces this with the slot/journal lookup.
         services.TryAddScoped<IWorkflowDefinitionPublicationStateLookup, NullWorkflowDefinitionPublicationStateLookup>();
         services.TryAddScoped<Endpoints.Definitions.IWorkflowDefinitionDetailsReader, Endpoints.Definitions.WorkflowDefinitionDetailsReader>();
@@ -76,6 +76,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
                 serviceProvider.GetServices<IWorkflowDefinitionDraftStore>()));
         services.TryAddScoped<IActivityInputOptionsProviderResolver, ActivityInputOptionsProviderResolver>();
         services.TryAddScoped<ActivityInputOptionsAuthoringService>();
+        services.AddScoped<ActivityDataContextService>();
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();
         services.TryAddSingleton<IServiceCollection>(services);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, LibraryVisibilityStartupTask>());
@@ -108,6 +109,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();
         services.AddApiCapabilitySource<WorkflowTemplateCapabilitySource>();
         services.AddApiCapabilitySource<WorkflowLibraryCapabilitySource>();
+        services.AddApiCapabilitySource<WorkflowActivityDataCapabilitySource>();
         services.AddPermissionContributor<WorkflowDesignPermissionContributor>();
         services.ConfigureHttpJsonOptions(options =>
         {

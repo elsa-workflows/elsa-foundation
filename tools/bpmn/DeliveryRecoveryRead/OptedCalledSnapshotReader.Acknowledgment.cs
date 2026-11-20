@@ -32,7 +32,7 @@ internal static partial class OptedCalledSnapshotReader
         var cs = new SqliteConnectionStringBuilder { DataSource = new Uri(Path.GetFullPath(snapshot)).AbsoluteUri + "?immutable=1", Mode = SqliteOpenMode.ReadOnly }.ToString();
         await using var connection = new SqliteConnection(cs); await connection.OpenAsync();
         await using (var query = connection.CreateCommand()) { query.CommandText = "PRAGMA query_only=ON"; await query.ExecuteNonQueryAsync(); }
-        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(await ReadOnlyRuntimeSnapshot.OptionsAsync(connection));
         var access = new ScopedAccess(new PersistenceScope(scopeName));
         var workflows = new EfWorkflowExecutionStateStore(context, access, new NoPaging()); var activities = new EfActivityExecutionStateStore(context, access, new NoPaging());
         var dispatches = new EfWorkflowDispatchStore(context, access); var incidents = new EfIncidentStateStore(context, access); var bookmarks = new EfBookmarkStateStore(context, access);
@@ -93,7 +93,7 @@ internal static partial class OptedCalledSnapshotReader
                     JsonSerializer.SerializeToElement(finalControl, Json)), "The later real terminal source has no equivalent durable consumption proof.");
         }
         Require(childRoot.ProducedControl is not null && JsonElement.DeepEquals(JsonSerializer.SerializeToElement(childRoot.ProducedControl, Json), JsonSerializer.SerializeToElement(finalControl.Batch, Json)) && childRoot.ProducedControlSourceCommitId == (completedPair ? null : control.SourceCommitId), "Actual root emission or anchor differs from the cut.");
-        if (completedPair) Require(call.ChildControl is not null && JsonElement.DeepEquals(JsonSerializer.SerializeToElement(call.ChildControl, Json), JsonSerializer.SerializeToElement(finalControl, Json)) && call.Completion?.OutcomeKey == "Completed" && call.Fault is null && !string.IsNullOrEmpty(call.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId)), "Actual terminal call lost its original truthful ordinary completion receipt.");
+        if (completedPair) Require(call.ChildControl is not null && JsonElement.DeepEquals(JsonSerializer.SerializeToElement(call.ChildControl, Json), JsonSerializer.SerializeToElement(finalControl, Json)) && call.Completion?.OutcomeNames is ["Completed"] && call.Fault is null && !string.IsNullOrEmpty(call.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId)), "Actual terminal call lost its original truthful ordinary completion receipt.");
         else Require(call.ChildControl is null, "Actual nonterminal notice fabricated ordinary completion.");
         var warning = Exact(parentStates, item.GetProperty("parent"), "node-warning"); var normals = parentStates.Where(state => state.Execution.ExecutableNodeId == "node-normal").ToArray();
         Require(warning.Status == (phase == "finished" ? ActivityExecutionStatus.Completed : ActivityExecutionStatus.Suspended) && normals.Length == (completedPair ? 1 : 0) && normals.All(state => state.Status == ActivityExecutionStatus.Completed), "Actual accepted caller branches differ or repeated.");

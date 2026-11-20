@@ -23,7 +23,8 @@ internal static class FlowchartScheduler
         string executionScopeId,
         string? iterationKey,
         string schedulingActivityExecutionId,
-        string schedulingCause)
+        string schedulingCause,
+        IEnumerable<string?>? causedBy = null)
     {
         context.ScheduleChildActivity(
             nodeId,
@@ -48,7 +49,9 @@ internal static class FlowchartScheduler
                 metadata: new Dictionary<string, string>
                 {
                     [FlowchartExecutionEngine.TargetNodeIdMetadataKey] = nodeId
-                }));
+                })
+                // Spec 1229 FR-007: a join names every arrival that satisfied it, not only the last.
+                .WithCausedBy(causedBy));
 
         var activeChild = new FlowchartActiveChild(nodeId, executionPathId, executionScopeId, schedulingCause);
         return state with

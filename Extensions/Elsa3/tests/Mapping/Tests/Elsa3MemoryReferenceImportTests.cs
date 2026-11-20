@@ -109,8 +109,9 @@ public sealed class Elsa3MemoryReferenceImportTests
         return Case(definition, [Consumer()], [memoryId], version =>
         {
             var expression = ReadPortableExpression(ReadValue(FindInput(version, "variable-node", ValueInputKey)));
-            Assert.Equal("(args.total) ?? null", expression.Source);
-            var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["total"]);
+            Assert.Equal("(variables.total) ?? null", expression.Source);
+            var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["variables.total"]);
+            Assert.Equal(ExpressionParameterSurfaces.Variables, parameter.Surface);
             Assert.Equal("workflow", parameter.DeclaringScopeNodeId);
             Assert.Equal("variable-total", parameter.VariableKey);
         });
@@ -229,8 +230,8 @@ public sealed class Elsa3MemoryReferenceImportTests
         {
             var expression = ReadPortableExpression(ReadValue(FindInput(version, "liquid-node", ValueInputKey)));
             Assert.Equal("Liquid", expression.Language);
-            Assert.Equal("{{ customer.name }}", expression.Source);
-            var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["customer"]);
+            Assert.Equal("{{ variables.customer.name }}", expression.Source);
+            var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["variables.customer"]);
             Assert.Equal("variable-customer", parameter.VariableKey);
             Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, expression.CapabilityProfile);
         });

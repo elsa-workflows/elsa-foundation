@@ -1,7 +1,7 @@
 using Elsa.Api.AspNetCore;
 using Elsa3.Activities.Design.Import.Models;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa3.Activities.Design.Import.Endpoints;
 

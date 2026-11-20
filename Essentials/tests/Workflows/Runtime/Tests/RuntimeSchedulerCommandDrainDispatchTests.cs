@@ -438,6 +438,9 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowSchedulerDrainObserver>(observer);
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        // This drive observes the discrete Schedule → Start → Invoke chain item by item. Since spec 1221 an External
+        // leaf runs that chain as one fused span by default, so fusion is turned off here to keep the chain visible.
+        services.AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = false });
         services.AddPersistenceModes();
         await using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IWorkflowExecutableStore>();

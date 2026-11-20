@@ -130,6 +130,12 @@ public enum Elsa3ValueContract
     HttpResponseContentType,
 
     /// <summary>
+    /// WriteHttpResponse headers (#3202): Elsa 3 saves an empty header map, which is no Elsa 4 binding; a literal map is
+    /// bound as an object with an array of values per header, the shape of the Elsa 4 header dictionary.
+    /// </summary>
+    HttpResponseHeaders,
+
+    /// <summary>
     /// A RunJavaScript body (plan D-16): rewritten in script mode, its Elsa 3 reads bound through the activity's
     /// <c>arguments</c> input and its completion value returned.
     /// </summary>

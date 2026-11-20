@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, LocateFixed, Undo2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, ChevronRight, Info, LocateFixed, Undo2 } from "lucide-react";
 import type {
   StudioActivityDiagnostic,
   StudioActivityDiagnosticFocusResult
@@ -56,18 +56,20 @@ export function ActivityDefinitionDiagnosticsPanel({
   return <section className="ad-diagnostics-panel" aria-labelledby="activity-diagnostics-title">
     <details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
       <summary>
-        <span>Draft diagnostics</span>
-        <span>{counts.error} errors · {counts.warning} warnings · {counts.info} info</span>
+        <h2 id="activity-diagnostics-title"><ChevronRight className="ad-diagnostics-chevron" size={14} aria-hidden />Draft diagnostics</h2>
+        <span aria-label="Diagnostic severity counts">{[
+          counts.error ? `${counts.error} error${counts.error === 1 ? "" : "s"}` : null,
+          counts.warning ? `${counts.warning} warning${counts.warning === 1 ? "" : "s"}` : null,
+          counts.info ? `${counts.info} info` : null
+        ].filter(Boolean).join(" · ") || "No messages"}</span>
       </summary>
     <div className="ad-diagnostics-content">
       <header className="ad-diagnostics-header">
       <div>
-        <span className="ad-kicker">{validation || failure ? "Exact saved revision" : "Local authoring buffer"}</span>
-        <h2 id="activity-diagnostics-title">Draft diagnostics</h2>
         <p>{validation
           ? validation.isValid
-            ? `Revision ${validation.revision} passed validation. The result is server-authoritative for this exact saved revision.`
-            : `Revision ${validation.revision} was rejected by draft validation. Correct the errors before publication or Test Run.`
+            ? `Revision ${validation.revision} passed validation.`
+            : `Revision ${validation.revision} did not pass validation. Review the messages below before publishing or Test Run.`
           : failure
             ? validationFailureMessage(failure)
             : "Local authoring diagnostics must be resolved or reset before revision-sensitive actions can continue."}</p>
@@ -77,11 +79,6 @@ export function ActivityDefinitionDiagnosticsPanel({
         {validation.isValid ? "Valid draft" : "Draft rejected"}
       </span> : null}
       </header>
-    <div className="ad-diagnostic-counts" aria-label="Diagnostic severity counts">
-      <SeverityCount severity="error" count={counts.error} />
-      <SeverityCount severity="warning" count={counts.warning} />
-      <SeverityCount severity="info" count={counts.info} />
-    </div>
     {groups.map(group => <section key={group.area} className="ad-diagnostic-group" aria-labelledby={`activity-diagnostics-${group.id}`}>
       <h3 id={`activity-diagnostics-${group.id}`}>{group.area}</h3>
       <ActivityDiagnosticList diagnostics={group.diagnostics} onFocus={onFocus} label={`${group.area} diagnostics`} />
@@ -100,7 +97,7 @@ export function ActivityDefinitionDiagnosticsPanel({
       <span>{focusAnnouncement ?? "Select a diagnostic to move to a supported contract control or provider-owned implementation location."}</span>
       {canReturn ? <button type="button" onClick={onReturn}><Undo2 size={15} aria-hidden /> Return to diagnostic</button> : null}
     </div>
-    <p className="ad-runtime-distinction"><strong>Runtime is separate.</strong> A later Test Run can be rejected during dispatch even when this draft is valid; Runtime rejection is reported by the Test Run experience, not as a draft-validation transport failure.</p>
+    <details className="ad-diagnostic-help"><summary>About validation and Test Run</summary><p className="ad-runtime-distinction"><strong>Runtime is separate.</strong> A later Test Run can be rejected during dispatch even when this draft is valid; Runtime rejection is reported by the Test Run experience, not as a draft-validation transport failure.</p></details>
     </div>
     </details>
   </section>;
@@ -151,10 +148,6 @@ function DiagnosticItem({
       <LocateFixed size={15} aria-hidden /> Focus location
     </button>
   </li>;
-}
-
-function SeverityCount({ severity, count }: { severity: DiagnosticTone; count: number }) {
-  return <span className={`is-${severity}`}>{severityIcon(severity)} <strong>{count}</strong> {severity}{count === 1 ? "" : "s"}</span>;
 }
 
 function countSeverities(

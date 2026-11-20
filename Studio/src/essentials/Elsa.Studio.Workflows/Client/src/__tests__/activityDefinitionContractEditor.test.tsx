@@ -16,6 +16,33 @@ afterEach(() => {
 });
 
 describe("ActivityDefinitionContractEditor", () => {
+  it.each([
+    { readOnly: false, stored: "elsa.json", active: ["elsa.json"], disabled: false },
+    { readOnly: true, stored: "elsa.json", active: ["elsa.json"], disabled: true },
+    { readOnly: false, stored: "retired.driver", active: ["elsa.json"], disabled: false },
+    { readOnly: false, stored: "retired.driver", active: [], disabled: true }
+  ])("keeps the saved driver visible and authorizes available choices: %j", ({ readOnly, stored, active, disabled }) => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mountedRoots.push({ root, container });
+    const catalog = capabilities();
+    catalog.storageDriverKeys = active;
+    const contract = contractWithDefault("hello");
+    contract.inputs[0].storageDriverKey = stored;
+    flushSync(() => root.render(<ActivityDefinitionContractEditor contract={contract} capabilities={catalog}
+      expressions={[]} providerRequiredOutcomes={[]} baselineUnavailable={false}
+      readOnly={readOnly} capabilitiesUnavailable={false} onChange={() => undefined}
+      onLocalValidityChange={() => undefined} />));
+    click(buttonByText(container, "Advanced"));
+    const driver = controlByLabel<HTMLSelectElement>(container, "Durable storage driver");
+    expect(driver.value).toBe(stored);
+    expect(driver.disabled).toBe(disabled);
+    expect([...driver.options].map(option => option.value)).toEqual([...new Set([stored, ...active])]);
+    expect(driver.parentElement?.textContent).toContain(active.length ? "Only one compatible storage driver" : "No compatible storage driver");
+    if (!active.includes(stored)) expect(driver.selectedOptions[0].disabled).toBe(true);
+  });
+
   it("keeps an unsafe JSON default visible with a precision error and disables Apply", () => {
     const container = document.createElement("div");
     document.body.append(container);
@@ -38,7 +65,7 @@ describe("ActivityDefinitionContractEditor", () => {
     expect(committed).toBe(false);
   });
 
-  it("keeps common contract fields in the basic view and preserves advanced values when edited", () => {
+  it("separates member settings and preserves staged defaults across tabs and advanced edits", () => {
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
@@ -82,14 +109,15 @@ describe("ActivityDefinitionContractEditor", () => {
       { text: "Expression", value: "expression" }
     ]);
 
-    const advanced = input.querySelector<HTMLDetailsElement>("details.ad-contract-advanced")!;
-    expect(advanced.open).toBe(false);
+    const advanced = input.querySelectorAll<HTMLElement>("[role='tabpanel']")[2];
+    expect(advanced.hidden).toBe(true);
     expect(advanced.querySelector("[data-contract-field='referenceKey']")).toBeTruthy();
     expect(advanced.querySelector("[data-contract-field='storageDriverKey']")).toBeTruthy();
-    expect(advanced.querySelector("[data-contract-field='type.alias']")).toBeTruthy();
+    expect(advanced.querySelector("[data-contract-field='type.alias']")).toBeNull();
     expect(advanced.querySelector("[data-contract-field='type.collectionKind']")).toBeTruthy();
     expect(advanced.querySelector("[data-contract-field='isNullable']")).toBeTruthy();
-    expect([...advanced.querySelectorAll("small")].some(copy => copy.textContent?.includes("CLR type names are not stored"))).toBe(true);
+    expect(input.textContent).not.toContain("CLR type names");
+    expect(input.textContent).not.toContain("Type alias");
     expect(container.textContent).not.toContain("exact-revision draft queue");
     const schemaDetails = container.querySelector<HTMLDetailsElement>("details[data-contract-schema]")!;
     expect(schemaDetails.open).toBe(false);
@@ -97,13 +125,23 @@ describe("ActivityDefinitionContractEditor", () => {
     expect(container.querySelector(".ad-badge[data-contract-schema]")).toBeNull();
     expect(basicFields.querySelector<HTMLSelectElement>("[data-contract-field='default']")?.options).toHaveLength(4);
 
-    advanced.open = true;
-    changeInput(controlByLabel<HTMLInputElement>(advanced, "Display name"), "Friendly value");
+    const originalSource = controlByLabel<HTMLInputElement>(input, "Value");
+    changeInput(originalSource, "pending default");
+    click(buttonByText(input, "Presentation"));
+    expect(basicFields.closest<HTMLElement>("[role='tabpanel']")!.hidden).toBe(true);
+    changeInput(controlByLabel<HTMLInputElement>(input, "Display name"), "Friendly value");
+    changeInput(controlByLabel<HTMLInputElement>(input, "Category"), "Customer");
+    expect(input.querySelector("datalist option")?.getAttribute("value")).toBe("Customer");
+    click(buttonByText(input, "Advanced"));
+    expect(advanced.hidden).toBe(false);
     changeSelect(controlByLabel<HTMLSelectElement>(advanced, "Durable storage driver"), "elsa.memory");
     const keyInput = advanced.querySelector<HTMLInputElement>("[data-contract-field='referenceKey']")!;
     changeInput(keyInput, "custom_reference");
     click(buttonByText(advanced, "Apply key"));
 
+    click(buttonByText(input, "General"));
+    expect(controlByLabel<HTMLInputElement>(input, "Value")).toBe(originalSource);
+    expect(originalSource.value).toBe("pending default");
     expect(committed?.inputs[0]).toMatchObject({
       referenceKey: "custom_reference",
       displayName: "Friendly value",
@@ -225,7 +263,7 @@ function capabilities(): ActivityAuthoringCapabilities {
 }
 
 function buttonByText(container: HTMLElement, text: string) {
-  const button = [...container.querySelectorAll("button")].find(candidate => candidate.textContent === text);
+  const button = [...container.querySelectorAll("button")].find(candidate => (candidate.textContent === text || candidate.getAttribute("aria-label") === text));
   if (!button) throw new Error(`Button '${text}' not found.`);
   return button;
 }

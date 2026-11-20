@@ -209,6 +209,18 @@ export function toActivityDescriptor(activity: ActivityCatalogItem): StudioActiv
     outputs: activity.outputs as StudioActivityDescriptor["outputs"],
     ports: (activity.ports ?? []) as StudioActivityDescriptor["ports"],
     isContainer: Boolean(activity.containerStructure),
-    isBrowsable: activity.available !== false
+    isBrowsable: activity.available !== false,
+    ...(readAccessesUndeclaredVariables(activity) ? { accessesUndeclaredVariables: true } : {})
   };
+}
+
+// The descriptor flag, or the `elsa.variable-access` design facet that carries the same marker (spec 1231 FR-026).
+function readAccessesUndeclaredVariables(activity: ActivityCatalogItem) {
+  if (activity.accessesUndeclaredVariables === true) return true;
+  return (activity.designFacets ?? []).some(facet => {
+    if (!facet || typeof facet !== "object") return false;
+    const { kind, payload } = facet as { kind?: unknown; payload?: unknown };
+    return kind === "elsa.variable-access" && !!payload && typeof payload === "object" &&
+      (payload as { accessesUndeclaredVariables?: unknown }).accessesUndeclaredVariables === true;
+  });
 }

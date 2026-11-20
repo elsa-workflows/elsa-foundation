@@ -28,5 +28,6 @@ export function describeInferredSource(expressionType: string, value: unknown, m
   }
   if (type === "variable") return "Variable value";
   if (type === "input") return "Workflow input";
+  if (type === "activityresult") return "Activity output";
   return "Expression result";
 }

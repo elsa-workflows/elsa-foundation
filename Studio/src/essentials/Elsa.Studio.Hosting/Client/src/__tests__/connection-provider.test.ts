@@ -10,7 +10,7 @@ afterEach(()=>{vi.unstubAllGlobals();window.history.replaceState({},"","/");});
 describe("document-owned connection providers",()=>{
  it("keeps core's fixed backend gated by real discovery with no profile request or selection storage",async()=>{
   sessionStorage.setItem("elsa.studio.backend.selection.v1","foreign");
-  const fetch=vi.fn(async()=>Response.json({capabilities:[]}));vi.stubGlobal("fetch",fetch);
+  const fetch=vi.fn<typeof globalThis.fetch>(async()=>Response.json({capabilities:[]}));vi.stubGlobal("fetch",fetch);
   const connection=new ConfiguredBackendConnection(host.host,host.identity,null,"http://backend.example/shell/");
   await connection.initialize();
   expect(connection.getSnapshot().active?.profile.id).toBe("legacy");

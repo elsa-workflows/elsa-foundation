@@ -33,7 +33,7 @@ public sealed class PublishEventTests
 
         // Fire-and-continue: completes Done immediately.
         var completion = await ExecuteAsync(activity);
-        Assert.Equal(ActivityOutcomes.Done, completion.Outcome);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, completion.Selection.ResolveNames());
 
         // Durable-first: exactly one request STAGED (not routed). The activity has no router dependency at all.
         var request = Assert.Single(stager.Requests);

@@ -87,7 +87,8 @@ In reusable mode, an input match resolves to the same binding `getInput("{name}"
   - **Decision:** a generated accessor whose name equals a built-in (for example a variable `CorrelationId`) is refused
     with `VF-IMP-002` and guidance to rename it. No guessing.
 - Generated accessors and built-ins override RunJavaScript's `setOutcome`/`setOutcomes`. This is irrelevant here,
-  because both are refused.
+  because both are refused. Spec 1208 (S-3), 2026-11, made `setOutcome`/`setOutcomes` convert in RunJavaScript
+  scripts, so this reasoning no longer holds there.
 
 ## R-4 Instance metadata binding (Elsa 4)
 

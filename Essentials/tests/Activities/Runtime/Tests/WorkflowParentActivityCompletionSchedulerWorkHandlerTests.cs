@@ -27,7 +27,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         var parent = run.State("node-parent");
         Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
         Assert.NotEmpty(parent.IncidentIds);
-        Assert.Contains("VF-ACT-006", parent.Fault!.Message, StringComparison.Ordinal);
+        // Spec 1208 FR-016: an undeclared outcome faults with VF-ACT-006 carried as the fault code.
+        Assert.Equal("VF-ACT-006", parent.Fault!.Code);
+        Assert.Contains("'Undeclared'", parent.Fault.Message, StringComparison.Ordinal);
         Assert.Collection(
             parent.Attempts!.OrderBy(attempt => attempt.Ordinal),
             initialAttempt =>

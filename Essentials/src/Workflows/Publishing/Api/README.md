@@ -40,6 +40,10 @@ requires this durable store and the cross-domain commit command to share one tra
 an Applied receipt, immutable activity version, definition head, executable template, Source
 Reference, layout, and dependency edges become visible together or not at all.
 
+## Cross-domain contributions
+
+- **`IActivitySourceVersionPublisher`** *(Core contract — `Elsa.Activities.Design.Core`)* — `SourceOwnedActivityVersionPublisher`, registered with `TryAddScoped`, closes each source-owned catalog version the activity reconciler contributes into its immutable publication and Runtime template, or refuses it per version with its diagnostics. Catalog: [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../../../Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md); the provider-backed path is described in [this feature's catalog](EXTENSION_POINTS.md).
+
 ## Publication lifecycle
 
 The management flow is capability-oriented but the authority transition is one coordinated Publishing

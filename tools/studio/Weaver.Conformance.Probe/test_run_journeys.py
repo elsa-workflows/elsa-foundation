@@ -3,13 +3,15 @@ import copy
 import json
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
 
 from artifacts import sha
 from batch_journeys import OUTCOME_ROWS
 from explain_journeys import READ_FRAMES
 from inspection_journeys import ADMISSION_REFUSAL, MUTATING_TOOLS
-from run_journeys import (BROWSER_JOURNEY, run_browser_inputs, BROWSER_OBSERVATIONS, EXPECTED_CASES, RUN_KIND, RUN_LIMITED, RUN_LIMITED_GRANTS, RUN_NATIVE, RUN_TOOL, TEXTS,
+from run_journeys import (BROWSER_JOURNEY, _browser, run_browser_inputs, BROWSER_OBSERVATIONS, EXPECTED_CASES, RUN_KIND, RUN_LIMITED, RUN_LIMITED_GRANTS, RUN_NATIVE, RUN_TOOL, TEXTS,
                           expected_disclosure, no_canary, require_controls_unoffered, require_no_canary_in_evidence, require_run_browser,
                           require_run_context, require_run_read, require_run_result, require_workflow_run, run_attachment, run_manifest_gaps,
                           run_principal, synthetic_browser, synthetic_native, synthetic_search)
@@ -312,11 +314,130 @@ class RunBrowserAndGateTests(unittest.TestCase):
                 ("run-control-offered", {**synthetic_native(), "controls-refused": {"control": "controls-refused", "unchanged": True,
                                                                                       "offered": [RUN_TOOL, "workflow_retry_run"]}}, None),
                 ("run-tool-missing", {**synthetic_native(), "controls-refused": {"control": "controls-refused", "unchanged": True, "offered": []}}, None),
-                ("shape", {**synthetic_native(), "runtime-agent-absent": {"control": "runtime-agent-absent", "code": "other"}}, None),
+                ("shape", {**synthetic_native(), "runtime-weaver-absent": {"control": "runtime-weaver-absent", "code": "other"}}, None),
                 ("canary", None, {"files": 3, "found": 1}), ("no-files", None, {"files": 0, "found": 0})):
             with self.subTest(change=name), self.assertRaises(RuntimeError):
                 require_workflow_run(self.section(native, search), self.root, source="a" * 40)
-        self.assertEqual(ADMISSION_REFUSAL["code"], synthetic_native()["runtime-agent-absent"]["code"])
+        self.assertEqual(ADMISSION_REFUSAL["code"], synthetic_native()["runtime-weaver-absent"]["code"])
+
+
+class RunBrowserFailureDiagnosticTests(unittest.TestCase):
+    """Exercise the direct subprocess boundary only; no browser, host or provider runs."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.owned = Path(directory.name)
+        self.root = self.owned / "run"
+        self.case = self.root / "copilot-workflow-run-browser"
+        self.output = self.case / "observation"
+        self.output.mkdir(parents=True)
+        self.original = RuntimeError("original browser subprocess failure")
+        self.report = {"status": "failed", "source": "a" * 40, "cases": [],
+                       "stage": "copilot-workflow-run-browser"}
+        self.runtime = SimpleNamespace(
+            sign_in=Mock(return_value=(None, {"storageState": str(self.case / "storage-private.json")})),
+            output=Mock(return_value=self.case), provider="copilot", studio_origin="http://127.0.0.1:41000",
+            backend_origin="http://127.0.0.1:41001", command_file=self.case / "command-private.json",
+            transport=Mock(return_value=SimpleNamespace(trace_file=self.case / "trace.jsonl")),
+            run=SimpleNamespace(run=Mock(side_effect=self.original), report=self.report, save=Mock()))
+        self.seed = {"faulted": {"workflowExecutionId": "owned-run", "instancePath": "/runtime/owned-run",
+                                 "activities": {"sensitive": {"detail": {"activityExecutionId": "owned-activity"}}}},
+                     "nodes": {"sensitive": "sensitive"}}
+        node = patch("run_journeys.shutil.which", return_value="node")
+        node.start()
+        self.addCleanup(node.stop)
+
+    def invoke_failure(self):
+        with self.assertRaises(RuntimeError) as caught:
+            _browser(self.runtime, "copilot-workflow-run-browser", self.seed, CANARY)
+        self.assertIs(self.original, caught.exception)
+        self.assertEqual("failed", self.report["status"])
+
+    def write_diagnostic(self):
+        value = {"kind": "AssertionError", "message": CANARY, "password": "private-password",
+                 "frames": [{"file": "browser.mjs", "line": 111, "column": 2},
+                            {"file": "browser.mjs", "line": 111, "column": 2},
+                            {"file": "/private/browser.mjs", "line": 222, "column": 3},
+                            {"file": "browser.mjs", "line": True, "column": 3}]}
+        path = self.output / "failure-diagnostic.json"
+        path.write_text(json.dumps(value))
+        return path
+
+    def test_failed_browser_retains_safe_primary_location_and_same_exception(self):
+        path = self.write_diagnostic()
+        original_bytes = path.read_bytes()
+        self.invoke_failure()
+        self.assertEqual({"kind": "AssertionError", "frames": [{"file": "browser.mjs", "line": 111, "column": 2}]},
+                         self.report.get("browserFailureDiagnostic"))
+        self.runtime.run.save.assert_called_once()
+        self.assertEqual(original_bytes, path.read_bytes())
+        self.assertNotIn(CANARY, json.dumps(self.report))
+        self.assertNotIn("private-password", json.dumps(self.report))
+
+    def test_missing_or_malformed_diagnostic_keeps_original_failure(self):
+        path = self.output / "failure-diagnostic.json"
+        for data in (None, "{", "[]", '{"kind":"private-kind","frames":false}'):
+            with self.subTest(data=data):
+                self.report.pop("browserFailureDiagnostic", None)
+                self.runtime.run.save.reset_mock()
+                if data is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.write_text(data)
+                self.invoke_failure()
+                if data is None or data == "{":
+                    self.assertNotIn("browserFailureDiagnostic", self.report)
+                    self.runtime.run.save.assert_not_called()
+                else:
+                    self.assertEqual({"kind": "Unavailable", "frames": []}, self.report["browserFailureDiagnostic"])
+
+    def test_diagnostic_read_or_save_failure_cannot_mask_subprocess_failure(self):
+        self.write_diagnostic()
+        with patch.object(Path, "read_text", side_effect=TimeoutError("diagnostic read failed")):
+            self.invoke_failure()
+        self.runtime.run.save.assert_not_called()
+        self.runtime.run.save.side_effect = RuntimeError("diagnostic save failed")
+        self.invoke_failure()
+        self.runtime.run.save.assert_called_once()
+
+    def test_success_does_not_consume_failure_diagnostic_or_change_report(self):
+        self.write_diagnostic()
+        self.runtime.run.run.side_effect = None
+        self.runtime.transport.return_value.protocol_trace = Mock(return_value={"incompleteTailBytes": 0, "records": [], "receipt": {}})
+        self.runtime.save = Mock(return_value={})
+        (self.output / "observation.json").write_text(json.dumps({"evidence": [], "ownerBefore": {}, "ownerAfter": {}}))
+        before = copy.deepcopy(self.report)
+        with patch("run_journeys.require_run_browser", return_value={"syntheticUnitOnly": True}):
+            value, _ = _browser(self.runtime, "copilot-workflow-run-browser", self.seed, CANARY)
+        self.assertEqual({"syntheticUnitOnly": True}, value)
+        self.assertEqual(before, self.report)
+        self.runtime.run.save.assert_not_called()
+
+    def test_safe_failure_survives_strict_full_export_refusal(self):
+        from export_evidence import export_evidence
+        from export_failure_diagnostic import export_failure_diagnostic
+
+        self.write_diagnostic()
+        outside = self.owned / "outside.txt"
+        outside.write_text("outside the run")
+        self.report.update(evidence=[{"path": str(outside), "sha256": sha(outside)}], failure={"message": CANARY})
+        report = self.root / "report.json"
+        self.runtime.run.save.side_effect = lambda: report.write_text(json.dumps(self.report))
+        self.invoke_failure()
+        with self.assertRaisesRegex(ValueError, "escaped"):
+            export_evidence(self.root, self.owned / "full")
+        destination = self.owned / "diagnostic"
+        index = export_failure_diagnostic(self.root, destination)
+        selected = json.loads((destination / "report.json").read_text())
+        self.assertEqual("copilot-workflow-run-browser", selected["stage"])
+        self.assertEqual("AssertionError", selected["browserFailureDiagnostic"]["kind"])
+        self.assertEqual(111, selected["browserFailureDiagnostic"]["frames"][0]["line"])
+        self.assertFalse(selected["qualificationComplete"])
+        self.assertFalse(selected["independentPackageWitness"])
+        self.assertEqual("failed", index["qualificationStatus"])
+        self.assertNotIn(CANARY, (destination / "report.json").read_text())
+        self.assertFalse((self.owned / "full").exists())
 
 
 if __name__ == "__main__":

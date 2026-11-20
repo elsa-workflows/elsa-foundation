@@ -90,7 +90,7 @@ public sealed class DeterministicCollectionTests
             activityExecutionId,
             $"attempt:{activityExecutionId}",
             result,
-            "Done",
+            Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named("Done"),
             completedAt,
             "test.result:1.0.0");
         return new ActivityExecutionState(

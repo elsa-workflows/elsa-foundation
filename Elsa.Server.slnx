@@ -1,59 +1,62 @@
 <Solution>
   <Folder Name="/Extensions/" />
   <Folder Name="/Extensions/Agent/" />
+  <Folder Name="/Extensions/Weaver/" />
+  <Folder Name="/Extensions/Weaver/src/">
+    <Project Path="Extensions/Weaver/src/Elsa.Weaver/Elsa.Weaver.csproj" />
+    <Project Path="Extensions/Weaver/src/Anthropic/Elsa.Weaver.Anthropic.csproj" />
+    <Project Path="Extensions/Weaver/src/Api/Elsa.Weaver.Api.csproj" />
+    <Project Path="Extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj" />
+    <Project Path="Extensions/Weaver/src/GitHubCopilot/Elsa.Weaver.GitHubCopilot.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Weaver/src/Persistence/">
+    <Project Path="Extensions/Weaver/src/Persistence/EntityFrameworkCore/Elsa.Weaver.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Agent/src/">
-    <Project Path="Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj" />
+    <Project Path="Extensions/Agent/src/Connections/Elsa.Agent.Connections.csproj" />
     <Project Path="Extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj" />
     <Project Path="Extensions/Agent/src/Api/Elsa.Agent.Api.csproj" />
+    <Project Path="Extensions/Agent/src/AzureOpenAI/Elsa.Agent.AzureOpenAI.csproj" />
+    <Project Path="Extensions/Agent/src/OpenAI/Elsa.Agent.OpenAI.csproj" />
     <Project Path="Extensions/Agent/src/Core/Elsa.Agent.Core.csproj" />
-    <Project Path="Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
+    <Project Path="Extensions/Agent/src/Design/Elsa.Agent.Design.csproj" />
+    <Project Path="Extensions/Agent/src/JsonSchema/Elsa.Agent.JsonSchema.csproj" />
+    <Project Path="Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Agent/src/Inspection/">
+    <Project Path="Extensions/Agent/src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Agent/src/Review/">
+    <Project Path="Extensions/Agent/src/Review/Api/Elsa.Agent.Review.Api.csproj" />
+    <Project Path="Extensions/Agent/src/Review/Elsa.Agent.Review/Elsa.Agent.Review.csproj" />
   </Folder>
   <Folder Name="/Extensions/Agent/src/Persistence/">
     <Project Path="Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Agent/src/Specialists/">
-    <Project Path="Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj" />
-    <Project Path="Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
-    <Project Path="Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj" />
-    <Project Path="Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj" />
-    <Project Path="Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj" />
-    <Project Path="Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj" />
-    <Project Path="Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj" />
-    <Project Path="Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj" />
+  <Folder Name="/Extensions/Weaver/src/Workflows/">
+    <Project Path="Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/Elsa.Weaver.Workflows.csproj" />
+    <Project Path="Extensions/Weaver/src/Workflows/Runtime/Elsa.Weaver.Workflows.Runtime.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Agent/src/Specialists/Inspection/">
-    <Project Path="Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj" />
+  <Folder Name="/Extensions/Weaver/tests/">
+    <Project Path="Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Agent/src/Specialists/Review/">
-    <Project Path="Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj" />
-    <Project Path="Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj" />
+  <Folder Name="/Extensions/Weaver/tests/Persistence/">
+    <Project Path="Extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj" />
+    <Project Path="Extensions/Weaver/tests/Persistence/ProviderTests/Elsa.Weaver.Persistence.ProviderTests.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Agent/src/Specialists/Persistence/">
-    <Project Path="Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj" />
-  </Folder>
-  <Folder Name="/Extensions/Agent/src/Workflows/">
-    <Project Path="Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/Elsa.Agent.Workflows.csproj" />
-    <Project Path="Extensions/Agent/src/Workflows/Runtime/Elsa.Agent.Workflows.Runtime.csproj" />
+  <Folder Name="/Extensions/Weaver/tests/Workflows/Runtime/">
+    <Project Path="Extensions/Weaver/tests/Workflows/Runtime/Tests/Elsa.Weaver.Workflows.Runtime.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Agent/tests/">
     <Project Path="Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj" />
-  </Folder>
-  <Folder Name="/Extensions/Agent/tests/Persistence/">
-    <Project Path="Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj" />
-    <Project Path="Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj" />
-  </Folder>
-  <Folder Name="/Extensions/Agent/tests/Workflows/Runtime/">
-    <Project Path="Extensions/Agent/tests/Workflows/Runtime/Tests/Elsa.Agent.Workflows.Runtime.Tests.csproj" />
-  </Folder>
-  <Folder Name="/Extensions/Agent/tests/Specialists/">
-    <Project Path="Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj" />
-    <Project Path="Extensions/Agent/tests/Specialists/ProviderTests/Elsa.Agent.Specialists.ProviderTests.csproj" />
+    <Project Path="Extensions/Agent/tests/ProviderTests/Elsa.Agent.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Etl/" />
   <Folder Name="/Extensions/Etl/src/">
     <Project Path="Extensions/Etl/src/Core/Elsa.Etl.Core.csproj" />
     <Project Path="Extensions/Etl/src/Api/Elsa.Etl.Api.csproj" />
     <Project Path="Extensions/Etl/src/RabbitMq/Elsa.Etl.RabbitMq.csproj" />
+    <Project Path="Extensions/Etl/src/Tooling/Elsa.Etl.Tooling.csproj" />
   </Folder>
   <Folder Name="/Extensions/Etl/src/Design/">
     <Project Path="Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj" />
@@ -78,6 +81,12 @@
     <Project Path="Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj" />
     <Project Path="Extensions/Etl/tests/WorkerHost/Elsa.Etl.WorkerHost.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Etl/tests/Hosting/">
+    <Project Path="Extensions/Etl/tests/Hosting/Tests/Elsa.Etl.Hosting.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Etl/tests/Persistence/">
+    <Project Path="Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Etl/tests/RabbitMq/">
     <Project Path="Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj" />
   </Folder>
@@ -95,6 +104,7 @@
   <Folder Name="/Extensions/Elsa3/src/Activities/Design/Import/">
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj" />
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Elsa3.Activities.Design.Import.Reconciliation.csproj" />
   </Folder>
   <Folder Name="/Extensions/Elsa3/src/Activities/Design/Import/Persistence/">
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
@@ -193,6 +203,9 @@
   </Folder>
   <Folder Name="/Extensions/Rules/tests/">
     <Project Path="Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Rules/tests/Hosting/">
+    <Project Path="Extensions/Rules/tests/Hosting/Tests/Elsa.Rules.Hosting.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Rules/tests/Persistence/" />
   <Folder Name="/Extensions/Rules/tests/Persistence/EntityFrameworkCore/">
@@ -370,6 +383,7 @@
     <Project Path="Essentials/src/Modularity/Planning/Elsa.Modularity.Planning.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Persistence/">
+    <Project Path="Essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj" />
     <Project Path="Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
     <Project Path="Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj" />
   </Folder>
@@ -851,5 +865,36 @@
   </Folder>
   <Folder Name="/Essentials/tests/Versioning/Publisher/">
     <Project Path="Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/tests/Evaluation/">
+    <Project Path="Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/src/">
+    <Project Path="Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj" />
+    <Project Path="Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
+    <Project Path="Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
+    <Project Path="Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
+    <Project Path="Extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/tests/Api/">
+    <Project Path="Extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/tests/Design/">
+    <Project Path="Extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/tests/Workflows/">
+    <Project Path="Extensions/Decisions/tests/Workflows/Tests/Elsa.Decisions.Workflows.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/tests/Workflows/Api/">
+    <Project Path="Extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/src/Persistence/">
+    <Project Path="Extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj" />
+    <Project Path="Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Decisions/src/Workflows/">
+    <Project Path="Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
+    <Project Path="Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
+    <Project Path="Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
   </Folder>
 </Solution>

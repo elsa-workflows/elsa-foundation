@@ -68,7 +68,7 @@ public sealed class Elsa3TopLevelReturnTests
             ["o"] = JsonSerializer.SerializeToElement(new { name = "Ada" }),
         });
         Assert.Equal("Ada", value.GetProperty("name").GetString());
-        Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["o"]);
+        Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["variables.o"]);
     }
 
     [Theory]

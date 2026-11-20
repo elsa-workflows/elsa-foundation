@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -44,9 +45,9 @@ public sealed class WorkflowDefinitionVersionDetailsTests
                     JsonSerializer.Deserialize<JsonElement>("""{"label":"Start"}"""))
             ]
         };
-        var handler = NewHandler(layout);
+        var reader = NewReader(layout);
 
-        var result = await handler.HandleAsync(new GetVersion(VersionId), CancellationToken.None);
+        var result = await reader.ReadAsync(VersionId, CancellationToken.None);
 
         var record = Assert.Single(result.Layout);
         Assert.Equal("node-1", record.NodeId);
@@ -60,9 +61,9 @@ public sealed class WorkflowDefinitionVersionDetailsTests
     [Fact]
     public async Task Details_use_empty_layout_when_no_layout_was_saved()
     {
-        var handler = NewHandler(layout: null);
+        var reader = NewReader(layout: null);
 
-        var result = await handler.HandleAsync(new GetVersion(VersionId), CancellationToken.None);
+        var result = await reader.ReadAsync(VersionId, CancellationToken.None);
 
         Assert.Empty(result.Layout);
     }
@@ -73,7 +74,7 @@ public sealed class WorkflowDefinitionVersionDetailsTests
         var store = new StubVersionStore(_version);
         var layout = new StubLayoutStore(layout: null);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => new GetVersionEndpoint(new WorkflowVersionDetailsReader(store, layout)).HandleAsync(
+        await Assert.ThrowsAsync<ArgumentException>(() => new GetVersionEndpoint(new WorkflowVersionDetailsReader(store, layout), [new AllowingAuthorizer()]).HandleAsync(
             new GetVersion("draft:synthetic"),
             CancellationToken.None));
 
@@ -81,8 +82,17 @@ public sealed class WorkflowDefinitionVersionDetailsTests
         Assert.Equal(0, layout.Calls);
     }
 
-    private GetVersionEndpoint NewHandler(WorkflowDefinitionVersionLayout? layout) =>
-        new(new WorkflowVersionDetailsReader(new StubVersionStore(_version), new StubLayoutStore(layout)));
+    // The layout composition is the reader's; the endpoint adds the request's permission and owner checks, which
+    // VersionReadAuthorizationTests cover through the endpoint pipeline.
+    private WorkflowVersionDetailsReader NewReader(WorkflowDefinitionVersionLayout? layout) =>
+        new(new StubVersionStore(_version), new StubLayoutStore(layout));
+
+    /// <summary>The owning definition authorizer the endpoint requires; the draft-id refusal happens before it is asked.</summary>
+    private sealed class AllowingAuthorizer : IWorkflowDefinitionAuthorizer
+    {
+        public ValueTask<bool> CanReadAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+    }
 
     private sealed class StubVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore
     {

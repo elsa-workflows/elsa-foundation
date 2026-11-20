@@ -245,7 +245,10 @@ internal sealed class Elsa3ActivityResolver(
             var unmatched = dynamicElement.TryGetProperty("unmatched", out var unmatchedElement) && unmatchedElement.ValueKind == JsonValueKind.String
                 ? unmatchedElement.GetString()
                 : null;
-            dynamic = new Elsa3DynamicOutcomes(source.GetString()!, unmatched);
+            // A catalog without the flag predates the Done rule: its items always selected one outcome.
+            var selectsOnEveryCompletion = !dynamicElement.TryGetProperty("selectsOnEveryCompletion", out var selects) ||
+                                           selects.ValueKind != JsonValueKind.False;
+            dynamic = new Elsa3DynamicOutcomes(source.GetString()!, unmatched, selectsOnEveryCompletion);
         }
 
         return ports.Count == 0 && dynamic is null ? Elsa3ActivityOutcomes.DoneOnly : new Elsa3ActivityOutcomes(ports, dynamic);

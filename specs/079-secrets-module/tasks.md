@@ -240,3 +240,15 @@
 - Mark each task `[x]` when completed.
 - Keep personal `.agent-prefs/*.md` uncommitted.
 - Do not overwrite unrelated local changes in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Web/shells.json`.
+
+## Case-preserving names refinement — #3855
+
+Reviewed spec/plan consistency: the name's spelling is preserved, its normalized identity is unchanged, and the name remains immutable.
+
+- [x] C001 Add causal regressions in `Essentials/tests/Secrets/Tests/SecretManagerTests.cs`, `SecretRepositoryContractTests.cs`, EF SQLite tests/host restart journey and Studio `secretDialogs.test.tsx`.
+- [x] C002 Preserve names in manager/Studio, accept uppercase stored names, and normalize EF/in-memory storage identities on all write paths; retain lookup normalization.
+- [x] C003 Extend `Studio/tests/acceptance/journeys.spec.ts` for casing, refresh/detail, copy and duplicate recovery, retaining screenshots across all four existing viewport/theme projects.
+- [x] C004 Run affected backend/frontend suites, typecheck and architecture/maps gates; commit, run composed acceptance on clean source and inspect captures independently. Record local results and the remaining downloadable-CI-evidence requirement on [PR #3859](https://github.com/elsa-workflows/elsa-foundation/pull/3859), whose gate receipt tracks shared evidence and merge readiness.
+
+- [x] C005 Version the case-preserving payload as Secrets 2.0.0 with a v1 upcaster and existing finalization-gate write selection. Add `SecretsNameSchemaTests.cs` for old-format continuation, gated refusal, finalization, legacy reads and preceding-reader version-skew diagnosis.
+- [x] C006 Map duplicate creation to a bounded conflict problem in `Essentials/src/Secrets/Api/SecretsApi.cs`; tighten backend and composed duplicate-message regressions. The stricter backend regression failed before the mapping and the whole Secrets suite passed after it.

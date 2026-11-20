@@ -24,7 +24,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // The schema family this module owns, at the version its skew check reads. A host's readability
 // report is derived from it alone; every family the stores check must be declared here, at the
 // version they read; that holds by review until #2606 restores a compiled check.
-[assembly: EfSchemaFamily(SecretsEfModule.SchemaFamily, "Secrets", SecretsEfModule.SchemaVersion)]
+[assembly: EfSchemaFamily(SecretsEfModule.SchemaFamily, "Secrets", SecretsEfModule.SchemaVersion, Upcasters = [typeof(SecretsV1Upcaster)])]
 
 // Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
 [assembly: EfSchemaContent(SecretsEfModule.SchemaFamily, typeof(SecretRecord), nameof(SecretRecord.Payload))]

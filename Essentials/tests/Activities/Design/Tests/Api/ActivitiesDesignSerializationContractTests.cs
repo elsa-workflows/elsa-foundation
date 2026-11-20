@@ -23,6 +23,19 @@ namespace Elsa.Activities.Design.Tests.Api;
 /// </summary>
 public sealed class ActivitiesDesignSerializationContractTests
 {
+    [Fact]
+    public void Node_presentation_wire_array_preserves_omitted_versus_empty_and_rejects_duplicates()
+    {
+        const string body = """{"expectedRevision":1,"contract":{"contractSchemaVersion":"1","inputs":[],"outputs":[],"outcomes":[]},"provider":{"providerKey":"test","schemaVersion":"1","payload":{}},"layout":[]}""";
+        Assert.Null(Deserialize<ReplaceReusableActivityDraft>(body).ActivityPresentation);
+        var empty = Deserialize<ReplaceReusableActivityDraft>(body[..^1] + ",\"activityPresentation\":[]}");
+        Assert.Empty(empty.ActivityPresentation!.Records);
+        var named = Deserialize<ReplaceReusableActivityDraft>(body[..^1] + ",\"activityPresentation\":[{\"nodeId\":\"n\",\"displayName\":\"  Review  \"}]}");
+        Assert.Equal("Review", Assert.Single(named.ActivityPresentation!.Records).DisplayName);
+        Assert.Equal(JsonValueKind.Array, JsonDocument.Parse(Serialize(named)).RootElement.GetProperty("activityPresentation").ValueKind);
+        Assert.Throws<JsonException>(() => Deserialize<ReplaceReusableActivityDraft>(body[..^1] + ",\"activityPresentation\":[{\"nodeId\":\"n\",\"displayName\":\"A\"},{\"nodeId\":\"n\",\"displayName\":\"B\"}]}"));
+    }
+
     private static readonly Type ContextType = typeof(ActivitiesDesignApiFeature).Assembly.GetType(
         "Elsa.Activities.Design.Api.ActivitiesDesignJsonContext",
         throwOnError: true)!;

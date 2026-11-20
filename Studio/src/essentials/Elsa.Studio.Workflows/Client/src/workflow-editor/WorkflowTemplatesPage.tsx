@@ -14,8 +14,8 @@ import type { CreateWorkflowDraft } from "./editorTypes";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";
 import { createTemplateDocumentAdapter } from "./templateDocumentAdapter";
 import { getDialogs } from "./dialogs";
-import { applyCreateDialogPrefill, createDialogAttachment, createDialogKind, templateListAttachment, templateListKind } from "./workflowLibraryAgent";
-import { useWorkflowPageAgent } from "./useWorkflowLibraryAgent";
+import { applyCreateDialogPrefill, createDialogAttachment, createDialogKind, templateListAttachment, templateListKind } from "./workflowLibraryWeaver";
+import { useWorkflowPageWeaver } from "./useWorkflowLibraryWeaver";
 
 const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const CreateWorkflowDialog = lazy(() => import("./CreateWorkflowDialog").then(module => ({ default: module.CreateWorkflowDialog })));
@@ -49,7 +49,7 @@ export function WorkflowTemplatesPage(props: Props) {
   }, [ai.clientId, listed, loading, props.weaver, search, supported, templateId]);
   // Spec 1193 FR-023: the open "Use template" dialog's values; a prefill may choose a listed template, and Create stays the user's.
   const dialogTemplates = useMemo(() => templates.map(item => ({ id: item.id, name: item.name, description: item.description, revision: item.revision, content: item.content })), [templates]);
-  useWorkflowPageAgent<CreateWorkflowDraft | null>({
+  useWorkflowPageWeaver<CreateWorkflowDraft | null>({
     controller: props.weaver, clientId: ai.clientId, kind: createDialogKind, toolId: "workflow_create_dialog_prefill", resultType: "workflows.create-dialog-prefill",
     describe: "Filled in the open New workflow dialog; create the workflow with its Create action.",
     build: (draft, client) => draft && dialog?.kind === "workflow" ? createDialogAttachment(draft, dialogTemplates, client) : null,
@@ -71,7 +71,7 @@ export function WorkflowTemplatesPage(props: Props) {
   useEffect(() => { const sync = () => setTemplateId(new URLSearchParams(window.location.search).get("template")); window.addEventListener("popstate", sync); return () => window.removeEventListener("popstate", sync); }, []);
   const open = (id: string | null) => { setTemplateId(id); navigate(`/workflows/templates${id ? `?template=${encodeURIComponent(id)}` : ""}`); if (!id) void reload(); };
   const begin = (kind: "template" | "workflow", template?: WorkflowTemplate, starter?: "http") => {
-    setError(""); setDialog({ kind, draft: { name: template ? `${template.name}${kind === "template" ? " copy" : ""}` : starter ? "HTTP request and response" : "", description: template?.description ?? "", rootActivityVersionId: null, starter,
+    setError(""); setDialog({ kind, draft: { name: template ? `${template.name}${kind === "template" ? " copy" : ""}` : starter ? "HTTP request and response" : "", description: template?.description ?? (starter ? builtInWorkflowTemplates.find(item => item.id === starter)!.description : ""), rootActivityVersionId: null, starter,
       ...(template ? { templateId: template.id, templateContent: structuredClone(template.content) } : {}) } });
   };
   const submit = async () => {
@@ -145,7 +145,7 @@ export function WorkflowTemplatesPage(props: Props) {
 
 
 export function WorkflowTemplatesRoute({ api, navigate, weaver }: { api: ElsaStudioModuleApi; navigate(path: string): void; weaver?: Props["weaver"] }) {
-  return <WorkflowTemplatesPage key={`${api.backend.baseUrl}:${api.runtime.identity?.tenantId}:${api.runtime.identity?.subject}`} context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors.list()}
+  return <WorkflowTemplatesPage key={`${api.backend.baseUrl}:${api.runtime.identity?.tenantId}:${api.runtime.identity?.subject}`} context={api.backend} ai={api.weaver} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors.list()}
     runInputEditors={api.workflowRunInputEditors?.list() ?? []} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []}
     workflowDesignerPanels={api.workflowDesigner.panels.list()} navigate={navigate} />;
 }

@@ -29,19 +29,20 @@ def select(event_name: str, event: dict, changed: list[str] | None, patterns: di
     if event_name == 'schedule':
         result['studio-order'] = True
         return result
-    if event_name not in {'push', 'pull_request'}:
+    if event_name not in {'push', 'pull_request', 'merge_group'}:
         return result
-    ready = event.get('action') == 'ready_for_review'
+    # A merge-queue entry is validated as a pull request that just received a push: same scope, same proofs.
+    pr_like = event_name in {'pull_request', 'merge_group'}
     draft = event.get('pull_request', {}).get('draft', False)
     for suite, filters in patterns.items():
         affected = changed is None or any(matches(path, pattern) for path in changed for pattern in filters)
         if suite == 'studio':
-            result[suite] = event_name == 'push' or affected and not ready
+            result[suite] = event_name == 'push' or affected
         elif suite == 'weaver':
             result[suite] = affected and not draft
         else:
-            result[suite] = event_name == 'pull_request' and affected and not ready
-    result['studio-order'] = event_name == 'pull_request' and not ready and (
+            result[suite] = pr_like and affected
+    result['studio-order'] = pr_like and (
         changed is None or any(path in {'.github/workflows/ci.yml', 'tools/ci/workflow_scope.py',
                                       'tools/ci/workflow-paths.json', 'tools/ci/test_workflow_scope.py',
                                       '.github/actions/setup-studio/action.yml'} for path in changed))
@@ -49,13 +50,20 @@ def select(event_name: str, event: dict, changed: list[str] | None, patterns: di
 
 
 def changed_paths(event_name: str, event: dict, head: str) -> list[str] | None:
-    if event_name not in {'push', 'pull_request'}:
+    if event_name not in {'push', 'pull_request', 'merge_group'}:
         return []
-    # PR merge commit first parent is today's main, rather than the stale base.sha.
-    base = f'{head}^1' if event_name == 'pull_request' else event.get('before', '')
+    # PR merge commit first parent is the base branch today (main or initiative/*), rather than the stale base.sha. A
+    # merge-queue entry names its own parent: base_sha is the commit the entry was built on, and head (GITHUB_SHA) is the
+    # entry's merge result.
+    if event_name == 'pull_request':
+        base = f'{head}^1'
+    elif event_name == 'merge_group':
+        base = event.get('merge_group', {}).get('base_sha', '')
+    else:
+        base = event.get('before', '')
     if not base or set(base) == {'0'}:
         return None
-    diff_range = f'{base}...{head}' if event_name == 'pull_request' else f'{base}..{head}'
+    diff_range = f'{base}..{head}' if event_name == 'push' else f'{base}...{head}'
     diff = subprocess.run(['git', 'diff', '--name-only', '--no-renames', '-z', diff_range],
                           cwd=ROOT, capture_output=True, text=True)
     if diff.returncode:

@@ -312,6 +312,11 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
                 Element(new { layoutHash = before?.LayoutHash, layoutCount = before?.LayoutCount }),
                 Element(new { layoutHash = after?.LayoutHash, layoutCount = after?.LayoutCount }),
                 ActivityVersionChangeImpact.NonBehavioral, ActivityVersionBump.Patch, "The activity layout changed."));
+        if (!StringComparer.Ordinal.Equals(before?.PresentationHash, after?.PresentationHash) || before?.PresentationCount != after?.PresentationCount)
+            Add(changes, SimpleChange("presentation:nodes:names-changed", ActivityVersionChangeArea.Presentation, "NodePresentationChanged",
+                Element(new { presentationHash = before?.PresentationHash, presentationCount = before?.PresentationCount }),
+                Element(new { presentationHash = after?.PresentationHash, presentationCount = after?.PresentationCount }),
+                ActivityVersionChangeImpact.NonBehavioral, ActivityVersionBump.Patch, "The activity node names or descriptions changed."));
     }
 
     private static void CompareRequirements(

@@ -71,7 +71,7 @@ internal static class ChildControlDelivery
             if (child.Status != ActivityExecutionStatus.Completed || child.Completion is null ||
                 !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(child.ChildControl), JsonSerializer.SerializeToElement(decision.Ready[^1])))
                 throw new InvalidOperationException("A ready terminal barrier requires its exact committed ordinary leaf completion.");
-            outcomes = [child.Completion.OutcomeKey];
+            outcomes = child.Completion.OutcomeNames;
         }
         await StructuralCallbackEvaluation.RunAsync(services, timeProvider, workItem, payload,
             new StructuralCallbackEvaluation.Definition

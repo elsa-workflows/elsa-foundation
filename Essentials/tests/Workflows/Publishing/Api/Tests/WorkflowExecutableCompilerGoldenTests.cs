@@ -45,7 +45,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     public static TheoryData<string> CorpusNames()
     {
         var data = new TheoryData<string>();
-        foreach (var name in Corpus.Keys)
+        foreach (var name in Corpus.Keys.Where(name => name is not ("structured-variable-ref" or "bare-variable-ref")))
             data.Add(name);
         return data;
     }
@@ -60,6 +60,20 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         var executable = await compiler.CompileAsync(definition.Request);
 
         AssertMatchesGolden(corpusName, executable);
+    }
+
+    [Theory]
+    [InlineData("structured-variable-ref")]
+    [InlineData("bare-variable-ref")]
+    public async Task Previously_undeclared_variable_fixtures_are_refused_while_their_retained_golden_files_stay_unchanged(string corpusName)
+    {
+        var definition = Corpus[corpusName];
+        var before = File.ReadAllBytes(GoldenPath(corpusName));
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            definition.BuildCompiler(_activityStructureService).CompileAsync(definition.Request).AsTask());
+        var refusal = Assert.IsType<Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionRejectedException>(exception.InnerException);
+        Assert.Contains(refusal.Findings, finding => finding.Type == "Variable/UnresolvableReference" && finding.Path == "write-var/inputs/Text");
+        Assert.Equal(before, File.ReadAllBytes(GoldenPath(corpusName)));
     }
 
     [Fact]
@@ -122,7 +136,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     }
 
     [Fact]
-    public async Task CompileProjectsEachActivityNodesChildrenExactlyOnce()
+    public void The_compilation_projection_is_reusable_without_reprojecting_each_nodes_children()
     {
         // W30b (#418) evidence for the traverse-once fix and the single INTENTIONAL observable change of the
         // refactor: the compiler used to call IActivityStructureService.ProjectChildren twice per node (once in
@@ -131,9 +145,12 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         // fact proves the call-count reduction actually landed.
         var counting = new CountingActivityStructureService(_activityStructureService);
         var definition = Corpus["nested-child-slots"]; // sequence root + two leaf nodes = 3 nodes.
-        var compiler = definition.BuildCompiler(counting);
-
-        await compiler.CompileAsync(definition.Request);
+        var projection = new ActivityTreeProjector(counting).Project(definition.Version.State!.RootActivity!);
+        foreach (var node in projection.Nodes)
+        {
+            _ = projection.ChildProjections(node);
+            _ = projection.ChildProjections(node);
+        }
 
         Assert.Equal(3, counting.ProjectChildrenCallsByNode.Count);
         Assert.All(counting.ProjectChildrenCallsByNode, entry =>

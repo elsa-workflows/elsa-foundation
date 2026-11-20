@@ -83,9 +83,8 @@ public sealed class FlowchartExecutionEngine(
         // Flowchart ends — it completes itself with the Break outcome so the nearest enclosing loop
         // (For/ForEach/While/Do) ends early, mirroring the linear/branch composites (Sequence/If/Switch).
         // The breaking path is marked completed and every other in-flight path (e.g. sibling branches of a
-        // parallel fork that has not yet joined) is canceled so no further nodes are scheduled; the late
-        // completions of those canceled children are ignored because the Flowchart's activity execution is
-        // no longer Running by then. Matched by outcome name so the Flowchart takes no dependency on the
+        // parallel fork that has not yet joined) is canceled so no further nodes are scheduled, and their still
+        // running activities are cancelled in the same commit. Matched by outcome name so the Flowchart takes no dependency on the
         // (separate) Break activity module.
         if (completionContext.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
         {
@@ -96,6 +95,9 @@ public sealed class FlowchartExecutionEngine(
                 LastOutcomeNames = completionContext.OutcomeNames
             });
             state = CancelPendingPathsForBreak(state, path, completionContext.CompletedChildExecutableNodeId);
+            // The other paths' running activities end with the Flowchart: without this they kept running and committed
+            // their writes after the Flowchart had completed (spec 266 research R-3).
+            context.RequestLiveChildrenSubtreeCancellation("flowchart-break");
             return ValueTask.FromResult(persister.StageState(RuntimeStructuralContinuation.Complete(ActivityOutcomes.Break), state));
         }
 
@@ -140,9 +142,9 @@ public sealed class FlowchartExecutionEngine(
             return ValueTask.FromResult(PersistAndMaybeComplete(state));
         }
 
+        // Every taken connection is an arrival at its target, also when two selected outcomes lead to the same node:
+        // by default the target's implicit join runs it once after both arrivals (ADR 0045 §6, Q4).
         var outboundConnections = graph.SelectOutboundConnections(completionContext.CompletedChildExecutableNodeId, completionContext.OutcomeNames);
-        if (outboundConnections.Select(connection => connection.Target.NodeId).Distinct(StringComparer.Ordinal).Count() != outboundConnections.Count)
-            throw new FlowchartExecutionException($"Flowchart completion for child executable node '{completionContext.CompletedChildExecutableNodeId}' contains duplicate connection targets.");
 
         if (outboundConnections.Count == 0)
         {
@@ -163,6 +165,12 @@ public sealed class FlowchartExecutionEngine(
 
         var scheduledTargets = new HashSet<string>(StringComparer.Ordinal);
         var takenConnectionIds = new HashSet<string>(StringComparer.Ordinal);
+        // A join answers per source node, so the first of two taken connections to one target would otherwise fire
+        // it alone and strand the second arrival, leaving the Flowchart running. Every arrival but the last one this
+        // completion makes at a target waits there; the last one decides and the firing consumes them all.
+        var lastConnectionByTarget = new Dictionary<string, FlowchartConnection>(StringComparer.Ordinal);
+        foreach (var connection in outboundConnections)
+            lastConnectionByTarget[connection.Target.NodeId] = connection;
         foreach (var connection in outboundConnections)
         {
             var connectionId = graph.GetConnectionId(connection);
@@ -182,6 +190,14 @@ public sealed class FlowchartExecutionEngine(
                 targetIterationKey);
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, completionContext.CompletedChildActivityExecutionId);
+
+            // An earlier arrival from this same completion waits for the last one without a join-wait diagnostic: it is
+            // not waiting on another source, and the last arrival records the wait if there is one.
+            if (!ReferenceEquals(lastConnectionByTarget[connection.Target.NodeId], connection))
+            {
+                state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
+                continue;
+            }
 
             if (joinCoordinator.ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
             {

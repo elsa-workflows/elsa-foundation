@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -7,7 +7,6 @@ import { getActivityAuthoringCapabilities } from "./api/activityDesign";
 import type { ActivityAuthoringCapabilities } from "./activityDefinitionTypes";
 import { IncidentStrategySection } from "./IncidentStrategySection";
 import { PersistenceModeSection } from "./PersistenceModeSection";
-import { WorkflowVersionHistory, type WorkflowVersionHistoryAgent } from "./workflow-editor/WorkflowVersionHistory";
 import {
   argumentNameKeys,
   createInput,
@@ -31,6 +30,8 @@ import {
   variableNameKeys
 } from "./workflowProperties";
 import { collectionKinds } from "./workflowTypes";
+import { VariableRenameContext, useVariableRenameScope } from "./variableRenameContext";
+import { workflowVariableScopeId } from "./variableRename";
 import type {
   CollectionKind,
   VariableDefinition,
@@ -356,7 +357,7 @@ interface ArgumentColumns {
 function ArgumentsEditor({
   items, typeOptions, storageOptions, storageOptionsStatus, editorForAlias,
   namePrefix, nameKeys, title, addLabel, emptyLabel,
-  create, patch, columns, warnings, onChange
+  create, patch, columns, warnings, onNameCommitted, onChange
 }: {
   items: Record<string, unknown>[];
   typeOptions: PickerOption[] | null;
@@ -372,8 +373,25 @@ function ArgumentsEditor({
   patch(existing: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown>;
   columns: ArgumentColumns;
   warnings?: Map<string, string>;
+  /** Called once a row's name edit is committed (on blur) with the name it had when editing began. */
+  onNameCommitted?(referenceKey: string, oldName: string, newName: string): void;
   onChange(next: unknown[]): void;
 }) {
+  // The name each row had when its name field took focus: a rename is reported once, when the edit ends — on blur, or
+  // when the editor unmounts while a name field still has focus (a view switch), so no rename goes unreported.
+  const namesAtFocus = useRef(new Map<number, string>());
+  const latestRows = useRef({ items, nameKeys, onNameCommitted });
+  latestRows.current = { items, nameKeys, onNameCommitted };
+  useEffect(() => () => {
+    const { items: rows, nameKeys: keys, onNameCommitted: report } = latestRows.current;
+    for (const [index, before] of namesAtFocus.current) {
+      const row = rows[index];
+      const after = row ? readStringField(row, keys) : "";
+      const key = row ? readStringField(row, referenceKeyKeys) : "";
+      if (report && key && before && after.trim() && before !== after) report(key, before, after);
+    }
+    namesAtFocus.current.clear();
+  }, []);
   const { add, update, remove } = buildCollectionOps<Record<string, unknown>>(items, onChange, {
     namePrefix,
     nameKeys,
@@ -405,7 +423,18 @@ function ArgumentsEditor({
         return (
           <tr key={index}>
             <td>
-              <input type="text" aria-label={`${namePrefix} name`} value={name} onChange={event => update(index, { name: event.target.value })} />
+              <input
+                type="text"
+                aria-label={`${namePrefix} name`}
+                value={name}
+                onFocus={() => namesAtFocus.current.set(index, name)}
+                onBlur={() => {
+                  const before = namesAtFocus.current.get(index);
+                  namesAtFocus.current.delete(index);
+                  if (onNameCommitted && referenceKey && before && name.trim() && before !== name) onNameCommitted(referenceKey, before, name);
+                }}
+                onChange={event => update(index, { name: event.target.value })}
+              />
               {warning ? <span className="wf-properties-warning" role="note" title={warning}>{warning}</span> : null}
             </td>
             <td>
@@ -479,6 +508,9 @@ export function VariablesEditor({ items, typeOptions, storageOptions, storageOpt
   warnings?: Map<string, string>;
   onChange(next: unknown[]): void;
 }) {
+  // A committed rename is reported to the nearest workflow editor, which updates the scripts that read the variable
+  // (spec 1222 FR-022); outside one, a rename changes the declaration alone.
+  const renameScope = useVariableRenameScope();
   return (
     <ArgumentsEditor
       items={items}
@@ -486,6 +518,9 @@ export function VariablesEditor({ items, typeOptions, storageOptions, storageOpt
       storageOptions={storageOptions}
       storageOptionsStatus={storageOptionsStatus}
       editorForAlias={editorForAlias}
+      onNameCommitted={renameScope
+        ? (referenceKey, oldName, newName) => renameScope.onVariableRenamed(renameScope.scopeId, referenceKey, oldName, newName)
+        : undefined}
       namePrefix="Variable"
       nameKeys={variableNameKeys}
       title={title}
@@ -563,7 +598,7 @@ export function toRecords(value: unknown[] | undefined): Record<string, unknown>
 }
 
 // Self-contained variable editor (loads its own type/storage descriptors) for use outside the
-// Properties tab — e.g. the container-scoped variables section in the activity inspector. Workflow-
+// workflow data tabs — e.g. the container-scoped variables section in the activity inspector. Workflow-
 // and container-scoped declarations share this one editor, differing only by where they are stored.
 export function ScopedVariablesEditor({ context, variables, title, addLabel, emptyLabel, warnings, onChange }: {
   context: StudioEndpointContext;
@@ -652,21 +687,13 @@ function InformationSection({ definition, definitionId, onMetaChange }: {
   );
 }
 
-export function WorkflowPropertiesView({ details, draft, context, onStateChange, onDefinitionMetaChange, versionAgent }: {
+export function WorkflowPropertiesView({ details, draft, context, onStateChange, onDefinitionMetaChange }: {
   details: WorkflowDefinitionDetails | null;
   draft: WorkflowDraft;
   context: StudioEndpointContext;
   onStateChange(producer: StateProducer): void;
   onDefinitionMetaChange?(patch: { name?: string; description?: string }): void;
-  /** Weaver's read-only version journey (spec 1193 story 8): a selected version is disclosed and can be explained. */
-  versionAgent?: WorkflowVersionHistoryAgent;
 }) {
-  const { typeOptions, storageOptions, storageOptionsStatus, editorForAlias } = useDescriptorOptions(context);
-  const variables = toRecords(draft.state.variables);
-  const inputs = toRecords(draft.state.inputs);
-  const outputs = toRecords(draft.state.outputs);
-  const versions = details?.versions ?? [];
-
   return (
     <div className="wf-properties-view">
       <InformationSection
@@ -685,6 +712,7 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
       />
 
       <PersistenceModeSection
+        context={context}
         strategyOptions={draft.state.strategyOptions}
         onChange={persistenceMode => onStateChange(state => ({
           ...state,
@@ -692,34 +720,47 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
         }))}
       />
 
-      <VariablesEditor
-        items={variables}
+    </div>
+  );
+}
+
+export type WorkflowDataSection = "variables" | "inputs" | "outputs";
+
+/** Workflow declarations share the scoped editors and the draft's existing save and undo path. */
+export function WorkflowDataView({ section, draft, context, onStateChange }: {
+  section: WorkflowDataSection;
+  draft: WorkflowDraft;
+  context: StudioEndpointContext;
+  onStateChange(producer: StateProducer): void;
+}) {
+  const { typeOptions, storageOptions, storageOptionsStatus, editorForAlias } = useDescriptorOptions(context);
+  const renameScope = useVariableRenameScope();
+  const workflowRenameScope = useMemo(
+    () => renameScope ? { ...renameScope, scopeId: workflowVariableScopeId } : null,
+    [renameScope]);
+  return (
+    <div className="wf-properties-view">
+      {section === "variables" ? <VariableRenameContext.Provider value={workflowRenameScope}><VariablesEditor
+        items={toRecords(draft.state.variables)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         storageOptionsStatus={storageOptionsStatus}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, variables: next as VariableDefinition[] }))}
-      />
-      <InputsEditor
-        items={inputs}
+      /></VariableRenameContext.Provider> : section === "inputs" ? <InputsEditor
+        items={toRecords(draft.state.inputs)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         storageOptionsStatus={storageOptionsStatus}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, inputs: next }))}
-      />
-      <OutputsEditor
-        items={outputs}
+      /> : <OutputsEditor
+        items={toRecords(draft.state.outputs)}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
         editorForAlias={editorForAlias}
         onChange={next => onStateChange(state => ({ ...state, outputs: next }))}
-      />
-
-      <section className="wf-properties-section">
-        <h3>Versions</h3>
-        <WorkflowVersionHistory definitionId={details?.definition.id ?? draft.definitionId} versions={versions} agent={versionAgent} />
-      </section>
+      />}
     </div>
   );
 }

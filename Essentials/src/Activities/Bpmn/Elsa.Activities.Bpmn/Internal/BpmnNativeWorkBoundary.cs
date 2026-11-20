@@ -301,7 +301,11 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         if (root?.Completion is { } value)
         {
             var redacted = value.Result.Policy.HidesValue() || value.Result.Presence == ValuePresence.Withheld || value.Result.ExternalReference is not null;
-            completion = new(value.InvocationId, value.AttemptId, value.ContractFingerprint, value.OutcomeKey, value.Result.Type,
+            // A BPMN token leaves a service or event task along one sequence flow, so a native worker's root completion
+            // must resolve to exactly one outcome (an unspecified selection resolves to Done).
+            if (value.OutcomeNames is not [var outcomeKey])
+                throw Unavailable($"A native BPMN worker's root completion must select exactly one outcome; it selected {value.Selection}.");
+            completion = new(value.InvocationId, value.AttemptId, value.ContractFingerprint, outcomeKey, value.Result.Type,
                 redacted ? null : value.Result.InlineValue?.Clone(), redacted);
         }
         var intentId = "bpmn-native-result:" + BpmnModelIdentity.Create(origin.WorkerExecutionId, origin.InvocationId, origin.AttemptId);

@@ -23,7 +23,8 @@ public sealed class WorkflowsDesignRetainedMigrationTests
         var type = Assert.Single(ModuleContextCatalog.Contexts(provider), type => typeof(WorkflowsDesignDbContext).IsAssignableFrom(type));
         using var context = ModuleContextCatalog.Create(type, ModuleContextCatalog.PlaceholderConnection(provider), schema: schema);
         Assert.Equal(ConnectionState.Closed, context.Database.GetDbConnection().State);
-        Assert.Equal(new[] { baseline, templates, library, operationKeys }, context.Database.GetMigrations());
+        var sources = Assert.Single(context.Database.GetMigrations(), migration => migration.EndsWith("_SharedSourceRevisions", StringComparison.Ordinal));
+        Assert.Equal(new[] { baseline, templates, library, operationKeys, sources }, context.Database.GetMigrations());
         var assembly = context.GetService<IMigrationsAssembly>();
         var initial = assembly.CreateMigration(assembly.Migrations[baseline], context.Database.ProviderName!);
         Assert.Contains(initial.UpOperations, operation => operation is CreateTableOperation { Name: "elsa_workflow_definitions_v2" });
@@ -101,7 +102,8 @@ public sealed class WorkflowsDesignRetainedMigrationTests
         }
         context.Database.ExecuteSqlRaw(script);
         Assert.Equal(new[] { baseline, templates, library }, context.Database.GetAppliedMigrations());
-        Assert.Equal(new[] { operationKeys }, context.Database.GetPendingMigrations());
+        var sources = Assert.Single(context.Database.GetMigrations(), migration => migration.EndsWith("_SharedSourceRevisions", StringComparison.Ordinal));
+        Assert.Equal(new[] { operationKeys, sources }, context.Database.GetPendingMigrations());
         context.Database.Migrate();
         using var command = context.Database.GetDbConnection().CreateCommand();
         command.CommandText = "SELECT MigrationId FROM __EFMigrationsHistory_ElsaWorkflowsDesign";
@@ -110,6 +112,8 @@ public sealed class WorkflowsDesignRetainedMigrationTests
         Assert.Equal(library, rows.GetString(0));
         Assert.True(rows.Read());
         Assert.Equal(operationKeys, rows.GetString(0));
+        Assert.True(rows.Read());
+        Assert.Equal(sources, rows.GetString(0));
         Assert.False(rows.Read());
     }
 }

@@ -1,0 +1,36 @@
+{
+  "id": "script-reads-variable-v1",
+  "definitionId": "script-reads-variable",
+  "name": "script-reads-variable",
+  "description": "Test-owned regular workflow (#3287): a RunJavaScript reads the String workflow variable 'greeting' and its result is captured into 'reply'.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    { "id": "greeting", "name": "greeting", "typeName": "String", "value": "hello" },
+    { "id": "reply", "name": "reply", "typeName": "Object" }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": { "usableAsActivity": false },
+  "root": {
+    "id": "script-reads-variable-root", "nodeId": "script-reads-variable-root", "name": "script-reads-variable-root", "type": "Elsa.Flowchart", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+    "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+    "activities": [
+      {
+        "id": "script", "nodeId": "script", "name": "script", "type": "Elsa.RunJavaScript", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
+        "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
+        "script": { "typeName": "String", "expression": { "type": "Literal", "value": "return getVariable('greeting');" } },
+        "result": { "typeName": "Object", "memoryReference": { "id": "reply" } }
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}
