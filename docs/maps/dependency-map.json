@@ -6093,11 +6093,6 @@
         },
         {
           "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Relational",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
           "id": "OpenIddict.Abstractions",
           "version": "7.5.0"
         },
@@ -6115,11 +6110,6 @@
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.31"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.EntityFrameworkCore",
-          "version": "10.0.10"
         },
         {
           "type": "pinned-transitive",
@@ -6164,16 +6154,6 @@
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.31"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.EntityFrameworkCore",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.EntityFrameworkCore.Relational",
-          "version": "10.0.10"
         },
         {
           "type": "pinned-transitive",
