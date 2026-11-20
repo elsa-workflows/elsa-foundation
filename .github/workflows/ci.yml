@@ -724,7 +724,8 @@ jobs:
   #
   # Lean CI: one issue per suite. The gate (Build & test, Architecture guards, Core-only) files "main is red: CI", as
   # before; each heavy suite that runs only in the nightly schedule files its own "main is red: CI nightly, <suite>", so a
-  # red suite names itself and one red suite does not hide another. Generated maps stays out (see generated-maps).
+  # red suite names itself and one red suite does not hide another. A Generated maps failure alone files nothing
+  # (see generated-maps).
   alert:
     name: Alert on a red main
     needs:
@@ -741,6 +742,8 @@ jobs:
       - shuffled-unit-tests
       - kernel-prototype-nightly
       - kernel-prototype-nightly-4096
+      # Only so a stale-filter failure, which reaches alert through Build & test, can be told apart and file nothing.
+      - generated-maps
     # A cancelled run (superseded by a newer push) is not a failure and files nothing. The nightly schedule
     # files too: its failure mail goes to whoever last edited the cron, which is nobody watching, and on main it is the
     # only automatic run of the heavy suites. A suite skipped on a push is not a failure.
@@ -771,6 +774,7 @@ jobs:
           SHUFFLED: ${{ needs.shuffled-unit-tests.result }}
           KERNEL_NIGHTLY: ${{ needs.kernel-prototype-nightly.result }}
           KERNEL_4096: ${{ needs.kernel-prototype-nightly-4096.result }}
+          MAPS: ${{ needs.generated-maps.result }}
         run: |
           set -euo pipefail
           failed=()
@@ -783,12 +787,21 @@ jobs:
             if [[ "${pair##*:}" == failure ]]; then failed+=("CI nightly, ${pair%:*}"); fi
           done
           if [ ${#failed[@]} -eq 0 ]; then
-            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate."
+            # Generated maps is an ancestor of alert through Build & test, so a stale-filter failure alone reaches this
+            # job. It is a request to open a refresh PR, not a red main (see generated-maps): file nothing for it.
+            if [[ "$MAPS" == failure ]]; then
+              echo "::notice::Only Generated maps failed: stale solution filters are a refresh request, not a red main. No issue filed."
+              exit 0
+            fi
+            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096"
             failed=("CI")
           fi
 
           # One issue per failed gate or suite; the body below is the same for each (left unindented for its heredoc).
-          for GATE in "${failed[@]}"; do
+          # A failed gh call for one suite does not stop the others (file_issue runs under ||, so set -e does not end
+          # the loop); the step fails at the end if any call failed.
+          file_issue() {
+          local GATE=$1 title trigger issues existing body
           title="main is red: $GATE"
 
           # Attribute only what the event actually says. On a schedule github.actor is whoever
@@ -840,7 +853,15 @@ jobs:
               gh issue create --title "$title" --body "$body"
             }
           fi
+          }
+
+          errors=0
+          for GATE in "${failed[@]}"; do
+            file_issue "$GATE" || { echo "::warning::Could not file or update the issue for $GATE."; errors=$((errors + 1)); }
           done
+          if [ "$errors" -ne 0 ]; then
+            echo "::error::$errors issue call(s) failed; see the warnings above."; exit 1
+          fi
 
   # Freshness gate for the one generated output that IS committed: the solution filters (Elsa.Server.*.slnf),
   # regenerated into a scratch directory and byte-compared with what is committed. It also runs the generator's own
@@ -859,7 +880,8 @@ jobs:
   # filters fresh"); both were folded in here to cut the workflows a push queues. It runs on pull_request, push to
   # main and this workflow's schedule, on every PR including documentation-only ones.
   #
-  # This job is deliberately NOT among the alert job's needs, as the former maps workflow also kept these failures separate: stale filters are a request to open a refresh PR, and the actionable output is the refresh
+  # A failure of this job alone files no alert issue (alert needs it only to recognise that case), as the former maps
+  # workflow also kept these failures separate: stale filters are a request to open a refresh PR, and the actionable output is the refresh
   # command in the run summary.
   #
   # The generator is built once and each check runs whenever that build succeeded, so one failing check does not
@@ -1093,6 +1115,7 @@ jobs:
         run: |
           echo "The full tier (integration and EF container shards) runs in CI's nightly schedule, not on pull requests."
           echo "Run it on this branch with: gh workflow run ci.yml --ref <branch> -f tier=full"
+          echo "The other heavy suites: -f suite=studio, backend-source, weaver, published-images or studio-order."
 
   studio-lint-and-test:
     needs: plan-scope
