@@ -21,8 +21,8 @@ import { clamp, readStoredBoolean, readStoredMaximizedSide, readStoredNumber, wr
 const sidePanelResizeHandleWidth = 10;
 const workflowCanvasMinimumWidth = 360;
 const compactCanvasMinimumWidth = 260;
-/** The widest measured workbench that is laid out for a phone. */
-export const phoneWorkbenchMaximumWidth = 600;
+/** The widest measured workbench that sheets an open inspector (phone and 768px tablet, #4695). */
+export const phoneWorkbenchMaximumWidth = 768;
 
 export interface SidePanelLayoutStorageKeys {
   paletteWidth: string;
@@ -96,8 +96,9 @@ export function resolveAdaptiveSidePanelLayout({
   const wantsInspector = !inspectorCollapsed && effectiveMaximizedSidePanel !== "palette";
   const canFitBothPanels = !palettePresent || !measured || initialPanelSpace >= minPaletteWidth + minInspectorWidth;
   const autoCollapsePalette = measured && wantsPalette && wantsInspector && !canFitBothPanels;
-  // A phone workbench starts on the canvas: its inspector opens only when explicitly requested for this
-  // session, whatever the saved preferences say, and then covers the canvas as a sheet (#4695).
+  // A phone or 768px-tablet workbench starts on the canvas: its inspector opens only when explicitly
+  // requested for this session, whatever the saved preferences say, and then covers the canvas as a
+  // sheet (#4695). At 768px both expanded panels otherwise leave a 260px canvas sliver.
   const inspectorOnRequest = measured && containerWidth <= phoneWorkbenchMaximumWidth && !effectiveMaximizedSidePanel;
   const phoneLayout = inspectorOnRequest && (autoCollapsePalette || (!palettePresent && wantsInspector));
   const forcePaletteOpen = autoCollapsePalette && responsiveExpandedSide === "palette";
@@ -159,7 +160,7 @@ export function resolveAdaptiveSidePanelLayout({
 }
 
 export interface PhonePanelPresentation {
-  /** The workbench is phone-width: panels dock beside the canvas rather than float over it. */
+  /** The workbench is phone- or 768px-tablet-width: panels dock beside the canvas rather than float over it. */
   phoneWidth: boolean;
   /**
    * The open inspector takes the whole workbench as a sheet and the canvas is hidden until the

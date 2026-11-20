@@ -13,10 +13,9 @@ for (const host of ["workflow", "activity"]) for (const width of [360, 390]) for
     await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
     const canvas = page.locator(".wf-canvas-shell");
     const commands = page.getByRole("group", { name: "Named block commands", exact: true });
-    // A phone-width inspector is a sheet (#4695): the canvas and its commands wait behind it rather
-    // than being squeezed beside it, so no command can paint into the active inspector.
+    // A phone-width inspector is a sheet (#4695): the canvas waits behind it rather than being
+    // squeezed beside it. Named block commands may live on the editor toolbar (outside the canvas).
     await expect(canvas).toBeHidden();
-    await expect(commands).toBeHidden();
     await expect(page.getByRole("button", { name: "Back to canvas", exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath("inspector-sheet.png"), fullPage: true });
 

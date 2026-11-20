@@ -25,10 +25,10 @@
 }
 
 /*
- * Phone-width workbench (#4695). An open inspector takes the whole workbench as a sheet, and its
- * header offers the way back to the canvas: side by side, the canvas would be left a sliver too
- * narrow to read or select. The class comes from useSidePanelLayout, which measures the workbench
- * rather than the viewport, so wider workbenches keep their docked or floating panels.
+ * Phone- and 768px-tablet-width workbench (#4695). An open inspector takes the whole workbench as a
+ * sheet, and its header offers the way back to the canvas: side by side, the canvas would be left a
+ * sliver too narrow to read or select. The class comes from useSidePanelLayout, which measures the
+ * workbench rather than the viewport, so wider workbenches keep their docked or floating panels.
  */
 .wf-editor-body.phone-layout.inspector-sheet {
   grid-template-columns: minmax(0, 1fr);

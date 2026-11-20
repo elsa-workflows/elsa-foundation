@@ -243,3 +243,24 @@ for (const width of [360, 390]) for (const layout of ["classic", "floating"]) fo
     await expect(nodes.first()).toHaveAttribute(composition === "flowchart" ? "class" : "aria-pressed", composition === "flowchart" ? /selected/ : "true");
   });
 }
+
+// #4695 QA 2026-11-20: at 768px with the inspector open, today's Studio left a 260×122 canvas
+// between the palette and inspector. The sheet threshold covers that tablet workbench too.
+test("768px tablet inspector is a sheet instead of a 260px canvas sliver", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 768, height: 900 });
+  await page.goto("/?mode=activity-duplicate-editor&host=workflow&composition=flowchart&theme=light");
+  const canvas = page.locator(".wf-canvas-shell");
+  const inspector = page.locator(".wf-inspector");
+  await expect(page.locator(".wf-canvas .react-flow__node").first()).toBeVisible();
+  await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
+  const back = page.getByRole("button", { name: "Back to canvas", exact: true });
+  await expect(back).toBeVisible();
+  await expect(canvas).toBeHidden();
+  await expect(page.locator(".wf-palette")).toBeHidden();
+  await expect.poll(async () => Math.round((await inspector.boundingBox())!.width)).toBeGreaterThanOrEqual(767);
+  await expectInsideViewport(inspector, page);
+  await page.screenshot({ path: testInfo.outputPath("tablet-inspector-sheet.png") });
+  await back.click();
+  await expect(canvas).toBeVisible();
+  await expect.poll(async () => Math.round((await canvas.boundingBox())!.width)).toBeGreaterThan(260);
+});

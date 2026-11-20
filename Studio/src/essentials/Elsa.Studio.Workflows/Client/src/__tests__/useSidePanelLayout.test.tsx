@@ -93,7 +93,7 @@ describe("adaptive workflow side-panel layout", () => {
     expect(layout.paletteWidth + layout.inspectorWidth + 10 + 360).toBeLessThanOrEqual(1204);
   });
 
-  it("collapses the palette to a rail when both minimum panels no longer fit and lets the user temporarily expand either side", async () => {
+  it("starts a 700px tablet on the canvas and sheets an opened inspector without rewriting saved preferences", async () => {
     window.localStorage.setItem(workflowPaletteWidthStorageKey, "460");
     window.localStorage.setItem(workflowInspectorWidthStorageKey, "560");
     renderLayout();
@@ -101,11 +101,9 @@ describe("adaptive workflow side-panel layout", () => {
 
     flushSync(() => resize?.(700));
     await vi.waitFor(() => expect(container.firstElementChild?.className).toContain("palette-collapsed"));
+    expect(classes()).toEqual(expect.arrayContaining(["phone-layout", "palette-collapsed", "inspector-collapsed"]));
     expect(layout.paletteWidth).toBe(42);
-    expect(layout.inspectorWidth).toBe(378);
-    expect(layout.editorBodyStyle["--wf-palette-width"]).toBe("42px");
-    expect(layout.editorBodyStyle["--wf-inspector-width"]).toBe("378px");
-    expect(layout.paletteWidth + layout.inspectorWidth + 20 + 260).toBeLessThanOrEqual(700);
+    expect(layout.inspectorWidth).toBe(42);
 
     flushSync(() => layout.toggleSidePanelCollapsed("palette"));
     expect(container.firstElementChild?.className).toContain("inspector-collapsed");
@@ -114,16 +112,15 @@ describe("adaptive workflow side-panel layout", () => {
     expect(layout.inspectorWidth).toBe(42);
 
     flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
-    expect(container.firstElementChild?.className).toContain("palette-collapsed");
-    expect(container.firstElementChild?.className).not.toContain("inspector-collapsed");
-    expect(layout.paletteWidth + layout.inspectorWidth + 20 + 260).toBeLessThanOrEqual(700);
+    expect(layout.inspectorSheet).toBe(true);
+    expect(classes()).toEqual(expect.arrayContaining(["phone-layout", "inspector-sheet"]));
     expect(window.localStorage.getItem(workflowPaletteCollapsedStorageKey)).toBe("false");
     expect(window.localStorage.getItem(workflowInspectorCollapsedStorageKey)).toBe("false");
 
-    flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
-    expect(container.firstElementChild?.className).not.toContain("palette-collapsed");
-    expect(container.firstElementChild?.className).toContain("inspector-collapsed");
-    expect(window.localStorage.getItem(workflowInspectorCollapsedStorageKey)).toBe("true");
+    flushSync(() => layout.showCanvas());
+    expect(layout.inspectorSheet).toBe(false);
+    expect(classes()).toContain("inspector-collapsed");
+    expect(window.localStorage.getItem(workflowInspectorCollapsedStorageKey)).toBe("false");
     expect(window.localStorage.getItem(workflowPaletteWidthStorageKey)).toBe("460");
     expect(window.localStorage.getItem(workflowInspectorWidthStorageKey)).toBe("560");
   });
@@ -261,9 +258,10 @@ describe("adaptive workflow side-panel layout", () => {
   it.each([
     [360, true, null, { phoneWidth: true, inspectorSheet: true }],
     [600, true, null, { phoneWidth: true, inspectorSheet: true }],
+    [768, true, null, { phoneWidth: true, inspectorSheet: true }],
     [360, false, null, { phoneWidth: true, inspectorSheet: false }],
     [360, true, "inspector", { phoneWidth: true, inspectorSheet: false }],
-    [601, true, null, { phoneWidth: false, inspectorSheet: false }],
+    [769, true, null, { phoneWidth: false, inspectorSheet: false }],
     [0, true, null, { phoneWidth: false, inspectorSheet: false }]
   ] as const)("presents a %spx workbench with the inspector expanded=%s and %s maximized as a phone sheet only when narrow", (containerWidth, inspectorExpanded, maximizedSidePanel, expected) => {
     expect(resolvePhonePanelPresentation({ containerWidth, inspectorExpanded, maximizedSidePanel })).toEqual(expected);
@@ -294,6 +292,20 @@ describe("adaptive workflow side-panel layout", () => {
     flushSync(() => resize?.(1280));
     expect(classes()).not.toContain("phone-layout");
     expect(classes()).not.toContain("inspector-sheet");
+  });
+
+  it("gives a 768px tablet inspector the whole workbench as a sheet so the canvas is not a 260px sliver", async () => {
+    renderLayout();
+    await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
+    flushSync(() => resize?.(768));
+    expect(classes()).toContain("phone-layout");
+    expect(classes()).not.toContain("inspector-sheet");
+    flushSync(() => layout.toggleSidePanelCollapsed("inspector"));
+    expect(layout.inspectorSheet).toBe(true);
+    expect(classes()).toEqual(expect.arrayContaining(["phone-layout", "inspector-sheet"]));
+    flushSync(() => layout.showCanvas());
+    expect(layout.inspectorSheet).toBe(false);
+    expect(window.localStorage.getItem(workflowInspectorCollapsedStorageKey)).toBe("false");
   });
 
   it("keeps canvas priority without a palette and restores an explicitly opened inspector", async () => {
