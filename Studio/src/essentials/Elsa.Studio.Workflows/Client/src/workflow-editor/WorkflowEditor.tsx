@@ -555,8 +555,14 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
   const edges = runCanvas.edges;
+  // Selecting another activity opens Run data for an attached run until the author picks an activity view
+  // themselves; after that the chosen view is kept until the run detaches (#4845).
+  const activityViewChosen = useRef(false);
+  useEffect(() => { if (!runCanvas.attached) activityViewChosen.current = false; }, [runCanvas.attached]);
   const showEditorRunData = () => {
-    if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
+    if (!runCanvas.attached) return;
+    if (!activityViewChosen.current) setInspectorView("run-data");
+    setActiveRightPanelId("inspector"); setInspectorCollapsed(false);
   };
   const selectEditorNode = (nodeId: string | null) => {
     select(nodeId);
@@ -1263,7 +1269,7 @@ export function WorkflowEditor({
       order: 0,
       icon: <ListTree size={15} />,
       render: () => <>
-        {runCanvas.eligible ? <div className="wf-attached-inspector-views"><PanelTabList label="Activity view" activeTabId={inspectorView} onSelect={value => setInspectorView(value as "configuration" | "run-data")}
+        {runCanvas.eligible ? <div className="wf-attached-inspector-views"><PanelTabList label="Activity view" activeTabId={inspectorView} onSelect={value => { activityViewChosen.current = true; setInspectorView(value as "configuration" | "run-data"); }}
           tabs={[{ id: "configuration", title: "Configuration", order: 0, icon: null, render: () => null }, { id: "run-data", title: "Run data", order: 1, icon: null, render: () => null }]} /></div> : null}
         {inspectorView === "run-data" && runCanvas.eligible ? <div className="wf-inspector-tab-panel">
           <React.Suspense fallback={<p role="status">Loading activity inspection…</p>}>
