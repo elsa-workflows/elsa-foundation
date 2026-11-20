@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildExecutableActivityGraph, findExecutableNodeFacts, ghostNodeLabel, isGhostFact } from "../executableGraph";
 import { buildExecutableInspectorCanvas } from "../workflow-editor/WorkflowExecutableInspector";
-import { getActivitySourcePorts, getChildSlots, planSlotNavigation, findNodeScopePath, resolveScope } from "../workflowAdapter";
-import type { ActivityNode, WorkflowExecutableNode } from "../workflowTypes";
-import { bpmnActivity, ifActivity, flowchartActivity, forEachActivity, sequenceActivity, setVariableActivity, setOutputActivity, writeLine } from "./fixtures";
+import { getActivitySourcePorts, getChildSlots, planSlotNavigation, findNodeScopePath, resolveScope, type ScopeFrame } from "../workflowAdapter";
+import type { ActivityNode, WorkflowDefinitionVersionDetails, WorkflowExecutableNode, WorkflowInstanceDetails } from "../workflowTypes";
+import { bpmnActivity, collectionActivity, ifActivity, flowchartActivity, forEachActivity, sequenceActivity, setVariableActivity, setOutputActivity, writeLine } from "./fixtures";
 import { buildBpmnCanvas } from "../bpmn/bpmnAdapter";
+import { buildInstanceCanvas } from "../workflow-editor/WorkflowInstances";
+import { expectExecutableSlotsNavigable } from "./executableStructureConformance";
 
 // The Executable Inspector adapts the Execution Material wire tree (executable nodes + named child
 // slots and compact topology) back into the authored ActivityNode shape so buildCanvas/resolveScope
@@ -208,6 +210,143 @@ describe("buildExecutableActivityGraph", () => {
       available: true,
       inputBindings: [{ inputName: "Text", source: "Literal", summary: "\"Hello\"" }]
     });
+  });
+
+  it("keeps Parallel branches navigable in the run and executable canvases, including nested BPMN", () => {
+    const parallel = collectionActivity("parallel");
+    const activities = [...catalog, parallel];
+    const branchName = "Branch [2]. nested";
+    const wire = sequenceRoot([executableNode({
+      executableNodeId: "exec-parallel", authoredActivityId: "parallel", activityType: parallel.activityTypeKey,
+      structureKind: "elsa.parallel.structure",
+      childSlots: [
+        { name: "Parallel.Branch[Branch 1]", activities: [executableNode()] },
+        { name: `Parallel.Branch[${branchName}]`, activities: [bpmnRoot([
+          executableNode({ executableNodeId: "exec-nested", authoredActivityId: "nested-leaf" })
+        ])] }
+      ]
+    })]);
+    const before = structuredClone(wire);
+    const catalogBefore = structuredClone(activities);
+    const graph = buildExecutableActivityGraph(wire, activities);
+    const timestamp = "2026-11-18T22:45:36Z";
+    const version: WorkflowDefinitionVersionDetails = {
+      id: "version", version: "1.0.0", layout: [], state: { rootActivity: graph.root },
+      definition: { id: "definition", name: "Parallel test", createdAt: timestamp, lastModifiedAt: timestamp }
+    };
+    const instanceDetails: WorkflowInstanceDetails = {
+      instance: { workflowExecutionId: "run", artifactId: "artifact", artifactHash: "sha256:test", artifactVersion: "1.0.0",
+        definitionId: "definition", definitionVersionId: "version", status: "Completed", createdAt: timestamp, activityCount: 6, incidentCount: 0 },
+      activities: [], incidents: []
+    };
+
+    const parallelNode = getChildSlots(graph.root, activities)[0].activities[0];
+    expectExecutableSlotsNavigable(graph.root, parallelNode, activities, [
+      (navigate: (frames: ScopeFrame[]) => void) => buildInstanceCanvas(version, activities, instanceDetails, null, [], navigate),
+      (navigate: (frames: ScopeFrame[]) => void) => buildExecutableInspectorCanvas(graph, activities, [], [], navigate)
+    ]);
+
+    for (const build of [
+      (navigate: ReturnType<typeof vi.fn>) => buildInstanceCanvas(version, activities, instanceDetails, null, [], navigate),
+      (navigate: ReturnType<typeof vi.fn>) => buildExecutableInspectorCanvas(graph, activities, [], [], navigate)
+    ]) {
+      const navigate = vi.fn();
+      const canvas = build(navigate);
+      const node = canvas.nodes.find(item => item.id === "parallel")!;
+      expect(node.data.childSlots.map(slot => slot.label)).toEqual(["Branch 1", branchName]);
+      node.data.onEnterSlot!(node.data.childSlots[0]);
+      const firstPath = navigate.mock.calls.at(-1)![0];
+      expect(resolveScope(graph.root, firstPath, activities)?.slot.activities.map(child => child.nodeId)).toEqual(["write-line-1"]);
+      node.data.onEnterSlot!(node.data.childSlots[1]);
+      const nestedPath = navigate.mock.calls.at(-1)![0];
+      expect(resolveScope(graph.root, nestedPath, activities)?.owner.nodeId).toBe("bpmn-root");
+      expect(resolveScope(graph.root, nestedPath, activities)?.slot.activities.map(child => child.nodeId)).toEqual(["nested-leaf"]);
+      const nestedCanvas = buildInstanceCanvas(version, activities, instanceDetails, null, nestedPath, navigate);
+      expect(nestedCanvas.nodes.map(item => item.id)).toEqual(["start", "task-0", "end"]);
+    }
+    expect(wire).toEqual(before);
+    expect(activities).toEqual(catalogBefore);
+  });
+
+  it("keeps collection-backed branches available without a catalog entry", () => {
+    const graph = buildExecutableActivityGraph(executableNode({
+      activityType: "Elsa.Activities.Parallel.Activities.Parallel", structureKind: "elsa.parallel.structure",
+      childSlots: [{ name: "Parallel.Branch[Branch 1]", activities: [executableNode({ executableNodeId: "exec-child", authoredActivityId: "child" })] }]
+    }), []);
+    expect(getChildSlots(graph.root, []).flatMap(slot => slot.activities.map(child => child.nodeId))).toEqual(["child"]);
+  });
+
+  it("does not invent branches for an empty Parallel collection", () => {
+    const parallel = collectionActivity("parallel");
+    const facet = parallel.designFacets![0] as { payload: { initialPayload: Record<string, unknown> } };
+    facet.payload.initialPayload = { branches: [{ name: "template branch", activity: { nodeId: "template" } }] };
+    const graph = buildExecutableActivityGraph(executableNode({
+      activityType: parallel.activityTypeKey, structureKind: "elsa.parallel.structure"
+    }), [parallel]);
+    expect(getChildSlots(graph.root, [parallel])).toEqual([]);
+    expect(graph.root.structure?.payload.branches).toEqual([]);
+  });
+
+  it("preserves unmapped pinned slots and all single-slot children with diagnostics", () => {
+    const parallel = collectionActivity("parallel");
+    const activities = [...catalog, parallel];
+    const wire = sequenceRoot([executableNode({
+      executableNodeId: "exec-parallel", authoredActivityId: "parallel", activityType: parallel.activityTypeKey,
+      structureKind: "elsa.parallel.structure",
+      childSlots: [
+        { name: "Parallel.Unrecognized", activities: [executableNode({ executableNodeId: "exec-unmatched", authoredActivityId: "unmatched-child" })] },
+        { name: "Parallel.Branch[overflow]", activities: [
+          executableNode({ executableNodeId: "exec-overflow-a", authoredActivityId: "overflow-a" }),
+          executableNode({ executableNodeId: "exec-overflow-b", authoredActivityId: "overflow-b" })
+        ] }
+      ]
+    })]);
+    const before = structuredClone(wire);
+    const graph = buildExecutableActivityGraph(wire, activities);
+    const parallelNode = getChildSlots(graph.root, activities)[0].activities[0];
+    const slots = getChildSlots(parallelNode, activities);
+
+    expect(slots.map(slot => slot.label)).toEqual(["Parallel.Unrecognized", "Parallel.Branch[overflow]"]);
+    expect(slots.flatMap(slot => slot.activities.map(child => child.nodeId))).toEqual([
+      "unmatched-child", "overflow-a", "overflow-b"
+    ]);
+    expect(graph.factsByNodeId.get("parallel")?.structureDiagnostics.map(diagnostic => [diagnostic.code, diagnostic.wireSlot])).toEqual([
+      ["unmatched", "Parallel.Unrecognized"],
+      ["single-cardinality-overflow", "Parallel.Branch[overflow]"]
+    ]);
+
+    const timestamp = "2026-11-18T22:45:36Z";
+    const version: WorkflowDefinitionVersionDetails = {
+      id: "version", version: "1.0.0", layout: [], state: { rootActivity: graph.root },
+      definition: { id: "definition", name: "Parallel fallback test", createdAt: timestamp, lastModifiedAt: timestamp }
+    };
+    const instanceDetails: WorkflowInstanceDetails = {
+      instance: { workflowExecutionId: "run", artifactId: "artifact", artifactHash: "sha256:test", artifactVersion: "1.0.0",
+        definitionId: "definition", definitionVersionId: "version", status: "Completed", createdAt: timestamp, activityCount: 4, incidentCount: 0 },
+      activities: [], incidents: []
+    };
+    expectExecutableSlotsNavigable(graph.root, parallelNode, activities, [
+      (navigate: (frames: ScopeFrame[]) => void) => buildInstanceCanvas(version, activities, instanceDetails, null, [], navigate),
+      (navigate: (frames: ScopeFrame[]) => void) => buildExecutableInspectorCanvas(graph, activities, [], [], navigate)
+    ]);
+    expect(wire).toEqual(before);
+  });
+
+  it("maps collection items alongside fixed slots and preserves empty branches", () => {
+    const activity = collectionActivity("switch");
+    const graph = buildExecutableActivityGraph(executableNode({
+      executableNodeId: "exec-switch", authoredActivityId: "switch",
+      activityType: activity.activityTypeKey, structureKind: "elsa.switch.structure",
+      childSlots: [
+        { name: "Switch.Case[Default]", activities: [executableNode()] },
+        { name: "Switch.Case[]", activities: [] },
+        { name: "Switch.Default", activities: [executableNode({ executableNodeId: "exec-default", authoredActivityId: "default-child" })] }
+      ]
+    }), [activity]);
+    const slots = getChildSlots(graph.root, [activity]);
+    expect(slots.map(slot => slot.label)).toEqual(['"Default"', '""', "Default"]);
+    expect(slots.map(slot => slot.activities.map(child => child.nodeId))).toEqual([["write-line-1"], [], ["default-child"]]);
+    expect(new Set(slots.map(slot => slot.id)).size).toBe(3);
   });
 
   it("marks activity-catalog misses as ghosts", () => {

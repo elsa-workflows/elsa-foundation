@@ -91,7 +91,7 @@ describe("publication review model", () => {
             collectionProperty: "cases",
             childProperty: "activity",
             labelProperty: "name",
-            slotNameTemplate: "Switch.Case[{name}]"
+            slotNameTemplate: "Case {name}"
           }],
           initialPayload: { cases: [] }
         }

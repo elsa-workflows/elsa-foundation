@@ -2,6 +2,7 @@ import React from "react";
 import { createPortal, flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
+import { StudioDataGrid } from "../data-grid/DataGrid";
 import { studioRowInteraction } from "../data-grid/rowInteraction";
 
 let dispose: (() => void) | undefined;
@@ -68,4 +69,16 @@ it("ignores portal padding, prevented events, modified clicks and repeated keys"
   for (const modifier of ["metaKey", "ctrlKey", "shiftKey", "altKey"]) row.dispatchEvent(new MouseEvent("click", { bubbles: true, [modifier]: true }));
   row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", repeat: true, bubbles: true }));
   expect(activate).not.toHaveBeenCalled();
+});
+
+it("retains DataGrid roving focus and gives nonselectable rows no activation affordance", () => {
+  const columns = [{ id: "name", header: "Name", render: (item: string) => item }];
+  const host = render(<>
+    <StudioDataGrid columns={columns} items={["one", "two"]} getKey={item => item} selectedKey="two" onSelect={() => {}} />
+    <StudioDataGrid columns={columns} items={["static"]} getKey={item => item} />
+  </>);
+  const rows = [...host.querySelectorAll<HTMLElement>(".studio-data-grid-row")];
+  expect(rows.map(row => row.getAttribute("tabindex"))).toEqual(["-1", "0", null]);
+  expect(rows.map(row => row.hasAttribute("data-studio-row-interactive"))).toEqual([true, true, false]);
+  expect(rows[1].getAttribute("aria-selected")).toBe("true");
 });

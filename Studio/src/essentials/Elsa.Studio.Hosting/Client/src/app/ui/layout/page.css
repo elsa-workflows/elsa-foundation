@@ -1,5 +1,6 @@
 /* Shared page and collection recipes. No host or module-private selectors. */
 @import "./DialogFooter.css";
+@import "./RefreshControl.css";
 
 .studio-page {
   display: flex;
@@ -129,7 +130,13 @@
 .studio-table tbody tr:last-child, .studio-collection-table > [role="row"]:last-child { border-bottom: 0; }
 .studio-table tbody tr, .studio-collection-table > [role="row"]:not(:first-child) { border-bottom-style: var(--studio-row-boundary-style); }
 .studio-table th, .studio-collection-table > [role="row"]:first-child { height: var(--studio-table-header-height); min-height: var(--studio-table-header-height); }
-.studio-table tbody tr:hover, .studio-collection-table > [role="row"]:not(:first-child):hover { background: var(--studio-row-hover); }
+.studio-table tbody tr:not([data-studio-row-interactive]):hover, .studio-collection-table > [role="row"]:not(:first-child, [data-studio-row-interactive]):hover { background: var(--studio-row-hover); }
+[data-studio-row-interactive] { cursor: pointer; }
+[data-studio-row-interactive]:where(:not([aria-selected="true"])):is(:hover, :focus-visible) { background: var(--studio-row-hover); }
+[data-studio-row-interactive]:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: -2px; }
+:is(a, button).studio-row-link { display: inline-block; width: fit-content; min-width: 0; max-width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+:is(a, button).studio-row-link:hover:not(:disabled) { background: transparent; color: var(--studio-accent); text-decoration: underline; text-underline-offset: 2px; }
+.studio-row-link:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; border-radius: var(--studio-radius-sm); }
 .studio-table .studio-result-state { min-width: 16rem; }
 .studio-result-state {
   display: flex;

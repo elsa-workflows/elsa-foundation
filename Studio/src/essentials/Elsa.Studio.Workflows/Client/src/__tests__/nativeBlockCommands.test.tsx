@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NativeBlockCommands, type NativeBlockValidation } from "../graph-authoring/NativeBlockCommands";
+import { NativeBlockAuthorityProvider } from "../graph-authoring/nativeBlockAuthority";
 import { planExtractNativeBlock, type NativeBlockContext, type NativeBlockDocument } from "../graph-authoring/nativeBlocks";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import { normalizeActivityStructures } from "../workflowAdapter";
@@ -10,13 +11,14 @@ import type { ActivityNode } from "../workflowTypes";
 import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
 import { sequenceActivity, flowchartActivity, sequenceNode, writeLine, leafNode, setVariableActivity } from "./fixtures";
 
-let root: Root, container: HTMLDivElement;
+let root: Root, container: HTMLDivElement, portalHost: HTMLDivElement | null;
 let context: NativeBlockContext;
 let createPosition: { x: number; y: number };
 const validate = vi.fn<(document: NativeBlockDocument) => Promise<NativeBlockValidation>>();
 const apply = vi.fn();
 const open = vi.fn();
 beforeEach(() => {
+  portalHost = null;
   createPosition = { x: 800, y: 100 };
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   context = { document: { rootActivity: sequenceNode("root", [leafNode("one"), leafNode("two")]), layout: [], activityPresentation: [] },
@@ -24,15 +26,62 @@ beforeEach(() => {
   validate.mockReset().mockResolvedValue({ state: "validated", messages: [] }); apply.mockReset(); open.mockReset();
   render();
 });
-afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
-function render() { flushSync(() => root.render(<NativeBlockCommands context={context} selectedNodeIds={["one", "two"]} createPosition={createPosition} validate={validate} apply={apply} open={open} />)); }
-function button(label: string) { const item = [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label); if (!item) throw new Error(label); return item; }
+afterEach(() => { flushSync(() => root.unmount()); container.remove(); portalHost?.remove(); });
+function render(authority: React.ComponentProps<typeof NativeBlockAuthorityProvider>["value"] = null, toolbarHost?: HTMLElement | null) { flushSync(() => root.render(<NativeBlockAuthorityProvider value={authority}><NativeBlockCommands context={context} selectedNodeIds={["one", "two"]} createPosition={createPosition} validate={validate} apply={apply} open={open} toolbarHost={toolbarHost} /></NativeBlockAuthorityProvider>)); }
+function button(label: string) {
+  let item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === label);
+  if (!item) {
+    const trigger = container.querySelector<HTMLButtonElement>(".wf-block-menu-trigger");
+    if (trigger && trigger.getAttribute("aria-expanded") !== "true") flushSync(() => trigger.click());
+    item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === label);
+  }
+  if (!item) throw new Error(label);
+  return item;
+}
 function click(label: string) { flushSync(() => button(label).click()); }
 function name(value: string) {
   const input = container.querySelector<HTMLInputElement>("input")!;
   flushSync(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 }
 async function settle() { await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {}); }
+
+it("offers the published host's editing action without applying a block and shows its pending state", () => {
+  context = { ...context, canEdit: false };
+  const startEditing = vi.fn();
+  const authority = { sourceKey: "published:1", canEdit: false, canApply: () => false, validate: vi.fn(), startEditing };
+  const before = structuredClone(context.document);
+  render(authority);
+  expect(container.textContent).not.toContain("Other edits create a draft automatically.");
+  click("Blocks");
+  expect(document.body.textContent).toContain("Other edits create a draft automatically.");
+  expect(document.body.textContent).not.toContain("Open an editable draft");
+  expect(button("Create Sequence block").disabled).toBe(true);
+  expect(startEditing).not.toHaveBeenCalled();
+  click("Start editing");
+  expect(startEditing).toHaveBeenCalledTimes(1);
+  render({ ...authority, startingEditing: true });
+  expect(button("Starting…").disabled).toBe(true);
+  expect(container.querySelector("[role=status]")?.textContent).toBe("Preparing your draft…");
+  click("Starting…");
+  expect(startEditing).toHaveBeenCalledTimes(1);
+  expect(validate).not.toHaveBeenCalled();
+  expect(apply).not.toHaveBeenCalled();
+  expect(context.document).toEqual(before);
+  context = { ...context, canEdit: true };
+  render({ ...authority, canEdit: true, startEditing: undefined });
+  expect(container.textContent).not.toContain("Start editing");
+  expect(button("Create Sequence block").disabled).toBe(false);
+});
+
+it("keeps genuinely read-only block commands unavailable without offering draft creation", () => {
+  context = { ...context, canEdit: false };
+  render();
+  expect(container.textContent).not.toContain("Block editing is unavailable in this view. Open an editable draft.");
+  click("Blocks");
+  expect(document.body.textContent).toContain("Block editing is unavailable in this view. Open an editable draft.");
+  expect(container.textContent).not.toContain("Start editing");
+  expect(button("Create Sequence block").disabled).toBe(true);
+});
 
 it("previews the whole proposal without mutation, then revalidates at confirmation and commits once", async () => {
   const before = JSON.stringify(context.document);
@@ -43,6 +92,33 @@ it("previews the whole proposal without mutation, then revalidates at confirmati
   click("Apply change"); await settle();
   expect(validate).toHaveBeenCalledTimes(2); expect(apply).toHaveBeenCalledTimes(1); expect(container.querySelector("[role=dialog]")).toBeNull();
   expect(apply.mock.calls[0][0].activityPresentation[0].displayName).toBe("Prepare shipment");
+});
+
+it("keeps block commands in a menu and restores focus to its trigger after Escape", () => {
+  const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+  expect(trigger).not.toBeNull();
+  expect(document.body.textContent).not.toContain("Create Sequence block");
+
+  flushSync(() => trigger!.click());
+  const menu = document.body.querySelector<HTMLElement>('[role="menu"][aria-label="Block commands"]');
+  expect(menu).not.toBeNull();
+  expect(document.body.textContent).toContain("Create Sequence block");
+
+  flushSync(() => menu!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(document.body.querySelector('[role="menu"][aria-label="Block commands"]')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+});
+
+it("renders block commands in the toolbar host and waits when the host is not mounted", () => {
+  portalHost = document.createElement("div");
+  document.body.append(portalHost);
+  render(null, portalHost);
+  expect(portalHost.querySelector('[aria-label="Named block commands"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="Named block commands"]')).toBeNull();
+
+  render(null, null);
+  expect(portalHost.querySelector('[aria-label="Named block commands"]')).toBeNull();
+  expect(container.querySelector('[aria-label="Named block commands"]')).toBeNull();
 });
 
 it.each(["source", "selection", "permission", "catalog"])("refuses a stale %s before confirmation without a history edit", async change => {

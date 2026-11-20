@@ -41,7 +41,8 @@
 .wf-grid.wf-instance-grid .wf-run-health-indicator[data-health="blocking"] { color: var(--studio-danger-fg); }
 .wf-grid.wf-instance-grid .wf-run-health-indicator[data-health="active"] { color: var(--studio-warning-fg); }
 .ad-designed-collection .ad-collection-head,
-.ad-designed-collection .ad-collection-row { display: grid; grid-template-columns: minmax(240px, 2fr) minmax(190px, 1.3fr) 70px minmax(160px, 1fr) 120px; min-width: 870px; align-items: center; gap: 16px; }
+.ad-designed-collection .ad-collection-row { display: grid; grid-template-columns: minmax(240px, 2fr) minmax(190px, 1.3fr) 70px minmax(160px, 1fr) 120px 120px; min-width: 1010px; align-items: center; gap: 16px; }
+.ad-page.ad-designed-collection .ad-collection > .ad-collection-head { height: auto; }
 .ad-designed-collection .ad-collection-row > span { min-width: 0; }
 .ad-designed-collection .ad-collection-row .ad-collection-activity { grid-column: auto; display: block; }
 .ad-designed-collection .ad-collection-activity strong { display: block; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
