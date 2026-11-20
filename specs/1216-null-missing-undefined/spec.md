@@ -84,8 +84,8 @@ start path. S-2 adds four things to it:
 - workflow-input nullability, which comes from the input's type (FR-001a), is pinned in the input contract (FR-005),
   so admission refuses an explicit `null` for a
   non-nullable input unless default-on-null applies (FR-008, FR-013);
-- an omitted required input that declares a default is refused, as ADR 0045 §2 says; today the default satisfies it
-  (FR-034);
+- a workflow input declared both required and with a default is refused at publication, so admission never meets
+  one (FR-034);
 - FR-008's "before the start checkpoint" holds for these new outcomes too: they are decided where #3731 decides, before
   the start command is enqueued.
 
@@ -294,11 +294,14 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-001**: The system MUST accept an explicit `null` for every nullable target: activity inputs, variables, workflow
   outputs and the `value` of the `Set` / `SetOutput` intrinsics, whether it comes from a literal, a variable or an
   expression.
-- **FR-001a**: The nullability of a variable, a workflow input and a workflow output comes from its type, as in .NET
-  (Q8): `Boolean`, the number types, enums and the other value types cannot hold `null`, and their default is
-  `false`, `0` or the type's zero value; every other type (`String`, `Any`, every JSON alias, object types) can hold
-  `null`, and its default is `null`. No per-member *Allow null* flag is read for these members, and Studio shows none.
-  Activity inputs keep their declared nullability (the activity's .NET contract).
+- **FR-001a**: Whether a variable, a workflow input or a workflow output accepts `null` comes from its type, as in
+  .NET (Q8): `Boolean`, the number types, enums and the other value types do not, and their type default is `false`,
+  `0` or the type's zero value; every other type (`String`, `Any`, every JSON alias, object types) does, and its type
+  default is `null`. The type default is what an omitted optional workflow input gets (FR-006) and what default-on-null
+  substitutes (FR-013). A declared variable that was never given a value still reads `null` (spec 1222 FR-006): it is
+  unset, not assigned. The *Allow null* flag is retired for these members: not read, not shown, not written (Q8).
+  Activity inputs keep their declared nullability: `DateTime?` versus `DateTime` in a .NET activity, and the *Allow
+  null* setting of an authored activity definition's contract.
 - **FR-002**: An intrinsic's `value` input MUST take the nullability of its target variable or output, instead of
   always being non-nullable.
 - **FR-003**: Without the default-on-null policy, `null` for a non-nullable target MUST fail with `VF-ACT-004`: at
@@ -316,12 +319,12 @@ omitted; after resume, the first reads explicit null and the invocation record s
   `null` when nullable, and otherwise as its type's default. A non-nullable type without a non-null default (for
   example `String` or a JSON object) has no type default: such an optional member still needs a declared default, as
   publication requires today (`VF-ACT-003`).
-- **FR-007**: An omitted required activity input MUST fail publication (`VF-ACT-003`), even when it declares a
-  default: a declared default never satisfies a required member (ADR 0045 §2). Today both publication and admission
-  let the default satisfy it; S-2 fixes both (FR-034).
-- **FR-034**: An omitted required workflow input MUST be refused at admission even when it declares a default. A
-  built-in activity input that is declared required and has a default is declared optional instead, so its default
-  keeps applying (Q9).
+- **FR-007**: An omitted required activity input MUST fail publication (`VF-ACT-003`).
+- **FR-034**: A member declared both required and with a default (an activity input, an authored activity
+  definition's input, a workflow input) MUST fail publication with `VF-ACT-013`, naming the member and saying to set
+  *Required* off, because a required member always receives a value and its default could never be used (Q9). Built-in
+  activity inputs declared that way are fixed at their source: declared optional. Where Studio lets an author set a
+  default (the activity definition contract editor), setting a default turns *Required* off.
 - **FR-008**: An omitted required workflow input, and an explicit `null` for a non-nullable workflow input without the
   default-on-null policy, MUST be refused at admission, before the start checkpoint, with a diagnostic naming the
   member. No step runs and no work item is scheduled. This holds on every start path (API, triggers, BPMN, test runs,
@@ -436,8 +439,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
 ## Spec decisions
 
 These are about how this spec builds the settled decisions above. ADR 0045 §2 left Q1 to Q4 to this spec; Q5 came
-from the code survey; Q6 to Q9 came from the recheck against the merged specs and the code. Q1 to Q8 are
-accepted; Q9 waits for the coordinator. The requirements follow the answers.
+from the code survey; Q6 to Q9 came from the recheck against the merged specs and the code; Q10 came from the
+coordinator's review. Q1 to Q9 are accepted; Q10 waits for the coordinator. The requirements follow the answers.
 
 - **Q1 — Where is default-on-null set?** **Accepted: workflow only**, until a case needs per input.
 - **Q2 — Which default does it use?** **Accepted: the type default**, independently of declared defaults: it is what
@@ -466,17 +469,26 @@ accepted; Q9 waits for the coordinator. The requirements follow the answers.
   assignment silently keeps the old value) and always writing `null` (hides the bug in native workflows).
 - **Q8 — Where does nullability of variables, workflow inputs and workflow outputs come from?** **Accepted: from the
   type, as in .NET** (FR-001a): `Boolean` defaults to `false`, numbers to `0`, other value types to their zero
-  value, and every other type can hold `null` and defaults to `null`. No *Allow null* flag for these members.
-  Rejected: a per-member flag shown in Studio (Studio stores `false` for it on every new input and output today, so
-  trusting it would refuse `null` even for a `String` output).
-- **Q9 — A required input that declares a default.** Problem: ADR 0045 §2 says a declared default never satisfies a
-  required member, but today it does. Example: a workflow definition (written through the API or JSON; Studio has no
-  default column for workflow inputs) declares input `quantity` as required with default `5`. A caller starts the
-  workflow without `quantity`; today the engine fills in `5`, so *required* has no effect. The same happens for a
-  built-in activity input that is required and declares a default in code. *Recommended:* publication refuses a
-  member declared both required and with a default, with a message to choose one; built-in activity inputs declared
-  that way become optional (their default keeps applying), found by an audit task (FR-007, FR-034). Alternative:
-  amend ADR 0045 so a default satisfies a required member.
+  value, and every other type can hold `null` and defaults to `null`. The *Allow null* flag is retired for these
+  members, `SetOutput` included: an output accepts `null` when its type does. Rejected: a per-member flag (Studio
+  stores `false` for it on every new input and output today, so trusting it would refuse `null` even for a `String`
+  output).
+- **Q9 — A member declared both required and with a default.** **Accepted: refuse at publication** (`VF-ACT-013`):
+  "a default is set but *Required* is on; set *Required* off". A required member always receives a value, so its
+  default could never be used. In Studio, setting a default turns *Required* off. Built-in activity inputs declared
+  that way become optional (FR-034). This is the strict form of ADR 0045 §2 (a declared default never satisfies a
+  required member): the pair never reaches run time. Rejected: letting the default satisfy the requirement (what the
+  code does today, so *required* means nothing).
+- **Q10 — Dates: what is the type default of `DateTime` and `DateTimeOffset`?** Both are registered workflow types and
+  .NET value types, so under Q8 they never accept `null`. Their .NET zero value is `0001-01-01T00:00:00`, which looks
+  like a real date. Problem: an optional workflow input `dueDate: DateTime`, omitted at start, would read
+  `0001-01-01`, and a decision `dueDate < now` would treat the order as overdue without any warning. No built-in
+  activity has a date input or output today; a .NET activity that declares `DateTime` refuses `null`, one that
+  declares `DateTime?` accepts it. *Recommended:* dates have no type default, like `String`: an optional date input
+  needs a declared default (`VF-ACT-003`), and `null` for a date is refused even under default-on-null (`VF-ACT-004`),
+  so no made-up date ever enters a run. Alternative: the zero value `0001-01-01` as the type default, which is what
+  Elsa 3 produced. A workflow that needs an optional date without a default uses a `String` or `Any` member until a
+  nullable date type is needed.
 
 ## Success Criteria *(mandatory)*
 

@@ -75,13 +75,12 @@ red without the change. xUnit only.
   conversion, and leave that conversion as it is (S-9 owns it). In `WorkflowStartDispatcher.ApplyInputContract`, and
   in the early checks of `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow`, substitute the type default for
   such a `null` before validating when the pinned `DefaultOnNull` is on. The start command carries the
-  substitutions, and the seed records them as `VF-NULL-001` through S-8's warning channel when the instance starts.
-  Also refuse an omitted required input that declares a default (FR-034): drop the `!DefaultValue.HasValue` exemption
-  in the required check. One shared helper does the substitution; the early checks call it only because they refuse
+  substitutions, and the seed records them as `VF-NULL-001` through S-8's warning channel when the instance starts. One shared helper does the substitution; the early checks call it only because they refuse
   before their own side effects (#3731), so all three give the same answer
-- [ ] T013a [US2] Q9, as the coordinator decides it: publication refuses a member declared both required and with a
-  default; `RuntimeInputBindingCompiler.CompileUnbound` checks requiredness before the default (FR-007). Audit built-in
-  activity descriptors for inputs that are required and declare a default, declare them optional, and test
+- [ ] T013a [US2] Q9 (FR-034): publication refuses a member declared both required and with a default with
+  `VF-ACT-013` (activity inputs, authored activity definition inputs, workflow inputs); remove the validator's
+  `!DefaultValue.HasValue` exemption, which can then never apply. Audit built-in activity descriptors for inputs
+  declared that way, declare them optional, and test
 - [ ] T014 [US2] Check that `RuntimeWorkflowStateSeed.BuildSeedChanges` stores a completed JSON `null` as an explicit
   null envelope, not a present JSON `null`, and fix it if not
 - [ ] T015 [US2] Tests for S-2's additions (US2 scenarios 2, 3 and 5, and the `null` refusal) on the API, trigger,
@@ -159,7 +158,15 @@ red without the change. xUnit only.
   acceptance scenario of T021 and T026 once as a native workflow and once as a converted one with the same policies,
   and compare outputs and diagnostics
 
-## Phase 9: Studio (FR-033 only; Q6: no controls)
+## Phase 9: Studio (Q6: no policy controls; Q8, Q9)
+
+- [ ] T033 [P] Retire *Allow null* for workflow inputs and outputs (Q8): drop `isNullable` from `WorkflowInput` /
+  `WorkflowOutput` in `workflowTypes.ts` and from `createInput` / `createOutput` in `workflowProperties.ts`; the
+  backend stops reading it for workflow members (T004). The shared `InputDefinition` keeps the field for activity
+  definition contracts. Regenerate any stored fixture that carried it
+- [ ] T034 [P] Activity definition contract editor (`ActivityDefinitionContractEditor.tsx`): setting a default turns
+  *Required* off, and *Required* is disabled while a default is set, with the hint "A member with a default is
+  optional"; replace today's hint "A value must be available after the default is applied" (Q9). Client test
 
 - [ ] T035 Check that the `VF-UNDEF-*`, `VF-NUM-001` and `VF-NULL-001` warnings show in Studio's existing instance
   diagnostics with no new surface (FR-033); a Studio client test if a mapping is missing

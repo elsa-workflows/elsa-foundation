@@ -26,6 +26,7 @@ reason codes of `WorkflowExecutableInputValidationReasonCodes` (`runtime.input.*
 | Code | Severity | When | Names | Exists |
 |---|---|---|---|---|
 | `VF-ACT-003` | error | Omitted required activity input at publication; omitted optional input whose type has no type default and that declares no default | node, input | yes |
+| `VF-ACT-013` | error | A member declared both required and with a default: "a default is set but Required is on; set Required off" (Q9) | node or activity definition, member | new |
 | `VF-ACT-004` | error | `null` for a non-nullable target without `DefaultOnNull`, or whose type has no type default | node, input or target | yes |
 | `runtime.input.missing-required` | error | Admission: omitted required workflow input (#3731) | input | yes |
 | `runtime.input.null-not-allowed` | error | Admission: explicit `null` for a non-nullable workflow input without `DefaultOnNull`, refused like #3731's codes (category `Input`, `400`) | input | new |
