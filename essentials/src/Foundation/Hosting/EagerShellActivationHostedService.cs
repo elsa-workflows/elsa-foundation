@@ -2,8 +2,11 @@ using System.Collections.Concurrent;
 using System.Runtime.ExceptionServices;
 using CShells.Hosting;
 using CShells.Lifecycle;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
-namespace Elsa.Foundation.Host.Shells;
+namespace Elsa.Foundation.Hosting;
 
 /// <summary>
 /// Optional. Activates the configured shell(s) at boot so shell-lifetime work starts without waiting for the first HTTP request —
@@ -29,7 +32,7 @@ namespace Elsa.Foundation.Host.Shells;
 /// targets continue. Shutdown retains and joins the same run across caller-bounded waits.
 /// </para>
 /// </remarks>
-public sealed class EagerShellActivationHostedService(
+internal sealed class EagerShellActivationHostedService(
     IShellRegistry registry,
     IShellActivationRunner runner,
     IConfiguration configuration,
@@ -181,7 +184,7 @@ public sealed class EagerShellActivationHostedService(
     {
         if (attempt.Outcome == ShellActivationAttemptOutcome.Succeeded)
         {
-            tracker.Activated(attempt.ShellName);
+            tracker.ObserveSettlement(attempt.ShellName);
             logger.LogInformation("Eagerly activated shell '{Shell}' at boot.", attempt.ShellName);
             return ValueTask.CompletedTask;
         }

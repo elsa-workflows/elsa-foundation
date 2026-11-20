@@ -1,7 +1,8 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Schema;
+using Microsoft.Extensions.Logging;
 
-namespace Elsa.Foundation.Host.Shells;
+namespace Elsa.Foundation.Hosting;
 
 /// <summary>
 /// One shell a reload could not activate, as an operator reads it. CShells catches whatever a blueprint, provider build or
@@ -31,7 +32,7 @@ namespace Elsa.Foundation.Host.Shells;
 /// <param name="Error">What went wrong, in words an operator can act on.</param>
 /// <param name="Refusal">The EF module's refusal behind the failure, when there is one.</param>
 /// <param name="Exception">The failure as CShells reported it.</param>
-internal sealed record ShellReloadFailure(string Shell, string Error, ShellActivationRefusal? Refusal, Exception Exception)
+public sealed record ShellReloadFailure(string Shell, string Error, ShellActivationRefusal? Refusal, Exception Exception)
 {
     /// <summary>
     /// The host's own directory, which is what <c>--host</c> needs: the persistence tool loads the package set the running host
@@ -47,6 +48,22 @@ internal sealed record ShellReloadFailure(string Shell, string Error, ShellActiv
     /// <param name="hostDirectory">The directory <c>dotnet elsa persistence --host</c> takes: the host's own, holding its build output and its <c>.nuplane</c> state.</param>
     public static IReadOnlyList<ShellReloadFailure> From(IEnumerable<ReloadResult> results, string hostDirectory) =>
         [.. results.Where(result => result.Error is not null).Select(result => Describe(result.Name, result.Error!, hostDirectory))];
+
+    /// <summary>Logs the outcome of an automatic reload after Nuplane reconciliation.</summary>
+    public static ValueTask LogNuplaneReloadResults(IReadOnlyList<ReloadResult> results, ILogger logger)
+    {
+        var failures = From(results, HostDirectory);
+        logger.LogInformation("Reloaded {Count} active shell(s) after a Nuplane reconcile.", results.Count - failures.Count);
+        foreach (var failure in failures)
+        {
+            if (failure.Refusal is null)
+                logger.LogError(failure.Exception, "Reloading shell '{Shell}' after a Nuplane reconcile failed; its previous generation is still active.", failure.Shell);
+            else
+                logger.LogWarning("Reloading shell '{Shell}' after a Nuplane reconcile was refused; its previous generation is still active. {Error}", failure.Shell, failure.Error);
+        }
+
+        return ValueTask.CompletedTask;
+    }
 
     /// <summary>One shell's failure, from the exception that stopped it activating, read the way <see cref="From"/> reads a reload result.</summary>
     internal static ShellReloadFailure Describe(string shell, Exception error, string hostDirectory)

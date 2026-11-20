@@ -2,13 +2,14 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using CShells.Nuplane;
-using FoundationHost = Elsa.Foundation.Host.Shells;
+using FoundationHost = Elsa.Foundation.Hosting;
 using WorkbenchHost = Elsa.Workbench;
 using Elsa.Testing;
+using Elsa.Foundation.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Nuplane.Abstractions;
 using Nuplane.Events;
 using Nuplane.Observability;
@@ -27,27 +28,35 @@ internal static class NuplaneHostTestComposition
 
     public static ServiceProvider BuildProfile(IConfigurationRoot configuration, bool foundation, ILoggerProvider? logger = null)
     {
-        var services = new ServiceCollection();
-        services.AddLogging(logging =>
+        var builder = CreateBuilder(configuration);
+        builder.Services.AddLogging(logging =>
         {
             if (logger is not null)
                 logging.AddProvider(logger);
         });
-        services.AddSingleton<IConfiguration>(configuration);
-        AddProfile(services, configuration, foundation);
-        return services.BuildServiceProvider();
+        AddProfile(builder, configuration, foundation);
+        return builder.Services.BuildServiceProvider();
     }
 
     public static NuplaneHostTestFixture CreateAdapter(bool foundation, params string[] activeShells) => new(foundation, activeShells);
 
-    private static void AddProfile(IServiceCollection services, IConfigurationRoot configuration, bool foundation)
+    private static HostApplicationBuilder CreateBuilder(IConfigurationRoot configuration)
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Configuration.Sources.Clear();
+        builder.Configuration.AddConfiguration(configuration);
+        return builder;
+    }
+
+    private static void AddProfile(HostApplicationBuilder builder, IConfiguration configuration, bool foundation)
     {
         if (foundation)
-            services.ConfigureOptions<FoundationHost.NuplaneIntegrationOptionsSetup>();
+            builder.AddFoundationNuplane(configuration);
         else
-            services.ConfigureOptions<WorkbenchHost.NuplaneIntegrationOptionsSetup>();
-        services.AddSingleton<IOptionsChangeTokenSource<NuplaneIntegrationOptions>>(
-            new ConfigurationChangeTokenSource<NuplaneIntegrationOptions>(Options.DefaultName, configuration.GetSection("Elsa:Shells")));
+        {
+            builder.AddNuplaneHostIntegration(configuration);
+            builder.Services.ConfigureOptions<WorkbenchHost.NuplaneIntegrationOptionsSetup>();
+        }
     }
 
     internal sealed class NuplaneHostTestFixture : IDisposable
@@ -69,16 +78,15 @@ internal static class NuplaneHostTestComposition
             Logger = new CapturingLogger();
             Following = new FollowingObserver();
 
-            var services = new ServiceCollection();
-            services.AddLogging(logging => logging.AddProvider(Logger));
-            services.AddSingleton<IConfiguration>(Configuration);
-            services.AddSingleton<IRuntimeFeatureCatalog>(Catalog);
-            services.AddSingleton<IShellRegistry>(Registry);
-            AddProfile(services, Configuration, foundation);
-            services.AddCShells().WithNuplaneFeatureDiscovery();
-            services.AddSingleton(Following);
-            services.AddSingleton<INuplaneObserver>(provider => provider.GetRequiredService<FollowingObserver>());
-            _services = services.BuildServiceProvider();
+            var builder = CreateBuilder(Configuration);
+            builder.Services.AddLogging(logging => logging.AddProvider(Logger));
+            builder.Services.AddSingleton<IRuntimeFeatureCatalog>(Catalog);
+            builder.Services.AddSingleton<IShellRegistry>(Registry);
+            AddProfile(builder, Configuration, foundation);
+            builder.Services.AddCShells().WithNuplaneFeatureDiscovery();
+            builder.Services.AddSingleton(Following);
+            builder.Services.AddSingleton<INuplaneObserver>(provider => provider.GetRequiredService<FollowingObserver>());
+            _services = builder.Services.BuildServiceProvider();
 
             Observer = _services.GetServices<INuplaneObserver>().Single(observer => observer is IShellGenerationBuildParticipant);
             Participant = Assert.IsAssignableFrom<IShellGenerationBuildParticipant>(Observer);

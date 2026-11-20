@@ -71,8 +71,8 @@ public static class CompositionActivationObservationEndpoints
 
     private static ShellObservation Observe(IShellRegistry registry, ShellReadinessState readiness, string shellName)
     {
-        var active = registry.GetActive(shellName);
-        var isActive = active?.State == ShellLifecycleState.Active;
+        var active = (registry as ISettledShellRegistry)?.GetSettledActive(shellName);
+        var isActive = active is not null;
         var ready = isActive && readiness.Snapshot.Status is ShellReadinessStatus.Ready or ShellReadinessStatus.Disabled;
         return new ShellObservation(shellName, isActive ? active!.Descriptor.Generation : null, ready,
             CandidateMatch, ProcessInstanceId);

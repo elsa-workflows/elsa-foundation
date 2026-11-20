@@ -37,6 +37,7 @@ using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Foundation.DataProtection;
+using Elsa.Foundation.Hosting;
 using Elsa.ExtensionBuilder.Api;
 using Elsa.ExtensionBuilder.Api.Extensions;
 using Elsa.Foundation.Identity;
@@ -170,8 +171,6 @@ if (consoleLogStreamingEnabled)
     builder.Services.AddConsoleLogStreamingHost(ConsoleLogStreamingSetup.ConfigureHost);
     builder.Services.AddConsoleLogStreamingAspNetCore(ConsoleLogStreamingSetup.ConfigureEndpoints);
 }
-var nuplaneConfiguration = configuration.GetSection("Nuplane");
-
 const string studioCorsPolicy = "ElsaStudio";
 
 var studioCorsOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
@@ -225,20 +224,8 @@ var extensionBuilderEnabled = ExtensionBuilderServiceCollectionExtensions.IsEnab
 if (extensionBuilderEnabled)
     builder.Services.AddElsaExtensionBuilder(configuration);
 
-builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
-{
-    // The content root, which is where this host's own appsettings.json was just read from. A relative
-    // configured DirectoryPath resolves against NuplaneBuilder.BasePath when something sets one, and against
-    // the process's current directory otherwise — so without this line a Workbench whose content root is set
-    // independently of where it was launched reads "DirectoryPath": "packages" out of one directory and
-    // looks for that folder under another. See apps/Elsa.Foundation.Host/Program.cs for the longer note.
-    nuplane.UseBasePath(builder.Environment.ContentRootPath);
-    nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
-    nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
-});
+builder.AddNuplaneHostIntegration(configuration);
 builder.Services.ConfigureOptions<NuplaneIntegrationOptionsSetup>();
-builder.Services.AddSingleton<IOptionsChangeTokenSource<NuplaneIntegrationOptions>>(
-    new ConfigurationChangeTokenSource<NuplaneIntegrationOptions>(Options.DefaultName, configuration.GetSection("Elsa:Shells")));
 // Nuplane registers its trigger ingress, reconcile coordinator and admin operations by type or by factory, so every shell
 // container CShells builds from copies of these registrations would hold second instances of them, and a reconcile enqueued
 // on a shell's copy of the queue is read by no dispatcher (#2159). Shells, among them the shell-scoped package catalog
