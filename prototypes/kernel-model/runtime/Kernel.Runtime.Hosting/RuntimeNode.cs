@@ -256,7 +256,11 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             for (var scope = 0; scope < partitions; scope++)
                 if (_runtime.Owns(scope)) wait = Math.Min(wait, Volatile.Read(ref _due[scope]));
             var ms = Math.Clamp(wait - Now, 0, int.MaxValue);
-            if (ms == 0) continue;
+            if (ms == 0)
+            {
+                await Task.Yield();     // a Zero-delay pass must not hold this exclusive scheduler: BalanceLoopAsync runs on it
+                continue;
+            }
             try { await _signal.WaitAsync(TimeSpan.FromMilliseconds(ms), exit); }
             catch (OperationCanceledException) { break; }
         }
