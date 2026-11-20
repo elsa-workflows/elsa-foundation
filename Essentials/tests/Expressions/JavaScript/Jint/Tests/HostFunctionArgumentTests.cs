@@ -109,6 +109,17 @@ public sealed class HostFunctionArgumentTests
                                                      warning.Details!["paths"].Contains("acme.lookup()[1]", StringComparison.Ordinal));
     }
 
+    // A blind write is the script's value: the function's read records no session read the script never made.
+    [Fact]
+    public async Task A_function_reading_a_variable_the_script_assigned_records_no_session_read()
+    {
+        var session = new Session(Order);
+        var (result, _) = await RunAsync("variables.order = { price: 1 }; return acme.readOrder().price;", session: session);
+
+        Assert.Equal(1, result!.Value.GetInt32());
+        Assert.Empty(session.ReadNames);
+    }
+
     [Fact]
     public async Task A_function_that_reads_variables_reads_through_the_body_session()
     {
@@ -117,7 +128,7 @@ public sealed class HostFunctionArgumentTests
         Assert.Equal(10.5, result!.Value.GetDouble());
     }
 
-    private static async Task<(JsonElement? Result, ExecutionWarningCollector Warnings)> RunAsync(string source, bool protectedRead = false)
+    private static async Task<(JsonElement? Result, ExecutionWarningCollector Warnings)> RunAsync(string source, bool protectedRead = false, Session? session = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.echo", call => call.Arguments[0].Clone()));
@@ -140,7 +151,7 @@ public sealed class HostFunctionArgumentTests
             new JavaScriptScriptEvaluationRequest(source, JsonSerializer.SerializeToElement(new { }), CancellationToken.None)
             {
                 Warnings = warnings,
-                Variables = new Session(Order) { HasReadProtectedValue = protectedRead }
+                Variables = session ?? new Session(Order) { HasReadProtectedValue = protectedRead }
             });
         return (result.Value, warnings);
     }
@@ -151,8 +162,13 @@ public sealed class HostFunctionArgumentTests
         public bool HasReadProtectedValue { get; init; }
         public bool IsReadOnly(string name) => false;
 
-        public ExpressionVariableRead Read(string name) =>
-            name == "order" ? ExpressionVariableRead.Present(JsonSerializer.Deserialize<JsonElement>(order)) : ExpressionVariableRead.Missing;
+        public List<string> ReadNames { get; } = [];
+
+        public ExpressionVariableRead Read(string name)
+        {
+            ReadNames.Add(name);
+            return name == "order" ? ExpressionVariableRead.Present(JsonSerializer.Deserialize<JsonElement>(order)) : ExpressionVariableRead.Missing;
+        }
 
         public void Write(string name, JsonElement? value)
         {

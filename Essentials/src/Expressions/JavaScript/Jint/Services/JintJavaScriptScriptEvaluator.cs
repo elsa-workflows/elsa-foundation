@@ -101,13 +101,18 @@ internal sealed class JintJavaScriptScriptEvaluator(
 
         public Elsa.Expressions.Core.Contracts.ExpressionVariableRead Read(string name)
         {
-            var stored = session.Read(name);
             if (current() is not { } variables || !variables.TryGet(name, out var held))
-                return stored;
+                return session.Read(name);
             if (held.IsUndefined())
                 return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Missing;
             var heldJson = JintResultMaterializer.Stringify(engine, held)
                 ?? throw new JavaScriptException(engine.Intrinsics.TypeError, $"Variable '{name}' holds a value with no JSON form.");
+            // A variable the script assigned whole is the script's value: reading the session only to compare would
+            // record a read the script never made.
+            if (variables.WasAssigned(name))
+                return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Present(JintResultMaterializer.ParseResult(heldJson, options));
+            // Held without a whole assignment means the script read it, so this read is already recorded.
+            var stored = session.Read(name);
             if (stored.Outcome == Elsa.Expressions.Core.Contracts.ExpressionVariableReadOutcome.Present &&
                 StringComparer.Ordinal.Equals(JintResultMaterializer.Stringify(engine, engine.Invoke(_parse, JsValue.Undefined, [stored.Value.GetRawText()])), heldJson))
                 return stored;
