@@ -133,6 +133,10 @@ internal sealed class JavaScriptHostFunctions
         CancellationToken cancellationToken) =>
         new(engine, name, (_, arguments) =>
         {
+            // The call is host work: its plumbing, the arguments' JSON and the function's own work are not the script's
+            // memory. What can run the script's code (a stringify that falls back to the engine, a variable read) and the
+            // value the script gets back are counted.
+            using var hostWork = EvaluationLimits.ExcludeHostWork(engine);
             var values = new JsonElement[arguments.Length];
             for (var index = 0; index < arguments.Length; index++)
                 values[index] = Argument(engine, options, declaration.Name, index, arguments[index]);
@@ -141,9 +145,7 @@ internal sealed class JavaScriptHostFunctions
             JsonElement result;
             try
             {
-                // The function's own work is the host's; converting its arguments and entering its result are counted.
-                using (EvaluationLimits.ExcludeHostWork(engine))
-                    result = declaration.Implementation(new JavaScriptHostFunctionCall(values, context.Variables, cancellationToken));
+                result = declaration.Implementation(new JavaScriptHostFunctionCall(values, context.Variables, cancellationToken));
             }
             // An engine limit reached inside the function (reading a variable runs the engine) stops the evaluation; a
             // script cannot catch it as the function's error.
@@ -153,11 +155,14 @@ internal sealed class JavaScriptHostFunctions
                 throw new JavaScriptException(engine.Intrinsics.Error, $"{declaration.Name}: {exception.Message}");
             }
 
-            return result.ValueKind == JsonValueKind.Undefined
-                ? JsValue.Undefined
-                // The result enters through the value bridge, as variables and arguments do: a number JavaScript cannot
-                // hold exactly is tracked like any lossy entered number (spec 1228; reported if read, refused if written).
-                : context.Values.Enter($"{declaration.Name}()[{++context.Calls}]", result);
+            if (result.ValueKind == JsonValueKind.Undefined)
+                return JsValue.Undefined;
+            var key = $"{declaration.Name}()[{++context.Calls}]";
+            // The result enters through the value bridge, as variables and arguments do: a number JavaScript cannot hold
+            // exactly is tracked like any lossy entered number (spec 1228; reported if read, refused if written). The
+            // script keeps what it gets: counted.
+            using (EvaluationLimits.CountScriptWork(engine))
+                return context.Values.Enter(key, result);
         });
 
     /// <summary>
@@ -228,9 +233,21 @@ internal sealed class JavaScriptHostFunctions
             return JsonSerializer.SerializeToElement<object?>(null);
         try
         {
-            return JintResultMaterializer.Stringify(engine, value) is { } json
-                ? JintResultMaterializer.ParseResult(json, options)
-                : throw new InvalidOperationException("It has no JSON form (a function or a symbol).");
+            // Plain data is serialized in .NET, running no script code: host work. Anything else goes through the engine's
+            // JSON.stringify, which can run the script's toJSON or getters: counted.
+            string? json;
+            using (EvaluationLimits.ExcludeHostWork(engine))
+            {
+                if (!PlainJson.TryStringify(engine, value, infinity: null, marker: null, out json))
+                {
+                    using (EvaluationLimits.CountScriptWork(engine))
+                        json = JintResultMaterializer.Stringify(engine, value);
+                }
+
+                return json is not null
+                    ? JintResultMaterializer.ParseResult(json, options)
+                    : throw new InvalidOperationException("It has no JSON form (a function or a symbol).");
+            }
         }
         catch (InvalidOperationException exception)
         {

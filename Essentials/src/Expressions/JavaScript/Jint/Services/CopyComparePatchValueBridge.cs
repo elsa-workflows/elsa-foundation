@@ -229,19 +229,18 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             // an entered number became Infinity, which JSON writes as null and so must be marked to be found.
             if (!_enteredInfinity && (value is not ObjectInstance || _origins.Count == 0))
             {
-                var plain = JintResultMaterializer.Stringify(_engine, value)
+                var plain = Serialize(value, infinity: false, markers: null)
                     ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
                 using (EvaluationLimits.ExcludeHostWork(_engine))
                     return (JintResultMaterializer.ParseResult(plain, _options), markers);
             }
 
-            _replacer ??= NewReplacer();
             // Restored, not cleared: a toJSON can call a host function whose variable read previews another value.
             var outer = _currentMarkers;
             _currentMarkers = markers;
             try
             {
-                var text = JintResultMaterializer.Stringify(_engine, value, _replacer)
+                var text = Serialize(value, infinity: true, markers)
                     ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
                 using (EvaluationLimits.ExcludeHostWork(_engine))
                     return (JintResultMaterializer.ParseResult(text, _options), markers);
@@ -252,6 +251,45 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             }
         }
 
+        /// <summary>
+        /// <c>JSON.stringify</c> of a script value, marking infinite numbers and, given <paramref name="markers"/>, each
+        /// unchanged entered object. Plain data is serialized in .NET (<see cref="PlainJson"/>), which runs no script code:
+        /// host work, not counted against the script. Anything else goes through the engine's <c>JSON.stringify</c>, which
+        /// can run the script's toJSON, getters or Proxy traps: counted, even inside host work.
+        /// </summary>
+        private string? Serialize(JsValue value, bool infinity, Dictionary<string, JsonElement>? markers)
+        {
+            using (EvaluationLimits.ExcludeHostWork(_engine))
+            {
+                if (PlainJson.TryStringify(_engine, value, infinity ? InfinityMarkerText : null, markers is null ? null : MarkerFor, out var plain))
+                    return plain;
+            }
+
+            // Markers taken before the serializer gave up are not in any text: start again.
+            markers?.Clear();
+            using (EvaluationLimits.CountScriptWork(_engine))
+            {
+                if (markers is not null)
+                    return JintResultMaterializer.Stringify(_engine, value, _replacer ??= NewReplacer());
+                return infinity
+                    ? JintResultMaterializer.Stringify(_engine, value, InfinityOnlyReplacer())
+                    : JintResultMaterializer.Stringify(_engine, value);
+            }
+        }
+
+        // The marker standing for an unchanged entered object, or null to serialize it.
+        private string? MarkerFor(ObjectInstance instance)
+        {
+            if (_currentMarkers is null || !_origins.TryGetValue(instance, out var origin) || !IsUnchanged(instance))
+                return null;
+            // Numbered across the evaluation, not per Mark: a nested Mark (a toJSON calling a host function that reads
+            // a variable) must not reuse a marker whose origin path the outer Mark still needs.
+            var marker = _markerPrefix + (_markerCount++).ToString(CultureInfo.InvariantCulture);
+            _currentMarkers[marker] = origin;
+            _markerPaths[marker] = _originPaths[instance];
+            return marker;
+        }
+
         private Dictionary<string, JsonElement>? _currentMarkers;
 
         private JsValue NewReplacer()
@@ -259,17 +297,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             var lookup = new ClrFunction(_engine, "lookup", (_, arguments) =>
             {
                 var candidate = arguments.At(0);
-                if (_currentMarkers is null ||
-                    candidate is not ObjectInstance instance ||
-                    !_origins.TryGetValue(instance, out var origin) ||
-                    !IsUnchanged(instance))
-                    return candidate;
-                // Numbered across the evaluation, not per Mark: a nested Mark (a toJSON calling a host function that reads
-                // a variable) must not reuse a marker whose origin path the outer Mark still needs.
-                var marker = _markerPrefix + (_markerCount++).ToString(CultureInfo.InvariantCulture);
-                _currentMarkers[marker] = origin;
-                _markerPaths[marker] = _originPaths[instance];
-                return new JsString(marker);
+                return candidate is ObjectInstance instance && MarkerFor(instance) is { } marker ? new JsString(marker) : candidate;
             });
             var infinity = InfinityMarker();
             // .NET, not JavaScript: nothing the script changed on the prototypes can intercept it, and it runs no script
@@ -338,9 +366,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             if (!_origins.TryGetValue(instance, out var origin))
                 return false;
 
-            var text = _enteredInfinity
-                ? JintResultMaterializer.Stringify(_engine, instance, InfinityOnlyReplacer())
-                : JintResultMaterializer.Stringify(_engine, instance);
+            var text = Serialize(instance, _enteredInfinity, markers: null);
             bool unchanged;
             if (text is null)
                 unchanged = false;

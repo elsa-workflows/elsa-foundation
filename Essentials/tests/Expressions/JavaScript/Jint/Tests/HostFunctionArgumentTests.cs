@@ -227,8 +227,9 @@ public sealed class HostFunctionArgumentTests
         Assert.Equal(1, result!.Value.GetInt32());
     }
 
-    // The memory limit is the script's: the bridge's plain .NET work on a large changed variable (parsing, comparing and
-    // patching its JSON) does not count against it. Converting the script's value does, for each function read too.
+    // The memory limit is the script's: serializing, comparing and patching plain data is host work (PlainJson), so
+    // reading a large changed variable through a function many times, or passing it as an argument, does not add up.
+    // (A function that hands the whole variable back gives the script a new value each call: that is counted.)
     [Fact]
     public async Task Bridge_work_on_a_large_variable_does_not_count_against_the_memory_limit()
     {
@@ -236,7 +237,7 @@ public sealed class HostFunctionArgumentTests
         var session = new Session("{" + members + "}");
 
         var (result, _) = await RunAsync(
-            "variables.order.updatedAt = 1; for (var i = 0; i < 2; i++) acme.readOrderText(); return 1;",
+            "variables.order.updatedAt = 1; for (var i = 0; i < 16; i++) { acme.readOrderSize(); acme.size(variables.order); } return 1;",
             session: session,
             configure: feature => feature.MaxMemoryBytes = 64 * 1024 * 1024);
 
@@ -285,6 +286,11 @@ public sealed class HostFunctionArgumentTests
     {
         var services = new ServiceCollection();
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.echo", call => call.Arguments[0].Clone()));
+        services.AddSingleton(new JavaScriptHostFunctionDeclaration(
+            "acme.readOrderSize",
+            call => JsonSerializer.SerializeToElement(call.Variables!.Read("order").Value.GetRawText().Length),
+            ReadsVariables: true));
+        services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.size", call => JsonSerializer.SerializeToElement(call.Arguments[0].GetRawText().Length)));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.slow", _ => throw new TimeoutException("lock wait timed out")));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.big", _ => JsonSerializer.Deserialize<JsonElement>("9007199254740993")));
         services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookup", call => JsonSerializer.Deserialize<JsonElement>(
