@@ -169,8 +169,11 @@ shows each new test failing without the change.
   `EfDesignSupport.Fingerprint`, `EfWorkflowLibraryStore.Fingerprint`, `GitCanonicalJson`, `EtlArtifactJson`,
   `ActivityForkMaterialFingerprint` and `AuthoringSchemaExporter.ComputeFingerprint`; delete
   `EfDesignSupport.LegacyFingerprint` (FR-021, Q11)
-- [ ] T023a [US4] Add a golden test per hash (fixed input → pinned value) and the guard rule: any hash call whose input
-  is serialized JSON and does not go through `JsonHashInput` fails the architecture test (US4 scenario 2)
+- [ ] T023a [US4] Add a golden test per hash (fixed input → pinned value), covering every variant the canonical form
+  absorbs (escaping, whitespace, member order, number notation) and every one it keeps apart (missing versus `null`,
+  array order, a different number). Each golden's failure message states the first-stable freeze rule of FR-021. Add
+  the guard rule: any hash call whose input is serialized JSON and does not go through `JsonHashInput` fails the
+  architecture test (US4 scenario 2)
 - [ ] T024 [US4] Move every check that compares serialized text to decide equality (research R-1) to
   `JsonCanonicalForm.Equals` (FR-021):
   - `EfWorkflowTriggerBindingStore.cs` L44, L68;
@@ -232,7 +235,11 @@ shows each new test failing without the change.
 
 - [ ] T034 [P] Update `docs/serialization.md`: the baseline and the data rule; the canonical form; the default
   conversion contract and `[JsonConversion]`; "camelCase, case-insensitive on read" → exact reads; the "HTTP boundary"
-  exception without FastEndpoints (FR-024)
+  exception without FastEndpoints (FR-024); a *Hash inputs* section with `JsonHashInput` and the first-stable freeze
+  rule (FR-021)
+- [ ] T034a Add one line to `AGENTS.md` that routes to that rule: until Elsa 4's first stable release, stored formats
+  and hashes may change with regenerated fixtures; from it on, they are frozen and change only by an explicit
+  decision (FR-021)
 - [ ] T035 [P] Delete `Essentials/apps/Elsa.Workbench/Constants/JsonSerializerOptionsCache.cs` (unused, research R-11)
 - [ ] T036 [P] Add *baseline* and *baseline deviation* to the glossary, and update `EXTENSION_POINTS.md` if the
   baseline is listed as a contract

@@ -442,3 +442,7 @@ System.Text.Json has no "warn on unmapped member" mode. It ignores unmapped memb
   serialize with `EfDesignSupport.Json` (Web), not `IPayloadSerializer`. Both stay frozen and registered.
 - **#4832 and S-8.** `JsonElement`-backed aliases are `StructuredValue`, and `Any` is the one dynamic kind held as
   `JsonElement`; both fit decision 5. No change.
+- **Offset-less dates at the API (probed 2026-11-20, .NET 10, server zone W. Europe Standard Time).**
+  `JsonSerializer.Deserialize` with `JsonSerializerOptions.Web` reads `"2026-10-28T09:15:00"` into a `DateTimeOffset`
+  as `2026-10-28T09:15:00+01:00` (the server's offset) and into a `DateTime` as kind `Unspecified`. The same request
+  means a different instant on a server in another zone. → FR-016c.

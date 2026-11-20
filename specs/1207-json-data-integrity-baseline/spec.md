@@ -479,7 +479,14 @@ faithful-or-refuse.
     goldens in place, and no run-time shim; `EfDesignSupport.LegacyFingerprint`, kept only to replay older markers,
     is deleted.
   - A golden test pins each hash for a fixed input, so any later change to `JsonHashInput` or to a hashed type shows
-    up as a failing test, not as a silent mismatch.
+    up as a failing test, not as a silent mismatch. The goldens cover every variant the canonical form absorbs
+    (escaping, whitespace, member order, number notation) and every one it keeps apart (missing versus `null`, array
+    order, a different number).
+  - **From Elsa 4's first stable release, hashes are frozen again.** Until then a hash may change when its golden and
+    fixtures are regenerated in the same change. From that release on, changing `JsonHashInput`, a hashed type or a
+    pinned golden is an explicit decision that assesses identity, versioning and migration (ADR 0091 decision 1); it
+    is never done by regenerating the golden. Every golden's failure message states this rule, and
+    `docs/serialization.md` and `AGENTS.md` state it, so any session that meets a failing hash golden reads it there.
   - The architecture test (FR-020) finds every SHA-256 or other hash call whose input is serialized JSON and fails
     unless it goes through `JsonHashInput`, so a new hash cannot bypass it.
 
@@ -543,11 +550,11 @@ faithful-or-refuse.
 ADR 0091 left Q1 to this spec, Q8 sat between ADR 0091 and ADR 0046, and the code survey added Q2 to Q7 (research
 R-0). Q1 to Q8 were answered by the approvers before ADR 0091 and ADR 0046 were accepted, and both ADRs now carry
 those answers. Q9 to Q11 come from the recheck against the merged ADRs and the specs merged since. The coordinator
-answered Q10 on 2026-11-20 and answers Q9 and Q11 when approving this spec.
+answered Q9, Q10 and Q11 on 2026-11-20, as recommended.
 
-**Open for the coordinator**
+**Answered by the coordinator on 2026-11-20**
 
-| # | Question | Concrete problem and example | Recommendation, as applied |
+| # | Question | Concrete problem and example | Answer, as applied (the recommendation, accepted) |
 |---|---|---|---|
 | Q9 | Where does a scoped conversion contract live, and is it recorded with a version? | ADR 0091 decision 2 says the selected behaviour is explicit and stable "in the published conversion contract and its version", and ADR 0046 *Dates* records a date interpretation there. No such artifact exists in code, and S-8 FR-028 was amended on 19 Nov to stamp and check nothing. Example: a connector's `Invoice` input selects case-insensitive matching; a published workflow passes `{"InvoiceNo":…}`. If the connector later drops that option, the same workflow leaves `InvoiceNo` unset with a warning. | The contract is code on the type or input member (FR-004a), so it changes only with that package, like the type's members; nothing is stamped into the executable and nothing is checked at run time. Rejected: a contract hash in each executable's activity contract, which would move the activity contract fingerprint and every ADR 0038 artifact hash (FR-021). This reads ADR 0091 decision 2's "published conversion contract and its version" as the type's published package; if the coordinator reads it as an executable record, the ADR wording goes through the spec-to-ADR loop instead. |
 | Q11 | Do the existing hashes stay frozen with their own options, or move once to one hash input? | About twenty hashes over JSON each use their own settings: no options, `JsonSerializerOptions.Web`, or an own context. The list is kept by hand, and the review found one it missed (`EfWorkflowLibraryStore`). Example: the design-store operation fingerprint hashes `JsonSerializerOptions.Web` text; if a .NET upgrade changes how `Web` escapes, or someone moves it to the baseline, a retried save no longer matches its stored marker, and nothing tells you why. | Move every hash over JSON once, now, to `JsonHashInput`: explicit settings, hashed over the canonical form, a golden test per hash, and an architecture test that catches any hash that bypasses it (FR-021). The hash values change once, which before the first stable release costs regenerated fixtures only. Rejected: keeping each frozen, which leaves twenty option sets to guard forever. This replaces the "frozen" answer of Q4, given before the first-stable compatibility rule. |
