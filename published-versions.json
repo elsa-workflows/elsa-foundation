@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "81c72ebad6e3350025f9f2dc71a8c38fd47ebf74",
+  "last_publish_commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -149,23 +149,23 @@
     },
     {
       "package_id": "Elsa.Agent.Anthropic",
-      "version": "4.0.19-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.20-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Agent.Api",
-      "version": "4.0.28-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.29-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Agent.AzureOpenAI",
-      "version": "4.0.1-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.2-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Agent.Connections",
-      "version": "4.0.1-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.2-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Agent.Core",
@@ -194,8 +194,8 @@
     },
     {
       "package_id": "Elsa.Agent.OpenAI",
-      "version": "4.0.1-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.2-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Agent.Persistence.EntityFrameworkCore",
@@ -344,33 +344,33 @@
     },
     {
       "package_id": "Elsa.Connections",
-      "version": "4.0.16-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.17-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Connections.Api",
-      "version": "4.0.14-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.15-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Connections.Core",
-      "version": "4.0.13-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.14-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Connections.Design",
-      "version": "4.0.12-preview",
-      "commit": "3fb6c8ec2cb87183be99087f4d5d1f31c1e4a7ba"
+      "version": "4.0.13-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Connections.Persistence.EntityFrameworkCore",
-      "version": "4.0.8-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.9-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Connections.Workflows",
-      "version": "4.0.16-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.17-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Decisions",
@@ -489,8 +489,8 @@
     },
     {
       "package_id": "Elsa.Etl.Runtime",
-      "version": "4.0.18-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.19-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Etl.Runtime.Api",
@@ -679,18 +679,18 @@
     },
     {
       "package_id": "Elsa.Integrations.Connectors.Microsoft365",
-      "version": "4.0.9-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.10-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Integrations.Connectors.OAuth2",
-      "version": "4.0.12-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.13-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Integrations.Connectors.Slack",
-      "version": "4.0.9-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.10-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Integrations.Sdk",
@@ -1124,8 +1124,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Http",
-      "version": "4.0.18-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.19-preview",
+      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Inspection.Core",
