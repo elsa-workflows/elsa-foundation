@@ -1,5 +1,7 @@
 # Durable timers and the `Delay` activity
 
+> **Current core.** This page describes the current Elsa core, which stays the default until the switch to the clean-slate kernel (milestone K13). The kernel is in development, tracked in [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229); its design is in the [kernel architecture pages](architecture/README.md). This page will be rewritten for the new core as part of that switch.
+
 **Who this is for:** contributors who want to know how a workflow waits for a period of time and still wakes up on schedule after the server restarts.
 
 ## The problem
