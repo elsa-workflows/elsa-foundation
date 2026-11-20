@@ -152,6 +152,19 @@ public sealed class StepVariableSessionUnitTests
         Assert.Equal(expected, ClrActivityContractTestBuilder.BuildContract(activityType).AccessesUndeclaredVariables);
     }
 
+    // FR-028: only a declared marker counts as one; an engine script activity's implied marker never does, so its
+    // analyzed body keeps deciding its may-write set (and its catalog facet carries no `declared`).
+    [Theory]
+    [InlineData(typeof(FreeNameSetActivity), true)]
+    [InlineData(typeof(InheritedMarkerActivity), true)]
+    [InlineData(typeof(EngineConsumerActivity), false)]
+    [InlineData(typeof(Elsa.Activities.Scripting.Activities.RunJavaScript), false)]
+    [InlineData(typeof(SessionIncrementActivity), false)]
+    public void Only_a_declared_marker_counts_as_declared(Type activityType, bool expected)
+    {
+        Assert.Equal(expected, VariableReferenceTypes.DeclaresAccessesUndeclaredVariables(activityType));
+    }
+
     [Fact]
     public void A_typed_read_records_dropped_members_only_when_the_value_is_written_back()
     {

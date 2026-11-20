@@ -1001,6 +1001,8 @@ public sealed class ClrAssemblyScannerTests
         // A declared marker says so, so an analyzed script body never narrows it (spec 1231 FR-028).
         Assert.True(VariableAccessDesignFacet.DeclaresAccessesUndeclaredVariables(
             models.Single(model => model.ActivityTypeKey == typeof(InheritedFreeNameFixtureActivity).FullName).DesignFacets));
+        Assert.True(VariableAccessDesignFacet.DeclaresAccessesUndeclaredVariables(
+            models.Single(model => model.ActivityTypeKey == typeof(FreeNameFixtureActivity).FullName).DesignFacets));
     }
 
     [Fact]
