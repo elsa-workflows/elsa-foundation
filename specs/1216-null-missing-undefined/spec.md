@@ -78,11 +78,13 @@ variable reads; the Elsa 3 converter option; the stored representation of explic
 
 **Admission**: "admission" in this spec is #3731's input-contract step in `WorkflowStartDispatcher`. It already
 delivers FR-008 for an omitted required input and the declared-default half of FR-006 for workflow inputs, on every
-start path. S-2 adds three things to it:
+start path. S-2 adds four things to it:
 - an omitted optional input without a declared default materializes as `null` when nullable, otherwise as its type
   default (FR-006, FR-009);
 - workflow-input nullability is pinned in the input contract (FR-005), so admission refuses an explicit `null` for a
   non-nullable input unless default-on-null applies (FR-008, FR-013);
+- an omitted required input that declares a default is refused, as ADR 0045 §2 says; today the default satisfies it
+  (FR-034);
 - FR-008's "before the start checkpoint" holds for these new outcomes too: they are decided where #3731 decides, before
   the start command is enqueued.
 
@@ -293,6 +295,9 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-001**: The system MUST accept an explicit `null` for every nullable target: activity inputs, variables, workflow
   outputs and the `value` of the `Set` / `SetOutput` intrinsics, whether it comes from a literal, a variable or an
   expression.
+- **FR-001a**: A variable's nullability comes from its kind: it is nullable unless its type is a non-nullable value
+  type (`Int32`, `Boolean`, an enum); `String`, `Any` and every JSON alias are nullable. A workflow output's
+  nullability is its declared *Allow null* flag (Q8).
 - **FR-002**: An intrinsic's `value` input MUST take the nullability of its target variable or output, instead of
   always being non-nullable.
 - **FR-003**: Without the default-on-null policy, `null` for a non-nullable target MUST fail with `VF-ACT-004`: at
@@ -309,7 +314,12 @@ omitted; after resume, the first reads explicit null and the invocation record s
   `null` when nullable, and otherwise as its type's default. A non-nullable type without a non-null default (for
   example `String` or a JSON object) has no type default: such an optional member still needs a declared default, as
   publication requires today (`VF-ACT-003`).
-- **FR-007**: An omitted required activity input MUST still fail publication (`VF-ACT-003`).
+- **FR-007**: An omitted required activity input MUST fail publication (`VF-ACT-003`), even when it declares a
+  default: a declared default never satisfies a required member (ADR 0045 §2). Today both publication and admission
+  let the default satisfy it; S-2 fixes both (FR-034).
+- **FR-034**: An omitted required workflow input MUST be refused at admission even when it declares a default. A
+  built-in activity input that is declared required and has a default is declared optional instead, so its default
+  keeps applying (Q9).
 - **FR-008**: An omitted required workflow input, and an explicit `null` for a non-nullable workflow input without the
   default-on-null policy, MUST be refused at admission, before the start checkpoint, with a diagnostic naming the
   member. No step runs and no work item is scheduled. This holds on every start path (API, triggers, BPMN, test runs,
@@ -329,7 +339,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
   per-input setting is added only once a case needs it.
 - **FR-013**: Under the policy, a `null` for a non-nullable target MUST be replaced by the target type's default
   (`default(T)` for value types and enums, Elsa 3's behaviour) (Q2), independently of any declared default, and the
-  invocation record MUST show that the value was substituted. A target type without a non-null default (FR-006) still
+  substitution MUST be recorded: on the invocation record for an activity input, and as a diagnostic of the started
+  instance for a workflow input substituted at admission. A target type without a non-null default (FR-006) still
   fails with `VF-ACT-004`. Requiredness is checked before any default applies (FR-008).
 - **FR-014**: The policy MUST never replace a `null` for a nullable target.
 
@@ -337,6 +348,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-015**: By default, a binding result of `undefined` MUST stay an error with the ADR 0083 guidance, for both
   binding forms.
 - **FR-016**: By default, an `undefined`-valued object property MUST be dropped and a warning MUST name its path.
+- **FR-016a**: Under either policy, an `undefined` array element or sparse hole MUST become a `null` placeholder and a
+  warning MUST name its path, so later indices never shift. An element already `null` needs no warning.
 - **FR-017**: `NaN`, `Infinity` and `-Infinity` MUST become `null`, and a warning MUST name their path, under any policy.
 - **FR-018**: A workflow MUST be able to select the undefined-as-null policy. Under it, an `undefined` result
   MUST materialize as `null`, and an `undefined`-valued property MUST be kept as `null` at every depth. The policy acts
@@ -351,6 +364,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
     gives, ADR 0083) whose result is consumed and
     that has no `return` statement MUST be refused at publication.
 
+  A returned completion (`return complete(result, outcomes)`, spec 1208) is judged by its `result`: `undefined` with
+  a bound result follows this rule; with an unbound result nothing is written and the outcome still applies.
   In every form, a consumed result that is `undefined` at run time (a path without a value, `return undefined`, or a
   completion value of `undefined`) MUST fault the step without undefined-as-null; under undefined-as-null it MUST be
   `null`, which the binding writes. The publication refusal and the fault name the activity and say to produce a value
@@ -375,8 +390,10 @@ omitted; after resume, the first reads explicit null and the invocation record s
   the persistence and incident settings, each with a one-line explanation of what it changes. A converted workflow
   shows the switches its conversion turned on. Changing a switch changes the definition like any other workflow
   setting.
-- **FR-032**: Studio's workflow inputs table MUST show and edit a workflow input's nullability (*Allow null*) beside
-  *Required*, as the activity contract editor already does for activity inputs.
+- **FR-032**: Studio's workflow inputs and outputs tables MUST show and edit nullability (*Allow null*) beside
+  *Required*, as the activity contract editor already does for activity inputs. A new input or output whose type can
+  hold null MUST start with *Allow null* on. Today Studio creates an optional, non-nullable `String` input with no
+  default, which FR-006 would refuse at publication.
 - **FR-033**: The boundary warnings of FR-016 and FR-017 and the substitution of FR-013 MUST reach Studio through the
   existing instance diagnostics; no new Studio surface is added for them.
 
@@ -401,7 +418,8 @@ omitted; after resume, the first reads explicit null and the invocation record s
 
 **Diagnostics**
 - **FR-028**: Every warning and refusal in this spec MUST have a stable diagnostic code and name the member, path or
-  variable concerned.
+  variable concerned. A JSON path can contain data keys, so it follows S-8's value-free rule: when the evaluation read
+  a protected value, the diagnostic names only the root.
 
 ### Key Entities
 
@@ -417,7 +435,7 @@ omitted; after resume, the first reads explicit null and the invocation record s
 ## Spec decisions
 
 These are about how this spec builds the settled decisions above. ADR 0045 §2 left Q1 to Q4 to this spec; Q5 came
-from the code survey; Q6 and Q7 came from the recheck against the merged specs. The requirements follow the answers.
+from the code survey; Q6 to Q9 came from the recheck against the merged specs and the code. The requirements follow the answers.
 
 - **Q1 — Where is default-on-null set?** **Accepted: workflow only**, until a case needs per input.
 - **Q2 — Which default does it use?** **Accepted: the type default**, independently of declared defaults: it is what
@@ -442,6 +460,17 @@ from the code survey; Q6 and Q7 came from the recheck against the merged specs. 
 - **Q7 — A script assigns `undefined` to a whole variable.** *Recommended:* the same rule as a consumed result: a
   fault naming the variable without undefined-as-null, `null` under it (FR-030). Rejected: writing nothing (the
   assignment silently keeps the old value) and always writing `null` (hides the bug in native workflows).
+- **Q8 — Where do variable and output nullability come from?** Problem: `Set` / `SetOutput` must know whether their
+  target accepts `null` (FR-002), but variables carry no nullability flag, and outputs carry one that Studio always
+  sets to off. *Recommended:* variables by kind (FR-001a: nullable unless a non-nullable value type), outputs by
+  their declared flag, with Studio showing it and starting it on (FR-032). Alternative: outputs by kind too, ignoring
+  the flag (then the flag means nothing, and an author cannot forbid `null` on a `String` output).
+- **Q9 — A required input that declares a default.** Problem: ADR 0045 §2 says a declared default never satisfies a
+  required member, but today it does, at publication for activity inputs and at admission for workflow inputs. Example:
+  a required `Int32` workflow input with default `5`, omitted at start, runs with `5` today; under the ADR it is
+  refused. *Recommended:* apply the ADR (FR-007, FR-034) and declare any built-in activity input that is required
+  with a default as optional, so it keeps its default; the audit is a task. Alternative: amend ADR 0045 so a default
+  satisfies a required member (then *required* only matters for members without a default).
 
 ## Success Criteria *(mandatory)*
 

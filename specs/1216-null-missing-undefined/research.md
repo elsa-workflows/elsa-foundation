@@ -101,27 +101,34 @@ Line numbers are from that initiative head.
 
 - **Decision**: one helper, `NullPolicyDefaults.TryGetTypeDefault(alias)`, in `Elsa.Workflows.Runtime.Core`, returning
   the type default for value types and enums and nothing for other types (`String`, `Any` and the JSON aliases have
-  none, although `JsonElement` is a CLR struct). It is applied in three places, each only
+  none, although `JsonElement` is a CLR struct). It is applied in four places, each only
   when the workflow's pinned `DefaultOnNull` is on: publication (`ValidateNull`: pin the default literal instead of
   failing), run-time materialization (`ValidatePresence`: replace `ExplicitNull` with the default and record a
-  `VF-NULL-001` diagnostic on the invocation), and admission (`WorkflowStartDispatcher.ApplyInputContract`,
-  R-3). The hydrator's CLR guard stays as a
+  `VF-NULL-001` diagnostic on the invocation), the intrinsic executor (`WorkflowIntrinsicExecutor`: a `Set` /
+  `SetOutput` expression that evaluates to `null` becomes `ExplicitNull` without passing the materializer, and
+  `ValidateAssignmentPayload` skips anything not `Present`, so today `null` into an `Int32` variable is written; S-2
+  refuses it with `VF-ACT-004` or substitutes under the policy), and admission
+  (`WorkflowStartDispatcher.ApplyInputContract`, R-3). The hydrator's CLR guard stays as a
   backstop; it never sees a null for such an input once the materializer substituted.
-- **Rationale**: one rule, three entry points; the hydrator stays a pure contract check.
+- **Rationale**: one rule, four entry points; the hydrator stays a pure contract check.
 - **Alternatives**: substitute in the hydrator (rejected: the invocation record would not show the substitution).
 
 ## R-7 Boundary diagnostics and undefined-as-null in S-8's value bridge
 
 - **Decision**: build in the writer of S-8's script value bridge (`CopyComparePatchValueBridge`), the one place every
-  value leaves a script: a binding result, a `Run JavaScript` result and each variable change. Its stringify replacer
-  already tracks the path and marks values. S-2 extends it:
+  value leaves a script: a binding result, a `Run JavaScript` result and each variable change. On #4838 the replacer
+  only marks an `Infinity` from an entered number and unchanged entered objects; paths are built in C# (`WriteMarked`)
+  after stringify, when `undefined` members are already gone; and a value with no entered object skips the replacer
+  (`Mark`), so a freshly computed `({ discount: undefined })` never reaches it. S-2 therefore makes the replacer run on
+  every written object and adds `undefined` and `NaN` markers, which `WriteMarked` turns into the diagnostics below
+  with their paths. The extra cost shows in S-8's per-evaluation bridge metric (S-8 FR-010):
   - an `undefined` object property: dropped with `VF-UNDEF-002` (default), or kept as `null` (policy);
   - an `undefined` array element or sparse hole: a `null` placeholder with `VF-UNDEF-003`, under either policy;
   - a computed `NaN` or `±Infinity`: `null` with `VF-NUM-001`. An `Infinity` that came from an entered number stays
     S-8's precision loss (`VF-PREC-001`), checked first;
   - a top-level `undefined`: the caller's rule (R-8, FR-015, FR-030).
   Warnings go through S-8's `IExecutionWarningSink`, so Studio shows them with the instance's diagnostics.
-- **Rationale**: one pass, no change to JavaScript semantics; a string the script itself produced with
+- **Rationale**: one pass per written value, no change to JavaScript semantics; a string the script itself produced with
   `JSON.stringify` is a string value and is never re-parsed (FR-018). Building in the bridge, not in
   `JintResultMaterializer`, follows S-8: the materializer is only the bridge's stringify step after #4838.
 - **Order**: User Story 4 is built after #4838 is merged. A JavaScript `Array` hole is not an own property, so the

@@ -72,22 +72,25 @@ are regenerated in place. New hash fields are written only when set, so most fix
 
 ## Decisions
 
+Plan decisions are numbered P-n, apart from the board's D-n.
+
 | # | Decision | Detail |
 |---|---|---|
-| D-1 | Intrinsic `value` takes the target's nullability | R-5. `name` / `outcome` stay non-nullable strings. |
-| D-2 | Variable nullability from the type | R-5: nullable unless a non-nullable value type. Verified in T004. |
-| D-3 | Workflow input nullability pinned | R-4. Hashed only when `true`. |
-| D-4 | Extend #3731's admission | R-3. #3731 already checks the input contract once in `WorkflowStartDispatcher` for every start, before the start policy and enqueue, and fills declared defaults. S-2 adds D-10's completion (`null` or type default) and the `null` refusal for non-nullable inputs to the validator's normalization, and default-on-null substitution before it. No new admission step. |
-| D-5 | Policies on `WorkflowStrategyOptions.NullHandling` | R-2. Compiled to `WorkflowExecutable.ValuePolicies`; each JavaScript evaluation gets the undefined policy from the executable. |
-| D-6 | Default-on-null = type default | R-6, Q2. Value types and enums only; other types keep `VF-ACT-004`. |
-| D-7 | In S-8's bridge writer | R-7. `VF-UNDEF-002` (property dropped), `VF-UNDEF-003` (array element or hole as a `null` placeholder, either policy), `VF-NUM-001` (computed `NaN`/`Infinity`); the policy keeps `undefined` properties as `null`. |
-| D-8 | Script without a value | R-8, Q3. Bindings (expression or statement body) need no `return`; only `Run JavaScript` (a function body) with a bound result and no `return` is refused at publication (`VF-UNDEF-001`). A consumed `undefined` faults the step at run time; `null` under the policy. Unbound: nothing written. |
-| D-13 | `undefined` assigned to a variable | R-8, Q7. `VF-UNDEF-001` fault naming the variable; `null` under the policy. |
-| D-14 | Studio | Q6. `NullHandlingSection` beside `PersistenceModeSection` in `WorkflowPropertiesView`; an *Allow null* column on workflow inputs; warnings through the existing instance diagnostics. |
-| D-9 | Converter option | R-9, Q4. `Elsa3MappingOptions.ApplyElsa3NullPolicies`, default `true`. |
-| D-10 | Computed read miss | R-10. Built by S-4 (`VF-READ-001`); no work here. |
-| D-12 | Inputs that cannot hold null | R-12, Q5. `VF-ACT-004` under any policy; audit built-in activities. |
-| D-11 | Diagnostic codes | [contracts/null-policies.md](contracts/null-policies.md). |
+| P-1 | Intrinsic `value` takes the target's nullability | R-5, Q8. Variables by kind, outputs by their flag; `name` / `outcome` stay non-nullable strings. The intrinsic executor checks a run-time `null` too (R-6). |
+| P-2 | Variable nullability from the type | R-5: nullable unless a non-nullable value type. Verified in T004. |
+| P-3 | Workflow input nullability pinned | R-4. Hashed only when `true`. |
+| P-4 | Extend #3731's admission | R-3. #3731 already checks the input contract once in `WorkflowStartDispatcher` for every start, before the start policy and enqueue, and fills declared defaults. S-2 adds the board's D-10 completion (`null` or type default) and the `null` refusal for non-nullable inputs to the validator's normalization, and default-on-null substitution before it. No new admission step. |
+| P-5 | Policies on `WorkflowStrategyOptions.NullHandling` | R-2. Compiled to `WorkflowExecutable.ValuePolicies`; each JavaScript evaluation gets the undefined policy from the executable. |
+| P-6 | Default-on-null = type default | R-6, Q2. Value types and enums only; other types keep `VF-ACT-004`. |
+| P-7 | In S-8's bridge writer | R-7. `VF-UNDEF-002` (property dropped), `VF-UNDEF-003` (array element or hole as a `null` placeholder, either policy), `VF-NUM-001` (computed `NaN`/`Infinity`); the policy keeps `undefined` properties as `null`. |
+| P-8 | Script without a value | R-8, Q3. Bindings (expression or statement body) need no `return`; only `Run JavaScript` (a function body) with a bound result and no `return` is refused at publication (`VF-UNDEF-001`). A consumed `undefined` faults the step at run time; `null` under the policy. Unbound: nothing written. |
+| P-13 | `undefined` assigned to a variable | R-8, Q7. `VF-UNDEF-001` fault naming the variable; `null` under the policy. |
+| P-14 | Studio | Q6. `NullHandlingSection` beside `PersistenceModeSection` in `WorkflowPropertiesView`; an *Allow null* column on workflow inputs; warnings through the existing instance diagnostics. |
+| P-9 | Converter option | R-9, Q4. `Elsa3MappingOptions.ApplyElsa3NullPolicies`, default `true`. |
+| P-10 | Computed read miss | R-10. Built by S-4 (`VF-READ-001`); no work here. |
+| P-15 | Required with a default | Q9. Requiredness is checked before the default at publication and admission; built-in inputs that are required with a default become optional. |
+| P-12 | Inputs that cannot hold null | R-12, Q5. `VF-ACT-004` under any policy; audit built-in activities. |
+| P-11 | Diagnostic codes | [contracts/null-policies.md](contracts/null-policies.md). |
 
 ## Project Structure
 

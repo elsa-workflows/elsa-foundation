@@ -25,7 +25,7 @@ red without the change. xUnit only.
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T004 Verify D-2 (variable nullability by kind: nullable unless a non-nullable value type; `Any` and every JSON
+- [ ] T004 Verify P-2 (variable nullability by kind: nullable unless a non-nullable value type; `Any` and every JSON
   alias nullable) against the alias registry and record the table in research.md R-5
 - [ ] T005 [P] Add `NullPolicyDefaults.TryGetTypeDefault(alias)` in
   `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs`, with unit tests for value types, enums and
@@ -40,6 +40,8 @@ red without the change. xUnit only.
   (`VF-ACT-003`, FR-006), as it already does for activity inputs
 - [ ] T008 Hand the executable's pinned `UndefinedAsNull` to every JavaScript evaluation (binding and `Run
   JavaScript`) from the callers that already hold the executable; no per-binding field (R-2)
+- [ ] T008a Expose `strategyOptions.nullHandling` and a workflow input's `isNullable` through the workflow definition
+  API (read and write) and the exported JSON, with an API round-trip test (FR-024)
 - [ ] T009 Write `valuePolicies` and input `isNullable` in `WorkflowExecutableHasher.WriteBehavioralPayload` only when
   set; test that each one changes the hash when set (ADR 0038, US5 scenario 3). Regenerate in place any stored fixture
   whose hash moves
@@ -49,7 +51,11 @@ red without the change. xUnit only.
 **Independent test**: a `Set` writing literal `null` into a nullable variable publishes and runs.
 
 - [ ] T010 [US1] Build the intrinsic `value` definition with the target's nullability in
-  `ExecutableNodeCompiler.CompileIntrinsicNode` (R-5); keep `name` and `outcome` non-nullable
+  `ExecutableNodeCompiler.CompileIntrinsicNode` (R-5, FR-001a: variables by kind, outputs by their flag); keep `name`
+  and `outcome` non-nullable
+- [ ] T010a [US1] Run time: in `WorkflowIntrinsicExecutor`, check a `null` from a `Set` / `SetOutput` expression
+  against the target's nullability: `VF-ACT-004` for a non-nullable target, the type default under `DefaultOnNull`
+  (R-6). Test: the expression `null` into an `Int32` variable faults today's silent write
 - [ ] T011 [US1] Tests in `Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`: null
   literal into a nullable variable and a nullable output publishes; into an `Int32` variable fails with `VF-ACT-004`
 - [ ] T012 [US1] Run test: the variable holds `ExplicitNull` and a workflow output persists an explicit JSON `null`
@@ -66,7 +72,14 @@ red without the change. xUnit only.
   `runtime.input.null-not-allowed`; accept an explicit `null` for a nullable input without running the type
   conversion, and leave that conversion as it is (S-9 owns it). In `WorkflowStartDispatcher.ApplyInputContract`, and
   in the early checks of `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow`, substitute the type default for
-  such a `null` before validating when the pinned `DefaultOnNull` is on, and record `VF-NULL-001`
+  such a `null` before validating when the pinned `DefaultOnNull` is on. The start command carries the
+  substitutions, and the seed records them as `VF-NULL-001` through S-8's warning channel when the instance starts.
+  Also refuse an omitted required input that declares a default (FR-034): drop the `!DefaultValue.HasValue` exemption
+  in the required check. One shared helper does the substitution; the early checks call it only because they refuse
+  before their own side effects (#3731), so all three give the same answer
+- [ ] T013a [US2] Publication: in `RuntimeInputBindingCompiler.CompileUnbound`, check requiredness before the
+  declared default, so an unbound required activity input with a default fails `VF-ACT-003` (FR-007). Audit built-in
+  activity descriptors for inputs that are required and declare a default, declare them optional, and test (Q9)
 - [ ] T014 [US2] Check that `RuntimeWorkflowStateSeed.BuildSeedChanges` stores a completed JSON `null` as an explicit
   null envelope, not a present JSON `null`, and fix it if not
 - [ ] T015 [US2] Tests for S-2's additions (US2 scenarios 2, 3 and 5, and the `null` refusal) on the API, trigger,
@@ -104,9 +117,11 @@ red without the change. xUnit only.
 
 **Independent test**: `({ a: undefined, b: NaN, c: [1, , undefined] })` with and without the policy.
 
-- [ ] T022 [US4] In S-8's bridge writer (`CopyComparePatchValueBridge`), extend its replacer (R-7): a dropped
+- [ ] T022 [US4] In S-8's bridge writer (`CopyComparePatchValueBridge`), run the replacer on every written object
+  (today `Mark` skips it without an entered object) and add `undefined` and `NaN` markers that `WriteMarked` resolves
+  with their paths (R-7): a dropped
   `undefined` property records `VF-UNDEF-002`; an `undefined` array element or hole becomes a `null` placeholder with
-  `VF-UNDEF-003` (holes checked by index); a computed `NaN` or `±Infinity` becomes `null` with `VF-NUM-001`, after
+  `VF-UNDEF-003` (holes checked by index, FR-016a); a computed `NaN` or `±Infinity` becomes `null` with `VF-NUM-001`, after
   S-8's precision check; under `UndefinedAsNull` an `undefined` property is kept as `null`. Add the codes to
   `JavaScriptValueDiagnostics`; warnings go through `IExecutionWarningSink`. Check that the byte, depth and node
   limits still count the output
@@ -130,23 +145,28 @@ red without the change. xUnit only.
   `Extensions/Elsa3/src/Mapping/Elsa3MappingOptions.cs`, bind it in `Elsa3MappingFeature`, with a feature
   registration test (options binding carries logic)
 - [ ] T028 [US5] Set `StrategyOptions.NullHandling` in `Elsa3WorkflowDefinitionToState.Map` when the option is on, and
-  list the policies in the conversion report; say the stricter Elsa 4 rules apply when it is off
+  list the policies in the conversion report; say the stricter Elsa 4 rules apply when it is off. Test both converter
+  entry points: an Elsa 3 import and Elsa 3 JSON reconciled at engine start (FR-022)
 - [ ] T029 [US5] Remove `AddNullCoalescing` from `Elsa3ExpressionRewriter` (FR-023) and update the spec 262 tests
 - [ ] T030 [US5] Narrow spec 267's `NullRefused` for SetVariable `Value` and SetOutput `OutputValue` in
   `Elsa3BuiltInActivityMap.Entries.cs`: emit a typed `Literal` null for a nullable target, or when `DefaultOnNull` is
-  recorded; refuse otherwise; update `Elsa3NullMemberTests`
+  recorded and the target type has a type default (`NullPolicyDefaults`); refuse otherwise, including a non-nullable
+  `String` target (FR-029); update `Elsa3NullMemberTests`
 - [ ] T031 [US5] Verify Elsa 3 3.6.3 input requiredness (R-11) and map converted inputs' requiredness and nullability
   accordingly
-- [ ] T032 [US5] Export/import round-trip test: `nullHandling` survives, and a native workflow with the same policies
-  gives the same outputs (SC-004)
+- [ ] T032 [US5] Export/import round-trip test: `nullHandling` survives. Parity test (SC-004): run every US3 and US4
+  acceptance scenario of T021 and T026 once as a native workflow and once as a converted one with the same policies,
+  and compare outputs and diagnostics
 
 ## Phase 9: Studio (Q6; US5 scenarios 5 and 6)
 
 - [ ] T033 [P] Add `NullHandlingSection.tsx` beside `PersistenceModeSection` in `WorkflowPropertiesView.tsx`: two
   switches, *Default on null* and *Undefined as null*, each with a one-line explanation, read from and written to
   `strategyOptions.nullHandling` (FR-031); read and write helpers in `workflowProperties.ts`
-- [ ] T034 [P] Add an *Allow null* column beside *Required* on the workflow inputs table in `WorkflowPropertiesView.tsx`,
-  disabled for a type that cannot hold null, as the activity contract editor does (FR-032)
+- [ ] T034 [P] Add an *Allow null* column beside *Required* on the workflow inputs and outputs tables in
+  `WorkflowPropertiesView.tsx`, disabled for a type that cannot hold null, as the activity contract editor does; start
+  it on in `createInput` / `createOutput` (`workflowProperties.ts`) for a type that can hold null (FR-032). Regenerate
+  any stored fixture whose inputs or outputs change
 - [ ] T035 Studio client tests for both, and a check that the `VF-UNDEF-*`, `VF-NUM-001` and `VF-NULL-001` warnings
   show in the existing instance diagnostics with no new surface (FR-033)
 
