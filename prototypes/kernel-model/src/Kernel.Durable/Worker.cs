@@ -151,9 +151,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // they were held. They count as held for the host's pass gate, no answer releases them, and they move only through a
     // retake that counts a death. Reset leaves them.
     private readonly SortedDictionary<int, long> _pending = [];
-    private long _lastPass, _takesStarted;
-    private Answered? _answered;
-    private long _judgedAt = long.MinValue;     // CR-4: the send time of the last answer judged; anything older is refused     // K1b: the last answer's stand-down side, for the next pass
+    private long _lastPass, _takesStarted, _takeAt, _retakeAt;     // when the take, or the reset's retake, in flight started: for the gate
+    private Answered? _answered;     // K1b: the last answer's stand-down side, for the next pass
+    private long _judgedAt = long.MinValue;     // CR-4: the send time of the last answer judged; anything older is refused
     private sealed record Answered(HeartbeatSent Sent, NodeBeat Answer, Func<int, bool>? Sibling);
     private int _gaining = -1;
     private bool _retaking, _retakeStoodDown;      // a stand-down during a retake (RetakeAsync) cancels it
@@ -707,10 +707,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
         get
         {
             lock (_turnSync)
-                // A Worker that holds nothing counts only when nothing is on its way back either: no reset's retake and no gain
-                // in flight (CodeRabbit 5984758539): a retake that hangs keeps the gate closed, as a hung pass does.
-                return (!Owns && _pending.Count == 0 && !(_retaking && _retakeSet.Count > 0) && _gaining < 0)
-                    || _options.Monotonic() - Volatile.Read(ref _lastPass) < (long)_options.Lease.TotalMilliseconds;
+            {
+                // A Worker that holds nothing counts only when nothing is on its way back either: no gain in flight, and no
+                // reset's retake (CodeRabbit 5984758539) or take (CodeRabbit 4636945436) in flight for a lease or more. One that
+                // hangs keeps the gate closed, as a hung pass does. One still within the lease leaves the gate open: a retake
+                // must not close the gate it checks at its own start, a fresh node heartbeats and takes, and its other
+                // Workers' takes go on beside it.
+                var (now, lease) = (_options.Monotonic(), (long)_options.Lease.TotalMilliseconds);
+                var retakeHangs = _retaking && _retakeSet.Count > 0 && now - Volatile.Read(ref _retakeAt) >= lease;
+                var takeHangs = _taking && now - Volatile.Read(ref _takeAt) >= lease;
+                return (!Owns && _pending.Count == 0 && !retakeHangs && _gaining < 0 && !takeHangs) || now - Volatile.Read(ref _lastPass) < lease;
+            }
         }
     }
 
@@ -752,6 +759,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             return;
         }
         _taking = true;
+        Volatile.Write(ref _takeAt, _options.Monotonic());
         Interlocked.Increment(ref _takesStarted);
         if (partitions.Count > 1 && !_store.OwnedSetsAvailable)
         {
@@ -1104,7 +1112,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 {
                     kept = [.. held.Where(f => !partitions.Contains(f.Partition))];
                     Reset();
-                    if (kept.Count > 0) (_retaking, _retakeStoodDown) = (true, false);
+                    if (kept.Count > 0) (_retaking, _retakeStoodDown, _retakeAt) = (true, false, _options.Monotonic());
                     _retakeSet.UnionWith(kept.Select(f => f.Partition));
                 }
             }
@@ -2403,7 +2411,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             (held, var releasing) = (Fences, _releasing);
             Fail(units);
             retake = held.Count > 1 && !releasing && !Has(Flaw.NoResetAfterFailedCommit);
-            if (retake) (_retaking, _retakeStoodDown) = (true, false);
+            if (retake) (_retaking, _retakeStoodDown, _retakeAt) = (true, false, _options.Monotonic());
             if (retake) _retakeSet.UnionWith(held.Select(f => f.Partition));
         }
         if (retake) await RetakeAsync(held, cancellationToken);

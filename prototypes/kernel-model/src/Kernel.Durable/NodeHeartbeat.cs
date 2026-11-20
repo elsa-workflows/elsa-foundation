@@ -13,6 +13,13 @@ namespace Kernel.Durable;
 /// missed renewal: nothing is handed over. A host with several Workers divides the answer: each judges the partitions it
 /// holds, and the release side skips the partitions another Worker of the host claims.
 /// </para>
+/// <para>
+/// The host's pass duty (ownership and fencing, "The host therefore keeps passing a Worker whose only partitions are
+/// pending"): a host passes every Worker whose pending set is not empty, one whose activation was disposed included, until
+/// that set is empty, and one that holds nothing while an answer waits for it (<see cref="Worker.AnswerWaiting"/>). The
+/// built-in runtime does it with <c>INodeLeaseHost.PassAsync</c> (<see cref="DurableHost.PassAsync"/>), for a node's
+/// Worker and a fixed host's alike. Without it such a Worker is never live again, and the gate withholds every heartbeat.
+/// </para>
 /// </summary>
 public sealed class NodeHeartbeat
 {

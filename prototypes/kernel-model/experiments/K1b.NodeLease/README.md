@@ -91,8 +91,13 @@ record. Its read holds nothing, so the heartbeat completes; q then sees p renewe
 - membership read inside the heartbeat's transaction, under SQL Server without RCSI: each heartbeat holds its own record
   and waits for the other's. As built, the membership reads run after the transaction and hold nothing.
 
-**The verdict (coordinator, 19 November): SQL Server's deadlocks are the proof for each mutation.** Each one
-targets an engine that takes a lock for the read. On the others the cycle cannot form, because the read takes no lock:
+**The verdict: the amended NL-C1 (owner card, 20 November).** The coordinator's reading of 19 November took SQL
+Server's deadlocks as the proof for each mutation. The amended
+[NL-C1](../../../../docs/program-goals/clean-slate-kernel.md#gate-2-conditions) asks every engine for a locking-read
+mutation that deadlocks while the ordered take does not: SQL Server with the take at REPEATABLE READ, with and without
+RCSI; MySQL at REPEATABLE READ with the node read as a subquery of the update; PostgreSQL with the node read taken
+`FOR SHARE`. Those per-engine runs come in K1b slice 6. The runs above show why the mutations they used deadlock only
+on SQL Server:
 
 **Where the negatives do not deadlock, the engine takes no lock for the read.**
 - PostgreSQL reads the node records from its snapshot, at any level.
