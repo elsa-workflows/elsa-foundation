@@ -404,7 +404,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     http: {
       getJson: async (url: string) => {
         if (hostPersistenceMode && url === "/runtime/workflows/persistence-mode") return { persistenceMode: hostPersistenceMode };
-        if (live?.disconnected && url.startsWith("/runtime/")) throw new Error("Fixture connection dropped");
+        if (live?.disconnected && url.startsWith("/runtime/")) { (window as Window & { droppedFixtureReads?: number }).droppedFixtureReads = ((window as Window & { droppedFixtureReads?: number }).droppedFixtureReads ?? 0) + 1; throw new Error("Fixture connection dropped"); }
         if (url === "/capabilities") {
           return {
             capabilities: [

@@ -7,8 +7,14 @@ namespace Kernel.Sim;
 /// answers them. The queue keeps every continuation on that thread and in order: an operation starts when the one before
 /// it has ended, inline. Nothing else changes: the host and its worker are the runtime's.
 /// </summary>
-public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount
+public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount, INodeLeaseHost
 {
+    // K1b: the node lease. The heartbeat runs off the turn, as the built-in runtime's own loop sends it; the node passes
+    // are queued with the host's other operations.
+    public TimeSpan? NodeLease => host.NodeLease;
+    public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default) => host.HeartbeatAsync(window, cancellationToken);
+    public async ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default) => await Queued(() => host.PassAsync(cancellationToken));
+
     public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) => host.CheckScopesAsync(scopes, cancellationToken);
 
     private Task _tail = Task.CompletedTask;
@@ -50,8 +56,14 @@ public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount
 /// A partition its Worker holds that the runtime does not know is adopted only when the runtime never gave it up since its
 /// last activation: the Worker brought it back by itself (a pending retake). One given up is a bug, reported, not adopted.
 /// </summary>
-public sealed class GiveUps(IScopeHost inner) : IScopeHost, IScopeCount
+public sealed class GiveUps(IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost
 {
+    public TimeSpan? NodeLease => (inner as INodeLeaseHost)?.NodeLease;
+    public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default) =>
+        inner is INodeLeaseHost lease ? lease.HeartbeatAsync(window, cancellationToken) : ValueTask.FromResult<Cluster?>(null);
+    public ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default) =>
+        inner is INodeLeaseHost lease ? lease.PassAsync(cancellationToken) : ValueTask.FromResult<IReadOnlyCollection<int>>([]);
+
     private readonly Dictionary<int, (IScopeActivation Inner, Recorded Outer)> _scopes = [];
     public HashSet<int> GivenUp { get; } = [];
 

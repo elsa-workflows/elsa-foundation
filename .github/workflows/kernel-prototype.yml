@@ -52,7 +52,7 @@ jobs:
     name: Kernel prototype gate
     if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft || github.event_name == 'workflow_dispatch' && inputs.suite == 'gate' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25      # K1b slice 5a: the node-lease seeds add about 4 minutes to a 13-minute gate
     defaults:
       run:
         working-directory: prototypes/kernel-model
@@ -89,6 +89,9 @@ jobs:
           SIM="dotnet sim/$BIN/Kernel.Sim.dll"
           $SIM --seeds 10000
           $SIM --native --seeds 10000
+          # K1b: the same seeds under the node lease, beside the per-partition lease until slice 6 flips the default.
+          $SIM --seeds 10000 --node-lease
+          $SIM --native --seeds 10000 --node-lease
           $SIM --lease-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
@@ -136,7 +139,7 @@ jobs:
     name: Kernel prototype nightly
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'nightly' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180     # K1b slice 5a: the node-lease sizes add about an hour to a 60- to 75-minute nightly
     defaults:
       run:
         working-directory: prototypes/kernel-model
@@ -172,6 +175,11 @@ jobs:
           $SIM --seeds 20000 --actions 1000
           $SIM --native --seeds 200000
           $SIM --native --seeds 20000 --actions 1000
+          # K1b: the same sizes under the node lease, beside the per-partition lease until slice 6 flips the default.
+          $SIM --seeds 200000 --node-lease
+          $SIM --seeds 20000 --actions 1000 --node-lease
+          $SIM --native --seeds 200000 --node-lease
+          $SIM --native --seeds 20000 --actions 1000 --node-lease
           $SIM --lease-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
@@ -203,6 +211,9 @@ jobs:
           $RTC semantic
           $RTC semantic --partitions 1024
           $RTC stress 20 2000
+          # K1b slice 5a: the nodes' heartbeat loops renew the node lease, the only renewal under it.
+          $RTC semantic --node-lease
+          $RTC stress 20 2000 --node-lease
 
       # The -broken forms break the store's fence on purpose; the runner decides whether the runtime failed as it must.
       - name: Fence broken on purpose

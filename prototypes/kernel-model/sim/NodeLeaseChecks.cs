@@ -33,6 +33,121 @@ internal static class NodeLeaseChecks
         await DisposeOfAPendingPartition(check);
         await HandOverOfAPendingPartition(check);
         await HungResetRetakeClosesTheGate(check);
+        await HungFirstTakeClosesTheGate(check);
+        await TimelyFirstTakeKeepsTheGateOpen(check);
+        await FixedHostPassesAGivenUpPending(check);
+        await LazyFixedHostHeartbeats(check);
+        await FixedHostAnswerJudgesOnce(check);
+    }
+
+    // CodeRabbit 4636945436 (review B of #4870): an empty Worker's first take hangs. Once it has been in flight for a lease
+    // the Worker is not live: the host withholds its heartbeat and takes nothing more. The late reply leaves 0 pending (a
+    // reply past its send time plus the lease renews nothing), and the next heartbeat and pass retake it.
+    private static async Task HungFirstTakeClosesTheGate(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(1, out _);
+        var wire = new DelayedCommit(store) { DelayTake = true };
+        var worker = Owner(wire, [0], clock);
+        var beat = new NodeHeartbeat("p", wire, [worker], Lease, Window);
+        var take = new DurableHost([worker]).ActivateAsync(0).AsTask();
+        await wire.Taken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        advance(11_000);
+        var closed = !worker.Live && !beat.Open && await beat.BeatAsync() is null;
+        wire.TakeReply.SetResult();
+        await take;
+        var pending = !worker.Holds(0) && worker.Pending.ContainsKey(0);
+        var late = pending ? worker.Pending[0] : 0L;
+        var live = worker.Live;
+        await beat.BeatAsync();
+        await worker.RunAsync();        // the answer's retake of 0
+        check(closed && pending && live && worker.Holds(0) && worker.EpochOf(0) > late,
+            $"a first take in flight for a lease closes the gate: closed {closed}, unheld and pending after the late reply {pending}, live after {live}, holds 0 at last {worker.Holds(0)} epoch {worker.EpochOf(0)} (late {late})");
+    }
+
+    // The same take answered within the lease: the gate stays open while it is in flight, so a fresh node heartbeats and takes.
+    private static async Task TimelyFirstTakeKeepsTheGateOpen(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(1, out _);
+        var wire = new DelayedCommit(store) { DelayTake = true };
+        var worker = Owner(wire, [0], clock);
+        var beat = new NodeHeartbeat("p", wire, [worker], Lease, Window);
+        var take = new DurableHost([worker]).ActivateAsync(0).AsTask();
+        await wire.Taken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        advance(3_000);
+        var open = worker.Live && beat.Open && await beat.BeatAsync() is not null;
+        wire.TakeReply.SetResult();
+        await take;
+        check(open && worker.Holds(0) && worker.Live, $"a first take within the lease keeps the gate open: open {open}, holds 0 {worker.Holds(0)}");
+    }
+
+    // Review A of #4870, round 2 (binding on 5a): the fixed host keeps passing a Worker with pending partitions, one whose
+    // activation was disposed included, until its pending set is empty (ownership-and-fencing, "The host therefore keeps
+    // passing a Worker whose only partitions are pending"). w0 is disposed while the gate is closed, so its release cannot
+    // retake its pending 0 and leaves it pending and given up. The host's own loop (its node pass, its heartbeat, its node
+    // pass again) reopens the gate, counts 0's trial at the retake and releases it, takes 1 back for w1, and keeps renewing.
+    private static async Task FixedHostPassesAGivenUpPending(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(2, out _);
+        var (w0, w1) = (Owner(store, [0], clock), new Worker("p", 1, store, new WorkflowInstance([new Counter()]), new WorkerOptions { Monotonic = clock, Partitions = 1 }));
+        var host = new DurableHost([w0, w1]);
+        var scope = (await host.ActivateAsync(0))!;
+        await host.ActivateAsync(1);
+        await host.HeartbeatAsync(Window);      // the host's heartbeat and gate exist from here
+        var trial = OnTrial(store, "t0", 0);
+        advance(11_000);
+        await w0.RunAsync(); await w1.RunAsync();       // both guards have expired: 0 and 1 are pending
+        advance(11_000);                // no pass for a lease: the gate is closed
+        var closed = host.Heartbeat is { Open: false };
+        await scope.DisposeAsync();     // the host gives 0 up; its counting retake cannot run now
+        var stranded = w0.Pending.ContainsKey(0) && store.Partitions[0].Owner == "p";
+        await host.PassAsync();         // the passes no active scope gives: both Workers, pending only
+        var renewed = await host.HeartbeatAsync(Window) is not null;
+        await host.PassAsync();         // the answer's retakes
+        var back = w1.Holds(1);
+        advance(3_000);
+        await host.PassAsync();         // w0 holds nothing and nothing is pending now; w1 passes as its scope would
+        await w1.RunAsync();
+        var still = await host.HeartbeatAsync(Window) is not null && w1.Holds(1);
+        check(closed && stranded && renewed && trial.Attempts == 1 && store.Partitions[0].Owner is null && w0.Pending.Count == 0 && back && still,
+            $"the fixed host keeps passing a Worker whose given-up partition is pending, until it is retaken and released: closed {closed}, stranded {stranded}, renewed {renewed}, attempts {trial.Attempts}, owner of 0 {store.Partitions[0].Owner ?? "none"}, w1 holds 1 {back}, renews after {still}");
+    }
+
+    // Architect F1 of #4877: ForNode on a node-lease store without owned sets has no Worker until ActivateAsync.
+    // NodeLease and the first heartbeat must not wait for one; after a take the heartbeat still renews and the scope
+    // survives past one lease.
+    private static async Task LazyFixedHostHeartbeats(Action<bool, string> check)
+    {
+        var (store, clock, advance) = World(1, out _);
+        var wire = new DelayedCommit(store) { WithoutOwnedSets = true };
+        var host = DurableHost.ForNode("n1", wire, new WorkflowInstance([new Counter()]), 1, new() { Monotonic = clock, Partitions = 1 });
+        var before = host.NodeLease is not null && await host.HeartbeatAsync(Window) is not null;
+        var scope = await host.ActivateAsync(0);
+        if (scope is not null) await scope.RunAsync();
+        advance(5_000);
+        var mid = await host.HeartbeatAsync(Window) is not null;
+        if (scope is not null) await scope.RunAsync();
+        advance(6_000);
+        // Probe at t=11 s, before the last beat: the node record is valid to 15 s after the t=5 s renewal, expired at 10 s without it.
+        var survived = scope is { Active: true } && await store.TakeAsync(0, "probe", Lease) is null;
+        var renewed = await host.HeartbeatAsync(Window) is not null;
+        check(before && mid && renewed && survived,
+            $"a lazy fixed host heartbeats before any Worker and keeps a scope past one lease: before {before}, mid {mid}, renewed {renewed}, survived {survived}");
+    }
+
+    // N1: a ForNode fixed host without owned sets, 256 Workers. One answer must not scan Claims per sibling candidate.
+    private static async Task FixedHostAnswerJudgesOnce(Action<bool, string> check)
+    {
+        const int n = 256;
+        var (store, clock, _) = World(n, out _);
+        var wire = new DelayedCommit(store) { WithoutOwnedSets = true };
+        var host = DurableHost.ForNode("n1", wire, new WorkflowInstance([new Counter()]), n, new() { Monotonic = clock, Partitions = n });
+        var workers = new Worker[n];
+        for (var p = 0; p < n; p++) workers[p] = (Worker)(await host.ActivateAsync(p))!;
+        await host.HeartbeatAsync(Window);
+        foreach (var w in workers) await w.RunAsync();
+        var claims = workers.Sum(w => w.ClaimsLookups);
+        check(claims < n && workers.All(w => w.Holds(w.Partition)),
+            $"one answer over {n} Workers judges with {claims} Claims calls (bound {n}), held {workers.Count(w => w.Holds(w.Partition))}");
     }
 
     // Review round 2 of #4870, the coordinator's rule: a fixed Worker's pending partition, with a trial on it, is given up by

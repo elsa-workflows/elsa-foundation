@@ -43,6 +43,10 @@ public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKe
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) => Call(() => inner.TakeAsync(partition, node, lease, cancellationToken));
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => Call(() => inner.ReleaseAsync(partition, epoch, cancellationToken));
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => Call(() => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken));
+    // K1b: the node lease, forwarded; the heartbeat and the counting retake can fail as any call here does.
+    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) => Call(() => inner.NodeHeartbeatAsync(node, lease, window, cancellationToken));
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) => Call(() => inner.RetakeAsync(partition, node, epoch, lease, countDeaths, cancellationToken));
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) => Call(() => inner.CommitAsync(batch, cancellationToken));
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => Call(() => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken));
     // A set poll is one call, as on a SQL store: through the interface's default it was one call per partition, and the
@@ -138,6 +142,9 @@ public class RecordingStore(IKernelStore inner) : IKernelStore
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) => inner.TakeAsync(partition, node, lease, cancellationToken);
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => inner.ReleaseAsync(partition, epoch, cancellationToken);
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
+    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;     // K1b: the node lease, forwarded
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) => inner.NodeHeartbeatAsync(node, lease, window, cancellationToken);
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, countDeaths, cancellationToken);
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken);
     public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => inner.PollAsync(owned, horizon, limit, cancellationToken);
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => inner.AddAsync(message, cancellationToken);

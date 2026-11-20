@@ -179,7 +179,9 @@ test("folder navigation falls back to the flat inventory when folder capabilitie
   await page.goto("/?theme=light&mode=folder-restructure&capabilities=folders-absent");
 
   await expect(page.getByText("All workflow")).toBeVisible();
-  await expect(page.getByRole("tree")).toHaveCount(0);
+  // #4903 keeps the workflow navigation without folders: a single "All workflows" entry and no folder tree items.
+  await expect(page.getByRole("tree").getByRole("treeitem")).toHaveCount(1);
+  await expect(page.getByRole("treeitem", { name: "All workflows", exact: true })).toBeVisible();
   expect(await page.evaluate(() => (window as Window & { folderMutationRequests?: unknown[] }).folderMutationRequests)).toBeUndefined();
 });
 

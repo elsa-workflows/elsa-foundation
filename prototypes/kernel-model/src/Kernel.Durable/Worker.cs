@@ -151,15 +151,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // they were held. They count as held for the host's pass gate, no answer releases them, and they move only through a
     // retake that counts a death. Reset leaves them.
     private readonly SortedDictionary<int, long> _pending = [];
-    private long _lastPass, _takesStarted;
-    private Answered? _answered;
-    private long _judgedAt = long.MinValue;     // CR-4: the send time of the last answer judged; anything older is refused     // K1b: the last answer's stand-down side, for the next pass
+    private long _lastPass, _takesStarted, _takeAt, _retakeAt;     // when the take, or the reset's retake, in flight started: for the gate
+    private Answered? _answered;     // K1b: the last answer's stand-down side, for the next pass
+    private long _judgedAt = long.MinValue;     // CR-4: the send time of the last answer judged; anything older is refused
     private sealed record Answered(HeartbeatSent Sent, NodeBeat Answer, Func<int, bool>? Sibling);
     private int _gaining = -1;
     private bool _retaking, _retakeStoodDown;      // a stand-down during a retake (RetakeAsync) cancels it
     private readonly HashSet<int> _retakeLost = [];     // partitions given up during a retake: it does not take them back
     private readonly HashSet<int> _retakeSet = [];      // what a retake after a reset takes back: the Worker's still, for Claims
     private readonly HashSet<int> _handingOver = [];    // K1b: what a LoseAsync under way gives up: never kept pending
+    private readonly HashSet<int> _broughtBack = [];    // K1b: pending partitions an answer's retake took back, for the host's runtime to adopt
     private readonly HashSet<int> _givenUp = [];        // K1b: partitions the host gave up while their gain or counting retake was in flight
 
     public Worker(string node, int partition, IKernelStore store, IActorType type, WorkerOptions? options = null)
@@ -487,6 +488,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>K1b: the store keeps the node lease, so the host's heartbeat renews and a commit renews nothing.</summary>
     private bool NodeLease => _store.NodeLeaseAvailable;
+    internal IKernelStore Store => _store;      // K1b: the host's heartbeat goes to the Workers' store
+    internal TimeSpan Lease => _options.Lease;
 
     /// <summary>
     /// The node lease's guard (decisions, "The local lease guard"): one deadline, the latest send time plus the lease over
@@ -597,7 +600,21 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (release.Count > 0)
             try { await _store.ReleaseAsync(release, cancellationToken); }
             catch (Exception) { /* retried at the next answer, which lists them again */ }
-        if (retake.Count > 0) await RetakePendingAsync(retake, cancellationToken);
+        if (retake.Count > 0) await RetakePendingAsync(retake, cancellationToken, byItself: true);
+    }
+
+    /// <summary>
+    /// K1b: the partitions an answer's retake brought back since the last call, by the Worker itself and no activation of
+    /// its runtime's. The host hands them to its runtime, which activates the ones it does not know.
+    /// </summary>
+    internal IReadOnlyCollection<int> TakeBroughtBack()
+    {
+        lock (_turnSync)
+        {
+            int[] back = [.. _broughtBack.Where(_held.ContainsKey)];
+            _broughtBack.Clear();
+            return back;
+        }
     }
 
     /// <summary>
@@ -605,7 +622,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// previous-epoch trial messages, as a take from an expired owner does. A partition retaken is added to the set
     /// without a reset; one refused is no longer pending; one whose answer is lost stays pending, for the next answer.
     /// </summary>
-    private async Task<bool> RetakePendingAsync(IReadOnlyList<int> partitions, CancellationToken cancellationToken)
+    private async Task<bool> RetakePendingAsync(IReadOnlyList<int> partitions, CancellationToken cancellationToken, bool byItself = false)
     {
         var any = false;
         foreach (var partition in partitions)
@@ -644,6 +661,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     if (fresh) RenewGuard(started, fresh: true);
                     _caughtUp = false;      // F1: until a poll has read the partition's inbox, nothing is handed over in memory
                     (_woken, installed) = (true, true);
+                    if (byItself) _broughtBack.Add(partition);
                 }
                 (_taking, _gaining) = (false, -1);      // after the install: Claims never sees neither
             }
@@ -689,10 +707,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
         get
         {
             lock (_turnSync)
-                // A Worker that holds nothing counts only when nothing is on its way back either: no reset's retake and no gain
-                // in flight (CodeRabbit 5984758539): a retake that hangs keeps the gate closed, as a hung pass does.
-                return (!Owns && _pending.Count == 0 && !(_retaking && _retakeSet.Count > 0) && _gaining < 0)
-                    || _options.Monotonic() - Volatile.Read(ref _lastPass) < (long)_options.Lease.TotalMilliseconds;
+            {
+                // A Worker that holds nothing counts only when nothing is on its way back either: no gain in flight, and no
+                // reset's retake or take in flight for a lease or more. The take and retake terms are a backstop for a Worker
+                // that passes nothing; a recent pass still opens the gate.
+                var (now, lease) = (_options.Monotonic(), (long)_options.Lease.TotalMilliseconds);
+                var retakeHangs = _retaking && _retakeSet.Count > 0 && now - Volatile.Read(ref _retakeAt) >= lease;
+                var takeHangs = _taking && now - Volatile.Read(ref _takeAt) >= lease;
+                return (!Owns && _pending.Count == 0 && !retakeHangs && _gaining < 0 && !takeHangs) || now - Volatile.Read(ref _lastPass) < lease;
+            }
         }
     }
 
@@ -700,12 +723,29 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public Func<bool>? TakesOpen { get; set; }
     private bool TakesClosed => NodeLease && TakesOpen is { } open && !open();
 
+    public long ClaimsLookups { get; private set; }     // N1: one answer's judging, counted by the lease-check witness
     /// <summary>The partition is this Worker's: held, pending, or being taken. A host with several Workers divides an answer by it.</summary>
     public bool Claims(int partition)
     {
         lock (_turnSync)
+        {
+            ClaimsLookups++;
             return _held.ContainsKey(partition) || _pending.ContainsKey(partition) || _gaining == partition || (_taking && Assigned.Contains(partition))
                 || (_retaking && _retakeSet.Contains(partition));
+        }
+    }
+
+    /// <summary>The partitions <see cref="Claims"/> would accept, under the same lock. One answer builds a map from these.</summary>
+    internal IReadOnlyList<int> ClaimedPartitions()
+    {
+        lock (_turnSync)
+        {
+            HashSet<int> claimed = [.. _held.Keys, .. _pending.Keys];
+            if (_gaining >= 0) claimed.Add(_gaining);
+            if (_taking) claimed.UnionWith(Assigned);
+            if (_retaking) claimed.UnionWith(_retakeSet);
+            return [.. claimed];
+        }
     }
 
     // ---- ownership ---------------------------------------------------------------------------------------------
@@ -733,6 +773,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             await RetakePendingAsync(pending, cancellationToken);
             return;
         }
+        Volatile.Write(ref _takeAt, _options.Monotonic());
         _taking = true;
         Interlocked.Increment(ref _takesStarted);
         if (partitions.Count > 1 && !_store.OwnedSetsAvailable)
@@ -1086,7 +1127,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 {
                     kept = [.. held.Where(f => !partitions.Contains(f.Partition))];
                     Reset();
-                    if (kept.Count > 0) (_retaking, _retakeStoodDown) = (true, false);
+                    if (kept.Count > 0) (_retaking, _retakeStoodDown, _retakeAt) = (true, false, _options.Monotonic());
                     _retakeSet.UnionWith(kept.Select(f => f.Partition));
                 }
             }
@@ -2385,7 +2426,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             (held, var releasing) = (Fences, _releasing);
             Fail(units);
             retake = held.Count > 1 && !releasing && !Has(Flaw.NoResetAfterFailedCommit);
-            if (retake) (_retaking, _retakeStoodDown) = (true, false);
+            if (retake) (_retaking, _retakeStoodDown, _retakeAt) = (true, false, _options.Monotonic());
             if (retake) _retakeSet.UnionWith(held.Select(f => f.Partition));
         }
         if (retake) await RetakeAsync(held, cancellationToken);
