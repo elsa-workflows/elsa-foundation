@@ -144,7 +144,7 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         }
 
         // The selection travels next to the result; whether its names are in this node's pinned outcome set is checked
-        // when the completion is projected, as for every other activity.
+        // when the completion is projected, as for every other activity, and, under protection, first here (below).
         var selection = evaluation.SelectionState switch
         {
             JavaScriptOutcomeSelectionState.Named => OutcomeSelection.Named(evaluation.OutcomeNames),
@@ -163,9 +163,8 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         return ActivityTransition.Complete(new RunJavaScriptResult(evaluation.Value), selection);
     }
 
-    // A read the session refused is the cause of a failed step, even when the script caught the error and failed
-    // otherwise (spec 1222 FR-017a). Its message is the session's own and names no value; nothing the script threw is
-    // attached, since that could quote a protected value it read.
+    // The projection's outcome-selection rules (ActivityOutcomeSelectionRules.Validate) over this node's outcome set:
+    // Done plus PossibleOutcomes, the set pinned at publication.
     private bool IsValidSelection(JavaScriptScriptEvaluationResult evaluation)
     {
         if (evaluation.SelectionState != JavaScriptOutcomeSelectionState.Named)
@@ -177,6 +176,9 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
                                  PossibleOutcomes?.Contains(name, StringComparer.Ordinal) == true);
     }
 
+    // A read the session refused is the cause of a failed step, even when the script caught the error and failed
+    // otherwise (spec 1222 FR-017a). Its message is the session's own and names no value; nothing the script threw is
+    // attached, since that could quote a protected value it read.
     private static void ThrowIfRefused(StepScriptVariables? variables)
     {
         if (variables?.Refusal is { } refusal)
