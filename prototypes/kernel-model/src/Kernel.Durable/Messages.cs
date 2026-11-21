@@ -35,6 +35,8 @@ public readonly record struct InboxKey(string Id, long Scope = 0, string? Match 
     public override string ToString() => Id;
 }
 
+internal sealed record FoundationOperatorCommand(string? Selection);
+
 /// <summary>A message. Times are database time in milliseconds.</summary>
 public sealed record Message(
     string Id, InstanceRef Target, string Kind, string? Payload = null, string? Sender = null,
@@ -43,6 +45,8 @@ public sealed record Message(
     [System.Text.Json.Serialization.JsonIgnore]
     public long InboxScope { get; private init; }
     internal bool BindFoundationChild { get; init; }
+    internal FoundationOperatorCommand? Operator { get; init; }
+    internal bool IsControl => Operator is not null || Kinds.IsControl(Kind);
     internal bool ActorAuthored { get; init; }
     internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]

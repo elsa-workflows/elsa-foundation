@@ -12,6 +12,9 @@ public interface IActorType
     /// references from the wire kind before the stored model is loaded. This grants no sender authority.</summary>
     string? SelfReference(Delivery delivery) => null;
 
+    /// <summary>Whether this implementation enforces the public operator protocol for this row.</summary>
+    bool SupportsFoundationOperator(InstanceRow? row) => false;
+
     /// <summary>An owner command that needs a single-message boundary but still obeys normal withholding.</summary>
     bool SingleMessage(Message message) => false;
 

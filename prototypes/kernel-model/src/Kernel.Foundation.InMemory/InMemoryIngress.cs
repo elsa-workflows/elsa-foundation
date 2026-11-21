@@ -4,10 +4,12 @@ using Durable = Kernel.Durable;
 namespace Kernel.Foundation.InMemory;
 
 /// <summary>The built-in in-memory ingress over the existing bound actor and event admission routes.</summary>
-internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Requests requests, string node) : IIngress
+internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Requests requests, string node,
+    Func<BoundScope, string, bool>? authorizeOperator = null) : IIngress
 {
     private readonly OrdinaryIngress _ordinary = new(store);
     private readonly EventIngress _event = new(store, requests, node);
+    private readonly OperatorIngress _operator = new(store, authorizeOperator);
 
     public ValueTask<Admission> SendAsync(BoundScope scope, Target target, string id, string kind, string? payload = null,
         AddOptions? options = null, CancellationToken cancellationToken = default) =>
@@ -31,7 +33,12 @@ internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Reque
             var admission = await SendToActor(scope, target, id, kind, payload, add, cancellationToken,
                 open.ReplyAddress(node, request.ReleaseBeforeCommit));
             if (admission.Outcome == AdmissionOutcome.Refused)
-                return new(null, null, Error: admission.Reason == RefusalReason.Repeat ? "repeat" : "missing");
+                return new(null, null, Error: admission.Reason switch
+                {
+                    RefusalReason.Repeat => "repeat",
+                    RefusalReason.StaleSelection => "stale selection",
+                    _ => "missing"
+                });
             return await RequestReplies.WaitAsync(store, requests, open, scope, admission.Actor, cancellationToken);
         }
         finally
@@ -45,7 +52,9 @@ internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Reque
 
     private ValueTask<Admission> SendToActor(BoundScope scope, Target target, string id, string kind, string? payload,
         AddOptions? options, CancellationToken cancellationToken, string? replyTo = null) =>
-        target switch
+        Kinds.IsCommand(kind) && target is Target.Ref or Target.Key { Spec: null }
+            ? _operator.SendAsync(scope, target, id, kind, payload, options, cancellationToken, replyTo)
+            : target switch
         {
             Target.Ref exact => _ordinary.SendAsync(scope, exact, id, kind, payload, options, cancellationToken, replyTo),
             Target.Key key => _ordinary.SendAsync(scope, key, id, kind, payload, options, cancellationToken, replyTo),
