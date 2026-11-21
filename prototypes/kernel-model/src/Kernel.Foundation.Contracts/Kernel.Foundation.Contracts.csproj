@@ -2,4 +2,9 @@
   <PropertyGroup>
     <RootNamespace>Kernel.Foundation.Contracts</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Runtime.Hosting" />
+    <InternalsVisibleTo Include="Kernel.Store.Conformance" />
+    <InternalsVisibleTo Include="Kernel.Sim" />
+  </ItemGroup>
 </Project>

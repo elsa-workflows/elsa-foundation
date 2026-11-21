@@ -2359,7 +2359,7 @@ call takes a `BoundScope`:
 | Read | What it returns |
 |---|---|
 | `GetAsync(scope, ref)` | One `ActorView`: the header, the `Selection` an operator command names, the `ParkView` when parked, and `AsOf` |
-| `ListAsync(scope, query)` | A `Page<ActorView>` filtered by `ActorQuery(Type, Status, Labels, EndedBefore, Parked)`; the parked-work list is this query with `Parked` |
+| `ListAsync(scope, query, from)` | A `Page<ActorView>` filtered by `ActorQuery(Type, Status, Labels, EndedBefore, Parked)`. Pass the previous page's opaque `Next` as `from` for the same tenant and query. The parked-work list is this query with `Parked` |
 | `TailAsync(scope, ref, from)` | One actor's `JournalEntry` pages after an opaque `PageToken`, in commit order |
 | `InboxAsync(scope, ref, from)` | One actor's `DeliveryView` pages: pending, held, and the rows its Park keeps (`Consumed` or `Arrived`), each with its handle |
 
