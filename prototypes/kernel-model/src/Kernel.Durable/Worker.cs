@@ -2689,8 +2689,14 @@ internal sealed class Slot
 
 internal sealed record JobTicket(string Model, [property: System.Text.Json.Serialization.JsonConverter(typeof(DurableKeyJson))] string Key, string? Arguments);
 
-internal sealed record JobContext(InstanceRef Instance, string Key, string? Arguments, long Creation, int AttemptNumber) : IJob
+internal sealed class JobContext(InstanceRef instance, string key, string? arguments, long creation, int attemptNumber) : IJob
 {
+    public InstanceRef Instance { get; } = instance;
+    public string Key { get; } = key;
+    public string? Arguments { get; } = arguments;
+    public long Creation { get; } = creation;
+    public int AttemptNumber { get; } = attemptNumber;
+
     private string? _attemptId;
     public string AttemptId => LazyInitializer.EnsureInitialized(ref _attemptId, static () => Guid.NewGuid().ToString("N"));
 }
