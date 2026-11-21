@@ -27,8 +27,27 @@ internal static class JobResultEncoding
     private static string Encode(object? value)
     {
         using var stream = new BoundedBuffer();
-        JsonSerializer.Serialize(stream, value, value?.GetType() ?? typeof(object), Options);
+        try
+        {
+            JsonSerializer.Serialize(stream, value, value?.GetType() ?? typeof(object), Options);
+        }
+        catch (ArgumentException error) when (IsWriterSizeLimit(error))
+        {
+            // A DOM node or a custom converter can call the writer before the buffer sees the token.
+            throw new LimitExceeded();
+        }
         return Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length);
+    }
+
+    private static bool IsWriterSizeLimit(ArgumentException error)
+    {
+        var origin = error.TargetSite;
+        var owner = origin?.DeclaringType;
+        // .NET 10 reports token limits through these helpers. Match the assembly and throw site, so the
+        // classification is independent of locale and leaves unrelated JSON and activity errors intact.
+        return owner is { FullName: "System.Text.Json.ThrowHelper" } && owner.Assembly == typeof(Utf8JsonWriter).Assembly &&
+            origin!.Name is "ThrowArgumentException_ValueTooLarge" or "ThrowArgumentException_PropertyNameTooLarge" or
+                "ThrowPropertyNameTooLargeArgumentException";
     }
 
     internal sealed class LimitExceeded : Exception;

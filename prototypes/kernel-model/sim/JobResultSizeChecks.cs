@@ -1,5 +1,7 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using Kernel.Foundation.InMemory;
+using Kernel.Native;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Sim;
@@ -23,6 +25,10 @@ internal static class JobResultSizeChecks
         var huge = new string('x', 166_666_667);
         await Schedule(huge, false, true, flaws, (ok, name) => check(ok, $"value beyond the serializer's single-token limit: {name}"));
         await Schedule(new[] { huge }, false, true, flaws, (ok, name) => check(ok, $"nested value beyond the serializer's single-token limit: {name}"));
+        var native = new BackgroundResult(TransitionKind.Complete, JsonValue.Create(huge), "Done", null);
+        await Schedule(native, false, true, flaws, (ok, name) => check(ok, $"oversized Native result, deliverable: {name}"));
+        await Schedule(native, true, true, flaws, (ok, name) => check(ok, $"oversized Native result, suspended: {name}"));
+        await Schedule(new JsonObject { [huge] = true }, false, true, flaws, (ok, name) => check(ok, $"oversized JSON property name: {name}"));
 
         async Task Run(string shape, string value, bool tooLarge)
         {

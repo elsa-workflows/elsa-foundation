@@ -383,7 +383,7 @@ retain the milestones above.
 
 | Acceptance clause | Executable evidence | Negative control | Qualification still owed |
 |---|---|---|---|
-| JC-2(h), completion payload size | `--job-result-size-check` runs the real driver and in-memory foundation. A result at the payload limit survives unchanged. Two encodings one byte over, an oversized compound value and a string beyond the serializer's token limit become job errors. The suspend schedule observes an authenticated bounded row before resume. Each schedule consumes one ticket, applies one outcome and clears the registry. | `UnboundedJobResult` stores the oversized row under suspension and either passes the value or returns the serializer's unrelated error to the deliverable actor. | The unresolved Park schedule at K3, and physical-provider row-encoding limits at K4. |
+| JC-2(h), completion payload size | `--job-result-size-check` runs the real driver and in-memory foundation. A result at the payload limit survives unchanged. Two encodings one byte over, an oversized compound value and tokens beyond the writer's own limit become `result too large`. The suite includes the Native `BackgroundResult` JSON shape in both the deliverable and suspended schedules. The latter observes an authenticated bounded row before resume. Each schedule consumes one ticket, applies one outcome and clears the registry. | `UnboundedJobResult` stores the oversized row under suspension and either passes the value or returns the serializer's own error to the actor. | The unresolved Park schedule at K3, and physical-provider row-encoding limits at K4. |
 
 ### FC-8 on providers
 
