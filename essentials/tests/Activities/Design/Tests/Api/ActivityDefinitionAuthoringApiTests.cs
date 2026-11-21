@@ -32,6 +32,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "Definitions.List", "GET", "design/activities/definitions" },
         { "Definitions.Get", "GET", "design/activities/definitions/{definitionId}" },
         { "Definitions.Update", "PATCH", "design/activities/definitions/{definitionId}" },
+        { "Definitions.Restore", "POST", "design/activities/definitions/{definitionId}/restore" },
         { "Definitions.Recommendation", "PUT", "design/activities/definitions/{definitionId}/recommendation" },
         { "Definitions.Picker", "GET", "design/activities/definitions/picker" },
         { "Definitions.AddDraft", "POST", "design/activities/definitions/{definitionId}/drafts" },
@@ -165,6 +166,19 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal("definition-1", Assert.IsType<ArchiveReusableActivityDefinition>(host.Seams.LastCommand).DefinitionId);
+    }
+
+    [Fact]
+    public async Task Definitions_restore_is_available_as_a_bodyless_manage_operation()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/design/activities/definitions/definition-1/restore");
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignCompatibilityCases.IdentityHeader, "trusted-success");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal("definition-1", Assert.IsType<RestoreReusableActivityDefinition>(host.Seams.LastCommand).DefinitionId);
     }
 
     [Fact]

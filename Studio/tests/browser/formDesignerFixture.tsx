@@ -16,7 +16,13 @@ const existingForm: TaskForm = {
   version: "1",
   name: "Contact form",
   provider: basicProvider,
-  fields: fixtureSearch.has("missing-control")
+  fields: fixtureSearch.has("nullable-settings")
+    ? JSON.parse(`[
+      {"key":"accepted","label":"Accept terms","kind":"boolean","required":false,"readOnly":false,"help":null,"choices":null,"mustBeTrue":null,"presentation":{"display":"radio","trueLabel":null,"falseLabel":"No","unansweredLabel":null}},
+      {"key":"amount","label":"Amount","kind":"number","required":false,"readOnly":false,"minimum":null,"maximum":10,"maxLength":null,"configuration":null},
+      {"key":"rating","label":"Rating","kind":"number","required":false,"readOnly":false,"controlId":"example.rating/1","configuration":{"max":5}}
+    ]`) as TaskField[]
+    : fixtureSearch.has("missing-control")
     ? [{ key: "rating", label: "Rating", kind: "number", required: true, readOnly: false, controlId: "example.rating/1", configuration: { max: 5 } }]
     : [{ key: "email", label: "Email address", kind: "text", required: true, readOnly: false }]
 };
@@ -121,10 +127,10 @@ const exampleRatingControl: StudioUserTaskFieldControlContribution = {
   valueKind: "number",
   order: 20,
   createField: fields => ({ key: `rating${fields.length + 1}`, label: "Rating", kind: "number", required: false, readOnly: false, configuration: { max: 5 } }),
-  component: ({ field, id, disabled, value, onChange }) => {
+  component: ({ field, id, disabled, value, error, onChange }) => {
     const configuration = (field as TaskField).configuration ?? {};
     const maximum = typeof configuration.max === "number" ? configuration.max : 5;
-    return <input id={id} type="number" min="1" max={maximum} value={typeof value === "number" ? value : ""} disabled={disabled} onChange={event => onChange(event.target.value ? Number(event.target.value) : undefined)} />;
+    return <input id={id} data-studio-field-control="" type="number" min="1" max={maximum} value={typeof value === "number" ? value : ""} disabled={disabled} aria-invalid={Boolean(error)} onChange={event => onChange(event.target.value ? Number(event.target.value) : undefined)} />;
   },
   propertiesEditor: ({ field, disabled, onChange }) => {
     const typedField = field as TaskField;

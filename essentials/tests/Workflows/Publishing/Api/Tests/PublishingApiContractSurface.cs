@@ -85,6 +85,7 @@ internal static class PublishingApiContractSurface
         typeof(PreflightWorkflowPublicationSnapshot),
         typeof(PublishWorkflowRequest),
         typeof(UnpublishPublicationSlotRequest),
+        typeof(UnpublishPublicationSlotAtRevisionRequest),
         typeof(RestorePublicationSlotRequest),
         typeof(UnpublishPublicationSlot),
         typeof(RestorePublicationSlot),

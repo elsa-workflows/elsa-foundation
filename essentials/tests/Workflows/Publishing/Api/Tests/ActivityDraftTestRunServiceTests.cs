@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed partial class ActivityDraftTestRunServiceTests
 {
     [Fact]
-    public async Task Placement_failure_is_persisted_as_safe_pre_dispatch_validation_rejection()
+    public async Task Missing_required_input_is_persisted_as_safe_actionable_pre_dispatch_rejection()
     {
         var fixture = await CreateFixture();
 
@@ -37,8 +37,8 @@ public sealed partial class ActivityDraftTestRunServiceTests
 
         Assert.Equal("ValidationRejected", response.Status);
         Assert.Equal("Validation", response.Failure?.Kind);
-        Assert.Equal("activity.test-run.preparation-failed", response.Failure?.Code);
-        Assert.Equal("The activity draft could not be prepared for a Test Run.", response.Failure?.Message);
+        Assert.Equal("activity.test-run.required-input", response.Failure?.Code);
+        Assert.Equal("A required activity input has no value or default. Provide values for required inputs before running the Test Run.", response.Failure?.Message);
         Assert.DoesNotContain("VF-ACT-003", response.Failure?.Message ?? string.Empty, StringComparison.Ordinal);
         Assert.DoesNotContain("required-value", response.Failure?.Message ?? string.Empty, StringComparison.Ordinal);
         Assert.Null(response.ArtifactId);
@@ -54,19 +54,46 @@ public sealed partial class ActivityDraftTestRunServiceTests
 
         var polled = await fixture.Service.GetAsync(response.TestRunId);
         Assert.Equal("ValidationRejected", polled.Status);
-        Assert.Equal("activity.test-run.preparation-failed", polled.Failure?.Code);
+        Assert.Equal("activity.test-run.required-input", polled.Failure?.Code);
         Assert.Equal(response.Failure?.Message, polled.Failure?.Message);
 
         var stored = await fixture.Receipts.FindByIdempotencyKeyAsync(
             ActivityDraftTestRunIdentity.CreateOperationScope(null), fixture.Draft.Id, fixture.Request.IdempotencyKey);
         Assert.NotNull(stored);
         Assert.Equal(ActivityDraftTestRunReceiptStatus.ValidationRejected, stored.Status);
-        Assert.Equal("activity.test-run.preparation-failed", stored.Failure?.Code);
+        Assert.Equal("activity.test-run.required-input", stored.Failure?.Code);
         Assert.Empty(stored.Failure!.Diagnostics);
         Assert.Null(stored.ArtifactId);
         Assert.Null(stored.SourceReferenceId);
         Assert.Null(stored.CommandDispatchStatus);
         Assert.Equal(2, stored.Revision);
+        Assert.False(fixture.Dispatcher.WasCalled);
+    }
+
+    [Fact]
+    public async Task Unexpected_placement_failure_keeps_the_redacted_pre_dispatch_rejection_on_replay()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var fixture = await CreateFixture(wrapTemplates: inner => new CancelOnDependencyReadTemplateStore(
+            inner,
+            cancellation,
+            "child-template",
+            new InvalidOperationException("hidden authored value")));
+
+        var response = await fixture.Service.StartAsync(fixture.Request);
+
+        Assert.Equal("ValidationRejected", response.Status);
+        Assert.Equal("activity.test-run.preparation-failed", response.Failure?.Code);
+        Assert.Equal("The activity draft could not be prepared for a Test Run.", response.Failure?.Message);
+        Assert.DoesNotContain("hidden authored value", response.Failure?.Message ?? string.Empty, StringComparison.Ordinal);
+        Assert.Null(response.ArtifactId);
+        Assert.Null(response.SourceReferenceId);
+        Assert.Null(response.CommandDispatchStatus);
+        Assert.False(fixture.Dispatcher.WasCalled);
+
+        var replay = await fixture.Service.StartAsync(fixture.Request);
+        Assert.Equal(response.TestRunId, replay.TestRunId);
+        Assert.Equal(response.Failure, replay.Failure);
         Assert.False(fixture.Dispatcher.WasCalled);
     }
 
@@ -357,7 +384,8 @@ public sealed partial class ActivityDraftTestRunServiceTests
     private sealed class CancelOnDependencyReadTemplateStore(
         IExecutableActivityTemplateStore inner,
         CancellationTokenSource cancellation,
-        string dependencyTemplateId) : IExecutableActivityTemplateStore
+        string dependencyTemplateId,
+        Exception? placementFailure = null) : IExecutableActivityTemplateStore
     {
         public bool CanMaintainReferences(IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references) =>
             inner.CanMaintainReferences(executables, references);
@@ -371,7 +399,11 @@ public sealed partial class ActivityDraftTestRunServiceTests
         {
             var template = await inner.FindAsync(templateId, cancellationToken);
             if (StringComparer.Ordinal.Equals(templateId, dependencyTemplateId))
+            {
+                if (placementFailure is not null)
+                    throw placementFailure;
                 cancellation.Cancel();
+            }
             return template;
         }
 

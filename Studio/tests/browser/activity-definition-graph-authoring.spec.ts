@@ -212,6 +212,53 @@ test("Activity Definition input bindings select a public input directly from Lit
   await page.screenshot({ path: test.info().outputPath("activity-input-bindings-narrow.png"), fullPage: true });
 });
 
+test("Activity Definition empty JavaScript inputs bind directly and restore the selected key after reopening", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockGraphAuthoring(page);
+  await page.goto("/?mode=activity-definition-graph-authoring&theme=dark&bindings=empty-javascript");
+
+  const node = page.locator("[data-graph-node-id='write-line-1']");
+  await node.click();
+  const syntax = page.getByRole("button", { name: "Message expression syntax: JavaScript", exact: true });
+  await expect(syntax).toBeVisible();
+  const bindingTool = page.locator(".wf-input-bindings-toggle");
+  await bindingTool.click();
+
+  const bindings = page.locator(".wf-js-input-bindings");
+  const picker = bindings.getByLabel("Add activity input");
+  await picker.selectOption(await picker.locator("option").nth(1).getAttribute("value") ?? "");
+  await expect(page.getByRole("button", { name: "Message expression syntax: Request input", exact: true })).toBeVisible();
+  await expect(picker).toHaveValue("customer-id");
+
+  await page.getByRole("tab", { name: "Code" }).click();
+  const code = page.getByRole("textbox", { name: "Activity Definition JSON" });
+  const draft = JSON.parse(await code.inputValue()) as {
+    implementation: {
+      payload: {
+        rootActivity: {
+          structure: {
+            payload: {
+              activities: Array<{ inputs?: Array<{ referenceKey: string; value?: unknown }> }>;
+            };
+          };
+        };
+      };
+    };
+  };
+  expect(draft.implementation.payload.rootActivity.structure.payload.activities[0]?.inputs?.find(input => input.referenceKey === "message")?.value).toMatchObject({
+    expressionType: "WorkflowRequest",
+    value: { memberKey: "customer-id" }
+  });
+
+  await page.getByRole("tab", { name: "Designer" }).click();
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await expect(page.locator(".wf-input-bindings-toggle")).toHaveCount(0);
+  await node.click();
+  await expect(page.getByRole("button", { name: "Message expression syntax: Request input", exact: true })).toBeVisible();
+  await page.locator(".wf-input-bindings-toggle").click();
+  await expect(page.locator(".wf-js-input-bindings").getByLabel("Add activity input")).toHaveValue("customer-id");
+});
+
 test("Activity Definition input bindings use a compact inspector tool beside conversion", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await mockGraphAuthoring(page);

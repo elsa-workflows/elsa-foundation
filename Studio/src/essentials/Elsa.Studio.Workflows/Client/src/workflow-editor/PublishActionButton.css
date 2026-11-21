@@ -4,6 +4,25 @@
   align-items: stretch;
 }
 
+.wf-publish-actions > button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-control);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 0 10px;
+}
+
+.wf-editor-toolbar .wf-publish-actions > button {
+  border-radius: var(--studio-radius-control);
+}
+
 .wf-editor-toolbar .wf-publish-actions > .wf-publish-primary,
 .wf-editor-toolbar .wf-publish-actions > .wf-publish-menu-trigger {
   border-color: color-mix(in srgb, var(--studio-accent) 40%, var(--studio-border));

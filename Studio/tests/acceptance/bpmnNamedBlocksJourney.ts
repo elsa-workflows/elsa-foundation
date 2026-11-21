@@ -114,7 +114,7 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
       const body = (draft: WorkflowDraft | GraphDraft) => "state" in draft ? draft.state.rootActivity : draft.provider.payload.rootActivity;
       await page.goto(host === "workflow" ? `/workflows/definitions?backend=legacy&definition=${definitionId}` : `/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`); await canvas();
       if (host === "workflow") { await page.getByRole("button", { name: "Save", exact: true }).click(); await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved"); }
-      else await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+      else await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
       const undoAction = page.getByRole("button", { name: host === "workflow" ? "Undo" : "Undo Activity Graph edit", exact: true });
       const redoAction = page.getByRole("button", { name: host === "workflow" ? "Redo" : "Redo Activity Graph edit", exact: true });
       if (profile === "authoring") {
