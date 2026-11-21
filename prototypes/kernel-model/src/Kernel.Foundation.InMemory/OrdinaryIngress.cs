@@ -3,7 +3,7 @@ using Durable = Kernel.Durable;
 
 namespace Kernel.Foundation.InMemory;
 
-/// <summary>The bound one-way routes for a generated start and an exact-reference send.</summary>
+/// <summary>The bound one-way routes that target one exact actor life.</summary>
 internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
 {
     public ValueTask<Admission> SendAsync(BoundScope scope, Target.Start target, string id, AddOptions? options = null,
@@ -11,11 +11,9 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        if (id.StartsWith('~')) return new(new Admission(AdmissionOutcome.Refused));
+        if (!Durable.InMemoryStore.IsOutsideMessageId(id)) return new(new Admission(AdmissionOutcome.Refused));
 
-        var spec = target.Spec;
-        var start = new Durable.StartSpec(spec.Type, spec.TypeData, spec.Input, Ephemeral: spec.Ephemeral, History: (Durable.History)spec.History);
-        var receipt = store.AdmitGeneratedFoundationStart(scope.Tenant, id, start, options?.DueAt, options?.KeepFor);
+        var receipt = store.AdmitGeneratedFoundationStart(scope.Tenant, id, Start(target.Spec), options?.DueAt, options?.KeepFor);
         var outcome = receipt.Duplicate ? AdmissionOutcome.Duplicate : AdmissionOutcome.Accepted;
         return new(new Admission(outcome, new ActorRef(receipt.Reference)));
     }
@@ -25,8 +23,7 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        if (id.StartsWith('~') || kind.StartsWith("kernel.", StringComparison.Ordinal) ||
-            kind is Kinds.Start or Kinds.JobFinished or Kinds.Event or Kinds.ChildFinished)
+        if (!Durable.InMemoryStore.IsOutsideMessageId(id) || !IsOrdinary(kind))
             return new(new Admission(AdmissionOutcome.Refused));
 
         var added = store.AddFoundationMessage(scope.Tenant, target.Actor.Id, id, kind, payload, options?.DueAt, options?.KeepFor);
@@ -37,4 +34,28 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
             null => new Admission(AdmissionOutcome.Refused)
         });
     }
+
+    public ValueTask<Admission> SendAsync(BoundScope scope, Target.Key target, string id, string kind, string? payload = null,
+        AddOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (target.Spec is null && !IsOrdinary(kind)) return new(new Admission(AdmissionOutcome.Refused));
+
+        var receipt = store.AdmitFoundationKey(scope.Tenant, target.CallerKey, id, kind, payload,
+            target.Spec is { } spec ? Start(spec) : null, options?.DueAt, options?.KeepFor);
+        return new(receipt.Outcome switch
+        {
+            Durable.InMemoryStore.KeyAdmissionOutcome.Accepted => new Admission(AdmissionOutcome.Accepted, new ActorRef(receipt.Reference!)),
+            Durable.InMemoryStore.KeyAdmissionOutcome.Duplicate => new Admission(AdmissionOutcome.Duplicate, new ActorRef(receipt.Reference!)),
+            Durable.InMemoryStore.KeyAdmissionOutcome.Repeat => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.Repeat),
+            _ => new Admission(AdmissionOutcome.Refused)
+        });
+    }
+
+    private static bool IsOrdinary(string kind) => !kind.StartsWith("kernel.", StringComparison.Ordinal) &&
+        kind is not (Kinds.Start or Kinds.JobFinished or Kinds.Event or Kinds.ChildFinished);
+
+    private static Durable.StartSpec Start(StartSpec spec) =>
+        new(spec.Type, spec.TypeData, spec.Input, Ephemeral: spec.Ephemeral, History: (Durable.History)spec.History);
 }
