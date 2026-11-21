@@ -1,7 +1,7 @@
 import React from "react";
 import "./Button.css";
 
-export type StudioButtonVariant = "primary" | "default" | "ghost";
+export type StudioButtonVariant = "primary" | "default" | "ghost" | "danger";
 export type StudioButtonSize = "sm" | "md";
 
 /**
