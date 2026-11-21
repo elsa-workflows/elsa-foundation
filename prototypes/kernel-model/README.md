@@ -63,6 +63,9 @@ $SIM --seeds 200000 --count 4096                     # K1: the store's virtual p
 $SIM --native --seeds 200000                         # the same with native instances in the mix (40 % of outside actions)
 $SIM --native --seeds 20000 --actions 1000
 $SIM --seed 22 --flaw TrialPerPartition              # replay one seed; prints a shrunk trace when it fails
+$SIM --contract --seeds 100 --actions 300              # K2 public-contract delivery workload
+$SIM --contract --seed 1 --flaw WallClockTimers        # replay the early timer negative control
+$SIM --contract --seed 1 --flaw KeepConsumedMessages  # replay the committed inbox negative control
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
 $SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
@@ -72,6 +75,18 @@ $SIM --seeds 4000 --coverage                         # also count what happened
 $SIM --seeds 5000 --actions 1000 --faults 2          # scale the faults
 $SIM --backlog 1000                                  # how long a backlog of suspects takes to recover
 ```
+
+The K2 contract workload drives `IIngress` and checks `IActorReads`. Each seed boots two caller keys in
+two tenants. It interleaves exact and keyed sends, retries, future inputs, and live event fan-out.
+The driver expires an owner and takes its scopes on a second node. It loses one turn commit before
+it executes and one answer after the batch lands. The oracle reads the paged journal and checks
+once-only effects, order of ordinary inputs, due time and tenant isolation. It also checks the
+committed receipt count and the empty inbox. An adapter can run the same schedule and oracle by
+providing its ingress, reads, and deterministic clock and fault controls.
+
+This slice covers scoped delivery and its ordinary journal observations. The full K2 workload replay
+also needs the other actor and workflow mixes, including jobs, child lifecycles, held inputs and live
+requests. The existing simulation and case suites still exercise these paths independently.
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
 `Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 22 lists the first failing seed of every round-3 flaw (the seeds of earlier flaws, in sections 2 and 3, have since moved), section 24 the two flaws round 4 renamed.
