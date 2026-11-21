@@ -1939,11 +1939,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var original = ticket.Message;
         var creation = original.TargetCreation ?? 0;
         bool MayReturn() => JobMayRun(generation) && Volatile.Read(ref slot.ActiveCreation) == creation;
-        var context = new JobContext(ticket.Message.Target, job.Key, job.Arguments, creation);
         var token = ticket.Cancel!.Token;
         bool entered = false;
         ValueTask<object?> Enter()
         {
+            int attemptNumber;
             lock (slot)
             {
                 if (!JobMayRun(generation) || _releasing || PoisonPending(slot) || slot.PendingJobRestrictions != 0 ||
@@ -1953,7 +1953,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 // Admission happens on the executing thread. Once admitted, ordinary cancellation signals the body.
                 entered = true;
                 Volatile.Write(ref ticket.JobEntered, true);
+                if (ticket.JobEntries < int.MaxValue) ticket.JobEntries++;
+                attemptNumber = ticket.JobEntries;
             }
+            var context = new JobContext(original.Target, job.Key, job.Arguments, creation, attemptNumber);
             return _type.ExecuteJobAsync(job.Model, context, token);
         }
         async Task ExecuteAndPublish(bool scheduled)
@@ -2686,4 +2689,14 @@ internal sealed class Slot
 
 internal sealed record JobTicket(string Model, [property: System.Text.Json.Serialization.JsonConverter(typeof(DurableKeyJson))] string Key, string? Arguments);
 
-internal sealed record JobContext(InstanceRef Instance, string Key, string? Arguments, long Creation = 0) : IJob;
+internal sealed class JobContext(InstanceRef instance, string key, string? arguments, long creation, int attemptNumber) : IJob
+{
+    public InstanceRef Instance { get; } = instance;
+    public string Key { get; } = key;
+    public string? Arguments { get; } = arguments;
+    public long Creation { get; } = creation;
+    public int AttemptNumber { get; } = attemptNumber;
+
+    private string? _attemptId;
+    public string AttemptId => LazyInitializer.EnsureInitialized(ref _attemptId, static () => Guid.NewGuid().ToString("N"));
+}

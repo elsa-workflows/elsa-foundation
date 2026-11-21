@@ -40,6 +40,7 @@ public static class LeaseChecks
         var store = new InMemoryStore(1, () => time);
         var wire = new DelayedCommit(store);
         int oldTurns = 0, newTurns = 0, oldJobs = 0, newJobs = 0, oldEffects = 0;
+        IJob? oldContext = null, newContext = null;
         var effectFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var newWork = new TaskCompletionSource<object?>();
         var oldWork = new TaskCompletionSource<object?>();
@@ -51,9 +52,10 @@ public static class LeaseChecks
             effectFinished.TrySetResult();
             return result;
         }
-        Worker Owner(string node) => new(node, 0, wire, new WorkflowInstance([new Counter(), new HistoryProbe(), new Runner((_, _) =>
+        Worker Owner(string node) => new(node, 0, wire, new WorkflowInstance([new Counter(), new HistoryProbe(), new Runner((job, _) =>
         {
-            if (node == "old") return OldEffect();
+            if (node == "old") { oldContext = job; return OldEffect(); }
+            newContext = job;
             newJobs++; return new ValueTask<object?>(newWork.Task);
         })]), new WorkerOptions { Monotonic = () => time, Flaws = flaw, OnTurn = (_, _, _) => { if (node == "old") oldTurns++; else newTurns++; } });
         async Task Start(Worker owner) { await new DurableHost([owner]).ActivateAsync(0); await owner.PollAsync(); }
@@ -250,6 +252,7 @@ public static class LeaseChecks
         oldJobs = newJobs = oldEffects = 0; oldWork = new TaskCompletionSource<object?>(); newWork = new TaskCompletionSource<object?>();
         effectFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         old = Owner("old"); await Start(old);
+        oldContext = newContext = null;
         await store.AddAsync(new Message("go2", new InstanceRef(id), "go", Json.Write("work"), Start: Runner.Spec));
         await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();
         Check(oldJobs == 1, "the first job began before expiry");
@@ -259,6 +262,12 @@ public static class LeaseChecks
         await effectFinished.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await Drain(replacement, () => Json.Read<RunnerState>(store.Instances[id].State).Log.Contains("result work"));
         Check(oldJobs == 1 && oldEffects == 1 && newJobs == 1, "an already-running external effect can finish after expiry and overlap recovery");
+        var earlierAttempt = oldContext?.AttemptId;
+        var recoveredAttempt = newContext?.AttemptId;
+        Check(earlierAttempt is { Length: > 0 } && recoveredAttempt is { Length: > 0 } && earlierAttempt != recoveredAttempt &&
+              oldContext is { AttemptNumber: 1 } && newContext is { AttemptNumber: 1 } &&
+              oldContext.AttemptId == earlierAttempt && newContext.AttemptId == recoveredAttempt,
+            "the real old and recovered executions have stable distinct attempt ids and safe execution lower bounds");
         return failures == 0 ? 0 : 1;
     }
 

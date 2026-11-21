@@ -214,7 +214,7 @@ reaches the foundation only through `IActorTurn`.
 | Contract item | Prototype today (`prototypes/kernel-model`) |
 |---|---|
 | `ActorRef`, exact ref | `InstanceRef` with the partition in the id; `CreationProtocol.Origin(id, creation)` and `CreationAddress` |
-| `IActorType`, `IJob.AttemptId` | `IActorType` in `Kernel.Durable/Turns.cs` (12 members on main) and `WorkflowInstance`; the attempt id `{ticket id}@{epoch}` and the ticket's recorded attempts ([job workers](job-workers.md#release-1)) |
+| `IActorType`, `IJob.AttemptId` | `IActorType` in `Kernel.Durable/Turns.cs` and `WorkflowInstance`. The built-in worker supplies one opaque id per physical job entry and counts entries it observes for that delivery. See [job workers](job-workers.md#release-1) for the external worker protocol. |
 | `IActorTurn` | `DurableTurn` plus `TurnInput`, with `Turn` in `Kernel.Workflows` adding the workflow part and `Seal` building `InstanceRow` and `TurnOutcome` |
 | `End`, `SetHeader`, `ActorHeader` | `InstanceRow`'s columns `Status`, `Model`, `Definition`, `Suspended`, `Children`, `Fault`, `Parent`, `StateVersion`; `EndedAt` and the end mark are the terminal mark the data lifecycle page adds; `Labels` are new projected columns (K3) |
 | The atomic outcome | `Worker` flush → `IKernelStore.CommitAsync(CommitBatch)` with the k-row fence |
