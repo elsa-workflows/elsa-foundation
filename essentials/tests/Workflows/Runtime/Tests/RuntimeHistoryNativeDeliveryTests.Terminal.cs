@@ -261,7 +261,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         }
         else
         {
-            AssertTerminalFailure(result);
+            AssertTerminalFailure(result, "runtime.history.integrity");
             Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         }
         Assert.Equal(0, f.Activator.Calls);
