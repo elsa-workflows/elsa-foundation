@@ -1,4 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+async function openFormAction(page: Page, row: Locator, action: "Edit" | "View") {
+  await row.getByRole("button", { name: /^Actions for / }).click();
+  await page.getByRole("menuitem", { name: action, exact: true }).click();
+}
 
 for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
   test(`User Tasks collection and details ${width}px ${theme}`, async ({ page }, info) => {
@@ -27,7 +32,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await expect(link).toBeVisible();
     await link.press("Enter");
     const detail = page.getByRole("region", { name: /^Review purchase request/ });
-    await expect(detail.getByRole("heading")).toBeFocused();
+    await expect(detail.getByRole("heading", { name: /^Review purchase request/ })).toBeFocused();
     expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
     await detail.getByRole("textbox", { name: "Note" }).fill("Reviewed with keyboard");
     await expect(detail.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
@@ -49,34 +54,28 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await page.goto(`/user-tasks-ux.html?forms&populated-forms&theme=${theme}`);
     const formRow = page.getByRole("row").filter({ hasText: "purchase-form-with-a-long-identifier" });
     await expect(formRow).toContainText("Published · v1");
-    const nextVersion = page.getByRole("button", { name: "Create next version", exact: true });
-    await expect(nextVersion).toBeVisible();
-    expect((await nextVersion.boundingBox())!.width).toBeGreaterThan(120);
-    expect((await nextVersion.boundingBox())!.height).toBeLessThan(48);
-    const edit = formRow.getByRole("button", { name: "Edit", exact: true });
-    await expect(edit).toBeVisible();
-    expect((await edit.boundingBox())!.height).toBeLessThan(48);
+    const createForm = page.getByRole("button", { name: "Create form", exact: true });
+    await expect(createForm).toBeVisible();
+    expect((await createForm.boundingBox())!.width).toBeGreaterThan(90);
+    expect((await createForm.boundingBox())!.height).toBeLessThan(48);
+    const formActions = formRow.getByRole("button", { name: "Actions for Purchase response", exact: true });
+    await expect(formActions).toBeVisible();
+    expect((await formActions.boundingBox())!.height).toBeLessThan(48);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("forms-list.png"), fullPage: true });
-    await nextVersion.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath("form-version-action.png"), fullPage: true });
-    await page.getByRole("button", { name: "Create form version", exact: true }).first().press("Enter");
-    await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
-    await expect(page.getByRole("region", { name: "Reusable form versions" })).toHaveCount(0);
-    await page.getByRole("complementary", { name: "Field palette", exact: true }).getByRole("button", { name: "Text input", exact: true }).click();
-    const checkbox = page.getByRole("checkbox", { name: "Required", exact: true });
-    expect((await checkbox.boundingBox())!.width).toBeLessThanOrEqual(20);
-    expect((await checkbox.boundingBox())!.height).toBeLessThanOrEqual(20);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: info.outputPath("form-authoring.png"), fullPage: true });
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Create form version", exact: true }).first()).toBeFocused();
-
-    await edit.press("Enter");
-    await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeDisabled();
-    await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toHaveValue("purchase-form-with-a-long-identifier");
-    if (width <= 600) await page.getByRole("button", { name: "Expand controls panel" }).click();
-    await page.getByRole("complementary", { name: "Field palette", exact: true }).getByRole("button", { name: "Text input", exact: true }).click();
+    await formActions.click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+    const formId = page.getByRole("textbox", { name: "Form ID", exact: true });
+    if (!(await formId.isVisible())) await page.getByRole("button", { name: "Expand properties panel" }).click();
+    await expect(formId).toBeDisabled();
+    await expect(formId).toHaveValue("purchase-form-with-a-long-identifier");
+    await expect(page.getByRole("tab", { name: "Versions", exact: true })).toBeVisible();
+    const fieldPalette = page.getByRole("complementary", { name: "Field palette", exact: true });
+    const expandControls = page.getByRole("button", { name: "Expand controls panel", exact: true });
+    if (await expandControls.isVisible()) await expandControls.click();
+    await fieldPalette.getByRole("button", { name: "Text input", exact: true }).click();
+    const expandProperties = page.getByRole("button", { name: "Expand properties panel", exact: true });
+    if (await expandProperties.isVisible()) await expandProperties.click();
     const existingFormCheckbox = page.getByRole("checkbox", { name: "Required", exact: true });
     expect((await existingFormCheckbox.boundingBox())!.width).toBeLessThanOrEqual(20);
     expect((await existingFormCheckbox.boundingBox())!.height).toBeLessThanOrEqual(20);
@@ -84,6 +83,22 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await page.screenshot({ path: info.outputPath("form-existing-authoring.png"), fullPage: true });
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(page.getByRole("button", { name: "Purchase response", exact: true })).toBeFocused();
+
+    await createForm.click();
+    if (!(await formId.isVisible())) await page.getByRole("button", { name: "Expand properties panel" }).click();
+    await expect(formId).toBeEnabled();
+    await formId.fill("new-form");
+    await page.getByRole("textbox", { name: "Name", exact: true }).fill("New form");
+    if (await expandControls.isVisible()) await expandControls.click();
+    await fieldPalette.getByRole("button", { name: "Text input", exact: true }).click();
+    if (await expandProperties.isVisible()) await expandProperties.click();
+    const newFormCheckbox = page.getByRole("checkbox", { name: "Required", exact: true });
+    expect((await newFormCheckbox.boundingBox())!.width).toBeLessThanOrEqual(20);
+    expect((await newFormCheckbox.boundingBox())!.height).toBeLessThanOrEqual(20);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath("form-authoring.png"), fullPage: true });
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(createForm).toBeFocused();
   });
 }
 
@@ -129,7 +144,7 @@ for (const width of [360, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/user-tasks-ux.html?forms&populated-forms&form-history");
     const row = page.getByRole("row").filter({ hasText: "purchase-form-history" });
-    await row.getByRole("button", { name: "Edit", exact: true }).click();
+    await openFormAction(page, row, "Edit");
     const workspace = page.getByRole("region", { name: "Form editor", exact: true });
     const frame = (await workspace.boundingBox())!;
     expect(frame.width).toBeGreaterThan(width - 70);
@@ -172,7 +187,7 @@ for (const width of [360, 1440]) {
     await page.getByRole("button", { name: "Back to forms", exact: true }).click();
     await expect(page.getByText("1 form shown", { exact: true })).toBeVisible();
     await expect(row.getByRole("button", { name: "Unsaved designer copy", exact: true })).toBeFocused();
-    await row.getByRole("button", { name: "Edit", exact: true }).click();
+    await openFormAction(page, row, "Edit");
     await versionsTab.click();
     await expect(history.getByRole("button", { name: "Select version 2", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Back to forms", exact: true })).toBeVisible();
@@ -185,7 +200,7 @@ for (const width of [360, 1440]) {
 test("unapplied form source stays put when Versions is selected", async ({ page }) => {
   await page.goto("/user-tasks-ux.html?forms&populated-forms&form-history");
   const row = page.getByRole("row").filter({ hasText: "purchase-form-history" });
-  await row.getByRole("button", { name: "Edit", exact: true }).click();
+  await openFormAction(page, row, "Edit");
   const sourceTab = page.getByRole("tab", { name: "Source", exact: true });
   const versionsTab = page.getByRole("tab", { name: "Versions", exact: true });
   await sourceTab.click();
@@ -245,7 +260,8 @@ test("legacy history failure preserves the latest form snapshot", async ({ page 
 
 test("read-only form readers can inspect published versions", async ({ page }) => {
   await page.goto("/user-tasks-ux.html?forms&form-history&read-only");
-  await page.getByRole("row").filter({ hasText: "purchase-form-history" }).getByRole("button", { name: "View", exact: true }).click();
+  const row = page.getByRole("row").filter({ hasText: "purchase-form-history" });
+  await openFormAction(page, row, "View");
   await page.getByRole("tab", { name: "Versions", exact: true }).click();
   const history = page.getByRole("region", { name: "Published form versions", exact: true });
   await expect(history.getByRole("button", { name: "Select version 2", exact: true })).toBeVisible();
@@ -255,7 +271,8 @@ test("read-only form readers can inspect published versions", async ({ page }) =
 
 test("a failed older-form page leaves the selected published version available", async ({ page }) => {
   await page.goto("/user-tasks-ux.html?forms&populated-forms&form-history&form-history-error");
-  await page.getByRole("row").filter({ hasText: "purchase-form-history" }).getByRole("button", { name: "Edit", exact: true }).click();
+  const row = page.getByRole("row").filter({ hasText: "purchase-form-history" });
+  await openFormAction(page, row, "Edit");
   await page.getByRole("tab", { name: "Versions", exact: true }).click();
   const history = page.getByRole("region", { name: "Published form versions", exact: true });
   await history.getByRole("button", { name: "Load older versions", exact: true }).click();

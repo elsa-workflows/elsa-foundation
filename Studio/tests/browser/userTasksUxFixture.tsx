@@ -137,7 +137,7 @@ function Fixture() {
     for (const key of ["view", "search", "after", "focusTask", "backend"]) {
       if (destination.searchParams.has(key)) query.set(key, destination.searchParams.get(key)!); else query.delete(key);
     }
-    history.replaceState(history.state, "", `${fixturePath}?${query}`);
+    window.history.replaceState(window.history.state, "", `${fixturePath}?${query}`);
     setTaskId(id);
   };
   return params.has("forms") ? <FormsPage api={api} /> : taskId ? <TaskDetailPage api={api} id={taskId} navigate={navigate} /> : <TasksPage api={api} navigate={navigate} />;

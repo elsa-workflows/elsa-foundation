@@ -2,20 +2,22 @@ import { expect, test } from "@playwright/test";
 
 test.use({ viewport: { width: 1440, height: 1000 } });
 
-test("opens purpose groups and keeps domain destinations nested under their parent", async ({ page }) => {
+test("opens purpose groups and routes through nested destinations", async ({ page }) => {
   await page.goto("/?mode=nav-placement");
   for (const name of ["Build", "Operate", "Integrations"]) await expect(page.getByRole("button", { name, exact: true })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("link", { name: "User tasks", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "More tools" })).toHaveCount(0);
   const sidebar = page.locator(".sidebar");
-  for (const name of ["Executables", "Console", "Runtime evidence settings", "Activity availability"]) await expect(sidebar.getByRole("link", { name, exact: true })).toHaveCount(0);
+  for (const name of ["Activity definitions", "Templates", "Definitions", "Executables"]) await expect(sidebar.getByRole("link", { name, exact: true })).toBeVisible();
+  for (const name of ["Console", "Runtime evidence settings", "Activity availability"]) await expect(sidebar.getByRole("link", { name, exact: true })).toHaveCount(0);
   // #4903 keeps Library as a sidebar parent with child links instead of local "Library views".
   await sidebar.getByRole("link", { name: "Templates", exact: true }).click();
   await expect(sidebar.getByRole("link", { name: "Templates", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("navigation", { name: "Library views" })).toHaveCount(0);
-  await sidebar.getByRole("link", { name: "Workflows", exact: true }).click();
-  await page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true }).click();
-  await expect(sidebar.getByRole("link", { name: "Workflows", exact: true })).toHaveAttribute("aria-current", "page");
+  await sidebar.getByRole("link", { name: "Definitions", exact: true }).click();
+  await expect(sidebar.getByRole("link", { name: "Definitions", exact: true })).toHaveAttribute("aria-current", "page");
+  await sidebar.getByRole("link", { name: "Executables", exact: true }).click();
+  await expect(sidebar.getByRole("link", { name: "Executables", exact: true })).toHaveAttribute("aria-current", "page");
   await sidebar.getByRole("link", { name: "Diagnostics", exact: true }).click();
   await page.getByRole("navigation", { name: "Diagnostics views" }).getByRole("link", { name: "Structured logs", exact: true }).click();
   await expect(sidebar.getByRole("link", { name: "Diagnostics", exact: true })).toHaveAttribute("aria-current", "page");
