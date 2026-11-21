@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 /// K1b, NL-9 on the prototype engines (ownership-and-fencing.md, the node's heartbeat, "Lock order"): takes, a heartbeat
 /// and a commit overlap, and no cycle may form. An outside transaction holds rows so that each interleaving is forced:
 /// the probe waits until the engine reports the sessions waiting, then releases the hold (its write is rolled back).
-///   x nodelease postgres|sqlserver|mysql "connection" case=heartbeat|mutual|heartbeats [mutation=subquery|rr|membership] [expect=none|deadlock] [rcsi=0]
+///   x nodelease postgres|sqlserver|mysql "connection" case=heartbeat|mutual|heartbeats [mutation=subquery|rr|membership|rr-subquery|share] [expect=none|deadlock] [rcsi=0]
 /// case=heartbeat: r owns 1, p owns 2 and 3, both past their node leases. The hold is on partition row 0. p's heartbeat
 ///   is sent: it writes p's record, and its read of the partition rows waits at row 0 where reads take locks. Then q's
 ///   take of {1, 2} is sent; on release, p's commit in 3 and p's gain take of 5 are sent too.
@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 /// mutation=subquery (EfStore.NodeReadInUpdate) reads the node records inside the take's update, after it locked rows;
 /// mutation=rr (EfStore.RepeatableReadTake) runs the take at REPEATABLE READ; mutation=membership
 /// (EfStore.MembershipInHeartbeat) reads the node count and the free list inside the heartbeat's transaction.
+/// NL-C1 adds MySQL rr-subquery (both take mutations) and PostgreSQL share (FOR SHARE on the other owners' records).
 /// The exit code is the verdict. expect=deadlock fails unless the run deadlocked; expect=none (the default as built) fails
 /// if it did, or if any answer failed or hung. A negative (any mutation=) must deadlock: its default is expect=deadlock,
 /// and a negative that does not deadlock fails whatever its expect=. A mutual run, and any run where reads take locks
@@ -34,7 +35,16 @@ static class NodeLeaseRun
         var (admin, store) = (target.Admins(), target.Store(target.Workers()));
         var (kind, mutation) = (target.Get("case", "heartbeat"), target.Get("mutation", ""));
         var (negative, expect) = (mutation != "", target.Get("expect", mutation != "" ? "deadlock" : "none"));
-        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; case {kind}; take {mutation switch { "subquery" => "READS THE NODE RECORDS IN ITS UPDATE (the negative)", "rr" => "AT REPEATABLE READ (the negative)", "membership" => "with the heartbeat READING MEMBERSHIP IN ITS TRANSACTION (the negative)", _ => "as built" }}; expect {expect}");
+        var take = mutation switch
+        {
+            "subquery" => "reads the node records in its update",
+            "rr" => "at repeatable read",
+            "rr-subquery" => "at repeatable read with a subquery",
+            "share" => "reads the node records FOR SHARE",
+            "membership" => "with the heartbeat reading membership in its transaction",
+            _ => "as built",
+        };
+        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; case {kind}; take {take}; expect {expect}");
         var held = new Dictionary<string, OwnedLease>();
         foreach (var (node, set) in kind == "mutual" ? new[] { ("a", new[] { 1, 2 }), ("b", [3, 4]) } : [("r", [1]), ("p", [2, 3])])     // heartbeats: as heartbeat
             if ((held[node] = await store.TakeAsync(set, node, Brief)).Taken.Count != set.Length) { Console.WriteLine($"the probe could not set up {node}"); return 2; }

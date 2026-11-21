@@ -19,6 +19,9 @@ public sealed partial class EfStore
     /// <summary>MUTATION, for NL-9: the take's transaction runs at REPEATABLE READ, so its read of a node record holds until it ends.</summary>
     public bool RepeatableReadTake { get; init; }
 
+    /// <summary>MUTATION, for NL-C1: the PostgreSQL take locks every other owner's node record with FOR SHARE.</summary>
+    public bool LockNodeRead { get; init; }
+
     /// <summary>MUTATION, for NL-9: the heartbeat reads membership (the node count and the free list) inside its transaction, while it holds its own record.</summary>
     public bool MembershipInHeartbeat { get; init; }
 
@@ -101,7 +104,12 @@ public sealed partial class EfStore
                 if (owners.Count > 0)
                 {
                     var slots = string.Join(", ", owners.Select((_, i) => $"{{{i}}}"));
-                    var live = await db.Database.SqlQueryRaw<string>(Q($"""SELECT "Id" AS "Value" FROM "Nodes" WHERE "Id" IN ({slots}) AND "LeaseUntil" >= {Now}"""), [.. owners]).ToListAsync(deadline.Token);
+                    // Under the PostgreSQL mutation, lock even an expired owner's row before testing its lease.
+                    var ownerRows = $"""SELECT "Id", "LeaseUntil" FROM "Nodes" WHERE "Id" IN ({slots})""";
+                    var sql = LockNodeRead && postgres && Engine is null
+                        ? $"""WITH locked AS MATERIALIZED ({ownerRows} FOR SHARE) SELECT "Id" AS "Value" FROM locked WHERE "LeaseUntil" >= {Now}"""
+                        : $"""SELECT "Id" AS "Value" FROM "Nodes" WHERE "Id" IN ({slots}) AND "LeaseUntil" >= {Now}""";
+                    var live = await db.Database.SqlQueryRaw<string>(Q(sql), [.. owners]).ToListAsync(deadline.Token);
                     expired = [.. owners.Except(live, StringComparer.Ordinal)];
                 }
             }

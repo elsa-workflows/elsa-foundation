@@ -17,8 +17,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 /// <c>sim --placement-check</c> runs it); contiguous sets are the fair ranges. Each row runs <c>runs</c> times from its own
 /// setup, which is not counted; the counts are the most common run's (the runs whose counts differ are listed) and the time is the
 /// median. Counted as the cost runs count: commands, BEGINs, COMMITs, the TCP round trips through the proxy and, on
-/// PostgreSQL, the Execute frames (one per statement). "Rows" are the fence rows the operation wrote, read back from
-/// the Partitions table before and after (owner, epoch, lease or position changed).
+/// PostgreSQL, the Execute frames (one per statement). "Changed" counts the partition rows whose owner, epoch or position
+/// changed between the two reads. WAL measurement covers the physical writes.
 /// </summary>
 static class SetCost
 {
