@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -2116,7 +2117,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             catch (Exception e) { error = e.Message; }
             if (!MayReturn() || token.IsCancellationRequested) return;
-            var completed = entered ? original with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(job.Key, result, error)) } : null;
+            var completed = entered ? original with { Kind = Kinds.JobFinished, Payload = EncodeJobResult(job.Key, result, error) } : null;
             // Timestamp and enqueue together so simultaneous callbacks retain their observation order. The owner
             // may receive this after a command matures. Its later clock cannot replace the original readiness time.
             lock (publications)
@@ -2146,6 +2147,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
             try { await scheduled.Unwrap().ConfigureAwait(false); }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { /* cancelled while queued */ }
         }
+    }
+
+    private const int JobResultPayloadLimit = (16 * 1024 - 2 * 24) * 1024;
+
+    private string EncodeJobResult(string key, string? result, string? error)
+    {
+        var unbounded = Has(Flaw.UnboundedJobResult);
+        // The serialized job result is itself a string in the completion envelope. Count that envelope as stored.
+        if (unbounded || (long)(result?.Length ?? 0) + (error?.Length ?? 0) <= JobResultPayloadLimit)
+        {
+            var payload = Json.Write(new JobFinished(key, result, error));
+            if (unbounded || Encoding.UTF8.GetByteCount(payload) <= JobResultPayloadLimit) return payload;
+        }
+        return Json.Write(new JobFinished(key, null, "result too large"));
     }
 
     private long ReceiveJobPublications(CancellationToken cancellationToken = default)
