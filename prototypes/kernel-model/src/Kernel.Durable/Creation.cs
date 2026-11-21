@@ -150,7 +150,10 @@ public static class CreationProtocol
         if (HeaderError(row, born: previous is null or { Retired: true }) is { } header) RefuseWrite(header);
         if (row is { Creation: 0, Retired: true } && !IsPhysicalRetirement(turn)) RefuseWrite("legacy row cannot carry a partial creation header");
         if (row.PendingStart is { } pending && (previous is { Retired: false } && previous.PendingStart != pending ||
-            previous?.PendingStart != pending && turn.Held?.Contains(pending) != true)) RefuseWrite("invalid held start continuation");
+            previous?.PendingStart != pending && turn.Held?.Contains(pending) != true &&
+            !(row.FoundationInlineBirth?.Creator == pending && turn.FoundationHeldPromotions?.Contains(pending) == true &&
+              turn.Sent.Any(message => message.InboxKey == pending))))
+            RefuseWrite("invalid held start continuation");
         if (previous?.PendingStart is { } retained && row.PendingStart is null && row.Status == InstanceStatus.Running &&
             !turn.Consumed.Concat(turn.Done).Contains(retained)) RefuseWrite("held start cleared without consuming its delivery");
         if (row.Retired)

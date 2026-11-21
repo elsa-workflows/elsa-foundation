@@ -5,7 +5,7 @@ namespace Kernel.Foundation.InMemory;
 
 /// <summary>The built-in in-memory ingress over the existing bound actor and event admission routes.</summary>
 internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Requests requests, string node,
-    Func<BoundScope, string, bool>? authorizeOperator = null) : IIngress
+    Func<BoundScope, string, bool>? authorizeOperator = null, Durable.Worker? inlineOwner = null) : IIngress
 {
     private readonly OrdinaryIngress _ordinary = new(store);
     private readonly EventIngress _event = new(store, requests, node);
@@ -30,8 +30,10 @@ internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Reque
         var open = requests.OpenBound(id, request.Deadline, scope.Tenant, request.Ambient);
         try
         {
-            var admission = await SendToActor(scope, target, id, kind, payload, add, cancellationToken,
-                open.ReplyAddress(node, request.ReleaseBeforeCommit));
+            var replyTo = open.ReplyAddress(node, request.ReleaseBeforeCommit);
+            var admission = request.Inline && target is Target.Start { Spec.Ephemeral: true } start && inlineOwner?.Node == node
+                ? await _ordinary.SendAsync(scope, start, id, add, cancellationToken, replyTo, inlineOwner)
+                : await SendToActor(scope, target, id, kind, payload, add, cancellationToken, replyTo);
             if (admission.Outcome == AdmissionOutcome.Refused)
                 return new(null, null, Error: admission.Reason switch
                 {

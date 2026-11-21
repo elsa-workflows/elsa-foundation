@@ -79,6 +79,8 @@ $SIM --contract-events --seed 1 --flaw CorrelationForgets
 $SIM --contract-events --seed 1 --flaw KeepConsumedMessages
 $SIM --contract-http --seeds 100                      # immediate, early, timer, job, and resumed requests
 $SIM --contract-http --seed 1 --flaw EmitBeforeCommit
+$SIM --inline-ephemeral-check                        # public write-free completion, short waits and atomic promotion
+$SIM --inline-ephemeral-check --flaw ForgetShortWaits
 $SIM --contract-jobs --seeds 100                     # public Runner, Fragile and nested Tree workloads
 $SIM --contract-jobs --seed 1 --flaw VolatileJobTicket
 $SIM --contract-jobs --seed 1 --flaw JobPoisonAsError

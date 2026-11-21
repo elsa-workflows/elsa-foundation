@@ -192,6 +192,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             long MarkEpoch(MessageRow row) => Has(Flaw.SeenAtNodeEpoch) && fences.Count > 0 ? fences.Max(f => f.Epoch) : epochs.GetValueOrDefault(row.Message.Target.Partition, batch.Epoch);
 
             Dictionary<InboxKey, ReferenceBinding>? childBindings = null;
+            Dictionary<string, ReferenceBinding>? inlineRoots = null;
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
@@ -210,16 +211,19 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
-                    foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription);
                     StoreBatchRules.ValidateActorSends(turn, previous);
                     ValidateFoundationHeader(turn);
+                    var inlineRoot = turn.Row is { FoundationInlineBirth: not null } local ? BindInlineRoot(local) : null;
+                    if (inlineRoot is not null && !(inlineRoots ??= new(StringComparer.Ordinal)).TryAdd(turn.Instance, inlineRoot))
+                        Diverged($"two inline births for {turn.Instance}");
+                    foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription, inlineRoot);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
                     {
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
                         if (!message.BindFoundationChild) continue;
-                        var binding = BindChild(turn, previous, message);
+                        var binding = BindChild(turn, previous, message, inlineRoot);
                         childBindings ??= [];
                         childAddresses ??= [];
                         childReferences ??= new(StringComparer.Ordinal);
@@ -264,7 +268,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 }
                 if (turn.Row is { } stored)
                 {
-                    Instances[stored.Id] = CommitClockFacts.Stamp(stored, now);
+                    if (inlineRoots?.GetValueOrDefault(stored.Id) is { } root) InsertReference(root);
+                    Instances[stored.Id] = CommitClockFacts.Stamp(stored.WithoutInlineBirth(), now);
                     RecordFoundationMetadata(turn, stored, now);
                 }
                 if (turn.Delete)
@@ -287,7 +292,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var message in turn.Sent)
                 {
                     // Messages the owner hands over in memory to its own partition are written as seen already.
-                    Messages[message.InboxKey] = new MessageRow(message, ++_seq, batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0);
+                    Messages[message.InboxKey] = new MessageRow(message, ++_seq, batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0)
+                    {
+                        Held = turn.FoundationHeldPromotions?.Contains(message.InboxKey) == true
+                    };
                     seqs.Add(_seq);
                     if (childBindings?.GetValueOrDefault(message.InboxKey) is { } binding) InsertReference(binding);
                 }
@@ -592,10 +600,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         return default;
     }
 
-    private void RequireSameSubscriptionScope(SubscriptionRow subscription)
+    private void RequireSameSubscriptionScope(SubscriptionRow subscription, ReferenceBinding? inlineRoot = null)
     {
-        var targetTenant = subscription.Creation is > 0
-            ? _referenceBirths.GetValueOrDefault(new(subscription.Instance, subscription.Creation))?.Tenant : null;
+        var target = new CreationAddress(subscription.Instance, subscription.Creation);
+        var targetTenant = inlineRoot?.Address == target ? inlineRoot.Tenant
+            : subscription.Creation > 0 ? _referenceBirths.GetValueOrDefault(target)?.Tenant : null;
         if (subscription.Start is null && targetTenant != subscription.FoundationTenant)
             throw new StoreException(Failure.Definite, "The subscription's scope does not own the target creation.");
         if (Subscriptions.TryGetValue(subscription, out var previous) && previous.FoundationTenant != subscription.FoundationTenant)
