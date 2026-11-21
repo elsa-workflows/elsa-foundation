@@ -66,6 +66,9 @@ $SIM --seed 22 --flaw TrialPerPartition              # replay one seed; prints a
 $SIM --contract --seeds 100 --actions 300              # K2 public-contract delivery workload
 $SIM --contract --seed 1 --flaw WallClockTimers        # replay the early timer negative control
 $SIM --contract --seed 1 --flaw KeepConsumedMessages  # replay the committed inbox negative control
+$SIM --contract-native --seeds 100                   # run the original Native mix through the public actor turn
+$SIM --contract-native --seed 1 --native-flaw UnstableEffectKey
+$SIM --contract-native --seed 1 --native-flaw JoinWithoutGuard
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
 $SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
@@ -84,9 +87,18 @@ once-only effects, order of ordinary inputs, due time and tenant isolation. It a
 committed receipt count and the empty inbox. An adapter can run the same schedule and oracle by
 providing its ingress, reads, and deterministic clock and fault controls.
 
-This slice covers scoped delivery and its ordinary journal observations. The full K2 workload replay
-also needs the other actor and workflow mixes, including jobs, child lifecycles, held inputs and live
-requests. The existing simulation and case suites still exercise these paths independently.
+The Native workload uses the original nine `NativeWorkflows.Mix` definitions. It starts them through
+`WorkflowRuntime` and drives the same clock and owner controls. A pending Native timer crosses takeover,
+the Balanced outbound workflow replays a lost write, and the built-in publisher advances a live Flowchart
+after its commit answer is lost. The seeded schedule varies signals, due times, takeovers and the execution
+mode of the other workflows. Public journal and read observations check the background job, attached and
+detached children, threshold joins, graph arrivals and completion. The observed HTTP and email effects
+check that a replay keeps its key and that different activations keep distinct keys.
+
+The seeded contract workloads cover scoped delivery and Native workflows. The focused
+[held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live response after
+takeover and an input that stays durable across local reset. The remaining legacy transport and actor
+mixes still use their separate simulation and case suites.
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
 `Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 22 lists the first failing seed of every round-3 flaw (the seeds of earlier flaws, in sections 2 and 3, have since moved), section 24 the two flaws round 4 renamed.
