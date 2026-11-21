@@ -1,3 +1,6 @@
+using System.Collections.Frozen;
+using System.Globalization;
+using System.Text;
 using System.Security.Cryptography;
 using Kernel.Runtime;
 
@@ -6,7 +9,8 @@ namespace Kernel.Durable;
 public sealed partial class InMemoryStore
 {
     private sealed record ReferenceBinding(string Tenant, string Reference, CreationAddress Address, InboxKey Creator, string Fingerprint);
-    internal sealed record ActorCheckpoint(string Reference, InstanceRow Row, long? EndedAt);
+    internal sealed record FoundationParkMark(long Revision, long At);
+    internal sealed record ActorCheckpoint(string Reference, InstanceRow Row, long? EndedAt, FoundationHeaderChange Header, FoundationParkMark? Park);
     internal sealed record ActorRead(long AsOf, ActorCheckpoint? Actor);
     internal sealed record ActorReadSet(long AsOf, IReadOnlyList<ActorCheckpoint> Actors);
 
@@ -14,6 +18,8 @@ public sealed partial class InMemoryStore
     private readonly Dictionary<string, ReferenceBinding> _referenceBindings = new(StringComparer.Ordinal);
     private readonly Dictionary<CreationAddress, ReferenceBinding> _referenceBirths = [];
     private readonly Dictionary<CreationAddress, long> _foundationEnds = [];
+    private readonly Dictionary<CreationAddress, FoundationHeaderChange> _foundationHeaders = [];
+    private readonly Dictionary<CreationAddress, FoundationParkMark> _foundationParks = [];
 
     // A turn may form the ref for a prospective child before commit. Until the creator is stored, it has no binding.
     internal string ReferenceFor(string tenant, CreationAddress address)
@@ -104,16 +110,55 @@ public sealed partial class InMemoryStore
     }
 
     private ActorCheckpoint Checkpoint(InstanceRow row, ReferenceBinding binding) =>
-        new(binding.Reference, row, _foundationEnds.TryGetValue(binding.Address, out var endedAt) ? endedAt : null);
+        new(binding.Reference, row, _foundationEnds.TryGetValue(binding.Address, out var endedAt) ? endedAt : null,
+            _foundationHeaders.GetValueOrDefault(binding.Address) ?? LegacyProjection(row),
+            _foundationParks.GetValueOrDefault(binding.Address));
 
-    private void RecordFoundationEnd(InstanceRow row, long now)
+    private static FoundationHeaderChange LegacyProjection(InstanceRow row) => new(row.Definition,
+        new Dictionary<string, string>
+        {
+            ["definition"] = row.Definition,
+            ["version"] = row.StateVersion.ToString(CultureInfo.InvariantCulture)
+        }.ToFrozenDictionary(StringComparer.Ordinal));
+
+    private static void ValidateFoundationHeader(TurnCommit turn)
+    {
+        if (turn.FoundationHeader is not { } header) return;
+        if (turn.Row is not { Retired: false } || header.Labels.Count > 4 ||
+            header.Labels.Any(label => Encoding.UTF8.GetByteCount(label.Key) > 1024 || Encoding.UTF8.GetByteCount(label.Value) > 1024))
+            throw new StoreException(Failure.Definite, "Actor headers carry at most four labels, with each name and value at most 1,024 bytes.");
+    }
+
+    private void RecordFoundationMetadata(TurnCommit turn, InstanceRow row, long now)
     {
         if (_referenceBirths.Count == 0) return;
         var address = new CreationAddress(row.Id, row.Creation);
-        if (row.Retired || row.Status == InstanceStatus.Running)
+        if (!_referenceBirths.ContainsKey(address)) return;
+        if (row.Retired)
+        {
+            RemoveFoundationMetadata(address);
+            return;
+        }
+
+        if (turn.FoundationHeader is { } replacement)
+            _foundationHeaders[address] = new(replacement.TypeData, replacement.Labels.ToFrozenDictionary(StringComparer.Ordinal));
+
+        if (row.Status == InstanceStatus.Running)
+        {
             _foundationEnds.Remove(address);
-        else if (_referenceBirths.ContainsKey(address))
+            _foundationParks.Remove(address);
+        }
+        else
             _foundationEnds.TryAdd(address, now);
+        if (turn.OpensPark)
+            _foundationParks[address] = new(row.Revision, now);
+    }
+
+    private void RemoveFoundationMetadata(CreationAddress address)
+    {
+        _foundationEnds.Remove(address);
+        _foundationHeaders.Remove(address);
+        _foundationParks.Remove(address);
     }
 
     /// <summary>Resolve an outside exact send and insert its delivery in one operation.

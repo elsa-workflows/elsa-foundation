@@ -23,7 +23,7 @@ internal static class ActorListChecks
         Add("acme", "wrong-definition", "finish", definition: "other");
         Add("acme", "wrong-model", "finish", model: "other");
         var parked = Add("acme", "park", "park");
-        Add("acme", "running", "wait");
+        var authoredFault = Add("acme", "authored-fault", "wait");
         Add("other", "elsewhere", "finish");
 
         Worker Owner(string name) => new(name, 0, store, new WorkflowInstance([new Probe("list"), new Probe("other")]),
@@ -39,6 +39,28 @@ internal static class ActorListChecks
         var reader = new ActorList(store, 2);
         var labels = new Dictionary<string, string> { ["version"] = "1", ["definition"] = "invoice" };
         var query = new Contract.ActorQuery("list", Contract.ActorStatus.Finished, labels, stamp + 1, Parked: false);
+        var source = store.ReadFoundationActor("acme", authoredFault).Actor!.Row;
+        var claimed = source with { Revision = source.Revision + 1, Status = InstanceStatus.Faulted, Fault = "actor-owned outcome" };
+        var custom = new Dictionary<string, string> { ["region"] = "west" };
+        var headerUpdate = new TurnCommit(source.Id, claimed, source.Revision, [], [], [], [], [], "[\"ended\"]")
+        { FoundationHeader = new("opaque data", custom) };
+        var fence = store.Partitions[0];
+        var batch = new CommitBatch(0, fence.Epoch, fence.Position, TimeSpan.FromSeconds(10), false, [headerUpdate], [], []);
+        check((await store.CommitAsync(batch)).Landed, "the fenced checkpoint stores custom actor header data");
+        custom["region"] = "later caller mutation";
+        var listedCustom = await reader.ListAsync(scope, new(Labels: new Dictionary<string, string> { ["region"] = "west" }));
+        check(listedCustom.Items is [{ Header.TypeData: "opaque data", Header.Status: Contract.ActorStatus.Faulted, Park: null }],
+            "committed custom labels drive the list and an actor-authored fault has no Park mark");
+
+        var tooMany = Enumerable.Range(1, 5).ToDictionary(index => index.ToString(), _ => "value");
+        var invalid = headerUpdate with { Expected = claimed.Revision, Row = claimed with { Revision = claimed.Revision + 1 },
+            FoundationHeader = new("uncommitted", tooMany) };
+        var refused = false;
+        try { await store.CommitAsync(batch with { Position = fence.Position, Turns = [invalid] }); }
+        catch (StoreException exception) when (exception.Failure == Failure.Definite) { refused = true; }
+        check(refused && (await reader.GetAsync(scope, new(authoredFault)))?.Header.TypeData == "opaque data" &&
+            store.Instances[claimed.Id].Revision == claimed.Revision, "an oversized label set cannot change the checkpoint or its read model");
+
         var first = await reader.ListAsync(scope, query);
         check(first.Items.Count == 2 && first.Next is not null && first.AsOf == now &&
             first.Items.All(item => item.AsOf == now && item.Header.EndedAt == stamp), "the first bound list page includes only committed matches and an AsOf reading");

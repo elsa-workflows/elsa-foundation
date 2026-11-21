@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
@@ -72,17 +71,9 @@ internal sealed class ActorList
         ActorRef? parent = row.Parent is { } parentId && row.ParentCreation > 0
             ? new ActorRef(_store.ReferenceFor(tenant, new(parentId, row.ParentCreation)))
             : null;
-        // The current prototype projects workflow definition and version. K3 persists arbitrary actor labels.
-        var labels = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["definition"] = row.Definition,
-            ["version"] = row.StateVersion.ToString(CultureInfo.InvariantCulture)
-        };
         var header = new ActorHeader(new(checkpoint.Reference), row.Model, tenant, (ActorStatus)row.Status,
-            row.Fault, parent, checkpoint.EndedAt, row.Definition, labels);
-        var park = row is { Status: Durable.InstanceStatus.Faulted, Fault: not null } && checkpoint.EndedAt is { } parkedAt
-            ? new ParkView(parkedAt, null)
-            : null;
+            row.Fault, parent, checkpoint.EndedAt, checkpoint.Header.TypeData, checkpoint.Header.Labels);
+        var park = checkpoint.Park is { } mark ? new ParkView(mark.At, null) : null;
         return new(header, null, park, asOf);
     }
 

@@ -108,7 +108,13 @@ public sealed record NodeBeat(IReadOnlyList<OwnedEpoch> Owned, long Now, Cluster
 /// </summary>
 public sealed record TurnCommit(
     string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<InboxKey> Consumed, IReadOnlyList<InboxKey> Done, IReadOnlyList<Message> Sent,
-    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<InboxKey>? Held = null, bool Delete = false);
+    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<InboxKey>? Held = null, bool Delete = false)
+{
+    internal FoundationHeaderChange? FoundationHeader { get; init; }
+    internal bool OpensPark { get; init; }
+}
+
+internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);
 
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>
 public sealed record CommitBatch(
