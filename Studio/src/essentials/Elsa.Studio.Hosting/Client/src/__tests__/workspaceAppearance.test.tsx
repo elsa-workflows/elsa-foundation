@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider, useTheme } from "../app/components/ThemeProvider";
 import { getTheme, getThemeModeDefinition } from "../app/themes/presets";
 import { appearanceResetStorageKeys } from "../app/themes/appearance";
+import { resolveNavigationColors } from "../app/themes/sidebarColor";
 import { normalizeThemeStore, withoutOptionalMode } from "../app/themes/themeStoreApi";
 import type { StudioEndpointContext } from "../sdk";
 
@@ -38,7 +39,7 @@ afterEach(async () => {
   await update(() => root.unmount());
   container.remove();
   for (const name of Array.from(html().attributes).map(attribute => attribute.name)) {
-    if (name.startsWith("data-theme") || name === "data-nav-mode" || name === "data-sidebar-color" || name === "data-workspace-style" || name === "data-color-scheme" || name === "style") html().removeAttribute(name);
+    if (name.startsWith("data-theme") || name === "data-nav-mode" || name === "data-sidebar-color" || name === "data-sidebar-backdrop" || name === "data-workspace-style" || name === "data-color-scheme" || name === "style") html().removeAttribute(name);
   }
 });
 
@@ -87,6 +88,41 @@ describe("sidebar color", () => {
     await update(() => appearance.resetAppearance());
     expect(appearance.sidebarColorPreference).toBe("dark");
     expect(localStorage.getItem("elsa-studio-sidebar-color")).toBeNull();
+  });
+});
+
+describe("sidebar backdrop", () => {
+  it("follows the selected color scheme and stays off for top navigation and High contrast", async () => {
+    await render();
+    await update(() => appearance.setColorScheme("space"));
+    expect(html().getAttribute("data-sidebar-backdrop")).toBe("starfield");
+
+    await update(() => appearance.setSidebarColorPreference("light"));
+    expect(html().style.getPropertyValue("--studio-nav-bg")).toBe(
+      resolveNavigationColors(appearance.currentColorScheme, appearance.mode, appearance.workspaceStyle, "light").bg
+    );
+
+    await update(() => appearance.setColorScheme("signal"));
+    expect(html().hasAttribute("data-sidebar-backdrop")).toBe(false);
+    await update(() => appearance.setColorScheme("space"));
+    await update(() => appearance.setModePreference("high-contrast"));
+    expect(html().hasAttribute("data-sidebar-backdrop")).toBe(false);
+
+    await update(() => appearance.setModePreference("dark"));
+    expect(html().getAttribute("data-sidebar-backdrop")).toBe("starfield");
+    await update(() => appearance.setNavModePreference("top"));
+    expect(html().hasAttribute("data-sidebar-backdrop")).toBe(false);
+    await update(() => appearance.setNavModePreference("left"));
+    expect(html().getAttribute("data-sidebar-backdrop")).toBe("starfield");
+  });
+
+  it("uses the draft backdrop during preview and suppresses it in High contrast", async () => {
+    await render();
+    await update(() => appearance.previewTheme({ ...getTheme("space")!, sidebarBackdrop: "gradient" }));
+    expect(html().getAttribute("data-sidebar-backdrop")).toBe("gradient");
+
+    await update(() => appearance.setModePreference("high-contrast"));
+    expect(html().hasAttribute("data-sidebar-backdrop")).toBe(false);
   });
 });
 

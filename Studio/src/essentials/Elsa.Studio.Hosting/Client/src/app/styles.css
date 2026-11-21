@@ -563,6 +563,27 @@ html[data-theme-material][data-sidebar-color] .sidebar {
   background: var(--studio-nav-bg);
 }
 
+@media (min-width: 1025px) {
+  html[data-nav-mode="left"][data-sidebar-backdrop="gradient"]:not([data-theme-appearance="high-contrast"]) .sidebar {
+    background-image:
+      linear-gradient(155deg, color-mix(in srgb, var(--studio-nav-active) 34%, transparent), transparent 62%),
+      linear-gradient(180deg, color-mix(in srgb, var(--studio-nav-text) 5%, var(--studio-nav-bg)), var(--studio-nav-bg) 72%);
+  }
+
+  html[data-nav-mode="left"][data-sidebar-backdrop="starfield"]:not([data-theme-appearance="high-contrast"]) .sidebar {
+    background-image:
+      radial-gradient(circle at 13% 8%, color-mix(in srgb, var(--studio-nav-text) 78%, transparent) 0.55px, transparent 1px),
+      radial-gradient(circle at 78% 13%, color-mix(in srgb, var(--studio-nav-text) 58%, transparent) 0.5px, transparent 0.95px),
+      radial-gradient(circle at 49% 24%, color-mix(in srgb, var(--studio-nav-text) 44%, transparent) 0.5px, transparent 0.95px),
+      radial-gradient(circle at 25% 35%, color-mix(in srgb, var(--studio-nav-text) 52%, transparent) 0.55px, transparent 1px),
+      radial-gradient(circle at 87% 45%, color-mix(in srgb, var(--studio-nav-text) 68%, transparent) 0.55px, transparent 1px),
+      radial-gradient(circle at 58% 57%, color-mix(in srgb, var(--studio-nav-text) 38%, transparent) 0.5px, transparent 0.95px),
+      radial-gradient(circle at 10% 70%, color-mix(in srgb, var(--studio-nav-text) 60%, transparent) 0.55px, transparent 1px),
+      radial-gradient(circle at 76% 82%, color-mix(in srgb, var(--studio-nav-text) 48%, transparent) 0.5px, transparent 0.95px),
+      radial-gradient(ellipse at 74% 5%, color-mix(in srgb, var(--studio-nav-active) 18%, transparent), transparent 58%);
+  }
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -1921,7 +1942,8 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   align-content: start;
   gap: 8px;
   border-right: 1px solid var(--preview-border);
-  background: color-mix(in srgb, var(--preview-card) 92%, var(--preview-primary));
+  background-color: var(--preview-sidebar);
+  color: var(--preview-sidebar-foreground);
   padding: 14px;
 }
 
@@ -1931,7 +1953,20 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 }
 
 .theme-preview-surface nav span:first-child {
-  background: color-mix(in srgb, var(--preview-primary) 18%, transparent);
+  background: var(--preview-sidebar-active);
+  color: var(--preview-sidebar-active-foreground);
+}
+
+.theme-preview-surface nav[data-sidebar-backdrop="gradient"] {
+  background-image: linear-gradient(155deg, color-mix(in srgb, var(--preview-sidebar-active) 34%, transparent), transparent 68%);
+}
+
+.theme-preview-surface nav[data-sidebar-backdrop="starfield"] {
+  background-image:
+    radial-gradient(circle at 13% 8%, color-mix(in srgb, var(--preview-sidebar-foreground) 78%, transparent) 0.55px, transparent 1px),
+    radial-gradient(circle at 78% 13%, color-mix(in srgb, var(--preview-sidebar-foreground) 58%, transparent) 0.5px, transparent 0.95px),
+    radial-gradient(circle at 49% 24%, color-mix(in srgb, var(--preview-sidebar-foreground) 44%, transparent) 0.5px, transparent 0.95px),
+    radial-gradient(ellipse at 74% 5%, color-mix(in srgb, var(--preview-sidebar-active) 18%, transparent), transparent 58%);
 }
 
 .theme-preview-surface section {

@@ -497,6 +497,44 @@ const dusk = definition(
   }
 );
 
+const space = {
+  ...definition(
+    "space",
+    "Space",
+    "A quiet midnight workspace with cool cyan accents and a starfield navigation backdrop.",
+    geistTypography,
+    { radiusSm: "5px", radius: "8px", radiusMd: "10px", radiusLg: "12px", radiusXl: "16px" },
+    "classic",
+    {
+      light: mode({
+        scheme: "light", hue: 220, chroma: 0.012,
+        background: 0.978, card: 0.998, muted: 0.945, border: 0.88, input: 0.99, sidebar: 0.15, foreground: 0.22, mutedForeground: 0.49,
+        primary: oklch(0.47, 0.14, 220), primaryForeground: white,
+        wash: oklch(0.29, 0.07, 220), activeForeground: oklch(0.94, 0.08, 210),
+        overrides: {
+          sidebarForeground: oklch(0.95, 0.012, 220),
+          sidebarActive: oklch(0.3, 0.075, 220),
+          sidebarActiveForeground: oklch(0.97, 0.035, 205)
+        }
+      }),
+      dark: mode({
+        scheme: "dark", hue: 220, chroma: 0.025,
+        background: 0.12, card: 0.16, muted: 0.205, border: 0.29, input: 0.15, sidebar: 0.09, foreground: 0.95, mutedForeground: 0.72,
+        primary: oklch(0.74, 0.16, 215), primaryForeground: oklch(0.16, 0.04, 220),
+        wash: oklch(0.26, 0.07, 220), activeForeground: oklch(0.92, 0.1, 210)
+      }),
+      dim: mode({
+        scheme: "dim", hue: 220, chroma: 0.04,
+        background: 0.245, card: 0.29, muted: 0.34, border: 0.42, input: 0.27, sidebar: 0.19, foreground: 0.96, mutedForeground: 0.8,
+        primary: oklch(0.8, 0.14, 210), primaryForeground: oklch(0.18, 0.04, 220),
+        wash: oklch(0.37, 0.08, 220), activeForeground: oklch(0.95, 0.08, 205)
+      }),
+      highContrast: highContrast(oklch(0.9, 0.18, 205), 205)
+    }
+  ),
+  sidebarBackdrop: "starfield" as const
+};
+
 /** Neutral actions and surfaces; the small focus/selection mark carries the accent. */
 function minimalMode(scheme: "light" | "dark" | "dim", id: string): ThemeModeDefinition {
   const light = scheme === "light";
@@ -538,6 +576,6 @@ const minimalThemes = minimalStudioPresets.map(preset => ({
   workspaceStyle: "minimal" as const
 }));
 
-export const foundationThemeIds = ["linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk"] as const;
+export const foundationThemeIds = ["linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk", "space"] as const;
 
-export const foundationThemeDefinitions: StudioThemeDefinition[] = [linen, ...minimalThemes, classic, meridian, drift, schematic, atelier, elsaCloud, signal, dusk];
+export const foundationThemeDefinitions: StudioThemeDefinition[] = [linen, ...minimalThemes, classic, meridian, drift, schematic, atelier, elsaCloud, signal, dusk, space];

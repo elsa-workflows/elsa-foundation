@@ -209,6 +209,11 @@ export function ThemeProvider({
     root.setAttribute("data-theme-appearance", activeMode);
     root.setAttribute(studioThemeLayoutAttribute, styledTheme.layout ?? "classic");
     root.setAttribute(navModeAttribute, navMode);
+    if (navMode === "left" && activeMode !== "high-contrast" && currentColorScheme.sidebarBackdrop && currentColorScheme.sidebarBackdrop !== "solid") {
+      root.setAttribute("data-sidebar-backdrop", currentColorScheme.sidebarBackdrop);
+    } else {
+      root.removeAttribute("data-sidebar-backdrop");
+    }
     if (activeStyle === null && isMaterialTheme(currentTheme.id)) {
       root.setAttribute("data-theme-material", currentTheme.id);
     } else {
