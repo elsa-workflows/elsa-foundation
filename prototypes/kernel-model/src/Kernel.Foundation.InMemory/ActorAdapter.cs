@@ -18,6 +18,10 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         return checkpoint.Park is not null || actor.Withholds(Header(checkpoint));
     }
 
+    bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
+        (delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null) &&
+        store.FoundationTurnHeader(row).Park is null;
+
     public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline;
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>

@@ -12,6 +12,7 @@ public sealed record WorkerOptions
     public TimeSpan Lease { get; init; } = Defaults.Lease;
     public TimeSpan Horizon { get; init; } = TimeSpan.FromSeconds(10);
     internal Action? BeforeTimedJobCutoff { get; init; }
+    internal Action? AfterTimedJobCutoff { get; init; }
     public int PollLimit { get; init; } = 500;
     public int MaxBatch { get; init; } = 500;
 
@@ -269,8 +270,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private IEnumerable<string> ReadyForTurns(CancellationToken cancellationToken)
     {
-        ReceiveJobPublications(cancellationToken);
-        var now = Now;
+        var now = ReceiveJobPublications(cancellationToken);
         return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && Deliverable(s.Key, s.Value, now).Count > 0).Select(s => s.Key)
             .Where(id => !Blocked && (TrialItems.Count == 0 || OnTrial(id) || Spared(id)));    // while a trial runs, nothing else in the process does
     }
@@ -1423,7 +1423,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// epoch, which moves the polls on, but it is neither on trial nor cleared to run. The next owner still suspects it.
     /// </summary>
     private bool Shelf(Delivery suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(Canonical(suspect.Message.Target.Id), out var slot) && Withheld(slot)
-        && CreationError(slot, suspect.Message) is null;
+        && !CanSettleWhileWithheld(slot, suspect) && CreationError(slot, suspect.Message) is null;
 
     // Exhausted input blocks new physical jobs and job trials. Ordinary predecessor suspects may
     // still be fenced so an earlier due timer cannot strand the pending Park.
@@ -1450,6 +1450,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// Kernel messages still pass.
     /// </summary>
     private bool Withheld(Slot slot) => slot.Row is { Retired: false } row && _type.Withholds(row, this);
+
+    private bool CanSettleWhileWithheld(Slot slot, Delivery delivery) =>
+        slot.Row is { Retired: false } row && _type.SettlesWhileWithheld(row, delivery);
 
     /// <summary>
     /// Finding F2: suspects are tried apart from everything else. A fenced commit writes that they are on trial at this
@@ -1480,7 +1483,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (skipped.Contains(target) || PoisonPending(slot) &&
                 (suspect.Message.Kind == Kinds.Job && suspect.Ticket || !PrecedesPoison(suspect, slot, control))) continue;
             if (suspect.UncheckedReference is null && (Loaded(slot) || Has(Flaw.TrialBeforeLoad)) && (!slot.Busy || Has(Flaw.SuspendDuringTrial) || Has(Flaw.TrialBeforeLoad))
-                && (suspect.DiscardedAt(slot) || !Withheld(slot) || CreationError(slot, suspect.Message) is not null)
+                && (suspect.DiscardedAt(slot) || !Withheld(slot) || CanSettleWhileWithheld(slot, suspect) ||
+                    CreationError(slot, suspect.Message) is not null)
                 && (attempts ??= suspect.Attempts) == suspect.Attempts)
             {
                 group.Add(suspect);
@@ -1554,7 +1558,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var onTrial = OnTrial(instance);
         var control = RecoveryBoundary(slot, now, onTrial);
         bool Eligible(Delivery item) => !item.Ticket && !item.Taken && !(item.Message.Due > now)
-            && (!suspended || item.DiscardedAt(slot) || item.Message.IsControl || CreationError(slot, item.Message) is not null);
+            && (!suspended || item.DiscardedAt(slot) || item.Message.IsControl || CanSettleWhileWithheld(slot, item) ||
+                CreationError(slot, item.Message) is not null);
         bool InFront(Delivery item) => TrialItems.Contains(item) || BeforeRecoveryControl(item, control);
 
         // Finish marking ordinary cohort members together. Unselected suspects obtain their own fenced
@@ -1754,11 +1759,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private void RunTurn(string instance, CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested) return;
-        ReceiveJobPublications(cancellationToken);
+        var now = ReceiveJobPublications(cancellationToken);
         instance = Canonical(instance);
         if (_releasing || !LeaseUsable() || !_slots.TryGetValue(instance, out var slot) || !Loaded(slot) || slot.Busy) return;
         if (Blocked || (TrialItems.Count > 0 && !OnTrial(instance) && !Spared(instance))) return;
-        var now = Now;
         var due = Deliverable(instance, slot, now);
         if (due.Count == 0) return;
         var supplied = due.FindAll(i => i.DiscardedAt(slot));
@@ -2025,7 +2029,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
-    private void ReceiveJobPublications(CancellationToken cancellationToken = default)
+    private long ReceiveJobPublications(CancellationToken cancellationToken = default)
     {
         DeferPoisonBlockedJobTrials();
         if (_jobsWaitingForTrial && _gate.Idle)
@@ -2033,6 +2037,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _jobsWaitingForTrial = false;
             foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToList()) StartJob(ticket, cancellationToken);
         }
+        long cutoff;
         do
         {
             while (_jobPublications.TryDequeue(out var observation))
@@ -2061,12 +2066,21 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     RefreshPoisonBoundary(slot);
                 }
             }
-        } while (ExpireTimedJobs());
+        } while (ExpireTimedJobs(out cutoff));
+
+        // Selection shares the cutoff used to arbitrate callbacks. A timer that matures after this
+        // scan needs a further pass so a timely callback published in the gap can still win.
+        _options.AfterTimedJobCutoff?.Invoke();
+        return cutoff;
     }
 
-    private bool ExpireTimedJobs()
+    private bool ExpireTimedJobs(out long cutoff)
     {
-        if (_timedJobs.Count == 0) return false;
+        if (_timedJobs.Count == 0)
+        {
+            cutoff = Now;
+            return false;
+        }
         _options.BeforeTimedJobCutoff?.Invoke();
         var expired = new List<Delivery>();
         var foundTimelyResult = false;
@@ -2074,6 +2088,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         lock (publications)
         {
             var now = Now;
+            cutoff = now;
             foreach (var timed in _timedJobs.Where(item => item.JobDeadline <= now).ToArray())
             {
                 _timedJobs.Remove(timed);

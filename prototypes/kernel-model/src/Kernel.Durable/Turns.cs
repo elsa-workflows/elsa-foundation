@@ -33,6 +33,9 @@ public interface IActorType
     /// <summary>The actor cannot be given its messages now; commands still pass. Suspended, say.</summary>
     bool Withholds(InstanceRow row, ITurnServices services);
 
+    /// <summary>Whether the foundation can settle this input without offering it to the actor.</summary>
+    internal bool SettlesWhileWithheld(InstanceRow row, Delivery delivery) => false;
+
     /// <summary>
     /// A turn the actor type handles alone, without any of the actor's own code: a command (<see cref="Kinds.IsControl"/>),
     /// or messages to an actor that has ended. Null when the turn is not one of those.
@@ -466,13 +469,17 @@ public sealed class DurableTurn
     internal void CancelJob(string key, string? deadline, bool resultReady)
     {
         if (!_jobs.Remove(key)) return;     // not in flight: never started, done, or its result is in this turn's inbox
-        var ticket = resultReady ? InboxKey.JobResult(Id, key, _input.Creation) : InboxKey.Ticket(Id, key, _input.Creation);
+        var ticket = InboxKey.Ticket(Id, key, _input.Creation);
         if (_started.Remove(key, out var timer))
         {
             _sent.RemoveAll(m => m.InboxKey == ticket);
             deadline = timer;
         }
-        else _cancelled.Add(ticket);
+        else
+        {
+            if (resultReady) ticket = InboxKey.JobResult(Id, key, _input.Creation);
+            _cancelled.Add(ticket);
+        }
         if (deadline is not null) Recall(deadline);
         Services.Cancelling(ticket);     // from here on its result is nobody's
     }

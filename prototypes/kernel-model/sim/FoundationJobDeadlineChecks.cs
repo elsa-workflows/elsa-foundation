@@ -15,13 +15,19 @@ internal static class FoundationJobDeadlineChecks
         Contract.IIngress edge = new InMemoryIngress(store, requests, "jobs", (selected, _) => selected == scope);
         var model = new Probe();
         Action? atCutoff = null;
+        Action? afterCutoff = null;
 
         async Task<Contract.ActorRef> Start(string name) =>
             (await edge.SendAsync(scope, new Contract.Target.Start(new("timed-job", "ready", name)), name, Contract.Kinds.Start)).Actor!.Value;
 
         async Task<IScopeActivation> Owner(string node)
         {
-            var worker = new Worker(node, 0, store, new ActorAdapter(store, model), new WorkerOptions { Monotonic = () => now - initial, BeforeTimedJobCutoff = () => atCutoff?.Invoke() });
+            var worker = new Worker(node, 0, store, new ActorAdapter(store, model), new WorkerOptions
+            {
+                Monotonic = () => now - initial,
+                BeforeTimedJobCutoff = () => atCutoff?.Invoke(),
+                AfterTimedJobCutoff = () => afterCutoff?.Invoke()
+            });
             return (await new DurableHost([worker]).ActivateAsync(0))!;
         }
 
@@ -34,6 +40,8 @@ internal static class FoundationJobDeadlineChecks
         var ended = await Start("ended");
         var replaces = await Start("replace-after-timeout");
         var poison = await Start("poison");
+        var staged = await Start("staged-replacement");
+        var suspended = await Start("suspended-success");
         var owner = await Owner("job-first");
         await Pump(owner);
         check(model.Attempts["fast"].Job is { Actor: var actor, Key: "job", Deadline: initial + 100, AttemptId.Length: > 0 } &&
@@ -56,11 +64,25 @@ internal static class FoundationJobDeadlineChecks
             "the old attempt cannot publish into a restarted job with the same key");
 
         store.AddFoundationMessage(scope.Tenant, expires.Id, "suspend", Kinds.Suspend);
+        await edge.SendAsync(scope, new Contract.Target.Ref(suspended), "suspend", Contract.Kinds.Suspend);
         await Pump(owner);
         now = initial + 99;
+        model.Attempts["suspended-success"].Finish("timely while suspended");
+        model.Attempts["staged-replacement"].Finish("cancel staged");
+        await ((Worker)owner).JobCompletion(Row(suspended).Id, "job", Row(suspended).Creation)!.WaitAsync(TimeSpan.FromSeconds(2));
+        await ((Worker)owner).JobCompletion(Row(staged).Id, "job", Row(staged).Creation)!.WaitAsync(TimeSpan.FromSeconds(2));
         await Pump(owner);
         check(!model.Attempts["expires"].Cancelled && Results(expires).Count == 0,
             "the owner leaves its timed job active before the deadline");
+        var stagedRow = Row(staged);
+        check(Results(staged).SequenceEqual(["cancel staged"]) && stagedRow.Jobs is null && Timers(staged) == 0 &&
+            !model.Attempts.ContainsKey("must-not-enter") &&
+            !store.Messages.ContainsKey(InboxKey.Ticket(stagedRow.Id, "job", stagedRow.Creation)),
+            "cancelling a staged same-key replacement retracts its ticket and timer in the predecessor's result turn");
+        var suspendedRow = Row(suspended);
+        check(Results(suspended).Count == 0 && Timers(suspended) == 0 &&
+            store.HasFoundationJobResult(suspendedRow.Id, suspendedRow.Creation, "job"),
+            "foundation settles a timely result while suspension still withholds it from the actor");
         model.Attempts["held-success"].Finish("held-success");
         await ((Worker)owner).JobCompletion(Row(held).Id, "job", Row(held).Creation)!.WaitAsync(TimeSpan.FromSeconds(2));
         await edge.SendAsync(scope, new Contract.Target.Ref(ended), "end", "end");
@@ -107,6 +129,7 @@ internal static class FoundationJobDeadlineChecks
         var entries = model.Entries;
         await using var successor = await Owner("job-successor");
         await edge.SendAsync(scope, new Contract.Target.Ref(held), "release", "release");
+        await edge.SendAsync(scope, new Contract.Target.Ref(suspended), "resume", Contract.Kinds.Resume);
         await Pump(successor);
         model.Attempts["moves"].Finish("late from former owner");
         check(Results(moves).SequenceEqual(["timeout"]) && Timers(moves) == 0 && model.Entries == entries,
@@ -115,6 +138,26 @@ internal static class FoundationJobDeadlineChecks
             "the successor hands the held timely success back without a substituted timeout");
         check(store.ReadFoundationActor(scope.Tenant, poison.Id).Actor is { Park: not null, Row.Status: InstanceStatus.Faulted } &&
             Results(poison).Count == 0, "an exhausted timed ticket parks across takeover even when its deadline has arrived");
+        check(Results(suspended).SequenceEqual(["timely while suspended"]) && Timers(suspended) == 0,
+            "a later owner resumes the actor with its one persisted success even after the deadline");
+
+        var boundary = await Start("after-scan");
+        await Pump(successor);
+        var boundaryRow = Row(boundary);
+        var worker = (Worker)successor;
+        var callback = worker.JobCompletion(boundaryRow.Id, "job", boundaryRow.Creation)!;
+        now += 99;
+        afterCutoff = () =>
+        {
+            afterCutoff = null;
+            model.Attempts["after-scan"].Finish("timely after scan");
+            callback.WaitAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
+            now++;
+        };
+        worker.RunTurn(boundaryRow.Id);
+        await Pump(successor);
+        check(Results(boundary).SequenceEqual(["timely after scan"]) && Timers(boundary) == 0,
+            "a deadline crossed after the cutoff scan waits for a new scan that sees the timely callback");
 
         InstanceRow Row(Contract.ActorRef reference) =>
             store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row;
@@ -182,6 +225,11 @@ internal static class FoundationJobDeadlineChecks
                     case Contract.Kinds.JobFinished:
                         var result = Json.Read<Contract.JobFinished>(message.Payload!);
                         var value = result.Error ?? Json.Read<string>(result.Result!);
+                        if (value == "cancel staged")
+                        {
+                            turn.StartJob("job", "must-not-enter", TimeSpan.FromMilliseconds(100));
+                            turn.CancelJob("job");
+                        }
                         if (value == "held-success" && !turn.Inbox.Any(input => input.Kind == "release"))
                             turn.Hold(message);
                         else results.Add(value);
