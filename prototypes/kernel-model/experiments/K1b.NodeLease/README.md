@@ -10,8 +10,7 @@ on the prototype's PostgreSQL, SQL Server and MySQL paths. Under the node lease'
 
 Each mutation must deadlock where its engine's locks close the cycle. Provider qualification is K4.
 
-The probe is `x nodelease` in `ef/Kernel.Ef.Run/NodeLeaseRun.cs`. The store is `EfStore` with the owned commit, fence
-in the batch, and the switch `NodeLease` on.
+The probe is `x nodelease` in `ef/Kernel.Ef.Run/NodeLeaseRun.cs`. The probe uses `EfStore` with the owned commit and the fence in the batch.
 
 ## The cases
 
@@ -38,8 +37,9 @@ until the engine reports the sessions waiting, then releases the hold.
   inside its transaction, while it holds its own record.
 
 **The exit code is the verdict.**
-- `expect=deadlock` exits 1 unless the run deadlocked. `expect=none`, the default, exits 1 if it did, or if any answer
-  failed or hung.
+- As built, `expect=none` is the default and exits 1 on a deadlock, failure or hang. A negative (any `mutation=`)
+  defaults to `expect=deadlock` and exits 1 unless it deadlocked. Explicit `expect=none` with a mutation exits 2
+  before opening a connection.
 - A mutual run, and every run on SQL Server without RCSI (where reads take locks), also exits 1 when its sessions were
   not waiting before the release.
 - On PostgreSQL the victim's error decides, because `pg_stat_database.deadlocks` lags by up to a second.

@@ -17,10 +17,12 @@ using Microsoft.EntityFrameworkCore.Storage;
 /// mutation=subquery (EfStore.NodeReadInUpdate) reads the node records inside the take's update, after it locked rows;
 /// mutation=rr (EfStore.RepeatableReadTake) runs the take at REPEATABLE READ; mutation=membership
 /// (EfStore.MembershipInHeartbeat) reads the node count and the free list inside the heartbeat's transaction.
-/// The exit code is the verdict. expect=deadlock fails unless the run deadlocked; expect=none (the default) fails if it
-/// did, or if any answer failed or hung. A mutual run, and any run where reads take locks (SQL Server without RCSI), fails
-/// too when its sessions were not waiting before the release; the heartbeat cases elsewhere are recorded unforced. On
-/// PostgreSQL the victim's error decides, since its counter lags.
+/// The exit code is the verdict. expect=deadlock fails unless the run deadlocked; expect=none (the default as built) fails
+/// if it did, or if any answer failed or hung. A negative (any mutation=) must deadlock: its default is expect=deadlock,
+/// and a negative that does not deadlock fails whatever its expect=. A mutual run, and any run where reads take locks
+/// (SQL Server without RCSI), fails too when the forced wait did not occur (its sessions were not waiting before the
+/// release); the heartbeat cases elsewhere are recorded unforced. On PostgreSQL the victim's error decides, since its
+/// counter lags.
 /// </summary>
 static class NodeLeaseRun
 {
@@ -31,7 +33,8 @@ static class NodeLeaseRun
         await target.ResetAsync(8);
         var (admin, store) = (target.Admins(), target.Store(target.Workers()));
         var (kind, mutation) = (target.Get("case", "heartbeat"), target.Get("mutation", ""));
-        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; case {kind}; take {mutation switch { "subquery" => "READS THE NODE RECORDS IN ITS UPDATE (the negative)", "rr" => "AT REPEATABLE READ (the negative)", "membership" => "with the heartbeat READING MEMBERSHIP IN ITS TRANSACTION (the negative)", _ => "as built" }}; expect {target.Get("expect", "none")}");
+        var (negative, expect) = (mutation != "", target.Get("expect", mutation != "" ? "deadlock" : "none"));
+        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; case {kind}; take {mutation switch { "subquery" => "READS THE NODE RECORDS IN ITS UPDATE (the negative)", "rr" => "AT REPEATABLE READ (the negative)", "membership" => "with the heartbeat READING MEMBERSHIP IN ITS TRANSACTION (the negative)", _ => "as built" }}; expect {expect}");
         var held = new Dictionary<string, OwnedLease>();
         foreach (var (node, set) in kind == "mutual" ? new[] { ("a", new[] { 1, 2 }), ("b", [3, 4]) } : [("r", [1]), ("p", [2, 3])])     // heartbeats: as heartbeat
             if ((held[node] = await store.TakeAsync(set, node, Brief)).Taken.Count != set.Length) { Console.WriteLine($"the probe could not set up {node}"); return 2; }
@@ -87,11 +90,12 @@ static class NodeLeaseRun
         var victim = outcomes.Any(o => o.Answer.Contains(target.DeadlockCode, StringComparison.Ordinal));
         var deadlocked = target.Engine == "postgres" ? victim : counted > 0 || victim;
         var clean = done && !deadlocked && outcomes.All(o => !o.Answer.StartsWith("failed", StringComparison.Ordinal) && o.Answer != "HUNG");
-        var (expectDeadlock, lockingReads) = (target.Get("expect", "none") == "deadlock", target.Engine == "sqlserver" && target.Get("rcsi", "1") == "0");
+        var (expectDeadlock, lockingReads) = (expect == "deadlock", target.Engine == "sqlserver" && target.Get("rcsi", "1") == "0");
         var forced = kind == "mutual" || lockingReads;      // where the hold makes the sessions wait
-        var met = done && (waited || !forced) && (expectDeadlock ? deadlocked : clean);
-        Console.WriteLine($"nodelease{(mutation != "" ? " negative" : "")}: {(deadlocked ? "DEADLOCKED, broken by the engine" : clean ? "no deadlock; every outcome landed or was refused" : "other")}; " +
-            $"expected {(expectDeadlock ? "a deadlock" : "none")}{(forced ? ", forced" : "")}: {(met ? "as expected" : "NOT AS EXPECTED")}");
+        var met = done && (waited || !forced) && (expectDeadlock ? deadlocked : clean) && (!negative || deadlocked);
+        Console.WriteLine($"nodelease{(negative ? " negative" : "")}: {(deadlocked ? "DEADLOCKED, broken by the engine" : clean ? "no deadlock; every outcome landed or was refused" : "other")}; " +
+            $"expected {(expectDeadlock ? "a deadlock" : "none")}{(forced ? ", forced" : "")}: {(met ? "as expected" : "NOT AS EXPECTED")}" +
+            $"{(forced && !waited ? "; the forced wait did not occur" : "")}{(negative && !deadlocked ? "; a negative must deadlock" : "")}");
         return met ? 0 : 1;
     }
 
