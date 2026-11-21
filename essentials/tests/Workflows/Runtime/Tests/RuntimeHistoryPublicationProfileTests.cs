@@ -76,7 +76,7 @@ public sealed class RuntimeHistoryPublicationProfileTests
 
     [Theory]
     [InlineData("input")] [InlineData("handler")] [InlineData("router")]
-    [InlineData("start")] [InlineData("resume")] [InlineData("adapter")] [InlineData("native-source")] [InlineData("processor")]
+    [InlineData("start")] [InlineData("resume")] [InlineData("adapter")] [InlineData("native-source")]
     public async Task Declaration_alone_cannot_advertise_a_replaced_or_missing_actual_source_component(string missing)
     {
         using var f = new Fixture(change: services =>
@@ -93,7 +93,6 @@ public sealed class RuntimeHistoryPublicationProfileTests
                 case "resume": services.AddScoped<IBookmarkResumeDispatcher>(sp => new LegacySavedResume(BookmarkResumeDispatcher.Create(sp))); break;
                 case "adapter": services.RemoveAll<IStimulusDeliveryIntentAdapter>(); break;
                 case "native-source": services.AddSingleton<IStimulusDeliveryStore, LegacySource>(); break;
-                case "processor": services.AddSingleton<IRuntimePostCommitOutboxProcessor, LegacyProcessor>(); break;
             }
         });
         var newPolicy = RuntimeHistoryRegistration.ResolvePolicy(f.Services, "new-publisher")!;
@@ -104,6 +103,32 @@ public sealed class RuntimeHistoryPublicationProfileTests
         var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => f.PublishAsync());
         Assert.Equal("runtime.history.capture-unavailable", failure.Code);
         Assert.Empty(f.Writer.ListCommits()); Assert.Null(await f.Writer.FindDurableAsync(f.LastSourceId!));
+        Assert.Equal(0, f.Actors.Calls);
+    }
+
+    [Fact]
+    public async Task Qualified_recording_observes_a_refused_fresh_pipeline_without_claiming_delivery_health()
+    {
+        using var f = new Fixture(change: services => services.AddSingleton<IRuntimePostCommitOutboxProcessor, LegacyProcessor>());
+        var policy = RuntimeHistoryRegistration.ResolvePolicy(f.Services, "publisher")!;
+        Assert.All(PublicationKinds, kind => Assert.Contains(kind, policy.SupportedKinds));
+        await f.SeedAsync(policy);
+        var pending = await f.PublishAsync();
+        var processor = f.Services.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        Assert.False(processor.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.WorkflowCheckpoint, Kind, RuntimeSubscriptionDelivery.CurrentVersion));
+        var claim = Assert.Single(await f.Writer.ClaimAsync(new("recording-only", At, TimeSpan.FromMinutes(1), 1)));
+        var source = new PostCommitDeliveryContext(claim, Scope);
+        var handler = (IRuntimePostCommitDurableSourceIntentHandler)f.Services.GetRequiredService<PublishStimulusExecutor>();
+        Assert.True(handler.CanRecordHistory(f.Services.GetRequiredService<IRuntimeHistoryObservationWriter>(), f.Reader));
+        await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => handler.HandleAsync(source).AsTask());
+        var events = (await f.Reader.ReadPageAsync(new("publisher"))).Items;
+        Assert.Contains(events, item => item.Name == "StimulusRoutingAttemptObserved");
+        Assert.Contains(events, item => item.Name == "StimulusRoutingDispositionObserved" &&
+            item.Metadata.GetValueOrDefault("history.reasonCode") == "routing-source-refused-observed");
+        var owed = (await f.Writer.FindDurableAsync(pending.OutboxItemId))!;
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, owed.Status);
+        Assert.Equal(0, owed.DeliveryAttemptCount);
+        Assert.Null(owed.RecipientSnapshot); Assert.Null(owed.SubscriptionDelivery);
         Assert.Equal(0, f.Actors.Calls);
     }
 

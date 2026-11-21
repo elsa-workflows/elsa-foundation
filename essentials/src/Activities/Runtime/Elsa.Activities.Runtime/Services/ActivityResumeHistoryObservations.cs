@@ -26,7 +26,10 @@ internal static class ActivityResumeHistoryObservations
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (access.Current != context) throw Unavailable();
-                _ = context.RequireScope(); context.EnsureTenantScope(execution.TenantId);
+                var scope = context.RequireScope();
+                if (!execution.HasRetainedSourceScope(scope)) context.EnsureTenantScope(execution.TenantId);
+                if (execution.Partition is { } partition && partition.Value != scope.Value)
+                    throw new InvalidOperationException("The native receiver belongs to a different physical persistence scope.");
             }
             EnsureCurrent();
             var policy = await ActivityHistoryPreflight.ReadPolicyAndValidateAsync(services, work.WorkflowExecutionId, cancellationToken);

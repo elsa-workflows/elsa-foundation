@@ -335,7 +335,7 @@ public sealed class RuntimeCheckpointCommitter
 
     private static RuntimeStateChange<RuntimePostCommitOutboxItem>[] HistorySources(RuntimeCheckpointCommit commit) =>
         commit.StateChanges.PostCommitOutbox.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert &&
-            change.State?.Intent.HistoryCausation is not null).ToArray();
+            change.State?.Intent?.HistoryCausation is not null).ToArray();
 
     private PersistenceScope? RequiredSourceScope(RuntimeCheckpointCommit commit)
     {

@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -27,7 +28,7 @@ internal static class RuntimeTerminalResumeHistory
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (access!.Current != context) throw Unavailable();
-                context.EnsureTenantScope(execution.TenantId);
+                NativeIngressCheckpointAuthority.EnsureHistoryScope(context, execution);
                 if (!execution.Status.IsTerminal() || expected.RegistrationCapture is not { } capture ||
                     !capture.Scope.Matches(execution, context.RequireScope()) ||
                     !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(capture.Executable, execution.PinnedExecutable) ||
