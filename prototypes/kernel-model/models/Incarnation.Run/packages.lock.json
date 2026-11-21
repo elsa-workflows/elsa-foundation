@@ -42,7 +42,22 @@
         "dependencies": {
           "Kernel.Foundation.InMemory": "[1.0.0, )",
           "Kernel.Native": "[1.0.0, )",
+          "Kernel.Statecharts": "[1.0.0, )",
+          "Kernel.WorkflowActor": "[1.0.0, )",
           "Kernel.Workflows": "[1.0.0, )"
+        }
+      },
+      "kernel.statecharts": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Model.Contracts": "[1.0.0, )"
+        }
+      },
+      "kernel.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Kernel.Model.Contracts": "[1.0.0, )"
         }
       },
       "kernel.workflows": {
