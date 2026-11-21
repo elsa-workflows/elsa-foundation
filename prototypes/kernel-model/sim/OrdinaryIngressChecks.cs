@@ -69,6 +69,10 @@ internal static class OrdinaryIngressChecks
         var due = now + 200;
         var delayed = new Contract.AddOptions(DueAt: due, KeepFor: TimeSpan.FromMilliseconds(7));
         var delayedFirst = await ingress.SendAsync(scope, exact, "scheduled", "ordinary", "first occurrence", delayed);
+        var occurrence = store.Messages.Keys.Single(key => store.Messages[key].Message.Id == "scheduled");
+        var legacy = new Message(occurrence.Id, new InstanceRef("0/legacy"), "ordinary", Due: due + 100);
+        check(await store.AddAsync(legacy) && store.Messages.ContainsKey(occurrence) && store.Messages.ContainsKey(legacy.InboxKey),
+            "the private occurrence and the same legitimate legacy wire id coexist in separate scopes");
         now += 7;
         var delayedDuplicate = await ingress.SendAsync(scope, exact, "scheduled", "ordinary", "ignore", delayed);
         now++;

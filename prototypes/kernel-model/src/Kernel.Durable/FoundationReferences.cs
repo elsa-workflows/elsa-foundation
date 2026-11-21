@@ -310,7 +310,8 @@ public sealed partial class InMemoryStore
             var until = checked(now + (long)window.TotalMilliseconds);
             var message = new Message(id, new InstanceRef(address.Id), kind, payload, Due: dueAt,
                 KeepUntil: until, ReplyTo: replyTo, TargetCreation: address.Creation)
-                { StorageId = FormattableString.Invariant($"{receipt}/{occurrence}"), Operator = @operator };
+                { StorageId = FormattableString.Invariant($"{receipt}/{occurrence}"), Operator = @operator }
+                .WithInboxScope(InboxKey.FoundationOccurrenceScope);
             if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
             Messages.Add(message.InboxKey, new MessageRow(message, occurrence, 0));
             _seq = occurrence;
