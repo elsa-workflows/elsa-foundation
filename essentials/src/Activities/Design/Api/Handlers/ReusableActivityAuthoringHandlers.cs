@@ -43,7 +43,8 @@ public sealed class ReusableActivityAuthoringService(
     IEnumerable<IActivityAuthoringCatalog>? candidateCatalogs = null,
     IEnumerable<IActivityDataSelectionDocumentProjector>? candidateProjectors = null,
     IActivityStructureService? candidateStructures = null,
-    IArchiveActivityDefinitionCommand? archiveDefinition = null) : IReusableActivityAuthoringService
+    IArchiveActivityDefinitionCommand? archiveDefinition = null,
+    IRestoreActivityDefinitionCommand? restoreDefinition = null) : IReusableActivityAuthoringService
 {
     // Preserve the original public constructor for existing binary consumers. Compositions that do
     // not install the request-only candidate dependencies retain their existing authoring behavior.
@@ -72,7 +73,7 @@ public sealed class ReusableActivityAuthoringService(
         definitions, authoringStore, draftStore, publicationStore, layoutStore, validationStore,
         createDefinition, updateDefinitionPresentation, createDraft, updateDraftPresentation, createConflictCopy,
         replaceDraft, discardDraft, storeValidation, providers, validator, contractAuthoringValidator,
-        typeKeyPolicy, identityGenerator, timeProvider, context, null, null, null, null)
+        typeKeyPolicy, identityGenerator, timeProvider, context, null, null, null, null, null)
     {
     }
 
@@ -145,6 +146,26 @@ public sealed class ReusableActivityAuthoringService(
             return;
 
         await archiveDefinition.ExecuteAsync(new(
+            command.DefinitionId,
+            authoring.TenantId,
+            context.TenantId,
+            timeProvider.GetUtcNow()), cancellationToken);
+    }
+
+    public async Task RestoreDefinitionAsync(RestoreReusableActivityDefinition command, CancellationToken cancellationToken)
+    {
+        if (restoreDefinition is null)
+            throw OperationFailed("Activity Definition restore is not supported by the configured persistence backend.");
+
+        var definition = await GetDefinitionEntityAsync(command.DefinitionId, cancellationToken);
+        var authoring = await GetAuthoringAsync(command.DefinitionId, cancellationToken);
+        EnsureVisible(definition.TenantId);
+        EnsureVisible(authoring.TenantId);
+        EnsureDesignAuthority(authoring, allowArchived: true);
+        if (authoring.ArchivedAt is null)
+            return;
+
+        await restoreDefinition.ExecuteAsync(new(
             command.DefinitionId,
             authoring.TenantId,
             context.TenantId,
@@ -941,6 +962,8 @@ public interface IReusableActivityAuthoringService
     Task<ReusableActivityDefinitionMutationView> CreateDefinitionAsync(CreateReusableActivityDefinition command, CancellationToken cancellationToken);
     Task<ActivityDefinitionIdentityView> UpdateDefinitionAsync(UpdateReusableActivityDefinition command, CancellationToken cancellationToken);
     Task ArchiveDefinitionAsync(ArchiveReusableActivityDefinition command, CancellationToken cancellationToken);
+    Task RestoreDefinitionAsync(RestoreReusableActivityDefinition command, CancellationToken cancellationToken) =>
+        Task.FromException(new NotSupportedException("Activity Definition restore is not supported by this authoring service."));
     Task<ReusableActivityDraftView> CreateDraftAsync(CreateReusableActivityDraft command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> ReplaceDraftAsync(ReplaceReusableActivityDraft command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> UpdateDraftPresentationAsync(UpdateReusableActivityDraftPresentation command, CancellationToken cancellationToken);

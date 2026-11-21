@@ -204,21 +204,47 @@ describe("ValidationPanel", () => {
 
   const draft = { validationErrors: [] } as unknown as WorkflowDraft;
 
-  it("shows the combined errors and offers node navigation, overriding the draft's empty list", () => {
-    const selected: string[] = [];
+  it("keeps full diagnostics collapsed until expanded and offers input navigation", () => {
+    const selected: Array<{ id: string; path?: string }> = [];
+    const message = 'Required input "Text" on Write Line is empty. Check the Conversion setting on this input and confirm that the selected profile supports the source representation.';
     flushSync(() => root.render(
       <ValidationPanel
         draft={draft}
-        errors={[{ type: STRUCTURAL_DANGLING_TYPE, message: "Activity 'orphan' is not connected.", path: "orphan" }]}
+        errors={[{ type: "InputOutput/MissingRequired", message, path: "orphan/inputs/Text" }]}
         onRepair={() => {}}
-        onSelectNode={id => selected.push(id)}
+        onSelectNode={(id, path) => selected.push({ id, path })}
       />
     ));
     expect(container.querySelector(".wf-validation-summary")?.textContent).toContain("1 validation issue");
-    expect(container.querySelector(".wf-validation-message")?.getAttribute("title")).toBe("orphan");
-    const goTo = container.querySelector<HTMLButtonElement>(".wf-validation-repair")!;
+    expect(container.querySelector<HTMLButtonElement>(".wf-validation-toggle")?.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector(".wf-validation-details")?.hasAttribute("hidden")).toBe(true);
+    const toggle = container.querySelector<HTMLButtonElement>(".wf-validation-toggle")!;
+    flushSync(() => toggle.click());
+    expect(container.querySelector(".wf-validation-message")?.textContent).toBe(message);
+    expect(container.querySelector(".wf-validation-location")?.textContent).toContain("Inputs → Text");
+    expect(container.querySelector(".wf-validation-hint")?.textContent).toContain("Set a value for this required input");
+    const goTo = container.querySelector<HTMLButtonElement>(".wf-validation-node-action")!;
+    expect(goTo.textContent).toContain("Go to input");
     flushSync(() => goTo.click());
-    expect(selected).toEqual(["orphan"]);
+    expect(selected).toEqual([{ id: "orphan", path: "orphan/inputs/Text" }]);
+  });
+
+  it("keeps unresolved-variable Repair path-aware so the affected input can receive focus", () => {
+    const selected: Array<{ id: string; path?: string }> = [];
+    const repair = vi.fn();
+    flushSync(() => root.render(
+      <ValidationPanel
+        draft={draft}
+        errors={[{ type: "Expressions/UnresolvedVariable", message: "Variable is not visible from this activity's scope.", path: "orphan/inputs/Text" }]}
+        onRepair={repair}
+        onSelectNode={(id, path) => selected.push({ id, path })}
+      />
+    ));
+
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-validation-toggle")!.click());
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-validation-repair")!.click());
+    expect(selected).toEqual([{ id: "orphan", path: "orphan/inputs/Text" }]);
+    expect(repair).not.toHaveBeenCalled();
   });
 
   it("identifies non-blocking warnings and keeps their node navigation available", () => {
@@ -238,6 +264,7 @@ describe("ValidationPanel", () => {
     ));
 
     expect(container.querySelector(".wf-validation-summary")?.textContent).toContain("1 warning · publishing is not blocked");
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-validation-toggle")!.click());
     expect(container.querySelector(".wf-validation-message")?.textContent).toContain("Demo logging needs no action");
     const goTo = container.querySelector<HTMLButtonElement>(".wf-validation-node-action")!;
     expect(goTo.textContent).toContain("Go to");
@@ -277,6 +304,7 @@ describe("ValidationPanel", () => {
       />
     ));
 
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-validation-toggle")!.click());
     const fixes = Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-validation-repair"))
       .filter(button => button.textContent?.includes("Set as start"));
     expect(fixes).toHaveLength(2);
@@ -294,6 +322,7 @@ describe("ValidationPanel", () => {
         onSetAsStartNode={() => {}}
       />
     ));
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-validation-toggle")!.click());
     expect(container.textContent).not.toContain("Set as start");
 
     flushSync(() => root.render(
@@ -308,12 +337,31 @@ describe("ValidationPanel", () => {
 
   it("notes when server validation is unavailable on the empty state", () => {
     flushSync(() => root.render(<ValidationPanel draft={draft} errors={[]} onRepair={() => {}} unavailable />));
-    expect(container.querySelector(".wf-validation.ok")?.textContent).toContain("server validation unavailable");
+    expect(container.textContent).toMatch(/server validation unavailable/i);
+    expect(container.textContent).not.toContain("No validation issues found");
   });
 
   it("does not claim no validation errors while local contribution checks are pending", () => {
     flushSync(() => root.render(<ValidationPanel draft={draft} errors={[]} onRepair={() => {}} pending />));
     expect(container.textContent).toContain("Checking validation");
-    expect(container.textContent).not.toContain("No validation errors");
+    expect(container.textContent).not.toContain("No validation issues found");
+  });
+
+  it("keeps known findings visible while server validation is still checking or unavailable", () => {
+    const message = "This warning remains available while validation updates.";
+    flushSync(() => root.render(
+      <ValidationPanel
+        draft={draft}
+        errors={[{ type: "CompensationScope/ReplaySafeStep", message, path: "scope/steps/0", severity: "Warning" }]}
+        onRepair={() => {}}
+        pending
+        unavailable
+      />
+    ));
+
+    expect(container.querySelector(".wf-validation-summary")?.textContent).toContain("Still checking");
+    expect(container.textContent).toMatch(/server validation unavailable/i);
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-validation-toggle")!.click());
+    expect(container.querySelector(".wf-validation-message")?.textContent).toBe(message);
   });
 });

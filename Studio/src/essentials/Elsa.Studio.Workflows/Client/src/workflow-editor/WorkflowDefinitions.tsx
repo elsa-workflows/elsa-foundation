@@ -5,7 +5,7 @@ import { applyCreateDialogPrefill, applyListStateChange, createDialogAttachment,
 import { useWorkflowPageWeaver } from "./useWorkflowLibraryWeaver";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { AlertCircle, Package, Plus, Trash2 } from "lucide-react";
-import { StudioHttpError, type StudioWeaverRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioWeaverRegistry, type StudioEndpointContext, type StudioNotificationInput, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
@@ -26,6 +26,10 @@ import "./workflowDefinitionTable.css";
 import { LatestDefinitionVersion, PublishedDefinitionVersion } from "./DefinitionVersionCells";
 import type { WorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
+import { formatExecutableRunError } from "./editorHelpers";
+import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
+import { notifyPublishedRunStarted, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
+import { useNotificationGuard } from "./notifications";
 
 const CreateWorkflowDialog = lazy(() =>
   import("./CreateWorkflowDialog").then(module => ({ default: module.CreateWorkflowDialog }))
@@ -82,7 +86,7 @@ function canRetainBrowseSnapshot(previous: BrowseIdentity, next: BrowseIdentity)
     && (previous.search === next.search ? previous.page === next.page : true);
 }
 
-export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, homeCreateRequestId = null, onHomeCreateRequestHandled }: {
+export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, homeCreateRequestId = null, onHomeCreateRequestHandled, runInputEditors = [] }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
   /** The Workflows module's Weaver state: this page discloses its visible list and create dialog, and applies their reviewed changes. */
@@ -91,6 +95,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   session: WorkflowDefinitionBrowseSession;
   homeCreateRequestId?: string | null;
   onHomeCreateRequestHandled?(requestId: string): void;
+  runInputEditors?: StudioWorkflowRunInputEditorContribution[];
 }) {
   const {
     browseLocation,
@@ -174,6 +179,24 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   const bulkDeleteInFlight = useRef<object | null>(null);
   const bulkDeleteButtonRef = useRef<HTMLButtonElement>(null);
   const bulkDeleteResultRef = useRef<HTMLDivElement>(null);
+  const captureRunNotificationGuard = useNotificationGuard(context);
+  const pendingRunFeedback = useRef<{ canNotify: (() => boolean) | null; name: string }>({ canNotify: null, name: "" });
+  const publishedRun = useExecutableWorkflowRun({
+    context,
+    onDispatchStart: () => undefined,
+    onStarted: (_target, result) => {
+      const feedback = pendingRunFeedback.current;
+      if (feedback.canNotify?.()) notifyPublishedRunStarted(feedback.name, result);
+    },
+    onError: error => {
+      const feedback = pendingRunFeedback.current;
+      if (feedback.canNotify?.()) getNotifications().notify({
+        level: "error",
+        title: `Couldn't start ${feedback.name}`,
+        message: formatExecutableRunError(error)
+      });
+    }
+  });
   const currentSelectionScope = useRef(scopeRevision);
   currentSelectionScope.current = scopeRevision;
   const [bulkDeleteResult, setBulkDeleteResult] = useState<{ scope: number; deleted: number; failures: { id: string; message: string }[] } | null>(null);
@@ -557,6 +580,30 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     catch (caught) { if (isCurrentGeneration()) setRequestError({ identity: targetIdentity, message: caught instanceof Error ? caught.message : "Couldn't change this favorite." }); }
   };
 
+  const runDefinition = async (definition: WorkflowDefinitionSummary) => {
+    const canNotify = captureRunNotificationGuard();
+    pendingRunFeedback.current = { canNotify, name: definition.name };
+    try {
+      const target = await resolvePublishedDefinitionRunTarget(context, definition.id);
+      if (!canNotify()) return;
+      if (!target) {
+        getNotifications().notify({
+          level: "error",
+          title: `Couldn't start ${definition.name}`,
+          message: "No live published version is available to run."
+        });
+        return;
+      }
+      await publishedRun.request(target);
+    } catch (error) {
+      if (canNotify()) getNotifications().notify({
+        level: "error",
+        title: `Couldn't start ${definition.name}`,
+        message: formatExecutableRunError(error)
+      });
+    }
+  };
+
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
     if (!(await getDialogs().confirm({ message: `Delete workflow definition "${definition.name}"? You can restore it from the Recycle bin.`, confirmLabel: "Delete", tone: "danger" })) || !isCurrentGeneration()) return;
     setRequestError(null);
@@ -905,6 +952,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
                   ]
                   : [
                     { id: "artifacts", label: "Artifacts", onSelect: () => openDefinitionArtifacts(definition.id) },
+                    ...(definition.publishedVersionId ? [{ id: "run", label: "Run…", onSelect: () => { void runDefinition(definition); } }] : []),
                     ...(moveCapabilityAvailable && librarySupport !== null && (!librarySupport.organization || libraryPermissions.canManageFolders === true) ? [{ id: "move", label: "Move to folder…", onSelect: () => { setRowMoveTarget(definition.id); setMoveDialogOpen(true); } }] : []),
                     ...(librarySupport?.organization ? [{ id: "tags", label: "Edit tags…", onSelect: () => setOrganizationTarget({ id: definition.id, name: definition.name }) }] : []),
                     ...(librarySupport?.favorites ? [{ id: "favorite", label: definition.favorite ? "Remove from favorites" : "Add to favorites", onSelect: () => void changeFavorite(definition) }] : []),
@@ -990,6 +1038,13 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
       </div>
       {librarySupport?.organization && organizationTarget ? <Suspense fallback={<p role="status">Loading workflow organization…</p>}><WorkflowTagsDialog context={context} definitionId={organizationTarget.id} name={organizationTarget.name} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
       {librarySupport?.bulk && bulkTagTargets ? <Suspense fallback={<p role="status">Loading bulk tag editor…</p>}><WorkflowBulkTagsDialog context={context} definitionIds={bulkTagTargets} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
+      {publishedRun.pending ? <WorkflowRunInputDialog
+        inputs={publishedRun.pending.inputs}
+        editors={runInputEditors}
+        busy={!!publishedRun.runningArtifactId}
+        onSubmit={inputs => { void publishedRun.confirm(inputs); }}
+        onCancel={publishedRun.cancel}
+      /> : null}
       {createDraft ? (
         <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading create dialog…</div>}>
           <CreateWorkflowDialog

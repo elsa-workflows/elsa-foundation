@@ -112,6 +112,25 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
         Assert.NotNull(await ((IActivityDefinitionDraftStore)stores).FindAsync("draft-1"));
         Assert.NotNull(await ((IActivityDefinitionStore)stores).GetAsync("d1"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => ((IReplaceActivityDraftCommand)stores).ExecuteAsync(new("draft-1", 1, draft.State, [])));
+
+        var archivedSnapshot = await projectionStore.GetCurrentSnapshotAsync();
+        var archivedPage = await projectionStore.ReadDefinitionsAsync(new("tenant-a", archivedSnapshot.Sequence, 0, 10, ArchivedOnly: true));
+        Assert.Equal("d1", Assert.Single(archivedPage.Items).DefinitionId);
+
+        await ((IRestoreActivityDefinitionCommand)stores).ExecuteAsync(new("d1", "tenant-a", "tenant-a", now.AddMinutes(2)));
+        db.ChangeTracker.Clear();
+
+        Assert.Null((await ((IActivityDefinitionAuthoringStore)stores).FindAsync("d1"))?.ArchivedAt);
+        Assert.Single((await projectionStore.ReadDefinitionsAsync(new("tenant-a", null, 0, 10))).Items);
+        Assert.Empty((await projectionStore.ReadDefinitionsAsync(new("tenant-a", null, 0, 10, ArchivedOnly: true))).Items);
+        Assert.Empty((await projectionStore.ReadDefinitionsAsync(new("tenant-a", archivedSnapshot.Sequence, 0, 10, ArchivedOnly: true))).Items);
+        Assert.Single((await ((IRecommendedActivityDefinitionPickerStore)stores).ReadAsync("tenant-a", 0, 10)).Items);
+        Assert.NotNull(await ((IActivityDefinitionVersionPublicationStore)stores).FindAsync("v1"));
+        Assert.NotNull(await ((IActivityDefinitionDraftStore)stores).FindAsync("draft-1"));
+
+        var restoredSnapshot = await projectionStore.GetCurrentSnapshotAsync();
+        await ((IRestoreActivityDefinitionCommand)stores).ExecuteAsync(new("d1", "tenant-a", "tenant-a", now.AddMinutes(3)));
+        Assert.Equal(restoredSnapshot.Sequence, (await projectionStore.GetCurrentSnapshotAsync()).Sequence);
     }
 
     [Fact]
@@ -134,6 +153,11 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
 
         Assert.NotNull((await ((IActivityDefinitionAuthoringStore)stores).FindAsync("d1"))?.ArchivedAt);
         Assert.Empty(await db.ActivityDefinitionVersionPublications.ToListAsync());
+
+        await ((IRestoreActivityDefinitionCommand)stores).ExecuteAsync(new("d1", "tenant-a", "tenant-a", DateTimeOffset.UtcNow.AddMinutes(1)));
+
+        Assert.Null((await ((IActivityDefinitionAuthoringStore)stores).FindAsync("d1"))?.ArchivedAt);
+        Assert.Empty((await ((IRecommendedActivityDefinitionPickerStore)stores).ReadAsync("tenant-a", 0, 10)).Items);
     }
 
     [Fact]

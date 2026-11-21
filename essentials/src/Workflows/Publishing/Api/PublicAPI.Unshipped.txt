@@ -69,6 +69,10 @@ Elsa.Workflows.Publishing.Api.Endpoints.Slots.Restore.Endpoint
 Elsa.Workflows.Publishing.Api.Endpoints.Slots.Restore.Endpoint.Endpoint(Elsa.Workflows.Publishing.Api.Handlers.IPublicationSlotRestorer! restorer, Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore! publicationStore) -> void
 Elsa.Workflows.Publishing.Api.Endpoints.Slots.Unpublish.Endpoint
 Elsa.Workflows.Publishing.Api.Endpoints.Slots.Unpublish.Endpoint.Endpoint(Elsa.Workflows.Publishing.Api.Handlers.IPublicationSlotUnpublisher! unpublisher, Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore! publicationStore) -> void
+Elsa.Workflows.Publishing.Api.Endpoints.Slots.UnpublishReviewed.Endpoint
+Elsa.Workflows.Publishing.Api.Endpoints.Slots.UnpublishReviewed.Endpoint.Endpoint(Elsa.Workflows.Publishing.Api.Handlers.IPublicationSlotUnpublisher! unpublisher, Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore! publicationStore) -> void
+override Elsa.Workflows.Publishing.Api.Endpoints.Slots.UnpublishReviewed.Endpoint.Configure(MinimalEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Workflows.Publishing.Api.Endpoints.Slots.UnpublishReviewed.Endpoint.HandleAsync(Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Publishing.Api.Models.PublicationSlotView!>!
 Elsa.Workflows.Publishing.Api.Endpoints.TestRuns.DeliverEvent.Endpoint
 Elsa.Workflows.Publishing.Api.Endpoints.TestRuns.DeliverEvent.Endpoint.Endpoint(Elsa.Workflows.Publishing.Api.Services.ITestRunWaitOperations! waits) -> void
 Elsa.Workflows.Publishing.Api.Endpoints.TestRuns.Get.Endpoint
@@ -95,6 +99,7 @@ Elsa.Workflows.Publishing.Api.Handlers.IPublicationSlotRestorer
 Elsa.Workflows.Publishing.Api.Handlers.IPublicationSlotRestorer.RestoreAsync(string! workflowDefinitionId, string! slotName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot!>!
 Elsa.Workflows.Publishing.Api.Handlers.IPublicationSlotUnpublisher
 Elsa.Workflows.Publishing.Api.Handlers.IPublicationSlotUnpublisher.UnpublishAsync(string! workflowDefinitionId, string! slotName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot!>!
+Elsa.Workflows.Publishing.Api.Handlers.IPublicationSlotUnpublisher.UnpublishAtRevisionAsync(string! workflowDefinitionId, string! slotName, long expectedRevision, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot!>!
 Elsa.Workflows.Publishing.Api.Handlers.IWorkflowTestRunStarter
 Elsa.Workflows.Publishing.Api.Handlers.IWorkflowTestRunStarter.GetAsync(string! testRunId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView?>!
 Elsa.Workflows.Publishing.Api.Handlers.IWorkflowTestRunStarter.GetDraftOptionsAsync(Elsa.Workflows.Publishing.Api.Requests.DraftTestRunOptionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Publishing.Api.Models.DraftTestRunOptionsView!>!
@@ -119,6 +124,7 @@ Elsa.Workflows.Publishing.Api.Handlers.StartWorkflowTestRunRequestHandler.StopAs
 Elsa.Workflows.Publishing.Api.Handlers.UnpublishPublicationSlotRequestHandler
 Elsa.Workflows.Publishing.Api.Handlers.UnpublishPublicationSlotRequestHandler.Handle(Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlot! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot!>!
 Elsa.Workflows.Publishing.Api.Handlers.UnpublishPublicationSlotRequestHandler.UnpublishAsync(string! workflowDefinitionId, string! slotName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot!>!
+Elsa.Workflows.Publishing.Api.Handlers.UnpublishPublicationSlotRequestHandler.UnpublishAtRevisionAsync(string! workflowDefinitionId, string! slotName, long expectedRevision, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot!>!
 Elsa.Workflows.Publishing.Api.Handlers.UnpublishPublicationSlotRequestHandler.UnpublishPublicationSlotRequestHandler(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationAuthority! activationAuthority, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowActivationCoordinator! activationCoordinator, Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore! publicationStore, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executableStore, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore! sourceReferenceStore, System.TimeProvider! timeProvider, Microsoft.Extensions.Logging.ILogger<Elsa.Workflows.Publishing.Api.Handlers.UnpublishPublicationSlotRequestHandler!>? logger = null) -> void
 Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunCancellationView
 Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunCancellationView.<Clone>$() -> Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunCancellationView!
@@ -1219,6 +1225,22 @@ Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlot.SlotName.init ->
 Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlot.UnpublishPublicationSlot(string! WorkflowDefinitionId, string! SlotName) -> void
 Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlot.WorkflowDefinitionId.get -> string!
 Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlot.WorkflowDefinitionId.init -> void
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.DefinitionId.get -> string!
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.DefinitionId.init -> void
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.ExpectedRevision.get -> long
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.ExpectedRevision.init -> void
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.SlotName.get -> string!
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.SlotName.init -> void
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.<Clone>$() -> Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest!
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.Deconstruct(out string! DefinitionId, out string! SlotName, out long ExpectedRevision) -> void
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.Equals(Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest? other) -> bool
+override Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.GetHashCode() -> int
+Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.UnpublishPublicationSlotAtRevisionRequest(string! DefinitionId, string! SlotName, long ExpectedRevision) -> void
+static Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.operator !=(Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest? left, Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest? right) -> bool
+static Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.operator ==(Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest? left, Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest? right) -> bool
+override Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest.ToString() -> string!
 Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotRequest
 Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotRequest.<Clone>$() -> Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotRequest!
 Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotRequest.Deconstruct(out string! DefinitionId, out string! SlotName) -> void

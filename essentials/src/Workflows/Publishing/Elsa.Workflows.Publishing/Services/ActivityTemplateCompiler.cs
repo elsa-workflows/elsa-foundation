@@ -36,7 +36,8 @@ public sealed class ActivityTemplateCompiler(
     TimeProvider timeProvider,
     IEnumerable<IActivityDataSelectionDocumentProjector> dataProjectors,
     IActivityDataSelectionAnalyzer dataAnalyzer,
-    IActivityStructureService? activityStructures = null) : IActivityTemplateCompiler
+    IActivityStructureService? activityStructures = null,
+    RuntimeInputBindingCompiler? inputBindingCompiler = null) : IActivityTemplateCompiler
 {
     // Retain the source-analysis constructor while the owning structure projection is added.
     public ActivityTemplateCompiler(
@@ -50,7 +51,7 @@ public sealed class ActivityTemplateCompiler(
         IEnumerable<IActivityDataSelectionDocumentProjector> dataProjectors,
         IActivityDataSelectionAnalyzer dataAnalyzer)
         : this(providers, dependencyDiscoverers, publications, activityVersions, templates, admissionPolicy,
-            timeProvider, dataProjectors, dataAnalyzer, null)
+            timeProvider, dataProjectors, dataAnalyzer, null, null)
     {
     }
 
@@ -65,7 +66,7 @@ public sealed class ActivityTemplateCompiler(
         IActivityTemplateAdmissionPolicy admissionPolicy,
         TimeProvider timeProvider)
         : this(providers, dependencyDiscoverers, publications, activityVersions, templates, admissionPolicy,
-            timeProvider, [], null!)
+            timeProvider, [], null!, null, null)
     {
     }
 
@@ -404,6 +405,55 @@ public sealed class ActivityTemplateCompiler(
         }
 
         var occurrenceCompilations = compilation.Occurrences.ToDictionary(x => x.OccurrenceId, StringComparer.Ordinal);
+        foreach (var dependency in resolved.OrderBy(x => x.OccurrenceId, StringComparer.Ordinal))
+        {
+            if (!occurrenceCompilations.TryGetValue(dependency.OccurrenceId, out var occurrence))
+                continue;
+
+            var inputStates = RuntimeInputBindingCompiler.ReadOccurrenceInputStates(occurrence.InputBindings);
+            var secretStates = inputStates.Where(state => RuntimeInputBindingCompiler.IsSecretBinding(state.Value)).ToArray();
+            if (secretStates.Length == 0)
+                continue;
+
+            var descriptor = loadedTemplates[dependency.TemplateId].Root.Descriptor;
+            if (inputBindingCompiler is null)
+            {
+                diagnostics.Add(new(
+                    "activity.input.secret-admission-unavailable",
+                    ActivityDiagnosticSeverity.Error,
+                    "Secret bindings in this activity draft could not be validated against their exact dependency version.",
+                    subject,
+                    new(ProviderKey: request.Candidate.Provider.ProviderKey, JsonPointer: "/rootActivity",
+                        ReferenceKey: dependency.OccurrenceId, NodeOrigin: dependency.NodeOrigin),
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["definitionVersionId"] = dependency.VersionId
+                    }));
+                continue;
+            }
+
+            try
+            {
+                inputBindingCompiler.EnsureSecretBindingsAdmissible(dependency.OccurrenceId, descriptor, inputStates);
+            }
+            catch (ArgumentException exception) when (exception.Message.StartsWith("VF-ACT-012:", StringComparison.Ordinal))
+            {
+                diagnostics.Add(new(
+                    "VF-ACT-012",
+                    ActivityDiagnosticSeverity.Error,
+                    exception.Message,
+                    subject,
+                    new(ProviderKey: request.Candidate.Provider.ProviderKey, JsonPointer: "/rootActivity",
+                        ReferenceKey: dependency.OccurrenceId, NodeOrigin: dependency.NodeOrigin),
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["definitionVersionId"] = dependency.VersionId
+                    }));
+            }
+        }
+        if (diagnostics.Any(IsError))
+            return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
+
         var directRuntimeDependencies = resolved
             .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
             .ThenBy(x => x.VersionId, StringComparer.Ordinal)
@@ -419,7 +469,7 @@ public sealed class ActivityTemplateCompiler(
                             occurrence.Structure.SchemaVersion,
                             occurrence.Structure.Payload);
                     var memberReads = MemberReadSelectionPinner.CaptureOccurrence(x.OccurrenceId,
-                        occurrence.InputBindings.Deserialize<ArgumentState[]>(OccurrenceSerializerOptions) ?? [], sourceAnalysis?.MemberReads ?? []);
+                        RuntimeInputBindingCompiler.ReadOccurrenceInputStates(occurrence.InputBindings), sourceAnalysis?.MemberReads ?? []);
                     overlay = new(
                         memberReads is null ? ExecutableActivityTemplateOccurrenceOverlay.SupportedSchemaVersion : ExecutableActivityTemplateOccurrenceOverlay.MemberReadSchemaVersion,
                         occurrence.InputBindings,
@@ -534,10 +584,6 @@ public sealed class ActivityTemplateCompiler(
         };
     }
 
-    private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-    };
 
     private async ValueTask<(ActivityDataSelectionDocument? Document, ActivityDataSelectionAnalysis? Analysis)> ValidateDataSelectionAsync(ActivityTemplateCompilerRequest request, CancellationToken cancellationToken)
     {

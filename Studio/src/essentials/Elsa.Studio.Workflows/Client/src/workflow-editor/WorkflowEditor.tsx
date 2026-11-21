@@ -64,7 +64,8 @@ import {
   findAiAction,
   getDraftSignature,
   groupActivityPalette,
-  normalizeWorkflowError
+  normalizeWorkflowError,
+  formatExecutableRunError
 } from "./editorHelpers";
 import {
   hasNonCollapsedTextSelection,
@@ -96,7 +97,10 @@ import {
   contributionDraftValidationCollectors
 } from "../contributionDraftValidation";
 import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
+import { parseValidationErrorPath } from "../validationDiagnostics";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
+import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
+import { notifyPublishedRunStarted, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
 import { LazyWorkflowTestDrivePanel } from "./lazyTestDriveUi";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { useDraftHistory } from "./useDraftHistory";
@@ -262,6 +266,7 @@ export function WorkflowEditor({
   const [status, setStatus] = useState("");
   const notificationScope = useMemo(() => ({ context, definitionId, documentAdapter }), [context, definitionId, documentAdapter]);
   const captureNotificationGuard = useNotificationGuard(notificationScope);
+  const publishedRunNotification = useRef<(() => boolean) | null>(null);
   const [operation, setOperation] = useState<WorkflowEditorOperation>("idle");
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
   const [paletteSearch, setPaletteSearch] = useState("");
@@ -273,6 +278,10 @@ export function WorkflowEditor({
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
   const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
+  const [validationPanelOpen, setValidationPanelOpen] = useState(false);
+  const [validationFocus, setValidationFocus] = useState<{ nodeId: string; inputKey: string; request: number } | null>(null);
+  const [pendingReviewValidationMessage, setPendingReviewValidationMessage] = useState<string | null>(null);
+  const validationFocusRequest = useRef(0);
 
   const historyCatalog = useRef<ActivityCatalogItem[]>([]);
   const historyView = useRef<GraphAuthoringView>({ frames: [], selectedNodeIds: [], primaryNodeId: null });
@@ -427,6 +436,37 @@ export function WorkflowEditor({
   const publishedExecutable = executableArtifactExport.target;
   // Live HTTP requests need only the published runtime artifact; they do not depend on export support.
   const publishedRuntimeExecutable = executableArtifactExport.publishedTarget;
+  const publishedRun = useExecutableWorkflowRun({
+    context,
+    onDispatchStart: () => { setStatus(""); setError(""); },
+    onStarted: (_target, result) => {
+      if (publishedRunNotification.current?.()) notifyPublishedRunStarted(details?.definition.name ?? "workflow", result);
+    },
+    onError: error => {
+      if (publishedRunNotification.current?.()) setError(formatExecutableRunError(error));
+    }
+  });
+  const runPublishedWorkflow = async () => {
+    const canNotify = captureNotificationGuard();
+    publishedRunNotification.current = canNotify;
+    setError("");
+    if (!publishedRuntimeExecutable?.artifactId) return;
+    try {
+      const target = await resolvePublishedDefinitionRunTarget(context, definitionId);
+      if (!canNotify()) return;
+      if (!target) {
+        setError("No live published version is available to run.");
+        return;
+      }
+      await publishedRun.request(target);
+    } catch (error) {
+      if (canNotify()) setError(formatExecutableRunError(error));
+    }
+  };
+  const canRunPublished = !!publishedRuntimeExecutable?.artifactId && !busy && !publishedRun.pending && !publishedRun.runningArtifactId;
+  const runPublishedTitle = publishedRuntimeExecutable?.artifactId
+    ? `Run published version ${details?.definition.publishedVersion ?? "currently published"}. Unpublished draft changes are not included; use Test Run for the draft.`
+    : "Publish this workflow to run it";
   const activityLabels = useMemo(
     () => createValidationActivityLabels({
       root: draft?.state.rootActivity,
@@ -1146,8 +1186,43 @@ export function WorkflowEditor({
   const goToValidationNode = useCallback((nodeId: string, path?: string) => {
     const currentRoot = draft?.state.rootActivity;
     const scope = currentRoot ? findActivityNode(currentRoot, nodeId, catalogByVersion) : null;
-    repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
+    const compensationTarget = compensationValidationTarget(scope, path);
+    const targetNodeId = compensationTarget ?? nodeId;
+    const targetPath = parseValidationErrorPath(path);
+    setValidationPanelOpen(true);
+    setActiveRightPanelId("inspector");
+    setInspectorView("configuration");
+    setActiveInspectorTabId("inputs");
+    if (!compensationTarget && targetPath.bag === "inputs" && targetPath.referenceKey) {
+      setValidationFocus({ nodeId: targetNodeId, inputKey: targetPath.referenceKey, request: ++validationFocusRequest.current });
+    }
+    repairVariableReference(targetNodeId);
   }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
+
+  const locatablePublicationValidation = useCallback((message: string) => {
+    const matches = combinedValidationErrors.filter(error => error.message === message);
+    if (matches.length !== 1) return null;
+    const path = parseValidationErrorPath(matches[0].path);
+    const root = draft?.state.rootActivity;
+    return path.nodeId && root && findActivityNode(root, path.nodeId, catalogByVersion)
+      ? matches[0]
+      : null;
+  }, [catalogByVersion, combinedValidationErrors, draft?.state.rootActivity]);
+
+  const openValidationIssueFromReview = useCallback((message: string) => {
+    if (!locatablePublicationValidation(message)) return;
+    setPendingReviewValidationMessage(message);
+    cancelPublication();
+  }, [cancelPublication, locatablePublicationValidation]);
+
+  useEffect(() => {
+    if (publicationReview || pendingReviewValidationMessage == null) return;
+    const error = locatablePublicationValidation(pendingReviewValidationMessage);
+    setPendingReviewValidationMessage(null);
+    if (!error) return;
+    const path = parseValidationErrorPath(error.path);
+    if (path.nodeId) goToValidationNode(path.nodeId, error.path ?? undefined);
+  }, [goToValidationNode, locatablePublicationValidation, pendingReviewValidationMessage, publicationReview]);
 
   // Choose data on ordinary activity inputs of an executable workflow draft, including BPMN-bound activities.
   const activityDataSelection = useWorkflowActivityDataSelection({
@@ -1338,6 +1413,8 @@ export function WorkflowEditor({
           onRetryExpressionDescriptors={() => { void reloadExpressionDescriptors(); }}
           scopedVariableAnalysis={scopedVariableAnalysis}
           activityDataSelection={activityDataSelection}
+          focusInputKey={validationFocus && inspectedNode && validationFocus.nodeId === inspectedNode.nodeId ? validationFocus.inputKey : undefined}
+          focusInputRequest={validationFocus && inspectedNode && validationFocus.nodeId === inspectedNode.nodeId ? validationFocus.request : undefined}
           activeTabId={activeInspectorTabId}
           onActiveTabChange={setActiveInspectorTabId}
           onSelectedActivityChange={updateSelectedActivity}
@@ -1475,6 +1552,9 @@ export function WorkflowEditor({
           setStatus={setStatus} setError={setError} reload={reload} /> : undefined}
         publicationUnavailableReason={publicationUnavailableReason}
         onPublish={mode => { if (operations?.publishing.state !== "unavailable") void preparePublication(mode); }}
+        onRunPublished={() => { void runPublishedWorkflow(); }}
+        canRunPublished={canRunPublished}
+        runPublishedTitle={runPublishedTitle}
         onRun={() => { if (operations?.testRuns.state !== "unavailable") void run(); }}
         canRun={canRunTest}
         runTitle={operations?.testRuns.state === "unavailable" ? operations.testRuns.reason ?? "Test runs are unavailable on this backend." : draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
@@ -1548,6 +1628,13 @@ export function WorkflowEditor({
       ) : null}
 
       {saveTemplateOpen ? <React.Suspense fallback={<p role="status">Loading template dialog…</p>}><SaveWorkflowTemplateDialog context={context} draft={draft} name={details.definition.name + (documentAdapter ? " copy" : "")} description={details.definition.description} onClose={() => setSaveTemplateOpen(false)} /></React.Suspense> : null}
+      {!documentAdapter && publishedRun.pending ? <WorkflowRunInputDialog
+        inputs={publishedRun.pending.inputs}
+        editors={runInputEditors}
+        busy={!!publishedRun.runningArtifactId}
+        onSubmit={inputs => { void publishedRun.confirm(inputs); }}
+        onCancel={publishedRun.cancel}
+      /> : null}
       {error ? (
         <WorkflowAlert
           error={error}
@@ -1583,6 +1670,8 @@ export function WorkflowEditor({
           onPublish={confirmPublication}
           onCancel={cancelPublication}
           onOpenPublishedExecutable={openPublishedExecutable}
+          canOpenValidationIssue={message => !!locatablePublicationValidation(message)}
+          onOpenValidationIssue={openValidationIssueFromReview}
         />
       ) : null}
 
@@ -1865,8 +1954,11 @@ export function WorkflowEditor({
             onRepair={repairVariableReference}
             onSelectNode={goToValidationNode}
             onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
-            unavailable={draftValidations.available === false}
-            pending={localDraftValidation.pending && combinedValidationErrors.length === 0}
+            activityLabels={activityLabels}
+            unavailable={draftValidations.available === false || draftValidations.status === "error"}
+            pending={localDraftValidation.pending || (!documentAdapter && draftValidations.available !== false && draftValidations.status !== "ready" && draftValidations.status !== "error")}
+            expanded={validationPanelOpen}
+            onExpandedChange={setValidationPanelOpen}
           />
           </>
           )}

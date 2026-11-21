@@ -20,13 +20,33 @@ export function DecisionGridFixture() {
   </main>;
 }
 
-const composedXml = editTable(newDecisionXml(), { kind: "add-rule" });
+const composedXml = (() => {
+  let xml = editTable(newDecisionXml(), { kind: "add-clause", output: false });
+  const secondInput = parseTable(xml).inputs[1];
+  xml = editTable(xml, { kind: "clause", id: secondInput.id, output: false, name: "customerCategory", type: "string" });
+  for (let index = 0; index < 3; index++) xml = editTable(xml, { kind: "add-rule" });
+  const table = parseTable(xml);
+  const conditions = ["<= 21", "> 21", "-", "-"];
+  const outcomes = ['"Manual review"', '"Automatic"', '"VIP"', '"Other"'];
+  table.rules.forEach((rule, index) => {
+    xml = editTable(xml, { kind: "cell", ruleId: rule.id, output: false, column: 0, text: conditions[index] });
+    xml = editTable(xml, { kind: "cell", ruleId: rule.id, output: true, column: 0, text: outcomes[index] });
+  });
+  return xml;
+})();
 const recoveryTable = parseTable(composedXml);
 const recoveryXml = editTable(composedXml, { kind: "cell", ruleId: recoveryTable.rules[0].id, output: false, column: 0, text: "male" });
+const recoveryDiagnostics: Diagnostic[] = recoveryTable.rules.flatMap(rule => [...recoveryTable.inputs, ...recoveryTable.outputs].map(clause => ({
+  code: "UnsupportedExpression",
+  message: "This condition is not supported by the selected profile.",
+  decisionId: recoveryTable.id,
+  ruleId: rule.id,
+  clauseId: clause.id
+})));
 const composedAsset: DecisionAsset = {
   id: "approval",
   name: "Approval",
-  description: "A compact, two-rule decision for the composed editor check.",
+  description: "A representative decision for the composed editor check.",
   revision: "revision-1",
   sourceHash: "hash-1",
   xml: composedXml,
@@ -42,6 +62,7 @@ const composedCase = {
   expectedStatus: "Success",
   expectedResult: { kind: "string", value: "Manual review" }
 };
+const historyRun = { id: "history-run-1", candidateId: "revision-1", candidateHash: "hash-1", passed: false, hasDetailedPayload: false, comparisons: [], evaluatedAt: "2026-11-18T10:00:00Z", completedAt: "2026-11-18T10:00:00Z" };
 const recycledAsset: DecisionAsset = { ...composedAsset, revision: "recycled-r1", publishedVersionId: null, deletedAt: "2026-11-20T12:00:00Z" };
 
 export function DecisionPageFixture() {
@@ -50,21 +71,26 @@ export function DecisionPageFixture() {
   const state = useRef<"recycled" | "active" | "purged">(initialCollection ? "recycled" : "active");
   const currentAsset = useRef<DecisionAsset>(recoveryMode ? { ...composedAsset, xml: recoveryXml, sourceHash: "invalid-hash" } : composedAsset);
   const savedCase = recoveryMode ? { ...composedCase, inputs: { amount: { kind: "number", value: "20" } }, expectedResult: { kind: "string", value: "Approved" } } : composedCase;
+  const savedCases = useRef([savedCase]);
   const api = {
     backend: {
       baseUrl: "http://decisions.test/tenant",
       http: {
         getJson: async (path: string) => path.endsWith("/recycle-bin") ? { items: state.current === "recycled" ? [recycledAsset] : [] }
           : path.endsWith("/decisions") ? { items: state.current === "active" ? [currentAsset.current] : [] }
-            : path.endsWith("/cases") ? { items: [savedCase] }
-              : path.endsWith("/versions") || path.endsWith("/runs") ? { items: [] } : currentAsset.current,
-        postJson: async (path: string) => {
+            : path.endsWith("/cases") ? { items: savedCases.current }
+              : path.endsWith("/versions") ? { items: [] }
+                : path.endsWith("/runs") ? { items: [historyRun] }
+                  : path.includes("/runs/") ? historyRun : currentAsset.current,
+        postJson: async (path: string, body?: unknown) => {
+          if (path.endsWith("/cases")) {
+            const created = { ...(body as typeof savedCase), id: "case-created", revision: "case-revision-2" };
+            savedCases.current = [...savedCases.current, created];
+            return created;
+          }
           if (path.endsWith("/test")) {
             if (recoveryMode && currentAsset.current.xml === recoveryXml) throw Object.assign(new Error("Request failed with 400."), { payload: {
-              code: "unsupported", message: "The exact candidate cannot be evaluated.", diagnostics: [{
-                code: "UnsupportedExpression", message: "This condition is not supported by the selected profile.", decisionId: recoveryTable.id,
-                ruleId: recoveryTable.rules[0].id, clauseId: recoveryTable.inputs[0].id
-              }]
+              code: "unsupported", message: "The exact candidate cannot be evaluated.", diagnostics: recoveryDiagnostics
             } });
             return { id: "recovery-run", candidateId: currentAsset.current.revision, candidateHash: currentAsset.current.sourceHash, passed: true, hasDetailedPayload: false, comparisons: [], evaluatedAt: "2026-11-18T10:00:00Z", completedAt: "2026-11-18T10:00:00Z" };
           }
@@ -73,7 +99,15 @@ export function DecisionPageFixture() {
           if (path.endsWith("/recycle")) state.current = "recycled";
           return { id: composedAsset.id, revision: "revision-2" };
         },
-        putJson: async (_path: string, body: unknown) => {
+        putJson: async (path: string, body: unknown) => {
+          if (path.includes("/cases/")) {
+            const id = decodeURIComponent(path.slice(path.lastIndexOf("/") + 1));
+            const existing = savedCases.current.find(item => item.id === id);
+            if (!existing) throw new Error("Saved case not found.");
+            const updated = { ...existing, ...(body as Partial<typeof existing>), revision: "case-revision-2" };
+            savedCases.current = savedCases.current.map(item => item.id === id ? updated : item);
+            return updated;
+          }
           const update = body as Pick<DecisionAsset, "name" | "xml" | "isSensitive"> & Partial<Pick<DecisionAsset, "description">>;
           currentAsset.current = { ...currentAsset.current, ...update, revision: "revision-2", sourceHash: "hash-2", updatedAt: "2026-11-18T11:00:00Z" };
           return currentAsset.current;
@@ -82,16 +116,16 @@ export function DecisionPageFixture() {
     },
     backendSession: {
       capabilities: { capabilities: [{ id: "elsa.api.decisions", contractVersion: "1", links: [{ rel: "decisions", href: "decisions" }] }] },
-      identity: { status: "authenticated", subject: "browser-test", tenantId: "tenant", roles: [], permissions: ["decisions:read", "decisions:manage", "decisions:test"] }
+      identity: { status: "authenticated", subject: "browser-test", tenantId: "tenant", roles: [], permissions: ["decisions:read", "decisions:manage", "decisions:publish", "decisions:test", "decisions:history"] }
     },
     dialogs: { confirm: async () => true, prompt: async () => "Approval", alert: () => undefined },
     notifications: { notify: () => ({ id: "decision-fixture", update: () => undefined, dismiss: () => undefined }), track: <T,>(work: Promise<T>) => work }
   } as unknown as ElsaStudioModuleApi;
 
-  return <main className="browser-decision-grid" style={{ minHeight: "100vh", padding: "1.5rem", background: "var(--studio-surface)", color: "var(--studio-text)" }}>
-    <DecisionsPage api={api} navigate={path => {
+  const editor = <DecisionsPage api={api} navigate={path => {
       const target = new URL(path, window.location.href);
       setRoute({ assetId: target.searchParams.get("decision") ?? undefined, isNew: target.searchParams.get("new") === "1" });
-    }} assetId={route.assetId} isNew={route.isNew} />
-  </main>;
+    }} assetId={route.assetId} isNew={route.isNew} />;
+  return page === "full" ? <div className="browser-decision-shell"><main className="content">{editor}</main></div>
+    : <main className="browser-decision-grid" style={{ minHeight: "100vh", padding: "1.5rem", background: "var(--studio-surface)", color: "var(--studio-text)" }}>{editor}</main>;
 }
