@@ -18,6 +18,7 @@ public static class LeaseChecks
         await ActorAdapterChecks.Run(Check);
         await ActorAdapterChecks.EventAmbient(Check);
         await OrdinaryIngressChecks.Run(Check);
+        await FoundationKeyIngressChecks.Run(Check);
         await ContractStatechartChecks.Run(Check);
         await EventRequestChecks.Run(Check);
         await EventRequestChecks.Provenance(Check);
