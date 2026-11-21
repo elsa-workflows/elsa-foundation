@@ -40,6 +40,7 @@ public sealed record Message(
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public long InboxScope { get; private init; }
+    internal bool BindFoundationChild { get; init; }
     [System.Text.Json.Serialization.JsonIgnore]
     public string? EventMatch { get; private init; }
     [System.Text.Json.Serialization.JsonIgnore]
