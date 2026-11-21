@@ -13,7 +13,7 @@ internal static class FoundationEventReferences
         var store = new InMemoryStore(1, () => now);
         var spec = new Contract.StartSpec("event-refs", "start");
         var scope = new Contract.BoundScope(tenant);
-        var ingress = new EventRequests(store, new Requests("event-reference-requests"), "caller");
+        var ingress = new EventIngress(store, new Requests("event-reference-requests"), "caller");
         await Events.PublishAsync(store, new EventRow("acme_late", "published-first", "kept", now + 60_000) { FoundationTenant = "acme" });
         check(store.Messages.Count == 0, "a kept event remains without a creator before the start subscription");
 
