@@ -9,8 +9,16 @@ public static class WatchdogChecks
 {
     private static readonly TimeSpan Lease = TimeSpan.FromMilliseconds(300);
 
-    public static async Task<int> RunAsync() => Report(await OwnerPathAsync()) | Report(await BesideAsync());
+    public static async Task<int> RunAsync() => Report(Contract()) | Report(await OwnerPathAsync()) | Report(await BesideAsync());
     private static int Report((bool Ok, string What) r) { Console.WriteLine($"{(r.Ok ? "ok" : "FAIL")} {r.What}"); return r.Ok ? 0 : 1; }
+    // B1 of #4922: every member of the store contract is the watched store's own, so no interface default stands in for the
+    // inner store's (the 5a wrapper bug); the owner-path table below holds the watched ones to the watchdog.
+    private static (bool, string) Contract()
+    {
+        var missing = typeof(WatchedStore).GetInterfaceMap(typeof(IKernelStore)).TargetMethods.Concat(typeof(WatchedStore).GetInterfaceMap(typeof(IMembership)).TargetMethods)
+            .Where(m => m.DeclaringType != typeof(WatchedStore)).Select(m => m.Name).ToList();
+        return (missing.Count == 0, $"the watched store implements the whole store contract itself: missing [{string.Join(", ", missing)}]");
+    }
     // L1: each owner-path member, stuck in the store, is closed at twice the lease, and the call ends on it.
     private static readonly (string What, Func<IKernelStore, Task> Call)[] OwnerPath =
     [

@@ -198,12 +198,15 @@ the commit step, on every engine; this covers a client that pauses between the b
 bounds a holder whose client is gone or silent: PostgreSQL's `idle_in_transaction_session_timeout` and statement
 timeout, MongoDB's `transactionLifetimeLimitSeconds`, and on SQL Server and MySQL the end of the dead client's session
 by connection keepalive. A take waits at most its own lock timeout (`LOCK_TIMEOUT`, `innodb_lock_wait_timeout`,
-PostgreSQL's `lock_timeout`), no longer than the lease; past it the take fails as a transient error, its transaction is
+PostgreSQL's `lock_timeout`), no longer than the lease and set for the take alone: after it, the pooled connection's
+lock timeout reads back at the engine's default; past it the take fails as a transient error, its transaction is
 rolled back, and it is retried at the next balancing round. A client that is stuck and never resumes, while its
 connection stays open, is ended by its host's watchdog: when an owner-path store call (commit, take, poll, load or
 heartbeat) has outlasted twice the lease, the watchdog first closes that call's connection from another thread, which
 closes the socket and makes the server roll the transaction back; it ends the process only when the connection cannot
-be closed, and in the Embedded profile, where the host process is the application, that last step is the
+be closed, that is when the call is still in flight a grace of a third of the lease after the close. The watchdog looks
+every third of a lease, so it closes a stuck call between 2 and 2⅓ leases after the call was sent, and ends the process
+⅓ to ⅔ of a lease after that close: about 3 leases after the send in the worst case. In the Embedded profile, where the host process is the application, that last step is the
 application's policy. A batch's command timeout is at most the lease. This is the bound on SQL Server,
 where `LOCK_TIMEOUT` cancels only the waiting take and keepalive detects only a dead peer. K4 qualifies these bounds on
 each provider, the server-side heartbeat timeout and a stuck holder on a live connection included. With one Worker per node (D1) that Worker is the node's; a fixed host with a Worker per

@@ -104,4 +104,11 @@ public enum Flaw : long
     // K1b slice 1: the node lease's store rules, each caught by its store conformance case (NL-2, NL-5).
     TakeIgnoresNodeLease = 1L << 55, // a node-lease take treats every owner's node record as expired, so it takes from a live process
     PlainReadEmptyFence = 1L << 56,  // the fence of a batch with no journal rows is a plain read that holds no row, so a take lands after it
+
+    // K1b slice 6a: the node lease's Worker and host rules, each caught by sim --node-lease-mutations (NL-3, NL-8, NL-10).
+    HeartbeatIgnoresAnswer = 1L << 57, // the answer's stand-down side is skipped: a partition taken from the process is not stood down
+    KeepUnheldRows = 1L << 58,       // the answer is reconciled one way only: a row listed as the process's that it does not hold stays its
+    ReleaseDuringTake = 1L << 59,    // the answer's release side ignores takes in flight and the generation, and frees rows a take brought back
+    RenewRegardlessOfPasses = 1L << 60, // the pass gate counts every Worker live, so a wedged host keeps renewing
+    TakeRenewsWedgedHost = 1L << 61, // a host whose gate is closed still takes, and its take renews its node record
 }

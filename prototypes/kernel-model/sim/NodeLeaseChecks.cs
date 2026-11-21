@@ -28,6 +28,8 @@ internal static class NodeLeaseChecks
         await RenewsDuringARetake(check);
         await AnswerDuringAPass(check);
         await SiblingTakeInFlight(check);
+        await OwnTakeInFlight(check);
+        await MarksOnlyFence(check);
         await HungReleaseDrain(check);
         await GivenUpDuringItsRetake(check);
         await DisposeOfAPendingPartition(check);
@@ -219,7 +221,7 @@ internal static class NodeLeaseChecks
     private static async Task HandOverOfAPendingPartition(Action<bool, string> check)
     {
         var (store, clock, advance) = World(2, out _);
-        var host = DurableHost.ForNode("p", store, new WorkflowInstance([new Counter()]), 2, new() { Monotonic = clock, Partitions = 2 });
+        var host = DurableHost.ForNode("p", store, new WorkflowInstance([new Counter()]), 2, new() { Monotonic = clock, Partitions = 2, Flaws = Flaws });
         var scope = (await host.ActivateAsync(0))!;
         await host.ActivateAsync(1);
         var worker = host.NodeWorker!;
@@ -279,6 +281,39 @@ internal static class NodeLeaseChecks
         await gain;
         check(listed && kept && w1.Holds(1) && store.Partitions[1].Owner == "p" && store.Partitions[1].Epoch == w1.EpochOf(1),
             $"NL-8: a sibling's take in flight keeps its partition from the other Worker's release side: listed {listed}, kept {kept}, w1 holds 1 {w1.Holds(1)}");
+    }
+
+    // NL-8, slice 6a: an answer sent while the Worker's own take is in flight lists the partition the take wrote; its release
+    // side frees nothing of it (mutation ReleaseDuringTake).
+    private static async Task OwnTakeInFlight(Action<bool, string> check)
+    {
+        var (store, clock, _) = World(2, out _);
+        var wire = new DelayedCommit(store);
+        var host = DurableHost.ForNode("p", wire, new WorkflowInstance([new Counter()]), 2, new() { Monotonic = clock, Partitions = 2, Flaws = Flaws });
+        await host.ActivateAsync(0);
+        var worker = host.NodeWorker!;
+        wire.DelayTake = true;
+        var gain = host.ActivateAsync(1).AsTask();
+        await wire.Taken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Beat(store, worker);
+        await worker.RunAsync();        // judges the answer while the take is in flight
+        wire.TakeReply.SetResult();
+        await gain;
+        check(worker.Holds(1) && store.Partitions[1].Owner == "p" && store.Partitions[1].Epoch == worker.EpochOf(1),
+            $"NL-8: an answer sent during the Worker's own take frees nothing it took: owner of 1 {store.Partitions[1].Owner ?? "none"}, holds 1 {worker.Holds(1)}");
+    }
+
+    // NL-5, slice 6a: a batch of seen marks only over 0 and 1, with 1 taken on the wire after it locked 0 (its epoch moves),
+    // is refused whole (mutation PlainReadEmptyFence: the fence reads without locking, so it lands).
+    private static async Task MarksOnlyFence(Action<bool, string> check)
+    {
+        var (store, _, _) = World(2, out _);
+        await store.AddAsync(new Message("m", InstanceRef.In(1, "x"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
+        var held = (await store.TakeAsync([0, 1], "p", Lease)).Taken;
+        store.Locking = p => { if (p == 0) store.Partitions[1].Epoch++; };
+        var landed = (await store.CommitAsync(CommitBatch.Owned(held, Lease, false, [], ["m"], []))).Landed;
+        store.Locking = null;
+        check(!landed, $"NL-5: a batch of marks only, with a partition taken on the wire, is refused whole: landed {landed}");
     }
 
     // Review A of #4870, item 3: a fixed host's Worker whose release drain hangs on its commit runs no pass, and none counts:
@@ -399,7 +434,7 @@ internal static class NodeLeaseChecks
     {
         var (store, clock, _) = World(2, out _);
         var wire = new DelayedCommit(store);
-        var host = DurableHost.ForNode("p", wire, new WorkflowInstance([new Counter()]), 2, new() { Monotonic = clock, Partitions = 2 });
+        var host = DurableHost.ForNode("p", wire, new WorkflowInstance([new Counter()]), 2, new() { Monotonic = clock, Partitions = 2, Flaws = Flaws });
         await host.ActivateAsync(0);
         var scope = (await host.ActivateAsync(1))!;
         var worker = host.NodeWorker!;
@@ -519,12 +554,15 @@ internal static class NodeLeaseChecks
     private static (InMemoryStore Store, Func<long> Clock, Action<long> Advance) World(int partitions, out long start)
     {
         var time = start = 100_000L;
-        var store = new InMemoryStore(partitions, () => time) { NodeLeaseAvailable = true };
+        var store = new InMemoryStore(partitions, () => time, Flaws) { NodeLeaseAvailable = true };
         return (store, () => time, by => time += by);
     }
 
     private static Worker Owner(IKernelStore store, int[] partitions, Func<long> clock) =>
-        new("p", partitions, store, new WorkflowInstance([new Counter()]), new WorkerOptions { Monotonic = clock, Partitions = partitions.Length });
+        new("p", partitions, store, new WorkflowInstance([new Counter()]), new WorkerOptions { Monotonic = clock, Partitions = partitions.Length, Flaws = Flaws });
+
+    /// <summary>K1b slice 6a: the mutation these witnesses run under (sim --node-lease-mutations); None otherwise.</summary>
+    internal static Flaw Flaws { get; set; }
 
     private static async Task<Worker.HeartbeatSent> Beat(InMemoryStore store, Worker worker, Func<NodeBeat, NodeBeat>? alter = null)
     {
@@ -611,7 +649,7 @@ internal static class NodeLeaseChecks
     {
         var (store, clock, advance) = World(2, out _);
         var wire = new DelayedCommit(store);
-        var host = DurableHost.ForNode("q", wire, new WorkflowInstance([new Counter()]), 2, new() { Monotonic = clock, Partitions = 2 });
+        var host = DurableHost.ForNode("q", wire, new WorkflowInstance([new Counter()]), 2, new() { Monotonic = clock, Partitions = 2, Flaws = Flaws });
         await host.ActivateAsync(0);
         var worker = host.NodeWorker!;
         wire.DelayTake = true;

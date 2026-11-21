@@ -1784,12 +1784,14 @@ jobs:
       # FreshTurnSwapsLoopKeys is first caught at seed 3589 since slice 7 (NATIVE.md), and the gate keeps three times that. Every kernel mutation is caught except the two FINDINGS documents as caught only
       # with the rule that covers them. --expect-total pins the number of mutations, the two flag combinations included, so one dropped or added fails.
       # K1 slice 7 added five (48): FenceSubset, SeenAtNodeEpoch, SuspectAcrossPartitions, ChildIssuerPerWorker, TrialSparesOtherPartitions.
+      # K1b slice 6a: the node lease's seven mutations, each against the deterministic node-lease witnesses; all caught, pinned at 7.
       - name: Mutation checks
         run: |
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 48 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 12000
+          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 7 -- dotnet sim/$BIN/Kernel.Sim.dll --node-lease-mutations
 
       # K1 slice 7: both witness cases must fail, each on the landed flush, with the k-row fence broken to land the part
       # of a flush still fenced.
@@ -1881,6 +1883,7 @@ jobs:
             dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
             dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
+          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 7 -- dotnet sim/$BIN/Kernel.Sim.dll --node-lease-mutations
 
       - name: Store conformance, in memory and EF on SQLite in both fence modes
         run: |

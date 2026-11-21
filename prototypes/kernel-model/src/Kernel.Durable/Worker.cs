@@ -537,7 +537,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         lock (_turnSync)
         {
-            if (sent.Generation != _generation) return;
+            if (sent.Generation != _generation && !Has(Flaw.ReleaseDuringTake)) return;
             if (Owns && sent.At >= Volatile.Read(ref _safeUntil)) return;     // sent after the guard expired: the next pass stands down
             RenewGuard(sent.At);
             Observe(answer.Now);
@@ -582,15 +582,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
             (sent, answer, sibling) = answered;
             _answered = null;
             _judgedAt = Math.Max(_judgedAt, sent.At);
-            if (sent.Generation != _generation) return;
+            if (sent.Generation != _generation && !Has(Flaw.ReleaseDuringTake)) return;     // MUTATION ReleaseDuringTake: also below
             var listed = answer.Owned.ToDictionary(o => o.Partition, o => o.Epoch);
             foreach (var (partition, epoch) in _pending.ToList())
                 if (listed.GetValueOrDefault(partition, -1) == epoch) retake.Add(partition);
                 else _pending.Remove(partition);
-            if (!sent.Taking && !_taking && sent.Takes == Interlocked.Read(ref _takesStarted))
+            if (!Has(Flaw.KeepUnheldRows) && (Has(Flaw.ReleaseDuringTake) || !sent.Taking && !_taking && sent.Takes == Interlocked.Read(ref _takesStarted)))
                 release = [.. listed.Where(l => !(_held.TryGetValue(l.Key, out var held) && held.Epoch == l.Value) && !_pending.ContainsKey(l.Key))
                     .Select(l => new PartitionFence(l.Key, l.Value, 0))];
-            lost = sent.Held.Where(f => (!listed.TryGetValue(f.Partition, out var epoch) || epoch != f.Epoch)
+            lost = Has(Flaw.HeartbeatIgnoresAnswer) ? [] : sent.Held.Where(f => (!listed.TryGetValue(f.Partition, out var epoch) || epoch != f.Epoch)
                 && _held.TryGetValue(f.Partition, out var held) && held.Epoch == f.Epoch).Select(f => f.Partition).ToHashSet();
         }
         // As a cooperative hand-over goes: drain, then drop when quiet, or reset and take the rest back. Its release of the
@@ -714,14 +714,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 var (now, lease) = (_options.Monotonic(), (long)_options.Lease.TotalMilliseconds);
                 var retakeHangs = _retaking && _retakeSet.Count > 0 && now - Volatile.Read(ref _retakeAt) >= lease;
                 var takeHangs = _taking && now - Volatile.Read(ref _takeAt) >= lease;
-                return (!Owns && _pending.Count == 0 && !retakeHangs && _gaining < 0 && !takeHangs) || now - Volatile.Read(ref _lastPass) < lease;
+                return (!Owns && _pending.Count == 0 && !retakeHangs && _gaining < 0 && !takeHangs) || now - Volatile.Read(ref _lastPass) < lease
+                    || Has(Flaw.RenewRegardlessOfPasses);       // MUTATION: renewal regardless of passes
             }
         }
     }
 
     /// <summary>K1b: the host's pass gate, set by its heartbeat (<see cref="NodeHeartbeat"/>). While it is closed the Worker takes nothing.</summary>
     public Func<bool>? TakesOpen { get; set; }
-    private bool TakesClosed => NodeLease && TakesOpen is { } open && !open();
+    private bool TakesClosed => NodeLease && TakesOpen is { } open && !open() && !Has(Flaw.TakeRenewsWedgedHost);     // MUTATION: a wedged host takes
 
     /// <summary>Test-only (N1, N6): how many times <see cref="ClaimedPartitions"/> ran. One answer asks each Worker once.</summary>
     internal long ClaimedLookups { get; private set; }

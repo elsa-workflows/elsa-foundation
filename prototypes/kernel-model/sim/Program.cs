@@ -6,6 +6,7 @@ using Kernel.Sim;
 //   dotnet run -c Release --project sim -- --seeds 10000 [--from 1] [--actions 300] [--flaw Name[,Name]] [--count 1024|4096]
 //   dotnet run -c Release --project sim -- --seed 42 [--actions 300] [--flaw Name]      replay one seed; prints a shrunk trace if it fails
 //   dotnet run -c Release --project sim -- --mutations [--seeds 2000]                   break the kernel on purpose and see who notices
+//   dotnet run -c Release --project sim -- --node-lease-mutations                       the node lease's mutations, each against its witnesses
 
 // A named mutation must select exactly its own bit. Aliases make unrelated controls run together.
 var namedFlaws = Enum.GetNames<Flaw>().Where(name => name != nameof(Flaw.None)).ToArray();
@@ -38,6 +39,7 @@ if (args.Contains("--landed-check")) return LandedChecks.Run();
 if (args.Contains("--placement-check")) return PlacementChecks.Run(flaws);
 if (args.Contains("--native-mutations")) return NativeMutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (args.Contains("--mutations")) return Mutations(int.Parse(Arg("--seeds") ?? "2000"));
+if (args.Contains("--node-lease-mutations")) return await NodeLeaseMutations();
 if (Arg("--backlog") is { } backlog) return Backlog(int.Parse(backlog));
 if (Arg("--seed") is { } one) return Replay(int.Parse(one), flaws) ? 0 : 1;
 return Sweep(int.Parse(Arg("--from") ?? "1"), int.Parse(Arg("--seeds") ?? "10000"), flaws) ? 0 : 1;
@@ -245,6 +247,25 @@ int Mutations(int seeds)
         Console.WriteLine(caught is { } c
             ? $"{mutation}: CAUGHT at seed {c.Seed} after {acts} actions, {clock.ElapsedMilliseconds} ms: {c.Violation}"
             : $"{mutation}: NOT CAUGHT in {seeds} seeds ({acts} actions, {clock.ElapsedMilliseconds} ms)");
+    }
+    return missed;
+}
+
+// K1b slice 6a: the node lease's mutations (NL-2, NL-3, NL-5, NL-8, NL-10), each caught by a node-lease witness of --lease-check.
+async Task<int> NodeLeaseMutations()
+{
+    Flaw[] mutations = [Flaw.TakeIgnoresNodeLease, Flaw.HeartbeatIgnoresAnswer, Flaw.PlainReadEmptyFence, Flaw.KeepUnheldRows, Flaw.ReleaseDuringTake,
+        Flaw.RenewRegardlessOfPasses, Flaw.TakeRenewsWedgedHost];
+    var missed = 0;
+    foreach (var mutation in mutations)
+    {
+        List<string> failed = [];
+        NodeLeaseChecks.Flaws = mutation;
+        try { await NodeLeaseChecks.Run((ok, name) => { if (!ok) failed.Add(name); }); }
+        catch (Exception e) { failed.Clear(); Console.WriteLine($"  {mutation}: the witnesses threw {e.GetType().Name}: no catch"); }
+        finally { NodeLeaseChecks.Flaws = Flaw.None; }
+        if (failed.Count == 0) missed++;
+        Console.WriteLine(failed.Count > 0 ? $"{mutation}: CAUGHT by {failed.Count} node-lease witness(es): {failed[0]}" : $"{mutation}: NOT CAUGHT by the node-lease witnesses");
     }
     return missed;
 }

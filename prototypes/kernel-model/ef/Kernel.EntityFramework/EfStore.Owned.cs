@@ -313,6 +313,7 @@ public sealed partial class EfStore
         var ids = List(partitions.Distinct().Order());
         await using var db = create();
         await using var transaction = await (NodeLease ? BeginNodeTakeAsync(db, lease, cancellationToken) : Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        await using var reset = LockTimeoutReset(db);       // disposed before the transaction, on its open connection
         // The node lease (K1b): the owners' node records read first, then this node's own written, then the rows below.
         var expired = NodeLease ? await ReadAndRenewAsync(db, NodeReadInUpdate ? null : ids, node, lease, cancellationToken) : null;
         var take = NodeLease ? """ "Owner" = {0}, "Epoch" = "Epoch" + 1""" : $""" "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"}""";
