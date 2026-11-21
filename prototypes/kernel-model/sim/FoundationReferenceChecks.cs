@@ -29,7 +29,7 @@ internal static class FoundationReferenceChecks
 
         var oldDue = time + 100;
         check(store.AddFoundationMessage(tenant, proposed, "deferred-old", "signal", "\"old\"", oldDue) == true &&
-              store.Messages[new InboxKey("deferred-old")].Message.TargetCreation == 1,
+              store.Messages.Values.Single(row => row.Message.Id == "deferred-old").Message.TargetCreation == 1,
             "an exact send to a pending creator is pinned to its accepted life");
 
         Worker Owner(string node) => new(node, 0, store, new WorkflowInstance([new Probe()]),
@@ -47,6 +47,8 @@ internal static class FoundationReferenceChecks
             "the same exact ref routes after owner replacement and the same id is a duplicate");
         await Pump(nextOwner);
         check(Read() is ["first"], "the replacement applies the exact send once");
+        check(store.AddFoundationMessage(tenant, proposed, "before-end", "signal", """"duplicate"""") == false,
+            "an exact send stays a duplicate after its fenced consumption");
         check(store.AddFoundationMessage(tenant, proposed, "finish", "finish") == true, "the exact ref can end its own life");
         await Pump(nextOwner);
         check(store.Instances.GetValueOrDefault(target.Id)?.Status == InstanceStatus.Finished, "the first life finishes");
@@ -75,15 +77,27 @@ internal static class FoundationReferenceChecks
         check(store.AddFoundationMessage(tenant, proposed, "after-recreate", "signal") is null,
             "an old ref cannot select the successor");
         if (successor is not null)
-            check(store.AddFoundationMessage(tenant, successor, "second-life", "signal", "\"new\"") == true,
+            check(store.AddFoundationMessage(tenant, successor, "second-life", "signal", "\"new\"", keepFor: TimeSpan.FromMilliseconds(105)) == true,
                 "the successor's own ref admits the new send");
         time = oldDue;
         await Pump(nextOwner);
         check(store.Instances.GetValueOrDefault(target.Id) is { Creation: 2, Retired: false } && Read() is ["new"] &&
-              !store.Messages.ContainsKey(new InboxKey("deferred-old")),
+              store.Messages.Values.All(row => row.Message.Id != "deferred-old" || row.Done),
             "delivery discards the old pinned input and applies only the successor's send");
         check(store.AddFoundationMessage(tenant, proposed, "after-successor-commit", "signal") is null,
             "the old ref stays unavailable after the successor's first turn lands");
+
+        var peer = InstanceRef.In(0, "acme_peer");
+        var peerRef = store.AdmitFoundationStart(tenant, first with { Id = "peer", Target = peer })!;
+        check(store.AddFoundationMessage(tenant, peerRef, "second-life", "signal", Json.Write("peer")) == true &&
+              store.AddFoundationMessage(tenant, successor, "second-life", "signal", Json.Write("duplicate")) == false,
+            "the same caller id is independent across exact targets");
+        time += 6;
+        check(store.AddFoundationMessage(tenant, successor, "second-life", "signal", Json.Write("after-window")) == true,
+            "a settled id may be reused after its shorter deduplication window, before sweep");
+        await Pump(nextOwner);
+        check(Read() is ["new", "after-window"] && Json.Read<List<string>>(store.Instances[peer.Id].State) is ["peer"],
+            "the actor worker applies the two targets and the post-window replay once each");
 
         List<string>? Read() => store.Instances.TryGetValue(target.Id, out var row) ? Json.Read<List<string>>(row.State) : null;
     }
