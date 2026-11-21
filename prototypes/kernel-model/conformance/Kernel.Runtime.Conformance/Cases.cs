@@ -233,20 +233,38 @@ public static class Cases
 
         new("split: two activations of one scope at once, on two sides; the fence lets one of them write", Level.Required, async h =>
         {
-            await h.StartAsync(side: 0);
-            await h.StartAsync(side: 1);
+            var old = await h.StartAsync(side: 0);
             await Settle(h);
-            var holder = h.Watcher.Holders(h.Partitions)[0].Single();
+            var store = h.StoreOf(old.Name);
+            var actor = InstanceRef.In(0, "c");
             var tokens = Enumerable.Range(0, 20).Select(i => "s" + i).ToList();
-            // The holder's next commit is in flight when the network splits: it executes three leases later, under an
-            // epoch that is no longer the partition's. Meanwhile the other side activates the scope and handles the same
-            // messages.
-            h.StoreOf(holder).StallNextCommit(h.Lease * 3, partition: 0);
-            foreach (var token in tokens) await h.AddAsync(Token(0, "c", token));
-            await Applied(h, 0, "c", tokens, h.Lease * 4 + Slack);
-            var held = h.StoreOf(holder).Held;
-            That(await Task.WhenAny(held, Task.Delay(h.Lease * 5)) == held, "the holder's commit was never held: it handled no message in partition 0");
-            That(h.Watcher.OverlapsOn(0, holder) > 0, "partition 0 was never held on both sides at once: the case did not split");
+            // This is a correctness witness. Get the old write on the wire before the other side
+            // starts, and release it only after the other side has taken and applied the inbox.
+            var patience = Scaled(h.Partitions, Timeout / 5);       // hang guard for each stage
+            store.StallNextCommit(System.Threading.Timeout.InfiniteTimeSpan, partition: 0);
+            try
+            {
+                await h.AddAsync(Token(0, "c", tokens[0]));
+                That(await h.WaitAsync(() => store.Stalls > 0, patience), "no old turn commit entered the hold");
+                foreach (var token in tokens.Skip(1)) await h.AddAsync(Token(0, "c", token), wake: false);
+                var successor = await h.StartAsync(side: 1);
+                h.Watcher.CountPasses(0, successor.Name);
+                That(await h.WaitAsync(() => h.Watcher.OverlapsOn(0, old.Name) > 0, patience), "the two activations never overlapped");
+                That(await Harness.WaitAsync(async () =>
+                {
+                    var passes = h.Watcher.CountedPasses;
+                    var applied = (await h.RowAsync(actor.Id)) is { } row ? Json.Read<CounterState>(row.State).Tokens.Count : 0;
+                    if (applied >= tokens.Count) return true;
+                    // Read, recover, turn and flush can each take a pass, even for a single input.
+                    That(passes < 4 * tokens.Count + 4, $"only {applied} of {tokens.Count} tokens after {passes} completed passes");
+                    return false;
+                }, patience), "the successor stopped making progress");
+                await Applied(h, 0, "c", tokens, TimeSpan.Zero);
+            }
+            finally { store.Resume(); }
+
+            var held = store.Held;
+            That(await Task.WhenAny(held, Task.Delay(patience)) == held, "the held commit never returned");
             if (held.Result != "refused") throw new FenceException($"the stale side's commit was not refused by the fence: it {held.Result}");
             await Applied(h, 0, "c", tokens, TimeSpan.Zero);
         }, Fence: true),
