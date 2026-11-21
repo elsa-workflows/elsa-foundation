@@ -236,6 +236,7 @@ destination can keep their existing controls.
   A shared visual primitive does not grant permissions or implement a mutation.
 - Use `StudioButton` with `variant="danger"` for destructive actions: “Delete” destroys a record; “Remove” detaches an item from a list or parent.
 - Use `StudioDialog` for module-owned modal forms. Give it a title, optional description and a `StudioDialogFooter` with Cancel first and one primary confirm at the default button size. Pass `onSubmit` to make the body and footer part of the same form.
+- Use `StudioIconButton` for an icon-only action. Pass one decorative 16px lucide icon and a sentence-case `aria-label`; the label also supplies the default tooltip. Use `variant="danger"` for a destructive icon action.
 - Keep embedded editors, diagnostic streams, dashboards and graph workspaces shaped
   for their task. Use the same typography, controls, semantic colors and feedback.
   A compact page header is available through `studio-page-header--compact` for docked panels.

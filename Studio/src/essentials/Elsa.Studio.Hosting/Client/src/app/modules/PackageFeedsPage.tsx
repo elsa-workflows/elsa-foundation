@@ -1,4 +1,5 @@
-import { StudioPageHeader, StudioButton, StudioField } from "../ui";
+import { StudioPageHeader, StudioField } from "../ui";
+import { StudioIconButton } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useRef, useState, useId } from "react";
 import { PackagePlus, Pencil, RefreshCcw, Trash2, X } from "lucide-react";
 import { defaultStudioHostId, useDialogFocus } from "../../sdk";
@@ -61,9 +62,9 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
     <section className="modules-page package-feeds-page">
       <StudioPageHeader headingLevel={2} title={<>Package feeds</>} description={<>Manage Nuplane feeds, reconciliation, and retention separately for Studio and Server.</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
-            <StudioButton type="button" className="studio-icon-button" aria-label="Refresh package feeds" title="Refresh" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
-              <RefreshCcw size={15} />
-            </StudioButton>
+            <StudioIconButton aria-label="Refresh package feeds" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
+              <RefreshCcw size={16} aria-hidden="true" />
+            </StudioIconButton>
           </StudioToolbarGroup>
         </StudioToolbar></>} />
 
@@ -169,12 +170,12 @@ function PackageFeedsWorkbench({
                   <small>{feed.includeAll ? "All packages" : feed.includePatterns.join(", ")}</small>
                 </span>
                 <div className="package-feed-row-actions">
-                  <button type="button" className="studio-icon-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} title={`Edit ${feed.name} on ${host.label}`} aria-label={`Edit ${feed.name}`} onClick={() => setEditingFeed(feed)}>
-                    <Pencil size={14} />
-                  </button>
-                  <button type="button" className="studio-icon-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} title={`Delete ${feed.name} from ${host.label}`} aria-label={`Delete ${feed.name}`} onClick={() => onDeleteFeed(feed.name)}>
-                    <Trash2 size={14} />
-                  </button>
+                  <StudioIconButton disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} title={`Edit ${feed.name} on ${host.label}`} aria-label={`Edit ${feed.name}`} onClick={() => setEditingFeed(feed)}>
+                    <Pencil size={16} aria-hidden="true" />
+                  </StudioIconButton>
+                  <StudioIconButton variant="danger" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} title={`Delete ${feed.name} from ${host.label}`} aria-label={`Delete ${feed.name}`} onClick={() => onDeleteFeed(feed.name)}>
+                    <Trash2 size={16} aria-hidden="true" />
+                  </StudioIconButton>
                 </div>
               </div>
             ))}
@@ -342,9 +343,9 @@ function FeedDialog({
             <h3 id="package-feed-dialog-title">{title}</h3>
             {feedChangesRequireRestart ? <p>Feed registration changes require a host restart before Nuplane can use them.</p> : null}
           </div>
-          <button type="button" className="studio-icon-button" aria-label={`Close ${mode} feed`} onClick={onClose} disabled={busy}>
-            <X size={14} />
-          </button>
+          <StudioIconButton aria-label={`Close ${mode} feed`} onClick={onClose} disabled={busy}>
+            <X size={16} aria-hidden="true" />
+          </StudioIconButton>
         </div>
 
         <form id="package-feed-form" className="modules-form" onSubmit={submit}>

@@ -46,6 +46,8 @@ A field keeps its label, optional help, and control together; use a supported sh
 <StudioButton variant="primary" size="md" type="submit">Create service</StudioButton>
 ```
 
+For a compact icon-only action, use `StudioIconButton` with a required `aria-label` and a single decorative icon.
+
 For a configured optional section, start it open, show the set count, and allow the author to collapse it. Pass only the host's actual error/force-open state; the disclosure contract owns how those states remain visible.
 
 ```tsx
