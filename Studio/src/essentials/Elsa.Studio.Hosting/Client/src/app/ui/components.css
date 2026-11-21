@@ -1,6 +1,7 @@
 /* Public Studio primitives. Shared by the host and independently packaged modules. */
 @import "./forms/Button.css";
 @import "./forms/Field.css";
+@import "./overlay/StudioDialog.css";
 
 .studio-toolbar {
   display: flex;

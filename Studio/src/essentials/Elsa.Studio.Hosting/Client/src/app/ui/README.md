@@ -90,6 +90,8 @@ imports, a complete collection example, state/accessibility requirements, and th
 standalone stylesheet setup. The [React host example](../../../../../../../examples/react-host/README.md)
 exercises the same published styles without copying internal CSS.
 
+Use `StudioDialog` with `StudioDialogFooter` for module-owned modal forms (see Create Workflow).
+
 Use the injected `api.dialogs.confirm` for confirmation; it resolves `true` for
 confirmation and `false` for cancel or dismissal. Only confirmation calls the
 mutation. Keep the action disabled while the dialog or mutation is pending.
