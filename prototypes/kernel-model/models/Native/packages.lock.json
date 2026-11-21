@@ -20,6 +20,12 @@
           "Kernel.Foundation.Contracts": "[1.0.0, )"
         }
       },
+      "kernel.native.activities": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )"
+        }
+      },
       "kernel.runtime": {
         "type": "Project"
       },
