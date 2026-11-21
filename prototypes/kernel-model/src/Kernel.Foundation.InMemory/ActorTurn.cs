@@ -97,11 +97,12 @@ internal sealed partial class ActorAdapter
 
         public void StartJob(string key, string? arguments = null, TimeSpan? timeout = null)
         {
-            if (timeout is not null) throw new NotSupportedException("Public job deadlines are unavailable on this adapter.");
-            _turn.StartJobWithPayload(key, arguments);
+            ArgumentOutOfRangeException.ThrowIfLessThan(timeout ?? TimeSpan.Zero, TimeSpan.Zero, nameof(timeout));
+            long? deadline = timeout is { } period ? checked(Now + (long)period.TotalMilliseconds) : null;
+            _turn.StartJobWithPayload(key, arguments, deadline);
         }
 
-        public void CancelJob(string key) => _turn.CancelJob(key);
+        public void CancelJob(string key) => _turn.CancelJob(key, _store.FoundationJob(_row.Id, _row.Creation, key)?.Timer);
 
         public void Subscribe(string key, string wait, bool keep = false) => _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
         public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait);
@@ -137,12 +138,16 @@ internal sealed partial class ActorAdapter
             {
                 foreach (var child in _children) _turn.Send(new(child.Id), Contract.Kinds.Terminate, options: new(TargetCreation: child.Creation));
                 foreach (var job in _turn.Jobs() is { } jobs ? Durable.DurableKeyJson.ReadKeys(jobs) : [])
-                    _turn.CancelJob(job);
+                    CancelJob(job);
             }
 
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
             for (var i = 0; i < outcome.Replied.Count; i++)
                 outcome.Replied[i] = outcome.Replied[i] with { FromFoundation = true };
+            foreach (var completion in outcome.Consumed.Where(delivery => delivery.IsWorkerJobCompletion))
+                if (completion.Original?.Read<Durable.JobTicket>().Timer is { } timer &&
+                    _store.HasStoredJobDeadline(_row.Id, _row.Creation, timer))
+                    _turn.Recall(timer);
             foreach (var notice in outcome.Consumed.Where(entry => entry.Message.Kind == Contract.Kinds.ChildFinished))
             {
                 var message = notice.Message;

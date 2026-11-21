@@ -39,6 +39,20 @@ public sealed partial class InMemoryStore
                 message.Target.Id == actor && message.TargetCreation == creation;
     }
 
+    internal bool HasStoredJobDeadline(string actor, long creation, string id)
+    {
+        lock (_gate)
+            return Messages.GetValueOrDefault(InboxKey.Issued(id)) is { Done: false, Message: { Kind: Kinds.JobDeadline } timer } &&
+                timer.Target.Id == actor && timer.TargetCreation == creation;
+    }
+
+    internal JobTicket? FoundationJob(string actor, long creation, string key)
+    {
+        lock (_gate)
+            return Messages.GetValueOrDefault(InboxKey.Ticket(actor, key, creation)) is { Done: false, Message: { Kind: Kinds.Job } ticket }
+                ? ticket.Read<JobTicket>() : null;
+    }
+
     internal ActorCheckpoint FoundationTurnHeader(InstanceRow row)
     {
         lock (_gate)

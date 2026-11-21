@@ -116,6 +116,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly Dictionary<string, Slot> _slots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _aliases = new(StringComparer.Ordinal);
     private readonly Dictionary<InboxKey, Delivery> _items = [];    // every message held, by id
+    private readonly HashSet<Delivery> _timedJobs = [];
     private readonly List<Delivery> _meets = [];
     private readonly HashSet<InboxKey> _cancelling = [];        // tickets of jobs cancelled by a commit in flight
     private readonly HashSet<InboxKey> _consumed = [];          // while a poll is in flight
@@ -1188,6 +1189,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _slots.Clear();
             _aliases.Clear();
             _items.Clear();
+            _timedJobs.Clear();
             _meets.Clear();
             _queue.Clear();
             _consumed.Clear();
@@ -1322,7 +1324,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default, object? starterAmbient = null)
     {
         if (message.ReplyTo is not null && (message.Kind == Kinds.JobFinished ||
-            message.InboxScope == 0 && message.Kind is Kinds.Job or Kinds.Meet or Kinds.Publish))
+            message.InboxScope == 0 && message.Kind is Kinds.Job or Kinds.Meet or Kinds.Publish or Kinds.JobDeadline))
             message = message with { ReplyTo = null }; // an outside copy cannot acquire an observer, even if this activation resets
         if (durable && _items.TryGetValue(message.InboxKey, out var promoted) && promoted.AwaitPoll)
         {
@@ -1375,7 +1377,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
         else if (!item.SuppliedTicket && message.Kind == Kinds.Job && attempts < _options.MaxAttempts)
         {
             item.Ticket = true;
-            item.Key = message.Read<JobTicket>().Key;
+            var job = message.Read<JobTicket>();
+            (item.Key, item.JobDeadline) = (job.Key, job.Deadline);
+            if (job.Deadline is not null) _timedJobs.Add(item);
             item.Taken = _cancelling.Contains(message.InboxKey);
         }
         if (!_slots.TryGetValue(Canonical(message.Target.Id), out var slot))
@@ -1901,6 +1905,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void StartJob(Delivery ticket, CancellationToken cancellationToken)
     {
+        if (ticket.JobDeadline is { } deadline && Now >= deadline) return;
         if (!_slots.TryGetValue(Canonical(ticket.Message.Target.Id), out var loadedSlot) || !Loaded(loadedSlot) || loadedSlot.Busy) return;
         if (loadedSlot.Row is not { Status: InstanceStatus.Running } || CreationProtocol.TargetError(loadedSlot.Row, ticket.Message) is not null)
         {
@@ -1963,7 +1968,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             {
                 if (!JobMayRun(generation) || _releasing || PoisonPending(slot) || slot.PendingJobRestrictions != 0 ||
                     Volatile.Read(ref slot.RunnableCreation) != creation || ticket.Taken || token.IsCancellationRequested ||
-                    ticket.AwaitingJobMark || ticket.DeferredJobTrial || !_gate.Allows(this, ticket))
+                    ticket.AwaitingJobMark || ticket.DeferredJobTrial || job.Deadline is { } deadline && Now >= deadline || !_gate.Allows(this, ticket))
                     return ValueTask.FromResult<object?>(null);
                 // Admission happens on the executing thread. Once admitted, ordinary cancellation signals the body.
                 entered = true;
@@ -1971,7 +1976,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (ticket.JobEntries < int.MaxValue) ticket.JobEntries++;
                 attemptNumber = ticket.JobEntries;
             }
-            var context = new JobContext(original.Target, job.Key, job.Arguments, creation, attemptNumber);
+            var context = new JobContext(original.Target, job.Key, job.Arguments, creation, attemptNumber, job.Deadline);
             return _type.ExecuteJobAsync(job.Model, context, token);
         }
         async Task ExecuteAndPublish(bool scheduled)
@@ -1988,7 +1993,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // Timestamp and enqueue together so simultaneous callbacks retain their observation order. The owner
             // may receive this after a command matures. Its later clock cannot replace the original readiness time.
             lock (publications)
-                publications.Enqueue(new(ticket, slot, completed, Now, Interlocked.Increment(ref _observed)));
+            {
+                var at = Now;
+                if (job.Deadline is { } deadline && at >= deadline) return;
+                publications.Enqueue(new(ticket, slot, completed, at, Interlocked.Increment(ref _observed)));
+            }
         }
         // Publish a synchronous body's outcome before this scheduled callback returns. An asynchronous
         // body completes its publication on its continuation, independently of the owner's next pass.
@@ -2045,6 +2054,23 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (slot.Inbox.Remove(ticket)) slot.Inbox.Insert(0, ticket);
                 RefreshPoisonBoundary(slot);
             }
+        }
+        ExpireTimedJobs();
+    }
+
+    private void ExpireTimedJobs()
+    {
+        if (_timedJobs.Count == 0) return;
+        var now = Now;
+        foreach (var timed in _timedJobs.Where(item => item.JobDeadline <= now).ToArray())
+        {
+            _timedJobs.Remove(timed);
+            if (timed.CompletedJob || timed.Taken) continue;
+            try { timed.Cancel?.Cancel(); }
+            catch (AggregateException) { } // A driver's cancellation handler cannot hold up the fenced timeout.
+            timed.Suspect = false;
+            timed.DeferredJobTrial = false;
+            _gate.Finished(this, timed);
         }
     }
 
@@ -2636,6 +2662,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void Forget(Delivery item)
     {
+        _timedJobs.Remove(item);
         _schedulerRetries.Remove(item);
         _items.Remove(item.Message.InboxKey);
         _gate.Finished(this, item);     // the trial is over: what waited for it may start
@@ -2723,15 +2750,20 @@ internal sealed class Slot
     public object? Pending;                         // the history its turns in memory left, the actor type's
 }
 
-internal sealed record JobTicket(string Model, [property: System.Text.Json.Serialization.JsonConverter(typeof(DurableKeyJson))] string Key, string? Arguments);
+internal sealed record JobTicket(string Model, [property: System.Text.Json.Serialization.JsonConverter(typeof(DurableKeyJson))] string Key, string? Arguments,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? Deadline = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Timer = null);
 
-internal sealed class JobContext(InstanceRef instance, string key, string? arguments, long creation, int attemptNumber) : IJob
+internal sealed record JobDeadline([property: System.Text.Json.Serialization.JsonConverter(typeof(DurableKeyJson))] string Key);
+
+internal sealed class JobContext(InstanceRef instance, string key, string? arguments, long creation, int attemptNumber, long? deadline) : IJob
 {
     public InstanceRef Instance { get; } = instance;
     public string Key { get; } = key;
     public string? Arguments { get; } = arguments;
     public long Creation { get; } = creation;
     public int AttemptNumber { get; } = attemptNumber;
+    public long? Deadline { get; } = deadline;
 
     private string? _attemptId;
     public string AttemptId => LazyInitializer.EnsureInitialized(ref _attemptId, static () => Guid.NewGuid().ToString("N"));

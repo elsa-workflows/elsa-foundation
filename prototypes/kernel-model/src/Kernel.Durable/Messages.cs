@@ -44,6 +44,7 @@ public sealed record Message(
     public long InboxScope { get; private init; }
     internal bool BindFoundationChild { get; init; }
     internal bool ActorAuthored { get; init; }
+    internal bool FoundationJobResult { get; init; }
     internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]
     public string? EventMatch { get; private init; }
@@ -68,6 +69,7 @@ public static class Kinds
     public const string Start = "start";
     public const string JobFinished = "job-finished";
     public const string Event = "event";
+    internal const string JobDeadline = "kernel.job-deadline";
     public const string Job = "kernel.job";    // a job's ticket: the intent while the work is in flight, the result afterwards
     public const string Meet = "kernel.meet";  // "read the events for the keys this commit subscribed"
 
@@ -80,7 +82,7 @@ public static class Kinds
 
     public static void RequireApplicationSend(string kind)
     {
-        if (kind == Job) throw new ArgumentException("A kernel job ticket must be created by DurableTurn.StartJob.", nameof(kind));
+        if (kind is Job or JobDeadline) throw new ArgumentException("The foundation issues job tickets and deadlines.", nameof(kind));
         if (kind is Meet or Publish) throw new ArgumentException("Event tickets must be created by DurableTurn.Subscribe or Publish.", nameof(kind));
     }
 
@@ -95,6 +97,7 @@ public interface IJob
     long Creation => 0;
     string? AttemptId => null;
     int AttemptNumber => 1;
+    long? Deadline => null;
     string Key { get; }
     string? Arguments { get; }
 }

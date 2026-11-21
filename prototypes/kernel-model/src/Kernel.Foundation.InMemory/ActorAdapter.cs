@@ -14,7 +14,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         return checkpoint.Park is not null || actor.Withholds(Header(checkpoint));
     }
 
-    public bool SingleMessage(Durable.Message message) => message.Kind == Contract.Kinds.ChildFinished;
+    public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline;
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null);
@@ -22,6 +22,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public Durable.TurnOutcome? Command(Durable.TurnInput input)
     {
         var message = input.Taken[input.From].Message;
+        if (message.Kind == Durable.Kinds.JobDeadline)
+            return TimeoutJob(input, message);
         if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete ||
             message.Kind == Contract.Kinds.Terminate && input.Row is { } row && store.FoundationTurnHeader(row).Park is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "ResolutionUnavailable");
@@ -30,6 +32,24 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (!IsChildNotice(input.Row, message))
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "InvalidChildCompletion");
         return null;
+    }
+
+    private Durable.TurnOutcome TimeoutJob(Durable.TurnInput input, Durable.Message message)
+    {
+        var row = input.Row;
+        if (!message.InboxKey.HasIssuedOrigin || row is not { Status: Durable.InstanceStatus.Running } ||
+            message.Sender != row.Id || message.SenderCreation != row.Creation)
+            return new(input.Actor) { Consumed = [.. input.Taken], Status = row?.Status };
+        var key = message.Read<Durable.JobDeadline>().Key;
+        var ticket = store.FoundationJob(row.Id, row.Creation, key);
+        if (ticket is null || ticket.Timer != message.Id || ticket.Deadline != message.Due)
+            return new(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };
+
+        var turn = new Durable.DurableTurn(input);
+        turn.CancelJob(key);
+        turn.ReportJobTimeout(key);
+        var checkpoint = row with { Revision = turn.Revision, Jobs = turn.Jobs() };
+        return turn.Seal(turn.Outcome(row.Status), checkpoint, input.State, journal: null);
     }
 
     private static bool IsChildNotice(Durable.InstanceRow? parent, Durable.Message message) =>
@@ -131,6 +151,6 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         public string? Arguments => job.Arguments;
         public string AttemptId => job.AttemptId ?? throw new InvalidOperationException("A job execution needs an attempt.");
         public int AttemptNumber => job.AttemptNumber;
-        public long? Deadline => null;
+        public long? Deadline => job.Deadline;
     }
 }
