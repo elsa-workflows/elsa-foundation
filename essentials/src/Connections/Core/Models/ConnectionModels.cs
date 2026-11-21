@@ -189,8 +189,17 @@ public sealed class ConnectionResolveRequest
     public required string Name { get; init; }
     public string? RequiredType { get; init; }
     public string Owner { get; init; } = ConnectionOwners.Tenant;
+
+    /// <summary>
+    /// When true, a connection in <see cref="ConnectionStatuses.NeedsAuthorization"/> is returned
+    /// so authorization can complete. Callers that need credentials still resolve without this flag
+    /// and receive <see cref="Exceptions.ConnectionUnavailableException"/>.
+    /// </summary>
+    public bool AllowNeedsAuthorization { get; init; }
+
     /// <summary>When supplied, refuse a different or unknown creation identity from the same document read.</summary>
     public string? ExpectedIncarnationId { get; init; }
+
     /// <summary>Optional preview observation guard. Omit for ordinary point-of-use rotation on a retained mapping.</summary>
     public int? ExpectedVersion { get; init; }
 }

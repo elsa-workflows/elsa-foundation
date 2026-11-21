@@ -237,7 +237,7 @@ test("bulk edits preview explicit identities and keep mixed outcomes visible", a
   expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   expect(box!.y).toBeGreaterThanOrEqual(0); expect(box!.y + box!.height).toBeLessThanOrEqual(780);
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Refresh workflow definitions" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Refresh workflow definitions", exact: true })).toBeFocused();
 });
 
 test("a stale organization write retains the intended change until an explicit reload", async ({ page }) => {

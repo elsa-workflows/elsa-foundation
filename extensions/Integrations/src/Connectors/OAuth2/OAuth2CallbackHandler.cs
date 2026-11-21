@@ -21,7 +21,8 @@ internal sealed class OAuth2CallbackHandler(
                 TenantId = tenantId,
                 Name = connectionName,
                 RequiredType = ConnectionTypeNames.Http,
-                Owner = ConnectionOwners.Tenant
+                Owner = ConnectionOwners.Tenant,
+                AllowNeedsAuthorization = true
             }, cancellationToken);
 
             if (!string.Equals(connection.AuthScheme, HttpAuthSchemes.OAuth2, StringComparison.OrdinalIgnoreCase))

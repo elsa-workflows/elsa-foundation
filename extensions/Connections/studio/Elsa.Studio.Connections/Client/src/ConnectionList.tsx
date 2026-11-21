@@ -1,4 +1,4 @@
-import { StudioCollectionEmptyState, StudioTableContainer, StudioResultState, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, StudioCollectionEmptyState, StudioTableContainer, StudioResultState, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import React from "react";
 import { AlertCircle, Cable, ChevronRight, RefreshCw, Search, Plus } from "lucide-react";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
@@ -33,10 +33,10 @@ export function ConnectionList({ items, descriptors, loading, error, searched, o
               description={loading ? undefined : "Try loading the list again."}
               actions={!loading && error ? <StudioButton onClick={onRetry}><RefreshCw size={14} aria-hidden /> Retry</StudioButton> : undefined} />
           </td></tr> : items.map(item => (
-            <tr key={item.name}>
+            <tr key={item.name} {...studioRowInteraction<HTMLTableRowElement>(() => onOpen(item.name))}>
               <td><div className="connections-name">
                 <span className="connections-service-icon" aria-hidden="true"><Cable size={18} /></span>
-                <div><button type="button" className="connections-name-link" onClick={() => onOpen(item.name)}>{item.displayName || item.name}</button>
+                <div><button type="button" className="connections-name-link studio-row-link" onClick={() => onOpen(item.name)}>{item.displayName || item.name}</button>
                   {item.displayName && item.displayName !== item.name ? <code>{item.name}</code> : null}</div>
               </div></td>
               <td data-label="Service">{connectionTypeLabel(descriptors, item.typeName)}</td>

@@ -235,9 +235,10 @@ public interface IKernelStore : IMembership
     /// fence renews no lease: <see cref="CommitBatch.Lease"/>
     /// renews nothing (slice 4 makes it the commit-step deadline), and the fence still checks and locks every fenced
     /// row, a batch with no journal rows included. Membership's free partitions are those unowned or whose owner's node
-    /// lease has expired. Under the node lease the host's membership call is <see cref="NodeHeartbeatAsync"/>;
-    /// <see cref="IMembership.HeartbeatAsync"/> stays for the per-partition lease only, and slice 5 moves the hosts off
-    /// it. Off by default: until the Worker switches (K1b slice 4), the per-partition lease stands.
+    /// lease has expired. Under the node lease the host's membership call is <see cref="NodeHeartbeatAsync"/>: the
+    /// runtime's balancing round reads the cluster its last renewing heartbeat saw (K1b slice 5), and
+    /// <see cref="IMembership.HeartbeatAsync"/> stays for the per-partition lease only. Off by default: until K1b slice 6
+    /// deletes the switch, the per-partition lease stands.
     /// </summary>
     bool NodeLeaseAvailable => false;
 

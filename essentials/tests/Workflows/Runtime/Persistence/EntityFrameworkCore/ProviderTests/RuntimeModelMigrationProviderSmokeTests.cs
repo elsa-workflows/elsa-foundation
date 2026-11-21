@@ -23,9 +23,13 @@ public sealed class RuntimeModelMigrationPostgreSqlSmokeTests(RuntimeBookmarksPo
     [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task PostgreSql_model_migrations_install_or_preserve_captured_rows(bool retained) => RuntimeModelMigrationProviderSmoke.RunAsync(fixture,
-        (connection, interceptors) => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>()
-            .UseNpgsql(connection, sql => sql.MigrationsHistoryTable(RuntimeEfModule.HistoryTableName)).AddInterceptors(interceptors).Options), retained);
+    public Task PostgreSql_model_migrations_install_or_preserve_captured_rows(bool retained)
+    {
+        RuntimeModelMigrationProviderSmoke.SkipIfCapturedStoreMissing(retained);
+        return RuntimeModelMigrationProviderSmoke.RunAsync(fixture,
+            (connection, interceptors) => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>()
+                .UseNpgsql(connection, sql => sql.MigrationsHistoryTable(RuntimeEfModule.HistoryTableName)).AddInterceptors(interceptors).Options), retained);
+    }
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -34,9 +38,13 @@ public sealed class RuntimeModelMigrationSqlServerSmokeTests(RuntimeBookmarksSql
     [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task SqlServer_model_migrations_install_or_preserve_captured_rows(bool retained) => RuntimeModelMigrationProviderSmoke.RunAsync(fixture,
-        (connection, interceptors) => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>()
-            .UseSqlServer(connection, sql => sql.MigrationsHistoryTable(RuntimeEfModule.HistoryTableName)).AddInterceptors(interceptors).Options), retained);
+    public Task SqlServer_model_migrations_install_or_preserve_captured_rows(bool retained)
+    {
+        RuntimeModelMigrationProviderSmoke.SkipIfCapturedStoreMissing(retained);
+        return RuntimeModelMigrationProviderSmoke.RunAsync(fixture,
+            (connection, interceptors) => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>()
+                .UseSqlServer(connection, sql => sql.MigrationsHistoryTable(RuntimeEfModule.HistoryTableName)).AddInterceptors(interceptors).Options), retained);
+    }
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -45,14 +53,28 @@ public sealed class RuntimeModelMigrationMySqlSmokeTests(RuntimeBookmarksMySqlFi
     [SkippableTheory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task MySql_model_migrations_install_or_preserve_captured_rows(bool retained) => RuntimeModelMigrationProviderSmoke.RunAsync(fixture,
-        (connection, interceptors) => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>()
-            .UseMySQL(connection, sql => sql.MigrationsHistoryTable(RuntimeEfModule.HistoryTableName)).AddInterceptors(interceptors).Options), retained);
+    public Task MySql_model_migrations_install_or_preserve_captured_rows(bool retained)
+    {
+        RuntimeModelMigrationProviderSmoke.SkipIfCapturedStoreMissing(retained);
+        return RuntimeModelMigrationProviderSmoke.RunAsync(fixture,
+            (connection, interceptors) => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>()
+                .UseMySQL(connection, sql => sql.MigrationsHistoryTable(RuntimeEfModule.HistoryTableName)).AddInterceptors(interceptors).Options), retained);
+    }
 }
 
 internal static class RuntimeModelMigrationProviderSmoke
 {
     private static readonly string[] Tables = ["elsa_runtime_workflow_executable", "elsa_runtime_workflow_execution_state"];
+
+    public static void SkipIfCapturedStoreMissing(bool retained)
+    {
+        if (!retained)
+            return;
+
+        Skip.IfNot(
+            File.Exists(Path.Combine(AppContext.BaseDirectory, "HostingBaseline", "runtime.sqlite.gz")),
+            "The captured hosting-baseline store is not in this checkout.");
+    }
 
     public static async Task RunAsync(RuntimeBookmarksProviderFixture fixture, Func<string, IInterceptor[], RuntimeDbContext> open, bool retained)
     {

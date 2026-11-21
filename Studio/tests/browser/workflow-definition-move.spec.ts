@@ -25,7 +25,7 @@ test("workflow definitions rebase a paged public capability view after a keyboar
   await expect(page.getByText("Second page workflow")).toBeHidden();
   await expect(page.getByText("Page 1")).toBeVisible();
   await expect(page.getByText("1 selected")).toBeHidden();
-  await expect(page.getByRole("button", { name: "Refresh" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Refresh workflow definitions", exact: true })).toBeFocused();
   await page.getByRole("button", { name: "Folders", exact: true }).click();
   await page.getByRole("treeitem", { name: "Unfiled" }).click();
   await expect(page.getByText("Moved workflow")).toBeVisible();

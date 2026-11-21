@@ -3,8 +3,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -44,7 +42,7 @@ public sealed class OpenIddictTokenService(
     OpenIddictValidationService validationService,
     IOptionsMonitor<OpenIddictServerOptions> serverOptions,
     IOptions<OpenIddictIdentityOptions> options,
-    IUserTokenEligibility userEligibility, IServiceProvider services,
+    IUserTokenEligibility userEligibility,
     IAuthenticationSessionStore? sessions = null,
     ICanonicalUserSignInService? canonical = null) : ITokenService
 {
@@ -176,12 +174,6 @@ public sealed class OpenIddictTokenService(
 
     private async ValueTask RevokeByKeyAsync(string subjectKey, CancellationToken cancellationToken)
     {
-        // The in-memory store (Workbench development/demo mode) cannot ExecuteUpdate, so bulk revocation fails.
-        // The store is discarded when the host stops, so skipping revocation is safe: no token survives shutdown.
-        // Skipping also avoids O(n) log spam when the store has accumulated tokens across many login sessions.
-        if (IsInMemoryStore())
-            return;
-
         // Entry by entry, not RevokeBySubjectAsync: that bulk path needs ExecuteUpdate, which the in-memory store
         // (Workbench development/demo mode) refuses. Materialized first so no reader stays open across the updates.
         var entries = new List<object>();
@@ -207,22 +199,6 @@ public sealed class OpenIddictTokenService(
 
         if (unrevoked > 0)
             throw new InvalidOperationException($"{unrevoked} of the subject's live tokens could not be revoked.");
-    }
-
-    /// <summary>
-    /// Whether the OpenIddict store uses EF Core InMemory, which cannot ExecuteUpdate and is discarded on shutdown.
-    /// </summary>
-    private bool IsInMemoryStore()
-    {
-        // Resolve any DbContext registered in the provider and check if it is non-relational.
-        // OpenIddict registers exactly one DbContext for its store, so the first match is sufficient.
-        // A non-relational provider here is the InMemory provider used in Workbench development/demo mode.
-        foreach (var context in services.GetServices<DbContext>())
-        {
-            if (!context.Database.IsRelational())
-                return true;
-        }
-        return false;
     }
 
     private string CreateAccessTokenJwt(TokenIssueRequest request, string subjectKey, string entryId, DateTimeOffset now, DateTimeOffset expiresAt)

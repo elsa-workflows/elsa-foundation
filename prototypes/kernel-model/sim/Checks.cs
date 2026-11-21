@@ -547,9 +547,9 @@ public sealed partial class World
             Time += Config.NodeLease ? 1_000 : round == 0 || missing ? 11_000 : 1_000;
             var beaten = new HashSet<Actor>();
             if (Config.NodeLease)       // K1b: each node's heartbeat, which its pass gate may withhold
-                foreach (var beat in Beats.ToList())
+                foreach (var runtime in LiveRuntimes.ToList())
                 {
-                    Watch(Heartbeat(beat));
+                    Watch(runtime.HeartbeatAsync().AsTask());
                     if (_dying.Count != 0) FinishDeaths();
                 }
             else for (var p = 0; p < Config.Partitions; p++)
@@ -573,18 +573,20 @@ public sealed partial class World
                 {
                     var actor = Of(node, partition);
                     var worker = actor.Worker;
-                    // K1b: a Worker whose only partitions are pending keeps getting passes, so that its gate reopens, and one
-                    // that holds none gets a pass while a heartbeat answer waits for it (its release side).
-                    if (Config.NodeLease && !worker.Owns && (worker.Pending.ContainsKey(partition) || worker.AnswerWaiting) && !actor.Passing)
+                    // K1b: the runtime's node pass, as the built-in runtime's pass loop runs it: a Worker whose only partitions
+                    // are pending keeps getting passes, so that its gate reopens, one that holds none gets a pass while a
+                    // heartbeat answer waits for it, and what a Worker took back by itself is adopted before it is checked.
+                    if (Config.NodeLease && !actor.Dead && !Actors.Any(a => a.Runtime == actor.Runtime && a.Passing)
+                        && (!worker.Owns && (worker.Pending.ContainsKey(partition) || worker.AnswerWaiting) || worker.Holds(partition) && !actor.Runtime.Owns(partition) && !actor.Runtime.Activating(partition)))
                     {
-                        Watch(Adopting(actor, actor.Serial is { } host ? host.RunNodeAsync() : worker.RunAsync().AsTask()));
-                        if (_dying.Count != 0) FinishDeaths();
-                        continue;
+                        Watch(actor.Runtime.NodePassAsync());
+                        if (_dying.Count != 0)
+                        {
+                            FinishDeaths();
+                            continue;
+                        }
                     }
                     if (!worker.Holds(partition)) continue;
-                    // K1b: a node-lease Worker brings partitions back by itself (a pending retake); the node, as their host,
-                    // adopts them first. One its runtime gave up since its last activation is not adopted: that is the bug.
-                    if (Config.NodeLease && Adoptable(actor, partition)) Watch(actor.Runtime.ActivateAsync(partition));
                     if (!actor.Runtime.Owns(partition))
                         Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it{(actor.GiveUps.GivenUp.Contains(partition) ? ": the runtime gave it up" : "")}");
                     // An eager host: every pass reads the inbox, and runs whatever is ready before it flushes. A process that

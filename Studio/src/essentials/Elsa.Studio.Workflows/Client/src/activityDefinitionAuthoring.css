@@ -14,7 +14,16 @@
 }
 
 .ad-draft-editor .wf-editor-title > strong { min-width: 0; overflow: hidden; font-size: var(--studio-section-title-size); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.ad-draft-context { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.ad-draft-identity { display: flex; flex: 1 1 18rem; min-width: 0; align-items: center; gap: .75rem; }
+.ad-draft-heading { flex: 1 1 0; min-width: 0; }
+.ad-draft-editor .ad-draft-heading h1 { margin: 0; font-size: var(--studio-section-title-size); line-height: 1.35; overflow-wrap: anywhere; }
+.ad-draft-editor .ad-draft-back { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; margin: 0; padding: 0; border-radius: var(--studio-radius); }
+.ad-draft-back:hover:not(:disabled) { background: var(--studio-surface-muted); }
+.ad-draft-back:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+/* One line only: transient save labels ("Saving queued") must not wrap and push the toolbar actions down. */
+.ad-draft-context { display: flex; min-width: 0; flex-wrap: nowrap; align-items: center; gap: .45rem; margin-top: .2rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); white-space: nowrap; }
+.ad-draft-context > * { flex: 0 0 auto; }
+.ad-draft-context > span:first-child:not(.ad-save-chip) { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ad-draft-context .ad-save-chip { min-height: 0; padding: 0; border-radius: 0; background: transparent; font-weight: 500; }
 .ad-draft-context .ad-save-chip.is-saved,
 .ad-draft-context .ad-save-chip.is-published { color: var(--studio-text-muted); }

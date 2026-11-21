@@ -1,21 +1,26 @@
 name: CI
 
 # All source validation lives here; publishing and trusted maintenance have separate tokens.
-# Required check names stay stable. Marking a PR ready runs both tiers and maps in one suite;
+# Required check names stay stable. Marking a PR ready runs the gate, the maps and the stubs in one suite;
 # splitting the required contexts across draft/ready suites can block protected merges (#3708).
-# A merge-queue entry (merge_group) runs both tiers on the exact merge result and reports all three
-# required checks. Focused manual runs select a suite below.
+# Focused manual runs select a suite below.
 # Path filters live in tools/ci/workflow-paths.json and are applied by plan-scope.
 # Pull requests to an initiative branch (docs/contributing/initiatives.md) run exactly what a pull request to main runs,
 # diffed against the initiative branch: the same tier selection and the same documentation-only fast path.
 #
-# Cost rules: a push to main runs the PR tier, not the full tier (the PR and the merge queue already ran it; the
-# nightly run below runs it again on main). The heavy proofs of a ready PR (the full tier, the Studio browser
-# proofs and the Weaver witness) run when it opens ready, is reopened or marked ready, in the merge queue, when it has the
-# `full-tier` label or changes the tiers, or when the repository variable CI_FULL_TIER_EVERY_PUSH is 'true'
-# (tools/ci/workflow_scope.py, heavy_now). A later push runs the PR tier, and `Full tier` reports as deferred.
-# Full composed UX runs nightly, on manual suite=studio requests and on explicit full-tier opt-in.
+# Lean CI (owner-approved 20 Nov 2026): a pull request and a push to main run one gate, `Build & test`: the PR-tier
+# shards, Architecture guards, Core-only, Generated maps and, when Studio changed, the Studio frontend checks. Every
+# heavy suite (the integration and EF container shards, the Studio browser, .NET and composed UX proofs, the backend
+# source journeys, the Weaver witness, the published-image pair and the shuffled Workflows tests) runs in the nightly
+# schedule below and on a manual run (suite and tier inputs), never on a pull request or a push. `alert` files one
+# issue per failing nightly suite. `Full tier` and `Generated maps fresh` are pass-through stubs that keep the two
+# required contexts reporting until ruleset main-2 drops them.
 # Task-specific local visual acceptance remains part of each visible change's review.
+#
+# The standalone kernel model (prototypes/kernel-model, issue #4229) has its own gate here, folded in from the former
+# kernel-prototype.yml: `Kernel prototype gate` runs on a pull request that changes the kernel model, the gate script
+# or this workflow (plan-scope's `kernel` output), and the `Kernel prototype nightly` jobs run on the nightly schedule.
+# None of them is a required check.
 
 on:
   pull_request:
@@ -26,10 +31,6 @@ on:
   push:
     branches:
       - main
-  # The merge queue on main requires `Build & test`, `Generated maps fresh` and `Full tier` from this run. A required
-  # check that a merge_group run does not report keeps the entry waiting until the queue times it out.
-  merge_group:
-    types: [checks_requested]
   workflow_dispatch:
     inputs:
       # FR-008: the one way to run the full tier early, on any branch, a draft's head included. The literals "tier"
@@ -37,7 +38,8 @@ on:
       suite:
         description: Validation to run
         type: choice
-        options: [ci, studio, backend-source, weaver, published-images, studio-order]
+        # kernel-gate and kernel-nightly run only the kernel prototype's gate or its nightly jobs.
+        options: [ci, studio, backend-source, weaver, published-images, studio-order, kernel-gate, kernel-nightly]
         default: ci
       tier:
         description: Which tier to run
@@ -54,9 +56,9 @@ permissions:
 # PR updates cancel the superseded head. Main finishes its active run and keeps only the
 # newest pending push in the same group, so a stream of merges cannot restart validation
 # indefinitely. Intermediate pending pushes are replaced by the latest one; plan-scope then diffs the latest push from
-# the last push run that ran, so the replaced pushes' changes still select their focused proofs (#4713). Manual,
-# scheduled and merge-queue runs retain their own groups. A cancelled run is not a failure,
-# and the aggregate jobs use !cancelled() so cancellation does not file a red-main issue.
+# the last push run that ran, so the replaced pushes' changes still select their focused proofs (#4713). Manual and
+# scheduled runs keep their own groups. A cancelled run is not a failure, and the aggregate jobs use !cancelled() so
+# cancellation does not file a red-main issue.
 concurrency:
   group: >-
     ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number)
@@ -85,6 +87,7 @@ jobs:
       published-images: ${{ steps.scope.outputs.published-images }}
       studio-order: ${{ steps.scope.outputs.studio-order }}
       backend-source: ${{ steps.scope.outputs.backend-source }}
+      kernel: ${{ steps.kernel.outputs.kernel }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -97,6 +100,20 @@ jobs:
           # Only a push reads the earlier runs; pull request code gets no token here.
           GH_TOKEN: ${{ github.event_name == 'push' && github.token || '' }}
         run: python3 tools/ci/workflow_scope.py
+      # The kernel prototype gate's path filter, the former kernel-prototype.yml's `paths`. A pull request diffs from the
+      # first parent of the merge commit GitHub tests (as change_scope.py does); a diff it cannot read runs the gate.
+      - name: Select the kernel prototype gate
+        id: kernel
+        run: |
+          kernel=false
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            if ! changed=$(git diff --name-only "$GITHUB_SHA^1" "$GITHUB_SHA"); then
+              kernel=true
+            elif grep -Eq '^(prototypes/kernel-model/|tools/ci/kernel_prototype_gate\.py$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+              kernel=true
+            fi
+          fi
+          echo "kernel=$kernel" >> "$GITHUB_OUTPUT"
 
   # Python only, so the shards start within a minute: the change scope, the cheap guards, and the shard matrix.
   plan-tiers:
@@ -211,9 +228,7 @@ jobs:
           DISPATCH_TIER: ${{ inputs.tier }}
         run: |
           case "$GITHUB_EVENT_NAME" in
-            # A merge-queue entry runs the PR tier here and the full tier through plan-full, as a ready PR does.
-            # A push to main also runs the PR tier only: the full tier already ran on the PR (and in the queue), and
-            # the nightly run covers main. This halves what each merge costs.
+            # A pull request and a push to main run the PR tier only; the full tier runs nightly and on a manual run.
             pull_request | merge_group | push) tier="pr" ;;
             schedule) tier="nightly" ;;
             workflow_dispatch) [[ "$DISPATCH_TIER" == pr ]] && tier="pr" || tier="nightly" ;;
@@ -348,11 +363,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # The required context. It reports one result for the PR tier: the plan, every shard, the architecture guards and the
-  # core-only leg. !cancelled() rather than always(): a superseded run must not turn into a red aggregate.
+  # The required context, and the one gate. It reports one result for the plan, every PR-tier shard, the architecture
+  # guards, the core-only leg, the generated maps (on a pull request) and the Studio frontend checks when Studio changed.
+  # The heavy suites run nightly, not here. !cancelled() rather than always(): a superseded run must not turn into a red
+  # aggregate.
   build-and-test:
     name: "${{ github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Build & test (not requested)' || 'Build & test' }}"
-    needs: [plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]
+    needs: [plan-tiers, pr-shard, architecture-guards, core-only, generated-maps, plan-scope, studio-lint-and-test]
     if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -362,16 +379,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Verify selected Studio proofs before the docs-only fast path
+      # Before the docs-only fast path: a Studio change that is also documentation-only still needs its frontend checks.
+      # The Studio browser, .NET and composed UX proofs run nightly (lean CI), so the frontend checks are the only
+      # Studio proof here. A missing scope fails rather than passes.
+      - name: Verify the Studio frontend checks before the docs-only fast path
         env:
+          SCOPE: ${{ needs.plan-scope.result }}
           STUDIO_SELECTED: ${{ needs.plan-scope.outputs.studio }}
-          STUDIO_HEAVY: ${{ needs.plan-scope.outputs.studio-heavy }}
-          STUDIO_UX_SELECTED: ${{ needs.plan-scope.outputs.studio-ux }}
           STUDIO_FRONTEND: ${{ needs.studio-lint-and-test.result }}
-          STUDIO_BROWSER: ${{ needs.studio-browser-tests.result }}
-          STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}
-          STUDIO_UX: ${{ needs.studio-ux-acceptance.result }}
-        run: python3 tools/ci/studio_gate.py
+        run: |
+          if [[ "$SCOPE" != success ]]; then
+            echo "::error::Select focused validation did not succeed ($SCOPE)."; exit 1
+          fi
+          if [[ "$STUDIO_SELECTED" == true && "$STUDIO_FRONTEND" != success ]]; then
+            echo "::error::Studio frontend lint, typecheck & unit tests did not succeed ($STUDIO_FRONTEND)."; exit 1
+          fi
+      # Generated maps runs on every pull request, documentation-only ones included, so it is checked before the fast
+      # path. Only on a pull request: on a push or the nightly run, stale filters stay out of `alert` (see generated-maps).
+      - name: Verify the generated maps
+        if: github.event_name == 'pull_request'
+        env:
+          MAPS: ${{ needs.generated-maps.result }}
+        run: |
+          if [[ "$MAPS" != success ]]; then
+            echo "::error::Generated maps did not succeed ($MAPS)."; exit 1
+          fi
       - name: Verify the PR tier passed
         env:
           PLAN: ${{ needs.plan-tiers.result }}
@@ -400,21 +432,20 @@ jobs:
           done
           exit "$failed"
 
+  # Nightly and manual runs only (lean CI). A push to main plans the PR tier, which selects no integration shard.
   integration-shard:
     name: Integration shard (${{ matrix.shard }})
-    needs: [plan-tiers, plan-full]
+    needs: [plan-tiers]
     if: >-
-      ${{ !cancelled() && ((github.event_name == 'pull_request' || github.event_name == 'merge_group')
-      && needs.plan-full.outputs.run == 'true' && needs.plan-full.outputs.integration_count != '0'
-      || github.event_name != 'pull_request' && github.event_name != 'merge_group' && needs.plan-tiers.result == 'success'
-      && needs.plan-tiers.outputs.docs_only != 'true' && needs.plan-tiers.outputs.integration_count != '0') }}
+      ${{ !cancelled() && github.event_name != 'pull_request' && needs.plan-tiers.result == 'success'
+      && needs.plan-tiers.outputs.docs_only != 'true' && needs.plan-tiers.outputs.integration_count != '0' }}
     runs-on: ubuntu-latest
     # The serial BPMN host cases are split across two shards of about 25 minutes each (#3784).
     # Leave room for setup and artifact upload; run_shard.py still bounds each test.
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.plan-full.outputs.integration_matrix || needs.plan-tiers.outputs.integration_matrix) }}
+      matrix: ${{ fromJSON(needs.plan-tiers.outputs.integration_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -473,19 +504,18 @@ jobs:
   # Several EF suites per job, one after another: the suites' own build is paid once per job instead of once per suite,
   # which keeps the full tier within the organization's 20-job limit (FR-022). Each suite still runs whole, with its
   # required-provider mode armed for that suite only, so an engine that fails to start fails rather than skips.
+  # Nightly and manual runs only (lean CI), like the integration shards.
   ef-container-shard:
     name: EF container shard (${{ matrix.shard }})
-    needs: [plan-tiers, plan-full]
+    needs: [plan-tiers]
     if: >-
-      ${{ !cancelled() && ((github.event_name == 'pull_request' || github.event_name == 'merge_group')
-      && needs.plan-full.outputs.run == 'true' && needs.plan-full.outputs.container_count != '0'
-      || github.event_name != 'pull_request' && github.event_name != 'merge_group' && needs.plan-tiers.result == 'success'
-      && needs.plan-tiers.outputs.docs_only != 'true' && needs.plan-tiers.outputs.container_count != '0') }}
+      ${{ !cancelled() && github.event_name != 'pull_request' && needs.plan-tiers.result == 'success'
+      && needs.plan-tiers.outputs.docs_only != 'true' && needs.plan-tiers.outputs.container_count != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.plan-full.outputs.container_matrix || needs.plan-tiers.outputs.container_matrix) }}
+      matrix: ${{ fromJSON(needs.plan-tiers.outputs.container_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -555,12 +585,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # One result for main/nightly alerts; the PR and merge-queue aggregate below owns the required Full tier context.
+  # One result for the full tier in the nightly and manual runs, and its suite in `alert`.
   # !cancelled() rather than always(): a cancelled run must not turn into a red aggregate that files a "main is red" issue.
   full-tier-result:
     name: Full tier result
     needs: [plan-tiers, integration-shard, ef-container-shard]
-    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -691,6 +721,11 @@ jobs:
   # whoever pushed, which is a better channel than the one the nightly uses -- but on
   # 2026-08-12 the pusher was the person who had just merged through three red checks, so it
   # is not a channel to rely on alone. This files or updates one deduplicated issue as well.
+  #
+  # Lean CI: one issue per suite. The gate (Build & test, Architecture guards, Core-only) files "main is red: CI", as
+  # before; each heavy suite that runs only in the nightly schedule files its own "main is red: CI nightly, <suite>", so a
+  # red suite names itself and one red suite does not hide another. A Generated maps failure alone files nothing
+  # (see generated-maps).
   alert:
     name: Alert on a red main
     needs:
@@ -698,11 +733,20 @@ jobs:
       - full-tier-result
       - architecture-guards
       - core-only
+      - studio-browser-tests
+      - studio-ux-acceptance
+      - studio-dotnet-build-and-test
+      - backend-source
+      - package-witness
+      - published-image-pair
+      - shuffled-unit-tests
+      - kernel-prototype-nightly
+      - kernel-prototype-nightly-4096
+      # Only so a stale-filter failure, which reaches alert through Build & test, can be told apart and file nothing.
+      - generated-maps
     # A cancelled run (superseded by a newer push) is not a failure and files nothing. The nightly schedule
     # files too: its failure mail goes to whoever last edited the cron, which is nobody watching, and on main it is the
-    # only automatic run of the EF container suites. full-tier-result is skipped on pull requests and merge-queue entries,
-    # where the PR aggregate reports the full tier, and a skipped need is not a failure. A red merge-queue entry is
-    # removed from the queue and never lands, so it files nothing either.
+    # only automatic run of the heavy suites. A suite skipped on a push is not a failure.
     if: ${{ failure() && !cancelled() && (github.event_name == 'push' || github.event_name == 'schedule') }}
     permissions:
       contents: read
@@ -710,17 +754,54 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: File or update the tracking issue
+      - name: File or update one tracking issue per failed suite
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          GATE: CI
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           COMMIT_SHA: ${{ github.sha }}
           ACTOR: ${{ github.actor }}
           EVENT_NAME: ${{ github.event_name }}
+          GATE_RESULTS: >-
+            ${{ needs.build-and-test.result }} ${{ needs.architecture-guards.result }} ${{ needs.core-only.result }}
+          FULL_TIER: ${{ needs.full-tier-result.result }}
+          STUDIO_BROWSER: ${{ needs.studio-browser-tests.result }}
+          STUDIO_UX: ${{ needs.studio-ux-acceptance.result }}
+          STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}
+          BACKEND_SOURCE: ${{ needs.backend-source.result }}
+          WEAVER: ${{ needs.package-witness.result }}
+          PUBLISHED_IMAGES: ${{ needs.published-image-pair.result }}
+          SHUFFLED: ${{ needs.shuffled-unit-tests.result }}
+          KERNEL_NIGHTLY: ${{ needs.kernel-prototype-nightly.result }}
+          KERNEL_4096: ${{ needs.kernel-prototype-nightly-4096.result }}
+          MAPS: ${{ needs.generated-maps.result }}
         run: |
           set -euo pipefail
+          failed=()
+          if [[ " $GATE_RESULTS " == *" failure "* ]]; then failed+=("CI"); fi
+          for pair in "Full tier:$FULL_TIER" "Studio browser tests:$STUDIO_BROWSER" "UX acceptance:$STUDIO_UX" \
+              "Studio .NET build & test:$STUDIO_DOTNET" "Backend source:$BACKEND_SOURCE" \
+              "Weaver independent package witness:$WEAVER" "Published image pair:$PUBLISHED_IMAGES" \
+              "Workflows unit tests (three shuffled orders):$SHUFFLED" "Kernel prototype nightly:$KERNEL_NIGHTLY" \
+              "Kernel prototype nightly, 4,096 virtual partitions:$KERNEL_4096"; do
+            if [[ "${pair##*:}" == failure ]]; then failed+=("CI nightly, ${pair%:*}"); fi
+          done
+          if [ ${#failed[@]} -eq 0 ]; then
+            # Generated maps is an ancestor of alert through Build & test, so a stale-filter failure alone reaches this
+            # job. It is a request to open a refresh PR, not a red main (see generated-maps): file nothing for it.
+            if [[ "$MAPS" == failure ]]; then
+              echo "::notice::Only Generated maps failed: stale solution filters are a refresh request, not a red main. No issue filed."
+              exit 0
+            fi
+            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096"
+            failed=("CI")
+          fi
+
+          # One issue per failed gate or suite; the body below is the same for each (left unindented for its heredoc).
+          # A failed gh call for one suite does not stop the others (file_issue runs under ||, so set -e does not end
+          # the loop); the step fails at the end if any call failed.
+          file_issue() {
+          local GATE=$1 title trigger issues existing body
           title="main is red: $GATE"
 
           # Attribute only what the event actually says. On a schedule github.actor is whoever
@@ -772,6 +853,15 @@ jobs:
               gh issue create --title "$title" --body "$body"
             }
           fi
+          }
+
+          errors=0
+          for GATE in "${failed[@]}"; do
+            file_issue "$GATE" || { echo "::warning::Could not file or update the issue for $GATE."; errors=$((errors + 1)); }
+          done
+          if [ "$errors" -ne 0 ]; then
+            echo "::error::$errors issue call(s) failed; see the warnings above."; exit 1
+          fi
 
   # Freshness gate for the one generated output that IS committed: the solution filters (Elsa.Server.*.slnf),
   # regenerated into a scratch directory and byte-compared with what is committed. It also runs the generator's own
@@ -785,19 +875,19 @@ jobs:
   # main by the "Publish generated maps" job below. Before #1274 this job ran on pull_request only and PR #1202 left
   # main stale for the next three PRs (#1243, #1247, #1248).
   #
-  # "Generated maps fresh" is a required status check on main, matched by JOB name, so the name below is
-  # load-bearing and must not be renamed. Until #2622 it lived in maps.yml and the filter check in
-  # solution-filters.yml ("Solution filters fresh"); both were folded in here to cut the workflows a push
-  # queues. It runs on pull_request, merge_group, push to main and this workflow's schedule, on every PR including
-  # documentation-only ones.
+  # Build & test needs this job on a pull request (lean CI); the required context "Generated maps fresh" is now the
+  # pass-through stub below. Until #2622 it lived in maps.yml and the filter check in solution-filters.yml ("Solution
+  # filters fresh"); both were folded in here to cut the workflows a push queues. It runs on pull_request, push to
+  # main and this workflow's schedule, on every PR including documentation-only ones.
   #
-  # This job is deliberately NOT among the alert job's needs, as the former maps workflow also kept these failures separate: stale filters are a request to open a refresh PR, and the actionable output is the refresh
+  # A failure of this job alone files no alert issue (alert needs it only to recognise that case), as the former maps
+  # workflow also kept these failures separate: stale filters are a request to open a refresh PR, and the actionable output is the refresh
   # command in the run summary.
   #
   # The generator is built once and each check runs whenever that build succeeded, so one failing check does not
   # hide another.
   generated-maps:
-    name: "${{ github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Generated maps (not requested)' || 'Generated maps fresh' }}"
+    name: "${{ github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Generated maps (not requested)' || 'Generated maps' }}"
     if: (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -961,6 +1051,18 @@ jobs:
   # along main (publish-generated-maps.sh skips an older commit), and a newer push supersedes a pending older one.
   # Pushes made with GITHUB_TOKEN start no workflow run. Like generated-maps it is not among the alert job's needs:
   # a failed publication leaves the previous set in place, and the next push to main catches the branch up.
+  # Pass-through stub (lean CI). Build & test now carries the generated maps; `Generated maps fresh` is still a required
+  # check in ruleset main-2, matched by job name, so this job keeps reporting it on every pull request until an admin
+  # drops it; then it is deleted. It needs nothing, so it always reports.
+  generated-maps-fresh:
+    name: Generated maps fresh
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report the generated maps as part of Build & test
+        run: echo "The generated-maps check runs as the Generated maps job, and Build & test requires it."
+
   publish-maps:
     name: Publish generated maps
     if: ${{ github.event_name == 'push' }}
@@ -1000,151 +1102,20 @@ jobs:
       - name: Commit the maps to the generated-maps branch
         run: bash tools/maps/publish-generated-maps.sh "$RUNNER_TEMP/maps" "$GITHUB_SHA"
 
-  # A pull request, or a merge-queue entry: the queue is where the full tier proves the exact merge result.
-  plan-full:
-    needs: plan-scope
-    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-    name: Plan full tier
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      checks: read        # a deferred push looks for an earlier green full tier on this PR
-      pull-requests: read
-    outputs:
-      run: ${{ steps.decide.outputs.run }}
-      docs_only: ${{ steps.scope.outputs.docs_only }}
-      integration_matrix: ${{ steps.select.outputs.integration_matrix }}
-      integration_count: ${{ steps.select.outputs.integration_count }}
-      container_matrix: ${{ steps.select.outputs.container_matrix }}
-      container_count: ${{ steps.select.outputs.container_count }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # BASE_SHA is the first parent of the merge commit GitHub tests, the base branch today (main or initiative/*), so
-      # both diffs below see only what the pull request changes; pull_request.base.sha can be days old on an open PR
-      # (see ci.yml). On a merge-queue entry it is merge_group.base_sha, the commit the entry was built on.
-      - name: Classify the change scope
-        id: scope
-        env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
-        run: >-
-          python3 tools/ci/change_scope.py --base "$BASE_SHA" --head "$GITHUB_SHA"
-          --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
-
-      - name: Decide whether the full tier runs
-        id: decide
-        env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
-          DRAFT: ${{ github.event.pull_request.draft }}
-          DOCS_ONLY: ${{ steps.scope.outputs.docs_only }}
-          # tools/ci/workflow_scope.py decides this for every heavy proof (see heavy_now): the ready transition, the
-          # full-tier label, a change to the tiers, or CI_FULL_TIER_EVERY_PUSH.
-          HEAVY: ${{ needs.plan-scope.outputs.heavy }}
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          # A push is only deferred when this PR's newest commit with a completed, green full tier differs from this head by
-          # documentation only (the classifier of the docs-only fast path). Any code change since then, a ready run that a
-          # quick follow-up push cancelled, a rewritten history, or a failed lookup all run the full tier on this push.
-          prior_full_tier_passed() {
-            local sha
-            for sha in $(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" --paginate --jq '.[].sha' | tail -n 30 | tac); do
-              if gh api "repos/$GITHUB_REPOSITORY/commits/$sha/check-runs?filter=latest&per_page=100" \
-                  --jq '[.check_runs[] | select(.name | test("^(Integration|EF container) shard")) | .conclusion] | length > 0 and all(. == "success")' \
-                  | grep -qx true; then
-                # Newest green commit decides: nothing but documentation may have changed since it.
-                rm -f "$RUNNER_TEMP/since-green.out"
-                python3 tools/ci/change_scope.py --base "$sha" --head "$HEAD_SHA" --github-output "$RUNNER_TEMP/since-green.out" > /dev/null 2>&1 \
-                  && grep -qx 'docs_only=true' "$RUNNER_TEMP/since-green.out"
-                return
-              fi
-            done
-            return 1
-          }
-          # The spec's "Manifest change" edge case: a draft that changes the tiers runs both tiers.
-          tier_change=$(git diff --name-only --no-renames "$BASE_SHA...$GITHUB_SHA" -- \
-            tools/ci/test-tiers.json tools/ci/test_tiers.py tools/ci/affected_tests.py tools/ci/test_results.py \
-            tools/ci/run_shard.py .github/workflows/ci.yml tools/ci/workflow_scope.py tools/ci/workflow-paths.json | head -1)
-          if [[ "$DOCS_ONLY" == true ]]; then
-            run=false; reason="documentation only (spec 257)"
-          elif [[ "$GITHUB_EVENT_NAME" == merge_group ]]; then
-            run=true; reason="merge queue: the full tier proves the merge result"
-          elif [[ "$DRAFT" == true ]]; then
-            if [[ -n "$tier_change" ]]; then
-              run=true; reason="this draft changes the tiers ($tier_change)"
-            else
-              run=false; reason="draft: the full tier runs once the pull request is ready for review"
-            fi
-          elif [[ "$HEAVY" == true ]]; then
-            run=true; reason="the pull request is ready for review and this run carries the heavy proofs"
-          elif ! prior_full_tier_passed; then
-            run=true; reason="no earlier commit of this pull request has a green full tier that differs from this head by documentation only, so this push runs it"
-          else
-            run=false
-            reason="deferred: the full tier already passed on an earlier commit and only documentation changed since. It runs again in the merge queue and nightly on main. To run it on a later push, add the \`full-tier\` label before pushing, or run \`gh workflow run ci.yml --ref <branch> -f tier=full\`."
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          printf '### Full tier\n\n%s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
-
-      # On a pull request only the integration units and EF suites its changes can affect run (#3787); both counts can
-      # be 0, and the shard jobs are then skipped by their count conditions. A merge-queue entry runs them all.
-      - name: Select the full-tier shards
-        id: select
-        env:
-          # The same switch check as Plan tiers runs when a change turns integrationLeavesPrTier on; gh needs a token.
-          GH_TOKEN: ${{ github.token }}
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
-        run: >-
-          python3 tools/ci/test_tiers.py select --tier full --base "$BASE_SHA" --head "$GITHUB_SHA"
-          --event "$GITHUB_EVENT_NAME" --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
-
-
+  # Pass-through stub (lean CI). The integration and EF container shards run nightly and on a manual run (see
+  # full-tier-result), not on pull requests. `Full tier` is still a required check in ruleset main-2, so this job keeps
+  # reporting it on every pull request until an admin drops it; then it is deleted. It needs nothing, so it always reports.
   full-tier:
-    name: "${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' && 'Full tier (not requested)' || (needs.plan-full.result != 'success' || needs.plan-full.outputs.run == 'true' || !github.event.pull_request.draft) && 'Full tier' || 'Full tier (not run: draft)' }}"
-    needs: [plan-full, integration-shard, ef-container-shard]
-    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+    name: Full tier
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify the full tier passed
-        env:
-          PLAN: ${{ needs.plan-full.result }}
-          RUN: ${{ needs.plan-full.outputs.run }}
-          DOCS_ONLY: ${{ needs.plan-full.outputs.docs_only }}
-          DRAFT: ${{ github.event.pull_request.draft }}
-          INTEGRATION: ${{ needs.integration-shard.result }}
-          CONTAINERS: ${{ needs.ef-container-shard.result }}
-          INTEGRATION_COUNT: ${{ needs.plan-full.outputs.integration_count }}
-          CONTAINER_COUNT: ${{ needs.plan-full.outputs.container_count }}
+      - name: Report the full tier as nightly
         run: |
-          if [[ "$PLAN" != success ]]; then
-            echo "::error::Plan full tier did not succeed ($PLAN), so nothing proves the full tier."; exit 1
-          fi
-          if [[ "$RUN" == false && "$DOCS_ONLY" == true ]]; then
-            echo "Documentation-only change: the full tier has nothing to test (spec 257)."; exit 0
-          fi
-          if [[ "$RUN" == false && "$DRAFT" == true ]]; then
-            echo "Not run: draft. The full tier runs once the pull request is marked ready for review."; exit 0
-          fi
-          if [[ "$RUN" == false ]]; then
-            echo "Deferred: the full tier already passed on an earlier commit and only documentation changed since; it runs again in the merge queue and nightly on main."; exit 0
-          fi
-          if [[ "$RUN" != true ]]; then
-            echo "::error::Plan full tier gave no decision (run='$RUN')."; exit 1
-          fi
-          if [[ ( "$INTEGRATION_COUNT" != 0 && "$INTEGRATION" != success ) || ( "$CONTAINER_COUNT" != 0 && "$CONTAINERS" != success ) ]]; then
-            echo "::error::The full-tier shards did not succeed ($INTEGRATION, $CONTAINERS)."; exit 1
-          fi
-          if [[ "$INTEGRATION_COUNT" == 0 && "$CONTAINER_COUNT" == 0 ]]; then
-            echo "No full-tier shard is affected by this change (see Plan full tier's summary)."; exit 0
-          fi
-          echo "Every selected integration shard and EF container shard passed."
+          echo "The full tier (integration and EF container shards) runs in CI's nightly schedule, not on pull requests."
+          echo "Run it on this branch with: gh workflow run ci.yml --ref <branch> -f tier=full"
+          echo "The other heavy suites: -f suite=studio, backend-source, weaver, published-images or studio-order."
 
   studio-lint-and-test:
     needs: plan-scope
@@ -1178,9 +1149,11 @@ jobs:
         run: pnpm check:bundle:workflows
         working-directory: Studio
 
+  # The heavy suites below run in the nightly schedule and on a manual run that selects them (suite input), never on a
+  # pull request or a push (lean CI). `alert` files one issue per failing suite.
   studio-browser-tests:
     needs: plan-scope
-    if: needs.plan-scope.outputs.studio-heavy == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.studio-heavy == 'true'
     name: Studio browser tests (Chromium ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     # Keep the complete inventory within the budget as it grows; no cases are omitted.
@@ -1225,7 +1198,7 @@ jobs:
   studio-ux-acceptance:
     name: UX acceptance (composed Studio)
     needs: plan-scope
-    if: needs.plan-scope.outputs.studio-ux == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.studio-ux == 'true'
     runs-on: ubuntu-latest
     # Allow time for the full composed journeys, Decision runtime qualification and artifact upload.
     # Standard composed proof has an 80-minute owned envelope; subsequent qualified probes retain their own caps.
@@ -1304,7 +1277,7 @@ jobs:
 
   studio-dotnet-build-and-test:
     needs: plan-scope
-    if: needs.plan-scope.outputs.studio == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.studio == 'true'
     name: Studio .NET build & test
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1414,7 +1387,7 @@ jobs:
 
   backend-source:
     needs: plan-scope
-    if: needs.plan-scope.outputs.backend-source == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.backend-source == 'true'
     name: Backend source (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
@@ -1581,7 +1554,7 @@ jobs:
 
   package-witness:
     needs: plan-scope
-    if: needs.plan-scope.outputs.weaver == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.weaver == 'true'
     name: Weaver independent package witness
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -1661,7 +1634,7 @@ jobs:
 
   published-image-pair:
     needs: plan-scope
-    if: needs.plan-scope.outputs.published-images == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.published-images == 'true'
     name: Exercise pinned published images in a real browser
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -1707,7 +1680,7 @@ jobs:
 
   shuffled-unit-tests:
     needs: plan-scope
-    if: needs.plan-scope.outputs.studio-order == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.studio-order == 'true'
     name: Workflows unit tests (three shuffled orders)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1734,3 +1707,255 @@ jobs:
             fi
             echo "::endgroup::"
           done
+
+  # The kernel prototype (prototypes/kernel-model, #4229), folded in from the former kernel-prototype.yml without a
+  # change to its steps. The server jobs select no test shard for a change under prototypes/ (affected_tests.py), so
+  # these are the prototype's own gate and nightly:
+  #   - pull request: a fast gate, the deterministic simulation at a small size plus both mutation checks, the in-memory
+  #     store conformance and the graph engine corpus. Target: well under its 25-minute timeout.
+  #   - nightly (this workflow's schedule): the larger simulation sizes, the runtime and store conformance (built-in
+  #     runtime, EF on SQLite in both fence modes) and the native smoke and cost runs.
+  # The database engines that run in containers (PostgreSQL, SQL Server, MySQL and the document database) stay manual:
+  # see the README. None of these is a required check, and `alert` does not need them.
+  kernel-prototype-gate:
+    name: Kernel prototype gate
+    needs: plan-scope
+    if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft && needs.plan-scope.outputs.kernel == 'true' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-gate' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25      # K1b slice 5a: the node-lease seeds add about 4 minutes to a 13-minute gate
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      # Output folders of the prototype projects, relative to prototypes/kernel-model.
+      BIN: bin/Release/net10.0
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      # One project at a time: they share obj/ folders through project references (README, Build). Every project
+      # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
+      - name: Build
+        run: |
+          for p in sim models/Native.Recovery.Run models/Statecharts.Run conformance/Kernel.Store.Conformance.Run models/Graph.Tests; do
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
+          done
+
+      # K1 slice 7: the sim's --count only sizes the store's rows, so the gate runs the default, 1,024. The nightly's
+      # count-4096 job runs the integrated runtime suite at 4,096.
+      - name: Simulation, kernel and native, plus the lease witness
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --seeds 10000
+          $SIM --native --seeds 10000
+          # K1b: the same seeds under the node lease, beside the per-partition lease until slice 6 flips the default.
+          $SIM --seeds 10000 --node-lease
+          $SIM --native --seeds 10000 --node-lease
+          $SIM --lease-check
+          $SIM --landed-check
+          # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
+          $SIM --placement-check
+          # It must fail on its checks (exit 1 with "placement: N check(s) FAILED"), not crash or reject the flaw name.
+          code=0; out=$($SIM --placement-check --flaw ContiguousOnlyBalancer) || code=$?
+          if [ "$code" -ne 1 ] || ! grep -Eq '^placement: [0-9]+ check\(s\) FAILED$' <<<"$out"; then echo "--placement-check did not catch ContiguousOnlyBalancer (exit $code)"; exit 1; fi
+          # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
+          dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
+          dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+
+      # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
+      # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 3208 (6946 before K1 slice 7's set worlds), a seed
+      # that has drifted before, so a smaller size would sit too close to it. The native check runs 12,000 seeds:
+      # FreshTurnSwapsLoopKeys is first caught at seed 3589 since slice 7 (NATIVE.md), and the gate keeps three times that. Every kernel mutation is caught except the two FINDINGS documents as caught only
+      # with the rule that covers them. --expect-total pins the number of mutations, the two flag combinations included, so one dropped or added fails.
+      # K1 slice 7 added five (48): FenceSubset, SeenAtNodeEpoch, SuspectAcrossPartitions, ChildIssuerPerWorker, TrialSparesOtherPartitions.
+      - name: Mutation checks
+        run: |
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 48 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 12000
+
+      # K1 slice 7: both witness cases must fail, each on the landed flush, with the k-row fence broken to land the part
+      # of a flush still fenced.
+      - name: Store conformance, in memory
+        run: |
+          STC="dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll"
+          $STC semantic
+          $STC semantic-flaw FenceSubset "the K1 witness" "the held flush landed"
+          # K1b slice 1: the node lease's store cases, each failing on its own check under its mutation.
+          $STC semantic-flaw TakeIgnoresNodeLease "NL-2" "from the live p"
+          $STC semantic-flaw PlainReadEmptyFence "NL-5" "taken on the wire landed"
+          $STC semantic-flaw StableNodeName "NL-6" "while its predecessor's node lease was live"
+
+      - name: Graph engine corpus
+        run: dotnet test models/Graph.Tests -c Release --no-build
+
+      - name: Gate script self-test
+        working-directory: .
+        run: python3 tools/ci/kernel_prototype_gate.py --self-test
+
+  kernel-prototype-nightly:
+    name: Kernel prototype nightly
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180     # K1b slice 5a: the node-lease sizes add about an hour to a 60- to 75-minute nightly
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      # Output folders of the prototype projects, relative to prototypes/kernel-model.
+      BIN: bin/Release/net10.0
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      - name: Build
+        run: |
+          for p in sim models/Native.Run models/Native.Recovery.Run models/Statecharts.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
+          done
+
+      # The sizes of the README's refactor gates (The gates of a refactor).
+      - name: Simulation, full sizes
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --seeds 200000
+          $SIM --seeds 20000 --actions 1000
+          $SIM --native --seeds 200000
+          $SIM --native --seeds 20000 --actions 1000
+          # K1b: the same sizes under the node lease, beside the per-partition lease until slice 6 flips the default.
+          $SIM --seeds 200000 --node-lease
+          $SIM --seeds 20000 --actions 1000 --node-lease
+          $SIM --native --seeds 200000 --node-lease
+          $SIM --native --seeds 20000 --actions 1000 --node-lease
+          $SIM --lease-check
+          $SIM --landed-check
+          # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
+          $SIM --placement-check
+          # It must fail on its checks (exit 1 with "placement: N check(s) FAILED"), not crash or reject the flaw name.
+          code=0; out=$($SIM --placement-check --flaw ContiguousOnlyBalancer) || code=$?
+          if [ "$code" -ne 1 ] || ! grep -Eq '^placement: [0-9]+ check\(s\) FAILED$' <<<"$out"; then echo "--placement-check did not catch ContiguousOnlyBalancer (exit $code)"; exit 1; fi
+          # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
+          dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
+          dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+
+      - name: Mutation checks, full size
+        run: |
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 48 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+          python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
+            dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
+
+      - name: Store conformance, in memory and EF on SQLite in both fence modes
+        run: |
+          dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll semantic
+          EFC="dotnet ef/Kernel.Ef.Conformance/$BIN/Kernel.Ef.Conformance.dll"
+          $EFC sqlite --checked-fence semantic
+          $EFC sqlite --fence-in-batch semantic
+
+      - name: Runtime conformance, built-in runtime
+        run: |
+          RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
+          $RTC semantic
+          $RTC semantic --partitions 1024
+          $RTC stress 20 2000
+          # K1b slice 5a: the nodes' heartbeat loops renew the node lease, the only renewal under it.
+          $RTC semantic --node-lease
+          $RTC stress 20 2000 --node-lease
+
+      # The -broken forms break the store's fence on purpose; the runner decides whether the runtime failed as it must.
+      - name: Fence broken on purpose
+        run: |
+          RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
+          $RTC semantic-broken
+          $RTC stress-broken 10 1000
+
+      - name: Native model, smoke and cost
+        run: |
+          NAT="dotnet models/Native.Run/$BIN/Kernel.Native.Run.dll"
+          $NAT smoke
+          $NAT cost sqlite
+
+      - name: Graph engine corpus
+        run: dotnet test models/Graph.Tests -c Release --no-build
+
+  # K1 slice 7: the count of 4,096. The sim's --count only sizes the store's rows (PARTITIONS.md, slice 7), so it runs
+  # here at reduced seeds; the integrated runtime suite qualifies 4,096 end to end. Estimate on a 4-core runner: build
+  # 3 min, the two sims 4 min, the runtime suite at 4,096 about 3 min (49 s on 15 cores).
+  kernel-prototype-nightly-4096:
+    name: Kernel prototype nightly, 4,096 virtual partitions
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      # Output folders of the prototype projects, relative to prototypes/kernel-model.
+      BIN: bin/Release/net10.0
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      - name: Build
+        run: |
+          for p in sim conformance/Kernel.Runtime.Conformance.Run; do
+            dotnet restore "$p" --locked-mode
+            dotnet build "$p" -c Release --no-restore
+          done
+
+      - name: Simulation at 4,096, kernel and native
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --seeds 20000 --count 4096
+          $SIM --native --seeds 20000 --count 4096
+
+      - name: Runtime conformance at 4,096, built-in runtime
+        run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096

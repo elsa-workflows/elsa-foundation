@@ -15,6 +15,9 @@ public sealed record RuntimeStressOptions
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromMilliseconds(300);
     public double FaultRate { get; init; } = 0.005;
 
+    /// <summary>K1b: the store keeps the node lease, and the nodes' heartbeat loops renew it.</summary>
+    public bool NodeLease { get; init; }
+
     /// <summary>How often the chaos does something, in milliseconds (a range).</summary>
     public (int Min, int Max) ChaosEvery { get; init; } = (100, 400);
     public bool BrokenFence { get; init; }
@@ -37,7 +40,7 @@ public static class RuntimeStress
     public static async Task<RuntimeStressResult> RunAsync(IRuntimeProvider runtime, IStoreProvider store, RuntimeStressOptions o, TextWriter? output = null)
     {
         output ??= Console.Out;
-        var setup = new HarnessSetup(o.Partitions, new RuntimeTiming(o.Lease, o.PollInterval), o.FaultRate, o.BrokenFence);
+        var setup = new HarnessSetup(o.Partitions, new RuntimeTiming(o.Lease, o.PollInterval), o.FaultRate, o.BrokenFence, NodeLease: o.NodeLease);
         await using var h = await Harness.CreateAsync(runtime, store, setup);
         var watch = Stopwatch.StartNew();
         for (var side = 0; side < 2; side++)

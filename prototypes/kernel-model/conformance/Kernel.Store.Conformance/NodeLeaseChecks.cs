@@ -64,16 +64,18 @@ internal static class NodeLeaseChecks
     private static async Task Heartbeat(Context c)
     {
         Require(c);
-        var p = await c.S.TakeAsync([1, 3], "p", Short);
-        var r = await c.S.TakeAsync([0], "r", Short);       // the control: nothing renews r
-        var f = await c.S.TakeAsync([2], "f", Short);
+        // Brief leases, as TakeRenews takes them: the first answer's check that every owner is live holds on a loaded
+        // runner too (a 300 ms lease ran out there before it, review of #4870).
+        var p = await c.S.TakeAsync([1, 3], "p", Brief);
+        var r = await c.S.TakeAsync([0], "r", Brief);       // the control: nothing renews r
+        var f = await c.S.TakeAsync([2], "f", Brief);
         // f's commit asks for a long lease; under the node lease the fence renews nothing.
         await c.Lands(() => c.S.CommitAsync(CommitBatch.Owned([f.Taken[0]], Context.Long, false, [Make.New("2/i")], [], [])).AsTask(), "f's commit in 2");
         var beat = await Beat(c, "p");
         Context.Equal(At([.. p.Taken]), Listed(beat), "p's heartbeat answer");
         Context.That(Math.Abs(await c.Now() - beat.Now) < 5_000, "the heartbeat's time and a poll's time are far apart");
         Context.Equal("", string.Join(" ", beat.Cluster.Free), "free partitions while every owner is live");
-        await Task.Delay(PastShort);
+        await Task.Delay(Brief + TimeSpan.FromMilliseconds(500));
         beat = await Beat(c, "p");
         Context.Equal(At([.. p.Taken]), Listed(beat), "p's heartbeat answer after r's and f's leases ran out");
         Context.Equal("0 2", string.Join(" ", beat.Cluster.Free), "free partitions after r's and f's leases ran out");

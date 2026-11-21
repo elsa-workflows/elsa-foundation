@@ -40,7 +40,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     await expect(refresh).toBeEnabled();
     expect(await geometry(elements)).toEqual(settled);
 
-    const statusSlot = runtime.locator(".wf-runtime-heading");
+    const statusSlot = runtime.locator(".wf-runtime-status-outcome");
     const confirmedSlot = await statusSlot.boundingBox();
     await toolbar.getByRole("button", { name: "Pause live updates", exact: true }).click();
     await expect(runtime.locator(".wf-runtime-outcome")).toContainText("observation paused");

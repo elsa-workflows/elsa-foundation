@@ -471,10 +471,12 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
 
   useEffect(() => {
     if (moveDialogOpen || !focusRefreshAfterMove) return;
+    // The refresh button is disabled while the post-move reload runs; focus it once it can take focus.
+    if (requestState === "loading") return;
     clearSelection();
     refreshButtonRef.current?.focus();
     setFocusRefreshAfterMove(false);
-  }, [focusRefreshAfterMove, moveDialogOpen]);
+  }, [focusRefreshAfterMove, moveDialogOpen, requestState]);
 
   const closeMoveDialog = () => { if (isCurrentGeneration()) setMoveDialogOpen(false); };
   const movedDefinitions = async (folderId: string | null) => {

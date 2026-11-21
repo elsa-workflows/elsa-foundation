@@ -5234,6 +5234,10 @@ button.wf-reference-select {
   gap: 6px;
 }
 
+.wf-property-row-header:has(> .studio-field-caption-actions) {
+  justify-content: flex-start;
+}
+
 .wf-property-row-caption {
   color: var(--wf-text);
   font-size: 12px;

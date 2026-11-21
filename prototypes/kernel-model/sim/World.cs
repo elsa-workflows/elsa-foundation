@@ -94,7 +94,7 @@ public sealed class Actor(int id, int node, int partition)
     public CancellationTokenSource? PassCancel;     // cancelled when the process dies: no turn after that, and no flush
     public DurableHost? Host;           // a set world's node host (ForNode), whose worker this is
     public SerialHost? Serial;          // a set world: that host as its layer 1 sees it, one operation at a time
-    public NodeHeartbeat? Beat;         // K1b: its incarnation's node heartbeat
+    public DurableHost NodeHost = null!;    // K1b: its incarnation's host, which keeps the node's heartbeat
     public GiveUps GiveUps = null!;     // K1b: what its runtime gave up, so a partition is adopted only when the runtime did not
     public Projector Projector = null!;
     public Projector[] Projectors = [];     // a set world: a projector per partition of the world, on every node
@@ -437,22 +437,18 @@ public sealed partial class World
         Processes[first.Worker.Node] = new Requests($"node{node}.{Incarnation[node]}", Config.Flaws);
         IMembership membership = Config.Rows > Config.Partitions ? new Placed(Store, Config.Partitions) : Store;
         var runtime = Runtimes[node] = new PartitionRuntime(first.Worker.Node, membership, Config.Partitions, TimeSpan.FromSeconds(25), flaws: Config.Flaws);
-        IScopeHost inner = first.Set ? first.Serial = new SerialHost(first.Host!) : new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker));
+        // K1b: the host keeps the node's heartbeat and pass gate over the Workers of this incarnation, on its first actor's
+        // wire. CR-2: one per incarnation, so a zombie that lives on keeps renewing its own record.
+        var durable = first.Set ? first.Host! : new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker));
+        IScopeHost inner = first.Set ? first.Serial = new SerialHost(durable) : durable;
         var host = new GiveUps(inner);
         runtime.StartAsync(host).AsTask().Wait();
-        for (var partition = 0; partition < Config.Partitions; partition++) (Of(node, partition).Runtime, Of(node, partition).GiveUps) = (runtime, host);
-        // K1b: the node's heartbeat and pass gate, over the Workers of this incarnation, on its first actor's wire.
-        // CR-2: the heartbeat belongs to the incarnation, so a zombie that lives on keeps renewing its own record.
-        if (Config.NodeLease)
-        {
-            var actors = first.Set ? [first] : Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p)).ToList();
-            var beat = new NodeHeartbeat(first.Worker.Node, first.Wire, [.. actors.Select(a => a.Worker)], TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(25));
-            foreach (var actor in actors) actor.Beat = beat;
-        }
+        for (var partition = 0; partition < Config.Partitions; partition++)
+            (Of(node, partition).Runtime, Of(node, partition).GiveUps, Of(node, partition).NodeHost) = (runtime, host, durable);
     }
 
-    /// <summary>K1b: the node heartbeats of the processes still running, one per incarnation, zombies included.</summary>
-    public IEnumerable<NodeHeartbeat> Beats => Actors.Where(a => !a.Dead && a.Beat is not null).Select(a => a.Beat!).Distinct();
+    /// <summary>K1b: the runtimes of the processes still running, one per incarnation, zombies included; each sends its node's heartbeat.</summary>
+    public IEnumerable<PartitionRuntime> LiveRuntimes => Actors.Where(a => !a.Dead).Select(a => a.Runtime).Distinct();
 
     /// <summary>A process is alive while any of its workers is.</summary>
     public bool Running(string process) => Actors.Exists(a => !a.Dead && a.Worker.Node == process);
@@ -556,25 +552,15 @@ public sealed partial class World
             }
     }
 
-    /// <summary>K1b: the node's heartbeat. It renews at once; each Worker's next pass runs the answer's stand-down side.</summary>
-    public static async Task Heartbeat(NodeHeartbeat beat) => await beat.BeatAsync();
-
     /// <summary>
-    /// K1b: a pass, and then the pending partitions the last answer had the Worker retake in it join the runtime's
-    /// activations, as an activation of a partition the Worker already holds: the node is its Workers' host.
+    /// K1b: a pass, then the runtime's node pass, as the built-in runtime's pass loop runs it after its scopes' passes: the
+    /// passes no active scope gives, and the adoption of what the Workers took back by themselves (a pending retake).
     /// </summary>
     public async Task Adopting(Actor actor, Task pass)
     {
         await pass;
-        if (!Config.NodeLease || actor.Dead) return;
-        foreach (var fence in actor.Worker.Fences)
-            if (Adoptable(actor, fence.Partition)) await actor.Runtime.ActivateAsync(fence.Partition);
+        if (Config.NodeLease && !actor.Dead) await actor.Runtime.NodePassAsync();
     }
-
-    // Held by the Worker, unknown to its runtime, and never given up by it since its last activation: the Worker brought it
-    // back by itself (a pending retake). A partition the runtime gave up is not adopted: the settling loop reports it.
-    public static bool Adoptable(Actor actor, int partition) =>
-        actor.Worker.Holds(partition) && !actor.Runtime.Owns(partition) && !actor.Runtime.Activating(partition) && !actor.GiveUps.GivenUp.Contains(partition);
 
     // A set world's pass runs under its host's turn, queued as the host's own passes, gains and losses are: a contended
     // turn would resume off the simulation's thread.
@@ -706,11 +692,11 @@ public sealed partial class World
             }
             case "heartbeat":
             {
-                if (Live(act.A) is not { Beat: { } beat }) return null;     // a dead incarnation sends no heartbeat
+                if (Live(act.A) is not { } actor || !Config.NodeLease) return null;     // a dead incarnation sends no heartbeat
                 var calls = Actors.Sum(a => a.Calls.Count);
-                var withheld = beat.Withheld;
-                Watch(Heartbeat(beat));
-                return beat.Withheld > withheld ? "withheld: a Worker that holds partitions has completed no pass within the lease" : $"{Actors.Sum(a => a.Calls.Count) - calls} call sent";
+                var withheld = actor.NodeHost.Heartbeat?.Withheld ?? 0;
+                Watch(actor.Runtime.HeartbeatAsync().AsTask());       // through its runtime and host, as the node's heartbeat loop sends it
+                return (actor.NodeHost.Heartbeat?.Withheld ?? 0) > withheld ? "withheld: a Worker that holds partitions has completed no pass within the lease" : $"{Actors.Sum(a => a.Calls.Count) - calls} call sent";
             }
             case "pass":
             {

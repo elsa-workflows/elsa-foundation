@@ -17,7 +17,8 @@ internal sealed class OAuth2AuthorizeBeginHandler(
             TenantId = request.TenantId,
             Name = request.ConnectionName,
             RequiredType = ConnectionTypeNames.Http,
-            Owner = ConnectionOwners.Tenant
+            Owner = ConnectionOwners.Tenant,
+            AllowNeedsAuthorization = true
         }, cancellationToken);
 
         if (!string.Equals(connection.AuthScheme, HttpAuthSchemes.OAuth2, StringComparison.OrdinalIgnoreCase))
