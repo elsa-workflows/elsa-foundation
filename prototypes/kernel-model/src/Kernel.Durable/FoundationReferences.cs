@@ -50,10 +50,31 @@ public sealed partial class InMemoryStore
 
             var binding = new ReferenceBinding(tenant, reference, address, creator.InboxKey, fingerprint);
             Messages.Add(creator.InboxKey, new MessageRow(creator, ++_seq, 0));
-            _referenceBindings.Add(reference, binding);
-            _referenceBirths.Add(address, binding);
+            InsertReference(binding);
             return reference;
         }
+    }
+
+    private void InsertReference(ReferenceBinding binding)
+    {
+        _referenceBindings.Add(binding.Reference, binding);
+        _referenceBirths.Add(binding.Address, binding);
+    }
+
+    private ReferenceBinding BindChild(TurnCommit turn, InstanceRow? previous, Message creator)
+    {
+        var parentCreation = turn.Row?.Creation ?? previous?.Creation;
+        if (parentCreation is not > 0 || !_referenceBirths.TryGetValue(new(turn.Instance, parentCreation.Value), out var parent) ||
+            creator.Sender != turn.Instance || creator.SenderCreation != parentCreation ||
+            creator.InboxScope != InboxKey.ChildCreatorScope || creator.Kind != Kinds.Start ||
+            creator.Start is not { Creation: { Generation: 1, Previous: 0 } } start || creator.TargetCreation != 1 ||
+            !creator.Target.ChildAddress || !CreationProtocol.IsPhysicalAddress(creator.Target.Id) || Instances.ContainsKey(creator.Target.Id) ||
+            (start.Parent is null ? start.ParentCreation != 0 : start.Parent != turn.Instance || start.ParentCreation != parentCreation))
+            throw new StoreException(Failure.Definite, "An exact child creator must come from its bound issuing actor.");
+
+        var address = new CreationAddress(creator.Target.Id, 1);
+        return new ReferenceBinding(parent.Tenant, ReferenceFor(parent.Tenant, address), address, creator.InboxKey,
+            CreationProtocol.Fingerprint(start, creator.Kind, creator.Payload)!);
     }
 
     internal ActorRead ReadFoundationActor(string tenant, string? reference)
