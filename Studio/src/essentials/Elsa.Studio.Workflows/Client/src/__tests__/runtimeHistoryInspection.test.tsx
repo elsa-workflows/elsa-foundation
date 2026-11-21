@@ -130,7 +130,7 @@ it.each([false, true])("explains recorded skipped resumes in the shared list (co
   expect(rows.map(row => row.querySelector("strong")?.textContent)).toEqual(Array(5).fill("Resume skipped"));
   for (const [index, [code, explanation]] of skippedResumeCases.entries()) {
     expect(rows[index].textContent).toContain(explanation); expect(rows[index].textContent).not.toContain(code);
-    expect(rows[index].textContent).toContain("Recorded source observation");
+    expect(rows[index].textContent).toContain("Recorded delivery observation");
   }
   flushSync(() => rows[3].click()); expect(select).toHaveBeenCalledWith(events[3]);
   expect(events[3].metadata["history.reasonCode"]).toBe("receiver-admission-superseded");
@@ -194,7 +194,7 @@ it("labels committed responsibilities, source observations, settlement and incid
   render(<HistoryEventList items={events} onSelect={vi.fn()} />);
   expect([...container.querySelectorAll(".wf-history-event strong")].map(item => item.textContent)).toEqual(labels.map(([, label]) => label));
   expect(container.querySelectorAll(".wf-history-event small").length).toBeGreaterThan(0);
-  expect(container.textContent?.match(/Recorded source observation/g)).toHaveLength(4);
+  expect(container.textContent?.match(/Recorded delivery observation/g)).toHaveLength(4);
 });
 it("keeps callback return distinct from a later continuation fault and recognizes abandoned compensation", async () => {
   api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(1, { name: "ActivityContinuationReturned" }), readAt: "now" });
@@ -250,7 +250,7 @@ it("keeps recorded sequence when clocks regress and labels every date transition
   render(<HistoryEventList items={items} unloadedAfterSequence={3} onSelect={vi.fn()} />);
   expect([...container.querySelectorAll("[data-history-sequence]")].map(row => row.getAttribute("data-history-sequence"))).toEqual(["1", "4"]);
   expect([...container.querySelectorAll(".wf-history-date")].map(row => row.textContent)).toEqual(items.map(item => historyDate(item.occurredAt)));
-  expect(container.textContent).toContain("Earlier snapshot history is not fully loaded"); expect(container.textContent).toContain("Recorded source observation");
+  expect(container.textContent).toContain("Earlier snapshot history is not fully loaded"); expect(container.textContent).toContain("Recorded delivery observation");
   expect(historyAuthorityLabel("Unspecified")).toBe("Authority unspecified");
 });
 

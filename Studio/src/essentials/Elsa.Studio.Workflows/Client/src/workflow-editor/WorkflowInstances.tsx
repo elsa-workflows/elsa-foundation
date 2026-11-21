@@ -899,6 +899,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const currentHistoryLocation = useRef(historyLocation); currentHistoryLocation.current = historyLocation;
   const appliedHistoryIntent = useRef<{ context: string; location: string; navigation: number } | null>(null);
   const initialHistoryKey = JSON.stringify(parsedInitialHistory);
+  const timelineReturn = useRef<{ context: string; historyEventId: string; activityExecutionId: string } | null>(null);
   const historyBack = useRef<Array<{ location: RunTimelineLocation; evidenceId: string | null; focus: HTMLElement | null }>>([]);
   const [historyOwnerMessage, setHistoryOwnerMessage] = useState("");
   const [focusHistoryInspector, setFocusHistoryInspector] = useState(true);
@@ -936,6 +937,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     // Retained workspace tabs reconnect effects and remember our local address-bar writes. Neither
     // is a new investigation: keep the causal Back stack and the user's chosen inspector tab.
     if (!explicitNavigation && previous?.context === browserContext && JSON.stringify(currentHistoryLocation.current) === initialHistoryKey) return;
+    timelineReturn.current = null;
     setHistoryLocation(parsedInitialHistory);
     historyBack.current = []; setHistoryOwnerMessage(""); setFocusHistoryInspector(true);
     appliedInitialInspectorTab.current = null; // A new exact target must open even after Issues/Details.
@@ -1420,6 +1422,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   };
 
   const selectEvidence = (evidenceId: string | null) => {
+    timelineReturn.current = null;
     beginEvidenceNavigation();
     setHistoryLocation(value => ({ ...value, selection: null }));
     setSelectedEvidenceId(evidenceId);
@@ -1444,6 +1447,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   };
 
   const openIncidentInIssues = (incidentId?: string | null, nodeId?: string | null) => {
+    timelineReturn.current = null;
     const requestId = beginEvidenceNavigation();
     setHistoryLocation(value => ({ ...value, selection: null }));
     const isCurrent = () => incidentNavigationRequest.current === requestId;
@@ -1468,6 +1472,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   };
 
   const showIncidentActivity = (incident: IncidentStateSummary, showInput: boolean) => {
+    timelineReturn.current = null;
     const requestId = beginEvidenceNavigation();
     const isCurrent = () => incidentNavigationRequest.current === requestId;
     const existingAssociation = resolveIncidentActivityAssociation(incident, associationActivities, data?.executableGraph);
@@ -1546,6 +1551,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   }, [browserContext, context, data?.executableGraph, labelForExecution, rememberExecution, workflowExecutionId]);
 
   const selectBrowserExecution = (execution: ActivityExecutionStateSummary, updateScope = true, focusCanvas = true, inspectorTab: InstanceInspectorTab = "activity", alignPlayback = true) => {
+    timelineReturn.current = null;
     rememberExecution(execution);
     rememberedExecutions.current.set(JSON.stringify([browserContext, executionScope?.activityExecutionId, execution.executableNodeId]), execution);
     beginEvidenceNavigation();
@@ -1582,6 +1588,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   };
 
   const selectGraphActivity = (nodeId: string) => {
+    timelineReturn.current = null;
     beginEvidenceNavigation();
     setHistoryLocation(value => ({ ...value, selection: null }));
     const node = data?.executableGraph?.factsByNodeId.get(nodeId);
@@ -1690,6 +1697,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     setHistoryOwnerMessage(""); setActiveInspectorTab("activity"); openInspector();
   }
   function backFromHistory() {
+    timelineReturn.current = null;
     beginEvidenceNavigation(true);
     const previous = historyBack.current.pop();
     if (previous && previous.evidenceId !== selectedEvidenceId) {
@@ -1705,9 +1713,12 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     setHistoryLocation(value => ({ ...value, view: "timeline", filters: { ...value.filters, activityExecutionId, includeDescendants: false } }));
   }
   async function showHistoryActivity(activityExecutionId: string, keepTarget?: RunHistorySelection) {
+    const selection = currentHistoryLocation.current.selection;
+    const returnTarget = selection?.kind === "event" ? { context: browserContext, historyEventId: selection.id, activityExecutionId } : null;
     const known = associationActivities.find(item => item.activityExecutionId === activityExecutionId);
     if (known) {
       selectActivityExecution(activityExecutionId);
+      timelineReturn.current = returnTarget;
       if (keepTarget) setHistoryLocation(value => ({ ...value, selection: keepTarget }));
       return;
     }
@@ -1719,13 +1730,15 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       const execution = activityExecutionSummaryFromInspection(inspection);
       selectBrowserExecution(execution); focusNodePath(findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId);
       void restoreExecutionContext(execution, false);
+      timelineReturn.current = returnTarget;
       if (keepTarget) setHistoryLocation(value => ({ ...value, selection: keepTarget }));
     } catch {
       if (generation === loadGeneration.current && navigation === incidentNavigationRequest.current)
         setHistoryOwnerMessage("The exact owning execution is unavailable. Its recorded event remains inspectable.");
     }
   }
-  async function openHistoryEvent(event: RuntimeHistoryEvent) {
+  async function openHistoryEvent(event: Pick<RuntimeHistoryEvent, "historyEventId" | "activityExecutionId">, retainReturn = false) {
+    if (!retainReturn) timelineReturn.current = null;
     playback.pause(event.activityExecutionId ? undefined : "This event has no activity occurrence. Playback remains at its confirmed position.");
     const navigation = ++incidentNavigationRequest.current;
     scopeRequest.current?.abort(); historyTargetRequest.current?.abort();
@@ -1742,6 +1755,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     try {
       const value = await getWorkflowHistoryEvent(context, workflowExecutionId, event.historyEventId, controller.signal);
       if (!current()) return;
+      timelineReturn.current = null;
       setPreparedHistoryEvent({ contextIdentity: identity, workflowExecutionId, historyEventId: event.historyEventId, value });
       setFocusHistoryInspector(false);
       setHistoryLocation(previous => ({ ...previous, selection: { kind: "event", id: event.historyEventId } }));
@@ -1750,6 +1764,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     } catch (error) {
       if (current()) {
         const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+        if (status === 401 || status === 403 || status === 404 || status === 409) timelineReturn.current = null;
         if (status === 401 || status === 403) playback.invalidate("Recorded event inspection is unavailable with your current access.");
         else setHistoryOwnerMessage("The requested recorded event could not be loaded. The previous confirmed selection remains visible.");
       }
@@ -1814,6 +1829,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     if (!current()) throw new DOMException("Obsolete playback selection", "AbortError");
     return { limitation, commit: () => {
       if (!current()) return;
+      if (!target.inspectActivity) timelineReturn.current = null;
       const controller = new AbortController();
       operation.signal.addEventListener("abort", () => controller.abort(), { once: true });
       scopeRequest.current = controller; focusReadyScope.current = controller;
@@ -1860,6 +1876,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     } : undefined,
     prepareSelection: preparePlaybackSelection,
     onUnavailable: () => {
+      timelineReturn.current = null;
       historyTargetRequest.current?.abort(); setHistoryTargetPending(false);
       setPreparedHistoryEvent(undefined); setPreparedScope(null); setSelectedEvidenceId(null); requestCanvasFocus(null);
       setHistoryLocation(previous => previous.selection ? { ...previous, selection: null } : previous);
@@ -2011,6 +2028,12 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       {state === "ready" && data ? <nav className="wf-run-primary-views" aria-label="Run workspace views">
         <button type="button" aria-pressed={historyLocation.view === "timeline"} onClick={() => {
           beginEvidenceNavigation(); setHistoryLocation(value => ({ ...value, view: "timeline" }));
+          const anchor = timelineReturn.current;
+          if (!historyLocation.selection && activeInspectorTab === "activity" && anchor?.context === browserContext
+            && anchor.activityExecutionId === selectedEvidenceId && observationIsCurrent()) {
+            void openHistoryEvent(anchor, true);
+            return;
+          }
           const cursor = playback.cursor;
           if (!historyLocation.selection && activeInspectorTab === "activity" && cursor && cursor.activityExecutionId === selectedEvidenceId
             && !playback.outsideSelection && playback.phase !== "failed" && !playback.error)

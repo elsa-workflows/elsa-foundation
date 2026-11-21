@@ -949,7 +949,8 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={pairedCatalog} focusInputKey="a-b" />);
     await vi.waitFor(() => expect(document.activeElement).toBe(buttons[1]));
-    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Inputs");
+    expect(container.querySelector('[role="tablist"][aria-label="Activity execution views"] [aria-selected="true"]')?.textContent).toBe("Data");
+    expect(container.querySelector('[role="tablist"][aria-label="Activity execution details"] [aria-selected="true"]')?.textContent).toBe("Inputs");
     expect(buttons[1]!.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(ids[1]!)?.hidden).toBe(false);
   });
@@ -1419,7 +1420,7 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
     const overview = container.querySelector<HTMLElement>(".wf-activity-overview")!;
-    const overviewTab = container.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')!;
+    const overviewTab = container.querySelector<HTMLButtonElement>('[role="tablist"][aria-label="Activity execution details"] [aria-selected="true"]')!;
     const overviewPanel = document.getElementById(overviewTab.getAttribute("aria-controls")!)!;
 
     expect(overview.querySelector("h4")?.textContent).toBe("Write Line");

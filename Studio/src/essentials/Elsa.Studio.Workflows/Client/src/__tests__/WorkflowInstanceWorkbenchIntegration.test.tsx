@@ -1008,6 +1008,7 @@ describe("workflow run workbench incident navigation", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
+    click(buttonByText(container, "Data"));
     const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
       .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
     expect(incidentCount).toBe("0");
@@ -1084,6 +1085,7 @@ describe("workflow run workbench incident navigation", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
+    click(buttonByText(container, "Data"));
     const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
       .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
     expect(incidentCount).toBe("0");
@@ -2102,4 +2104,38 @@ it("clears playback cursor and prepared protected inspection after the final own
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("unavailable with your current access"));
   expect(container.querySelector("[aria-label='History event details']")).toBeNull();
   expect(container.querySelector(".wf-playback-details")).toBeNull(); expect(container.querySelector(".wf-activity-overview")).toBeNull();
+});
+
+
+it.each([false, true])("restores the exact later resume event without playback and permits a transient retry (%s)", async transient => {
+  const owner = activityExecution();
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [owner], incidents: [] }));
+  const events = [
+    historyEvent(1, { workflowExecutionId: "run-1", historyEventId: "completed-owner", activityExecutionId: owner.activityExecutionId, name: "ActivityCompleted" }),
+    historyEvent(2, { workflowExecutionId: "run-1", historyEventId: "later-resume", activityExecutionId: owner.activityExecutionId,
+      name: "DeliveryUnmatched", category: "DeliveryObservation", authority: "DeliveryObservation", checkpointId: null, checkpointOrdinal: null,
+      physicalCommitId: null, metadata: { "history.reasonCode": "receiver-wait-no-longer-eligible" } })
+  ];
+  historyApi.getWorkflowHistoryPage.mockResolvedValue(historyPage(events));
+  historyApi.getWorkflowHistoryEvent.mockImplementation(async (_context, _run, id) => ({ coverage: historyCoverage,
+    event: events.find(event => event.historyEventId === id)!, readAt: "2026-10-01T12:02:00Z" }));
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelectorAll(".wf-run-history-view .wf-history-event")).toHaveLength(2));
+  const row = container.querySelector<HTMLButtonElement>('[data-history-event-id="later-resume"]')!;
+  click(row);
+  await vi.waitFor(() => expect(row.getAttribute("aria-pressed")).toBe("true"));
+  click(buttonByText(container, "Inspect owning execution →")); await showActivityData();
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-execution-details")?.textContent).toContain(owner.activityExecutionId));
+  const priorReads = historyApi.getWorkflowHistoryEvent.mock.calls.length;
+  if (transient) historyApi.getWorkflowHistoryEvent.mockRejectedValueOnce(Object.assign(new Error("Temporary exact-event read failure"), { status: 503 }));
+  click(buttonByText(container, "Timeline"));
+  if (transient) {
+    await vi.waitFor(() => expect(container.textContent).toContain("The requested recorded event could not be loaded."));
+    expect(row.getAttribute("aria-pressed")).toBe("false");
+    click(buttonByText(container, "Timeline"));
+  }
+  await vi.waitFor(() => expect(row.getAttribute("aria-pressed")).toBe("true"));
+  expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain("Resume skipped");
+  expect(historyApi.getWorkflowHistoryEvent.mock.calls.slice(priorReads).length).toBeGreaterThanOrEqual(transient ? 2 : 1);
+  expect(historyApi.getWorkflowHistoryEvent.mock.calls.slice(priorReads).every(([, , id]) => id === "later-resume")).toBe(true);
 });

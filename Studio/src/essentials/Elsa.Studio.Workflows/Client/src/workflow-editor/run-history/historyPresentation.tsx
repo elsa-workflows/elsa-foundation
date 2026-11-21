@@ -85,7 +85,7 @@ export function historyEventExplanation(event: HistoryPresentationEvent) {
 }
 export function isHistoryHighlight(event: RuntimeHistoryEvent) { return !["ActivityScheduled", "ActivityAttemptClaimed", "ValueCaptured"].includes(event.name); }
 export function historyAuthorityLabel(value: string) {
-  return value === "CommittedTransition" ? "Committed runtime transition" : value === "DeliveryObservation" ? "Recorded source observation"
+  return value === "CommittedTransition" ? "Committed runtime transition" : value === "DeliveryObservation" ? "Recorded delivery observation"
     : value === "Unspecified" ? "Authority unspecified" : `Unrecognized recorded authority (${value})`;
 }
 export function historyClock(value: string | null) {
@@ -181,7 +181,7 @@ export function HistoryEventList({ items, selectedEventId, onSelect, labelForEve
             {event.metadata["history.status"] ? <small>{event.metadata["history.status"]}</small> : null}
             {reason ? <small>{reason}</small> : null}
             {age ? <small><Clock3 size={12} aria-hidden="true" /> Handle lifetime {age}</small> : null}
-            {event.authority === "DeliveryObservation" ? <small>Recorded source observation</small> : event.authority !== "CommittedTransition" && event.authority !== "Unspecified" ? <small>{historyAuthorityLabel(event.authority)}</small> : null}
+            {event.authority === "DeliveryObservation" ? <small>Recorded delivery observation</small> : event.authority !== "CommittedTransition" && event.authority !== "Unspecified" ? <small>{historyAuthorityLabel(event.authority)}</small> : null}
           </span>
           <span className="wf-history-position" aria-label={`Recorded position ${event.sequence}`}>#{event.sequence}</span>
         </button>

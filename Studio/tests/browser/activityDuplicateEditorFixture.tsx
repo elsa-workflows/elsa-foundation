@@ -407,6 +407,17 @@ export function createEditorContext(live?: { status: string; disconnected: boole
   const incident = { incidentId: "incident-write-two", workflowExecutionId: "editor-execution", activityExecutionId: "activity-exec-write-two",
     executableNodeId: "exec-write-two", severity: "Error", status: "Active", failureType: "ActivityFailed", message: "Second activity failed in its exact execution.",
     createdAt: "2026-10-27T10:00:00Z", isBlocking: true, metadata: {} };
+  // Opt-in deterministic history protocol for Timeline interaction controls only.
+  const historyFixture = new URLSearchParams(window.location.search).has("timeline-entries");
+  const historyEvents = records.map((record, index) => ({
+    historyEventId: `fixture-history-${index + 1}`, workflowExecutionId: "editor-execution", sequence: index + 1, schemaVersion: 1,
+    name: "ActivityCompleted", category: "ActivityLifecycle", authority: "CommittedTransition",
+    activityExecutionId: record.activityExecutionId, executableNodeId: record.executableNodeId,
+    occurredAt: record.scheduledAt, recordedAt: record.scheduledAt, metadata: {}
+  }));
+  const historyCoverage = { state: "captured", policyId: "browser-fixture", policyVersion: 1,
+    supportedKinds: ["ActivityCompleted"], capturedFromStart: true, hasGaps: false,
+    firstSequence: 1, lastSequence: historyEvents.length, settledSequence: historyEvents.length, purgedThroughSequence: 0 };
   const runView = { testRunId: "editor-test", definitionId: draft.definitionId, definitionVersionId: "draft-1", artifactId: "editor-artifact", workflowExecutionId: "editor-execution", status: "Dispatched" };
   return {
     baseUrl: "browser-activity-duplicate-editor",
@@ -427,6 +438,10 @@ export function createEditorContext(live?: { status: string; disconnected: boole
                 { id: "elsa.api.runtime", contractVersion: "1", links: [
                   ...(hostPersistenceMode ? [{ rel: "runtime-persistence-mode", href: "runtime/workflows/persistence-mode" }] : []),
                   { rel: "workflow-instance", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true },
+                  ...(historyFixture ? [
+                    { rel: "workflow-history-page", href: "runtime/workflows/instances/{workflowExecutionId}/fixture-history", templated: true },
+                    { rel: "workflow-history-event", href: "runtime/workflows/instances/{workflowExecutionId}/fixture-history/{historyEventId}", templated: true }
+                  ] : []),
                   { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
                   { rel: "activity-execution", href: "runtime/workflows/instances/{workflowExecutionId}/activities/{activityExecutionId}", templated: true },
                   { rel: "activity-executions", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions", templated: true }
@@ -495,6 +510,18 @@ export function createEditorContext(live?: { status: string; disconnected: boole
               { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
             ]
           };
+        }
+        if (historyFixture && url.startsWith("/runtime/workflows/instances/editor-execution/fixture-history/")) {
+          const id = decodeURIComponent(url.split("/fixture-history/")[1]);
+          const event = historyEvents.find(item => item.historyEventId === id);
+          if (!event) throw new Error("Unknown fixture history event");
+          return { coverage: historyCoverage, event, readAt: "2026-10-27T10:00:01Z" };
+        }
+        if (historyFixture && url.startsWith("/runtime/workflows/instances/editor-execution/fixture-history?")) {
+          const query = new URL(url, "http://fixture").searchParams;
+          const items = historyEvents.filter(event => !query.get("activityExecutionId") || event.activityExecutionId === query.get("activityExecutionId"));
+          return { coverage: historyCoverage, items, upperSequence: historyEvents.length, scannedThroughSequence: historyEvents.length,
+            scannedCount: historyEvents.length, nextContinuationToken: null, catchUpToken: null, scopeComplete: true, readAt: "2026-10-27T10:00:01Z" };
         }
         if (runCanvas && url === "/runtime/workflows/instances/editor-execution") return {
           instance: { workflowExecutionId: "editor-execution", artifactId: "editor-artifact", definitionId: "definition-1", definitionVersionId: "draft-1",

@@ -448,6 +448,8 @@
 
 .wf-run-history-workspace.run-layout-medium,
 .wf-run-history-workspace.run-layout-narrow {
+  /* Lazy journal content must not move a focused tab between native pointerdown and click. */
+  overflow-anchor: none;
   display: flex;
   flex-direction: column;
   overflow: auto;

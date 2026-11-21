@@ -3990,11 +3990,8 @@ describe("workflows module", () => {
     expect(runInspector?.textContent).toContain("Workflow Instance ID");
     expect(runInspector?.querySelector("[aria-label='Copy Workflow Instance ID']")).toBeTruthy();
     await click(buttonByText(container, "Timeline"));
-    await click(buttonByText(container, "Open definition"));
-    expect(window.location.pathname).toBe("/workflows/definitions");
-    expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
-    // Return to the same exact activity deep link; Data belongs to that execution's inspector.
-    window.history.replaceState({}, "", "/workflows/instances/wfexec-1?selected=activity-execution-1");
+    // Data belongs to the selected execution's Activity inspector.
+    await click(buttonByText(container, "Activity"));
     // Timeline is the primary workspace. Older hosts report unsupported history without fabricating an activity journal.
     expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
     await waitForText(container, "This host does not support durable run history");
@@ -4033,6 +4030,9 @@ describe("workflows module", () => {
       "https://server.example/runtime/workflows/executables/artifact-1?ref=reference-pinned",
       expect.any(Object)
     );
+    await click(buttonByText(container, "Open definition"));
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
 
     await unmount();
   });
@@ -4344,7 +4344,8 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
-    await waitForText(container, "Pinned Runtime executable");
+    await waitForRunWorkbench(container);
+    expect(container.querySelector(".wf-detail-header h2")?.textContent).toBe("Run · definition-1");
     // Timeline reports the original host's history capability explicitly.
     await waitForText(container, "This host does not support durable run history");
     expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
