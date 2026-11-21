@@ -1,0 +1,33 @@
+using Kernel.Foundation.Contracts;
+
+namespace Kernel.Model.Contracts;
+
+public sealed record WorkflowStart(
+    string Model,
+    string Definition,
+    string? Input = null,
+    bool Ephemeral = false,
+    History History = History.Full);
+
+/// <summary>The workflow model and its versioned state format.</summary>
+public interface IExecutionModel
+{
+    string Key { get; }
+    Type StateType { get; }
+    int StateVersion { get; }
+    object CreateState(WorkflowStart start);
+    object UpgradeState(string state, int fromVersion);
+    ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken);
+    ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken);
+    RestorePlan RestoreWaits(InstanceInfo instance, object state);
+    long TerminalGrowth(InstanceInfo instance, object state);
+}
+
+/// <summary>Model-owned terminal metadata and deletion protection.</summary>
+public interface IModelMetadata
+{
+    bool HandlesMetadata(Message message);
+    ValueTask MetadataAsync(ITurn turn, ActorStatus status, CancellationToken cancellationToken);
+    void TerminateMetadata(object state);
+    bool ProtectsDeletion(object state, long? endedAt, long now);
+}
