@@ -19,7 +19,11 @@ internal static class ContractNativeChecks
             graph.All(name => name?.StartsWith("System.", StringComparison.Ordinal) == true),
             "the compiled Native execution model uses the public contracts and its layer-three libraries");
         foreach (var mode in new[] { Modes.Balanced, Modes.Durable })
+        {
             await Run((ok, label) => check(ok, $"{mode}: {label}"), mode);
+            await ReceiptLifetime((ok, label) => check(ok, $"{mode}: {label}"), mode);
+        }
+        await CompletedJobRestore(check);
     }
 
     private static async Task Run(Action<bool, string> check, string mode)
@@ -60,6 +64,10 @@ internal static class ContractNativeChecks
         await Pump(owner);
         check(State().Waits.ContainsKey(wait) && sent.Count == 0,
             "an outside timer-shaped message cannot release the Native wait");
+        await ingress.SendAsync(scope, target, "malformed-timer", NativeKinds.Timer, "{");
+        await Pump(owner);
+        check(await reads.GetAsync(scope, reference) is { Header.Status: Contract.ActorStatus.Running, Park: null } &&
+            State().Waits.ContainsKey(wait), "an unauthenticated malformed timer is ignored before decoding");
         await owner.DisposeAsync();
 
         now = due - 1;
@@ -94,9 +102,126 @@ internal static class ContractNativeChecks
         NativeState State() => Json.Read<NativeState>(store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row.State);
     }
 
-    private static async Task Pump(IScopeActivation owner)
+    private static async Task ReceiptLifetime(Action<bool, string> check, string mode)
     {
-        for (var step = 0; step < 25; step++)
+        const long initial = 1_701_800_000_000;
+        const string node = "native-receipts";
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("acme");
+        var requests = new Requests(node);
+        Contract.IIngress ingress = new InMemoryIngress(store, requests, node,
+            (bound, kind) => bound == scope && kind == Contract.Kinds.Terminate);
+        Contract.IActorReads reads = new ActorList(store, 16);
+        var runtime = new PublicRuntime(ingress, reads);
+        var registry = new WorkflowRegistry()
+            .Add(Wf.Workflow("receipt", Wf.Node<ReceiptReceiver>("receiver").With(Wf.Event("wait", "signal"))));
+        var model = new NativeExecutionModel(registry);
+        var actor = new PublicWorkflow([model]);
+        var worker = new Worker(node, 0, store, new ActorAdapter(store, actor, (requests, node)),
+            new WorkerOptions { Monotonic = () => now - initial, Transport = new LocalReplies(requests) });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var reference = (await runtime.StartAsync(scope, "start", NativeExecutionModel.Start("receipt", mode))).Actor!.Value;
+        var target = new Contract.Target.Ref(reference);
+        await Pump(owner);
+        var frame = State().Inboxes!.Keys.Single();
+        await ingress.SendAsync(scope, target, "admit", InvocationInput.Kind,
+            Json.Write(new InvocationInput(frame, "input", "request", "body")));
+        await Pump(owner);
+        var admitted = State().Inboxes![frame].Receipts["input"];
+        await runtime.TerminateAsync(scope, "end", (await reads.GetAsync(scope, reference))!);
+        await Pump(owner);
+
+        var terminal = await reads.GetAsync(scope, reference);
+        var state = State();
+        now += 4;
+        var present = await Ask("present");
+        var protectedBeforeExpiry = model.ProtectsDeletion(state, terminal?.Header.EndedAt, now);
+        now++;
+        var expired = await Ask("expired");
+        check(admitted.Status == "Queued" && terminal is { Header: { Status: Contract.ActorStatus.Cancelled, EndedAt: initial } } &&
+            present is { Result: "Found", Status: "NotProcessed", FinalizedAt: initial, ValidUntil: initial + 5 } &&
+            protectedBeforeExpiry && expired?.Result == "MissingOrExpired" && !model.ProtectsDeletion(state, terminal.Header.EndedAt, now),
+            "ended receipt queries and deletion protection share the committed expiry boundary");
+
+        NativeState State() => Json.Read<NativeState>(store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row.State);
+
+        async Task<Kernel.Native.Admission?> Ask(string id)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            var reply = ingress.RequestAsync(scope, target, id, ReceiptQuery.Kind, Json.Write(new ReceiptQuery(frame, "input")),
+                null, new Contract.RequestOptions(null, now + 1_000), timeout.Token).AsTask();
+            await Pump(owner);
+            return (await reply).Item as Kernel.Native.Admission;
+        }
+    }
+
+    private static async Task CompletedJobRestore(Action<bool, string> check)
+    {
+        const long now = 1_701_800_000_000;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("acme");
+        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("native-job-restore"), "native-job-restore");
+        Contract.IActorReads reads = new ActorList(store, 16);
+        var runtime = new PublicRuntime(ingress, reads);
+        var model = new NativeExecutionModel(new WorkflowRegistry().Add(Wf.Workflow("job",
+            Wf.Parallel("parallel", null, Wf.Call("lookup", "pricing"), Wf.Set("first", "a", 1),
+                Wf.Set("second", "b", 2), Wf.Event("wait", "signal")))));
+        var reference = (await runtime.StartAsync(scope, "start", NativeExecutionModel.Start("job", Modes.Durable))).Actor!.Value;
+        var instance = new Models.InstanceInfo(reference, scope.Tenant, model.Key, "job", null);
+        var pendingWasRestorable = false;
+        var queuedWasRestorable = false;
+        var sawQueuedCompletion = false;
+        var worker = new Worker("native-job-restore", 0, store, new ActorAdapter(store, new PublicWorkflow([model])),
+            new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        for (var pass = 0; pass < 30; pass++)
+        {
+            await Pump(owner, 1);
+            Observe();
+        }
+        var settled = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row;
+        var applied = Json.Read<NativeState>(settled.State).Results.GetValueOrDefault("lookup")?.GetValue<string>();
+        check(pendingWasRestorable && sawQueuedCompletion && !queuedWasRestorable && applied == "answer of pricing",
+            $"a Durable job restores while pending and its committed agenda result cannot restart it " +
+            $"(pending recipe {pendingWasRestorable}, queued result {sawQueuedCompletion}, queued recipe {queuedWasRestorable}, result {applied})");
+
+        void Observe()
+        {
+            if (store.ReadFoundationActor(scope.Tenant, reference.Id).Actor is not { Row: var row }) return;
+            var snapshot = Json.Read<NativeState>(row.State);
+            var job = snapshot.Waits.SingleOrDefault(wait => wait.Value.Kind == "job").Key;
+            if (job is null) return;
+            var restored = model.RestoreWaits(instance, snapshot).Jobs.Any(recipe => recipe.Key == job);
+            var hasTicket = row.Jobs is not null && DurableKeyJson.ReadKeys(row.Jobs).Contains(job);
+            if (hasTicket) pendingWasRestorable |= restored;
+            if (!hasTicket && snapshot.Agenda.Any(work => work is { Resume: true } && work.Wait == job))
+            {
+                sawQueuedCompletion = true;
+                queuedWasRestorable |= restored;
+            }
+        }
+    }
+
+    public sealed class ReceiptReceiver : CompositeActivity
+    {
+        protected override void Execute(CompositeContext context)
+        {
+            context.RegisterInputInbox(2, 2, TimeSpan.FromMilliseconds(5));
+            context.Schedule(context.Children.Single());
+        }
+
+        protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
+    }
+
+    private sealed class LocalReplies(Requests requests) : IReplyTransport
+    {
+        public void Send(string node, Reply reply) => requests.Receive(reply);
+    }
+
+    private static async Task Pump(IScopeActivation owner, int passes = 25)
+    {
+        for (var step = 0; step < passes; step++)
         {
             await owner.WokenAsync(null);
             await owner.RunAsync();

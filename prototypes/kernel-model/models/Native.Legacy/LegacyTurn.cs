@@ -45,7 +45,7 @@ internal sealed class LegacyTurn : INativeTurn
     public bool TargetsCurrentLife(Contract.Message message) =>
         _turn.Instance.Creation > 0 && _source[message].TargetCreation == _turn.Instance.Creation;
 
-    public bool IsTimer(Contract.Message message, string handle) => true;
+    public string TimerWait(Contract.Message message) => _source[message].Read<TimerFired>().Wait;
     public string? EventWait(Contract.Message message) => Events.Delivered(_source[message])?.Wait;
 
     public string SendToSelf(string kind, object? payload = null, long? dueAt = null) =>

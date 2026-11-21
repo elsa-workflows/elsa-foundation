@@ -15,7 +15,7 @@ internal interface INativeTurn
     object? Ambient { get; }
     IReadOnlyList<Contract.Message> Items { get; }
     IReceiptClock Clock { get; }
-    bool IsTimer(Contract.Message message, string handle);
+    string? TimerWait(Contract.Message message);
     bool TargetsCurrentLife(Contract.Message message);
     string? EventWait(Contract.Message message);
     Contract.ChildFinished ChildFinished(Contract.Message message);

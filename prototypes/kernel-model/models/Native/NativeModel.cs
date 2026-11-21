@@ -187,8 +187,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             {
                 // The timer's message is consumed by this turn. Its resume may wait in the agenda past a Durable boundary,
                 // and a cancel meanwhile must not recall a message that is gone: Recall is for one not yet received.
-                var wait = Read<TimerFired>(m).Wait;
-                if (_s.Waits.TryGetValue(wait, out var timer) && timer.Kind == "timer" && turn.IsTimer(m, timer.Key))
+                if (turn.TimerWait(m) is { } wait && _s.Waits.TryGetValue(wait, out var timer) && timer.Kind == "timer")
                 {
                     _s.Waits[wait] = timer with { Key = "" };
                     Resume(wait, null);

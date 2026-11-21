@@ -6,8 +6,10 @@ using Models = Kernel.Model.Contracts;
 
 namespace Kernel.Native;
 
-internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? outbound) : INativeTurn
+internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? outbound, long? endedAt = null) : INativeTurn
 {
+    private HashSet<string>? _timerHandles;
+
     public Contract.ActorRef Actor => turn.Instance.Ref;
     public string Definition => turn.Instance.Definition;
     public bool HasExactIdentity => true;
@@ -17,10 +19,20 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
     public NativeState State => (NativeState)turn.State;
     public object? Ambient => turn.Ambient;
     public IReadOnlyList<Contract.Message> Items => turn.Inbox;
-    public IReceiptClock Clock { get; } = new ModelReceiptClock(turn.Now);
+    public IReceiptClock Clock { get; } = new ModelReceiptClock(turn.Now, endedAt);
 
     public bool TargetsCurrentLife(Contract.Message message) => true; // the foundation addressed this turn's exact ref
-    public bool IsTimer(Contract.Message message, string handle) => message.Sender == Actor && message.Id == handle;
+    public string? TimerWait(Contract.Message message)
+    {
+        // The foundation ties the sender to this life. Only an outstanding timer's exact handle can carry its payload.
+        if (message.Sender != Actor) return null;
+        _timerHandles ??= State.Waits.Values.Where(wait => wait.Kind == "timer" && wait.Key.Length > 0)
+            .Select(wait => wait.Key).ToHashSet(StringComparer.Ordinal);
+        if (!_timerHandles.Contains(message.Id)) return null;
+        var receipt = JsonSerializer.Deserialize<TimerFired>(message.Payload!);
+        return receipt is not null && State.Waits.TryGetValue(receipt.Wait, out var expected) &&
+            expected.Kind == "timer" && expected.Key == message.Id ? receipt.Wait : null;
+    }
     public string? EventWait(Contract.Message message) => message.Event?.Wait;
     public Contract.ChildFinished ChildFinished(Contract.Message message) => JsonSerializer.Deserialize<Contract.ChildFinished>(message.Payload!)!;
     public bool MayHaveRun() => false;

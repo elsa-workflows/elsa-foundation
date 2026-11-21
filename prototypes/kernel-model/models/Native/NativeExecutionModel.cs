@@ -71,7 +71,10 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         var timers = new List<Contract.TimerSpec>();
         var jobs = new List<Contract.JobSpec>();
         var subscriptions = new List<Contract.SubscriptionSpec>();
-        foreach (var (wait, entry) in ((NativeState)state).Waits)
+        var native = (NativeState)state;
+        var queuedResumes = native.Agenda.Where(work => work.Resume && !work.Gone).Select(work => work.Wait)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var (wait, entry) in native.Waits)
         {
             switch (entry.Kind)
             {
@@ -79,7 +82,7 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
                     timers.Add(new(entry.Key, NativeKinds.Timer, JsonSerializer.Serialize(new TimerFired(wait)),
                         entry.Due ?? throw new InvalidOperationException("The timer checkpoint has no original due time.")));
                     break;
-                case "job":
+                case "job" when !queuedResumes.Contains(wait):
                     jobs.Add(entry.Job ?? throw new InvalidOperationException("The job checkpoint has no invocation recipe."));
                     break;
                 case "event":
@@ -95,9 +98,9 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         .Sum(inbox => 7 + 23L * inbox.Receipts.Values.Count(receipt => receipt.Status is "Queued" or "Evaluating" or "Selected")) ?? 0;
 
     public bool HandlesMetadata(Contract.Message message) => Burst.HandlesMetadata(message.Kind);
-    public ValueTask MetadataAsync(Models.ITurn turn, Contract.ActorStatus status, CancellationToken cancellationToken)
+    public ValueTask MetadataAsync(Models.ITurn turn, Contract.ActorStatus status, long? endedAt, CancellationToken cancellationToken)
     {
-        var bridge = new ContractTurn(turn, outbound);
+        var bridge = new ContractTurn(turn, outbound, endedAt);
         return turn.State is NativeState
             ? new Burst(registry, _options, bridge, cancellationToken, status).MetadataAsync()
             : InvocationLifetime.Missing(bridge);
