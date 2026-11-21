@@ -1805,6 +1805,7 @@ jobs:
           expect_contract_failure "version two did not inherit the old token count exactly once" --contract-evolution --seed 1 --flaw SkipUpgrade
           expect_contract_failure "the correlation actor forgot an event before its waiter arrived" --contract-events --seed 1 --flaw CorrelationForgets
           expect_contract_failure "respond released its response on the wrong side of the commit" --contract-http --seed 1 --flaw EmitBeforeCommit
+          expect_contract_failure "inline promotion writes the same public life, state, header, journal and live timer together" --inline-ephemeral-check --flaw ForgetShortWaits
 
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
       # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 3208 (6946 before K1 slice 7's set worlds), a seed

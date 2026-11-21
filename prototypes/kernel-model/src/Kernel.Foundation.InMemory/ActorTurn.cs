@@ -67,8 +67,9 @@ internal sealed partial class ActorAdapter
 
         public string Send(Contract.ActorRef target, string kind, string? payload = null, long? dueAt = null)
         {
-            var address = _stagedChildren.GetValueOrDefault(target) ?? _store.FoundationTarget(Header.Tenant, target.Id) ??
-                throw new ArgumentException("The actor reference was not found.", nameof(target));
+            var address = target == Header.Ref ? new Durable.CreationAddress(_row.Id, _row.Creation)
+                : _stagedChildren.GetValueOrDefault(target) ?? _store.FoundationTarget(Header.Tenant, target.Id) ??
+                  throw new ArgumentException("The actor reference was not found.", nameof(target));
             if (kind is Contract.Kinds.Start or Contract.Kinds.Event or Contract.Kinds.ChildFinished or Contract.Kinds.JobFinished)
                 throw new ArgumentException("The foundation issues this message kind.", nameof(kind));
             return _turn.SendFromActor(_store, new(address.Id), address.Creation, kind, payload, dueAt);
@@ -105,8 +106,13 @@ internal sealed partial class ActorAdapter
             _turn.StartJobWithPayload(key, arguments, deadline);
         }
 
-        public void CancelJob(string key) => _turn.CancelJob(key, _store.FoundationJob(_row.Id, _row.Creation, key).Ticket?.Timer,
-            _store.HasFoundationJobResult(_row.Id, _row.Creation, key));
+        public void CancelJob(string key)
+        {
+            var ticket = _store.FoundationJob(_row.Id, _row.Creation, key).Ticket;
+            if (ticket is null && _input.VolatileMessage(Durable.InboxKey.Ticket(_row.Id, key, _row.Creation)) is { Kind: Durable.Kinds.Job } local)
+                ticket = local.Read<Durable.JobTicket>();
+            _turn.CancelJob(key, ticket?.Timer, _store.HasFoundationJobResult(_row.Id, _row.Creation, key));
+        }
 
         public void Subscribe(string key, string wait, bool keep = false) => _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
         public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait);
@@ -166,10 +172,34 @@ internal sealed partial class ActorAdapter
             if (_input.Row is null) _entries.Insert(0, "start");
             if (ended) _entries.Add("end");
             if (Inbox is [{ Kind: Contract.Kinds.Migrate }]) _entries.Add("migrate");
-            var journal = _entries.Count > 0 ? Durable.Json.Write(_entries) :
+            var entries = _input.Pending is List<object> pending ? [.. pending, .. _entries] : _entries;
+            var journal = entries.Count > 0 ? Durable.Json.Write(entries) :
                 _row.History == Durable.History.State && State != (_row.FoundationNullState ? null : _row.State) ? "[]" : null;
-            outcome.FoundationHeader = _header ?? (_input.Row is null ? InitialHeader(Header.TypeData) : null);
+            outcome.FoundationHeader = _header ?? _row.FoundationInlineHeader ?? (_input.Row is null ? InitialHeader(Header.TypeData) : null);
+            if (row.FoundationInlineBirth is not null)
+            {
+                var until = _input.Unwritten ? _input.Until : InlineUntil();
+                if (ended && (_input.Row is null || _input.CheckpointTime < until) && _turn.SentCount == 0 && _turn.SubscribedCount == 0 &&
+                    outcome.Held.Count == 0 && outcome.Consumed.TrueForAll(item => !item.Durable))
+                    return outcome;
+
+                if (!ended && outcome.Held.Count == 0 && _turn.CanWaitInMemory(until))
+                {
+                    _turn.WaitInMemory();
+                    outcome.InMemory = true;
+                    outcome.Until = until;
+                    outcome.Pending = entries;
+                    return _turn.Seal(outcome, row with { FoundationInlineHeader = outcome.FoundationHeader }, State, null);
+                }
+            }
             return _turn.Seal(outcome, row, State, journal);
+        }
+
+        private long InlineUntil()
+        {
+            var configured = (long)_input.Services.ShortWait.TotalMilliseconds;
+            var deadline = Durable.ReplyTo.Parse(_input.Taken[_input.From].Message.ReplyTo!).Deadline;
+            return Math.Min(checked(Now + configured), deadline);
         }
 
         private Durable.Message Received(Contract.Message message) =>
@@ -180,8 +210,9 @@ internal sealed partial class ActorAdapter
 
         private Contract.Message Project(Durable.Message message)
         {
-            var sender = _store.FoundationReferenceOf(Header.Tenant, message.Sender, message.SenderCreation) is { } reference
-                ? new Contract.ActorRef(reference) : (Contract.ActorRef?)null;
+            var sender = message.Sender == _row.Id && message.SenderCreation == _row.Creation ? Header.Ref
+                : _store.FoundationReferenceOf(Header.Tenant, message.Sender, message.SenderCreation) is { } reference
+                    ? new Contract.ActorRef(reference) : (Contract.ActorRef?)null;
             var id = (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
                 ? _store.MessageHandle("inbox:" + message.Id) : message.Id;
             if (message.Start is null && message.EventMatch is { } encoded)

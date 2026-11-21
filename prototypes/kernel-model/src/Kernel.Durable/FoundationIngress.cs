@@ -10,10 +10,11 @@ public sealed partial class InMemoryStore
     private readonly Dictionary<(string Tenant, string Operation), CreatedRoot> _foundationStarts = [];
 
     internal FoundationStartReceipt AdmitGeneratedFoundationStart(string tenant, string id, StartSpec spec,
-        long? due, TimeSpan? keepFor, string? replyTo = null)
+        long? due, TimeSpan? keepFor, string? replyTo = null, Worker? inlineOwner = null)
     {
         if (spec.Parent is not null || spec.Creation is not null)
             throw new ArgumentException("The foundation assigns the generated actor's creation.", nameof(spec));
+        var partition = inlineOwner?.Fences.FirstOrDefault()?.Partition;
         var window = FoundationIngressWindow(keepFor);
         var operation = Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
         lock (_gate)
@@ -30,11 +31,25 @@ public sealed partial class InMemoryStore
                 StorageId = "root:" + address.Id
             };
             var until = checked(now + (long)window.TotalMilliseconds);
-            var reference = AdmitFoundationStart(tenant, creator) ??
+            var reference = partition is { } local
+                ? TryInlineRoot(inlineOwner!, local, name, tenant, creator)
+                : null;
+            reference ??= AdmitFoundationStart(tenant, creator) ??
                 throw new StoreException(Failure.Definite, "A generated actor address already has a creator.");
             _foundationStarts[(tenant, operation)] = new(reference, until);
             return new(reference, false);
         }
+    }
+
+    private string? TryInlineRoot(Worker owner, int partition, string name, string tenant, Message creator)
+    {
+        var address = InstanceRef.In(partition, name);
+        var local = creator with
+        {
+            Target = address, StorageId = "root:" + address.Id,
+            Start = creator.Start! with { FoundationInlineTenant = tenant }
+        };
+        return owner.TryQueueInlineStart(local) ? ReferenceFor(tenant, new(address.Id, 1)) : null;
     }
 
     private TimeSpan FoundationIngressWindow(TimeSpan? keepFor)

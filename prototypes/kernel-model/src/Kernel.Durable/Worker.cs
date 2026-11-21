@@ -105,6 +105,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // Each ownership generation has its own handoff. A callback that outlives reset can only post to its old queue.
     private ConcurrentQueue<JobPublication> _jobPublications = new();
     private readonly HashSet<Delivery> _schedulerRetries = [];
+    private readonly ConcurrentQueue<(long Generation, Message Creator)> _inlineStarts = new();
     private int _jobsDeferredByCancellation;
     private long _lastReceivedJob; // owner-side observation order of the latest result moved into an inbox
 
@@ -417,6 +418,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (!LeaseUsable()) return null;
         if (cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
+        while (_inlineStarts.TryDequeue(out var inline))
+        {
+            if (inline.Generation != _generation || !Post(inline.Creator, fresh: true))
+                LoseInlineStart(inline.Creator);
+        }
         // Retry once per pass. A scheduler that keeps refusing cannot make the publication drain spin.
         if (_schedulerRetries.Count > 0)
             foreach (var ticket in _schedulerRetries.ToArray())
@@ -984,7 +990,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal long Monotonic => _options.Monotonic();
 
     /// <summary>A wake, a job result or a deferred job came since the last pass: the next call must run a pass.</summary>
-    internal bool PassWanted => _woken || AnswerWaiting || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
+    internal bool PassWanted => _woken || AnswerWaiting || !_inlineStarts.IsEmpty || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
 
     /// <summary>
     /// Add one partition to the set while running, between passes: take its fence row alone, at a new epoch, and keep
@@ -1181,6 +1187,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Interlocked.Increment(ref _generation);
             _jobPublications = new();
             _schedulerRetries.Clear();
+            while (_inlineStarts.TryDequeue(out var inline)) LoseInlineStart(inline.Creator);
             Volatile.Write(ref _jobsDeferredByCancellation, 0);
             _held.Clear();
             _polling = _loading = _flushing = _meeting = _releasing = _aliasesChangedDuringLoad = _retryAliases = false;
@@ -1250,6 +1257,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // K1 D1: a full poll that read something new is read on at the next pass, without waiting for a hint or the poll
         // interval. One poll serves the node's whole set, so a backlog in one partition must not slow the others' reads.
         if (polled.Messages.Count >= _options.PollLimit && read > 0) _woken = true;
+    }
+
+    // Ingress can stage a local creator without mutating the owner's slots or taking its turn lock.
+    internal bool TryQueueInlineStart(Message creator)
+    {
+        var generation = Volatile.Read(ref _generation);
+        if (_releasing || !CanStartGeneration(generation)) return false;
+        _inlineStarts.Enqueue((generation, creator));
+        return true;
+    }
+
+    private void LoseInlineStart(Message creator)
+    {
+        if (creator.ReplyTo is { } route) Send(route, "lost", null, null, error: "lost");
     }
 
     /// <summary>
@@ -1972,6 +1993,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         ValueTask<object?> Enter()
         {
             int attemptNumber;
+            string? inlineTenant;
             lock (slot)
             {
                 if (!JobMayRun(generation) || _releasing || PoisonPending(slot) || slot.PendingJobRestrictions != 0 ||
@@ -1983,8 +2005,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 Volatile.Write(ref ticket.JobEntered, true);
                 if (ticket.JobEntries < int.MaxValue) ticket.JobEntries++;
                 attemptNumber = ticket.JobEntries;
+                inlineTenant = slot.CurrentRow?.FoundationInlineBirth?.Tenant;
             }
-            var context = new JobContext(original.Target, job.Key, job.Arguments, creation, attemptNumber, job.Deadline);
+            var context = new JobContext(original.Target, job.Key, job.Arguments, creation, attemptNumber, job.Deadline)
+                { FoundationInlineTenant = inlineTenant };
             return _type.ExecuteJobAsync(job.Model, context, token);
         }
         async Task ExecuteAndPublish(bool scheduled)
@@ -2267,6 +2291,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 u.Held.Where(i => i.Durable).Select(i => i.Message.InboxKey).ToList(), u.Delete)
             {
                 FoundationHeader = u.FoundationHeader,
+                FoundationHeldPromotions = u.Row?.FoundationInlineBirth is not null && u.Held.Count != 0
+                    ? u.Held.Where(i => !i.Durable).Select(i => i.Message.InboxKey).ToHashSet() : null,
                 OpensPark = u.OpensPark
             }).ToList();
         List<InboxKey> seen = [.. marks.Select(i => i.Message.InboxKey)], tried = [.. trial.Select(i => i.Message.InboxKey)];
@@ -2400,7 +2426,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     /// <summary>A message held in memory and never written: one that needs no delete when it is cancelled.</summary>
-    private bool InMemoryOnly(InboxKey id) => _items.TryGetValue(id, out var held) && !held.Durable;
+    internal Delivery? VolatileDelivery(InboxKey id) => _items.GetValueOrDefault(id) is { Durable: false } delivery ? delivery : null;
+
+    private bool InMemoryOnly(InboxKey id) => VolatileDelivery(id) is not null;
 
     // A never-written parked instance has no durable jobs to resume. Retire its volatile tickets atomically with
     // the faulted row so a new owner does not launch fresh work for a run that was already parked.
@@ -2434,7 +2462,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     private void Promote(TurnOutcome unit)
     {
-        if (unit.Slot is not { Unwritten: true }) return;
+        if (unit.Slot is not { Unwritten: true } && unit.Row?.FoundationInlineBirth is null) return;
         // Whoever wrote the outcome (a turn, a command, a park) saw the row in memory: it is not in the table, so it is
         // inserted, not updated at its revision.
         if (unit.Row is not null) unit.Expected = null;
@@ -2534,7 +2562,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             InvalidateAliasMisses(unit);
             if (_loading && _store.HasActorAliases && (unit.Row is not null || unit.Delete || committed.Unwritten))
                 committed.WrittenDuringAliasRead = _aliasRead;
-            if (unit.Row is not null) (committed.Row, committed.AbsentAt) = (unit.Row, 0);
+            if (unit.Row is not null)
+                (committed.Row, committed.AbsentAt) = (unit.InMemory ? unit.Row : unit.Row.WithoutInlineBirth(), 0);
             if (unit.Delete && unit.Row is not { Retired: true } || committed.Unwritten && !unit.InMemory && unit.Row is null)
                 (committed.Row, committed.AbsentAt) = (null, _store.HasActorAliases ? _aliasBirths : 0);
             // An unpersisted minted start may leave more inputs in the slot after its own
@@ -2798,6 +2827,7 @@ internal sealed record JobDeadline([property: System.Text.Json.Serialization.Jso
 
 internal sealed class JobContext(InstanceRef instance, string key, string? arguments, long creation, int attemptNumber, long? deadline) : IJob
 {
+    internal string? FoundationInlineTenant { get; init; }
     public InstanceRef Instance { get; } = instance;
     public string Key { get; } = key;
     public string? Arguments { get; } = arguments;

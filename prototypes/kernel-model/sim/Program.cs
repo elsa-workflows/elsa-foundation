@@ -51,6 +51,13 @@ if (args.Contains("--contract-events"))
 if (args.Contains("--contract"))
     return await ContractWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
         Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), actions, count, flaws);
+if (args.Contains("--inline-ephemeral-check"))
+{
+    var failed = false;
+    await InlineEphemeralChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
+    return failed ? 1 : 0;
+}
+
 if (args.Contains("--lease-check")) return await LeaseChecks.Run(flaws);
 if (args.Contains("--landed-check")) return LandedChecks.Run();
 if (args.Contains("--placement-check")) return PlacementChecks.Run(flaws);

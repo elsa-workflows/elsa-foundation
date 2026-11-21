@@ -23,6 +23,7 @@ public static class LeaseChecks
         await OrdinaryIngressChecks.Run(Check);
         await FoundationKeyIngressChecks.Run(Check);
         await IngressContractChecks.Run(Check);
+        await InlineEphemeralChecks.Run(Check, Flaw.None);
         await FoundationJobDeadlineChecks.Run(Check);
         await OperatorIngressChecks.Run(Check);
         await OperatorIngressChecks.Fallback(Check);

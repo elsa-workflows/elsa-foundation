@@ -95,6 +95,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return new(input.Actor) { Consumed = [.. input.Taken], Status = row?.Status };
         var key = message.Read<Durable.JobDeadline>().Key;
         var (ticket, attempts) = store.FoundationJob(row.Id, row.Creation, key);
+        if (ticket is null && input.VolatileMessage(Durable.InboxKey.Ticket(row.Id, key, row.Creation)) is { Kind: Durable.Kinds.Job } local)
+            ticket = local.Read<Durable.JobTicket>();
         if (ticket is null || ticket.Timer != message.Id || ticket.Deadline != message.Due || attempts >= input.MaxAttempts)
             return new(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };
 
@@ -170,12 +172,18 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
 
     public ValueTask<object?> ExecuteJobAsync(string type, Durable.IJob job, CancellationToken cancellationToken)
     {
-        var identity = store.FoundationIdentity(job.Instance.Id, job.Creation);
-        return actor.ExecuteJobAsync(new Job(new(identity.Reference), job), cancellationToken);
+        var reference = job is Durable.JobContext { FoundationInlineTenant: { } tenant }
+            ? store.ReferenceFor(tenant, new(job.Instance.Id, job.Creation))
+            : store.FoundationIdentity(job.Instance.Id, job.Creation).Reference;
+        return actor.ExecuteJobAsync(new Job(new(reference), job), cancellationToken);
     }
 
     public Durable.TurnOutcome Park(Durable.InstanceRow? row, string address, IReadOnlyList<Durable.Delivery> taken,
         Durable.StartSpec? spec, string error)
+        => Park(row, address, taken, spec, error, null);
+
+    public Durable.TurnOutcome Park(Durable.InstanceRow? row, string address,
+        IReadOnlyList<Durable.Delivery> taken, Durable.StartSpec? spec, string error, object? pending)
     {
         if (row is null && spec is not null && !HeaderLimits.FitsStart(spec.Model, spec.Definition))
             return Durable.CreationProtocol.Refuse(address, null, taken, "StartHeaderTooLarge");
@@ -198,11 +206,20 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         result.Status = next.Status;
         result.Revision = next.Revision;
         result.Unsubscribe = true;
-        result.Journal = Durable.Json.Write(new[] { "parked" });
-        if (row is null) result.FoundationHeader = InitialHeader(next.Definition);
+        result.Journal = pending is List<object> entries
+            ? Durable.Json.Write((object[])[.. entries, "parked"])
+            : Durable.Json.Write(new[] { "parked" });
+        result.FoundationHeader = next.FoundationInlineHeader ?? (row is null ? InitialHeader(next.Definition) : null);
         if (running && next.Parent is not null) result.Sent.Add(Notice(next, null, final: false));
         return result;
     }
+
+    public Durable.TurnOutcome Write(Durable.InstanceRow row, object? state, object? pending) => new(row.Id)
+    {
+        Row = row, State = state ?? (row.FoundationNullState ? null : row.State), Status = row.Status, Revision = row.Revision,
+        FoundationHeader = row.FoundationInlineHeader ?? InitialHeader(row.Definition),
+        Journal = pending is List<object> entries ? Durable.Json.Write(entries) : null
+    };
 
     private static string BoundFaultText(string error)
     {
@@ -216,17 +233,18 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     private Contract.ActorHeader Header(Durable.InMemoryStore.ActorCheckpoint checkpoint)
     {
         var row = checkpoint.Row;
-        var identity = store.FoundationIdentity(row.Id, row.Creation);
-        return new(new(identity.Reference), row.Model, identity.Tenant, (Contract.ActorStatus)row.Status, row.Fault,
-            Ref(identity.Tenant, row.Parent, row.ParentCreation), checkpoint.EndedAt, checkpoint.Header.TypeData, checkpoint.Header.Labels);
+        var tenant = row.FoundationInlineBirth?.Tenant ?? store.FoundationIdentity(row.Id, row.Creation).Tenant;
+        return new(new(checkpoint.Reference), row.Model, tenant, (Contract.ActorStatus)row.Status, row.Fault,
+            Ref(tenant, row.Parent, row.ParentCreation), checkpoint.EndedAt, checkpoint.Header.TypeData, checkpoint.Header.Labels);
     }
 
     private Contract.ActorHeader StartHeader(Durable.TurnInput input)
     {
         var spec = input.Spec!;
-        var identity = store.FoundationIdentity(input.Actor, input.Creation);
-        return new(new(identity.Reference), spec.Model, identity.Tenant, Contract.ActorStatus.Running, null,
-            Ref(identity.Tenant, spec.Parent, spec.ParentCreation), null, spec.Definition, InitialHeader(spec.Definition).Labels);
+        var tenant = spec.FoundationInlineTenant ?? store.FoundationIdentity(input.Actor, input.Creation).Tenant;
+        var reference = store.ReferenceFor(tenant, new(input.Actor, input.Creation));
+        return new(new(reference), spec.Model, tenant, Contract.ActorStatus.Running, null,
+            Ref(tenant, spec.Parent, spec.ParentCreation), null, spec.Definition, InitialHeader(spec.Definition).Labels);
     }
 
     private Contract.ActorRef? Ref(string tenant, string? id, long creation) =>
@@ -235,7 +253,11 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     private static Durable.InstanceRow NewRow(string id, Durable.StartSpec spec, Durable.Message creator) =>
         new(id, spec.Model, spec.Definition, Durable.InstanceStatus.Running, "null", 0, spec.Parent, History: spec.History,
             Creation: spec.Creation?.Generation ?? 0, ParentCreation: spec.ParentCreation,
-            StartIntent: Durable.CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload)) { FoundationNullState = true };
+            StartIntent: Durable.CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload))
+        {
+            FoundationNullState = true,
+            FoundationInlineBirth = spec.FoundationInlineTenant is { } tenant ? (tenant, creator.InboxKey) : null
+        };
 
     private static Durable.FoundationHeaderChange InitialHeader(string typeData) =>
         new(typeData, System.Collections.Frozen.FrozenDictionary<string, string>.Empty);

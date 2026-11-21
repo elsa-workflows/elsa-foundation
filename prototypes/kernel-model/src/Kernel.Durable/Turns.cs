@@ -184,6 +184,9 @@ public sealed class TurnInput
     public ITurnServices Services => _services;
     internal int MaxAttempts => _worker.MaxAttempts;
 
+    internal Message? VolatileMessage(InboxKey id) => _worker.VolatileDelivery(id) is { } held
+        ? held.Original ?? held.Message : null;
+
     /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
     public long CheckpointTime => _worker.Now;
 
@@ -441,7 +444,8 @@ public sealed class DurableTurn
         var storageId = Origin + "#" + id;
         var key = InboxKey.Issued(storageId);
         if (_sent.Any(message => message.InboxKey == key && message.Target == Actor) ||
-            store.HasFoundationTimer(key, Id, _input.Creation))
+            store.HasFoundationTimer(key, Id, _input.Creation) ||
+            _input.VolatileMessage(key)?.Target == Actor)
             Recall(storageId);
     }
 
