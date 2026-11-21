@@ -14,11 +14,26 @@ internal static class ContractBoundaryCheck
         var faults = new List<string>();
         Check(foundation, null, faults);
         Check(model, foundation.GetName().Name, faults);
+        CheckScope(typeof(IIngress), faults);
+        CheckScope(typeof(IActorReads), faults);
+        if (typeof(BoundScope).GetConstructors().Length != 0 || typeof(BoundScope).GetProperty(nameof(BoundScope.Tenant))?.CanWrite != false)
+            faults.Add("BoundScope must have no public constructor or tenant setter");
         foreach (var fault in faults)
             Console.Error.WriteLine(fault);
         if (faults.Count == 0)
             Console.WriteLine("ok the contract packages expose no implementation names or references");
         return faults.Count == 0 ? 0 : 1;
+    }
+
+    private static void CheckScope(Type contract, List<string> faults)
+    {
+        foreach (var method in contract.GetMethods())
+        {
+            var parameters = method.GetParameters();
+            if (parameters.Length == 0 || parameters[0].ParameterType != typeof(BoundScope)
+                || parameters.Any(p => p.ParameterType == typeof(string) && string.Equals(p.Name, "tenant", StringComparison.OrdinalIgnoreCase)))
+                faults.Add($"{contract.Name}.{method.Name} must use a bound scope as its only tenant source");
+        }
     }
 
     private static void Check(Assembly assembly, string? allowedContract, List<string> faults)
