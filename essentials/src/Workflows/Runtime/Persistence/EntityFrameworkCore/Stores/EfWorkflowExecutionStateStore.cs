@@ -77,7 +77,16 @@ public sealed class EfWorkflowExecutionStateStore(
                 !ReadChecked(row, scope, state.WorkflowExecutionId).Status.IsTerminal())
                 throw new NotSupportedException("Native model work requires its terminal result in the same checkpoint transaction.");
             if (row is null)
+            {
+                await EfTimerHistoryOwner.CoordinateFirstNativeAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
+                var ownerId = EfTimerHistoryOwner.Id(scope, state.WorkflowExecutionId);
+                // A current write observes a pin even when a caller established an older consistent snapshot.
+                // Initial source admission belongs to the atomic checkpoint, never this independent state save.
+                if (await context.ExecutionLivenessStates.Where(owner => owner.Id == ownerId && owner.TimerHistoryOwnerJson != null)
+                    .ExecuteUpdateAsync(update => update.SetProperty(owner => owner.Revision, owner => owner.Revision + 1), cancellationToken) != 0)
+                    throw new NotSupportedException("A pre-native timer owner requires first admission through its atomic runtime checkpoint.");
                 context.WorkflowExecutionStates.Add(ToEntityForWriteVersion(state, scope, id, NewRevision(), writeVersion));
+            }
             else
             {
                 _ = ReadChecked(row, scope, state.WorkflowExecutionId);

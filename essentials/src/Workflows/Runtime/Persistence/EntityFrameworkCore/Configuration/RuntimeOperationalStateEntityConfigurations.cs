@@ -50,6 +50,7 @@ public sealed class ExecutionLivenessStateEntityConfiguration : IEntityTypeConfi
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(ExecutionLivenessStateEntity.LeaseOwnerId), nullable: true);
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(ExecutionLivenessStateEntity.HeartbeatOwnerId), nullable: true);
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
+        b.Property(x => x.TimerHistoryOwnerJson).IsRequired(false);
         b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.OperationalStateIdHash }).IsUnique();
         // Keep provider index keys below SQL Server's 1700-byte limit. The full order projections remain on the
         // rows for exact keyset ordering; the hash tie-breaker gives each route a compact, deterministic index key.

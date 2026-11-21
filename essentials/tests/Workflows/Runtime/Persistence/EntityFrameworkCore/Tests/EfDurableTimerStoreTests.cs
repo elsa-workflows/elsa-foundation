@@ -17,7 +17,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfDurableTimerStoreTests
+public sealed partial class EfDurableTimerStoreTests
 {
     [Fact]
     public async Task Deadline_lookup_uses_one_index_seek_and_legacy_release_uses_bounded_seek_continuation()
