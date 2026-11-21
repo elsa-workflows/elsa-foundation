@@ -22,6 +22,26 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public Durable.TurnOutcome? Command(Durable.TurnInput input)
     {
         var message = input.Taken[input.From].Message;
+        if (message.Operator is { Selection: { } selection } && input.Row is { } selected)
+        {
+            var identity = store.FoundationIdentity(selected.Id, selected.Creation);
+            if (!store.MatchesFoundationSelection(identity.Tenant, identity.Reference, selection))
+                return Durable.CreationProtocol.Refuse(input.Actor, selected, input.Taken, "StaleSelection");
+        }
+        if (message is { Kind: Contract.Kinds.Delete, Operator: not null } && input.Row is { } ended)
+        {
+            var checkpoint = store.FoundationTurnHeader(ended);
+            if (ended.Status == Durable.InstanceStatus.Running || checkpoint.Park is not null ||
+                ended.Children is not null || ended.Jobs is not null || actor.ProtectsDeletion(Header(checkpoint), ended.State, input.Services.Now))
+                return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "Protected");
+
+            var marker = Durable.CreationProtocol.Retire(ended);
+            return new(input.Actor)
+            {
+                Row = marker, Expected = ended.Revision, Revision = marker.Revision, Status = ended.Status,
+                Consumed = [.. input.Taken], Journal = Durable.Json.Write(new[] { "delete" }), Delete = true, Unsubscribe = true
+            };
+        }
         if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete ||
             message.Kind == Contract.Kinds.Terminate && input.Row is { } row && store.FoundationTurnHeader(row).Park is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "ResolutionUnavailable");
