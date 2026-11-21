@@ -111,6 +111,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool DiscardedInput => SuppliedCompletion || SuppliedTicket;
     internal bool DiscardedAt(Slot slot) => DiscardedInput || Message.SuppliedCreator && slot.CurrentRow is null;
     internal bool JobEntered;         // physical model entry, distinct from a scheduled driver
+    internal int JobEntries;         // physical starts seen by this delivery, a lower bound after a takeover
     internal bool DeferredJobTrial;   // durable fence retained while runtime trial isolation is yielded before entry
     internal long DeferredTrialObserved; // preserve the original cohort horizon when isolation is reacquired
     internal bool CompletedJob;       // only the Worker can turn a ticket into a result

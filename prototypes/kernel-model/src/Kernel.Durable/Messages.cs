@@ -87,6 +87,8 @@ public interface IJob
 {
     InstanceRef Instance { get; }
     long Creation => 0;
+    string? AttemptId => null;
+    int AttemptNumber => 1;
     string Key { get; }
     string? Arguments { get; }
 }
