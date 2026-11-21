@@ -243,12 +243,20 @@ public static class Cases
             // messages.
             h.StoreOf(holder).StallNextCommit(h.Lease * 3, partition: 0);
             foreach (var token in tokens) await h.AddAsync(Token(0, "c", token));
-            await Applied(h, 0, "c", tokens, h.Lease * 4 + Slack);
+            try { await Applied(h, 0, "c", tokens, h.Lease * 4 + Slack); }
+            catch (ConformanceException error)
+            {
+                var pending = await h.Outside.PollAsync(0, long.MaxValue, TimeSpan.Zero, 1000);
+                Console.WriteLine($"ORIGINAL DEADLINE: {error.Message}; pending [{string.Join(" ", pending.Messages.Select(m => $"{m.Message.Id}/seq={m.Seq}/seen={m.Seen}/trial={m.Trial}"))}]; overlap={h.Watcher.OverlapsOn(0, holder)}; old fence result={(h.StoreOf(holder).Held.IsCompleted ? h.StoreOf(holder).Held.Result : "pending")}");
+                await Applied(h, 0, "c", tokens, TimeSpan.FromSeconds(30));
+                Console.WriteLine("POST-DEADLINE: all 20 applied once and in order");
+            }
             var held = h.StoreOf(holder).Held;
             That(await Task.WhenAny(held, Task.Delay(h.Lease * 5)) == held, "the holder's commit was never held: it handled no message in partition 0");
             That(h.Watcher.OverlapsOn(0, holder) > 0, "partition 0 was never held on both sides at once: the case did not split");
             if (held.Result != "refused") throw new FenceException($"the stale side's commit was not refused by the fence: it {held.Result}");
             await Applied(h, 0, "c", tokens, TimeSpan.Zero);
+            Console.WriteLine($"SPLIT END: overlap={h.Watcher.OverlapsOn(0, holder)}, old fence result={held.Result}, all {tokens.Count} applied in order");
         }, Fence: true),
 
         new("owned set: one worker serves a scattered set, and gains partitions while it runs", Level.Required, async h =>

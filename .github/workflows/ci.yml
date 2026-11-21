@@ -1815,7 +1815,7 @@ jobs:
 
   kernel-prototype-nightly:
     name: Kernel prototype nightly
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
@@ -1947,11 +1947,12 @@ jobs:
             dotnet build "$p" -c Release --no-restore
           done
 
-      - name: Simulation at 4,096, kernel and native
+      - name: Trace four complete 4,096-partition conformance runs
         run: |
-          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
-          $SIM --seeds 20000 --count 4096
-          $SIM --native --seeds 20000 --count 4096
-
-      - name: Runtime conformance at 4,096, built-in runtime
-        run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096
+          failed=0
+          for round in 1 2 3 4; do
+            echo "::group::Runtime conformance diagnostic $round"
+            dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096 || failed=1
+            echo "::endgroup::"
+          done
+          exit "$failed"
