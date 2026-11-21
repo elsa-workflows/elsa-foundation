@@ -22,8 +22,8 @@ internal sealed class EventRequests(Durable.InMemoryStore store, Durable.Request
         var until = options?.KeepFor is { Ticks: > 0 } keep
             ? checked(now + (long)keep.TotalMilliseconds)
             : now - 1;
-        var @event = new Durable.EventRow($"{scope.Tenant}_{target.CorrelationKey}", id, payload, until);
-        var open = requests.OpenEvent(id, request.Deadline);
+        var @event = new Durable.EventRow($"{scope.Tenant}_{target.CorrelationKey}", id, payload, until) { FoundationTenant = scope.Tenant };
+        var open = requests.OpenBound(id, request.Deadline, scope.Tenant, request.Ambient);
         try
         {
             var accepted = store.PublishRequest(@event, open.ReplyAddress(node, request.ReleaseBeforeCommit), cancellationToken);

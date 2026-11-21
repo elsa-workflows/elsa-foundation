@@ -15,7 +15,10 @@ public static class LeaseChecks
         await ActorListChecks.Run(Check);
         await ActorJournalChecks.Run(Check);
         await ActorInboxChecks.Run(Check);
+        await ActorAdapterChecks.Run(Check);
+        await ActorAdapterChecks.EventAmbient(Check);
         await EventRequestChecks.Run(Check);
+        await EventRequestChecks.Provenance(Check);
         await FoundationEventReferences.Run(Check);
         await CommandAuthorityChecks.Run(Check);
         await NodeLeaseChecks.Run(Check);

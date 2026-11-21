@@ -1595,8 +1595,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             due.Add(item);
         }
+        if (due is [var held] && held.Held && Kinds.IsControl(held.Message.Kind) && HeldCommandStimulus(slot, held, now) > 0)
+            return due;
         return due.TrueForAll(i => i.Held) ? [] : due;    // held messages wait for something new to come with
     }
+
+    private long HeldCommandStimulus(Slot slot, Delivery held, long now) => slot.Inbox
+        .Where(item => !item.Held && !item.Taken && !item.Ticket && !(item.Message.Due > now) &&
+            item.ObservedOrder > held.HeldThrough && !Awaits(item) && !item.DiscardedAt(slot) && CreationError(slot, item.Message) is null)
+        .Select(item => item.ObservedOrder).DefaultIfEmpty().Max();
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
@@ -1765,6 +1772,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Enqueue(Bound(_type.Write(slot.Row!, slot.State, slot.Pending), slot), cancellationToken);
             return;
         }
+        if (due is [var commandStimulus] && Kinds.IsControl(commandStimulus.Message.Kind))
+            commandStimulus.HeldThrough = commandStimulus.Held
+                ? HeldCommandStimulus(slot, commandStimulus, now) : commandStimulus.ObservedOrder;
         slot.Inbox.RemoveAll(due.Contains);
         foreach (var item in due) (item.Taken, item.Held) = (true, false);
         (slot.Busy, slot.Used) = (true, ++_used);
@@ -1853,7 +1863,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         // The owner already knows its restricting decision, even if its durable acknowledgement is still in flight.
         // Count each such outcome separately: applying one unit must not release another unit's restriction.
-        if (unit.Delete || unit.Row is { } next && (next.Retired || next.Status != InstanceStatus.Running ||
+        if (unit.FoundationWithholds || unit.Delete || unit.Row is { } next && (next.Retired || next.Status != InstanceStatus.Running ||
             next.Creation != slot.ActiveCreation || _type.Withholds(next, this)) ||
             slot.Unwritten && unit.Row is null && unit.Status is not (null or InstanceStatus.Running))
         {
@@ -2093,6 +2103,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 ? ReplyRelease.EphemeralWriteFree : ReplyRelease.WriteFree;
         if (Has(Flaw.EmitBeforeCommit)) Release(unit, release);
         else Release(unit, release, early: true);    // callers whose route opted out of waiting
+        ReleaseExplicit(unit, early: true);
         if (writeFree) Apply(unit, null, true, cancellationToken, release);
         else
         {
@@ -2492,16 +2503,21 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (unit.Row is not null && unit.Consumed is [var completion] && _type.RevisitsHeld(unit.Row.Model, unit.Row, completion))
             foreach (var held in slot.Inbox.Where(i => i.Held && i.InboxOrder < completion.InboxOrder)) held.Held = false;
         if (!Has(Flaw.EmitBeforeCommit)) Release(unit, release);
-        for (var i = 0; i < unit.Replied.Count; i++)
-        {
-            var reply = unit.Replied[i];
-            try { Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item, refusedInput: reply.RefusedInput); }
-            catch (Exception) when (reply.Rpc) { /* A lost RPC answer is recovered by replaying the logical operation. */ }
-        }
+        ReleaseExplicit(unit, early: false);
         // A load, poll or gate release can encounter any of this actor's jobs while its checkpoint is busy.
         foreach (var ticket in slot.Inbox.Where(i => i.Key is not null).ToArray()) StartJob(ticket, cancellationToken);
         if (slot.Row is null && slot.Inbox.Count == 0) RemoveSlot(unit.Instance);
         Evict();
+    }
+
+    private void ReleaseExplicit(TurnOutcome unit, bool early)
+    {
+        for (var i = 0; i < unit.Replied.Count; i++)
+        {
+            var reply = unit.Replied[i];
+            if ((reply.FromFoundation && ReplyTo.Parse(reply.To).BeforeCommit) != early) continue;
+            Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item, refusedInput: reply.RefusedInput);
+        }
     }
 
     /// <summary>
@@ -2539,6 +2555,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private void Release(TurnOutcome unit, ReplyRelease release, bool early = false)
     {
         if (unit.Slot is not { } slot) return;
+        // An explicit winner also supersedes a route attached by an earlier turn of this actor.
+        foreach (var reply in unit.Replied)
+            if (reply.FromFoundation) slot.Replies.Remove(reply.To);
         foreach (var item in unit.Consumed)
             if (item.Message.ReplyTo is { } to && !Expired(to) && !unit.Replied.Any(r => r.Message == item.Message.InboxKey)) slot.Replies.Add(to);
         var callers = slot.Replies.Where(to => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(to).BeforeCommit == early).ToList();
@@ -2557,7 +2576,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var (node, request, _, _) = ReplyTo.Parse(to);
         if (_options.Transport is not { } transport) return;
         var reply = new Reply(request, key, channel, item, status, error);
-        transport.Send(node, reply);
+        try { transport.Send(node, reply); }
+        catch (Exception) { return; } // Losing live output cannot abandon a prepared or landed commit.
         if (release is { } phase) _options.OnEmittedReply?.Invoke(node, reply, revision, phase);
         if (refusedInput is not null) _options.OnCreationRefused?.Invoke(node, reply, refusedInput);
     }

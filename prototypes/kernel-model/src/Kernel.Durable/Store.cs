@@ -11,7 +11,10 @@ namespace Kernel.Durable;
 /// <c>PendingStart</c> is the durable owner's initial delivery ID only while its first authored work remains held.
 /// </summary>
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
-    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null, bool IdentityOnly = false, bool IdentityMetadataRequired = false);
+    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null, bool IdentityOnly = false, bool IdentityMetadataRequired = false)
+{
+    internal bool FoundationNullState { get; init; }
+}
 
 /// <summary>A requested spelling, its stored actor identity (or first equivalent candidate if missing), and its snapshot.</summary>
 public sealed record ActorLookup(string Requested, string Canonical, InstanceRow? Row)
@@ -32,12 +35,17 @@ public sealed record SubscriptionRow(
     [property: JsonConverter(typeof(DurableKeyJson))] string Instance,
     [property: JsonConverter(typeof(DurableKeyJson))] string Wait, StartSpec? Start = null, long Creation = 0)
 {
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     internal string? FoundationTenant { get; init; }
 }
 
 public sealed record EventRow(
     [property: JsonConverter(typeof(DurableKeyJson))] string Key,
-    [property: JsonConverter(typeof(DurableKeyJson))] string Id, string? Payload, long KeepUntil);
+    [property: JsonConverter(typeof(DurableKeyJson))] string Id, string? Payload, long KeepUntil)
+{
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal string? FoundationTenant { get; init; }
+}
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries)
 {
@@ -386,7 +394,7 @@ public sealed class EventDelivery
 {
     internal EventDelivery(Message message, EventMatch match, string? foundationTenant = null)
     {
-        Message = message.WithInboxScope(-2, match.Encode());
+        Message = message.WithInboxScope(InboxKey.EventDeliveryScope, match.Encode());
         FoundationTenant = foundationTenant;
     }
 
@@ -397,8 +405,13 @@ public sealed class EventDelivery
 
 public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
 {
-    public EventDelivery Delivery(int partitions = 1, string? replyTo = null) =>
-        new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, new(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation), Wait.FoundationTenant);
+    public EventDelivery Delivery(int partitions = 1, string? replyTo = null)
+    {
+        if (Event.FoundationTenant != Wait.FoundationTenant || Event.Key != Wait.Key)
+            throw new ArgumentException("The event and wait must share their key and tenant scope.");
+        var match = new EventMatch(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation) { FoundationTenant = Wait.FoundationTenant };
+        return new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, match, Wait.FoundationTenant);
+    }
 }
 
 public sealed record EventAcceptance(bool Added, InstanceRef Target)
@@ -413,6 +426,9 @@ public sealed record EventMatch(
     [property: JsonConverter(typeof(DurableKeyJson))] string Wait,
     long Creation = 0)
 {
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal string? FoundationTenant { get; init; }
+
     public string Encode() => Json.Write(this);
     public static EventMatch Decode(string text) => Json.Read<EventMatch>(text);
 }

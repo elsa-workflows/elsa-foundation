@@ -31,6 +31,46 @@ public sealed partial class InMemoryStore
         return Convert.ToHexString(HMACSHA256.HashData(_referenceKey.Value, encoded));
     }
 
+    internal bool HasFoundationTimer(InboxKey key, string actor, long creation)
+    {
+        lock (_gate)
+            return Messages.GetValueOrDefault(key) is { Done: false, Message: { } message } &&
+                message.ActorAuthored && message.Sender == actor && message.SenderCreation == creation &&
+                message.Target.Id == actor && message.TargetCreation == creation;
+    }
+
+    internal ActorCheckpoint FoundationTurnHeader(InstanceRow row)
+    {
+        lock (_gate)
+        {
+            var binding = _referenceBirths[new(row.Id, row.Creation)];
+            return Checkpoint(row, binding);
+        }
+    }
+
+    internal (string Tenant, string Reference) FoundationIdentity(string id, long creation)
+    {
+        lock (_gate)
+        {
+            var binding = _referenceBirths[new(id, creation)];
+            return (binding.Tenant, binding.Reference);
+        }
+    }
+
+    internal string? FoundationReferenceOf(string tenant, string? id, long creation)
+    {
+        lock (_gate)
+            return id is not null && _referenceBirths.TryGetValue(new(id, creation), out var binding) && binding.Tenant == tenant
+                ? binding.Reference : null;
+    }
+
+    internal CreationAddress? FoundationTarget(string tenant, string? reference)
+    {
+        lock (_gate)
+            return reference is not null && _referenceBindings.TryGetValue(reference, out var binding) && binding.Tenant == tenant
+                ? binding.Address : null;
+    }
+
     /// <summary>Store a qualified root creator and its exact reference under the same lock.</summary>
     internal string? AdmitFoundationStart(string tenant, Message creator)
     {
@@ -221,6 +261,7 @@ public sealed partial class InMemoryStore
         long? dueAt = null, TimeSpan? keepFor = null)
     {
         Kinds.RequireApplicationSend(kind);
+        if (id.StartsWith('~')) throw new ArgumentException("The foundation reserves the issued ID namespace.", nameof(id));
         var window = FoundationIngressWindow(keepFor);
         lock (_gate)
         {
