@@ -368,14 +368,20 @@ public sealed class DurableTurn
     }
 
     /// <summary>Allocate the child and commit its identity and creator together with the parent's state.</summary>
-    public InstanceRef StartChild(StartSpec spec, int destination)
+    public InstanceRef StartChild(StartSpec spec, int destination) => StartChild(spec, destination, false);
+
+    internal InstanceRef StartFoundationChild(StartSpec spec, int destination) => StartChild(spec, destination, true);
+
+    private InstanceRef StartChild(StartSpec spec, int destination, bool bindReference)
     {
         if ((uint)destination >= (uint)Services.Partitions) throw new ArgumentOutOfRangeException(nameof(destination));
         var child = _input.ChildIds.Next(destination);
         if (_input.Creation > 0)
             spec = spec with { Creation = new CreationStart(1, 0, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(child.Id)))) };
         var handle = $"{Origin}#{Revision}.{_ordinal++:D4}";
-        _sent.Add(new Message(handle, child, Kinds.Start, Sender: Id, SenderCreation: _input.Creation, Start: spec, TargetCreation: spec.Creation?.Generation).WithInboxScope(InboxKey.ChildCreatorScope));
+        var creator = new Message(handle, child, Kinds.Start, Sender: Id, SenderCreation: _input.Creation,
+            Start: spec, TargetCreation: spec.Creation?.Generation) { BindFoundationChild = bindReference };
+        _sent.Add(creator.WithInboxScope(InboxKey.ChildCreatorScope));
         // An exact derived handle in this set denotes a child creator. Composed custom handles have an
         // additional '#' in the suffix, so both forms can share the existing optional checkpoint column.
         if (destination == Actor.Partition) _fresh.Add(_sent[^1].InboxKey);

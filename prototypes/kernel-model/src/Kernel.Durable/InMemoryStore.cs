@@ -186,10 +186,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             // MUTATION SeenAtNodeEpoch: the set's highest epoch, as one epoch for the whole node would be.
             long MarkEpoch(MessageRow row) => Has(Flaw.SeenAtNodeEpoch) && fences.Count > 0 ? fences.Max(f => f.Epoch) : epochs.GetValueOrDefault(row.Message.Target.Partition, batch.Epoch);
 
+            Dictionary<InboxKey, ReferenceBinding>? childBindings = null;
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
                 var at = fences.ToDictionary(f => f.Partition, f => f.Position);
+                HashSet<CreationAddress>? childAddresses = null;
+                HashSet<string>? childReferences = null;
                 foreach (var turn in batch.Turns)
                 {
                     if (turn.Delete && Instances.GetValueOrDefault(turn.Instance)?.Revision != turn.Expected) Diverged($"instance {turn.Instance} to delete is not at revision {turn.Expected}");
@@ -200,11 +203,23 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         if (revision != turn.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {turn.Expected?.ToString() ?? "none"}");
                         if (!row.Retired) CommitClockFacts.Validate(row, Instances.GetValueOrDefault(row.Id));
                     }
-                    CreationProtocol.Validate(turn, Instances.GetValueOrDefault(turn.Instance));
+                    var previous = Instances.GetValueOrDefault(turn.Instance);
+                    CreationProtocol.Validate(turn, previous);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
+                    {
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
+                        if (!message.BindFoundationChild) continue;
+                        var binding = BindChild(turn, previous, message);
+                        childBindings ??= [];
+                        childAddresses ??= [];
+                        childReferences ??= new(StringComparer.Ordinal);
+                        if (_referenceBindings.ContainsKey(binding.Reference) || _referenceBirths.ContainsKey(binding.Address) ||
+                            !childAddresses.Add(binding.Address) || !childReferences.Add(binding.Reference) ||
+                            !childBindings.TryAdd(message.InboxKey, binding))
+                            Diverged($"child {message.Target.Id} already has a creator");
+                    }
                     if (turn.Journal is not null && batch.PartitionOf(turn) is var journal && Journal.ContainsKey((journal, ++at[journal])))
                         Diverged($"journal position {at[journal]} of partition {journal} is written already");
                 }
@@ -266,6 +281,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     // Messages the owner hands over in memory to its own partition are written as seen already.
                     Messages[message.InboxKey] = new MessageRow(message, ++_seq, batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0);
                     seqs.Add(_seq);
+                    if (childBindings?.GetValueOrDefault(message.InboxKey) is { } binding) InsertReference(binding);
                 }
                 foreach (var subscription in turn.Subscribed) Subscriptions.Add(subscription);
                 foreach (var subscription in turn.Unsubscribed) Subscriptions.Remove(subscription);
