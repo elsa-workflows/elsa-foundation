@@ -105,10 +105,14 @@ internal static class EventRequestChecks
         var missedTyped = bound.RequestAsync(scope, eventTarget, "typed-request", "typed", keep, options);
         check(missedTyped.IsCompletedSuccessfully &&
               (await missedTyped) is { Error: "no waiter", Status: null } &&
-              !store.EventRows.ContainsKey(("acme_typed", "typed-request")) && requests.All.Count == 0,
+              !store.FoundationEvents.ContainsKey(("acme_typed", "typed-request")) && requests.All.Count == 0,
             "the bound request returns no waiter immediately, publishes nothing and releases the caller");
 
         await Events.SubscribeAsync(store, starter with { Key = "acme_typed" }, 2);
+        var sameSpelling = await bound.RequestAsync(scope, eventTarget, "typed-request", "typed", null, options);
+        check(sameSpelling.Error == "no waiter" && !store.FoundationEvents.ContainsKey(("acme_typed", "typed-request")),
+            "an unbound wait with the same spelling cannot receive a tenant-bound request");
+        await bound.SetStartAsync(scope, "typed", "scoped", new Contract.StartSpec("event-probe", "event"));
         var boundAnswer = bound.RequestAsync(scope, eventTarget, "typed-request", "typed", null, options).AsTask();
         await Pump();
         check((await boundAnswer.WaitAsync(TimeSpan.FromSeconds(2))) is { Channel: "event-output", Item: "typed" },
@@ -130,9 +134,37 @@ internal static class EventRequestChecks
             "cancelling the caller closes its registration and keeps the admitted delivery");
 
         await store.SweepAsync();
-        check(!store.EventRows.ContainsKey(("acme_typed", "typed-request")) &&
-              store.EventRows.ContainsKey(("acme_typed", "cancelled-caller")),
+        check(!store.FoundationEvents.ContainsKey(("acme_typed", "typed-request")) &&
+              store.FoundationEvents.ContainsKey(("acme_typed", "cancelled-caller")),
             "sweep removes an admitted event without a keep window and preserves one still kept");
+    }
+
+    public static async Task Provenance(Action<bool, string> check)
+    {
+        const long now = 1_700_000_000_000;
+        const string key = "acme_signal";
+        var store = new InMemoryStore(1, () => now);
+        var start = new StartSpec("event-probe", "probe");
+        var old = new SubscriptionRow(key, "", "start", start);
+        var publication = new EventRow(key, "same-id", "legacy", now + 60_000);
+        await Events.SubscribeAsync(store, old, 1);
+        var legacy = await store.AddEventAsync(new EventRoute(publication, old).Delivery());
+        store.Subscriptions.Remove(old);
+        store.SetFoundationEventStart("acme", "signal", "start", start);
+        var bound = store.Subscriptions.Single();
+
+        var mismatched = false;
+        try { _ = new EventRoute(publication, bound).Delivery(); }
+        catch (ArgumentException) { mismatched = true; }
+
+        check((await store.FindSubscriptionsAsync(key)).Count == 0 && mismatched,
+            "the legacy discovery and direct route cannot borrow a bound start subscription's authority");
+        var request = publication with { FoundationTenant = "acme", Payload = "tenant" };
+        var receipt = store.PublishRequest(request, "local-registration");
+        check(receipt is [{ Added: true, Target: var started }] && started != legacy.Target &&
+            store.Messages.Values.Any(row => row.Message.Target == started && row.Message.Payload == "tenant") &&
+            store.Messages.Values.Any(row => row.Message.Target == legacy.Target && row.Message.Payload == "legacy"),
+            "a retained legacy match cannot suppress a scoped delivery of the same key, id and wait");
     }
 
     private sealed class EventProbe : Model<List<string>>

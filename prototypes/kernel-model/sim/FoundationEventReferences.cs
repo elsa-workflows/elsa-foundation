@@ -14,26 +14,26 @@ internal static class FoundationEventReferences
         var spec = new Contract.StartSpec("event-refs", "start");
         var scope = new Contract.BoundScope(tenant);
         var ingress = new EventRequests(store, new Requests("event-reference-requests"), "caller");
-        await Events.PublishAsync(store, new EventRow("acme_late", "published-first", "kept", now + 60_000));
+        await Events.PublishAsync(store, new EventRow("acme_late", "published-first", "kept", now + 60_000) { FoundationTenant = "acme" });
         check(store.Messages.Count == 0, "a kept event remains without a creator before the start subscription");
 
         await ingress.SetStartAsync(scope, "late", "start", spec);
         await ingress.SetStartAsync(scope, "late", "start", spec);
-        var late = store.Messages.Values.Single().Message;
+        var late = store.Messages.Values.Single(row => row.Message.Start is not null).Message;
         var lateRef = store.ReferenceFor(tenant, new(late.Target.Id, 1));
-        check(late is { TargetCreation: 1, Start.Creation.Generation: 1 } &&
+        check(store.Messages.Count == 2 && late is { TargetCreation: 1, Start.Creation.Generation: 1 } &&
               store.AddFoundationMessage("other", lateRef, "foreign", "signal") is null &&
               store.AddFoundationMessage(tenant, lateRef, "exact-before-start", "signal", "follows-kept") == true,
             "the kept event creates one tenant-bound exact life and accepts an exact send before birth");
 
         await ingress.SetStartAsync(scope, "live", "start", spec);
         var liveEvent = new EventRow("acme_live", "registered-first", "live", now + 60_000);
-        var accepted = store.PublishRequest(liveEvent, "unused-reply");
+        var accepted = store.PublishRequest(liveEvent with { FoundationTenant = "acme" }, "unused-reply");
         var target = accepted?.Single().Target ?? default;
         check(target.Id is not null && target != late.Target &&
               store.Messages.Values.Any(row => row.Message.Target == target && row.Message.Start?.Creation?.Generation == 1),
             "a request matching a live start subscription creates its own exact life");
-        var liveRef = store.ReferenceFor(tenant, new(target.Id, 1));
+        var liveRef = store.ReferenceFor(tenant, new(target.Id!, 1));
 
         Worker Owner(string node) => new(node, 0, store, new WorkflowInstance([new Probe()]),
             new WorkerOptions { Monotonic = () => 0 });
@@ -52,7 +52,7 @@ internal static class FoundationEventReferences
             "the replacement routes one exact delivery to the original event-created actor");
 
         await ingress.SetStartAsync(scope, "live", "start", null);
-        check(store.PublishRequest(new EventRow("acme_live", "after-unpublish", null, now), "unused") is null,
+        check(store.PublishRequest(new EventRow("acme_live", "after-unpublish", null, now) { FoundationTenant = "acme" }, "unused") is null,
             "removing the start subscription leaves no event-request waiter");
 
         await store.SubscribeAsync(new SubscriptionRow("acme_mixed-legacy", "", "start", new StartSpec("event-refs", "legacy")));

@@ -40,6 +40,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         (a, b) => a is null || b is null ? a == b : (a.Key, a.Instance, a.Wait) == (b.Key, b.Instance, b.Wait),
         row => HashCode.Combine(row.Key, row.Instance, row.Wait)));
     public Dictionary<(string Key, string Id), EventRow> EventRows { get; } = [];
+    internal Dictionary<(string Key, string Id), EventRow> FoundationEvents { get; } = [];
+
+    private Dictionary<(string Key, string Id), EventRow> EventsFor(EventRow @event) =>
+        @event.FoundationTenant is null ? EventRows : FoundationEvents;
+
     public Dictionary<(int Partition, long Position), JournalRow> Journal { get; } = [];
     public List<string> Ghost { get; } = [];
     public Dictionary<string, NodeRow> Nodes { get; } = new(StringComparer.Ordinal);
@@ -419,28 +424,39 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     private long _eventSerial;
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default)
     {
-        ValidateEventIdentity(delivery);
         lock (_gate) return new(InsertEventDelivery(delivery));
     }
 
     private EventAcceptance InsertEventDelivery(EventDelivery delivery)
     {
+        ValidateEventIdentity(delivery);
         if (Messages.TryGetValue(delivery.Message.InboxKey, out var existing))
             return new(false, existing.Message.Target);
         var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++_eventSerial));
-        ReferenceBinding? binding = null;
         if (delivery.FoundationTenant is { } tenant && message.Start is { } start)
         {
             var address = new CreationAddress(message.Target.Id, 1);
             start = start with { Creation = new CreationStart(1, 0, address.Id) };
-            message = message with { Start = start, TargetCreation = 1 };
+            // The subscription creates an actor from its spec. The event is a separate delivery to that same life.
+            // Both rows and the exact reference become visible together, in start-then-event delivery order.
+            var creator = (message with
+            {
+                Id = "event-start:" + address.Id,
+                Kind = Kinds.Start,
+                Payload = start.Input,
+                Start = start,
+                TargetCreation = 1,
+                KeepUntil = null
+            }).WithInboxScope(InboxKey.EventCreatorScope, message.EventMatch);
+            message = message with { Start = null, TargetCreation = 1 };
             var reference = ReferenceFor(tenant, address);
-            binding = new ReferenceBinding(tenant, reference, address, message.InboxKey,
-                CreationProtocol.Fingerprint(start, message.Kind, message.Payload)!);
+            var binding = new ReferenceBinding(tenant, reference, address, creator.InboxKey,
+                CreationProtocol.Fingerprint(start, creator.Kind, creator.Payload)!);
+            Messages.Add(creator.InboxKey, new MessageRow(creator, ++_seq, 0));
+            InsertReference(binding);
         }
 
         Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
-        if (binding is not null) InsertReference(binding);
         return new(true, message.Target);
     }
 
@@ -454,9 +470,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         {
             cancellationToken.ThrowIfCancellationRequested();
             var key = (request.Key, request.Id);
+            var events = EventsFor(request);
             // The original match and deliveries were committed atomically. A retry cannot match new waits.
-            if (EventRows.ContainsKey(key)) return [];
-            var deliveries = Subscriptions.Where(wait => wait.Key == request.Key)
+            if (events.ContainsKey(key)) return [];
+            var deliveries = Subscriptions.Where(wait => wait.Key == request.Key && wait.FoundationTenant == request.FoundationTenant)
                 .OrderBy(wait => wait.Instance, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal)
                 .Select(wait => Events.Route(request, wait, partitions, replyTo)).ToArray();
             if (deliveries.Length == 0) return null;
@@ -464,17 +481,27 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             foreach (var delivery in deliveries) ValidateEventIdentity(delivery);
             var starts = deliveries.Count(delivery => delivery.Message.Start is not null && !Messages.ContainsKey(delivery.Message.InboxKey));
             _ = checked(_eventSerial + starts);
-            EventRows.Add(key, request);
+            events.Add(key, request);
             return Array.ConvertAll(deliveries, InsertEventDelivery);
         }
     }
 
     private void ValidateEventIdentity(EventDelivery delivery)
     {
-        if (CreationIdentityAvailable) return;
-        if (delivery.FoundationTenant is not null)
-            throw new StoreException(Failure.Definite, "A bound event starter requires qualified creation identity.");
-        CreationProtocol.RejectUnsupported(delivery.Message);
+        var message = delivery.Message;
+        if (!CreationIdentityAvailable)
+        {
+            if (delivery.FoundationTenant is not null)
+                throw new StoreException(Failure.Definite, "A bound event delivery requires qualified creation identity.");
+            CreationProtocol.RejectUnsupported(message);
+        }
+        if (message.Start is null)
+        {
+            var tenant = message.TargetCreation is > 0
+                ? _referenceBirths.GetValueOrDefault(new(message.Target.Id, message.TargetCreation.Value))?.Tenant : null;
+            if (tenant != delivery.FoundationTenant)
+                throw new StoreException(Failure.Definite, "The event's scope does not own the target creation.");
+        }
     }
 
     internal void SetFoundationEventStart(string tenant, string correlationKey, string wait, StartSpec? start)
@@ -496,7 +523,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             Subscriptions.Add(row);
 
             var now = clock();
-            foreach (var @event in EventRows.Values.Where(@event => @event.Key == key && @event.KeepUntil >= now).OrderBy(@event => @event.Id, StringComparer.Ordinal))
+            foreach (var @event in FoundationEvents.Values.Where(@event => @event.FoundationTenant == tenant && @event.Key == key && @event.KeepUntil >= now).OrderBy(@event => @event.Id, StringComparer.Ordinal))
                 InsertEventDelivery(Events.Route(@event, row, partitions));
         }
     }
@@ -518,7 +545,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
     {
-        lock (_gate) EventRows.TryAdd((@event.Key, @event.Id), @event);
+        lock (_gate) EventsFor(@event).TryAdd((@event.Key, @event.Id), @event);
         return default;
     }
 
@@ -535,19 +562,23 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     private void RequireSameSubscriptionScope(SubscriptionRow subscription)
     {
+        var targetTenant = subscription.Creation is > 0
+            ? _referenceBirths.GetValueOrDefault(new(subscription.Instance, subscription.Creation))?.Tenant : null;
+        if (subscription.Start is null && targetTenant != subscription.FoundationTenant)
+            throw new StoreException(Failure.Definite, "The subscription's scope does not own the target creation.");
         if (Subscriptions.TryGetValue(subscription, out var previous) && previous.FoundationTenant != subscription.FoundationTenant)
             throw new StoreException(Failure.Definite, "The subscription key is already registered in another scope.");
     }
 
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default)
     {
-        lock (_gate) return new(Subscriptions.Where(s => s.Key == key).OrderBy(s => s.Instance, StringComparer.Ordinal).ToList());
+        lock (_gate) return new(Subscriptions.Where(s => s.Key == key && s.FoundationTenant is null).OrderBy(s => s.Instance, StringComparer.Ordinal).ToList());
     }
 
     public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default)
     {
-        lock (_gate) return new(EventRows.TryGetValue((published.Key, published.Id), out var stored)
-            ? Subscriptions.Where(s => s.Key == stored.Key).OrderBy(s => s.Instance, StringComparer.Ordinal).Select(s => new EventRoute(stored, s)).ToList() : []);
+        lock (_gate) return new(EventsFor(published).TryGetValue((published.Key, published.Id), out var stored)
+            ? Subscriptions.Where(s => s.Key == stored.Key && s.FoundationTenant == stored.FoundationTenant).OrderBy(s => s.Instance, StringComparer.Ordinal).Select(s => new EventRoute(stored, s)).ToList() : []);
     }
 
     public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default)
@@ -555,10 +586,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         lock (_gate)
         {
             var now = clock();
-            var selected = waits.Select(w => (w.Key, w.Instance, w.Wait, w.Creation)).ToHashSet();
-            return new((from e in EventRows.Values orderby e.Id
-                join s in Subscriptions on e.Key equals s.Key
-                where e.KeepUntil >= now && selected.Contains((s.Key, s.Instance, s.Wait, s.Creation))
+            var selected = waits.Select(w => (w.Key, w.Instance, w.Wait, w.Creation, w.FoundationTenant)).ToHashSet();
+            return new((from e in EventRows.Values.Concat(FoundationEvents.Values) orderby e.Id
+                join s in Subscriptions on (e.Key, e.FoundationTenant) equals (s.Key, s.FoundationTenant)
+                where e.KeepUntil >= now && selected.Contains((s.Key, s.Instance, s.Wait, s.Creation, s.FoundationTenant))
                 select new EventRoute(e, s)).ToList());
         }
     }
@@ -620,7 +651,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             var events = EventRows.Values.Where(e => e.KeepUntil < now).Select(e => (e.Key, e.Id)).ToList();
             messages.ForEach(id => Messages.Remove(id));
             events.ForEach(key => EventRows.Remove(key));
-            return new(messages.Count + events.Count);
+            var foundationEvents = FoundationEvents.Where(pair => pair.Value.KeepUntil < now).Select(pair => pair.Key).ToList();
+            foundationEvents.ForEach(key => FoundationEvents.Remove(key));
+            return new(messages.Count + events.Count + foundationEvents.Count);
         }
     }
 }

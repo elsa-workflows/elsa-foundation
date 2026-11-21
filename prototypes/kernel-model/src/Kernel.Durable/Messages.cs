@@ -25,6 +25,8 @@ public sealed record SendOptions(TimeSpan? Delay = null, StartSpec? Start = null
 public readonly record struct InboxKey(string Id, long Scope = 0, string? Match = null)
 {
     internal const long ChildCreatorScope = long.MaxValue;
+    internal const long EventDeliveryScope = -2;
+    internal const long EventCreatorScope = -3;
     public bool HasIssuedOrigin => Scope == -1 || Scope > 0;
     public static InboxKey Issued(string id) => new(id, -1);
     public static InboxKey Custom(string actor, string id) => new(id, (long)int.MaxValue + 2 + actor.Length);

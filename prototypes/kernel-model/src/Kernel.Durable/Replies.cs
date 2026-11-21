@@ -65,6 +65,9 @@ public sealed class Request(string id, long deadline)
     public int Ends { get; private set; }
 
     internal bool AnyOutput { get; init; }
+    internal string? Tenant { get; init; }
+    internal object? Ambient { get; init; }
+    internal HashSet<InboxKey> AmbientGiven { get; } = [];
     private TaskCompletionSource<Reply>? _completion;
 
     internal Task<Reply> Completion() => Done
@@ -108,20 +111,29 @@ public sealed class Requests
 
     public Request Open(string id, long deadline) => Open(id, deadline, false);
 
-    internal Request OpenEvent(string id, long deadline) => Open(id, deadline, true);
+    internal Request OpenBound(string id, long deadline, string tenant, object? ambient) => Open(id, deadline, true, tenant, ambient);
 
-    private Request Open(string id, long deadline, bool anyOutput)
+    private Request Open(string id, long deadline, bool anyOutput, string? tenant = null, object? ambient = null)
     {
         lock (_gate)
         {
             var request = new Request(id, deadline)
             {
                 Registration = $"r{_incarnation}:{checked(++_next)}",
-                AnyOutput = anyOutput
+                AnyOutput = anyOutput, Tenant = tenant, Ambient = ambient
             };
             _open.Add(request.Registration, request);
             return request;
         }
+    }
+
+    internal object? TakeLocalAmbient(string address, string node, string tenant, long now, InboxKey delivery)
+    {
+        var route = ReplyTo.Parse(address);
+        if (route.Node != node || route.Deadline <= now) return null;
+        lock (_gate)
+            return _open.GetValueOrDefault(route.Request) is { Done: false, Ambient: { } ambient } request &&
+                request.Tenant == tenant && request.Deadline == route.Deadline && request.AmbientGiven.Add(delivery) ? ambient : null;
     }
 
     internal Task<Reply> CompletionOf(Request request)
