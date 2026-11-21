@@ -371,7 +371,7 @@ MySQL and MongoDB (K4), unless the milestone says otherwise. "A" and "B" are two
 
 | Case | Scenario | Pass when | Milestone |
 |---|---|---|---|
-| T1 | The contracts compile against `BoundScope` | No ingress method takes a tenant string; `ITurn` exposes the tenant read-only and `Send` has no tenant parameter; the architecture guard fails a layer 3 reference to `Q` or the tenant column | K2 |
+| T1 | The contracts compile against `BoundScope` | No ingress method takes a tenant string; `ITurn` exposes the tenant read-only and `Send` has no tenant parameter; the architecture guard fails a layer 3 reference to `Q` or the tenant column. The built-in contract boundary passed this case, including setter and vocabulary mutations ([#4958](https://github.com/elsa-workflows/elsa-foundation/pull/4958)). | K2 |
 | T2 | A and B add an outside message with id `op-1`; then A retries | Both are delivered once; A's retry gets A's duplicate-key answer; B's row is untouched | K3, K4 |
 | T3 | A and B subscribe to `order-17`; A publishes, then B publishes; one wait asks for kept events | A's event reaches only A's waits and B's only B's, kept events included; the match tuples differ | K3, K4 |
 | T4 | A and B each have an event-start subscription on `order-17` | Each publish starts one instance, in its own tenant | K3, K4 |
