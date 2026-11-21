@@ -789,10 +789,23 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
   - **Atomic timer registration (Option B).** Delay registers its timer activity-side, strictly before the bookmark (so "bookmark committed, timer missing" is structurally excluded). A fully atomic timer==bookmark lifecycle via a post-commit `RegisterDurableTimer` intent (`IRuntimePostCommitIntentDispatcher`) is the alternative if orphaned timers ever prove noisy.
 
 ### `IDurableTimerScheduler` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Replacement (one scheduler owns durable-timer registration for a runtime composition).
-- **Signature:** `ScheduleAsync(DurableTimer timer, ...)`.
-- **Usage:** thin activity-facing wrapper over `IDurableTimerStore.SaveAsync`. The `Delay` activity builds the `DurableTimer` (deriving `DueTime` from the injected `TimeProvider`) and calls this to write its timer before creating the matching bookmark. Scheduling composes Events and publishes a deferred wakeup hint. A custom composition using the original scheduler constructor without Events retains periodic recovery, without prompt local notifications.
-- **Default implementation:** `DurableTimerScheduler` *(registered by the `WorkflowsRuntimeScheduling` feature)*.
+- **Kind:** Replacement (one activity-facing producer).
+- **Signature:** `ScheduleAsync(DurableTimer timer, ...)`; optional `CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)` defaults to `false`.
+- **Default implementation:** `DurableTimerScheduler`, composed by `AddRuntimeDurableTimerScheduler`. Explicit scheduler and timer-store registrations are retained.
+- **Usage:** reads the actual original native/coalescing admission before scheduling. An uncaptured admission stays uncaptured when current capture is enabled; a captured timer choice is retained when current configuration is disabled. Only a complete qualified native/writer/reader/timer chain can create a captured source. Unneeded history and activity factories remain lazy, so an uncaptured timer does not activate them. Activity-owned timers require the exact concrete execution scope.
+- **Override implications:** decorators must deliberately forward qualification against the selected collaborators. Legacy implementations remain usable for uncaptured timers and cannot advertise captured registration by interface presence alone.
+
+### `IDurableTimerHistoryStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Optional provider capability on the selected `IDurableTimerStore`; `SupportsHistoryResponsibility`, `CanInspectHistorySources(history)` and `CanDischargeUnrecordedCompletion(checkpointStore)` default to `false`.
+- **Signatures:** `ListDuePageAsync(asOf, page, ...)`, `HasPendingHistoryAsync(run, ...)`, `ListPendingHistoryAsync(query, ...)`, `AcknowledgeHistoryAsync(run, timer, eventId, ...)`, `CompleteClaimWithHistoryAsync(claim, observation, ...)`, `RetireWithHistoryAsync(run, timer, observation, ...)`, and bounded `DischargeUnrecordedCompletionAsync(completion, limit, ...)` (unsupported by default).
+- **Owner:** the memory implementation requires the same checkpoint state, liveness owner, ordinary scope and actual history reader. Its scoped adapters share the native owner's timer state; the legacy public constructor remains unqualified. EF qualification and its schema rollout belong to the durable-provider unit.
+- **Usage:** retain original schedule and terminal responsibility until the exact semantic receipt is durable. Retired sources stay out of operational pages and cannot reactivate. Acknowledging history cannot revoke a live timer claim. Bounded due pages have scope/query-bound continuations; a held captured source must not hide later timers.
+- **Completion/deletion:** the exact native owner separately fences successful Ephemeral completion without a native record. No active captured timer may remain before bounded discharge permits queue advancement. `IRuntimeCheckpointCommitStore.RequiresUnrecordedTimerDischargeAsync(run, ...)` defaults to `false`; native owners and decorators forward their retained choice so disabling capture cannot bypass it. Native deletion clears indexed timer sources under the existing native ownership gates.
+- **Override implications:** custom owners/decorators must preserve original policy, physical scope, exact claim fencing, atomic receipt verification and current native deletion authority. They must refuse foreign/unsupported chains instead of dropping source responsibility.
+
+### `IRuntimeHistoryTimerSupport` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Optional composition qualification for the actual producer, physical owner and recurring pump. `CanCapture` defaults to `false`.
+- **Default/usage:** no expanded timer profile is admitted by this memory-owner unit. The scheduling module must qualify the selected complete chain before advertising timer kinds. Memory component tests do not establish pump, Delay, durable-provider, migration or restart acceptance.
 
 ### `DurableTimerScheduled` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Named informational event, published deferred after a successful timer save with the stored existing-wins deadline. Background event delivery isolates handler failures. Enqueue failure is logged and leaves periodic recovery available. Register scoped `IEventHandler<DurableTimerScheduled>` participants through the Events registration helpers.
