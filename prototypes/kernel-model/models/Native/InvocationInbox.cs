@@ -45,25 +45,25 @@ internal sealed partial class Burst
     private bool AdmitPrefix()
     {
         // A held composite signal may stay at the head while authored work waits. It cannot gate metadata admission.
-        var first = AdmissionHas(AdmissionFlaw.BlockedSignal) ? _inbox.Items.FirstOrDefault()
-            : _inbox.Items.FirstOrDefault(m => m.Kind != CompositeSignal.Kind);
+        var first = AdmissionHas(AdmissionFlaw.BlockedSignal) ? _bridge.Items.FirstOrDefault()
+            : _bridge.Items.FirstOrDefault(m => m.Kind != CompositeSignal.Kind);
         if (first is null || !NativeModel.HandlesMetadata(first.Kind)) return false;
         var prefix = true;
-        foreach (var message in _inbox.Items)
+        foreach (var message in _bridge.Items)
         {
-            if (message.Kind == CompositeSignal.Kind) { _inbox.Hold(message); continue; }
+            if (message.Kind == CompositeSignal.Kind) { _bridge.Hold(message); continue; }
             prefix &= NativeModel.HandlesMetadata(message.Kind);
-            if (!prefix) { _inbox.Hold(message); continue; }
+            if (!prefix) { _bridge.Hold(message); continue; }
             Admission result;
             try { result = Reduce(message); }
             catch (Exception error) when (error is JsonException or EncoderFallbackException)
             { result = new("", "", "Invalid", Actor: turn.Instance.Ref.Id); }
             if (AdmissionHas(AdmissionFlaw.EarlyReply)) turn.Emit(Request.Response, result);
-            else _inbox.Reply(message, result);
+            else _bridge.Reply(message, result);
             turn.Record($"admission:{result.Frame}:{result.Id}:{result.Result}:{result.Order}");
         }
         // The held suffix alone sleeps; one persisted wake also lets existing authored agenda work progress.
-        if (_inbox.Items.Any(m => m.Kind != ReceiptQuery.Kind)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+        if (_bridge.Items.Any(m => m.Kind != ReceiptQuery.Kind)) _bridge.SendToSelf(NativeKinds.Continue);
         return true;
     }
 
@@ -75,13 +75,13 @@ internal sealed partial class Burst
         if (ended is { } status && turn.Clock.Resolve(WorkflowCommitClock.Terminal) is not null)
             InvocationLifetime.Terminate(_s, WorkflowCommitClock.Terminal, status switch
             { InstanceStatus.Finished => "completed", InstanceStatus.Cancelled => "cancelled", _ => "faulted" }, AdmissionHas(AdmissionFlaw.KeepPayload), AdmissionHas(AdmissionFlaw.RestampCompleted));
-        foreach (var message in _inbox.Items.Where(message => NativeModel.HandlesMetadata(message.Kind)))
+        foreach (var message in _bridge.Items.Where(message => NativeModel.HandlesMetadata(message.Kind)))
         {
             Admission result;
             try { result = Reduce(message); }
             catch (Exception error) when (error is JsonException or EncoderFallbackException)
             { result = new("", "", "Invalid", Actor: turn.Instance.Ref.Id); }
-            _inbox.Reply(message, result);
+            _bridge.Reply(message, result);
         }
         return ValueTask.CompletedTask;
     }

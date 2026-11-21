@@ -203,7 +203,7 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
 internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationToken cancellationToken, InstanceStatus? ended = null)
 {
     internal long Creation => turn.Instance.Creation;
-    private readonly LegacyInbox _inbox = new(turn);
+    private readonly LegacyTurn _bridge = new(turn);
     private readonly NativeState _s = (NativeState)turn.State;
     private Workflow _wf => model.Registry.Get(turn.Instance.Definition); // metadata-only turns never resolve authored definitions
     private InstanceStatus _status = InstanceStatus.Running;
@@ -219,14 +219,14 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         LexicalScopes.Validate(_s);
         NativeInterventions.Validate(_s);
         if (AdmitPrefix()) return;
-        foreach (var message in _inbox.Items)
-            if (NativeModel.HandlesMetadata(message.Kind)) _inbox.Hold(message);
+        foreach (var message in _bridge.Items)
+            if (NativeModel.HandlesMetadata(message.Kind)) _bridge.Hold(message);
             else Accept(message);
-        if (_retryAccepted) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+        if (_retryAccepted) _bridge.SendToSelf(NativeKinds.Continue);
         else { await DrainAsync(); if (!_checkpointRequested) DrainInputs(); }
-        if (_checkpointRequested) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+        if (_checkpointRequested) _bridge.SendToSelf(NativeKinds.Continue);
         FinishSignals();
-        if (_inbox.Items.Any(message => NativeModel.HandlesMetadata(message.Kind))) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+        if (_bridge.Items.Any(message => NativeModel.HandlesMetadata(message.Kind))) _bridge.SendToSelf(NativeKinds.Continue);
     }
 
     // ---- messages in -------------------------------------------------------------------------------------------------
@@ -240,7 +240,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             case NativeRetry.Kind:
             {
                 var result = Retry(m);
-                _inbox.Reply(m, result);
+                _bridge.Reply(m, result);
                 turn.Record($"recovery:{result.Id}:{result.Result}:{result.Successor}");
                 break;
             }
@@ -269,7 +269,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             }
             case Kinds.Event:
                 // Friction F-N3, fixed in the merge: the kernel says which wait a delivery is for.
-                if (_inbox.EventWait(m) is { } eventWait) Resume(eventWait, Values.Parse(m.Payload));
+                if (_bridge.EventWait(m) is { } eventWait) Resume(eventWait, Values.Parse(m.Payload));
                 break;
             case NativeKinds.Resume:
             {
@@ -279,7 +279,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             }
             case Contract.Kinds.ChildFinished:
             {
-                var finished = _inbox.ChildFinished(m);
+                var finished = _bridge.ChildFinished(m);
                 var payload = new JsonObject { ["Status"] = finished.Status.ToString(), ["Output"] = finished.Output is null ? null : JsonNode.Parse(finished.Output), ["Child"] = finished.Child.Id };
                 foreach (var (id, wait) in _s.Waits.Where(w => w.Value.Kind == "child" && (w.Value.Key == finished.Child.Id || Has(NativeFlaw.ResumeAnyChild))).ToList())
                     Resume(id, payload.DeepClone());
@@ -313,7 +313,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             // Durable: a boundary after every activity. Balanced and Ephemeral: one turn until all waits or ends (capped).
             if ((Durable && _executed > 0) || _executed >= model.Options.MaxActivitiesPerTurn)
             {
-                turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+                _bridge.SendToSelf(NativeKinds.Continue);
                 return;
             }
             var work = _s.Agenda.FirstOrDefault(w => !w.Gone && Runnable(w));
@@ -323,7 +323,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 // Not replay-safe: commit the attempt first, run it in the next turn. After a crash the row says it may have run.
                 work.Attempt = 1;
                 turn.Record($"a:{work.Frame}:{work.Attempt}");
-                turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+                _bridge.SendToSelf(NativeKinds.Continue);
                 return;
             }
             if (Has(NativeFlaw.InFlightInMemory) && Durable) work.Gone = true;     // MUTATION: dequeued in memory only; the commit still carries it
@@ -385,7 +385,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 if (node.External)
                 {
                     // The observed delivery history can flag a possible earlier turn; a false hint does not rule out a race.
-                    var again = _inbox.MayHaveRun();
+                    var again = _bridge.MayHaveRun();
                     if (again && Durable) turn.Record($"m:{frame.Id}:{frame.Attempt}");
                     model.Options.OnExternal?.Invoke(turn.Instance.Ref, frame.Id, node.Id, frame.Attempt, again);
                 }
@@ -483,7 +483,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         if (Has(NativeFlaw.PathlessEffectKey)) return EffectKey.For(turn.Instance, frame.Node, EffectKey.RootPath, frame.Attempt);
         // MUTATION: on a first attempt (no redelivery hint) iteration 1 takes iteration 2's key and 2 takes 1's; the replay
         // after a lost first attempt derives the right keys, so the wrong ones live only in turns that never landed.
-        if (Has(NativeFlaw.FreshTurnSwapsLoopKeys) && !_inbox.MayHaveRun()) path = path.Replace("loop=1", "loop=#").Replace("loop=2", "loop=1").Replace("loop=#", "loop=2");
+        if (Has(NativeFlaw.FreshTurnSwapsLoopKeys) && !_bridge.MayHaveRun()) path = path.Replace("loop=1", "loop=#").Replace("loop=2", "loop=1").Replace("loop=#", "loop=2");
         var key = EffectKey.For(turn.Instance, frame.Node, path, frame.Attempt);
         return Has(NativeFlaw.UnstableEffectKey) ? key + "." + _unstableStamp : key;
     }
@@ -522,12 +522,14 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 break;
             case TimerTrigger t:
                 // The key is the timer message's id, so that a cancel can take it back (friction F-N4, fixed in the merge).
-                _s.Waits[id] = new WaitEntry(frame.Id, "timer", turn.Send(turn.Instance.Ref, NativeKinds.Timer, new TimerFired(id), new SendOptions(Delay: TimeSpan.FromMilliseconds(t.Milliseconds))));
+                var delay = TimeSpan.FromMilliseconds(t.Milliseconds);
+                var dueAt = checked(turn.Now + (long)delay.TotalMilliseconds);
+                _s.Waits[id] = new WaitEntry(frame.Id, "timer", _bridge.SendToSelf(NativeKinds.Timer, new TimerFired(id), dueAt));
                 break;
             case ChildTrigger c:
-                var child = turn.Start(NativeModel.Spec(c.Workflow, c.Mode, c.Input as JsonObject));
-                _s.Waits[id] = new WaitEntry(frame.Id, "child", child.Id, turn.ChildAddress(child).Creation);
-                turn.Record($"s:{frame.Id}:{child.Id}");
+                var child = _bridge.StartChild(frame.Id, c.Workflow, c.Mode, c.Input as JsonObject);
+                _s.Waits[id] = child;
+                turn.Record($"s:{frame.Id}:{child.Key}");
                 break;
         }
     }
@@ -539,7 +541,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             case "event": turn.Unsubscribe(wait.Key, id); break;
             case "job" when cancel: turn.CancelJob(wait.Key); break;
             case "child" when cancel:
-                turn.Send(new InstanceRef(wait.Key), NativeKinds.Cancel, options: new SendOptions(TargetCreation: wait.Creation > 0 ? wait.Creation : null));
+                _bridge.CancelChild(wait);
                 break;
             case "timer" when cancel && wait.Key.Length > 0: turn.Recall(wait.Key); break;      // its row goes with this commit
         }
@@ -555,7 +557,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             case DispatchEffect d:
             {
                 // A detached start (friction F-N5, fixed in the merge): no parent, and minted here, so no read.
-                var child = turn.Start(NativeModel.Spec(d.Workflow, d.Mode, d.Input as JsonObject), detached: true);
+                var child = _bridge.StartDetached(d.Workflow, d.Mode, d.Input as JsonObject);
                 turn.Record($"d:{frame.Id}:{child.Id}");
                 break;
             }

@@ -1,14 +1,15 @@
+using System.Text.Json.Nodes;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
 
-/// <summary>Projects the original prototype inbox for the Native model's contract-facing input handling.</summary>
-internal sealed class LegacyInbox
+/// <summary>Translates the original prototype turn at the Native model boundary.</summary>
+internal sealed class LegacyTurn
 {
     private readonly ITurn _turn;
     private readonly Dictionary<Contract.Message, Message> _source = new(ReferenceEqualityComparer.Instance);
 
-    public LegacyInbox(ITurn turn)
+    public LegacyTurn(ITurn turn)
     {
         _turn = turn;
         var items = new List<Contract.Message>();
@@ -33,6 +34,21 @@ internal sealed class LegacyInbox
         _turn.Instance.Creation > 0 && _source[message].TargetCreation == _turn.Instance.Creation;
 
     public string? EventWait(Contract.Message message) => Events.Delivered(_source[message])?.Wait;
+
+    public string SendToSelf(string kind, object? payload = null, long? dueAt = null) =>
+        _turn.Send(_turn.Instance.Ref, kind, payload, dueAt is null ? null : new SendOptions(DueAt: dueAt));
+
+    public WaitEntry StartChild(string frame, string workflow, string mode, JsonObject? input)
+    {
+        var child = _turn.Start(NativeModel.Spec(workflow, mode, input));
+        return new(frame, "child", child.Id, _turn.ChildAddress(child).Creation);
+    }
+
+    public Contract.ActorRef StartDetached(string workflow, string mode, JsonObject? input) =>
+        new(_turn.Start(NativeModel.Spec(workflow, mode, input), detached: true).Id);
+
+    public void CancelChild(WaitEntry child) =>
+        _turn.Send(new InstanceRef(child.Key), NativeKinds.Cancel, options: new SendOptions(TargetCreation: child.Creation > 0 ? child.Creation : null));
 
     public Contract.ChildFinished ChildFinished(Contract.Message message)
     {
