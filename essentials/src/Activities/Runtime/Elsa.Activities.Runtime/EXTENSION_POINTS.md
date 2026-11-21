@@ -15,11 +15,11 @@ hard, and requested cancellation propagates. Earlier profiles without this kind 
 their choices. Event time is the actual eligibility decision; another real invocation after an uncertain write has
 its own observation identity, without another business occurrence. No payload/exception message is persisted.
 
-Twenty controls are written and NOT RUN:6 removed/replaced/expired versus capture choices;3 pre-write/ambiguous-write/
+Current Runtime owning-project controls cover:6 removed/replaced/expired versus capture choices;3 pre-write/ambiguous-write/
 false-ack native defer/re-entry cases; older vocabulary; missing Required source owner; requested cancellation; direct
 actual-handler scope drift; malformed data with nested IO;2 expired-replacement generation/owner cases;
 wrapped requested cancellation;2 unrelated/unrequested cancellation cases;hard-cause cancellation precedence. The prior15 native delivery/publication cases are affected
-and NOT RUN. Supplied publisher/target/private state/schema and a controlled callback remain component inputs;
+and executed in the current Runtime owning suite. Supplied publisher/target/private state/schema and a controlled callback remain component inputs;
 no authored run, production authority, multiple recipients, physical provider/restart or composed UX is qualified.
 Only the exact saved-recipient admission-mismatch branch is covered here; other receiver no-op and claim-race
 diagnostics remain separate work. No new API/type contract, dependency, test friendship or public module is added.
@@ -205,13 +205,13 @@ activity execution. Workflows Runtime's existing terminal resumption purge now r
 `terminal-resume-ineligible` decision before its existing targeted deletion. Required missing/unpaired/failed
 recording leaves the source item intact. No callback or consumption is authorized by that cleanup observation.
 
-Thirty-one controls are written, all NOT RUN: the original15 claim/race/positive/defer/drift cases plus16
+Current Runtime owning-project controls cover: the original15 claim/race/positive/defer/drift cases plus16
 terminal cleanup controls (3 atomic-failure recovery,3 cleanup write/re-entry, original constructor, unpaired
 writer, old vocabulary, malformed data,2 cancellation identities, scope drift and3 bounded-walk/held-terminal fairness cases). A test-only consumption
 wrapper injects native changes immediately before the real service/committer/coherent memory predicate;
 it fabricates no superseded exception and validation handlers remain read-only. Cleanup controls instantiate
 the actual resumption service with actual native ports. Existing fixture/control defaults remain unchanged.
-The prior35 native component controls and existing resumption suite are affected and NOT RUN.
+Prior native component controls and the existing resumption suite are also exercised.
 One additive Runtime resumption constructor pairs the existing Core observation writer/reader; the old
 signature is retained. No new Core contract/schema/reference/dependency/friend/module/host is added.
 Other receiver branches and authored/provider/restart/authority/UX qualification remain open.

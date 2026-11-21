@@ -49,35 +49,10 @@ intent shape, and the `StartAndResume` handler pin).
 
 ## Cross-domain contributions
 
-`ActivitiesPrimitivesFeature` registers the private cross-domain `PublishStimulusHistoryEnricher` as
-Workflows Runtime Core's `IRuntimeCheckpointCommitEnricher` at `Order = 1900`, before native history
-capture at phase2000. It contributes safe publication inputs through Core's optional
-`IRuntimeHistorySourceExtension` before native capture. It stamps the logical intent and supplied pending
-projection only when the original final profile promises `StimulusPublicationCommitted`,
-`StimulusRoutingAttemptObserved` and `StimulusRoutingDispositionObserved`. Earlier vocabularies retain
-their original unstamped replay identity. This contribution does not advertise recording support or enable
-an expanded admission profile; complete source/admission qualification follows separately. See the
-[Runtime extension catalog](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the shared source boundary.
-their original unstamped replay identity. Its source-kind declaration is idempotent; it advertises those
-kinds only when the actual committer input owner, native source/provider pair, handler, router and both
-recipient transports qualify. The existing enricher's default-false `CanSupplyHistorySource` checks the
-selected source extension; the committer checks its actual frozen input-owner set. A declaration alone
-cannot activate recording. Final validation requires exact facts/origins for the final logical publication inputs and preserves original scoped sources/captured groups through a physical flush; a later contributor cannot introduce an unrecorded send. The native committer conserves the exact original caused-source inventory through flush enrichment, rejecting additions, rewrites and omissions; an event must also bind its own intent ID. Nonempty partial publication bundles refuse capture. No production history module is enabled. See the
-[Runtime extension catalog](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the shared source boundary.
+`ActivitiesPrimitivesFeature` contributes its private phase1900 publication-history enricher before Runtime capture and its scoped `PublishStimulusExecutor`. It supplies safe facts and an immutable outgoing event/run/outbox pointer only when the pinned policy supports the full publication vocabulary. Incoming event causation and outgoing source identity remain distinct. Older policies and unstamped work retain their existing identity.
 
-The same feature constructs its scoped `PublishStimulusExecutor` with the actual selected source, native
-owner, observation pair and clock. Its existing durable-handler port qualifies that actual chain; the
-original one-argument constructor remains available and does not qualify stamped history. For a stamped
-source the handler revalidates the canonical physical source and original native policy before recording
-its attempt. A separate closed disposition reports the actual routing return/failure/capacity shed, without
-claiming a recipient executed. Ambiguous observation writes retry the same immutable event once, never
-the routing effect. Primary and observation failures retain both causes; unchanged unstamped delivery
-uses the existing path. Native source/profile admission qualification remains separate; this handler
-support does not add a default supported source kind. Canonical source reads precede the shared retained
-source-scope shape check; that check preserves logical tenancy independently of physical partition and
-grants no initial admission or live claim authority.
+New admission advertises publication history only when the actual selected input/capture/committer, native saved-source router, start/resume transports and observation handler/read-write pair qualify. Merely registering compatible data stores or a source-kind declaration is insufficient. Interface defaults and original constructors remain unqualified. Complete native source/subscription/current-claim/scope checks still precede diagnostic handoff; no history pointer grants admission authority.
 
-Current qualification is recorded on [PR #4678](https://github.com/elsa-workflows/elsa-foundation/pull/4678):
-whole Activities891 and Runtime4382 passed with zero skips at the recorded source. Controlled policy/
-observation ports and actual native component controls retain their individual scopes; this is not
-complete publication, restart or Studio acceptance. New independent review remains pending.
+The handler reopens the actual physical source and native owner before recording one attempt and a separate closed routing disposition for that invocation. Saved start/resume commands carry the exact cause without enabling target history retrospectively. Uncertain observation writes retry the same event once, never the routing effect; primary and observation failures retain both causes. Current subscription publication retains its existing immediate durable boundary, while prior-protocol coalescing preserves the original logical source inventory.
+
+See the [Runtime extension catalog](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#qualified-publication-and-receiver-history-3849) for shared contracts and Spec1211 research for exact owning-project qualification and remaining delivery gates.
