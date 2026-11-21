@@ -38,6 +38,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     {
         var delivery = input.Taken[input.From];
         var message = delivery.Message;
+        if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsTypeData(spec.Definition))
+            return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
         if (message.Kind == Durable.Kinds.JobDeadline)
             return TimeoutJob(input, message);
         if (delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null && input.Row is { } completedRow &&
@@ -152,9 +154,10 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var jobs = row.Jobs is null ? 0 : Durable.DurableKeyJson.ReadKeys(row.Jobs).Count;
         var registryBytes = Math.Max(Bytes(row.Children), children * (long)TerminalChildBytes)
             + Math.Max(Bytes(row.Jobs), jobs * (long)TerminalJobBytes);
-        var bytes = TerminalHeaderReserve + registryBytes
-            + Bytes(row.State) + Bytes(row.CustomHandles) + Bytes(row.CommitTimes) + Bytes(row.Model) + Bytes(row.Definition)
-            + Bytes(header.TypeData) + header.Labels.Sum(label => Bytes(label.Key) + Bytes(label.Value));
+        var headerBytes = row.Status == Durable.InstanceStatus.Running ? HeaderLimits.VariableHeaderReserve
+            : Bytes(header.TypeData) + header.Labels.Sum(label => Bytes(label.Key) + Bytes(label.Value));
+        var bytes = TerminalHeaderReserve + registryBytes + headerBytes
+            + Bytes(row.State) + Bytes(row.CustomHandles) + Bytes(row.CommitTimes) + Bytes(row.Model) + Bytes(row.Definition);
         if (growth < 0 || growth > TerminalEnvelopeLimit - bytes)
             throw new InvalidOperationException("The actor checkpoint and its terminal growth exceed the record envelope.");
 
@@ -174,6 +177,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public Durable.TurnOutcome Park(Durable.InstanceRow? row, string address, IReadOnlyList<Durable.Delivery> taken,
         Durable.StartSpec? spec, string error)
     {
+        if (row is null && spec is not null && !HeaderLimits.FitsTypeData(spec.Definition))
+            return Durable.CreationProtocol.Refuse(address, null, taken, "StartHeaderTooLarge");
+
         var result = new Durable.TurnOutcome(address) { Expected = row?.Revision, Spec = spec, Consumed = [.. taken] };
         if (row is null && spec is null)
         {

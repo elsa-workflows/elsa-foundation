@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Kernel.Foundation.InMemory;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -70,8 +71,12 @@ internal static class FoundationEnvelopeChecks
         const int growth = 128;
         const int cap = 16_457_728;
         const int headerReserve = 16_384;
-        var maxState = cap - headerReserve - TerminalProbe.ModelType.Length - 2 * typeData.Length - growth;
-        var model = new TerminalProbe(maxState, growth);
+        const int maxTypeData = 16_384;
+        const int maxLabelBytes = 8_192;
+        var maxState = cap - headerReserve - maxTypeData - maxLabelBytes - TerminalProbe.ModelType.Length - typeData.Length - growth;
+        var fullHeader = new string('é', maxTypeData / 2);
+        var oversizedHeader = fullHeader + "x";
+        var model = new TerminalProbe(maxState, growth, fullHeader);
         var store = new InMemoryStore(1, () => now);
         var scope = new Contract.BoundScope("acme");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("terminal-reserve"), "terminal-reserve",
@@ -87,6 +92,30 @@ internal static class FoundationEnvelopeChecks
         var jobAtCap = await Start("key-fit");
         var jobAboveCap = await Start("key-over");
         var hugeJob = await Start("key-huge");
+        var updateOver = await Start("header-update-over");
+        var childOver = await Start("header-child-over");
+        var admissible = new Contract.StartSpec(model.Type, fullHeader, "header-fit");
+        var oversized = admissible with { TypeData = oversizedHeader };
+        var legacyStart = store.AdmitGeneratedFoundationStart(scope.Tenant, "legacy-oversized",
+            new StartSpec(model.Type, new string('x', cap + 1), "must-not-run"), null, null);
+        var rootRefusal = await ingress.SendAsync(scope, new Contract.Target.Start(oversized), "retry-root", Contract.Kinds.Start);
+        var keyedRefusal = await ingress.SendAsync(scope, new Contract.Target.Key("retry-key", oversized), "retry-key", Contract.Kinds.Start);
+        var rootFit = await ingress.SendAsync(scope, new Contract.Target.Start(admissible), "retry-root", Contract.Kinds.Start);
+        var keyedFit = await ingress.SendAsync(scope, new Contract.Target.Key("retry-key", admissible), "retry-key", Contract.Kinds.Start);
+        var invalidEvent = new Contract.Target.Event("invalid-start-data");
+        var eventRefused = false;
+        try
+        {
+            await ingress.SetStartAsync(scope, invalidEvent.CorrelationKey, "invalid", oversized);
+        }
+        catch (ArgumentException)
+        {
+            eventRefused = true;
+        }
+        await ingress.SendAsync(scope, invalidEvent, "never-start", "publish");
+        var validEvent = new Contract.Target.Event("valid-start-data");
+        await ingress.SetStartAsync(scope, validEvent.CorrelationKey, "valid", admissible);
+        await ingress.SendAsync(scope, validEvent, "start-event", "publish");
         await Pump();
 
         var fitted = await reads.GetAsync(scope, fit);
@@ -128,13 +157,41 @@ internal static class FoundationEnvelopeChecks
                     "a huge job key cannot enter the published checkpoint or the background driver");
         }
 
+        check(rootRefusal is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
+            rootFit is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } root } &&
+            (await reads.GetAsync(scope, root))?.Header.TypeData == fullHeader,
+            "an oversized generated start reserves no id and a 16 KiB retry is accepted");
+        check(keyedRefusal is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
+            keyedFit is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } keyed } &&
+            (await reads.GetAsync(scope, keyed))?.Header.TypeData == fullHeader,
+            "an oversized keyed start reserves no key or id and a 16 KiB retry is accepted");
+        check(await reads.GetAsync(scope, new(legacyStart.Reference)) is null && !model.LegacyStartEntered &&
+            store.Messages.Values.All(item => item.Message.Id != "legacy-oversized"),
+            "an inherited oversized pending start cannot execute, create a row or copy its header into Park");
+        var visible = (await reads.ListAsync(scope, new())).Items;
+        check(eventRefused && visible.All(item => item.Header.TypeData != oversizedHeader) &&
+            visible.Count(item => item.Header.TypeData == fullHeader && item.Park is null) == 3,
+            "event-start admission rejects one byte over and creates one actor from the at-cap registration");
+        foreach (var rejected in new[] { updateOver, childOver })
+        {
+            var row = Row(rejected);
+            var view = await reads.GetAsync(scope, rejected);
+            check(view is { Park: not null } && view.Header.TypeData == typeData && row.State == "null" &&
+                visible.All(item => item.Header.Parent != rejected) &&
+                store.Messages.Values.All(item => item.Message.Target.Id != row.Id || item.Message.Kind != "speculative"),
+                rejected == updateOver ? "oversized SetHeader rolls back the actor turn" :
+                    "an oversized child spec rolls back the parent turn and writes no child");
+        }
+
         var selection = new Contract.OperatorCommand(fitted!.Selection!);
         var terminate = await ingress.SendAsync(scope, new Contract.Target.Ref(fit), "terminate", Contract.Kinds.Terminate, Json.Write(selection));
         await Pump();
         check(terminate.Outcome == Contract.AdmissionOutcome.Accepted &&
-            (await reads.GetAsync(scope, fit)) is { Header.Status: Contract.ActorStatus.Cancelled, Park: null } &&
+            (await reads.GetAsync(scope, fit)) is { Header: { Status: Contract.ActorStatus.Cancelled } terminal, Park: null } &&
+            terminal.TypeData == fullHeader && terminal.Labels.Count == 4 &&
+            terminal.Labels.Sum(label => Encoding.UTF8.GetByteCount(label.Key) + Encoding.UTF8.GetByteCount(label.Value)) == maxLabelBytes &&
             Row(fit).State.Length == maxState + growth,
-            "the selected actor can spend its reserved bytes in the terminal commit");
+            "the exact-fit actor terminates with maximum state growth, 16 KiB type data and four maximum-sized labels");
 
         async Task<Contract.ActorRef> Start(string action) =>
             (await ingress.SendAsync(scope, new Contract.Target.Start(new(model.Type, typeData, action)),
@@ -153,11 +210,12 @@ internal static class FoundationEnvelopeChecks
         }
     }
 
-    private sealed class TerminalProbe(int atCap, int growth) : Contract.IActorType
+    private sealed class TerminalProbe(int atCap, int growth, string fullHeader) : Contract.IActorType
     {
         public const string ModelType = "terminal-probe";
         public string Type => ModelType;
         public bool LegalJobEntered { get; private set; }
+        public bool LegacyStartEntered { get; private set; }
         public bool Withholds(Contract.ActorHeader header) => false;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
@@ -176,6 +234,18 @@ internal static class FoundationEnvelopeChecks
                         };
                         turn.StartJob(key);
                         break;
+                    case Contract.Kinds.Start when message.Payload == "must-not-run":
+                        LegacyStartEntered = true;
+                        throw new InvalidOperationException("An invalid creator reached a turn.");
+                    case Contract.Kinds.Start when turn.Header.TypeData == fullHeader:
+                        turn.State = "header-fit";
+                        break;
+                    case Contract.Kinds.Start when message.Payload is "header-update-over" or "header-child-over":
+                        turn.Send(turn.Header.Ref, "speculative", dueAt: turn.Now + 1);
+                        turn.State = "do-not-store";
+                        if (message.Payload == "header-update-over") turn.SetHeader(fullHeader + "x", new Dictionary<string, string>());
+                        else turn.Start(new(ModelType, fullHeader + "x", "header-fit"));
+                        break;
                     case Contract.Kinds.Start:
                         turn.State = message.Payload switch
                         {
@@ -193,6 +263,9 @@ internal static class FoundationEnvelopeChecks
                         break;
                     case Contract.Kinds.Terminate:
                         turn.State += new string('x', growth);
+                        var labels = Enumerable.Range(0, 4).ToDictionary(index => new string('é', 511) + "x" + index,
+                            _ => new string('é', 512));
+                        turn.SetHeader(fullHeader, labels);
                         turn.End(Contract.ActorStatus.Cancelled);
                         break;
                 }
