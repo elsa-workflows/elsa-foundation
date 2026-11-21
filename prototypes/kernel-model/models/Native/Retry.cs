@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
 
@@ -95,15 +96,15 @@ internal static class NativeRetries
 internal sealed partial class Burst
 {
     private bool _retryAccepted;
-    private NativeRetryResult Retry(Message message)
+    private NativeRetryResult Retry(Contract.Message message)
     {
         NativeRetry? request;
-        try { request = message.Payload is null ? null : message.Read<NativeRetry>(); }
+        try { request = message.Payload is null ? null : Read<NativeRetry>(message); }
         catch (System.Text.Json.JsonException) { return new("", "Invalid"); }
         NativeRetryResult Result(string result, string? successor = null) => new(request?.Id ?? "", result, successor);
         if (request is null || string.IsNullOrEmpty(request.Id) || request.Id.Length > 128 || string.IsNullOrEmpty(request.Source) ||
             string.IsNullOrEmpty(request.Incident) || string.IsNullOrEmpty(request.Reason) || request.Reason.Length > 1024) return Result("Invalid");
-        if (message.TargetCreation != turn.Instance.Creation || turn.Instance.Creation <= 0) return Result("CreationMismatch");
+        if (!_inbox.TargetsCurrentLife(message)) return Result("CreationMismatch");
         if (_s.Retries?.GetValueOrDefault(request.Id) is { } previous)
             return previous.Request == request ? Result("Duplicate", previous.Successor) : Result("Conflict");
         if (!_s.InterventionEnabled || !_s.Frames.TryGetValue(request.Source, out var source) || source.Intervention is not { Outcome: "WaitForIntervention" } incident || incident.Id != request.Incident)

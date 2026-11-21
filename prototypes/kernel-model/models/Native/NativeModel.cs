@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
 
@@ -165,7 +166,8 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
 
     public ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken) => new Burst(this, turn, cancellationToken).RunAsync();
 
-    public bool HandlesMetadata(Message message) => message.Kind is InvocationInput.Kind or ReceiptQuery.Kind;
+    public bool HandlesMetadata(Message message) => HandlesMetadata(message.Kind);
+    internal static bool HandlesMetadata(string kind) => kind is InvocationInput.Kind or ReceiptQuery.Kind;
     public ValueTask MetadataAsync(ITurn turn, InstanceStatus status, CancellationToken cancellationToken) => turn.State is NativeState
         ? new Burst(this, turn, cancellationToken, status).MetadataAsync() : InvocationLifetime.Missing(turn);
     public void TerminateMetadata(object state)
@@ -201,6 +203,7 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
 internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationToken cancellationToken, InstanceStatus? ended = null)
 {
     internal long Creation => turn.Instance.Creation;
+    private readonly LegacyInbox _inbox = new(turn);
     private readonly NativeState _s = (NativeState)turn.State;
     private Workflow _wf => model.Registry.Get(turn.Instance.Definition); // metadata-only turns never resolve authored definitions
     private InstanceStatus _status = InstanceStatus.Running;
@@ -216,26 +219,28 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         LexicalScopes.Validate(_s);
         NativeInterventions.Validate(_s);
         if (AdmitPrefix()) return;
-        foreach (var message in turn.Inbox)
-            if (model.HandlesMetadata(message)) turn.Hold(message);
+        foreach (var message in _inbox.Items)
+            if (NativeModel.HandlesMetadata(message.Kind)) _inbox.Hold(message);
             else Accept(message);
         if (_retryAccepted) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
         else { await DrainAsync(); if (!_checkpointRequested) DrainInputs(); }
         if (_checkpointRequested) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
         FinishSignals();
-        if (turn.Inbox.Any(model.HandlesMetadata)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+        if (_inbox.Items.Any(message => NativeModel.HandlesMetadata(message.Kind))) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
     }
 
     // ---- messages in -------------------------------------------------------------------------------------------------
 
-    private void Accept(Message m)
+    private static T Read<T>(Contract.Message message) => System.Text.Json.JsonSerializer.Deserialize<T>(message.Payload!)!;
+
+    private void Accept(Contract.Message m)
     {
         switch (m.Kind)
         {
             case NativeRetry.Kind:
             {
                 var result = Retry(m);
-                turn.Reply(m, Request.Response, result);
+                _inbox.Reply(m, result);
                 turn.Record($"recovery:{result.Id}:{result.Result}:{result.Successor}");
                 break;
             }
@@ -243,7 +248,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             {
                 _s.Started = true;
                 InitializeIntervention();
-                var start = Json.Read<NativeStart>(m.Start?.Input ?? "{}");
+                var start = Json.Read<NativeStart>(m.Payload ?? "{}");
                 foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();
                 if (start.Input is { } input) _s.Variables["input"] = input.DeepClone();
                 (_s.TriggerNode, _s.Trigger) = (start.TriggerNode, start.Trigger ?? turn.Ambient as JsonNode);
@@ -257,32 +262,32 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             {
                 // The timer's message is consumed by this turn. Its resume may wait in the agenda past a Durable boundary,
                 // and a cancel meanwhile must not recall a message that is gone: Recall is for one not yet received.
-                var wait = m.Read<TimerFired>().Wait;
+                var wait = Read<TimerFired>(m).Wait;
                 if (_s.Waits.TryGetValue(wait, out var timer)) _s.Waits[wait] = timer with { Key = "" };
                 Resume(wait, null);
                 break;
             }
             case Kinds.Event:
                 // Friction F-N3, fixed in the merge: the kernel says which wait a delivery is for.
-                if (Events.Delivered(m) is { } delivered) Resume(delivered.Wait, Values.Parse(m.Payload));
+                if (_inbox.EventWait(m) is { } eventWait) Resume(eventWait, Values.Parse(m.Payload));
                 break;
             case NativeKinds.Resume:
             {
-                var stimulus = m.Read<ResumeStimulus>();
+                var stimulus = Read<ResumeStimulus>(m);
                 if (_s.Waits.FirstOrDefault(w => w.Value.Key == "event:" + stimulus.Event).Key is { } wait) Resume(wait, stimulus.Payload);
                 break;
             }
-            case WorkflowKinds.ChildFinished:
+            case Contract.Kinds.ChildFinished:
             {
-                var finished = m.Read<ChildFinished>();
-                var payload = new JsonObject { ["Status"] = finished.Status.ToString(), ["Output"] = finished.Output is null ? null : JsonNode.Parse(finished.Output), ["Child"] = finished.Child };
-                foreach (var (id, wait) in _s.Waits.Where(w => w.Value.Kind == "child" && (w.Value.Key == finished.Child || Has(NativeFlaw.ResumeAnyChild))).ToList())
+                var finished = _inbox.ChildFinished(m);
+                var payload = new JsonObject { ["Status"] = finished.Status.ToString(), ["Output"] = finished.Output is null ? null : JsonNode.Parse(finished.Output), ["Child"] = finished.Child.Id };
+                foreach (var (id, wait) in _s.Waits.Where(w => w.Value.Kind == "child" && (w.Value.Key == finished.Child.Id || Has(NativeFlaw.ResumeAnyChild))).ToList())
                     Resume(id, payload.DeepClone());
                 break;
             }
             case Kinds.JobFinished:
             {
-                var finished = m.Read<JobFinished>();
+                var finished = Read<Contract.JobFinished>(m);
                 Resume(finished.Key, Values.From(finished));
                 break;
             }
@@ -380,7 +385,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 if (node.External)
                 {
                     // The observed delivery history can flag a possible earlier turn; a false hint does not rule out a race.
-                    var again = turn.Inbox.Any(turn.Redelivered);
+                    var again = _inbox.MayHaveRun();
                     if (again && Durable) turn.Record($"m:{frame.Id}:{frame.Attempt}");
                     model.Options.OnExternal?.Invoke(turn.Instance.Ref, frame.Id, node.Id, frame.Attempt, again);
                 }
@@ -411,7 +416,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         _s.Frames.Remove(frame.Id);
         if (node.Background)
         {
-            var finished = Values.To<JobFinished>(work.Payload)!;
+            var finished = Values.To<Contract.JobFinished>(work.Payload)!;
             if (finished.Error is { } error) Fail(frame, new ActivityFault("job", error));
             else if (Json.Read<BackgroundResult>(finished.Result!) is var r) Apply(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
             return;
@@ -478,7 +483,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         if (Has(NativeFlaw.PathlessEffectKey)) return EffectKey.For(turn.Instance, frame.Node, EffectKey.RootPath, frame.Attempt);
         // MUTATION: on a first attempt (no redelivery hint) iteration 1 takes iteration 2's key and 2 takes 1's; the replay
         // after a lost first attempt derives the right keys, so the wrong ones live only in turns that never landed.
-        if (Has(NativeFlaw.FreshTurnSwapsLoopKeys) && !turn.Inbox.Any(turn.Redelivered)) path = path.Replace("loop=1", "loop=#").Replace("loop=2", "loop=1").Replace("loop=#", "loop=2");
+        if (Has(NativeFlaw.FreshTurnSwapsLoopKeys) && !_inbox.MayHaveRun()) path = path.Replace("loop=1", "loop=#").Replace("loop=2", "loop=1").Replace("loop=#", "loop=2");
         var key = EffectKey.For(turn.Instance, frame.Node, path, frame.Attempt);
         return Has(NativeFlaw.UnstableEffectKey) ? key + "." + _unstableStamp : key;
     }
