@@ -20,11 +20,11 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         using var f = await Fixture.CreateAsync("complete", publication: true, captured: captured,
             expiresAt: change == "expired" ? At.AddSeconds(2) : null);
         await f.SeedPublisherAsync(); await f.PublishAsync(); Assert.Equal(1, (await f.ProcessPublicationsAsync()).DeliveredCount);
-        var queued = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var queued = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         var origin = queued.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.HistoryCausation!;
         await ChangeWaitAsync(f, change);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single((await f.DrainAsync()).Items).Status);
-        Assert.Empty(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         var page = await f.History.ReadPageAsync(new(Run));
         if (!captured) { Assert.Null(page.Head); Assert.Empty(page.Items); return; }
         var skipped = Assert.Single(page.Items, IsReceiverObservation);
@@ -47,14 +47,14 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         var control = new ReceiverControl { Failure = failure };
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: control.Configure);
         await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync(); await ChangeWaitAsync(f, "removed");
-        var queued = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var queued = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Deferred, Assert.Single((await f.DrainAsync()).Items).Status);
-        Assert.Equal(queued.WorkItemId, Assert.Single(await f.Queue.ListAllAsync(new(Run))).WorkItemId);
+        Assert.Equal(queued.WorkItemId, Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))).WorkItemId);
         Assert.Equal(failure == "after-commit" ? 1 : 0, (await f.History.ReadPageAsync(new(Run))).Items.Count(IsReceiverObservation));
         Assert.Empty(await f.Poison.ListAsync(Run)); Assert.Equal(0, f.Activator.Calls);
         f.Clock.Advance(TimeSpan.FromSeconds(6));
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single((await f.DrainAsync()).Items).Status);
-        Assert.Empty(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         var observations = (await f.History.ReadPageAsync(new(Run))).Items.Where(IsReceiverObservation).ToArray();
         Assert.Equal(failure == "after-commit" ? 2 : 1, observations.Length);
         Assert.Equal(observations.Length, observations.Select(item => item.HistoryEventId).Distinct(StringComparer.Ordinal).Count());
@@ -104,7 +104,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync(); await ChangeWaitAsync(f, "removed");
         missing = true;
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Deferred, Assert.Single((await f.DrainAsync()).Items).Status);
-        Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Empty(await f.Poison.ListAsync(Run)); Assert.Equal(0, f.Activator.Calls);
+        Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Empty(await f.Poison.ListAsync(Run)); Assert.Equal(0, f.Activator.Calls);
         Assert.DoesNotContain((await f.History.ReadPageAsync(new(Run))).Items, IsReceiverObservation);
     }
 
@@ -117,7 +117,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: control.Configure);
         await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync(); await ChangeWaitAsync(f, "removed");
         var caught = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => f.DrainAsync(cancellation.Token).AsTask());
-        Assert.Same(original, caught); Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Same(original, caught); Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         Assert.DoesNotContain((await f.History.ReadPageAsync(new(Run))).Items, IsReceiverObservation);
     }
 
@@ -132,11 +132,11 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         } };
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: control.Configure);
         await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync(); await ChangeWaitAsync(f, "removed");
-        var work = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var work = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         var handler = new WorkflowResumeBookmarkSchedulerWorkHandler(f.Services.GetRequiredService<IServiceScopeFactory>(), f.Clock);
         var caught = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => handler.HandleAsync(work, cancellation.Token).AsTask());
         Assert.Same(original, caught); Assert.Equal(cancellation.Token, caught.CancellationToken);
-        Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         Assert.DoesNotContain((await f.History.ReadPageAsync(new(Run))).Items, IsReceiverObservation);
     }
 
@@ -154,10 +154,10 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         } };
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: control.Configure);
         await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync(); await ChangeWaitAsync(f, "removed");
-        var work = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var work = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         var handler = new WorkflowResumeBookmarkSchedulerWorkHandler(f.Services.GetRequiredService<IServiceScopeFactory>(), f.Clock);
         var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => handler.HandleAsync(work, caller.Token).AsTask());
-        Assert.Same(wrapped, failure.InnerException); Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Same(wrapped, failure.InnerException); Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
     }
 
     [Fact]
@@ -171,10 +171,10 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         } };
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: control.Configure);
         await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync(); await ChangeWaitAsync(f, "removed");
-        var work = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var work = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         var handler = new WorkflowResumeBookmarkSchedulerWorkHandler(f.Services.GetRequiredService<IServiceScopeFactory>(), f.Clock);
         var failure = await Assert.ThrowsAsync<RuntimeHistoryIntegrityException>(() => handler.HandleAsync(work, cancellation.Token).AsTask());
-        Assert.Same(wrapped, failure.InnerException); Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Same(wrapped, failure.InnerException); Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
     }
 
     [Fact]
@@ -185,11 +185,11 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: services =>
         { services.AddSingleton<IPersistenceAccessContextAccessor>(access); control.Configure(services); });
         await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync(); await ChangeWaitAsync(f, "removed");
-        var work = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var work = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         var handler = new WorkflowResumeBookmarkSchedulerWorkHandler(f.Services.GetRequiredService<IServiceScopeFactory>(), f.Clock);
         var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => handler.HandleAsync(work).AsTask());
         access.Current = original; Assert.Equal("runtime.history.capture-unavailable", failure.Code);
-        Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         Assert.Single((await f.History.ReadPageAsync(new(Run))).Items, IsReceiverObservation);
     }
 

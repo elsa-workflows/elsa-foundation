@@ -37,8 +37,8 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
         Assert.Empty(delivered.RecipientSnapshot!.Starts);
         Assert.Equal(new[] { OtherRun, Run }, delivered.RecipientSnapshot.Resumes.Select(item => item.WorkflowExecutionId).Order(StringComparer.Ordinal));
-        var first = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
-        var other = Assert.Single(await f.Queue.ListAllAsync(new(OtherRun)));
+        var first = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
+        var other = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(OtherRun)));
         Assert.NotEqual(first.WorkItemId, other.WorkItemId); Assert.NotEqual(first.CommandId, other.CommandId);
         var firstReceipt = await AssertBroadcastHandoffAsync(f, Run, captureFirst, first, published, source.OutboxItemId);
         var otherReceipt = await AssertBroadcastHandoffAsync(f, OtherRun, captureOther, other, published, source.OutboxItemId);
@@ -70,11 +70,11 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         await f.SeedOtherRecipientAsync(captured: true); await f.SeedPublisherAsync();
         var source = await f.PublishAsync(); await f.ProcessPublicationsAsync();
         Assert.Equal(2, (await f.PublicationWriter.FindDurableAsync(source.OutboxItemId))!.RecipientSnapshot!.Resumes.Count);
-        var other = Assert.Single(await f.Queue.ListAllAsync(new(OtherRun)));
+        var other = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(OtherRun)));
         var cause = other.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.HistoryCausation!;
         await f.Bookmarks.DeleteAsync(OtherRun, Wait);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single((await f.DrainOtherRecipientAsync()).Items).Status);
-        Assert.Empty(activator.Runs); Assert.Empty(await f.Queue.ListAllAsync(new(OtherRun)));
+        Assert.Empty(activator.Runs); Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(OtherRun)));
         var skipped = Assert.Single((await f.History.ReadPageAsync(new(OtherRun))).Items, IsReceiverObservation);
         Assert.Equal("receiver-bookmark-missing", skipped.Metadata["history.reasonCode"]);
         Assert.Equal(cause.HistoryEventId, skipped.Causation!.HistoryEventId);

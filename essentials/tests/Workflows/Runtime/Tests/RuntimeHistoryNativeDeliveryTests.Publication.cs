@@ -44,7 +44,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         }
         else { Assert.Null(before.Head); Assert.Empty(before.Items); }
         Assert.Equal(0, f.Activator.Calls); Assert.NotNull(await f.Bookmarks.FindAsync(Run, Wait));
-        var queued = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var queued = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         var cause = queued.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.HistoryCausation!;
         Assert.Equal(captured ? receipt!.HistoryEventId : published.HistoryEventId, cause.HistoryEventId);
         var drained = await f.DrainAsync();
@@ -94,7 +94,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         var replay = await f.PublishAsync();
         Assert.Equal(original.OutboxItemId, replay.OutboxItemId); Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, replay.Status);
         Assert.Empty((await f.ProcessPublicationsAsync()).Items);
-        Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         await f.DrainAsync(); Assert.Equal(1, f.Activator.Calls);
         var publisher = (await f.History.ReadPageAsync(new("publisher"))).Items;
         Assert.Single(publisher, item => item.Name == "StimulusPublicationCommitted");
@@ -113,7 +113,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         Assert.Equal(1, (await f.ProcessPublicationsAsync()).DeliveredCount);
         Assert.NotEqual(first.OutboxItemId, second.OutboxItemId);
         Assert.NotEqual(first.Intent.IdempotencyKey, second.Intent.IdempotencyKey);
-        Assert.Equal(2, (await f.Queue.ListAllAsync(new(Run))).Count);
+        Assert.Equal(2, (await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))).Count);
         Assert.Equal(0, f.Activator.Calls);
         f.Clock.Advance(TimeSpan.FromSeconds(1)); // Follow-up work from the winner is later than both queued resumes.
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single((await f.DrainAsync()).Items).Status);
@@ -140,7 +140,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         if (scenario == "replaced") await f.Bookmarks.SaveAsync(original); // Same fields, a new native generation.
         var drained = await f.DrainAsync();
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single(drained.Items).Status);
-        Assert.Empty(await f.Queue.ListAllAsync(new(Run))); Assert.Empty(await f.Poison.ListAsync(Run)); Assert.Equal(0, f.Activator.Calls);
+        Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Empty(await f.Poison.ListAsync(Run)); Assert.Equal(0, f.Activator.Calls);
         var events = (await f.History.ReadPageAsync(new(Run))).Items;
         Assert.Single(events, item => item.Name == "DeliveryReceived"); Assert.Single(events, item => item.Name == "DeliveryDispatched");
         Assert.DoesNotContain(events, item => item.Name is "BookmarkConsumed" or "ActivityContinuationStarted" or "ActivityContinuationCompleted");
