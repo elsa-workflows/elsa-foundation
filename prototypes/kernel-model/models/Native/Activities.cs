@@ -510,6 +510,6 @@ public sealed class WriteHttpResponse : Activity<HttpResponse>
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
         var response = new HttpResponse(StatusCode, ContentType, Body);
-        return new(Complete(response).With(new EmitEffect(Request.Response, Values.From(response))));
+        return new(Complete(response).With(new EmitEffect("response", Values.From(response))));
     }
 }

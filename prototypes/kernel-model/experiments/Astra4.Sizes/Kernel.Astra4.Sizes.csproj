@@ -5,7 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The real Native model, Kernel.Durable's event match and the runtime's placement hash, unchanged. -->
-    <ProjectReference Include="../../models/Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
     <!-- The BSON encoder of the prototype's MongoDB driver (mongo/Kernel.Mongo, MongoDB.Driver 3.9.0). -->
     <PackageReference Include="MongoDB.Bson" Version="3.9.0" />
   </ItemGroup>

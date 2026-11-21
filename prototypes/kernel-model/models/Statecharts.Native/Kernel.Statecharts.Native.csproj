@@ -2,6 +2,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Statecharts.Run" />
     <ProjectReference Include="../Statecharts/Kernel.Statecharts.csproj" />
-    <ProjectReference Include="../Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../Native.Legacy/Kernel.Native.Legacy.csproj" />
   </ItemGroup>
 </Project>

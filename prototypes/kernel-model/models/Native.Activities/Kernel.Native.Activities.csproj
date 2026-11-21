@@ -6,6 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
     <InternalsVisibleTo Include="Kernel.Native" />
+    <InternalsVisibleTo Include="Kernel.Native.Legacy" />
     <InternalsVisibleTo Include="Kernel.Native.Recovery.Run" />
     <InternalsVisibleTo Include="Kernel.Statecharts.Native" />
     <InternalsVisibleTo Include="Kernel.Statecharts.Run" />

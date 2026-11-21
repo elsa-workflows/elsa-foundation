@@ -30,15 +30,23 @@
       "kernel.native": {
         "type": "Project",
         "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
           "Kernel.Graph": "[1.0.0, )",
-          "Kernel.Native.Activities": "[1.0.0, )",
-          "Kernel.Workflows": "[1.0.0, )"
+          "Kernel.Model.Contracts": "[1.0.0, )",
+          "Kernel.Native.Activities": "[1.0.0, )"
         }
       },
       "kernel.native.activities": {
         "type": "Project",
         "dependencies": {
           "Kernel.Foundation.Contracts": "[1.0.0, )"
+        }
+      },
+      "kernel.native.legacy": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Native": "[1.0.0, )",
+          "Kernel.Workflows": "[1.0.0, )"
         }
       },
       "kernel.runtime": {
@@ -48,7 +56,7 @@
         "type": "Project",
         "dependencies": {
           "Kernel.Foundation.InMemory": "[1.0.0, )",
-          "Kernel.Native": "[1.0.0, )",
+          "Kernel.Native.Legacy": "[1.0.0, )",
           "Kernel.Statecharts": "[1.0.0, )",
           "Kernel.WorkflowActor": "[1.0.0, )",
           "Kernel.Workflows": "[1.0.0, )"
@@ -63,7 +71,7 @@
       "kernel.statecharts.native": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Native": "[1.0.0, )",
+          "Kernel.Native.Legacy": "[1.0.0, )",
           "Kernel.Statecharts": "[1.0.0, )"
         }
       },
