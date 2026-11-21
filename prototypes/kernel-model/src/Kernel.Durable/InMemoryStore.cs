@@ -206,6 +206,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
                     foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription);
+                    StoreBatchRules.ValidateActorSends(turn, previous);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
