@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Extensions;
 using System.Text.Json;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -39,6 +41,32 @@ public sealed class RuntimeStandaloneIngressProtocolTests
         Assert.Equal(64, RuntimeCheckpointCommitFingerprint.Compute(commit).Length);
         Assert.Equal(64, RuntimeCheckpointCommitFingerprint.ComputeHistorySource(commit).Length);
         Assert.Null(item.Intent);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Physical_flush_screening_preserves_actual_standalone_validator_refusal(bool withCausedWorkflowRow)
+    {
+        var standalone = Pending();
+        var changes = new List<RuntimeStateChange<RuntimePostCommitOutboxItem>>
+        { new(standalone.OutboxItemId, RuntimeStateChangeOperation.Upsert, standalone, new Dictionary<string, string>()) };
+        var commit = new RuntimeCheckpointCommit("screening", new("checkpoint", "DeferredWork", "workflow", Now, [],
+            new Dictionary<string, string> { [RuntimeMetadataKeys.CoalescedFlush] = "true" }),
+            new(null, null, [], [], [], [], [], postCommitOutbox: changes), [], new Dictionary<string, string>());
+        if (withCausedWorkflowRow)
+        {
+            var intent = new RuntimePostCommitIntent("intent", "workflow", "Test.Workflow", Now, null, "key", null)
+                { HistoryCausation = new("event", "workflow", "screening:intent") };
+            var item = RuntimePostCommitOutboxItems.CreatePending(commit, intent, [], Scope);
+            changes.Add(new(item.OutboxItemId, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>()));
+            commit = commit with { StateChanges = commit.StateChanges.WithPostCommitOutbox(changes) };
+        }
+        var registrations = new ServiceCollection(); registrations.AddWorkflowRuntime();
+        using var provider = registrations.BuildServiceProvider(validateScopes: true); using var scope = provider.CreateScope();
+        var committer = scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
+        var refusal = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => committer.CommitAsync(commit).AsTask());
+        Assert.Contains("standalone sources", refusal.Message);
+        Assert.Null(standalone.Intent);
     }
 
     [Fact]
