@@ -10,7 +10,7 @@ changed no behaviour: every gate gives the numbers it gave before (FINDINGS sect
 (FINDINGS section 26) puts the native Flowchart on main's Flowchart engine (`models/Graph`) and adds the graph
 invariants G1 to G5 to the simulation; it changes no kernel behaviour and no round trip. Round 4's runtimes (FINDINGS
 section 27) add the built-in runtime on a clock (`RuntimeNode`), the Orleans adapter and the runtime conformance suite,
-and change layer 2 where the seam needed it: a pass renews an idle lease (R1), a new activation is woken (R4), and a
+and change layer 2 where the seam needed it: the historical R1 idle-lease contract, a new activation is woken (R4), and a
 job's body may run off the runtime's scheduler (R14); every gate of README's "The gates of a refactor", SQLite and
 PostgreSQL, gives main's numbers at the stack's final state (FINDINGS section 27). The source of design intent is
 draft 5 of the kernel sketch (three layers, partitions only, deployment profiles, persistence as an abstraction,
@@ -102,10 +102,9 @@ public interface IWakeSignal                       // layer 1, pluggable; not du
   one of them commit.
 - **One pass at a time per scope.** `PartitionRuntime.PassAsync` calls `RunAsync` and never two at once for a scope.
   A pass reads the inbox if it was woken, loads what is missing, reads kept events, runs every turn that is ready in id
-  order and flushes; if no commit renewed the lease for a third of it, it beats (an empty fenced commit). It returns
-  zero while there is work, otherwise the sooner of the next timer it holds and the next beat (never zero), and null
-  once the scope is not held: a runtime that calls again when asked keeps an idle scope's lease. A cancelled token
-  stops it at a turn boundary, before its commit: a process that goes away.
+  order and flushes. The host heartbeats independently, renewing one node lease while the Worker's passes complete
+  within the lease window. A pass returns zero for more work, a positive delay for the next pass, or null after it
+  stands down. A cancelled token stops the pass at a turn boundary, before its commit.
 - **The wake signal is a hint; polling is the guarantee.** `WakeAsync` sends over the signal; a runtime that hears it
   for a scope it holds calls `WokenAsync`, and the next pass polls. A lost hint costs latency until the host's poll
   interval, when the host calls `WokenAsync(null)`. The built-in signal is a call within one process.
@@ -205,8 +204,8 @@ in the one bulk write.
 
 | Table | Row | Notes |
 |---|---|---|
-| `partition` | id, owner, epoch, lease_until, position, died | `position` counts journal rows written. `epoch` changes only when ownership is taken. Times are database time in milliseconds |
-| `node` | id, seen_at | A heartbeat per process start, for the fair share. Liveness only |
+| `partition` | id, owner, epoch, position, died | `position` counts journal rows written. `epoch` changes only when ownership is taken. Times are database time in milliseconds |
+| `node` | id, seen_at, lease_until | One lease per process start, renewed by the node heartbeat and by takes. The last heartbeat supplies the fair share |
 | `instance` | id, partition, model, definition, status, state, state_version, history, suspended, jobs, children, revision, parent, fault | `state` is opaque to the kernel. `jobs`: the background jobs in flight; `children`: the instances it started that have not finished. Layer 2's columns and layer 3's in one row (FINDINGS section 24) |
 | `message` | seq, id, partition, target, kind, payload, sender, reply_to, start, due, seen, trial, attempts, keep_until, done | The inbox. `seq` is the order key; `id` makes adding idempotent; `due` makes a timer; `start` creates the target; `reply_to` is a caller on some node |
 | `subscription` | key, instance, wait, partition, start | A wait of an instance, or with a start spec and no instance a definition an event starts |
@@ -221,7 +220,7 @@ subscriptions `(instance)` and journal `(partition, instance)` for terminate and
 ## The commit
 
 The owner of partition `p` at epoch `e`, which believes the position is `n`, commits `k` instance turns in one
-transaction: the fence `UPDATE partition SET position = n + j, lease_until = ... WHERE id = p AND epoch = e AND
+transaction: the fence `UPDATE partition SET position = n + j WHERE id = p AND epoch = e AND
 position = n` (`j` the journal rows written), checked before anything else is sent, or carried as concurrency tokens
 in the batch; the instance rows at their revisions (inserts, updates, deletes); consumed messages deleted, outside
 commands marked done, held messages taken off trial, polled messages marked seen or put on trial; sent messages
@@ -243,14 +242,14 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
 ## Ownership
 
 - **Take** (`PartitionRuntime.ActivateAsync` → `DurableHost` → `Worker.GainAsync`, or `Worker.TakeAsync` for a
-  worker of a fixed set) bumps the partition's epoch; a take from another owner can only succeed because its lease
-  expired. A gain keeps the rest of the set, its epochs, positions and memory. **Reset** after a refused fence or a
+  worker of a fixed set) bumps the partition's epoch. The take reads previous owners' node leases before renewing
+  the taker's lease and locking the partition rows. A missing or expired node record permits takeover. A gain keeps the rest of the set, its epochs, positions and memory. **Reset** after a refused fence or a
   lost answer retakes each partition the node still holds, one at a time at a new epoch (`IKernelStore.RetakeAsync`).
   The costs of each, scattered and contiguous, are PARTITIONS.md's "K1 costs".
 - **The lease is 10 s by default** (`Defaults.Lease`, the owner's of 12 November). A takeover waits for it, so
   failover takes about one lease. The simulation and the stress tests use short leases of their own.
 - **Leases decide who should write. The fence decides who can.**
-- **Fair share** (`PartitionRuntime.BalanceAsync`): a node beats, counts the nodes heard from, releases what is above its share and takes free
+- **Fair share** (`PartitionRuntime.BalanceAsync`): a node uses its last heartbeat’s membership, releases what is above its share and takes free
   partitions up to it. It gives up the highest first and asks for the lowest free first, so it moves the fewest and a
   node's set may be scattered (`Balancer.Plan`, K1). The number of partitions is fixed when the store is created:
   1,024 on every store by default (K1 slice 7); on SQLite one node owns them all as one set.
@@ -518,7 +517,7 @@ marked.
 |---|---|---|---|
 | 1 | No reads while a workflow runs | Memory per active instance; the whole state rewritten per commit | Bound on instances held; values by reference |
 | 2 | One writer per partition: no locks, many instances per commit | Failover takes about one lease; a hot partition has one writer; the partition count is fixed at creation | Partitions (1,024 virtual partitions: decided 16 November); lease (10 s: decided) |
-| 3 | An idle owner needs little traffic | A beat renews every owned partition's row about three times per lease, in one fenced commit per node (2 statements on PostgreSQL: the locking read and the update), plus one node beat; on PostgreSQL that is about 161 MB of WAL an hour on an idle four-node cluster at 1,024 (PARTITIONS.md, "K1 costs") | Lease; a node-level beat (D3, not built) |
+| 3 | An idle owner renews one node row | The heartbeat reads ownership and membership and runs about three times per lease. The prior partition-lease path wrote about 161 MB of PostgreSQL WAL an hour with four idle nodes and 1,024 partitions | Lease and heartbeat cadence. See PARTITIONS.md for the K1 baseline |
 | 4 | Batching under load | A commit waits for the one before it | Rows per flush |
 | 5 | Balanced mode: one commit per wait | Activities since the last commit run again after a crash; `Redelivered` reports observed delivery history, not every possible rerun | Persistence mode per workflow |
 | 6 | A background job does not block the instance | It can execute more than once | None: inherent |

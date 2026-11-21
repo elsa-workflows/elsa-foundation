@@ -44,12 +44,12 @@ public sealed partial class EfStore
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = true };
-        var (lease, window) = ((long)batch.Lease.TotalMilliseconds, batch.Window);
+        var window = batch.Window;
         // Statement 1: the fence, before any other row is touched (E9: the partition rows are locked first, k of them in
         // ascending partition id). Checked, it is a round trip of its own and nothing else is sent until it held; in the
         // batch, it is the first statement of the one command.
         var fences = Fenced(batch);
-        dialect.Fence(c, fences, NodeLease ? null : lease, window, Unfenced, FenceIgnoresCount);
+        dialect.Fence(c, fences, window, Unfenced, FenceIgnoresCount);
         // An owned batch, one fence or several: each turn writes its own partition's rows and journal, each mark takes the
         // epoch of its message's partition, and a mark, consume or done may touch only the fenced partitions' messages
         // (InboxKey does not name its partition, so the statements carry the bound and their counts check it).
@@ -179,18 +179,18 @@ public sealed partial class EfStore
     }
 
     /// <summary>
-    /// The fence alone, for k rows, as a transaction of its own: positions move and leases are renewed where every
+    /// The fence alone, for k rows, as a transaction of its own: positions move where every
     /// (Id, Epoch, Position) is what the owner believes; one row that does not match refuses the whole statement. Returns
     /// database time, or null when refused. The probe <c>x fence</c> runs it; the Worker refactor to range ownership
     /// (PARTITIONS.md) is its consumer.
     /// </summary>
-    public async ValueTask<long?> FenceAsync(IReadOnlyList<FenceRow> rows, TimeSpan lease, CancellationToken cancellationToken = default)
+    public async ValueTask<long?> FenceAsync(IReadOnlyList<FenceRow> rows, CancellationToken cancellationToken = default)
     {
         var dialect = RequireDialect();
         await using var db = create();
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         var c = new OwnedCommand(dialect) { HasFence = true };
-        dialect.Fence(c, rows.OrderBy(r => r.Id).ToArray(), NodeLease ? null : (long)lease.TotalMilliseconds, null, Unfenced, FenceIgnoresCount);
+        dialect.Fence(c, rows.OrderBy(r => r.Id).ToArray(), null, Unfenced, FenceIgnoresCount);
         var result = await RunAsync(db, dialect, c, cancellationToken);
         if (!result.Landed) return null;
         await transaction.CommitAsync(cancellationToken);
@@ -312,15 +312,15 @@ public sealed partial class EfStore
         if (partitions.Count == 0) return new([], 0);
         var ids = List(partitions.Distinct().Order());
         await using var db = create();
-        await using var transaction = await (NodeLease ? BeginNodeTakeAsync(db, lease, cancellationToken) : Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        await using var reset = LockTimeoutReset(db);       // disposed before the transaction, on its open connection
+        var begun = await BeginNodeTakeAsync(db, lease, cancellationToken);
+        await using var transaction = begun.Transaction;
+        await using var reset = begun.Reset;       // disposed before the transaction, on its open connection
         // The node lease (K1b): the owners' node records read first, then this node's own written, then the rows below.
-        var expired = NodeLease ? await ReadAndRenewAsync(db, NodeReadInUpdate ? null : ids, node, lease, cancellationToken) : null;
-        var take = NodeLease ? """ "Owner" = {0}, "Epoch" = "Epoch" + 1""" : $""" "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"}""";
-        var free = expired is null ? $"""("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"})"""
-            : NodeReadInUpdate ? $"""("Owner" IS NULL OR "Owner" = {"{0}"} OR NOT EXISTS (SELECT 1 FROM "Nodes" n WHERE n."Id" = "Partitions"."Owner" AND n."LeaseUntil" >= {Now}))"""     // MUTATION
+        var expired = await ReadAndRenewAsync(db, NodeReadInUpdate ? null : ids, node, lease, cancellationToken);
+        var take = """ "Owner" = {0}, "Epoch" = "Epoch" + 1""";
+        var free = NodeReadInUpdate ? $"""("Owner" IS NULL OR "Owner" = {"{0}"} OR NOT EXISTS (SELECT 1 FROM "Nodes" n WHERE n."Id" = "Partitions"."Owner" AND n."LeaseUntil" >= {Now}))"""     // MUTATION
             : $"""("Owner" IS NULL OR "Owner" = {"{0}"}{(expired.Count == 0 ? "" : $" OR \"Owner\" IN ({string.Join(", ", expired.Select((_, i) => $"{{{i + 1}}}"))})")})""";
-        object[] parameters = expired is null ? [node, (long)lease.TotalMilliseconds] : [node, .. expired];
+        object[] parameters = [node, .. expired];
         var died = """("Owner" IS NOT NULL AND "Owner" <> {0})""";
         var sql = Engine switch
         {
@@ -343,33 +343,11 @@ public sealed partial class EfStore
     /// owner and epoch that bumps the epoch, renews the lease and keeps the position. No death: no attempt is counted.
     /// </summary>
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) =>
-        NodeLease ? RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths: false, cancellationToken) : RetakeAutocommitAsync(partition, node, epoch, lease, cancellationToken);
+        RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths: false, cancellationToken);
 
     /// <summary>The retake, counting a death on the previous epoch's unfinished trial messages when asked (#4837, a pending partition).</summary>
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) =>
-        NodeLease || countDeaths ? RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths, cancellationToken) : RetakeAutocommitAsync(partition, node, epoch, lease, cancellationToken);
-
-    private async ValueTask<Lease?> RetakeAutocommitAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken)
-    {
-        var update = $"""UPDATE "Partitions" SET "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{2}"}""";
-        var mine = """ "Id" = {0} AND "Owner" = {1} AND "Epoch" = {3}""";
-        const string columns = """ "Id", "Owner", "Epoch", "Position", """;
-        await using var db = create();
-        List<SetRow> rows;
-        if (Engine is MySqlEngine)
-        {
-            // No RETURNING: the update and, when it matched, the read of what it wrote, under its row lock (as MySqlEngine's take).
-            await using var transaction = await Engine.BeginTakeAsync(db, cancellationToken);
-            if (await db.Database.ExecuteSqlRawAsync(Q($"{update} WHERE{mine}"), [partition, node, (long)lease.TotalMilliseconds, epoch], cancellationToken) != 1) return null;
-            rows = await db.Database.SqlQueryRaw<SetRow>(Q($"""SELECT{columns}{Now} AS "Now", "Died" FROM "Partitions" WHERE "Id" = {"{0}"}"""), partition).ToListAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-        }
-        else rows = await db.Database.SqlQueryRaw<SetRow>(Engine is SqlServerEngine
-                ? $"""{update} OUTPUT inserted."Id", inserted."Owner", inserted."Epoch", inserted."Position", {Now} AS "Now", inserted."Died" WHERE{mine}"""
-                : $"""{update} WHERE{mine} RETURNING{columns}{Now} AS "Now", "Died" """,
-            partition, node, (long)lease.TotalMilliseconds, epoch).ToListAsync(cancellationToken);
-        return rows is [var row] ? new Lease(row.Epoch, row.Position, row.Now) : null;
-    }
+        RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths, cancellationToken);
 
     /// <summary>A release of a set: one statement frees each row still at its epoch; the kept rows are not written.</summary>
     public async ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)

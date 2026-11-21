@@ -114,21 +114,28 @@ static class EngineRun
 
         var loops = Enumerable.Range(0, nodes).SelectMany(node => Enumerable.Range(0, partitions).Select(partition => Task.Run(async () =>
         {
-            var (random, worker) = (new Random(node * 31 + partition + name.GetHashCode()), new Worker(name + node, partition, store, target.Actors(Models()), options));
+            var (random, worker) = (new Random(node * 31 + partition + name.GetHashCode()), new Worker($"{name}{node}.p{partition}", partition, store, target.Actors(Models()), options));
+            var heartbeat = new NodeHeartbeat(worker.Node, store, [worker], options.Lease, options.Lease);
+            long nextHeartbeat = 0;
             while (!Stopped())
             {
-                if (!worker.Owns)
+                if (!worker.Owns && worker.Pending.Count == 0)
                 {
                     await new DurableHost([worker]).ActivateAsync(worker.Partition);
-                    if (!worker.Owns) await Task.Delay(20);
-                    continue;
+                    if (!worker.Owns)
+                    {
+                        await Task.Delay(20);
+                        continue;
+                    }
                 }
-                await worker.PollAsync();
-                await worker.LoadAsync();
-                await worker.MeetAsync();
-                foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
-                if (worker.NeedsFlush) await worker.FlushAsync();
-                else await worker.BeatAsync();
+                // A Worker with only pending partitions still needs a pass to judge its next heartbeat.
+                await worker.WokenAsync(null);
+                await worker.RunAsync();
+                if (Environment.TickCount64 >= nextHeartbeat)
+                {
+                    nextHeartbeat = Environment.TickCount64 + (long)(options.Lease.TotalMilliseconds / 3);
+                    await heartbeat.BeatAsync();
+                }
                 if (!Calm() && random.Next(25) == 0)
                 {
                     Interlocked.Increment(ref stalls);
@@ -642,7 +649,7 @@ static class EngineRun
         foreach (var k in new[] { 1, 3, partitions })
         {
             var rows = Enumerable.Range(0, k).Select(p => new FenceRow(p, leases[p].Epoch, leases[p].Position, leases[p].Position + 1)).ToArray();
-            var now = await store.FenceAsync(rows, TimeSpan.FromMinutes(1));
+            var now = await store.FenceAsync(rows);
             if (now is null) wrong++;
             for (var p = 0; p < k; p++) leases[p] = leases[p] with { Position = leases[p].Position + 1 };
             Console.WriteLine($"fence of {k} row(s): {(now is null ? "REFUSED (wrong)" : "landed, database time " + now)}; positions {await Positions()}");
@@ -652,12 +659,12 @@ static class EngineRun
         _ = await store.TakeAsync(5, "other-node", TimeSpan.FromMinutes(1));
         var before = await Positions();
         var stale = Enumerable.Range(0, partitions).Select(p => new FenceRow(p, leases[p].Epoch, leases[p].Position, leases[p].Position + 1)).ToArray();
-        var refused = await store.FenceAsync(stale, TimeSpan.FromMinutes(1)) is null;
+        var refused = await store.FenceAsync(stale) is null;
         var after = await Positions();
         if (!refused || before != after) wrong++;
         Console.WriteLine($"fence of {partitions} rows with row 5 stale: {(refused ? "refused" : "LANDED (wrong)")}; positions before {before}, after {after}{(before == after ? "" : " (MOVED: wrong)")}");
         // The same rows again: a retry from the same picture is refused too (the stale row stays stale), and the other node's commit on 5 lands.
-        var again = await store.FenceAsync(stale, TimeSpan.FromMinutes(1)) is null;
+        var again = await store.FenceAsync(stale) is null;
         if (!again) wrong++;
         Console.WriteLine($"the same fence again: {(again ? "refused" : "LANDED (wrong)")}");
         Console.WriteLine(wrong == 0 ? "fence probe: all as expected" : $"fence probe: {wrong} wrong");
@@ -793,7 +800,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     public EfStore Store(Func<KernelDb> create) => new(create, postgres: engine != "sqlite", FenceInBatch)
     {
         Unfenced = Has("unfenced"), DefiniteBeatsFence = Has("m5"), FenceIgnoresCount = Get("fencecount", "1") == "0", UnorderedFenceLocks = Has("unordered"),
-        NodeLease = Has("nodelease"), NodeReadInUpdate = Get("mutation", "") == "subquery", RepeatableReadTake = Get("mutation", "") == "rr", MembershipInHeartbeat = Get("mutation", "") == "membership",
+        NodeReadInUpdate = Get("mutation", "") == "subquery", RepeatableReadTake = Get("mutation", "") == "rr", MembershipInHeartbeat = Get("mutation", "") == "membership",
         CommitSql = Get("commit", "") switch { "ef" => CommitSql.EntityFramework, "owned" => CommitSql.Owned, _ => null },
         Engine = Dialect(),
     };
@@ -804,7 +811,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     private Engine? Dialect() => engine switch
     {
         "sqlserver" => new SqlServerEngine { ReadPast = Has("readpast"), Savepoints = Has("savepoints"), ReadCommittedSnapshot = Get("rcsi", "1") == "1" },
-        "mysql" => new MySqlEngine { Isolation = Get("isolation", "") == "rc" ? System.Data.IsolationLevel.ReadCommitted : null, Savepoints = Has("savepoints"), TakeIsolation = Has("takerr") ? null : System.Data.IsolationLevel.ReadCommitted },
+        "mysql" => new MySqlEngine { Isolation = Get("isolation", "") == "rc" ? System.Data.IsolationLevel.ReadCommitted : null, Savepoints = Has("savepoints") },
         _ => null,
     };
 
@@ -1047,6 +1054,9 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken ct = default) =>
+        Call("heartbeat", () => inner.NodeHeartbeatAsync(node, lease, window, ct));
+
     private readonly ConcurrentDictionary<string, int> _counts = new();
     private readonly ConcurrentDictionary<string, string> _samples = new();
     private readonly ConcurrentDictionary<string, ConcurrentBag<double>> _times = new();

@@ -189,7 +189,6 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
         if (taken is not null) _retaken[partition] = taken.Epoch;
         return taken;
     });
-    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
     public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) => Call(() => inner.NodeHeartbeatAsync(node, lease, window, cancellationToken));
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, long> _retaken = new();

@@ -60,10 +60,9 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         return () => new KernelDb(options);
     }
 
-    private EfStore Store(Func<KernelDb> create, bool fenceInBatch, bool unfenced = false, bool nodeLease = false) => new(create, engine != "sqlite", fenceInBatch)
+    private EfStore Store(Func<KernelDb> create, bool fenceInBatch, bool unfenced = false) => new(create, engine != "sqlite", fenceInBatch)
     {
         Unfenced = unfenced,
-        NodeLease = nodeLease,
         DefiniteBeatsFence = flags.Contains("--m5"),
         FenceIgnoresCount = flags.Contains("--fence-ignores-count"),
         CommitSql = Commit,
@@ -107,8 +106,8 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
                 break;
         }
         await Store(Factory(admin), false).CreateAsync(partitions);
-        var store = Store(Factory(worker, interceptors), FenceInBatch, setup.BrokenFence, setup.NodeLease);
-        return new Provided(this, store, Store(Factory(outside), FenceInBatch, nodeLease: setup.NodeLease), admin, file, counter);
+        var store = Store(Factory(worker, interceptors), FenceInBatch, setup.BrokenFence);
+        return new Provided(this, store, Store(Factory(outside), FenceInBatch), admin, file, counter);
     }
 
     private sealed class Provided(EfProvider provider, EfStore store, EfStore outside, string admin, string? file, Counting? counter) : ProvidedStore

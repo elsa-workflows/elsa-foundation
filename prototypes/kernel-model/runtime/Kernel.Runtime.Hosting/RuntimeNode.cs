@@ -245,7 +245,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         {
             try
             {
-                await _runtime.NodePassAsync(kill);     // K1b: the passes no active scope gives; nothing under the per-partition lease
+                await _runtime.NodePassAsync(kill);     // K1b: give pending scopes and heartbeat answers a pass
                 if (Now >= pollAt)
                 {
                     pollAt = Now + (long)_options.PollInterval.TotalMilliseconds;

@@ -143,8 +143,16 @@ public static class LeaseChecks
             await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();
             Check(queued ? pausedScheduler.Count > 0 : attempts == 1, $"{(queued ? "queued" : "running")} job prepared before renewal");
             time += 5_000;
-            wire.DelayNext = true; var delayedBeat = old.BeatAsync();
-            await wire.Landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var landed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            wire.HeartbeatReply = async answer =>
+            {
+                landed.SetResult();
+                await wire.Reply.Task;
+                return answer;
+            };
+            var beat = new NodeHeartbeat(old.Node, wire, [old], Defaults.Lease, Defaults.Lease);
+            var delayedBeat = beat.BeatAsync();
+            await landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
             time += 6_000;
             if (queued) pausedScheduler.RunAll(); else running.SetResult("late");
             await expired.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -167,7 +175,7 @@ public static class LeaseChecks
         await store.AddAsync(new Message("renewed", new InstanceRef(id), "go", Json.Write("work"), Start: Runner.Spec));
         await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();
         Check(oldJobs == 1, "renewal witness started its job");
-        time += 5_000; await old.BeatAsync();
+        time += 5_000; await new NodeHeartbeat(old.Node, wire, [old], Defaults.Lease, Defaults.Lease).BeatAsync();
         time += 6_000; oldWork.SetResult("valid"); await effectFinished.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await Drain(old, () => Json.Read<RunnerState>(store.Instances[id].State).Log.Contains("result work"));
         Check(old.Owns && oldEffects == 1, "a timely renewal permits a result after the prior deadline");
@@ -789,7 +797,6 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
         if (DelayRetake) { DelayRetake = false; Retaken.TrySetResult(); await RetakeReply.Task; }      // K1b: a counting retake's reply waits too
         return result;
     }
-    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
     public Func<NodeBeat, Task<NodeBeat>>? HeartbeatReply;      // K1b: the answer as the wire delivers it (delayed or altered)
     public async ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken ct = default)
     {

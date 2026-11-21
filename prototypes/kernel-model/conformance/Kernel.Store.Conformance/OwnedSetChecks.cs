@@ -324,11 +324,11 @@ internal static class OwnedSetChecks
         Context.Equal("2", string.Join(" ", (await c.S.ReadJournalAsync(6, 0, 10)).Select(j => j.Position)), "journal positions of partition 6 after the delete");
         if (c.S is InMemoryStore store) Context.That(store.Deleted[6] == 1 && store.Deleted[1] == 0, "journal rows removed by the delete are not counted in their own partition");
 
-        // A landed flush renews the lease of every fenced row.
+        // A landed flush leaves all fenced partitions on the original node lease.
         var brief = await c.S.TakeAsync([3, 5], "a", Short);
         await c.Lands(() => c.S.CommitAsync(Flush(brief.Taken, [])).AsTask(), "a flush over 3 and 5 under a long lease");
         await Task.Delay(PastShort);
-        Context.Equal("", string.Join(" ", Ids(await c.S.TakeAsync([3, 5], "b", Context.Long))), "partitions b took after a's flush renewed their leases");
+        Context.Equal("3 5", string.Join(" ", Ids(await c.S.TakeAsync([3, 5], "b", Context.Long))), "partitions b took after the node lease expired despite a's flush");
     }
 
     private static async Task Retake(Context c)
