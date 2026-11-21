@@ -38,6 +38,49 @@ internal static class NodeLeaseChecks
         await FixedHostPassesAGivenUpPending(check);
         await LazyFixedHostHeartbeats(check);
         await FixedHostAnswerJudgesOnce(check);
+        await WatchdogClosesAStuckCommit(check, abortable: true);
+        await WatchdogClosesAStuckCommit(check, abortable: false);
+        await WatchdogClosesAStuckCommit(check, abortable: false, "throws", () => throw new InvalidOperationException("the abort failed"));
+        await WatchdogClosesAStuckCommit(check, abortable: false, "blocks", () => Thread.Sleep(4_000));     // past the 2 s the look may take
+    }
+
+    // K1b slice 5b, the watchdog: p's commit is stuck on a live connection. At twice the lease since it was sent the
+    // watchdog closes that call's connection (its token); a call that aborts on it ends, and the process lives on. One whose
+    // client never resumes is still in flight a third of a lease later: then, and only then, the process ends. The commit
+    // lands and its reply is stuck, so its outcome is unknown; that the server rolls an open transaction back is K4's.
+    // A3: an abort that throws or blocks neither ends the watchdog nor holds back the end of the process.
+    private static async Task WatchdogClosesAStuckCommit(Action<bool, string> check, bool abortable, string abort = "", Action? onAbort = null)
+    {
+        var (store, clock, advance) = World(1, out _);
+        var wire = new DelayedCommit(store) { AbortOnToken = abortable, OnAbort = onAbort };
+        var ended = new List<string>();
+        var watchdog = new Watchdog(Lease, ended.Add, clock);
+        var worker = Owner(watchdog.Watch(wire), [0], clock);
+        await new DurableHost([worker]).ActivateAsync(0);
+        await store.AddAsync(new Message("m", InstanceRef.In(0, "x"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
+        await worker.WokenAsync(null);
+        wire.DelayNext = true;          // the pass's commit lands and its answer never comes
+        var pass = worker.RunAsync().AsTask();
+        await wire.Landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        advance(19_000);
+        var early = watchdog.Check();       // 19 s: under twice the lease, untouched
+        advance(1_000);
+        int closed;
+        try { closed = await Task.Run(watchdog.Check).WaitAsync(TimeSpan.FromSeconds(2)); }        // 20 s: closed
+        catch (Exception e) { check(false, $"the watchdog survives an abort that {abort}: {e.GetType().Name}"); return; }
+        if (abortable) await Task.WhenAny(pass, Task.Delay(TimeSpan.FromSeconds(5)));
+        advance(1_000);
+        watchdog.Check();                   // within a third of a lease of the close: the process waits for the call
+        var waited = watchdog.Ended == 0;
+        advance(2_400);
+        watchdog.Check();                   // a third of a lease after the close
+        var passEnded = pass.IsCompleted;
+        wire.Reply.TrySetResult();
+        await pass.WaitAsync(TimeSpan.FromSeconds(5));
+        check(early == 0 && closed == 1 && waited && passEnded == abortable && (abortable ? ended.Count == 0 && watchdog.Ended == 0 : ended.Count == 1 && ended[0].Contains("commit", StringComparison.Ordinal)),
+            abort != "" ? $"the watchdog ends the process when the abort {abort}: closed {closed}, waited {waited}, ended {ended.Count}" :
+            abortable ? $"the watchdog closes a stuck commit's connection at twice the lease, and the process lives on: closed {closed}, pass ended {passEnded}, ended {watchdog.Ended}"
+                      : $"the watchdog ends the process only when the stuck call outlives its closed connection: closed {closed}, waited {waited}, ended [{string.Join("; ", ended)}]");
     }
 
     // CodeRabbit 4636945436 (review B of #4870): an empty Worker's first take hangs. Once it has been in flight for a lease
@@ -134,7 +177,9 @@ internal static class NodeLeaseChecks
             $"a lazy fixed host heartbeats before any Worker and keeps a scope past one lease: before {before}, mid {mid}, renewed {renewed}, survived {survived}");
     }
 
-    // N1: a ForNode fixed host without owned sets, 256 Workers. One answer must not scan Claims per sibling candidate.
+    // N1, N5 and N6: a ForNode fixed host without owned sets, 256 Workers. One answer asks each Worker for its claimed
+    // partitions once, so it is judged over one map: a rewrite that asks per sibling candidate makes this quadratic. The
+    // heartbeat must be answered, and every Worker asked, or the count proves nothing.
     private static async Task FixedHostAnswerJudgesOnce(Action<bool, string> check)
     {
         const int n = 256;
@@ -143,11 +188,14 @@ internal static class NodeLeaseChecks
         var host = DurableHost.ForNode("n1", wire, new WorkflowInstance([new Counter()]), n, new() { Monotonic = clock, Partitions = n });
         var workers = new Worker[n];
         for (var p = 0; p < n; p++) workers[p] = (Worker)(await host.ActivateAsync(p))!;
-        await host.HeartbeatAsync(Window);
-        foreach (var w in workers) await w.RunAsync();
-        var claims = workers.Sum(w => w.ClaimsLookups);
-        check(claims < n && workers.All(w => w.Holds(w.Partition)),
-            $"one answer over {n} Workers judges with {claims} Claims calls (bound {n}), held {workers.Count(w => w.Holds(w.Partition))}");
+        var before = workers.Select(w => w.ClaimedLookups).ToArray();
+        var answered = await host.HeartbeatAsync(Window) is not null;
+        var waiting = workers.All(w => w.AnswerWaiting);       // each answer lists partitions the Worker does not hold: it waits
+        foreach (var w in workers) await w.RunAsync();          // where each Worker judges it, asking about its siblings
+        var judged = workers.All(w => !w.AnswerWaiting);
+        var asked = workers.Select((w, i) => w.ClaimedLookups - before[i]).ToArray();
+        check(answered && waiting && judged && asked.All(a => a == 1) && workers.All(w => w.Holds(w.Partition)),
+            $"one answer over {n} Workers asks each once: answered {answered}, every Worker judged {waiting && judged}, asked {asked.Sum()} times (each once {asked.All(a => a == 1)}), held {workers.Count(w => w.Holds(w.Partition))}");
     }
 
     // Review round 2 of #4870, the coordinator's rule: a fixed Worker's pending partition, with a trial on it, is given up by

@@ -50,11 +50,18 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private Task? _loop, _halted;
     private TimeSpan? _heartbeatEvery;
+    private readonly Func<CancellationToken, Task>? _beside;
+    private readonly CancellationTokenSource _besideEnd = new();     // A1: cancelled at the end of the stop, or on a kill
+    private Task? _besideRun;
     private readonly object _halting = new();
     private volatile bool _gone;
 
-    public RuntimeNode(string node, IMembership membership, int partitions, LoopOptions? options = null, IWakeSignal? wake = null)
+    /// <param name="beside">K1b slice 5b: a loop of the host's own that runs beside the node's loops, off the node's
+    /// scheduler, and ends when a stop has ended or on a kill: layer 2's watchdog (<c>Watchdog.RunAsync</c>), which closes a stuck
+    /// owner-path call's connection at twice the lease and ends the process, by the host's policy, only when it cannot.</param>
+    public RuntimeNode(string node, IMembership membership, int partitions, LoopOptions? options = null, IWakeSignal? wake = null, Func<CancellationToken, Task>? beside = null)
     {
+        _beside = beside;
         _options = options ?? new LoopOptions();
         _runtime = new PartitionRuntime(node, membership, partitions, _options.Window, wake);
         _due = new long[partitions];
@@ -79,7 +86,10 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         });
         lock (_halting)
             if (_halted is null)     // a stop or kill that came first leaves the node unstarted
+            {
                 _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync), _heartbeatEvery is { } every ? Task.Run(() => HeartbeatLoopAsync(every)) : Task.CompletedTask);
+                if (_beside is { } beside) _besideRun = Task.Run(() => Beside(beside));     // not in _loop: the stop must not wait on it
+            }
     }
 
     /// <summary>The heartbeat's cadence: at least three per lease and at most half the window apart, a second at most by default.</summary>
@@ -119,6 +129,17 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         }
     }
 
+    private async Task Beside(Func<CancellationToken, Task> loop)
+    {
+        try { await loop(_besideEnd.Token); }
+        catch (OperationCanceledException) when (_besideEnd.IsCancellationRequested) { }
+        catch (Exception e)
+        {
+            Interlocked.Increment(ref _errors);
+            LastError = e;
+        }
+    }
+
     private async Task BalanceLoopAsync()
     {
         var (exit, kill) = (_exit.Token, _kill.Token);
@@ -133,7 +154,13 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 LastError = e;
             }
             Signal();       // a scope taken gets its first pass at once
-            try { await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, (long)_options.BalanceEvery.TotalMilliseconds - (Now - started))), exit); }
+            var ms = Math.Max(0, (long)_options.BalanceEvery.TotalMilliseconds - (Now - started));
+            if (ms == 0)
+            {
+                await Task.Yield();     // CodeRabbit 4644811407: a round that used up its interval must not hold this exclusive scheduler: LoopAsync runs on it
+                continue;
+            }
+            try { await Task.Delay(TimeSpan.FromMilliseconds(ms), exit); }
             catch (OperationCanceledException) { break; }
         }
     }
@@ -168,7 +195,13 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         lock (_halting) return _halted ??= HaltOnceAsync();
     }
 
-    private async Task HaltOnceAsync()
+    private async Task HaltOnceAsync()     // A1: the watchdog guards the last pass and the releases, so it ends after them
+    {
+        try { await HaltLoopsAsync(); }
+        finally { _besideEnd.Cancel(); if (_besideRun is not null) await _besideRun; }
+    }
+
+    private async Task HaltLoopsAsync()
     {
         _gone = true;
         _exit.Cancel();

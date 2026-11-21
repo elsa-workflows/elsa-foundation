@@ -13,7 +13,8 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
-    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;   // the set take and release go through this wrapper's own calls; the set poll is one call
+    public bool OwnedSetsAvailable => !WithoutOwnedSets && inner.OwnedSetsAvailable;   // the set take and release go through this wrapper's own calls; the set poll is one call
+    public bool WithoutOwnedSets { get; init; }     // N2b: a fixed host, one Worker per scope, as on a store without owned sets
     public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => inner.PartitionCountAsync(cancellationToken);
     private readonly object _lock = new();
     private TaskCompletionSource? _stall;
