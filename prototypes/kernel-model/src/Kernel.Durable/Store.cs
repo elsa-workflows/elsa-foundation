@@ -144,6 +144,9 @@ public sealed record CommitBatch(
     int Partition, long Epoch, long Position, TimeSpan Lease, bool HandOver, IReadOnlyList<TurnCommit> Turns,
     IReadOnlyList<InboxKey> Seen, IReadOnlyList<InboxKey> Trial)
 {
+    /// <summary>Counted clears of pending job trials at this batch's exact fence epochs.</summary>
+    public IReadOnlyList<InboxKey> ClearJobTrials { get; init; } = [];
+
     /// <summary>
     /// How far the position moves: one per journal row. It counts the whole batch, while <c>Position</c> is the lowest
     /// fenced partition's; in the owned-set form each partition moves by <see cref="PositionsIn"/>.
@@ -253,6 +256,9 @@ public interface IKernelStore : IMembership
 
     /// <summary>The store commits a batch over several virtual partitions all or nothing under their k fence rows. Default unavailable.</summary>
     bool OwnedSetsAvailable => false;
+
+    /// <summary>Whether the store applies <see cref="CommitBatch.ClearJobTrials"/> under the batch's fences.</summary>
+    bool SupportsJobTrialClear => false;
 
     /// <summary>
     /// K1b, the node lease ("The partition record" and "The node's heartbeat" in ownership-and-fencing.md). The lease is

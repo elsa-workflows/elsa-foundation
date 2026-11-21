@@ -25,7 +25,9 @@ internal static partial class ContractActorWorkload
             }
         }
 
-        Console.WriteLine($"Public job and tree workload passed {seeds} seeds from {from} at {partitions} virtual partitions. Each seed exercised stale job attempts, real row refusal, lease-loss poison and nested tree cancellation.");
+        Console.WriteLine(treeStall
+            ? $"Uncooperative tree jobs kept trial isolation in {seeds} seeds from {from} at {partitions} virtual partitions."
+            : $"Public job and tree workload passed {seeds} seeds from {from} at {partitions} virtual partitions. Each seed exercised stale job attempts, real row refusal, lease-loss poison and nested tree cancellation.");
         return 0;
     }
 
@@ -39,6 +41,7 @@ internal static partial class ContractActorWorkload
         var random = new Random(seed);
         var scope = new Contract.BoundScope("job-tree");
         var refused = 0;
+        var clears = 0;
         var type = new PublicWorkflow([new PublicRunner(work), new PublicFragile(work), new PublicTree(work, treeEvent)]);
         await using var driver = new ContractWorkload.InMemoryDriver(partitions, flaws, type, maxAttempts,
             (actorScope, kind) => actorScope.Tenant == scope.Tenant && kind == Contract.Kinds.Terminate,
@@ -47,7 +50,7 @@ internal static partial class ContractActorWorkload
                 if (!row.State.Contains(Fragile.Sour, StringComparison.Ordinal)) return false;
                 refused++;
                 return true;
-            });
+            }, (batch, landed) => clears += landed ? batch.ClearJobTrials.Count : 0);
         var runtime = new PublicRuntime(driver.Ingress, driver.Reads);
         var runner = await Begin("runner", "runner");
         var healthy = await Begin("healthy", "fragile");
@@ -161,21 +164,37 @@ internal static partial class ContractActorWorkload
         foreach (var leaf in level)
             Require((await Journal(leaf)).SequenceEqual([new("tree-leaf"), new("tree-event")]), "a live leaf did not receive exactly one event");
 
-        trace.Add($"tree of {family.Count} actors loses the root termination answer before the descendants settle");
+        trace.Add($"tree of {family.Count} actors takes over with live background jobs");
+        await driver.TakeOver();
+        await driver.Pass(12);
+        var retrying = level.SelectMany(leaf => work.Attempts(leaf, "hold").Skip(1)).ToArray();
+        Require(retrying.Length > 0 && retrying.All(attempt => !attempt.Token.IsCancellationRequested),
+            "the root must encounter an already running recovered trial");
         var selection = await View(root);
         var authorized = await runtime.TerminateAsync(scope, "end-tree", selection);
         Require(authorized.Outcome == Contract.AdmissionOutcome.Accepted, "public root terminate was refused");
+        await driver.Pass(20);
+        Require(retrying.Any(attempt => attempt.Token.IsCancellationRequested) &&
+            retrying.All(attempt => !attempt.Result.Task.IsCompleted) && clears == 0 &&
+            (await View(root)).Header.Status == Contract.ActorStatus.Running,
+            "the trial did not signal the recovered bodies and keep the gate until they exit");
+        if (treeStall) return; // The uncooperative bodies remain in flight under the original gate.
+
+        ExitSignalled();
+        trace.Add("the root termination answer is lost before the descendants settle");
         await driver.LoseTurnCommit(landed: true, stopAfterLoss: true);
         Require((await View(root)).Header.Status == Contract.ActorStatus.Cancelled, "the lost root answer did not land");
         var queuedChildren = 0;
         foreach (var (actor, parent) in family.Where(node => node.Parent == root))
             if ((await driver.Reads.InboxAsync(scope, actor)).Items.Any(row => row.Kind == Contract.Kinds.Terminate)) queuedChildren++;
         Require(queuedChildren > 0, "the takeover witness needs a committed cascade still in flight");
-        // Normal trials have finite bodies. The liveness witness keeps the job attempts blocked.
-        work.CompleteTreeRetries = !treeStall;
         await driver.TakeOver();
-        await driver.Pass(20);
-        var journals = new Dictionary<Contract.ActorRef, List<WorkEntry>>();
+        for (var pass = 0; pass < 20; pass++)
+        {
+            ExitSignalled();
+            await driver.Pass(4);
+        }
+        Require(clears > 0, "the released job's actual exit did not lead to a fenced trial clear");
         for (var node = 0; node < family.Count; node++)
         {
             var actor = family[node].Actor;
@@ -188,10 +207,6 @@ internal static partial class ContractActorWorkload
             var leafAttempts = work.Attempts(leaf, "hold");
             Require(leafAttempts.All(attempt => attempt.Token.IsCancellationRequested || attempt.Result.Task.IsCompleted),
                 "nested cancellation left a leaf job running");
-            var applied = journals[leaf] = await Journal(leaf);
-            Require(applied.Take(2).SequenceEqual([new("tree-leaf"), new("tree-event")]) &&
-                applied.Skip(2).SequenceEqual(leafAttempts.Length == 1 ? [] : [new("tree-job-result", "settled retry")]),
-                "a leaf did not apply exactly the one finite result before terminating");
             foreach (var attempt in leafAttempts) attempt.Complete("late tree result");
         }
 
@@ -205,8 +220,15 @@ internal static partial class ContractActorWorkload
         }
         await driver.Pass(8);
         foreach (var leaf in level)
-            Require((await Journal(leaf)).SequenceEqual(journals[leaf]),
+            Require((await Journal(leaf)).SequenceEqual([new("tree-leaf"), new("tree-event")]),
                 "a cancelled leaf received an event or a stale job result");
+
+        void ExitSignalled()
+        {
+            // The model bodies can take time to unwind after seeing cancellation.
+            foreach (var attempt in level.SelectMany(leaf => work.Attempts(leaf, "hold")).Where(attempt => attempt.Token.IsCancellationRequested))
+                attempt.Complete("late tree result");
+        }
 
         async Task<Contract.ActorRef> Begin(string key, string model, object? input = null)
         {
@@ -267,7 +289,6 @@ internal static partial class ContractActorWorkload
     private sealed class WorkBodies
     {
         internal List<TaskCompletionSource> Turns { get; } = [];
-        internal bool CompleteTreeRetries { get; set; }
         private readonly List<WorkAttempt> _jobs = [];
 
         internal WorkAttempt[] Attempts(Contract.ActorRef actor, string key) =>
@@ -277,7 +298,6 @@ internal static partial class ContractActorWorkload
         {
             var attempt = new WorkAttempt(job, token);
             _jobs.Add(attempt);
-            if (job.Key == "hold" && CompleteTreeRetries) attempt.Complete("settled retry");
             return new(attempt.Result.Task);
         }
     }
