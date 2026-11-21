@@ -58,6 +58,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete ||
             message.Kind == Contract.Kinds.Terminate && input.Row is { } row && store.FoundationTurnHeader(row).Park is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "ResolutionUnavailable");
+        if (message is { ActorAuthored: true, Kind: Contract.Kinds.Terminate } &&
+            input.Row is { Status: not Durable.InstanceStatus.Running } terminal)
+            return new(input.Actor) { Consumed = [.. input.Taken], Status = terminal.Status };
         if (message.Kind != Contract.Kinds.ChildFinished) return null;
 
         if (!IsChildNotice(input.Row, message))
