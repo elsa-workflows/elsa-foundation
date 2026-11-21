@@ -1551,3 +1551,82 @@ Activities Primitives' scoped `PublishStimulusExecutor` qualifies its selected s
 The owner records one StimulusRoutingAttemptObserved per actual invocation and a separate StimulusRoutingDispositionObserved for actual routing return/refusal/unavailability/failure/capacity shedding. Receipts distinguish retries of one immutable source. Disposition points to its attempt; both retain original outbox identity. Core's PublicationObservation and writer safety validation require the full original vocabulary and closed fields/reasons. These observations do not claim recipient execution/consumption. Access is rechecked after awaits; uncertain writes retry the same immutable observation once without repeating routing. Simultaneous primary/observation failures retain both causes and hard failure dominance.
 
 Current qualification is recorded on [PR #4678](https://github.com/elsa-workflows/elsa-foundation/pull/4678): whole Runtime4382 and Activities891 passed, zero skips, at the recorded source, including the actual R5 red-to-green controls. Controlled input/observation ports and actual native component tests retain their distinct scopes. Expanded source/admission/default-profile declaration, full publication delivery, physical provider/restart, final independent review and composed UX acceptance remain separate. The existing public minimal history module remains enabled; this supporting unit does not expand its advertised policy. See the [owning contribution note](../../../Activities/Primitives/Elsa.Activities.Primitives/README.md#cross-domain-contributions).
+The owner rechecks its captured persistence access after source/owner/observation awaits. An uncertain append retries the exact same event once for IO/timeout/database failures, without repeating routing. Missing acknowledgement keeps responsibility owed; actual routing cannot be inferred to roll back. Simultaneous primary/observation failures preserve both original causes and hard failure dominance. The two new owner kinds are shape support, not advertised capture policy: actual source/admission/receiver qualification, default profile declaration and public host enablement remain following work.66 controls are written and NOT RUN (22 pure models,42 controlled owner cases,2 actual memory append/replay controls with supplied groups/claims); no actual full publication delivery, physical provider/restart or UX acceptance. See the [owning contribution note](../../../Activities/Primitives/README.md#cross-domain-contributions).
+
+### Verified recipient causation (#3849, S10e)
+
+Saved-source recipient paths read diagnostic origin from the canonical native intent. `StimulusDeliveryServices.PrepareResumeAsync` retains it on the exact resume request; a captured target records its actual receipt pointing to that publication, then queues the target receipt as the continuation cause. An originally uncaptured target forwards the original known cause without creating history or altering its pinned policy. Unmatched saved waits can record attributable receipt/disposition without enqueueing or consumption.
+
+The default start dispatcher derives origin inside its existing verified saved-source read, never from a new caller-controlled start-request field. Nullable null-omitted `WorkflowExecutionStartCommandPayload.HistoryCausation` and `RuntimeCheckpointCommandPayload.HistoryCausation` carry it through actual native start/checkpoint handlers to `WorkflowStarted`. Both start and resume command wire check exact cause equality so JSON cannot silently normalize an opaque identifier. Eligible first-fault owners preserve a readable bounded original start cause without fabricating workflow execution; optional cause parsing is separate from native identity/authority/policy eligibility so malformed diagnostics cannot replace the primary fault. No origin grants authority, changes mailbox/cohort keys or retrospectively enables target history.34 controls are written and NOT RUN; source-supplied/native component and recording-mailbox boundaries are not a full production/provider/restart/UX proof.
+
+### Actual publication profile qualification (#3849, S10f)
+
+`IRuntimeCheckpointCommitEnricher.CanSupplyHistorySource` defaults false. The actual committer qualifies its frozen owner set against its selected source extension. A source-kind declaration alone does not supply facts. Internal new-admission profile construction and retained capture also require the selected post-commit dispatcher/handler, actual router and physical source/retention/exact-resume stores to qualify the same scoped observation pair. The owning Primitives feature declares publication idempotently; a qualified declaration expands to `StimulusPublicationCommitted` and Core's closed `PublicationObservationKinds`. Unqualified declarations are omitted from new profiles; retained Required profiles refuse missing support before commit.
+
+`IStimulusRouter.CanRecordHistory` defaults false and checks its actual source/material/execution tuple, selected start transport and resume observer. `IWorkflowStartDispatcher.CanPreserveHistoryCausation` defaults false and the native factory binds lazy selected-pair qualification; it promises canonical causal transport, not a target receipt before admission. Older public constructors do not infer qualification. Ordinary service resolution remains lazy, disabled new admission leaves retained capture intact, and older pinned profiles are never widened. No diagnostic read model authorizes execution. No public history module/host is enabled by this internal composition.
+
+Thirty-seven component controls are written and NOT RUN: the original14 cover selected-chain, replaced-component and older-profile behavior;20 additions cover6 incomplete bundles,3 late logical/raw/fact changes,3 positive/late-injection physical flushes and8 direct public probe failures;3 inventory controls cover rebound/rewritten/omitted physical sources. The committer freezes caused native source rows before flush enrichment and checks exact inventory/state afterward; the owner also binds the event to its own pending intent ID. Capture refuses nonempty partial publication bundles. The actual input owner finally validates facts/origins and scoped raw sources against final logical work/captured flush groups; later contributors cannot bypass its required inputs. Public probe failures retain kind/cause/classification in RuntimePostCommitSourceBoundaryException. Publisher state and schema availability are supplied; no authored activity/recipient activation/callback, physical provider/migration/restart, production authority, retention or composed UX acceptance is established. A normal test-only reference to public Primitives and its two project-lock nodes enables this actual feature composition in Runtime's own history test assembly without cross-domain friendship. Existing package nodes are unchanged; locked restore remains NOT RUN.
+
+### Native publication-to-callback controls (#3849, S10g)
+
+Ten additional controls extend the existing native delivery fixture through actual public Primitives staging, committer, physical source claim/processor/owner observations, saved cohort/router/default mailbox, native bookmark consumption and a controlled callback. Completion, returned fault and throw each cover captured and originally uncaptured targets. Other controls separate exact commit replay from distinct competing business stimuli and preserve newer wait generations after queued handoff. Native target receipt links to original publication, and actual consumption/continuation links to the target receipt; an uncaptured target stays uncaptured. Callback failure is not a failed delivery handoff.
+
+All10 new and5 affected prior controls are NOT RUN. Publisher/target/private state and schema availability are supplied; explicit enqueue-only dispatch and one-work-item draining are used. No authored PublishEvent/Event start, multiple recipients, full host/production authority, physical provider/restart or composed UX acceptance is established. Explicit receiver-side stale-discard diagnostics remain open; these controls do not fabricate consumption or a second transport attempt. No production code/API/module/host/reference/friend is added and T025/T026/parent remain open.
+
+### Exact saved-resume receiver disposition (#3849, S10h)
+
+Activities Runtime's actual resume handler now owns an existing `DeliveryUnmatched` observation when exact saved-recipient admission fails at the receiver. It points back to the queued receipt/original cause, includes exact activity/bookmark/command/work association and a closed receiver missing/expired/ineligible reason, and precedes acknowledgement. Its private owner uses Core's existing observation port and validates the actual native policy/capture/provider pairing and stable scope; no diagnostic data authorizes consumption. Required record failure keeps native work owed; hard malformed data and requested cancellation retain their classifications. Prior vocabularies/uncaptured targets are not widened. Each actual invocation has a separate observation identity; an ambiguous write and actual re-entry can produce separate observations without another business occurrence. No payload or exception text is included. See the [owning catalog](../../../Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md#saved-resume-receiver-observation-owner-3849-s10h).
+
+All20 new and15 affected component controls are NOT RUN. Expiry attribution requires the saved generation/fields, and only an unavailable matching requested cancellation is restored from its retained cause chain; hard/unrelated failures keep their classification. No new public API/schema/dependency/friend/module/host is added, and only exact saved-admission mismatch is covered; other no-op/claim-race and full authored/native/provider/restart/authority/UX/parent qualification remain open.
+
+### Atomic saved-resume admission loss (#3849, S10i)
+
+Activities Runtime uses the existing Core observation port after the actual native consumption checkpoint
+rejects the saved recipient between preliminary eligibility and atomic admission. `DeliveryUnmatched` with
+`receiver-admission-superseded` is an observed rejection, not a consumption, callback or claim winner.
+The original native policy and explicit access context survive the claim attempt; the same private owner
+revalidates pairing/access and preserves Required write failure as owed work. Actual re-entry can record a
+different now-current receiver decision. See the [owning catalog](../../../Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md#atomic-saved-resume-admission-loss-3849-s10i).
+The existing terminal resumption purge also records `DeliveryUnmatched` / `terminal-resume-ineligible`
+before deleting exact saved-resume residue. It retains terminal status as authoritative: no activity executes
+and no bookmark consumption is invented. Recording failure keeps the native source queued for another sweep;
+a real retry is another observed cleanup decision. Live-owner exclusion, bounded paging and targeted deletion
+remain the existing purge's responsibility. The additive `RuntimeResumptionService` constructor receives the
+actual paired Core writer/reader; its original constructor remains and cannot waive retained obligations.
+No source/capture-chain qualification is claimed for this pure observation beyond the selected provider's
+native policy/scope/deletion contract; it enables no native activity effect.
+
+All31 new and35 prior native component controls plus the existing resumption suite are NOT RUN. One Runtime
+constructor/API baseline entry is added; no Core contract/schema/reference/dependency/friend/module/host.
+Other receiver branches, authored journeys, durable provider and UX acceptance remain open.
+
+Terminal observation outages are isolated as per-execution Faulted sweep outcomes, including held terminal
+candidates. Closed failure codes stay in the result; the original domain exception/cause goes to the logger,
+not history/result metadata. Other candidates and the bounded backlog walk continue, so the pump can apply
+its existing per-execution backoff. Partially purged failed executions are not counted as fully purged and
+are not reaped. Requested cancellation/access drift still escape. Three added controls cover repeated
+one-execution pages ahead of healthy live/legacy work and held-terminal partial purge accounting.
+
+The held-terminal control enqueues its pausable item before resume handoff and asserts the actual FIFO
+head plus native pause denial before sweeping; an earlier timestamp alone does not establish held discovery.
+
+### Multiple saved publication recipients (#3849, S10j)
+
+Nine additional component controls exercise one actual public Primitives publication/native processor/saved
+cohort through two native queued recipients and actual consumption/callback/history paths. Eight rows vary
+both original capture choices and whether the second callback returns a fault; a ninth retires one saved wait
+after handoff. Each captured recipient has its own receipt and causal consumption/outcome in its own ordered
+history; one source remains one publication/routing invocation. Uncaptured recipients keep the original source
+cause without acquiring history, and one recipient's fault/retirement does not invent effects on the other.
+
+All9 new and66 existing native delivery/publication/receiver component controls are NOT RUN. Both runs reuse
+activity/bookmark IDs to exercise run scoping. Native workflow/invocation/private state/schema and controlled
+callback activations remain supplied; a second wait is created by the actual native handler. Existing fixture
+defaults are unchanged. This is not authored start/whole-workflow, concurrent node/authority, durable provider/
+restart, hosted control sensitivity or composed UX qualification. No production/API/schema/reference/dependency/
+friend/module/host change is added. T026 and parent remain open.
+
+These controls re-read each exact native run/activity after both drains and assert completion/fault code,
+ended resume-attempt transition, consumed delivery, cleared waits and native incident state before the
+capture-specific history branch. Uncaptured rows therefore prove their native outcome too; absence of
+history and a Completed scheduler result alone cannot distinguish callback completion from a returned fault.
