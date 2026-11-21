@@ -186,6 +186,8 @@ public sealed class TurnOutcome(string instance)
 {
     internal Slot? Slot;
     internal bool RestrictsJobEntry;
+    internal FoundationHeaderChange? FoundationHeader;
+    internal bool OpensPark;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;

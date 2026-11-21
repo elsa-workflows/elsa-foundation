@@ -207,6 +207,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     CreationProtocol.Validate(turn, previous);
                     foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription);
                     StoreBatchRules.ValidateActorSends(turn, previous);
+                    ValidateFoundationHeader(turn);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
@@ -259,12 +260,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 if (turn.Row is { } stored)
                 {
                     Instances[stored.Id] = CommitClockFacts.Stamp(stored, now);
-                    RecordFoundationEnd(stored, now);
+                    RecordFoundationMetadata(turn, stored, now);
                 }
                 if (turn.Delete)
                 {
-                    if (turn.Row is not { Retired: true } && Instances.Remove(turn.Instance, out var removed) && _foundationEnds.Count > 0)
-                        _foundationEnds.Remove(new(removed.Id, removed.Creation));
+                    if (turn.Row is not { Retired: true } && Instances.Remove(turn.Instance, out var removed) && _referenceBirths.Count > 0)
+                        RemoveFoundationMetadata(new(removed.Id, removed.Creation));
                     foreach (var key in Journal.Where(j => j.Value.Instance == turn.Instance && j.Value.Revision > 0 && !Has(Flaw.DeleteLeavesJournal)).Select(j => j.Key).ToList())
                     {
                         Journal.Remove(key);

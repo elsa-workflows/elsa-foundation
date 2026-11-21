@@ -1783,7 +1783,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (_type.Command(input) is { } command)
             Enqueue(Bound(command, slot), cancellationToken);
         else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.JobFinished) is { } poison)
-            Enqueue(Bound(_type.Park(slot.CurrentRow, instance, due, spec, $"message {poison.Message.Id} was on trial when {poison.Attempts} owners were lost"), slot), cancellationToken);
+        {
+            var previous = slot.CurrentRow;
+            var park = _type.Park(previous, instance, due, spec, $"message {poison.Message.Id} was on trial when {poison.Attempts} owners were lost");
+            Enqueue(Bound(MarkPark(park, previous), slot), cancellationToken);
+        }
         else if (slot.Row is null && spec is null)                   // no target and no start spec: dropped and journalled
             Enqueue(new TurnOutcome(instance) { Slot = slot, Consumed = due, Journal = Json.Write(due.Select(i => "dropped " + i.Message.Id)), Status = null }, cancellationToken);
         else
@@ -1815,6 +1819,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 input.Slot.Driving = false;
                 input.Slot.RollbackTurn?.Invoke();
                 unit = _type.Park(input.Row, input.Actor, input.Taken, input.Spec, e.Message, input.Unwritten ? input.Pending : null);
+                MarkPark(unit, input.Row);
                 if (input.Unwritten) RetireVolatileJobs(unit);
                 Enqueue(Bound(unit, input.Slot), cancellationToken);
             }
@@ -2147,6 +2152,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     slot.RollbackTurn?.Invoke();
                     var park = Bound(slot.Unwritten ? _type.Park(slot.Row! with { State = "null" }, unit.Instance, unit.Consumed, unit.Spec, _refusal, slot.Pending)
                         : _type.Park(slot.CurrentRow, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, _refusal), slot);
+                    MarkPark(park, slot.CurrentRow);
                     if (slot.Unwritten) RetireVolatileJobs(park);
                     Promote(park);
                     ReleaseJobRestriction(unit); // the replacement park already owns its restriction
@@ -2157,6 +2163,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (outcome == Outcome.Refused && generation == _generation) Reset();   // nothing left to set apart
         }
         if (generation == _generation) _flushing = false;
+    }
+
+    private static TurnOutcome MarkPark(TurnOutcome unit, InstanceRow? previous)
+    {
+        unit.OpensPark = unit.Row is { Status: InstanceStatus.Faulted } && previous is null or { Status: InstanceStatus.Running };
+        return unit;
     }
 
     private async Task<Outcome> CommitAsync(List<TurnOutcome> units, List<Delivery> marks, List<Delivery> trial, long generation, CancellationToken cancellationToken, bool beat = false)
@@ -2175,7 +2187,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.InboxKey), .. Has(Flaw.VolatileJobTicket) ? [] : u.Cancelled.Where(id => !InMemoryOnly(id))],
                 Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.InboxKey).ToList(),
                 u.Sent.Where(m => !u.Volatile.Contains(m.InboxKey)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal, u.Unsubscribe,
-                u.Held.Where(i => i.Durable).Select(i => i.Message.InboxKey).ToList(), u.Delete)).ToList();
+                u.Held.Where(i => i.Durable).Select(i => i.Message.InboxKey).ToList(), u.Delete)
+            {
+                FoundationHeader = u.FoundationHeader,
+                OpensPark = u.OpensPark
+            }).ToList();
         List<InboxKey> seen = [.. marks.Select(i => i.Message.InboxKey)], tried = [.. trial.Select(i => i.Message.InboxKey)];
         // A store without owned sets gets only today's positional batch, one partition per batch (a worker of several
         // partitions cannot take on it). With owned sets, one partition held is that same batch, and several are one
