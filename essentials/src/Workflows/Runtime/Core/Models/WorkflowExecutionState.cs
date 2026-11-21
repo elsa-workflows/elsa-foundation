@@ -61,6 +61,23 @@ public sealed record WorkflowExecutionState(
     public RuntimeStimulusDeliveryOrigin? StimulusDeliveryOrigin { get; init; }
 
     /// <summary>
+    /// Checks the retained source's physical scope shape, independently of logical tenancy.
+    /// Use only after reading the actual retained execution; this does not prove initial admission or a live claim.
+    /// </summary>
+    public bool HasRetainedSourceScope(PersistenceScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        if (Partition?.Value != scope.Value || RunKind != WorkflowRunKind.PublishedRun || TestScope is not null ||
+            ParentWorkflowExecutionId is not null || Authority is null) return false;
+        if (StimulusDeliveryOrigin is { } saved)
+            return saved.Scope == scope && IngressOrigin is null && ModelWorkOrigin is null;
+        if (IngressOrigin is { } direct)
+            return direct.Scope == scope && ModelWorkOrigin is null && PinnedSource is not null;
+        return ModelWorkOrigin is { IngressOrigin: { } parent } work && parent.Scope == scope && work.Scope == scope &&
+            work.WorkerExecutionId == WorkflowExecutionId && WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(work.WorkerExecutable, PinnedExecutable);
+    }
+
+    /// <summary>
     /// Number of cross-workflow dispatch edges from the root execution. Root and legacy states default to zero.
     /// </summary>
     public int DispatchNestingDepth
