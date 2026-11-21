@@ -255,13 +255,16 @@ public sealed partial class InMemoryStore
         _foundationParks.Remove(address);
     }
 
+    internal static bool IsOutsideMessageId(string id) => !id.StartsWith('~') && !id.StartsWith("key/", StringComparison.Ordinal);
+
     /// <summary>Resolve an outside exact send and insert its delivery and deduplication marker in one operation.</summary>
     /// <returns>Null for an unavailable reference, false for a duplicate, true for a new delivery.</returns>
     internal bool? AddFoundationMessage(string tenant, string? reference, string id, string kind, string? payload = null,
-        long? dueAt = null, TimeSpan? keepFor = null)
+        long? dueAt = null, TimeSpan? keepFor = null, bool keyed = false)
     {
         Kinds.RequireApplicationSend(kind);
-        if (id.StartsWith('~')) throw new ArgumentException("The foundation reserves the issued ID namespace.", nameof(id));
+        if (!keyed && !IsOutsideMessageId(id))
+            throw new ArgumentException("The foundation reserves the issued ID namespace.", nameof(id));
         var window = FoundationIngressWindow(keepFor);
         lock (_gate)
         {
