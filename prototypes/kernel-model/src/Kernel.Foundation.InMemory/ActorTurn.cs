@@ -83,7 +83,7 @@ internal sealed partial class ActorAdapter
 
         public Contract.ActorRef Start(Contract.StartSpec spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)
         {
-            HeaderLimits.ValidateTypeData(spec.TypeData);
+            HeaderLimits.ValidateStart(spec.Type, spec.TypeData);
             var destination = placement == Contract.Placement.Spread
                 ? InstanceRef.Spread(FormattableString.Invariant($"{Header.Ref.Id}/{_turn.Revision}/{_turn.Ordinal}"), _input.Services.Partitions)
                 : _turn.Actor.Partition;

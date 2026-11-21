@@ -2017,7 +2017,11 @@ calls one new model hook.
     most 16 MiB less `M` less `F`. A larger value goes by reference ([write
     volume](write-volume.md#decisions-owner-1617-november-2026), decision 1a). Measured at K4: the encoded
     `ParkRecord` at `W_max` on each provider, an envelope at the reserve on each, and a message row at the cap in each
-    provider's stored encoding (D-3, S-6).
+    provider's stored encoding (D-3, S-6). At typed ingress the `StartSpec.Type` uses the same `N` bound.
+    For a typed start, replace the legacy 1 KiB definition allowance in this budget with a reserve for the provider's
+    maximum encoded 16 KiB of UTF-8 `TypeData`. K3 applies this envelope at admission and when composing a start delivery.
+    K4 qualifies the resulting message, event payload and start input budgets together (EM-3 and S-6), so a maximum-size
+    admitted event can still be delivered to a maximum-metadata event-start subscription.
 
   The lookup reads the disposition first, then the row. For a job the row is its ticket and, when the ticket is done
   or absent, the ticket's minted result row `{ticket id}/result`, found by a second point lookup by full key; a

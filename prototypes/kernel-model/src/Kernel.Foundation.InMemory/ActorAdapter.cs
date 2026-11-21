@@ -38,7 +38,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     {
         var delivery = input.Taken[input.From];
         var message = delivery.Message;
-        if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsTypeData(spec.Definition))
+        if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
         if (message.Kind == Durable.Kinds.JobDeadline)
             return TimeoutJob(input, message);
@@ -177,7 +177,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public Durable.TurnOutcome Park(Durable.InstanceRow? row, string address, IReadOnlyList<Durable.Delivery> taken,
         Durable.StartSpec? spec, string error)
     {
-        if (row is null && spec is not null && !HeaderLimits.FitsTypeData(spec.Definition))
+        if (row is null && spec is not null && !HeaderLimits.FitsStart(spec.Model, spec.Definition))
             return Durable.CreationProtocol.Refuse(address, null, taken, "StartHeaderTooLarge");
 
         var result = new Durable.TurnOutcome(address) { Expected = row?.Revision, Spec = spec, Consumed = [.. taken] };

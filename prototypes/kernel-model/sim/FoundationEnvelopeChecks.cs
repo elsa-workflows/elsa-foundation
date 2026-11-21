@@ -77,12 +77,20 @@ internal static class FoundationEnvelopeChecks
         var fullHeader = new string('é', maxTypeData / 2);
         var oversizedHeader = fullHeader + "x";
         var model = new TerminalProbe(maxState, growth, fullHeader);
+        var maxType = new string('é', 512);
+        var hugeType = new string('t', 16_800_000);
+        var hugeNamedActor = new TerminalProbe(maxState, growth, fullHeader, hugeType);
         var store = new InMemoryStore(1, () => now);
         var scope = new Contract.BoundScope("acme");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("terminal-reserve"), "terminal-reserve",
             (bound, kind) => bound == scope && kind == Contract.Kinds.Terminate);
         Contract.IActorReads reads = new ActorList(store, 16);
-        var worker = new Worker("terminal-reserve", 0, store, new ActorAdapter(store, model), new WorkerOptions { Monotonic = () => 0 });
+        var router = new ActorTypeRouter(new ActorAdapter(store, model), new Dictionary<string, IActorType>
+        {
+            [maxType] = new ActorAdapter(store, new TerminalProbe(maxState, growth, fullHeader, maxType)),
+            [hugeType] = new ActorAdapter(store, hugeNamedActor)
+        });
+        var worker = new Worker("terminal-reserve", 0, store, router, new WorkerOptions { Monotonic = () => 0 });
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         var fit = await Start("fits");
         var overflow = await Start("overflow");
@@ -98,6 +106,14 @@ internal static class FoundationEnvelopeChecks
         var oversized = admissible with { TypeData = oversizedHeader };
         var legacyStart = store.AdmitGeneratedFoundationStart(scope.Tenant, "legacy-oversized",
             new StartSpec(model.Type, new string('x', cap + 1), "must-not-run"), null, null);
+        var legacyNamedStart = store.AdmitGeneratedFoundationStart(scope.Tenant, "legacy-type",
+            new StartSpec(hugeType, typeData, "must-not-run"), null, null);
+        var badType = new Contract.Target.Start(new(hugeType, typeData, "must-not-run"));
+        var typeRefusal = await ingress.SendAsync(scope, badType, "retry-type", Contract.Kinds.Start);
+        var overType = new Contract.Target.Start(new(maxType + "x", typeData, "small"));
+        var overTypeRefusal = await ingress.SendAsync(scope, overType, "type-over", Contract.Kinds.Start);
+        var atType = new Contract.Target.Start(new(maxType, typeData, "small"));
+        var typeFit = await ingress.SendAsync(scope, atType, "retry-type", Contract.Kinds.Start);
         var rootRefusal = await ingress.SendAsync(scope, new Contract.Target.Start(oversized), "retry-root", Contract.Kinds.Start);
         var keyedRefusal = await ingress.SendAsync(scope, new Contract.Target.Key("retry-key", oversized), "retry-key", Contract.Kinds.Start);
         var rootFit = await ingress.SendAsync(scope, new Contract.Target.Start(admissible), "retry-root", Contract.Kinds.Start);
@@ -157,6 +173,15 @@ internal static class FoundationEnvelopeChecks
                     "a huge job key cannot enter the published checkpoint or the background driver");
         }
 
+        check(typeRefusal is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
+            overTypeRefusal is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
+            typeFit is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } named } &&
+            (await reads.GetAsync(scope, named)) is { Header: { Status: Contract.ActorStatus.Running, Type: var type }, Park: null } &&
+            type == maxType,
+            "oversized registered type names reserve no id and a 1,024-byte type can start on the same id");
+        check(await reads.GetAsync(scope, new(legacyNamedStart.Reference)) is null && !hugeNamedActor.LegacyStartEntered &&
+            store.Messages.Values.All(item => item.Message.Id != "legacy-type"),
+            "an inherited oversized type cannot execute or enter the Park checkpoint");
         check(rootRefusal is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
             rootFit is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } root } &&
             (await reads.GetAsync(scope, root))?.Header.TypeData == fullHeader,
@@ -210,10 +235,10 @@ internal static class FoundationEnvelopeChecks
         }
     }
 
-    private sealed class TerminalProbe(int atCap, int growth, string fullHeader) : Contract.IActorType
+    private sealed class TerminalProbe(int atCap, int growth, string fullHeader, string type = TerminalProbe.ModelType) : Contract.IActorType
     {
         public const string ModelType = "terminal-probe";
-        public string Type => ModelType;
+        public string Type => type;
         public bool LegalJobEntered { get; private set; }
         public bool LegacyStartEntered { get; private set; }
         public bool Withholds(Contract.ActorHeader header) => false;
@@ -237,7 +262,7 @@ internal static class FoundationEnvelopeChecks
                     case Contract.Kinds.Start when message.Payload == "must-not-run":
                         LegacyStartEntered = true;
                         throw new InvalidOperationException("An invalid creator reached a turn.");
-                    case Contract.Kinds.Start when turn.Header.TypeData == fullHeader:
+                    case Contract.Kinds.Start when turn.Header.TypeData == fullHeader || message.Payload == "small":
                         turn.State = "header-fit";
                         break;
                     case Contract.Kinds.Start when message.Payload is "header-update-over" or "header-child-over":
