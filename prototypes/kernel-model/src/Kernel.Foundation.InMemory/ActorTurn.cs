@@ -142,8 +142,7 @@ internal sealed partial class ActorAdapter
 
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
             for (var i = 0; i < outcome.Replied.Count; i++)
-                if (Durable.ReplyTo.Parse(outcome.Replied[i].To).BeforeCommit)
-                    outcome.Replied[i] = outcome.Replied[i] with { FoundationEarly = true };
+                outcome.Replied[i] = outcome.Replied[i] with { FromFoundation = true };
             foreach (var notice in outcome.Consumed.Where(entry => entry.Message.Kind == Contract.Kinds.ChildFinished))
             {
                 var message = notice.Message;
@@ -161,7 +160,7 @@ internal sealed partial class ActorAdapter
             if (ended) _entries.Add("end");
             if (Inbox is [{ Kind: Contract.Kinds.Migrate }]) _entries.Add("migrate");
             var journal = _entries.Count > 0 ? Durable.Json.Write(_entries) :
-                _row.History == Durable.History.State && State != _input.Row?.State ? "[]" : null;
+                _row.History == Durable.History.State && State != (_row.FoundationNullState ? null : _row.State) ? "[]" : null;
             outcome.FoundationHeader = _header ?? (_input.Row is null ? InitialHeader(Header.TypeData) : null);
             return _turn.Seal(outcome, row, State, journal);
         }

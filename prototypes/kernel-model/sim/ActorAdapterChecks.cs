@@ -15,9 +15,9 @@ internal static class ActorAdapterChecks
         var adapter = new ActorAdapter(store, actor);
         var router = new ActorTypeRouter(new WorkflowInstance([]), new Dictionary<string, IActorType> { [actor.Type] = adapter });
 
-        Contract.ActorRef Admit(string name, string scenario)
+        Contract.ActorRef Admit(string name, string scenario, History history = History.Minimal)
         {
-            var spec = new StartSpec(actor.Type, "seed", scenario, History: History.Minimal, Creation: new(1, 0, name));
+            var spec = new StartSpec(actor.Type, "seed", scenario, History: history, Creation: new(1, 0, name));
             var creator = new Message(name, InstanceRef.In(0, name), Kinds.Start, Start: spec, TargetCreation: 1);
             return new(store.AdmitFoundationStart("acme", creator)!);
         }
@@ -32,7 +32,7 @@ internal static class ActorAdapterChecks
         var recalled = Admit("typed-recalled", "recall");
         var rejected = Admit("typed-rejected", "fail");
         var parked = Admit("typed-parked", "recall");
-        var noState = Admit("typed-null", "unset");
+        var noState = Admit("typed-null", "unset", History.State);
         var holdingParent = Admit("typed-hold-term", "hold-parent");
         store.Refuses = row => row.State.Contains("must-rollback", StringComparison.Ordinal);
         var first = await Owner("typed-owner");
@@ -69,6 +69,15 @@ internal static class ActorAdapterChecks
             store.ReadFoundationActor("acme", holdingParent.Id).Actor!.Row.Children == parentCheckpoint.Children,
             "a held terminate stays pending and cannot cancel or discharge the live child");
 
+        check(store.AddFoundationMessage("acme", holdingParent.Id, "wake-held-term", "late-update") == true,
+            "fresh input can stimulate the held command");
+        await Pump(first);
+        check((await reader.GetAsync(scope, pendingChild))?.Header.Status == Contract.ActorStatus.Cancelled &&
+            store.ReadFoundationActor("acme", holdingParent.Id).Actor is { Header.TypeData: "seed", Row: var terminated } &&
+            Json.Read<ProbeState>(terminated.State).Count == 1 &&
+            Json.Read<ProbeState>(terminated.State).TerminateCalls == 2,
+            "the isolated terminate reaches the actor again, cascades on consumption and lets later input proceed");
+
         var outsideSameId = false;
         try { store.AddFoundationMessage("acme", root.Id, rootState.Handle!, "firing"); }
         catch (ArgumentException exception) when (exception.ParamName == "id") { outsideSameId = true; }
@@ -77,6 +86,15 @@ internal static class ActorAdapterChecks
         var noStateView = await reader.GetAsync(scope, noState);
         check(noStateView is { Header: { TypeData: "seed", Labels.Count: 0 } },
             "the initial typed header commits unchanged when the actor omits SetHeader");
+        var nullAddress = store.ReadFoundationActor("acme", noState.Id).Actor!.Row.Id;
+        int Changes() => store.Journal.Values.Count(entry => entry.Instance == nullAddress && entry.Entries == "[]");
+        foreach (var (kind, changes) in new[] { ("null-unchanged", 0), ("null-text", 1), ("null-unset", 2) })
+        {
+            store.AddFoundationMessage("acme", noState.Id, kind, kind);
+            await Pump(first);
+            check(Changes() == changes, $"State history records the logical nullable transition: {kind}");
+        }
+
         var parkedBefore = store.ReadFoundationActor("acme", parked.Id).Actor!.Row.State;
         store.AddFoundationMessage("acme", parked.Id, "reject-update", "reject-update");
         await Pump(first);
@@ -183,17 +201,41 @@ internal static class ActorAdapterChecks
             Read("acme", root).Observations.TakeLast(2).SequenceEqual(["held-ambient:held-object:1", "held-ambient:none:2"]),
             "a held event is handed back in order on ordinary input without reusing its first-turn Ambient");
 
-        await bound.SetStartAsync(scope, "spawn", "starts", new Contract.StartSpec(probe.Type, "from-subscription", "configured-input"));
-        var spawned = bound.RequestAsync(scope, new("spawn"), "birth-event", "trigger-payload", null,
-            new("initial-ambient", now + 10_000)).AsTask();
+        foreach (var (birthId, mode, early) in new[]
+        {
+            ("birth-event", "reply-emit", false), ("birth-end", "reply-end", false),
+            ("birth-event-early", "reply-emit", true), ("birth-end-early", "reply-end", true)
+        })
+        {
+            await bound.SetStartAsync(scope, "spawn", "starts", new Contract.StartSpec(probe.Type, birthId, "configured-input"));
+            var spawned = bound.RequestAsync(scope, new("spawn"), birthId, mode, null,
+                new("initial-ambient", now + 10_000, ReleaseBeforeCommit: early)).AsTask();
+            var partition = InstanceRef.Spread(birthId + ":starts", 2);
+            await Pump(partition == 0 ? local : elsewhere);
+            transport.Deliver();
+            var born = store.ReadFoundationActors("acme").Actors.Single(item => item.Header.TypeData == birthId);
+            var bornState = Json.Read<ProbeState>(born.Row.State);
+            var expectedAmbient = partition == 0 ? "initial-ambient" : "none";
+            check(await spawned.WaitAsync(TimeSpan.FromSeconds(2)) is { Channel: "spawned", Item: var payload } && payload as string == mode &&
+                bornState.Observations.SequenceEqual([$"start:configured-input:{expectedAmbient}", $"event:{mode}:none"]),
+                $"a silent start keeps its request and the later event's explicit reply wins: {mode}, early {early}");
+        }
+
+        transport.Throwing = true;
+        using var lostCaller = new CancellationTokenSource();
+        var lostReply = bound.RequestAsync(scope, new("signal"), "disconnected", "reply-first", null,
+            new(null, now + 10_000, ReleaseBeforeCommit: true), lostCaller.Token).AsTask();
         await Pump(local);
-        await Pump(elsewhere);
-        transport.Deliver();
-        var born = store.ReadFoundationActors("acme").Actors.Single(item => item.Header.TypeData == "from-subscription");
-        var bornState = Json.Read<ProbeState>(born.Row.State);
-        check(await spawned.WaitAsync(TimeSpan.FromSeconds(2)) is { Channel: "spawned", Item: "trigger-payload" } &&
-            bornState.Observations is ["start:configured-input:initial-ambient", "event:trigger-payload:none"],
-            "a scoped event start delivers the configured start input followed by the distinct event and replies once");
+        lostCaller.Cancel();
+        try { await lostReply; }
+        catch (OperationCanceledException) when (lostCaller.IsCancellationRequested) { }
+        transport.Throwing = false;
+        store.AddFoundationMessage("acme", root.Id, "after-live-failure", "late-update");
+        await Pump(local);
+        var afterLoss = Read("acme", root);
+        var attemptsAfterLoss = afterLoss.Observations.Count(o => o.StartsWith("disconnected:", StringComparison.Ordinal));
+        check(transport.Failures == 1 && attemptsAfterLoss == 1 && afterLoss.Count == 3,
+            $"throwing early transport cannot strand the turn, and later input runs after the single commit ({transport.Failures} failed sends, {attemptsAfterLoss} committed turns, count {afterLoss.Count})");
 
         store.Refuses = row => row.State.Contains("refused-output", StringComparison.Ordinal);
         var refused = bound.RequestAsync(scope, new("signal"), "refused-output", "refused", null,
@@ -216,9 +258,16 @@ internal static class ActorAdapterChecks
     private sealed class LocalReplies(Requests requests) : IReplyTransport
     {
         private readonly List<Reply> _sent = [];
+        public bool Throwing { get; set; }
+        public int Failures { get; private set; }
 
         public void Send(string node, Reply reply)
         {
+            if (Throwing && reply.Channel == "first-reply")
+            {
+                Failures++;
+                throw new IOException("caller disappeared");
+            }
             if (node == "receiving-node") _sent.Add(reply);
         }
 
@@ -251,6 +300,7 @@ internal static class ActorAdapterChecks
         public string? Published { get; set; }
         public List<string> Observations { get; set; } = [];
         public bool HeldOnce { get; set; }
+        public int TerminateCalls { get; set; }
         public long? FiredAt { get; set; }
     }
 
@@ -262,6 +312,12 @@ internal static class ActorAdapterChecks
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            if (turn.Inbox is [{ Kind: "null-unchanged" or "null-text" or "null-unset" } change])
+            {
+                if (change.Kind == "null-text") turn.State = "null";
+                else if (change.Kind == "null-unset") turn.State = null;
+                return default;
+            }
             var state = turn.State is { } saved ? Json.Read<ProbeState>(saved) : new();
             if (turn.Inbox is [{ Kind: Contract.Kinds.Start, Payload: "unset" }]) return default;
             foreach (var message in turn.Inbox)
@@ -271,15 +327,18 @@ internal static class ActorAdapterChecks
                     case Contract.Kinds.Start when message.Payload == "configured-input":
                         state.Observations.Add($"start:{message.Payload}:{turn.Ambient ?? "none"}");
                         break;
-                    case Contract.Kinds.Event when message.Event is { Key: "spawn", Id: "birth-event", Wait: "starts" }:
+                    case Contract.Kinds.Event when message.Event is { Key: "spawn", Wait: "starts" }:
                         state.Observations.Add($"event:{message.Payload}:{turn.Ambient ?? "none"}");
                         turn.Reply(message, "spawned", message.Payload);
+                        if (message.Payload == "reply-end") turn.End(Contract.ActorStatus.Finished);
+                        else turn.Emit("too-late", "second");
                         break;
                     case Contract.Kinds.Start when message.Payload == "hold-parent":
                         state.Child = turn.Start(new(Type, "child", "child")).Id;
                         break;
-                    case Contract.Kinds.Terminate when message.Payload == "hold":
-                        turn.Hold(message);
+                    case Contract.Kinds.Terminate:
+                        if (message.Payload == "hold" && state.TerminateCalls++ == 0) turn.Hold(message);
+                        else turn.End(Contract.ActorStatus.Cancelled);
                         break;
                     case Contract.Kinds.Start when message.Payload == "wait":
                         turn.Subscribe("signal", "active");

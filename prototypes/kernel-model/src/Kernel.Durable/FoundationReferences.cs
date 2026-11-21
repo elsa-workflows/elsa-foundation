@@ -31,9 +31,6 @@ public sealed partial class InMemoryStore
         return Convert.ToHexString(HMACSHA256.HashData(_referenceKey.Value, encoded));
     }
 
-    internal string MessageHandle(string id) =>
-        "~" + Convert.ToHexString(HMACSHA256.HashData(_referenceKey.Value, DurableKeyJson.CodeUnits(id)));
-
     internal bool HasFoundationTimer(InboxKey key, string actor, long creation)
     {
         lock (_gate)

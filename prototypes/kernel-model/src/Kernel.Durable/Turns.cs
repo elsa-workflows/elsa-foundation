@@ -103,6 +103,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     internal bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
     internal bool Again;              // its polled row already had a seen or trial marker (DurableTurn.Redelivered)
+    internal long HeldThrough;        // latest stimulus used to revisit a held command
     internal bool Held;               // a turn handed it back: it waits for something new to come with
     internal Message? Original;       // a job's ticket as it was before its result replaced it (decision 4: what is written)
     internal int Attempts;
@@ -230,7 +231,7 @@ public sealed class TurnOutcome(string instance)
 public sealed record RequestReply(InboxKey Message, string To, string Channel, object? Item)
 {
     internal bool Rpc { get; init; }
-    internal bool FoundationEarly { get; init; }
+    internal bool FromFoundation { get; init; }
     internal Message? RefusedInput { get; init; }
 }
 

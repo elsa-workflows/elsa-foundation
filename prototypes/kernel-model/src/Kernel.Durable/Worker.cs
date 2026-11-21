@@ -1595,8 +1595,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             due.Add(item);
         }
+        if (due is [var held] && held.Held && Kinds.IsControl(held.Message.Kind) && HeldCommandStimulus(slot, held, now) > 0)
+            return due;
         return due.TrueForAll(i => i.Held) ? [] : due;    // held messages wait for something new to come with
     }
+
+    private long HeldCommandStimulus(Slot slot, Delivery held, long now) => slot.Inbox
+        .Where(item => !item.Held && !item.Taken && !item.Ticket && !(item.Message.Due > now) &&
+            item.ObservedOrder > held.HeldThrough && !Awaits(item) && !item.DiscardedAt(slot) && CreationError(slot, item.Message) is null)
+        .Select(item => item.ObservedOrder).DefaultIfEmpty().Max();
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
@@ -1765,6 +1772,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Enqueue(Bound(_type.Write(slot.Row!, slot.State, slot.Pending), slot), cancellationToken);
             return;
         }
+        if (due is [var commandStimulus] && Kinds.IsControl(commandStimulus.Message.Kind))
+            commandStimulus.HeldThrough = commandStimulus.Held
+                ? HeldCommandStimulus(slot, commandStimulus, now) : commandStimulus.ObservedOrder;
         slot.Inbox.RemoveAll(due.Contains);
         foreach (var item in due) (item.Taken, item.Held) = (true, false);
         (slot.Busy, slot.Used) = (true, ++_used);
@@ -2505,9 +2515,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         for (var i = 0; i < unit.Replied.Count; i++)
         {
             var reply = unit.Replied[i];
-            if (reply.FoundationEarly != early) continue;
-            try { Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item, refusedInput: reply.RefusedInput); }
-            catch (Exception) when (reply.Rpc) { /* A lost RPC answer is recovered by replaying the logical operation. */ }
+            if ((reply.FromFoundation && ReplyTo.Parse(reply.To).BeforeCommit) != early) continue;
+            Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item, refusedInput: reply.RefusedInput);
         }
     }
 
@@ -2546,6 +2555,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private void Release(TurnOutcome unit, ReplyRelease release, bool early = false)
     {
         if (unit.Slot is not { } slot) return;
+        // An explicit winner also supersedes a route attached by an earlier turn of this actor.
+        foreach (var reply in unit.Replied)
+            if (reply.FromFoundation) slot.Replies.Remove(reply.To);
         foreach (var item in unit.Consumed)
             if (item.Message.ReplyTo is { } to && !Expired(to) && !unit.Replied.Any(r => r.Message == item.Message.InboxKey)) slot.Replies.Add(to);
         var callers = slot.Replies.Where(to => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(to).BeforeCommit == early).ToList();
@@ -2564,7 +2576,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var (node, request, _, _) = ReplyTo.Parse(to);
         if (_options.Transport is not { } transport) return;
         var reply = new Reply(request, key, channel, item, status, error);
-        transport.Send(node, reply);
+        try { transport.Send(node, reply); }
+        catch (Exception) { return; } // Losing live output cannot abandon a prepared or landed commit.
         if (release is { } phase) _options.OnEmittedReply?.Invoke(node, reply, revision, phase);
         if (refusedInput is not null) _options.OnCreationRefused?.Invoke(node, reply, refusedInput);
     }
