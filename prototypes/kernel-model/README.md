@@ -77,6 +77,8 @@ $SIM --contract-actors --seed 1 --flaw KeepConsumedMessages
 $SIM --contract-events --seeds 100                   # sequences, waiters, correlation actors and event starts
 $SIM --contract-events --seed 1 --flaw CorrelationForgets
 $SIM --contract-events --seed 1 --flaw KeepConsumedMessages
+$SIM --contract-http --seeds 100                      # immediate, early, timer, job, and resumed requests
+$SIM --contract-http --seed 1 --flaw EmitBeforeCommit
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
 $SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
