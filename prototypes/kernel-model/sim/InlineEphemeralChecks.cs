@@ -45,7 +45,7 @@ internal static class InlineEphemeralChecks
             Contract.IIngress ingress = new InMemoryIngress(store, requests, "inline-owner", inlineOwner: worker);
             Contract.IActorReads reads = new ActorList(store, 5);
 
-            var recipe = shape is "refused" or "lost-before" or "lost-after" ? "child" : shape == "handover" ? "promote" : shape;
+            var recipe = shape is "lost-before" or "lost-after" ? "child" : shape == "handover" ? "promote" : shape;
             var target = new Contract.Target.Start(new Contract.StartSpec(actor.Type, recipe, null, Ephemeral: true));
             var deadline = _now + (shape == "promote" ? 60 : 400);
             var reply = ingress.RequestAsync(_scope, target, shape, Contract.Kinds.Start, null, null,
@@ -111,10 +111,15 @@ internal static class InlineEphemeralChecks
             }
             else if (shape == "refused")
             {
+                var view = await reads.GetAsync(_scope, reference);
+                var history = await reads.TailAsync(_scope, reference);
                 check(answer is { Status: Contract.ActorStatus.Faulted, Item: null } &&
-                    await reads.GetAsync(_scope, reference) is { Header.Status: Contract.ActorStatus.Faulted } &&
-                    store.Messages.Count == 0 && store.Instances.Count == 1,
-                    "refusal publishes neither the proposed child nor the staged response");
+                    view is { Header: { Status: Contract.ActorStatus.Faulted, TypeData: "refused", Labels.Count: 0 } } &&
+                    history.Items.All(item => item.Entry != Json.Write("discard this entry")) &&
+                    store.Instances.Count == 1 && store.Instances.Values.Single().State == "null" &&
+                    store.Messages.Count == 0 && store.Subscriptions.Count == 0 &&
+                    store.FoundationEvents.Count == 0 && actor.JobsEntered == 0,
+                    "refusal rolls back the staged state, header, journal, response, sends, timer, job, subscription, publish and child");
             }
             else if (loss)
             {
@@ -157,14 +162,18 @@ internal static class InlineEphemeralChecks
     {
         public string Type => "inline-probe";
         public Contract.ActorRef? Reference { get; private set; }
+        public int JobsEntered { get; private set; }
         public bool Withholds(Contract.ActorHeader header) => false;
         public bool ProtectsDeletion(Contract.ActorHeader header, string? state, long now) => false;
         public long TerminalGrowth(Contract.ActorHeader header, string? state) => 0;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string? state) => new([], [], []);
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
-            => job.Key == "timed"
+        {
+            JobsEntered++;
+            return job.Key == "timed"
                 ? new(new TaskCompletionSource<object?>().Task.WaitAsync(cancellationToken))
                 : ValueTask.FromResult<object?>(job.Actor == Reference ? "job" : "wrong actor");
+        }
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
@@ -187,22 +196,39 @@ internal static class InlineEphemeralChecks
                         case "timed": turn.StartJob("timed", timeout: TimeSpan.FromMilliseconds(20)); break;
                         case "child": turn.Emit("response", turn.Start(new(Type, "finish", null), detached: true)); break;
                         case "hold": turn.Hold(message); break;
+                        case "refused":
+                            turn.SetHeader("discard this header", new Dictionary<string, string> { ["discard"] = "this label" });
+                            turn.State = "discard this state";
+                            turn.Record("discard this entry");
+                            turn.Send(turn.Header.Ref, "immediate");
+                            turn.Send(turn.Header.Ref, "timer", dueAt: turn.Now + 20);
+                            turn.StartJob("discard");
+                            turn.Subscribe("signal", "discard", keep: true);
+                            turn.Publish("signal", "discard", TimeSpan.FromSeconds(1));
+                            turn.Emit("response", turn.Start(new(Type, "finish", null), detached: true));
+                            break;
                     }
                     continue;
                 }
 
                 if (message.Kind == "resume") continue;
-                var observation = message.Kind == Contract.Kinds.Start && !recovered
-                    ? turn.Ambient as string == "caller" ? "finish" : "wrong ambient"
-                    : recovered ? "hold" : message.Kind == Contract.Kinds.JobFinished
-                        ? Json.Read<Contract.JobFinished>(message.Payload!) is { Result: { } result } ? Json.Read<string>(result) : JobError(message)
-                        : message.Kind;
+                var observation = message.Kind switch
+                {
+                    Contract.Kinds.Start when recovered => "hold",
+                    Contract.Kinds.Start => turn.Ambient as string == "caller" ? "finish" : "wrong ambient",
+                    Contract.Kinds.JobFinished => JobAnswer(message),
+                    _ => message.Kind
+                };
                 turn.Emit("response", observation);
                 turn.End(Contract.ActorStatus.Finished);
             }
             return default;
 
-            static string? JobError(Contract.Message message) => Json.Read<Contract.JobFinished>(message.Payload!).Error;
+            static string? JobAnswer(Contract.Message message)
+            {
+                var job = Json.Read<Contract.JobFinished>(message.Payload!);
+                return job.Result is { } result ? Json.Read<string>(result) : job.Error;
+            }
         }
     }
 
