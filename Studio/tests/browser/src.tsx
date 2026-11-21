@@ -1,7 +1,8 @@
 import { ActivityIconsFixture } from "./activityIconsFixture";
 import { ActivityInputEvidenceFixture } from "./activityInputEvidenceFixture";
-import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ActivityPropertiesPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
 import { ActivityDefinitionsPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionsPage";
@@ -11,17 +12,15 @@ import {
   activityGraphImplementationEditorContribution,
   activityGraphSchema2ImplementationEditorContribution
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
-import {
-  ActivityGraphImplementationEditor,
-  ActivityGraphPublicInterfaceEditor
-} from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
 import { ActivityDefinitionCreateDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionCreateDialog";
 import { ActivityDefinitionDraftCodeView } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftCodeView";
 import { ActivityDefinitionDiagnosticsPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel";
 import { ActivityDefinitionTestRunDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog";
+import { ActivityDefinitionAuthoringTabsHostContext } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionAuthoringTabsHost";
 import { WorkflowLazyBoundary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
 import { WorkflowRuntimePanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
-import { WorkflowEditorToolbar } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar";
+import { WorkflowCanvasToolsHostContext, WorkflowEditorToolbar, WorkflowEditorToolbarFrame } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar";
+import { StudioBreadcrumbs } from "@elsa-workflows/studio-ui";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { Download, ListTree, Package, PackageOpen, Play, Sparkles, Upload } from "lucide-react";
 import { PanelTabList } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PanelTabList";
@@ -29,6 +28,8 @@ import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/
 import { useWorkflowDefinitionBrowseSession } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
 import { setNotifications } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/notifications";
+import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
+import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
 import { createLocalNotificationStorage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/notificationStorage";
 import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
 import { NotificationCenter } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/NotificationCenter";
@@ -54,7 +55,7 @@ import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefi
 import { runExecutable } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/runtime";
 import { flowchartStructureKind } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/flowchartStartNode";
 import { getDraft, updateDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/workflowDesign";
-import { createActivityNode, getActivityDisplay, type ChildSlot } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
+import { createActivityNode, getActivityDisplay, sequenceStructureKind, type ChildSlot } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import { decorateReusableCatalog, projectRecommendedPalette } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowEditorData";
 import { ActivityPalettePanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPalettePanel";
 import { InspectorPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel";
@@ -87,6 +88,8 @@ import "../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/sr
 import "./fixture.css";
 
 const searchParams = new URLSearchParams(window.location.search);
+const ActivityGraphImplementationEditor = lazy(() => import("../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor").then(module => ({ default: module.ActivityGraphImplementationEditor })));
+const ActivityGraphPublicInterfaceEditor = lazy(() => import("../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor").then(module => ({ default: module.ActivityGraphPublicInterfaceEditor })));
 const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
 const scalarInputsFixture = searchParams.get("mode") === "scalar-inputs";
@@ -202,6 +205,12 @@ function toolbarTestRun(state: string): WorkflowTestRunView {
 }
 
 function ActivityDefinitionRoutesFixture() {
+  setDialogs(dialogs);
+  const [notifications] = useState(() => {
+    const controller = createNotificationController();
+    setNotifications(controller.api);
+    return controller;
+  });
   const [path, setPath] = useState(() => `${window.location.pathname}${window.location.search}`);
   useEffect(() => {
     const sync = () => setPath(`${window.location.pathname}${window.location.search}`);
@@ -212,14 +221,22 @@ function ActivityDefinitionRoutesFixture() {
     window.history.pushState({}, "", nextPath);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
-  return path.startsWith("/workflows/activity-definitions/upgrades")
+  const route = path.startsWith("/workflows/activity-definitions/upgrades")
     ? <ActivityUpgradeWorkbenchPage context={endpointContext} navigateToStudioPath={navigate} />
     : <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={endpointContext} activityEditors={() => [activityGraphImplementationEditorContribution]} runtime={{ identity: { tenantId: "browser-tenant", subject: "browser-author" }, activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } } }} navigateToStudioPath={navigate} /></QueryClientProvider>;
+  return <>
+    {route}
+    <ToastHost controller={notifications} navigate={navigate} />
+    <DialogHost />
+  </>;
 }
 
 function ActivityDefinitionGraphAuthoringFixture() {
   const [draft, setDraft] = useState<ActivityDefinitionDraftView>(browserGraphAuthoringDraft());
   const [activeView, setActiveView] = useState<"designer" | "public-interface" | "code">("designer");
+  const [authoringTabsHost, setAuthoringTabsHost] = useState<HTMLDivElement | null>(null);
+  const [authoringViewHost, setAuthoringViewHost] = useState<HTMLDivElement | null>(null);
+  const [canvasToolsHost, setCanvasToolsHost] = useState<HTMLElement | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [testRunOpen, setTestRunOpen] = useState(false);
   const [createdMessage, setCreatedMessage] = useState("");
@@ -259,63 +276,106 @@ function ActivityDefinitionGraphAuthoringFixture() {
       browserGraphDiagnostic("activity.graph.provider-note", "Info", "/provider", "elsa.activity-graph")
     ]
   } satisfies NonNullable<ActivityDefinitionDraftView["validation"]>;
+  const authoringTabsHostContext = useMemo(() => ({
+    activeView,
+    designerPanelId: "browser-graph-designer-panel",
+    designerTabId: "browser-graph-designer-tab",
+    setTablistHost: setAuthoringTabsHost,
+    setCenterViewHost: setAuthoringViewHost
+  }), [activeView]);
+  const authoringTabs = authoringTabsHost ? createPortal(
+    <nav className="ad-authoring-view-tabs" role="tablist" aria-label="Activity Definition authoring views">
+      {([
+        ["designer", "Designer", "browser-graph-designer-panel"],
+        ["public-interface", "Public Interface", "browser-graph-public-interface-panel"],
+        ["code", "Code", "browser-graph-code-panel"]
+      ] as const).map(([id, label, panelId]) => (
+        <button
+          key={id}
+          id={id === "designer" ? "browser-graph-designer-tab" : `browser-graph-${id}-tab`}
+          type="button"
+          role="tab"
+          aria-controls={panelId}
+          aria-selected={activeView === id}
+          onClick={() => setActiveView(id)}
+        >
+          {label}
+        </button>
+      ))}
+    </nav>,
+    authoringTabsHost
+  ) : null;
+  const authoringViewPanels = authoringViewHost ? createPortal(<>
+    <section
+      id="browser-graph-public-interface-panel"
+      role="tabpanel"
+      aria-label="Public Interface"
+      aria-labelledby="browser-graph-public-interface-tab"
+      hidden={activeView !== "public-interface"}
+    >
+      <Suspense fallback={<p role="status">Loading public interface…</p>}><ActivityGraphPublicInterfaceEditor {...implementationProps} /></Suspense>
+    </section>
+    <section
+      id="browser-graph-code-panel"
+      role="tabpanel"
+      aria-label="Code"
+      aria-labelledby="browser-graph-code-tab"
+      hidden={activeView !== "code"}
+    >
+      <ActivityDefinitionDraftCodeView
+        draft={draft}
+        readOnly={false}
+        canUndo={false}
+        canRedo={false}
+        onApply={setDraft}
+        onUndo={() => {}}
+        onRedo={() => {}}
+        onBufferStateChange={() => {}}
+      />
+    </section>
+  </>, authoringViewHost) : null;
 
   return (
     <QueryClientProvider client={queryClient}>
-      <main className="ad-page ad-draft-editor" aria-label="Activity Definition graph authoring fixture">
-        <header className="ad-workbench-header">
-          <div>
-            <span className="ad-kicker">Activity Definition authoring</span>
-            <h1>Browser graph activity</h1>
-            <p>Activity-specific graph editing without workflow lifecycle controls.</p>
-          </div>
-          <div className="ad-header-actions">
-            <button type="button" onClick={() => setCreateOpen(true)}>Create Activity Definition</button>
-            <button type="button" onClick={() => setTestRunOpen(true)}>Test Run</button>
-            <button
-              type="button"
-              onClick={() => setDraft(current => ({
-                ...current,
-                provider: {
-                  ...current.provider,
-                  schemaVersion: current.provider.schemaVersion === "2" ? "1" : "2"
-                }
-              }))}
-            >
-              {draft.provider.schemaVersion === "2" ? "Preview legacy schema" : "Return to schema 2"}
-            </button>
-          </div>
-        </header>
-        {createdMessage ? <p role="status">{createdMessage}</p> : null}
-        <nav className="ad-authoring-view-tabs" role="tablist" aria-label="Activity Definition authoring views">
-          {([
-            ["designer", "Designer"],
-            ["public-interface", "Public Interface"],
-            ["code", "Code"]
-          ] as const).map(([id, label]) => (
-            <button key={id} type="button" role="tab" aria-selected={activeView === id} onClick={() => setActiveView(id)}>
-              {label}
-            </button>
-          ))}
-        </nav>
-        <section role="tabpanel" aria-label="Designer" hidden={activeView !== "designer"}>
-          <ActivityGraphImplementationEditor {...implementationProps} />
-        </section>
-        <section role="tabpanel" aria-label="Public Interface" hidden={activeView !== "public-interface"}>
-          <ActivityGraphPublicInterfaceEditor {...implementationProps} />
-        </section>
-        <section role="tabpanel" aria-label="Code" hidden={activeView !== "code"}>
-          <ActivityDefinitionDraftCodeView
-            draft={draft}
-            readOnly={false}
-            canUndo={false}
-            canRedo={false}
-            onApply={setDraft}
-            onUndo={() => {}}
-            onRedo={() => {}}
-            onBufferStateChange={() => {}}
+      <main className="ad-page ad-draft-editor is-graph-designer" aria-label="Activity Definition graph authoring fixture">
+        <div className="ad-draft-editor-toolbar">
+          <WorkflowEditorToolbarFrame
+            className="ad-workbench-header"
+            identity={<StudioBreadcrumbs
+              items={[{ href: "/workflows/activity-definitions", label: "Activity Definitions" }]}
+              current={<span className="wf-editor-title"><strong role="heading" aria-level={1}>Browser graph activity</strong><span className="wf-chip">Draft</span></span>}
+            />}
+            metadata={<span>Unsaved changes</span>}
+            actions={<div className="ad-header-actions ad-authoring-toolbar-actions">
+              <span ref={setCanvasToolsHost} className="wf-canvas-command-host" />
+              <button type="button" onClick={() => setCreateOpen(true)}>Create Activity Definition</button>
+              <button type="button" onClick={() => setTestRunOpen(true)}>Test Run</button>
+              <button type="button">Save now</button>
+              <details className="ad-authoring-history"><summary>History</summary></details>
+              <details className="ad-authoring-advanced"><summary>Advanced</summary></details>
+              <button
+                type="button"
+                onClick={() => setDraft(current => ({
+                  ...current,
+                  provider: {
+                    ...current.provider,
+                    schemaVersion: current.provider.schemaVersion === "2" ? "1" : "2"
+                  }
+                }))}
+              >
+                {draft.provider.schemaVersion === "2" ? "Preview legacy schema" : "Return to schema 2"}
+              </button>
+            </div>}
           />
-        </section>
+        </div>
+        {createdMessage ? <p role="status">{createdMessage}</p> : null}
+        <WorkflowCanvasToolsHostContext.Provider value={canvasToolsHost}>
+          <ActivityDefinitionAuthoringTabsHostContext.Provider value={authoringTabsHostContext}>
+            <Suspense fallback={<p role="status">Loading graph designer…</p>}><ActivityGraphImplementationEditor {...implementationProps} /></Suspense>
+          </ActivityDefinitionAuthoringTabsHostContext.Provider>
+        </WorkflowCanvasToolsHostContext.Provider>
+        {authoringTabs}
+        {authoringViewPanels}
         <ActivityDefinitionDiagnosticsPanel
           validation={validation}
           canReturn={false}
@@ -356,6 +416,10 @@ function ActivityDefinitionGraphAuthoringFixture() {
 }
 
 function browserGraphAuthoringDraft(): ActivityDefinitionDraftView {
+  const withInputBinding = searchParams.get("bindings") === "true";
+  const withEmptyInputBinding = searchParams.get("bindings") === "empty";
+  const isSequence = searchParams.get("graph") === "sequence";
+  const hasInputBindingInput = withInputBinding || withEmptyInputBinding;
   return {
     draftId: "activity-graph-authoring-draft",
     definitionId: "activity-graph-authoring-definition",
@@ -365,7 +429,17 @@ function browserGraphAuthoringDraft(): ActivityDefinitionDraftView {
     status: "active",
     contract: {
       contractSchemaVersion: "1",
-      inputs: [],
+      inputs: hasInputBindingInput ? [{
+        referenceKey: "customer-id",
+        name: "CustomerId",
+        displayName: "Customer ID",
+        type: { alias: "String", collectionKind: "Single" }
+      }, {
+        referenceKey: "order-id",
+        name: "OrderId",
+        displayName: "Order ID",
+        type: { alias: "String", collectionKind: "Single" }
+      }] : [],
       outputs: [],
       outcomes: [
         { referenceKey: "accepted", name: "Accepted", isEmitted: true },
@@ -379,14 +453,36 @@ function browserGraphAuthoringDraft(): ActivityDefinitionDraftView {
       payload: {
         rootActivity: {
           nodeId: "root",
-          activityVersionId: "flowchart-v1",
+          activityVersionId: isSequence ? "sequence-v1" : "flowchart-v1",
           inputs: [],
           outputs: [],
           structure: {
-            // `graph=flowchart` opts into the canonical Flowchart kind, whose scope supports connections.
-            kind: searchParams.get("graph") === "flowchart" ? flowchartStructureKind : "Flowchart",
+            kind: isSequence ? sequenceStructureKind : flowchartStructureKind,
             schemaVersion: "1",
-            payload: { activities: [], connections: [] }
+            payload: {
+              activities: hasInputBindingInput ? [{
+                nodeId: "write-line-1",
+                activityVersionId: "write-line-v1",
+                inputs: [],
+                outputs: [],
+                ...(withInputBinding ? { message: {
+                  typeName: "System.String",
+                  expression: {
+                    type: "JavaScript",
+                    value: {
+                      language: "JavaScript",
+                      source: "args.customer",
+                      resultType: { alias: "String", collectionKind: "Single" },
+                      parameters: { customer: { kind: "WorkflowRequest", memberKey: "customer-id", path: null } },
+                      options: {},
+                      capabilityProfile: "binding-pure-v1"
+                    }
+                  }
+                } } : {}),
+                structure: null
+              }] : [],
+              connections: []
+            }
           }
         },
         variables: [],
@@ -1070,7 +1166,13 @@ function FolderRestructureFixture() {
       ];
       return true;
     },
-    prompt: async () => null,
+    prompt: async options => {
+      (window as Window & { folderPrompts?: unknown[] }).folderPrompts = [
+        ...((window as Window & { folderPrompts?: unknown[] }).folderPrompts ?? []),
+        options
+      ];
+      return null;
+    },
     alert: async () => undefined
   });
 
@@ -1641,8 +1743,8 @@ function publicationReview(): PublicationReviewState {
     // Spec 261 FR-515: `warnings=1` lists the replay-safe warnings a compensation scope with Write Line steps gets.
     validationWarnings: searchParams.get("warnings") === "1"
       ? [
-        "\"Charge card\" is marked safe to repeat, so its call may not be committed before it runs; if the process stops, recovery may not know it happened. Mark it as an external effect unless it has none.",
-        "The compensation of \"Charge card\" is marked safe to repeat, so an undo may run again after a restart without a committed claim. Mark it as an external effect unless it is idempotent and has no effect of its own."
+        "\"Charge card\" is marked safe to repeat, so if the process stops before Elsa records its attempt, recovery may not know whether it ran. If this is demo-only logging, no action is needed. If it performs a real external operation, replace it with an External activity and make retries safe with an idempotency key.",
+        "The compensation of \"Charge card\" is marked safe to repeat, so if the process stops before Elsa records its attempt, recovery may run the undo again. If this is demo-only logging, no action is needed. If it performs a real external operation, replace it with an External activity and make the undo safe to retry with an idempotency key."
       ]
       : review.validationWarnings,
     exactVersionSupported: searchParams.get("exact") !== "unsupported",
@@ -1928,7 +2030,7 @@ async function renderRequestedFixture() {
     return;
   }
 
-  if (activityDefinitionsFixture) {
+  if (activityDefinitionsFixture || activityGraphAuthoringFixture) {
     await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css");
   }
 

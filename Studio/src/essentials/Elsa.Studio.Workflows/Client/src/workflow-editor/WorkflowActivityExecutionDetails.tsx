@@ -289,8 +289,11 @@ export function WorkflowActivityExecutionDetails({
             <ActivityMetadataValue scope={copyScope} label="Duration" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
             <ActivityMetadataValue scope={copyScope} label="Incidents" value={incidentCount == null ? "Unavailable" : String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           </dl> : null}
-          {currentInspectionState.status === "ready" && (!compact || recordedIncidents === null || recordedIncidents.length > 0) ? <section className="wf-instance-section" aria-label="Activity incidents">
-            <h4>Incidents</h4>
+          {currentInspectionState.status === "ready" && (recordedIncidents === null || recordedIncidents.length > 0) ? <section className="wf-instance-section wf-activity-incidents" aria-label="Activity incidents">
+            <header className="wf-runtime-evidence-heading">
+              <h4>Incidents</h4>
+              {recordedIncidents ? <span className="wf-runtime-evidence-count" aria-label={`${recordedIncidents.length} incidents`}>{recordedIncidents.length}</span> : null}
+            </header>
             {recordedIncidents === null ? <p>Incident details are unavailable for this execution.</p> : recordedIncidents.length ? <ul>{recordedIncidents.map(incident => <li key={incident.incidentId}>
               <WorkflowStatusBadge status={incident.status} /><p>{incident.message}</p><small>{incident.failureType}</small>
             </li>)}</ul> : <p>No incidents recorded for this execution.</p>}
@@ -305,8 +308,9 @@ export function WorkflowActivityExecutionDetails({
             />
           ) : null}
           <section className="wf-instance-section">
-            <details className="wf-activity-execution-details">
+            <details className="wf-activity-inspection-disclosure wf-activity-execution-details">
               <summary>
+                <ChevronRight size={14} aria-hidden="true" />
                 <span>Execution details</span>
                 <small>{executionDetailRows.length} values</small>
               </summary>
@@ -347,7 +351,7 @@ function ActivityBoundaryDetails({ context, inspection, activityLabel }: { conte
 
   return (
     <section className="wf-instance-section wf-activity-boundary-details">
-      <details onToggle={event => setOpen(event.currentTarget.open)}>
+      <details className="wf-activity-inspection-disclosure" onToggle={event => setOpen(event.currentTarget.open)}>
         <summary>
           <ChevronRight size={14} aria-hidden="true" />
           <span>Inside this activity</span>
@@ -364,51 +368,32 @@ function ActivityBoundaryDetails({ context, inspection, activityLabel }: { conte
 
 function WorkflowActivityOutcomeEvidence({ state }: { state: ActivityExecutionInspectionState }) {
   if (state.status === "idle") return null;
-
-  if (state.status === "loading") {
-    return (
-      <section className="wf-instance-section">
-        <h4>Outcomes</h4>
-        <p>Loading runtime outcomes...</p>
-      </section>
-    );
-  }
-
-  if (state.status === "failed") {
-    return (
-      <section className="wf-instance-section">
-        <h4>Outcomes</h4>
-        <p>Runtime outcomes are unavailable.</p>
-        {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
-      </section>
-    );
-  }
-
-  const outcomeNames = state.inspection?.outcomeNames ?? [];
-  if (outcomeNames.length === 0) {
-    return (
-      <section className="wf-instance-section">
-        <h4>Outcomes</h4>
-        <p>No runtime outcomes were recorded for this execution.</p>
-      </section>
-    );
-  }
+  const outcomeNames = state.status === "ready" ? state.inspection?.outcomeNames ?? [] : [];
+  const presentation = state.status === "ready"
+    ? outcomeNames.length > 0 ? "recorded" : "empty"
+    : state.status === "loading" ? "loading" : "unavailable";
+  const presentationLabel = presentation === "recorded" ? "Recorded"
+    : presentation === "empty" ? "No records"
+      : presentation === "loading" ? "Loading"
+        : "Unavailable";
 
   return (
-    <section className="wf-instance-section">
+    <section className="wf-instance-section wf-activity-outcomes" data-state={presentation}>
       <header className="wf-runtime-evidence-heading">
-        <h4>
-          Outcomes
-          <span className="wf-runtime-evidence-count" aria-label={`${outcomeNames.length} outcomes`}>
-            {outcomeNames.length}
-          </span>
-        </h4>
+        <h4>Outcomes{presentation === "recorded" ? <span className="wf-runtime-evidence-count" aria-label={`${outcomeNames.length} outcomes`}>{outcomeNames.length}</span> : null}</h4>
+        <span className="wf-activity-outcome-state" data-state={presentation}>{presentationLabel}</span>
       </header>
-      <div className="wf-activity-outcome-list" role="list">
-        {outcomeNames.map((outcomeName, index) => (
-          <span className="wf-activity-outcome-chip" role="listitem" key={`${outcomeName}:${index}`}>{outcomeName}</span>
-        ))}
-      </div>
+      {state.status === "loading" ? <p>Loading runtime outcomes...</p>
+        : state.status === "failed" ? <>
+          <p>Runtime outcomes are unavailable.</p>
+          {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
+        </>
+          : outcomeNames.length === 0 ? <p>No runtime outcomes were recorded for this execution.</p>
+            : <div className="wf-activity-outcome-list" role="list">
+              {outcomeNames.map((outcomeName, index) => (
+                <span className="wf-activity-outcome-chip" role="listitem" key={`${outcomeName}:${index}`}>{outcomeName}</span>
+              ))}
+            </div>}
     </section>
   );
 }

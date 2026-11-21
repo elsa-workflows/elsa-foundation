@@ -37,21 +37,26 @@ export {
 } from "./flowchartStartNode";
 export { bpmnStructureKind } from "./bpmn/bpmnStructure";
 
-export interface WorkflowNodeData extends Record<string, unknown> {
+export interface ActivityCardPreview {
   label: string;
   /** The label came from explicit saved presentation rather than a catalog/type fallback. */
   hasAuthoredLabel?: boolean;
-  activityVersionId: string;
   activityTypeKey?: string;
-  category?: string;
-  executionType?: string;
   // Per-instance preview of the activity's primary authored input (e.g. Write Line's text), shown as
   // the node subtitle in place of the static `category · kind`. Undefined when nothing is authored yet.
   summary?: string;
+  description?: string;
+}
+
+export interface WorkflowNodeData extends ActivityCardPreview, Record<string, unknown> {
+  activityVersionId: string;
+  category?: string;
+  executionType?: string;
   activityDefinitionVersion?: string;
   icon?: WorkflowNodeIcon;
   iconTone?: ActivityIconTone;
   childSlots: ChildSlot[];
+  childPreviews?: Record<string, ActivityCardPreview>;
   collectionSlots?: CollectionSlot[];
   acceptsInbound: boolean;
   sourcePorts: WorkflowPortDescriptor[];
@@ -62,7 +67,6 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   incomingExecutionPulse?: string;
   /** Runtime activity identity for canvases whose visible node id is a different domain element id. */
   runtimeNodeId?: string;
-  description?: string;
   /** Catalog identity used at render time so reusable activities resolve without an eager icon table. */
   activityDefinitionId?: string;
   /** Raw catalog `icon` / `iconName`; the canvas resolves them so `activityIcons` stays off the entry. */
@@ -630,7 +634,7 @@ export function buildCanvas(
     const catalogItem = catalogByVersion.get(activity.activityVersionId);
     const record = layoutByNodeId.get(activity.nodeId);
     const position = record ?? defaultPosition(scope.slot.mode, index);
-    return createWorkflowNode(
+    const node = createWorkflowNode(
       activity,
       catalogItem,
       { x: position.x, y: position.y },
@@ -638,6 +642,12 @@ export function buildCanvas(
       formatSummary,
       presentationByNodeId.get(activity.nodeId)
     );
+    if (scope.slot.mode === "sequence" && node.data.childSlots.length) {
+      node.data.childPreviews = Object.fromEntries(node.data.childSlots.flatMap(slot => slot.activities.map(child =>
+        [child.nodeId, activityCardPreview(child, catalogByVersion.get(child.activityVersionId), presentationByNodeId.get(child.nodeId), formatSummary)]
+      )));
+    }
+    return node;
   });
 
   return {
@@ -908,6 +918,18 @@ export function normalizeActivityStructures(root: ActivityNode | null | undefine
   return normalizeFlowchartStartNode(next);
 }
 
+function activityCardPreview(
+  activity: ActivityNode, catalogItem?: ActivityCatalogItem, presentation?: ActivityPresentationRecord, formatSummary?: WorkflowNodeSummaryFormatter
+): ActivityCardPreview {
+  return {
+    label: resolveActivityLabel(presentation, catalogItem, catalogItem?.activityTypeKey ?? activity.activityVersionId),
+    hasAuthoredLabel: !!presentation?.displayName?.trim(),
+    activityTypeKey: catalogItem?.activityTypeKey,
+    summary: catalogItem && formatSummary ? formatSummary(activity, catalogItem) : undefined,
+    description: presentation?.description ?? undefined
+  };
+}
+
 function createWorkflowNode(
   activity: ActivityNode,
   catalogItem: ActivityCatalogItem | undefined,
@@ -925,18 +947,10 @@ function createWorkflowNode(
     deletable: options.deletable,
     draggable: options.draggable,
     data: {
-      label: resolveActivityLabel(
-        presentation,
-        catalogItem,
-        catalogItem?.activityTypeKey ?? activity.activityVersionId
-      ),
-      hasAuthoredLabel: !!presentation?.displayName?.trim(),
+      ...activityCardPreview(activity, catalogItem, presentation, formatSummary),
       activityVersionId: activity.activityVersionId,
-      activityTypeKey: catalogItem?.activityTypeKey,
       category: catalogItem?.category,
       executionType: catalogItem?.executionType,
-      summary: catalogItem && formatSummary ? formatSummary(activity, catalogItem) : undefined,
-      description: presentation?.description ?? undefined,
       activityDefinitionVersion: catalogItem?.activityDefinitionVersion,
       activityDefinitionId: catalogItem?.activityDefinitionId,
       catalogIcon: catalogItem?.icon,

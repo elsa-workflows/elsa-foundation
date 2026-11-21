@@ -155,6 +155,19 @@ public sealed class ActivityDefinitionAuthoringApiTests
     }
 
     [Fact]
+    public async Task Definitions_archive_is_available_as_a_manage_operation()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Delete, "/design/activities/definitions/definition-1");
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignCompatibilityCases.IdentityHeader, "trusted-success");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal("definition-1", Assert.IsType<ArchiveReusableActivityDefinition>(host.Seams.LastCommand).DefinitionId);
+    }
+
+    [Fact]
     public async Task Definitions_add_draft_binds_omitted_clone_payload_fields_as_null()
     {
         await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();

@@ -260,6 +260,11 @@ export async function getActivityDefinition(context: StudioEndpointContext, defi
   return context.http.getJson<ActivityDefinitionManagementView>(path, { signal });
 }
 
+export async function archiveActivityDefinition(context: StudioEndpointContext, definitionId: string) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition", { definitionId });
+  await context.http.deleteJson<unknown>(path);
+}
+
 export async function getActivityAuthoringCapabilities(context: StudioEndpointContext, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-authoring-capabilities");
   return context.http.getJson<ActivityAuthoringCapabilities>(path, { signal });

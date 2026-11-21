@@ -44,15 +44,16 @@ saved a full theme retain its original presentation; users can select Linen inde
 
 ### Minimal Studio presets
 
-Appearance offers three complete combinations: **Porcelain** (`builtin:porcelain`, Light), **Atelier**
-(`builtin:atelier`, Light), and **Graphite** (`builtin:graphite`, Dark). Each selects the Minimal workspace
-and its coordinated palette/mode. Navigation remains the user's independent choice. Subsequent
+Appearance offers four complete combinations: **Porcelain** (`builtin:porcelain`, Light), **Atelier**
+(`builtin:atelier`, Light), **Graphite** (`builtin:graphite`, Dark), and **Space** (`space`, Light). Each
+selects the Minimal workspace and its coordinated palette/mode. Space reuses the existing Space theme,
+including its subtle gradient, grid and star sidebar. Navigation remains the user's independent choice. Subsequent
 workspace, color and mode changes remain independent; selecting a color swatch alone does not
 apply a complete preset. Linen remains the fresh-profile default.
 
 For a branded Atelier default, set `WorkspaceStyle` to `minimal`, `PaletteId` to
-`builtin:atelier`, and `Mode` to `light` in the configuration above. Use `builtin:porcelain`/`light` or
-`builtin:graphite`/`dark` for the other combinations. Existing browser choices still win. New built-in IDs use a `builtin:` namespace outside the custom kebab-case ID grammar, so existing
+`builtin:atelier`, and `Mode` to `light` in the configuration above. Use `builtin:porcelain`/`light`,
+`builtin:graphite`/`dark`, or `space`/`light` for the other combinations. Existing browser choices still win. New built-in IDs use a `builtin:` namespace outside the custom kebab-case ID grammar, so existing
 custom themes such as `porcelain` or `graphite` remain intact. The earlier
 editorial theme keeps its stable ID `atelier` and appears as **Atelier Original**; saved profiles
 and integrations using that ID keep its original colors and geometry.

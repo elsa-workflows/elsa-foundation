@@ -215,6 +215,38 @@ describe("Choose data for an activity input", () => {
       { nodeId: "node-1", inputKey: "customerId" }, expect.any(AbortSignal), 0, { previewBindingConversion: true });
   });
 
+  it("keeps BPMN element identity out of the selected activity output and Go to request", async () => {
+    const binding = { expressionType: "ActivityResult", value: { producerNodeId: "producer-activity", projectionKey: "$result", isOptional: false } };
+    const offered = source("activity:producer-activity:$result", binding, null, "Customer");
+    const dataHost = host({
+      describeActivity: nodeId => nodeId === "producer-activity" ? { label: "Load customer", outputLabels: {} } : null
+    });
+    dataHost.requestSources = vi.fn(async (target: ActivityDataTarget) => {
+      dataHost.requests.push(target);
+      return answer("supported", { sources: [offered] });
+    });
+    const changes: ActivityNode[] = [];
+    const container = render({
+      activity: { nodeId: "consumer-activity", activityVersionId: "invoice-1", inputs: [], outputs: [] },
+      dataHost,
+      onChange: next => changes.push(next)
+    });
+
+    await openChooser(container);
+    await vi.waitFor(() => expect(option("Whole output", "Load customer")).toBeDefined());
+    expect(dataHost.requests[0]).toEqual({ nodeId: "consumer-activity", inputKey: "customerId" });
+    flushSync(() => option("Whole output", "Load customer")!.click());
+
+    const stored = changes[0]!.customerId as { expression: { type: string; value: unknown } };
+    expect(stored.expression.value).toEqual(binding.value);
+    expect(JSON.stringify(stored.expression.value)).not.toContain("producer-element");
+    await settle();
+    const goTo = [...container.querySelectorAll<HTMLButtonElement>(".wf-data-reference-actions button")]
+      .find(button => button.textContent?.includes("Go to"))!;
+    flushSync(() => goTo.click());
+    expect(dataHost.revealActivity).toHaveBeenCalledWith("producer-activity");
+  });
+
   it("says a reason shared by all of a producer's outputs once, and keeps differing reasons on their rows", async () => {
     const loop = (projectionKey: string, reasonCode: string): ActivityDataSourceFacts => ({
       ...source(`activity:loop-step:${projectionKey}`, null, reasonCode, null),
@@ -543,6 +575,82 @@ describe("a stored activity output", () => {
     expect(container.textContent).not.toContain("Double → String · automatic");
     await vi.waitFor(() => expect(container.querySelector(".wf-data-reference-problem")?.textContent)
       .toContain("Mode None requires identical contracts."));
+  });
+
+  it("opens conversion for an eligible result binding and preserves the source and mode through eligibility changes", async () => {
+    const target = { nodeId: "node-1", inputKey: "text" };
+    const conversion = {
+      sourceType: { alias: "User", collectionKind: "single" },
+      targetType: { alias: "String", collectionKind: "single" },
+      operation: null,
+      rejection: "No automatic conversion is available.",
+      canSerializeJsonString: true
+    };
+    const result = {
+      target: { target, displayName: "Text", constraint: null },
+      bindingConversion: conversion
+    };
+    const dataHost = host({ requestSources: vi.fn(async () => answer("empty", result)) });
+    const activity = {
+      nodeId: "node-1", activityVersionId: "invoice-1", inputs: [], outputs: [],
+      text: { typeName: "System.String", expression: { type: "ActivityResult", value: { producerNodeId: "get-customer", projectionKey: "$result", isOptional: false } } }
+    } as ActivityNode;
+    const changes: ActivityNode[] = [];
+    const container = render({ activity, inputs: [input("Text")], dataHost, onChange: next => changes.push(next) });
+    await vi.waitFor(() => expect(container.querySelector(".wf-data-reference-problem")?.textContent).toContain("No automatic conversion"));
+
+    const chooseConversion = [...container.querySelectorAll<HTMLButtonElement>(".wf-data-reference-problem button")]
+      .find(button => button.textContent === "Choose conversion");
+    expect(chooseConversion).toBeDefined();
+    flushSync(() => chooseConversion!.click());
+    const conversionModeTrigger = container.querySelector<HTMLButtonElement>(".wf-conversion-region .wf-syntax-picker-trigger");
+    expect(conversionModeTrigger).toBeDefined();
+    flushSync(() => conversionModeTrigger!.click());
+    await vi.waitFor(() => expect([...document.querySelectorAll("[role='option']")]
+      .some(option => option.textContent?.startsWith("Serialize to JSON"))).toBe(true));
+    const serialize = [...document.querySelectorAll<HTMLButtonElement>("[role='option']")]
+      .find(option => option.textContent?.startsWith("Serialize to JSON"))!;
+    flushSync(() => serialize.click());
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0]!.text).toMatchObject({
+      expression: { type: "ActivityResult", value: { producerNodeId: "get-customer", projectionKey: "$result", isOptional: false } },
+      conversion: { mode: "jsonString" }
+    });
+
+    flushSync(() => setHost({ ...dataHost, documentRevision: "rev-2", requestSources: vi.fn(async () => answer("empty", {
+      ...result, documentRevision: "rev-2", bindingConversion: { ...conversion, canSerializeJsonString: false }
+    })) }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-data-reference-problem button")).toBeNull());
+    expect(container.querySelector(".wf-conversion-toggle")?.getAttribute("aria-label")).toContain("Serialize to JSON");
+
+    flushSync(() => setHost({ ...dataHost, documentRevision: "rev-3", requestSources: vi.fn(async () => answer("empty", {
+      ...result, documentRevision: "rev-3", bindingConversion: { ...conversion, canSerializeJsonString: true }
+    })) }));
+    await vi.waitFor(() => expect([...container.querySelectorAll<HTMLButtonElement>(".wf-data-reference-problem button")]
+      .some(button => button.textContent === "Choose conversion")).toBe(true));
+  });
+
+  it("does not offer JSON serialization for a read-only activity input", async () => {
+    const target = { nodeId: "node-1", inputKey: "text" };
+    const conversion = {
+      sourceType: { alias: "User", collectionKind: "single" },
+      targetType: { alias: "String", collectionKind: "single" },
+      operation: null,
+      rejection: "No automatic conversion is available.",
+      canSerializeJsonString: true
+    };
+    const dataHost = host({ requestSources: vi.fn(async () => answer("empty", {
+      target: { target, displayName: "Text", constraint: null }, bindingConversion: conversion
+    })) });
+    const activity = {
+      nodeId: "node-1", activityVersionId: "invoice-1", inputs: [], outputs: [],
+      text: { typeName: "System.String", expression: { type: "ActivityResult", value: { producerNodeId: "get-customer", projectionKey: "$result", isOptional: false } } }
+    } as ActivityNode;
+    const container = render({ activity, inputs: [input("Text")], dataHost, readOnly: true });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-data-reference-source")).not.toBeNull());
+    expect(container.querySelector(".wf-data-reference-problem button")).toBeNull();
   });
 
   it("replaces it with the newly chosen binding, marking the current source", async () => {

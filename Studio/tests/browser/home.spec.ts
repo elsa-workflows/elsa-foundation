@@ -28,6 +28,67 @@ test.describe("customizable Home", () => {
     deviceScaleFactor: 2
   });
 
+  test("adds a faint Space starfield to Home margins in Light, Dark, and Dim", async ({ page }, info) => {
+    for (const appearance of ["light", "dark", "dim"] as const) {
+      await page.goto(`/?mode=home&theme=space&appearance=${appearance}`);
+      await expect(page.getByRole("heading", { level: 2, name: "Home" })).toBeVisible();
+
+      const content = page.locator(".content");
+      const paint = await content.evaluate(element => ({
+        image: getComputedStyle(element).backgroundImage,
+        widgetImage: getComputedStyle(element.querySelector(".dashboard-widget")!).backgroundImage
+      }));
+      expect(paint.image.match(/radial-gradient/g)?.length).toBe(11);
+      expect(paint.image).not.toContain("repeating-linear-gradient");
+      expect(paint.image).not.toContain("url(");
+      expect(paint.widgetImage).toBe("none");
+
+      await page.screenshot({ path: info.outputPath(`space-home-workspace-stars-${appearance}.png`), fullPage: true, animations: "disabled" });
+    }
+  });
+
+  test("keeps the Home starfield off for other schemes, High contrast, and forced colors", async ({ page }) => {
+    await page.goto("/?mode=home&theme=classic&appearance=dark");
+    await expect(page.locator(".content")).toHaveCSS("background-image", "none");
+
+    await page.goto("/?mode=home&theme=space&appearance=high-contrast");
+    await expect(page.locator(".content")).toHaveCSS("background-image", "none");
+
+    await page.goto("/?mode=home&theme=space&appearance=dark");
+    await expect.poll(() => page.locator(".content").evaluate(element => getComputedStyle(element).backgroundImage)).toContain("radial-gradient");
+    await page.emulateMedia({ forcedColors: "active" });
+    await expect.poll(() => page.locator(".content").evaluate(element => getComputedStyle(element).backgroundImage)).not.toContain("radial-gradient");
+  });
+
+  test("follows the Space color scheme and ignores retained opted-out tabs", async ({ page }) => {
+    await page.goto("/?mode=home&theme=space&appearance=dark");
+    const content = page.locator(".content");
+    await content.evaluate(() => {
+      document.documentElement.setAttribute("data-theme", "custom");
+      document.documentElement.setAttribute("data-sidebar-backdrop", "solid");
+    });
+    await expect.poll(() => content.evaluate(element => getComputedStyle(element).backgroundImage)).toContain("radial-gradient");
+
+    await content.evaluate(element => {
+      const home = element.querySelector(".home-page")!;
+      const activePanel = document.createElement("div");
+      activePanel.className = "studio-workspace-panel";
+      activePanel.append(home);
+      const retainedPanel = document.createElement("div");
+      retainedPanel.className = "studio-workspace-panel";
+      retainedPanel.hidden = true;
+      const optedOutRoute = document.createElement("section");
+      optedOutRoute.dataset.studioWorkspaceBackdrop = "none";
+      retainedPanel.append(optedOutRoute);
+      element.replaceChildren(activePanel, retainedPanel);
+    });
+    await expect.poll(() => content.evaluate(element => getComputedStyle(element).backgroundImage)).toContain("radial-gradient");
+
+    await content.locator(".studio-workspace-panel").first().evaluate(panel => { (panel as HTMLElement).hidden = true; });
+    await content.locator(".studio-workspace-panel").last().evaluate(panel => { (panel as HTMLElement).hidden = false; });
+    await expect(content).toHaveCSS("background-image", "none");
+  });
+
   test("renders the default Home landing and passes keyboard plus axe checks", async ({ page }) => {
     page.on("pageerror", error => console.error(error));
     await page.goto("/?mode=home");

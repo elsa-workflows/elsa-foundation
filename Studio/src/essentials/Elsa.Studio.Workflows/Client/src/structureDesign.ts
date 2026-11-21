@@ -209,7 +209,7 @@ function parseStructureDesignSlotDescriptor(value: unknown): StructureDesignSlot
   if (!name || !property || !displayName || (cardinality !== "single" && cardinality !== "many")) return null;
 
   const optionalKeys = ["collectionProperty", "childProperty", "labelProperty", "slotNameTemplate", "itemIdProperty", "conditionProperty"];
-  for (const key of optionalKeys) if (key in value && typeof value[key] !== "string") return null;
+  for (const key of optionalKeys) if (key in value && value[key] !== null && typeof value[key] !== "string") return null;
   return {
     name,
     property,

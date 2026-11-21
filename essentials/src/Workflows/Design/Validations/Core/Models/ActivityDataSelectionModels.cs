@@ -181,4 +181,4 @@ public sealed record ActivityDataInputConstraint(
 
 /// <summary>The planned operation or publication rejection for a known, authored result-to-input binding.</summary>
 public sealed record ActivityBindingConversionPreview(TypeReference SourceType, TypeReference TargetType,
-    string? Operation, string? ReasonCode = null, string? Rejection = null);
+    string? Operation, string? ReasonCode = null, string? Rejection = null, bool CanSerializeJsonString = false);

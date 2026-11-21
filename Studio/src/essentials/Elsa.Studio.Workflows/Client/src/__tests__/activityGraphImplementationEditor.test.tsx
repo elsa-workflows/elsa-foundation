@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   StudioActivityDefinitionImplementationEditorProps,
+  StudioDialogApi,
   StudioExpressionDescriptor,
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
@@ -19,6 +20,7 @@ import { flowchartStructureKind } from "../flowchartStartNode";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
 import { sequenceStructureKind } from "../workflowAdapter";
 import { activityDragDataType } from "../workflow-editor/constants";
+import { setDialogs } from "../workflow-editor/dialogs";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
 import { bpmnActivity, flowchartActivity, ifActivity, ifNode, whileActivity, whileNode, sequenceActivity, sequenceNode, setOutputActivity } from "./fixtures";
 
@@ -46,6 +48,7 @@ afterEach(() => {
     flushSync(() => item.root.unmount());
     item.container.remove();
   }
+  setDialogs({ confirm: async () => true, prompt: async () => null, alert: async () => undefined });
   catalogItems = [catalogItem()];
   expressionDescriptors = [];
 });
@@ -121,7 +124,7 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
     expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Approve order");
   });
 
-  it("renames a selected activity with one undo/redo and prunes presentation on delete without losing history", () => {
+  it("renames a selected activity with one undo/redo and prunes presentation on delete without losing history", async () => {
     catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
     const value = {
       ...sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]),
@@ -140,7 +143,7 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
     expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Approve order");
     confirmOnce();
     click(buttonByText(rendered.container, "Remove"));
-    expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([]);
+    await vi.waitFor(() => expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([]));
     click(rendered.container.querySelector("button[aria-label='Undo Activity Graph edit']")!);
     expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([{ nodeId: "write-line-1", displayName: "Approve order", description: "Keep this context" }]);
     expect(rendered.container.querySelector("[data-graph-node-id='write-line-1']")).not.toBeNull();
@@ -255,7 +258,9 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     });
 
     expect(rendered.container.querySelector("[data-graph-authoring-resource='activity-definition-graph']")).not.toBeNull();
-    expect(rendered.container.querySelector("[data-graph-root-location]")?.textContent).toContain("Flowchart");
+    expect(rendered.container.querySelector("[data-graph-root-location]")?.closest(".wf-palette")).toBeNull();
+    expect(rendered.container.querySelector(".ad-graph-scope-label")).toBeNull();
+    expect(rendered.container.querySelector(".ad-graph-canvas .wf-canvas-tools")).not.toBeNull();
     expect(rendered.container.textContent).not.toContain("Inputs (JSON array)");
     expect(rendered.container.querySelector("[data-graph-node-id='root']")).toBeNull();
     expect(buttonByText(rendered.container, "Collapse activities panel", "aria-label")).toBeTruthy();
@@ -265,9 +270,10 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     expect(rendered.container.querySelector("[aria-label='Resize activities panel']")).toBeTruthy();
     expect(rendered.container.querySelector("[aria-label='Resize inspector panel']")).toBeTruthy();
     expect(buttonByText(rendered.container, "Auto-layout Activity Graph", "aria-label")).toBeTruthy();
+    expect(rendered.container.querySelector(".wf-palette-category-toggle[data-category='Primitives']")?.getAttribute("aria-expanded")).toBe("true");
+    expect(buttonByText(rendered.container, "Write line")).toBeTruthy();
     expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Variables");
 
-    click(buttonByText(rendered.container, "Primitives1"));
     click(buttonByText(rendered.container, "Write line"));
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
       payload: expect.objectContaining({
@@ -296,7 +302,6 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     const rendered = renderDesigner({ value: emptyActivityGraphImplementationValue(), onChange });
 
     const palette = rendered.container.querySelector<HTMLElement>(".wf-palette")!;
-    click(palette.querySelector(".wf-palette-category-toggle")!);
     click(palette.querySelector(".wf-palette-activity")!);
 
     const payload = onChange.mock.calls.at(-1)![0].payload as Record<string, unknown>;
@@ -328,7 +333,7 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     expect(payload.outcomeMappings).toEqual([]);
   });
 
-  it("removes the selected second Sequence child in a controlled editor", () => {
+  it("removes the selected second Sequence child in a controlled editor", async () => {
     catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
     const value = sequenceImplementationValue([
       { nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null },
@@ -341,11 +346,54 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     confirmOnce();
     click(buttonByText(rendered.container, "Remove"));
 
-    expect(rendered.onChange).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(rendered.onChange).toHaveBeenCalledTimes(1));
     expect(rendered.onChange.mock.calls[0][0].payload.rootActivity.structure.payload.activities)
       .toEqual([expect.objectContaining({ nodeId: "write-line-1" })]);
     expect(rendered.container.querySelector("[data-graph-node-id='write-line-2']")).toBeNull();
     expect(() => buttonByText(rendered.container, "Remove")).toThrow();
+  });
+
+  it("asks the Studio dialog before removing a selected activity", async () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const confirm = vi.fn<StudioDialogApi["confirm"]>().mockResolvedValue(false);
+    setDialogs({ confirm, prompt: async () => null, alert: async () => undefined });
+    const rendered = renderControlledDesigner(sequenceImplementationValue([
+      { nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }
+    ]));
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    click(buttonByText(rendered.container, "Remove"));
+
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledWith({
+      message: "Remove this activity and any nested graph content? This change will autosave.",
+      confirmLabel: "Remove",
+      tone: "danger"
+    }));
+    expect(rendered.onChange).not.toHaveBeenCalled();
+    expect(rendered.container.querySelector("[data-graph-node-id='write-line-1']")).not.toBeNull();
+  });
+
+  it("does not remove an activity after its graph changes while confirmation is open", async () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    let resolveConfirm!: (confirmed: boolean) => void;
+    const confirm = vi.fn<StudioDialogApi["confirm"]>(() => new Promise(resolve => { resolveConfirm = resolve; }));
+    setDialogs({ confirm, prompt: async () => null, alert: async () => undefined });
+    const rendered = renderControlledDesigner(sequenceImplementationValue([
+      { nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }
+    ]));
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    click(buttonByText(rendered.container, "Remove"));
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
+
+    rendered.acknowledge(sequenceImplementationValue([
+      { nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null },
+      { nodeId: "write-line-2", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }
+    ]));
+    resolveConfirm(true);
+
+    await vi.waitFor(() => expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(2));
+    expect(rendered.onChange).not.toHaveBeenCalled();
   });
 
   it("places public contract inputs in the graph node expression scope", async () => {
@@ -403,6 +451,112 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
       const picker = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Input reference']");
       expect([...picker!.options].map(option => option.textContent)).toContainEqual(expect.stringContaining("Customer ID"));
     });
+  });
+
+  it("renders Activity Definition input bindings as a compact tool beside conversion", async () => {
+    expressionDescriptors = [{ type: "JavaScript", displayName: "JavaScript", editingMode: "text" }];
+    catalogItems = [flowchartCatalogItem(), inputLeafCatalogItem()];
+    const rendered = renderDesigner({
+      value: flowchartImplementationValue(flowchartStructureKind, [{
+        nodeId: "write-line-1",
+        activityVersionId: "write-line-v1",
+        inputs: [],
+        outputs: [],
+        message: {
+          typeName: "System.String",
+          expression: {
+            type: "JavaScript",
+            value: {
+              language: "JavaScript",
+              source: "args.customer",
+              resultType: { alias: "String", collectionKind: "Single" },
+              parameters: { customer: { kind: "WorkflowRequest", memberKey: "customer-id", path: null } },
+              options: {},
+              capabilityProfile: "binding-pure-v1"
+            }
+          }
+        },
+        structure: null
+      }]),
+      contract: {
+        contractSchemaVersion: "1",
+        inputs: [{ referenceKey: "customer-id", name: "CustomerId", displayName: "Customer ID", type: { alias: "String", collectionKind: "Single" } }],
+        outputs: [],
+        outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }]
+      }
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    await vi.waitFor(() => expect(rendered.container.querySelector(".wf-js-input-bindings")).not.toBeNull());
+
+    const bindingDisclosure = rendered.container.querySelector<HTMLButtonElement>(".studio-field-caption-actions .wf-input-bindings-toggle");
+    expect(bindingDisclosure?.getAttribute("aria-label")).toBe("Activity input bindings (1)");
+    expect(bindingDisclosure?.getAttribute("aria-expanded")).toBe("false");
+    expect(bindingDisclosure?.closest(".studio-field-caption-actions")?.querySelector(".wf-conversion-toggle")).not.toBeNull();
+    const bindings = rendered.container.querySelector<HTMLElement>(".wf-js-input-bindings");
+    expect(bindings?.hidden).toBe(true);
+    expect(rendered.container.querySelector(".wf-js-input-binding-list")).toBeNull();
+    click(bindingDisclosure!);
+    expect(bindingDisclosure?.getAttribute("aria-expanded")).toBe("true");
+    expect(bindings?.hidden).toBe(false);
+    const addInputField = rendered.container.querySelector(".wf-js-input-binding-add");
+    const boundInputs = rendered.container.querySelector(".wf-js-input-binding-list");
+    expect(addInputField).not.toBeNull();
+    expect(boundInputs?.textContent).toContain("CustomerId → args.customer");
+    expect(addInputField?.contains(boundInputs)).toBe(false);
+    const addInput = addInputField!.querySelector<HTMLSelectElement>("select")!;
+    addInput.focus();
+    flushSync(() => addInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(bindingDisclosure?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(bindingDisclosure);
+  });
+
+  it("binds a public graph input directly without JavaScript and confirms replacing authored values", async () => {
+    expressionDescriptors = [];
+    catalogItems = [flowchartCatalogItem(), inputLeafCatalogItem("Literal")];
+    const conversion = { mode: "strict", profileId: "stable-profile" };
+    const value = flowchartImplementationValue(flowchartStructureKind, [{
+      nodeId: "write-line-1",
+      activityVersionId: "write-line-v1",
+      inputs: [],
+      outputs: [],
+      message: { typeName: "System.String", expression: { type: "Literal", value: "Keep this text" }, conversion },
+      structure: null
+    }]);
+    const onChange = vi.fn();
+    const rendered = renderDesigner({
+      value,
+      contract: {
+        contractSchemaVersion: "1",
+        inputs: [
+          { referenceKey: "customer-id", name: "CustomerId", displayName: "Customer ID", type: { alias: "String", collectionKind: "Single" } },
+          { referenceKey: "order-id", name: "OrderId", displayName: "Order ID", type: { alias: "String", collectionKind: "Single" } }
+        ],
+        outputs: [],
+        outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }]
+      },
+      onChange
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    const bindingDisclosure = rendered.container.querySelector<HTMLButtonElement>(".wf-input-bindings-toggle")!;
+    click(bindingDisclosure);
+    const picker = rendered.container.querySelector<HTMLSelectElement>(".wf-js-input-binding-add select")!;
+    change(picker, "customer-id");
+    expect(rendered.container.querySelector('[role="alertdialog"]')?.textContent).toContain("replace the current value");
+    expect(onChange).not.toHaveBeenCalled();
+    click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='alertdialog'] button")].find(button => button.textContent === "Replace value")!);
+
+    const next = onChange.mock.calls.at(-1)![0];
+    const activity = next.payload.rootActivity.structure.payload.activities[0];
+    expect(activity.inputs).toContainEqual(expect.objectContaining({
+      referenceKey: "message",
+      value: {
+        expressionType: "WorkflowRequest",
+        value: { memberKey: "customer-id", path: null }
+      },
+      conversion
+    }));
   });
 
   // Inside a graph body the root scope is the graph, so graph variables are offered as workflow-scope
@@ -465,6 +619,23 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
 
     expect(rendered.container.querySelector(".wf-breadcrumb")).not.toBeNull();
     expect(rendered.container.querySelector(".ad-graph-breadcrumb")).toBeNull();
+  });
+
+  it("focuses root diagnostics on the canvas instead of the palette callout", async () => {
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const rendered = renderDesigner({ value: flowchartImplementationValue() });
+    const complete = vi.fn();
+
+    flushSync(() => rendered.container.querySelector("[data-provider-diagnostic-focus-root]")!.dispatchEvent(new CustomEvent(activityGraphDiagnosticFocusEvent, {
+      cancelable: true,
+      detail: { location: { jsonPointer: "/rootActivity" }, complete }
+    })));
+
+    const canvas = rendered.container.querySelector<HTMLElement>(".ad-graph-canvas")!;
+    await vi.waitFor(() => expect(document.activeElement).toBe(canvas));
+    expect(canvas.hasAttribute("data-graph-root-location")).toBe(true);
+    expect(canvas.closest(".wf-palette")).toBeNull();
+    expect(complete).toHaveBeenCalledWith(expect.objectContaining({ kind: "focused" }));
   });
 
   it("offers the shared empty-canvas picker and places the chosen activity", () => {
@@ -535,7 +706,6 @@ describe("ActivityGraphImplementationEditor single-activity slot navigation", ()
     expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootWhile / Body");
     expect(rendered.container.querySelector(".wf-sequence-designer")).not.toBeNull();
     await vi.waitFor(() => expect(rendered.container.querySelector("[data-graph-node-id]")).toBeNull());
-    click(buttonByText(rendered.container, "Primitives1"));
     click(buttonByText(rendered.container, "Write line"));
     const root = rendered.onChange.mock.calls.at(-1)![0].payload.rootActivity;
     const loop = nested ? root.structure.payload.activities[0] : root;
@@ -553,6 +723,7 @@ describe("ActivityGraphImplementationEditor single-activity slot navigation", ()
     click([...rendered.container.querySelectorAll("[role='tab']")].find(tab => tab.textContent === "Slots")!);
     click(rendered.container.querySelector(".wf-slot-row button")!);
     expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain("SequenceActivities");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootWhile / Body");
     await vi.waitFor(() => expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(1));
   });
 
@@ -561,7 +732,7 @@ describe("ActivityGraphImplementationEditor single-activity slot navigation", ()
     const rendered = renderControlledDesigner(implementation(true));
     selectSlot(rendered.container, true);
     pick(rendered.container, activity.displayName!);
-    expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain(activity.displayName);
+    expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain("Activities");
     expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootWhile / Body");
     await vi.waitFor(() => expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(0));
   });
@@ -609,7 +780,6 @@ describe("ActivityGraphImplementationEditor secondary root slots", () => {
     click([...rendered.container.querySelectorAll(".wf-slot-empty button")].find(button => button.textContent?.includes("Sequence"))!);
     expect(rendered.container.querySelector(".wf-sequence-designer")).not.toBeNull();
     expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootIf / Else");
-    click(buttonByText(rendered.container, "Primitives1"));
     click(buttonByText(rendered.container, "Write line"));
     const payload = () => rendered.onChange.mock.calls.at(-1)![0].payload.rootActivity.structure.payload;
     expect(payload().then).toEqual(sibling);
@@ -631,7 +801,7 @@ describe("ActivityGraphImplementationEditor secondary root slots", () => {
     openSlot(rendered.container, "Else");
     click([...rendered.container.querySelectorAll(".wf-slot-empty button")].find(button => button.textContent?.includes("Sequence"))!);
     click(buttonByText(rendered.container, "Undo Activity Graph edit", "aria-label"));
-    await vi.waitFor(() => expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain("Else"));
+    await vi.waitFor(() => expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toContain("Else"));
     expect(rendered.container.querySelector(".wf-slot-empty")?.textContent).toContain("Else");
     click(buttonByText(rendered.container, "Redo Activity Graph edit", "aria-label"));
     await vi.waitFor(() => expect(rendered.container.querySelector(".wf-sequence-designer")).not.toBeNull());
@@ -701,7 +871,7 @@ describe("ActivityGraphImplementationEditor editorial layout", () => {
     const rendered = renderDesigner({ value: flowchartImplementationValue(), onChange });
 
     expect(rendered.container.querySelector("input[aria-label='Search activity palette']")).toBeNull();
-    expect(rendered.container.querySelector("[data-graph-root-location]")?.textContent).toContain("Flowchart");
+    expect(rendered.container.querySelector(".ad-graph-scope-owner strong")?.textContent).toContain("Flowchart");
 
     // An empty scope that is not a flowchart canvas offers Add step instead of "choose from the palette".
     click(buttonByText(rendered.container, "Add step"));
@@ -758,7 +928,6 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     const onChange = vi.fn();
     const rendered = renderDesigner({ value: bpmnImplementationValue(), onChange });
 
-    click(buttonByText(rendered.container, "Primitives1"));
     click(buttonByText(rendered.container, "Write line"));
 
     const payload = lastPayload(onChange);
@@ -781,7 +950,23 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     expect(rendered.container.querySelector("[data-graph-node-id='write-line-1']")).toBeNull();
   });
 
-  it("drops the layout records of a deleted BPMN element and its bound activity", () => {
+  it("summarizes one unconditional outgoing path for a selected BPMN task", () => {
+    catalogItems = [bpmnCatalogItem()];
+    const rendered = renderDesigner({ value: bpmnImplementationValue([
+      { elementId: "start", elementType: "startEvent" },
+      { elementId: "task", elementType: "task" },
+      { elementId: "end", elementType: "endEvent" }
+    ], [], [{ flowId: "task-end", sourceRef: "task", targetRef: "end" }]) });
+
+    click(rendered.container.querySelector(".wf-bpmn-node[data-runtime-node-id='task']")!);
+
+    const disclosure = rendered.container.querySelector<HTMLButtonElement>(".wf-bpmn-flow-summary");
+    expect(disclosure?.getAttribute("aria-expanded")).toBe("false");
+    expect(disclosure?.textContent).toContain("End event");
+    expect(disclosure?.textContent).toContain("Any outcome");
+  });
+
+  it("drops the layout records of a deleted BPMN element and its bound activity", async () => {
     catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
     const onChange = vi.fn();
     const rendered = renderDesigner({
@@ -802,6 +987,7 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     click(rendered.container.querySelector("[data-graph-node-id='task-1']")!);
     confirmOnce();
     click(buttonByText(rendered.container, "Remove"));
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
 
     const layout = onChange.mock.calls.at(-1)?.[0].layout as Array<{ nodeId: string }>;
     expect(layout.map(record => record.nodeId)).toEqual(["start"]);
@@ -829,7 +1015,6 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     const onChange = vi.fn();
     const rendered = renderDesigner({ value: bpmnImplementationValue(), onChange });
 
-    click(rendered.container.querySelector(".wf-palette-category-toggle[data-category='BPMN']")!);
     click(buttonByText(rendered.container, "Exclusive gateway"));
 
     const payload = lastPayload(onChange);
@@ -889,7 +1074,6 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     expect(flowchart.container.querySelector("[data-element-id^='bpmn:']")).toBeNull();
 
     const locked = renderDesigner({ value: bpmnImplementationValue(), readOnly: true });
-    click(locked.container.querySelector(".wf-palette-category-toggle[data-category='BPMN']")!);
     expect(buttonByText(locked.container, "Exclusive gateway").disabled).toBe(true);
   });
 
@@ -928,7 +1112,7 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     });
 
     click(rendered.container.querySelector("[data-graph-node-id='gateway-1']")!);
-    setInput(rendered.container.querySelector<HTMLInputElement>("input[aria-label='Condition outcome for flow to End event']")!, "Approved");
+    setInput(rendered.container.querySelector<HTMLInputElement>("input[aria-label='Match outcome for flow to End event']")!, "Approved");
 
     expect(lastPayload(onChange).sequenceFlows).toEqual([
       expect.objectContaining({ flowId: "flow-1", conditionOutcome: "Approved" })
@@ -944,7 +1128,7 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     expect(payload.elements.find(element => element.elementId === "gateway-1")?.defaultFlowId).toBe("flow-1");
   });
 
-  it("removes a pure structure element along with its sequence flows", () => {
+  it("removes a pure structure element along with its sequence flows", async () => {
     catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
     const onChange = vi.fn();
     const rendered = renderDesigner({
@@ -968,6 +1152,7 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     click(rendered.container.querySelector("[data-graph-node-id='gateway-1']")!);
     confirmOnce();
     click(buttonByText(rendered.container, "Remove"));
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
 
     const payload = lastPayload(onChange);
     expect(payload.elements.map(element => element.elementId)).toEqual(["start"]);
@@ -1044,11 +1229,14 @@ describe("ActivityGraphImplementationEditor declared output targets", () => {
     click(rendered.container.querySelector("[data-graph-node-id='set-sum']")!);
     await vi.waitFor(() => expect(rendered.container.querySelector('.wf-intrinsic-inspector select')).not.toBeNull());
     const picker = () => rendered.container.querySelector<HTMLSelectElement>('.wf-intrinsic-inspector select')!;
+    const expectedType = () => rendered.container.querySelector(".wf-conversion-expected-type")?.textContent ?? "";
     expect(picker().value).toBe("Sum");
     expect(picker().disabled).toBe(false);
-    expect(rendered.container.querySelector('.wf-property-row-header-meta')?.textContent).toContain("Double");
+    const conversionToggle = rendered.container.querySelector<HTMLButtonElement>(".wf-conversion-toggle")!;
+    flushSync(() => conversionToggle.click());
+    expect(expectedType()).toContain("Double");
     flushSync(() => rendered.root.render(<ActivityGraphImplementationEditor {...props} contract={{ contractSchemaVersion: "1", outcomes: [], outputs: [{ ...output, type: { alias: "Boolean", collectionKind: "Single" } }] }} />));
-    expect(rendered.container.querySelector('.wf-property-row-header-meta')?.textContent).toContain("Boolean");
+    expect(expectedType()).toContain("Boolean");
     flushSync(() => rendered.root.render(<ActivityGraphImplementationEditor {...props} contract={{ contractSchemaVersion: "1", outcomes: [], outputs: [] }} />));
     expect(picker().getAttribute("aria-invalid")).toBe("true");
     expect(rendered.container.textContent).toContain("This output is no longer defined.");
@@ -1424,13 +1612,8 @@ function sequenceImplementationValue(activities: unknown[] = []) {
   };
 }
 
-// deleteSelected guards on window.confirm; approve exactly one prompt.
 function confirmOnce() {
-  const original = window.confirm;
-  window.confirm = () => {
-    window.confirm = original;
-    return true;
-  };
+  setDialogs({ confirm: async () => true, prompt: async () => null, alert: async () => undefined });
 }
 
 function bpmnCatalogItem() {

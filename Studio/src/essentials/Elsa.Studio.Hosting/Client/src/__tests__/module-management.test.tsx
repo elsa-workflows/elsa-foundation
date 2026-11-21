@@ -737,9 +737,9 @@ describe("module management page", () => {
     await unmount();
   });
 
-  it("explains how to configure optional privileged host management on the Server tab", async () => {
+  it.each([renderModuleManagementPage, renderPackageFeedsPage])("explains optional privileged host management once on the Server tab (%#)", async render => {
     const bridgeRegistryGetJson = vi.fn(async () => bridgeRegistryEnvelope(null, "unconfigured"));
-    const { container, unmount } = await renderModuleManagementPage(stubApi({ bridgeRegistryGetJson }));
+    const { container, unmount } = await render(stubApi({ bridgeRegistryGetJson }));
 
     const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
     flushSync(() => {
@@ -747,9 +747,15 @@ describe("module management page", () => {
     });
     await flushPromises();
 
-    expect(container.textContent).toContain("Privileged host management is optional");
-    expect(container.textContent).toContain("Studio:BackendBaseUrl");
-    expect(container.textContent).toContain("Studio:BackendModuleManagementApiKey");
+    const panel = activeGridPanel(container)?.parentElement ?? container.querySelector("[role='tabpanel']:not([hidden])")!;
+    expect(panel.textContent).toContain("Privileged host management is not configured");
+    expect(panel.textContent).toContain("It is optional, but required to manage Server modules");
+    expect(panel.textContent).toContain("Studio:BackendServerBaseUrl");
+    expect(panel.textContent).toContain("Studio:BackendBaseUrl");
+    expect(panel.textContent).toContain("Studio:BackendModuleManagementApiKey");
+    expect(panel.textContent?.match(/Privileged host management/g)).toHaveLength(1);
+    expect(panel.querySelector('[role="alert"]')).toBeNull();
+    expect(panel.querySelector(".studio-empty-state")).not.toBeNull();
     expect(activeGridPanel(container)).toBeNull();
 
     await unmount();

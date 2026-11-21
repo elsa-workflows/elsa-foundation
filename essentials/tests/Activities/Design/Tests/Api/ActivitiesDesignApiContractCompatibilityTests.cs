@@ -181,6 +181,9 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
     private static readonly Type[] NativeBlockCandidateContractTypes =
         [typeof(ValidateReusableActivityCandidate), typeof(ActivityCandidateValidationView)];
 
+    private static readonly Type[] ActivityDefinitionArchiveContractTypes =
+        [typeof(ArchiveReusableActivityDefinition)];
+
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
@@ -190,7 +193,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
 
         Assert.Equal("Elsa.Activities.Design.Api", apiAssembly.GetName().Name);
 
-        foreach (var contractType in ContractTypes.Concat(ActivityDataSelectionContractTypes).Concat(NativeBlockCandidateContractTypes))
+        foreach (var contractType in ContractTypes.Concat(ActivityDataSelectionContractTypes).Concat(NativeBlockCandidateContractTypes).Concat(ActivityDefinitionArchiveContractTypes))
         {
             Assert.Same(apiAssembly, contractType.Assembly);
             Assert.True(contractType.IsPublic, $"{contractType.FullName} must stay publicly exported.");
@@ -209,7 +212,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
             .Order(StringComparer.Ordinal);
 
         Assert.Equal(
-            ContractTypes.Concat(ActivityDataSelectionContractTypes).Concat(NativeBlockCandidateContractTypes).Concat(ImplementationOnlyTypes).Select(type => type.FullName).Order(StringComparer.Ordinal),
+            ContractTypes.Concat(ActivityDataSelectionContractTypes).Concat(NativeBlockCandidateContractTypes).Concat(ActivityDefinitionArchiveContractTypes).Concat(ImplementationOnlyTypes).Select(type => type.FullName).Order(StringComparer.Ordinal),
             exported);
     }
 

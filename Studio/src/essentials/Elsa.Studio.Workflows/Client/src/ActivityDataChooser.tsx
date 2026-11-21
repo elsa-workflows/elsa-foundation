@@ -44,8 +44,23 @@ import "./activityDataChooser.css";
  */
 
 const ActivityDataBindingChangeContext = createContext<((binding: ActivityDataBinding) => void) | null>(null);
-export function ActivityDataBindingChangeProvider({ onSelect, children }: { onSelect(binding: ActivityDataBinding): void; children: ReactNode }) {
-  return <ActivityDataBindingChangeContext.Provider value={onSelect}>{children}</ActivityDataBindingChangeContext.Provider>;
+const ActivityDataConversionPickerContext = createContext<(() => void) | null>(null);
+const ActivityDataJsonSerializationAvailabilityContext = createContext<((available: boolean) => void) | null>(null);
+export function ActivityDataBindingChangeProvider({ onSelect, onOpenConversion, onJsonSerializationAvailabilityChange, children }: {
+  onSelect(binding: ActivityDataBinding): void;
+  onOpenConversion?(): void;
+  onJsonSerializationAvailabilityChange?(available: boolean): void;
+  children: ReactNode;
+}) {
+  return (
+    <ActivityDataBindingChangeContext.Provider value={onSelect}>
+      <ActivityDataConversionPickerContext.Provider value={onOpenConversion ?? null}>
+        <ActivityDataJsonSerializationAvailabilityContext.Provider value={onJsonSerializationAvailabilityChange ?? null}>
+          {children}
+        </ActivityDataJsonSerializationAvailabilityContext.Provider>
+      </ActivityDataConversionPickerContext.Provider>
+    </ActivityDataBindingChangeContext.Provider>
+  );
 }
 
 const ActivityDataSelectionContext = createContext<ActivityDataSelectionHost | null>(null);
@@ -506,6 +521,8 @@ export function ActivityResultReferenceEditor(props: StudioExpressionEditorProps
 function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initialFocus, context, onChange }: StudioExpressionEditorProps) {
   const host = useActivityDataSelectionHost();
   const changeBinding = useContext(ActivityDataBindingChangeContext);
+  const openConversion = useContext(ActivityDataConversionPickerContext);
+  const reportJsonSerializationAvailability = useContext(ActivityDataJsonSerializationAvailabilityContext);
   const reference = readActivityResultReference(value);
   const replaceRef = useRef<HTMLButtonElement>(null);
   // Open for one target only: when the row shows another activity, an open browser and any pending choice go away.
@@ -518,6 +535,7 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
   const producer = reference && host ? host.describeActivity(reference.producerNodeId) : null;
   const missing = Boolean(reference && host && !producer);
   const preview = useBindingConversionPreview(host, target, Boolean(reference && producer && !disabled));
+  const canSerializeJsonString = Boolean(reference && producer && !disabled && preview?.canSerializeJsonString === true);
   const problem = !reference
     ? "No output is chosen yet. Use Choose data to pick one."
     : missing
@@ -527,6 +545,11 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
   const disambiguation = reference && producer?.sharesLabel ? reference.producerNodeId : null;
   const outputLabel = reference ? describeOutput(reference.projectionKey, producer) : "";
   const canBrowse = Boolean(host && nodeId && !disabled);
+
+  useEffect(() => {
+    reportJsonSerializationAvailability?.(canSerializeJsonString);
+    return () => reportJsonSerializationAvailability?.(false);
+  }, [canSerializeJsonString, reportJsonSerializationAvailability]);
 
   useEffect(() => {
     if (initialFocus) replaceRef.current?.focus();
@@ -560,6 +583,9 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
         <p className="wf-data-reference-problem">
           <AlertTriangle size={13} aria-hidden="true" />
           <span>{problem}</span>
+          {preview?.rejection && canSerializeJsonString && openConversion ? (
+            <button type="button" className="wf-data-reference-conversion" onClick={openConversion}>Choose conversion</button>
+          ) : null}
         </p>
       ) : null}
       <div className="wf-data-reference-actions">

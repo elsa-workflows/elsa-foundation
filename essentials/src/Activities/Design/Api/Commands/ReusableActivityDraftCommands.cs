@@ -42,6 +42,8 @@ public sealed record UpdateReusableActivityDefinition(
     string DisplayName,
     string? Description) : ICommand<ActivityDefinitionIdentityView>;
 
+public sealed record ArchiveReusableActivityDefinition([property: JsonIgnore] string DefinitionId) : ICommand;
+
 public sealed record CreateReusableActivityDraft(
     [property: JsonIgnore] string DefinitionId,
     string? SourceVersionId,

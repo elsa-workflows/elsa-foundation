@@ -39,7 +39,7 @@
   --transition-fast: 0.15s ease;
   --transition-base: 0.2s ease;
   --transition-slow: 0.3s ease;
-  
+
   /* Theme colors — Classic light until ThemeProvider applies the selected theme. */
   --primary: oklch(0.5 0.148 237);
   --primary-foreground: oklch(0.99 0 0);
@@ -561,6 +561,42 @@ html[data-sidebar-color] :where(.sidebar .nav-section) a.active {
 /* Material panels are textured for the workspace mode; a pinned tone keeps the plain surface. */
 html[data-theme-material][data-sidebar-color] .sidebar {
   background: var(--studio-nav-bg);
+}
+
+@media (min-width: 1025px) {
+  html[data-nav-mode="left"][data-sidebar-backdrop="gradient"]:not([data-theme-appearance="high-contrast"]) .sidebar {
+    background-image:
+      linear-gradient(155deg, color-mix(in srgb, var(--studio-nav-active) 34%, transparent), transparent 62%),
+      linear-gradient(180deg, color-mix(in srgb, var(--studio-nav-text) 5%, var(--studio-nav-bg)), var(--studio-nav-bg) 72%);
+  }
+
+}
+
+html[data-nav-mode="left"][data-sidebar-backdrop="starfield"]:not([data-theme-appearance="high-contrast"]) .sidebar,
+.theme-preview-surface nav[data-sidebar-backdrop="starfield"],
+.settings-preset-nav[data-sidebar-backdrop="starfield"] {
+  background-image:
+    radial-gradient(circle at 12% 9%, color-mix(in srgb, var(--studio-nav-text) 44%, transparent) 0.65px, transparent 1px),
+    radial-gradient(circle at 72% 15%, color-mix(in srgb, var(--studio-nav-text) 32%, transparent) 0.7px, transparent 1.1px),
+    radial-gradient(circle at 34% 29%, color-mix(in srgb, var(--studio-nav-text) 28%, transparent) 0.6px, transparent 1px),
+    radial-gradient(circle at 86% 38%, color-mix(in srgb, var(--studio-nav-text) 38%, transparent) 0.8px, transparent 1.2px),
+    radial-gradient(circle at 18% 63%, color-mix(in srgb, var(--studio-nav-text) 31%, transparent) 0.65px, transparent 1px),
+    radial-gradient(circle at 67% 81%, color-mix(in srgb, var(--studio-nav-text) 35%, transparent) 0.7px, transparent 1.1px),
+    radial-gradient(ellipse at 82% 18%, color-mix(in srgb, var(--studio-nav-active) 20%, transparent), transparent 68%),
+    radial-gradient(ellipse at 16% 78%, color-mix(in srgb, var(--studio-nav-text) 7%, transparent), transparent 62%),
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--studio-nav-text) 2.5%, transparent) 0 1px, transparent 1px 40px),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--studio-nav-text) 2.5%, transparent) 0 1px, transparent 1px 40px);
+  background-size:
+    100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%,
+    100% 100%, 100% 100%, 40px 40px, 40px 40px;
+  background-position: center;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat;
+}
+
+@media (max-width: 1024px) {
+  html[data-nav-mode="left"][data-sidebar-backdrop="starfield"]:not([data-theme-appearance="high-contrast"]) .sidebar {
+    background-image: none;
+  }
 }
 
 .brand {
@@ -1192,6 +1228,30 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   flex: 1;
 }
 
+.content:has(> .wf-page--template-workbench, > .studio-workspace-panel:not([hidden]) > .wf-page--template-workbench) {
+  --studio-content-padding-block: 0px;
+  --studio-content-padding-inline: 0px;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.content > .wf-page--template-workbench,
+.content > .studio-workspace-panel:not([hidden]) > .wf-page--template-workbench {
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.wf-page--template-workbench > .wf-editor,
+.wf-page--template-workbench > .wf-lazy-state {
+  height: auto;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
 .dashboard-view,
 .diagnostics-view {
   display: grid;
@@ -1338,6 +1398,122 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   user-select: none;
 }
 
+.studio-side-panel-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--studio-space-1);
+}
+
+.studio-side-panel-action-button {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.studio-side-panel-action-button:hover,
+.studio-side-panel-action-button:focus-visible {
+  border-color: var(--studio-border);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text);
+}
+
+.studio-side-panel-action-button:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.studio-side-panel-action-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.studio-resize-handle {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  background: var(--studio-surface);
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+
+.studio-resize-handle.vertical {
+  cursor: ew-resize;
+}
+
+.studio-resize-handle.horizontal {
+  cursor: ns-resize;
+}
+
+.studio-resize-handle::after {
+  display: block;
+  border-radius: 999px;
+  background: var(--studio-border);
+  content: "";
+  transition: background-color var(--transition-fast);
+}
+
+.studio-resize-handle.vertical::after {
+  width: 2px;
+  height: 24px;
+}
+
+.studio-resize-handle.horizontal::after {
+  width: 24px;
+  height: 2px;
+}
+
+.studio-resize-handle:hover::after {
+  background: var(--studio-accent);
+}
+
+.studio-resize-handle:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--studio-focus);
+}
+
+.studio-side-resize-handle,
+.studio-side-resize-spacer {
+  min-width: 0;
+  min-height: 0;
+}
+
+.studio-side-resize-handle {
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: var(--studio-surface);
+  cursor: ew-resize;
+  outline: none;
+  touch-action: none;
+}
+
+.studio-side-resize-handle:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--studio-focus);
+}
+
+.studio-side-panel-resizing,
+.studio-side-panel-resizing * {
+  cursor: ew-resize !important;
+  user-select: none;
+}
+
 .section-header {
   display: flex;
   align-items: end;
@@ -1402,53 +1578,129 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 
 .diagnostics-task-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: var(--studio-space-3);
   min-width: 0;
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
   list-style: none;
 }
 
-.diagnostics-task-list li + li {
-  border-top: 1px solid var(--border);
+.diagnostics-task-list li {
+  min-width: 0;
 }
 
 .diagnostics-task-link {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-md);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--studio-space-3);
+  height: 100%;
   min-width: 0;
-  padding: var(--spacing-md) var(--spacing-sm);
-  border-radius: var(--radius-sm);
-  color: var(--foreground);
+  padding: var(--studio-space-3);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  color: var(--studio-text);
   text-decoration: none;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
 .diagnostics-task-link:hover {
-  background: var(--muted);
+  transform: translateY(-2px);
+  border-color: var(--studio-accent);
+  background: var(--studio-surface-raised);
+  box-shadow: var(--studio-shadow-sm);
 }
 
 .diagnostics-task-link:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 2px solid var(--studio-accent);
   outline-offset: 2px;
 }
 
-.diagnostics-task-link > svg {
-  flex: none;
-  color: var(--muted-foreground);
+.diagnostics-task-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 20 / 9;
+  overflow: hidden;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-muted);
+}
+
+.diagnostics-task-preview svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.diagnostics-preview-canvas,
+.diagnostics-preview-panel {
+  fill: var(--studio-surface-muted);
+}
+
+.diagnostics-preview-toolbar {
+  fill: var(--studio-surface);
+}
+
+.diagnostics-preview-toolbar-edge,
+.diagnostics-preview-grid-line {
+  fill: none;
+  stroke: var(--studio-border);
+  stroke-width: 1;
+}
+
+.diagnostics-preview-dot,
+.diagnostics-preview-muted {
+  fill: var(--studio-text-muted);
+  opacity: 0.42;
+}
+
+.diagnostics-preview-accent {
+  fill: var(--studio-accent);
+}
+
+.diagnostics-preview-soft {
+  fill: var(--studio-accent-soft);
+}
+
+.diagnostics-preview-positive {
+  fill: var(--studio-success);
+}
+
+.diagnostics-preview-accent-line {
+  fill: none;
+  stroke: var(--studio-accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.diagnostics-preview-check {
+  fill: none;
+  stroke: var(--studio-success);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.diagnostics-preview-prompt {
+  fill: var(--studio-accent);
+  font-family: var(--studio-font-mono);
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .diagnostics-task-content {
   display: grid;
-  gap: var(--spacing-xs);
+  flex: 1;
+  align-content: start;
+  gap: var(--studio-space-2);
   min-width: 0;
 }
 
 .diagnostics-task-title {
-  color: var(--foreground);
+  color: var(--studio-text);
   font-size: 14px;
   font-weight: 650;
   line-height: 1.4;
@@ -1456,10 +1708,40 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 }
 
 .diagnostics-task-description {
-  color: var(--muted-foreground);
+  color: var(--studio-text-muted);
   font-size: 13px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.diagnostics-task-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--studio-space-1);
+  margin-top: auto;
+  padding-top: var(--studio-space-1);
+  color: var(--studio-accent);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.diagnostics-task-action svg {
+  transition: transform var(--transition-fast);
+}
+
+.diagnostics-task-link:hover .diagnostics-task-action svg {
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagnostics-task-link,
+  .diagnostics-task-action svg {
+    transition: none;
+  }
+
+  .diagnostics-task-link:hover {
+    transform: none;
+  }
 }
 
 .diagnostics-index-empty {
@@ -1921,7 +2203,11 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   align-content: start;
   gap: 8px;
   border-right: 1px solid var(--preview-border);
-  background: color-mix(in srgb, var(--preview-card) 92%, var(--preview-primary));
+  background-color: var(--preview-sidebar);
+  color: var(--preview-sidebar-foreground);
+  --studio-nav-bg: var(--preview-sidebar);
+  --studio-nav-text: var(--preview-sidebar-foreground);
+  --studio-nav-active: var(--preview-sidebar-active);
   padding: 14px;
 }
 
@@ -1931,7 +2217,12 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 }
 
 .theme-preview-surface nav span:first-child {
-  background: color-mix(in srgb, var(--preview-primary) 18%, transparent);
+  background: var(--preview-sidebar-active);
+  color: var(--preview-sidebar-active-foreground);
+}
+
+.theme-preview-surface nav[data-sidebar-backdrop="gradient"] {
+  background-image: linear-gradient(155deg, color-mix(in srgb, var(--preview-sidebar-active) 34%, transparent), transparent 68%);
 }
 
 .theme-preview-surface section {

@@ -36,6 +36,164 @@ for (const theme of ["light", "dark"]) {
   }
 }
 
+for (const theme of ["light", "dark"]) {
+  for (const width of [1440, 390]) {
+    test(`Activity Definition graph chrome stays joined around diagnostics (${theme}, ${width})`, async ({ page }, testInfo) => {
+      const state = await mockActivityDefinitionAuthoring(page);
+      state.draft.contract.inputs = [browserContractInput()];
+      await page.setViewportSize({ width, height: 1000 });
+      await createBrowserActivity(page, theme);
+      state.validationMode = "valid";
+      await page.getByRole("button", { name: "Validate saved revision", exact: true }).click();
+      const advancedDetails = page.locator("details.ad-authoring-advanced").first();
+      const advancedSummary = advancedDetails.locator(":scope > summary");
+      await advancedSummary.focus();
+      await page.keyboard.press("Enter");
+      await expect(advancedDetails).toHaveJSProperty("open", false);
+      await advancedSummary.evaluate(element => (element as HTMLElement).blur());
+
+      const editor = page.locator(".ad-draft-editor");
+      const workspace = page.locator(".ad-graph-workspace");
+      const diagnostics = page.locator(".ad-diagnostics-panel");
+      const details = diagnostics.locator(":scope > details");
+      await expect(diagnostics).toBeVisible();
+      await expect(editor).toHaveClass(/is-graph-designer/);
+      await expect(details).not.toHaveAttribute("open");
+      await expect(editor).toHaveCSS("border-top-width", "1px");
+      expect(await editor.evaluate(element => Number.parseFloat(getComputedStyle(element).borderTopLeftRadius))).toBeGreaterThan(0);
+      await expect(workspace).toHaveCSS("border-top-width", "0px");
+      await expect(workspace).toHaveCSS("border-radius", "0px");
+      const toolbar = page.locator(".ad-draft-editor-toolbar > .wf-editor-toolbar");
+      const authoringViews = page.getByRole("tablist", { name: "Activity Definition authoring views" });
+      const designerTab = authoringViews.getByRole("tab", { name: "Designer", exact: true });
+      const inputsTab = authoringViews.getByRole("tab", { name: /^Inputs/ });
+      const canvas = page.locator(".ad-graph-canvas");
+      const canvasTabs = canvas.locator(".ad-authoring-canvas-tabs");
+      const centerContent = canvas.locator(".ad-graph-center-content");
+      const designerPanel = centerContent.getByRole("tabpanel", { name: "Designer" });
+      const paletteSearch = page.getByRole("searchbox", { name: "Search activity palette" });
+      const palette = page.locator(".wf-palette");
+      const inspector = page.locator(".wf-inspector");
+      await expect(palette).toHaveCount(1);
+      await expect(inspector).toHaveCount(1);
+      await palette.evaluate(element => element.setAttribute("data-view-switch-sentinel", "mounted"));
+      await inspector.evaluate(element => element.setAttribute("data-view-switch-sentinel", "mounted"));
+      await expect(canvasTabs.locator(".ad-authoring-view-tabs")).toBeVisible();
+      if (width > 600) await paletteSearch.fill("Sequence");
+      const toolbarBounds = (await toolbar.boundingBox())!;
+      const tabsBounds = (await canvasTabs.locator(".ad-authoring-view-tabs").boundingBox())!;
+      const canvasBounds = (await canvas.boundingBox())!;
+      expect(tabsBounds.y).toBeGreaterThanOrEqual(toolbarBounds.y + toolbarBounds.height - 1);
+      expect(tabsBounds.x).toBeGreaterThanOrEqual(canvasBounds.x);
+      expect(tabsBounds.x + tabsBounds.width).toBeLessThanOrEqual(canvasBounds.x + canvasBounds.width + 1);
+      const widths = await page.evaluate(() => {
+        const editorBounds = document.querySelector(".ad-draft-editor.is-graph-designer")!.getBoundingClientRect();
+        const diagnosticsBounds = document.querySelector(".ad-diagnostics-panel")!.getBoundingClientRect();
+        return { editorLeft: editorBounds.left, editorRight: editorBounds.right, diagnosticsLeft: diagnosticsBounds.left, diagnosticsRight: diagnosticsBounds.right };
+      });
+      expect(Math.abs(widths.editorLeft - widths.diagnosticsLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(widths.editorRight - widths.diagnosticsRight)).toBeLessThanOrEqual(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+      await page.screenshot({ path: testInfo.outputPath(`graph-chrome-${theme}-${width}-collapsed.png`) });
+
+      const diagnosticsSummary = details.locator(":scope > summary");
+      await diagnosticsSummary.focus();
+      await page.keyboard.press("Enter");
+      await expect(details).toHaveAttribute("open", "");
+      await expect(diagnostics.getByText("Valid draft")).toBeVisible();
+      await diagnosticsSummary.evaluate(element => (element as HTMLElement).blur());
+      await page.screenshot({ path: testInfo.outputPath(`graph-chrome-${theme}-${width}-expanded.png`) });
+
+      await designerTab.focus();
+      await page.keyboard.press("ArrowRight");
+      await expect(inputsTab).toBeFocused();
+      await expect(inputsTab).toHaveAttribute("aria-selected", "true");
+      await expect(editor).toHaveClass(/is-graph-designer/);
+      await expect(canvasTabs.locator(".ad-authoring-view-tabs")).toBeVisible();
+      await expect(designerPanel).toBeHidden();
+      const inputsPanel = centerContent.getByRole("tabpanel", { name: "Inputs" });
+      const centerView = canvas.locator(".ad-graph-authoring-view-host");
+      await expect(inputsPanel).toBeVisible();
+      await expect(centerView).toHaveCSS("overflow-y", "auto");
+      await inputsPanel.evaluate(element => {
+        const scrollProbe = document.createElement("div");
+        scrollProbe.setAttribute("data-test-scroll-probe", "");
+        scrollProbe.setAttribute("aria-hidden", "true");
+        scrollProbe.style.height = "1200px";
+        element.append(scrollProbe);
+      });
+      const centerScroll = await centerView.evaluate(element => ({ scrollHeight: element.scrollHeight, clientHeight: element.clientHeight }));
+      expect(centerScroll.scrollHeight).toBeGreaterThan(centerScroll.clientHeight);
+      await centerView.evaluate(element => { element.scrollTop = element.scrollHeight; });
+      expect(await centerView.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+      await inputsPanel.evaluate(element => element.querySelector("[data-test-scroll-probe]")?.remove());
+      await expect(palette).toHaveAttribute("data-view-switch-sentinel", "mounted");
+      if (width > 600) {
+        await expect(paletteSearch).toHaveValue("Sequence");
+        await expect(paletteSearch).toBeEnabled();
+        await expect(page.locator(".wf-palette-category-toggle").first()).toBeEnabled();
+        await expect(page.locator(".wf-palette-activity").first()).toBeDisabled();
+      }
+      await expect(inspector).toHaveAttribute("data-view-switch-sentinel", "mounted");
+      await expect(diagnostics).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+      await page.screenshot({ path: testInfo.outputPath(`graph-inputs-${theme}-${width}.png`) });
+
+      for (const [tabName, panelName] of [["Outputs", "Outputs"], ["Outcomes", "Outcomes"], ["Variables", "Variables"]] as const) {
+        const tab = authoringViews.getByRole("tab", { name: new RegExp(`^${tabName}`) });
+        await page.keyboard.press("ArrowRight");
+        await expect(tab).toBeFocused();
+        await expect(tab).toHaveAttribute("aria-selected", "true");
+        await expect(centerContent.getByRole("tabpanel", { name: panelName })).toBeVisible();
+        await expect(palette).toHaveAttribute("data-view-switch-sentinel", "mounted");
+        await expect(inspector).toHaveAttribute("data-view-switch-sentinel", "mounted");
+      }
+
+      for (const tabName of ["Outcomes", "Outputs", "Inputs", "Designer"] as const) {
+        const tab = authoringViews.getByRole("tab", { name: new RegExp(`^${tabName}`) });
+        await page.keyboard.press("ArrowLeft");
+        await expect(tab).toBeFocused();
+        await expect(tab).toHaveAttribute("aria-selected", "true");
+      }
+      await expect(designerPanel).toBeVisible();
+      await expect(palette).toHaveAttribute("data-view-switch-sentinel", "mounted");
+      if (width > 600) await expect(paletteSearch).toHaveValue("Sequence");
+      await expect(inspector).toHaveAttribute("data-view-switch-sentinel", "mounted");
+      await expect(canvasTabs.locator(".ad-authoring-view-tabs")).toBeVisible();
+    });
+  }
+}
+
+test("Activity Definition recovers a failed provider editor asset on the same saved draft", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  await mockEditorEntry(page, state);
+  let failEditorModule = true;
+  let editorModuleRequests = 0;
+  await page.route(/ActivityGraphImplementationEditor\.tsx/, async route => {
+    editorModuleRequests++;
+    if (failEditorModule) return route.abort();
+    return route.continue();
+  });
+
+  await page.goto("/?mode=activity-definitions&definition=activity-def-browser&section=editor&draft=activity-draft-browser");
+  const editorFailure = page.locator(".ad-designer-view [role='alert']");
+  await expect(editorFailure).toContainText("Implementation editor unavailable");
+  await expect(editorFailure).toContainText("Studio assets");
+  await expect.poll(() => editorModuleRequests).toBeGreaterThan(0);
+  await expect(page.getByRole("button", { name: "Reload draft", exact: true })).toBeVisible();
+  await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Inputs/ }).click();
+  await expect(page.getByRole("tab", { name: /^Inputs/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "Browser graph activity" })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("draft")).toBe("activity-draft-browser");
+
+  await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: "Designer", exact: true }).click();
+  failEditorModule = false;
+  await page.getByRole("button", { name: "Reload draft", exact: true }).click();
+  await expect(page.getByLabel("Activity Graph designer")).toBeVisible();
+  await expect(page).toHaveURL(/draft=activity-draft-browser/);
+  expect(state.draftCreationRequests).toHaveLength(0);
+});
+
 test("Activity editor starts a draft only on the first change and keeps that change after reload", async ({ page }, testInfo) => {
   const state = await mockActivityDefinitionAuthoring(page);
   state.draft.status = "published";
@@ -154,6 +312,86 @@ for (const theme of ["light", "dark"]) {
   });
 }
 
+for (const theme of ["light", "dark"]) {
+  test(`Activity Definitions search shows its empty focused insertion marker (${theme})`, async ({ page }, testInfo) => {
+    await mockActivityDefinitions(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(`/?mode=activity-definitions&theme=${theme}`);
+
+    const input = page.getByRole("searchbox", { name: "Search" });
+    const shell = input.locator("..");
+    await input.focus();
+    await expect(input).toBeFocused();
+    await expect(input).toHaveAttribute("placeholder", "Name, type key, or category");
+
+    const focusedEmpty = await input.evaluate(element => {
+      const style = getComputedStyle(element);
+      const rootStyle = getComputedStyle(document.documentElement);
+      const marker = getComputedStyle(element.parentElement!, "::after");
+      return {
+        fontSize: Number.parseFloat(style.fontSize),
+        expectedFontSize: Number.parseFloat(rootStyle.getPropertyValue("--studio-body-size")) + 2,
+        markerOpacity: marker.opacity,
+        markerWidth: Number.parseFloat(marker.width),
+        markerLeft: Number.parseFloat(marker.left),
+        shellLeft: element.parentElement!.getBoundingClientRect().left,
+        shellBorderLeft: Number.parseFloat(getComputedStyle(element.parentElement!).borderLeftWidth),
+        inputLeft: element.getBoundingClientRect().left,
+        outlineStyle: getComputedStyle(element.parentElement!).outlineStyle,
+        outlineWidth: getComputedStyle(element.parentElement!).outlineWidth
+      };
+    });
+    expect(focusedEmpty.fontSize).toBeGreaterThanOrEqual(focusedEmpty.expectedFontSize - 0.1);
+    expect(focusedEmpty.markerOpacity).toBe("1");
+    expect(focusedEmpty.markerWidth).toBeGreaterThanOrEqual(2);
+    expect(Math.abs(focusedEmpty.shellLeft + focusedEmpty.shellBorderLeft + focusedEmpty.markerLeft - focusedEmpty.inputLeft))
+      .toBeLessThanOrEqual(1);
+    expect(focusedEmpty.outlineStyle).toBe("solid");
+    expect(focusedEmpty.outlineWidth).toBe("2px");
+    await testInfo.attach(`activity-definitions-search-${theme}.png`, {
+      body: await page.screenshot({ caret: "initial" }),
+      contentType: "image/png"
+    });
+
+    await shell.evaluate(element => element.setAttribute("dir", "rtl"));
+    const rtlMarker = await input.evaluate(element => {
+      const shell = element.parentElement!;
+      const shellStyle = getComputedStyle(shell);
+      const marker = getComputedStyle(shell, "::after");
+      return {
+        opacity: marker.opacity,
+        right: Number.parseFloat(marker.right),
+        shellRight: shell.getBoundingClientRect().right,
+        shellBorderRight: Number.parseFloat(shellStyle.borderRightWidth),
+        inputRight: element.getBoundingClientRect().right
+      };
+    });
+    expect(rtlMarker.opacity).toBe("1");
+    expect(Math.abs(rtlMarker.shellRight - rtlMarker.shellBorderRight - rtlMarker.right - rtlMarker.inputRight))
+      .toBeLessThanOrEqual(1);
+    await shell.evaluate(element => element.removeAttribute("dir"));
+
+    await input.fill("Invoice");
+    await expect(input).toHaveValue("Invoice");
+    await expect.poll(() => shell.evaluate(element => getComputedStyle(element, "::after").opacity)).toBe("0");
+    await input.fill("");
+    await expect(input).toHaveAttribute("placeholder", "Name, type key, or category");
+    await expect.poll(() => shell.evaluate(element => getComputedStyle(element, "::after").opacity)).toBe("1");
+    await input.evaluate(element => (element as HTMLInputElement).blur());
+    await expect.poll(() => shell.evaluate(element => getComputedStyle(element, "::after").opacity)).toBe("0");
+    await input.focus();
+    await expect.poll(() => shell.evaluate(element => getComputedStyle(element, "::after").opacity)).toBe("1");
+
+    await page.emulateMedia({ forcedColors: "active" });
+    const forcedColors = await shell.evaluate(element => ({
+      active: matchMedia("(forced-colors: active)").matches,
+      markerColor: getComputedStyle(element, "::after").backgroundColor
+    }));
+    expect(forcedColors.active).toBe(true);
+    expect(forcedColors.markerColor).not.toBe("rgba(0, 0, 0, 0)");
+  });
+}
+
 test("Activity Definitions supports keyboard navigation from the editor into history and exact draft URLs", async ({ page }) => {
   await mockActivityDefinitions(page);
   await page.goto("/?mode=activity-definitions");
@@ -176,6 +414,74 @@ test("Activity Definitions supports keyboard navigation from the editor into his
   await expect(page).toHaveURL(/definition=definition-1.*section=drafts.*draft=draft-1/);
 });
 
+test("Activity Definition row actions stay isolated and open version history", async ({ page }) => {
+  const archiveable = { ...definition(), actions: [{ action: "archive-definition", allowed: true }] };
+  await mockActivityDefinitions(page, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(pageOf([archiveable]))
+  }));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?mode=activity-definitions");
+
+  const row = page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" });
+  await expect(page.getByRole("columnheader", { name: "Actions", exact: true })).toBeVisible();
+  const trigger = row.getByRole("button", { name: "Actions for Invoice evaluator" });
+  const triggerBounds = (await trigger.boundingBox())!;
+  const actionsBounds = (await row.locator('[data-label="Actions"]').boundingBox())!;
+  expect(Math.abs(triggerBounds.x + triggerBounds.width - actionsBounds.x - actionsBounds.width)).toBeLessThanOrEqual(1);
+
+  await trigger.click();
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem")).toHaveText(["Edit", "Publish", "Archive", "Version history", "Usage"]);
+  await expect(page).not.toHaveURL(/definition=/);
+  await menu.getByRole("menuitem", { name: "Version history", exact: true }).click();
+
+  await expect(page).toHaveURL(/definition=definition-1.*section=versions/);
+  await expect(page.getByRole("tab", { name: "Versions", exact: true })).toHaveAttribute("aria-selected", "true");
+});
+
+test("Activity Definition archive uses confirmation and removes only the collection entry", async ({ page }) => {
+  let archived = false;
+  let archiveRequests = 0;
+  const archiveable = { ...definition(), actions: [{ action: "archive-definition", allowed: true }] };
+  await mockActivityDefinitions(page, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(pageOf(archived ? [] : [archiveable]))
+  }));
+  await page.route("**/design/activities/definitions/definition-1", async route => {
+    if (route.request().method() === "DELETE") {
+      archiveRequests++;
+      archived = true;
+      await route.fulfill({ status: 204 });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?mode=activity-definitions");
+
+  const row = page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" });
+  const trigger = row.getByRole("button", { name: "Actions for Invoice evaluator" });
+  await trigger.click();
+  await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
+  let confirmation = page.getByRole("dialog");
+  await expect(confirmation).toContainText("workflow references will remain intact");
+  await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(row).toBeVisible();
+  expect(archiveRequests).toBe(0);
+
+  await trigger.click();
+  await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
+  confirmation = page.getByRole("dialog");
+  await confirmation.getByRole("button", { name: "Archive", exact: true }).click();
+
+  await expect(row).toHaveCount(0);
+  await expect(page.getByText("No designed activities yet", { exact: true })).toBeVisible();
+  expect(archiveRequests).toBe(1);
+});
+
 test("Activity Definitions stays usable without viewport overflow at 360, 768, and 1280 pixels", async ({ page }) => {
   await mockActivityDefinitions(page);
   for (const width of [360, 768, 1280]) {
@@ -186,6 +492,57 @@ test("Activity Definitions stays usable without viewport overflow at 360, 768, a
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   }
+});
+
+test("Activity Definitions keeps provider labels readable inside the collection table", async ({ page }) => {
+  const createDefinition = (definitionId: string, displayName: string, providerKey: string) => {
+    const item = structuredClone(definition());
+    item.definition.definitionId = definitionId;
+    item.definition.displayName = displayName;
+    item.lifecycle.head.providerKey = providerKey;
+    item.lifecycle.recommendation.providerKey = providerKey;
+    return item;
+  };
+  const longProviderKey = `contoso.${"activity-provider-segment.".repeat(8)}`;
+  const noProviderDefinition = createDefinition("definition-no-provider", "No provider", "");
+  const items = [
+    createDefinition("definition-provider", "Graph activity", "elsa.activity-graph"),
+    createDefinition("definition-long-provider", "Long provider", longProviderKey),
+    { ...noProviderDefinition, lifecycle: { ...noProviderDefinition.lifecycle, head: null, recommendation: null } }
+  ];
+  await mockActivityDefinitions(page, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(pageOf(items))
+  }));
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/?mode=activity-definitions");
+
+  const providers = page.locator(".ad-collection-provider");
+  await expect(providers.nth(0)).toHaveText("elsa.activity-graph");
+  await expect(providers.nth(2)).toHaveText("Not established");
+  const shortProviderLines = await providers.nth(0).evaluate(element => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getClientRects().length;
+  });
+  expect(shortProviderLines).toBe(1);
+  await expect(providers.nth(1)).toHaveText(longProviderKey);
+  await expect(providers.nth(1)).toHaveCSS("overflow", "hidden");
+  await expect(providers.nth(1)).toHaveCSS("text-overflow", "ellipsis");
+  await expect(providers.nth(1)).toHaveCSS("white-space", "nowrap");
+  const adjacentColumns = await providers.nth(1).evaluate(element => ({
+    providerRight: element.getBoundingClientRect().right,
+    identifiersLeft: element.parentElement!.querySelector('[data-label="Identifiers"]')!.getBoundingClientRect().left
+  }));
+  expect(adjacentColumns.providerRight).toBeLessThanOrEqual(adjacentColumns.identifiersLeft);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const table = page.locator(".studio-table-container.ad-collection");
+  const tableOverflow = await table.evaluate(element => element.scrollWidth - element.clientWidth);
+  const viewportOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(tableOverflow).toBeGreaterThan(0);
+  expect(viewportOverflow).toBeLessThanOrEqual(0);
 });
 
 test("Activity Definitions restores each collection origin through real browser Back and Forward history", async ({ page }) => {
@@ -350,18 +707,118 @@ test("Activity Definition long identities remain copyable within the 390px popov
 
 test("Activity Definitions retains confirmed rows when refresh fails and keeps errors private", async ({ page }) => {
   let collectionReads = 0;
+  let releaseRefresh!: () => void;
+  let reportRefreshStarted!: () => void;
+  const refreshStarted = new Promise<void>(resolve => { reportRefreshStarted = resolve; });
+  const refreshResponse = new Promise<void>(resolve => { releaseRefresh = resolve; });
   await mockActivityDefinitions(page, async route => {
     collectionReads += 1;
     if (collectionReads === 1) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(collectionPage()) });
+    reportRefreshStarted();
+    await refreshResponse;
     return route.fulfill({ status: 500, contentType: "application/problem+json", body: JSON.stringify({ title: "hidden definition-99 secret failure" }) });
   });
-  await page.goto("/?mode=activity-definitions");
-  await expect(page.getByText("Invoice evaluator")).toBeVisible();
 
-  await page.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByText("Refresh failed; showing retained data")).toBeVisible();
-  await expect(page.getByText("Invoice evaluator")).toBeVisible();
-  await expect(page.getByText(/hidden definition-99 secret failure/)).toHaveCount(0);
+  try {
+    await page.goto("/?mode=activity-definitions");
+    await expect(page.getByText("Invoice evaluator")).toBeVisible();
+    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const initialPresentation = await refresh.evaluate(button => {
+      const style = getComputedStyle(button);
+      const bounds = button.getBoundingClientRect();
+      return { className: button.className, color: style.color, backgroundColor: style.backgroundColor, borderColor: style.borderColor, opacity: style.opacity, width: bounds.width, height: bounds.height };
+    });
+
+    await refresh.evaluate(button => (button as HTMLButtonElement).click());
+    await refreshStarted;
+    await expect(refresh).toBeEnabled();
+    await expect(refresh).toHaveAttribute("aria-busy", "true");
+    await expect(refresh).toHaveText("Refresh");
+    expect(await refresh.evaluate(button => {
+      const style = getComputedStyle(button);
+      const bounds = button.getBoundingClientRect();
+      return { className: button.className, color: style.color, backgroundColor: style.backgroundColor, borderColor: style.borderColor, opacity: style.opacity, width: bounds.width, height: bounds.height };
+    })).toEqual(initialPresentation);
+
+    releaseRefresh();
+    await expect(page.getByText("Refresh failed; showing retained data")).toBeVisible();
+    await expect(refresh).toBeEnabled();
+    await expect(refresh).not.toHaveAttribute("aria-busy", "true");
+    await expect(page.getByText("Invoice evaluator")).toBeVisible();
+    await expect(page.getByText(/hidden definition-99 secret failure/)).toHaveCount(0);
+  } finally {
+    releaseRefresh();
+  }
+});
+
+test("Activity Definition search keeps result positions stable while requests are pending", async ({ page }) => {
+  let missingRequestCount = 0;
+  let releaseMissingRequest!: () => void;
+  let releaseFollowUpRequest!: () => void;
+  let reportMissingRequestStarted!: () => void;
+  let reportFollowUpRequestStarted!: () => void;
+  const missingRequestStarted = new Promise<void>(resolve => { reportMissingRequestStarted = resolve; });
+  const followUpRequestStarted = new Promise<void>(resolve => { reportFollowUpRequestStarted = resolve; });
+  const missingRequestResponse = new Promise<void>(resolve => { releaseMissingRequest = resolve; });
+  const followUpRequestResponse = new Promise<void>(resolve => { releaseFollowUpRequest = resolve; });
+
+  await mockActivityDefinitions(page, async route => {
+    const search = new URL(route.request().url()).searchParams.get("search");
+    if (search === "missing") {
+      missingRequestCount += 1;
+      reportMissingRequestStarted();
+      await missingRequestResponse;
+      return route.fulfill({ json: pageOf([]) });
+    }
+    if (search === "follow-up") {
+      reportFollowUpRequestStarted();
+      await followUpRequestResponse;
+      return route.fulfill({ json: pageOf([]) });
+    }
+    return route.fulfill({ json: collectionPage() });
+  });
+
+  try {
+    await page.goto("/?mode=activity-definitions");
+    const search = page.getByRole("searchbox", { name: "Search" });
+    const table = page.locator(".studio-table-container.studio-collection-table");
+    await expect(page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" })).toBeVisible();
+    const populatedTop = await table.evaluate(element => element.getBoundingClientRect().top);
+
+    await search.fill("missing");
+    await missingRequestStarted;
+    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    await expect(refresh).toBeEnabled();
+    await expect(refresh).not.toHaveAttribute("aria-busy", "true");
+    await refresh.click();
+    await expect(refresh).toBeEnabled();
+    await expect(refresh).toHaveAttribute("aria-busy", "true");
+    await refresh.click();
+    await page.waitForTimeout(100);
+    expect(missingRequestCount).toBe(1);
+    await expect(page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" })).toBeVisible();
+    const populatedTopWhileSearching = await table.evaluate(element => element.getBoundingClientRect().top);
+    expect(populatedTopWhileSearching).toBeCloseTo(populatedTop, 1);
+
+    releaseMissingRequest();
+    const emptyState = page.locator(".studio-collection-empty");
+    await expect(page.getByRole("heading", { name: "No Activity Definitions match", exact: true })).toBeVisible();
+    await expect(refresh).not.toHaveAttribute("aria-busy", "true");
+    const emptyTop = await emptyState.evaluate(element => element.getBoundingClientRect().top);
+
+    await search.fill("follow-up");
+    await followUpRequestStarted;
+    await expect(refresh).toBeEnabled();
+    await expect(refresh).not.toHaveAttribute("aria-busy", "true");
+    await expect(page.getByRole("heading", { name: "No Activity Definitions match", exact: true })).toBeVisible();
+    const emptyTopWhileSearching = await emptyState.evaluate(element => element.getBoundingClientRect().top);
+    expect(emptyTopWhileSearching).toBeCloseTo(emptyTop, 1);
+  } finally {
+    releaseMissingRequest();
+    releaseFollowUpRequest();
+  }
+
+  await expect(page.getByRole("heading", { name: "No Activity Definitions match", exact: true })).toBeVisible();
 });
 
 test("Activity Definition draft management keeps parallel labels and supports blank plus exact clone creation", async ({ page }) => {
@@ -395,6 +852,87 @@ test("Activity Definition draft management keeps parallel labels and supports bl
   await expectSavedRevision(page, 1);
   expect(state.draftRequests[1]).toEqual({ sourceVersionId: "version-1", presentationLabel: "Review" });
   expect(state.sourceVersion).toEqual(sourceVersionDetail());
+});
+
+for (const width of [1440, 390]) {
+  test(`Activity Definition version details expand in place with keyboard input (${width}px)`, async ({ page }, testInfo) => {
+    await mockActivityDraftManagement(page);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions");
+
+    const breadcrumbs = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
+    await expect(page.getByRole("link", { name: "Back to designer", exact: true })).toHaveCount(0);
+    await expect(breadcrumbs.getByRole("link", { name: "Activity Definitions", exact: true })).toHaveAttribute("href", "/workflows/activity-definitions");
+    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("Invoice evaluator");
+    const versionRow = page.getByRole("button", { name: /1\.0\.0/ });
+    await expect(versionRow).toContainText("Active");
+    await expect(versionRow).toContainText("Recommended");
+    const historyWidth = await page.locator(".ad-version-history").evaluate(element => element.getBoundingClientRect().width);
+    expect(historyWidth).toBeLessThanOrEqual(Math.min(width, 1024) + 1);
+    await page.screenshot({ path: testInfo.outputPath(`versions-${width}.png`) });
+    await versionRow.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page).toHaveURL(/version=version-1/);
+    await expect(versionRow).toHaveAttribute("aria-expanded", "true");
+    const selected = page.getByLabel("Selected exact version");
+    await expect(selected.getByText("Immutable public contract")).toBeVisible();
+    const versionDetails = selected.locator("details.ad-version-details");
+    await expect(versionDetails).toHaveJSProperty("open", false);
+    await versionDetails.locator(":scope > summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(versionDetails).toHaveAttribute("open", "");
+    await expect(versionDetails.getByText("version-1", { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await versionRow.focus();
+    await page.keyboard.press("Enter");
+    await expect(versionRow).toHaveAttribute("aria-expanded", "false");
+    await expect(page).not.toHaveURL(/version=version-1/);
+    await breadcrumbs.getByRole("link", { name: "Activity Definitions", exact: true }).click();
+    await expect(page).toHaveURL(/\/workflows\/activity-definitions(?:\?|$)/);
+    await expect(breadcrumbs).toHaveCount(0);
+  });
+}
+
+test("Activity Definition draft History returns to the exact editor and preserves upgrade-plan context", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  await mockEditorEntry(page, state);
+  await page.goto("/workflows/activity-definitions?definition=activity-def-browser&section=editor&draft=activity-draft-browser&returnPlan=plan-exact");
+
+  const history = page.locator(".ad-authoring-history");
+  await history.locator(":scope > summary").click();
+  await history.getByRole("button", { name: "Versions", exact: true }).click();
+  await expect(page).toHaveURL(/section=versions.*originDraft=activity-draft-browser.*returnPlan=plan-exact/);
+
+  await page.reload();
+  const returnLink = page.getByRole("link", { name: "Back to designer", exact: true });
+  await expect(returnLink).toHaveAttribute("href", /section=editor.*draft=activity-draft-browser.*returnPlan=plan-exact/);
+  await returnLink.click();
+  await expect(page).toHaveURL(/section=editor.*draft=activity-draft-browser.*returnPlan=plan-exact/);
+});
+
+test("Activity Definition published-version History returns to its origin after selection and reload", async ({ page }) => {
+  await mockActivityVersionLifecycle(page);
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=editor&version=version-1");
+
+  const history = page.locator(".ad-authoring-history");
+  await history.locator(":scope > summary").click();
+  await history.getByRole("button", { name: "Versions", exact: true }).click();
+  await expect(page).toHaveURL(/section=versions.*originVersion=version-1/);
+  const secondVersion = page.getByRole("button", { name: /2\.0\.0/ });
+  await secondVersion.click();
+  await expect(page).toHaveURL(/version=version-2.*originVersion=version-1/);
+  await page.reload();
+
+  const backToDesigner = page.getByRole("link", { name: "Back to designer", exact: true });
+  await expect(backToDesigner).toHaveAttribute("href", /section=editor.*version=version-1/);
+  await page.getByRole("tab", { name: "Drafts", exact: true }).click();
+  await expect(page).toHaveURL(/section=drafts.*originVersion=version-1/);
+  await page.getByRole("tab", { name: "Versions", exact: true }).click();
+  await expect(backToDesigner).toHaveAttribute("href", /section=editor.*version=version-1/);
+  await backToDesigner.click();
+  await expect(page).toHaveURL(/section=editor.*version=version-1/);
+  await expect(page).not.toHaveURL(/originVersion=/);
 });
 
 test("source-owned Activity Definition history stays exact and offers no denied mutable controls", async ({ page }) => {
@@ -530,7 +1068,8 @@ test("draft management dialog traps and restores focus, supports keyboard clone 
   expect(state.draftRequests.at(-1)).toEqual({ sourceVersionId: "version-1", presentationLabel: "Keyboard clone" });
 });
 
-test("Activity Definition Test Run preserves exact input presence and opens focused Runtime Evidence", async ({ page }) => {
+test("Activity Definition Test Run opens as a modal and links compact evidence identities", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const state = await mockActivityDefinitionAuthoring(page);
   state.validationMode = "valid";
   state.testRunStatuses = ["Pending", "Running", "Completed"];
@@ -559,12 +1098,38 @@ test("Activity Definition Test Run preserves exact input presence and opens focu
   });
 
   await page.getByRole("textbox", { name: /Draft label/ }).fill("Immediate Test Run");
+  const draftUrl = page.url();
   const opener = page.getByRole("button", { name: "Test Run" });
   await opener.focus();
   await opener.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Browser graph activity" });
   await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(dialog.getByRole("button", { name: "Close Test Run" })).toBeFocused();
+  const modalLayout = await dialog.evaluate(element => {
+    const backdrop = element.parentElement!;
+    const dialogBounds = element.getBoundingClientRect();
+    const backdropBounds = backdrop.getBoundingClientRect();
+    return {
+      position: getComputedStyle(backdrop).position,
+      backdropTop: backdropBounds.top,
+      backdropHeight: backdropBounds.height,
+      dialogTop: dialogBounds.top,
+      dialogBottom: dialogBounds.bottom,
+      viewportHeight: window.innerHeight
+    };
+  });
+  expect(modalLayout.position).toBe("fixed");
+  expect(modalLayout.backdropTop).toBe(0);
+  expect(modalLayout.backdropHeight).toBe(modalLayout.viewportHeight);
+  expect(modalLayout.dialogTop).toBeGreaterThanOrEqual(0);
+  expect(modalLayout.dialogBottom).toBeLessThanOrEqual(modalLayout.viewportHeight);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await opener.press("Enter");
+  await expect(dialog).toBeVisible();
+  await expect(page).toHaveURL(draftUrl);
   await expect(dialog.getByText("Revision 2 validated")).toBeVisible();
   await dialog.getByRole("combobox", { name: "Comment presence" }).selectOption("Null");
   await dialog.getByRole("combobox", { name: "Reference presence" }).selectOption("Value");
@@ -596,12 +1161,48 @@ test("Activity Definition Test Run preserves exact input presence and opens focu
       { event: "test-run", surface: "editor", outcome: "running" },
       { event: "test-run", surface: "editor", outcome: "completed" }
     ]));
-  expect(JSON.stringify(observations)).not.toContain("activity-test-run-browser");
+  expect(JSON.stringify(observations)).not.toContain("activity-test-run-");
   expect(JSON.stringify(observations)).not.toContain("invoice-42");
-  expect(JSON.stringify(observations)).not.toContain("wrapper-artifact-browser");
+  expect(JSON.stringify(observations)).not.toContain("wrapper-artifact-");
+  expect(JSON.stringify(observations)).not.toContain("source-reference-");
+
+  const workflowExecutionId = `workflow-execution-${"c".repeat(48)}`;
+  const activityExecutionId = `outer-activity-${"d".repeat(48)}-1`;
+  const artifactId = `wrapper-artifact-${"a".repeat(48)}-1`;
+  const sourceReferenceId = `source-reference-${"b".repeat(48)}-1`;
+  const testRunId = `activity-test-run-${"9".repeat(48)}-1`;
+  const evidence = dialog.getByRole("region", { name: "Recorded activity evidence" });
+  await evidence.getByRole("tab", { name: "Outputs" }).click();
+  await expect(evidence.getByText("recorded output")).toBeVisible();
+  await dialog.getByText("Technical details", { exact: true }).click();
+  const workflowLink = dialog.getByRole("link", { name: "Open Workflow execution" });
+  const activityLink = dialog.getByRole("link", { name: "Open Outer activity execution" });
+  const artifactLink = dialog.getByRole("link", { name: "Open Wrapper artifact" });
+  const sourceReferenceLink = dialog.getByRole("link", { name: "Open Source Reference" });
+  await expect(workflowLink).toHaveAttribute("href", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
+  await expect(activityLink).toHaveAttribute("href", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}?activityExecutionId=${encodeURIComponent(activityExecutionId)}`);
+  const executableUrl = `/workflows/executables/${encodeURIComponent(artifactId)}?ref=${encodeURIComponent(sourceReferenceId)}`;
+  await expect(artifactLink).toHaveAttribute("href", executableUrl);
+  await expect(sourceReferenceLink).toHaveAttribute("href", executableUrl);
+  await expect(dialog.getByRole("link", { name: "Open Test Run" })).toHaveCount(0);
+  await expect(workflowLink.locator("code")).toContainText("…");
+  await dialog.getByRole("button", { name: "Copy Test Run ID" }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(testRunId);
+  await dialog.getByRole("button", { name: "Copy workflow execution ID" }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(workflowExecutionId);
+  for (const [label, value] of [
+    ["Copy outer activity execution ID", activityExecutionId],
+    ["Copy wrapper artifact ID", artifactId],
+    ["Copy Source Reference ID", sourceReferenceId]
+  ]) {
+    await dialog.getByRole("button", { name: label }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(value);
+  }
+  await expect(page).toHaveURL(draftUrl);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 
   await dialog.getByRole("button", { name: "Open focused Runtime Evidence" }).click();
-  await expect(page).toHaveURL(/\/workflows\/instances\/workflow-execution-browser\?activityExecutionId=outer-activity-browser/);
+  await expect(page).toHaveURL(new RegExp(`/workflows/instances/${encodeURIComponent(workflowExecutionId)}\\?activityExecutionId=${encodeURIComponent(activityExecutionId)}`));
 });
 
 test("Activity Definition Test Run keeps validation rejection out of Runtime dispatch", async ({ page }) => {
@@ -617,7 +1218,7 @@ test("Activity Definition Test Run keeps validation rejection out of Runtime dis
   expect(state.testRunWrites).toBe(0);
 
   await dialog.getByRole("button", { name: "Close Test Run" }).click();
-  await expect(opener).toBeFocused();
+  await expect(dialog).toHaveCount(0);
   state.validationMode = "forbidden";
   await opener.click();
   const unauthorized = page.getByRole("dialog", { name: "Browser graph activity" });
@@ -637,6 +1238,7 @@ test("Activity Definition Test Run separates Runtime rejection and reconciles am
   await dialog.getByRole("button", { name: "Dispatch Test Run" }).click();
   await expect(dialog.getByText("Runtime rejected dispatch")).toBeVisible();
   await expect(dialog.getByText("runtime.dispatch.denied")).toBeVisible();
+  await expect(dialog.getByRole("link")).toHaveCount(0);
 
   state.testRunMode = "ambiguous";
   state.testRunReceiptMisses = 1;
@@ -668,6 +1270,7 @@ test("Activity Definition Test Run cancels active evidence and distinguishes ful
   await dialog.getByRole("button", { name: "Rerun as new evidence" }).click();
   await expect(dialog.getByText("Test Run evidence expired")).toBeVisible({ timeout: 5_000 });
   await expect(dialog.getByText("Neither its Source Reference nor Runtime Evidence remains available.")).toBeVisible();
+  await expect(dialog.getByRole("link")).toHaveCount(0);
   await expect(dialog.getByText("Immutable rerun history (2)")).toBeVisible();
   expect(state.testRunWrites).toBe(2);
 });
@@ -929,9 +1532,13 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
   await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
   await selectSequenceStep(page, "Write line");
-  page.once("dialog", dialog => dialog.dismiss());
   await page.getByRole("button", { name: "Remove", exact: true }).click();
+  const removeConfirmation = page.getByRole("dialog");
+  await expect(removeConfirmation).toContainText("Remove this activity and any nested graph content? This change will autosave.");
+  await expect(removeConfirmation.getByRole("button", { name: "Remove", exact: true })).toHaveAttribute("data-tone", "danger");
+  await removeConfirmation.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
+  await expectSavedRevision(page, 6);
 
   state.conflictNextSave = true;
   await selectSequenceStep(page, "Delay");
@@ -949,6 +1556,43 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
     { activityVersionId: "write-line-v1" }
   ] } } } });
   expect(state.draft.contract).toMatchObject({ inputs: [{ referenceKey: "customer-note", isRequired: false, isNullable: true, default: { syntax: "Literal", value: null }, storageDriverKey: "elsa.json", durability: "Required" }] });
+});
+
+test("Activity Definition activity removal uses Studio confirmations in the inspector and sequence", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  await createBrowserActivity(page);
+  await addPaletteActivity(page, "Write line");
+  await addPaletteActivity(page, "Delay");
+  await expectSavedRevision(page, 2);
+
+  await selectSequenceStep(page, "Delay");
+  const deleteSequenceStep = page.getByRole("button", { name: "Delete Delay", exact: true });
+  await deleteSequenceStep.focus();
+  await deleteSequenceStep.press("Enter");
+  let confirmation = page.getByRole("dialog");
+  await expect(confirmation).toContainText("Remove this activity and any nested graph content? This change will autosave.");
+  await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
+  await expectSavedRevision(page, 2);
+
+  await selectSequenceStep(page, "Delay");
+  await deleteSequenceStep.focus();
+  await deleteSequenceStep.press("Enter");
+  confirmation = page.getByRole("dialog");
+  await confirmation.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(0);
+  await expectSavedRevision(page, 3);
+
+  await selectSequenceStep(page, "Write line");
+  const removeInspectorActivity = page.getByRole("button", { name: "Remove", exact: true });
+  await removeInspectorActivity.focus();
+  await removeInspectorActivity.press("Enter");
+  confirmation = page.getByRole("dialog");
+  await expect(confirmation).toContainText("Remove this activity and any nested graph content? This change will autosave.");
+  await confirmation.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(0);
+  await expectSavedRevision(page, 4);
+  expect(state.draft.revision).toBe(4);
 });
 
 test("Activity Definition provider contract proposals require review and apply an exact saved revision", async ({ page }) => {
@@ -1179,11 +1823,13 @@ test("Activity Definition publication keeps first and later recommendation seman
   await createBrowserActivity(page);
   const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
   const changesRegion = publicationDialog.getByRole("region", { name: "Changes", exact: true });
+  const summarizedVersion = publicationDialog.locator(".ad-publication-summary").first().locator("dd").first();
 
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("First publication", { exact: true })).toBeVisible();
   await expect(page.getByText("No published baseline exists", { exact: true })).toBeVisible();
   await expect(changesRegion).not.toBeVisible();
+  await expect(summarizedVersion).toHaveText("1.0.0");
   await expect(page.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeVisible();
   await page.getByText("Review initial activity contents", { exact: true }).click();
   await expect(changesRegion).toBeVisible();
@@ -1192,15 +1838,29 @@ test("Activity Definition publication keeps first and later recommendation seman
   await expect(page.getByText("raw-protected-provider-value")).toHaveCount(0);
   const firstVersion = await openPublicationVersion(publicationDialog);
   await firstVersion.fill("2.0.0");
+  await expect(summarizedVersion).toHaveText("2.0.0");
+  await firstVersion.fill("");
+  await expect(summarizedVersion).toHaveText("Not selected");
+  await firstVersion.fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
-  await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
-  await expect(page.getByText("The server now recommends this first published version.", { exact: true })).toBeVisible();
+  await expect(publicationDialog).not.toBeVisible();
+  const firstPublicationToast = page.getByRole("group", { name: "Published Browser graph activity 2.0.0" });
+  await expect(firstPublicationToast).toBeVisible();
+  await expect(firstPublicationToast.getByRole("button", { name: "View version" })).toBeVisible();
+  await expect(page.locator(".ad-draft-context")).toContainText("2.0.0");
+  const publicationTrigger = page.getByRole("button", { name: "View publication" });
+  await expect(publicationTrigger).toBeFocused();
+  await publicationTrigger.click();
+  await expect(publicationDialog.getByText("Published immutable version 2.0.0")).toBeVisible();
+  await expect(publicationDialog.getByText("The server now recommends this first published version.", { exact: true })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
 
-  await expect(publicationDialog.getByText("Published immutable version 2.0.0")).toBeVisible();
   await publicationDialog.getByText("Publication review details", { exact: true }).click();
+  await expect(summarizedVersion).toHaveText("2.0.0");
   await expect(publicationDialog.getByRole("button", { name: "Published 2.0.0" })).toBeDisabled();
-  await page.goto("/workflows/activity-definitions?definition=activity-def-browser&section=versions&version=published-version-1");
+  await publicationDialog.getByRole("button", { name: "Close publication review" }).click();
+  await firstPublicationToast.getByRole("button", { name: "View version" }).click();
+  await expect(page).toHaveURL(/definition=activity-def-browser.*section=versions.*version=published-version-1/);
   await expect(page.getByRole("button", { name: "Create draft from this exact version" })).toBeEnabled();
   await page.getByRole("button", { name: "Create draft from this exact version" }).click();
   const cloneDialog = page.getByRole("dialog", { name: "Create parallel draft" });
@@ -1212,14 +1872,21 @@ test("Activity Definition publication keeps first and later recommendation seman
 
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("Compared with published head")).toBeVisible();
+  await expect(summarizedVersion).toHaveText("2.1.0");
   await publicationDialog.locator("summary").filter({ hasText: /^Changes$/ }).click();
   await expect(changesRegion).toBeVisible();
   const nextVersion = await openPublicationVersion(publicationDialog);
   await expect(nextVersion).toHaveValue("2.1.0");
   await nextVersion.fill("3.4.5");
+  await expect(summarizedVersion).toHaveText("3.4.5");
   await page.getByRole("button", { name: "Publish 3.4.5" }).click();
-  await expect(page.getByText("Published immutable version 3.4.5")).toBeVisible();
-  await expect(page.getByText("The recommendation stayed unchanged. Publishing did not move it.", { exact: true })).toBeVisible();
+  await expect(publicationDialog).not.toBeVisible();
+  const laterPublicationToast = page.getByRole("group", { name: "Published Browser graph activity 3.4.5" });
+  await expect(laterPublicationToast).toBeVisible();
+  await expect(page.locator(".ad-draft-context")).toContainText("3.4.5");
+  await page.getByRole("button", { name: "View publication" }).click();
+  await expect(publicationDialog.getByText("Published immutable version 3.4.5")).toBeVisible();
+  await expect(publicationDialog.getByText("The recommendation stayed unchanged. Publishing did not move it.", { exact: true })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
   expect(state.requestedVersions).toEqual(["2.0.0", "3.4.5"]);
   expect(state.publicationWrites).toBe(2);
@@ -1231,6 +1898,67 @@ async function openPublicationVersion(dialog: Locator) {
   await dialog.locator("summary").filter({ hasText: /^Version$/ }).click();
   return dialog.getByRole("textbox", { name: "Publication version" });
 }
+
+test("reusable activity Run Overview stays readable with keyboard disclosures at inspector width", async ({ page }, testInfo) => {
+  const journey = await mockReusableBoundaryJourney(page);
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.goto("/?mode=reusable-boundary");
+
+  const recommended = page.getByRole("treeitem", { name: /Published browser activity.*2\.0\.0/ });
+  await expect(recommended).toBeVisible();
+  await recommended.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Draft saved and reloaded")).toBeVisible();
+  await page.getByRole("button", { name: /Published browser activity exact version 2\.0\.0/ }).click();
+  await page.getByRole("button", { name: "Dispatch workflow" }).click();
+  await expect(page.getByText("One Run · workflow-execution-1")).toBeVisible();
+
+  const runDetails = page.getByRole("complementary", { name: "Run details" });
+  const overview = runDetails.locator(".wf-activity-overview");
+  await expect(overview).toContainText("Published browser activity");
+  await expect(overview).toContainText("Completed");
+  await expect(runDetails).toContainText("No runtime outcomes were recorded for this execution.");
+  await expect(runDetails.locator('[aria-label="Activity incidents"]')).toHaveCount(0);
+  const overviewPanel = runDetails.locator(".wf-activity-inspection-tab-panel:not([hidden])");
+  await overviewPanel.evaluate(panel => {
+    const width = Math.min(320, panel.parentElement?.clientWidth ?? 320);
+    (panel as HTMLElement).style.width = `${width}px`;
+    (panel as HTMLElement).style.maxWidth = `${width}px`;
+    (panel as HTMLElement).style.boxSizing = "border-box";
+  });
+  const overviewWidth = await overviewPanel.evaluate(panel => ({ client: panel.clientWidth, scroll: panel.scrollWidth }));
+  expect(overviewWidth.scroll).toBeLessThanOrEqual(overviewWidth.client + 1);
+  const overviewScreenshot = await page.screenshot({ path: "test-results/run-activity-overview-360.png", fullPage: false });
+  await testInfo.attach("run-activity-overview-360", { body: overviewScreenshot, contentType: "image/png" });
+
+  const executionDetails = runDetails.locator("details.wf-activity-execution-details");
+  await executionDetails.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(executionDetails).toHaveAttribute("open", "");
+  await expect(executionDetails).toContainText("Activity Execution ID");
+  const evidenceTabs = runDetails.getByRole("tablist", { name: "Activity execution details" });
+  await evidenceTabs.getByRole("tab", { name: "Inputs", exact: true }).click();
+  await evidenceTabs.getByRole("tab", { name: "Overview", exact: true }).click();
+  await expect(executionDetails).toHaveAttribute("open", "");
+
+  const boundaryDetails = runDetails.locator(".wf-activity-boundary-details > details");
+  await boundaryDetails.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(boundaryDetails).toHaveAttribute("open", "");
+  const internals = runDetails.getByRole("region", { name: "Activity internals" });
+  await expect(internals).toBeVisible();
+  const technical = internals.locator("details.wf-boundary-technical");
+  await technical.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(technical).toHaveAttribute("open", "");
+  await expect(technical.getByText("activity-def-browser", { exact: true })).toBeVisible();
+  await internals.getByRole("tab", { name: "Definition", exact: true }).click();
+  await expect(internals.getByRole("link", { name: "View activity definition" })).toBeVisible();
+
+  const technicalWidth = await technical.evaluate(element => ({ client: element.clientWidth, scroll: element.scrollWidth }));
+  expect(technicalWidth.scroll).toBeLessThanOrEqual(technicalWidth.client + 1);
+  expect(journey.dispatchWrites).toBe(1);
+});
 
 test("published recommendation is placed exactly, dispatched once, and inspected as one reusable boundary", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
@@ -1310,6 +2038,7 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await expect(technical).not.toHaveAttribute("open");
   await expect(technical.getByText("Definition ID", { exact: true })).toBeHidden();
   await expect(technical.getByText("activity-def-browser", { exact: true })).toBeHidden();
+  await technical.locator("summary").click();
   await expect.poll(() => journey.boundaryLayoutReads).toBe(1);
   await expect.poll(() => journey.descendantReads).toBe(1);
   await expect(internals.getByRole("tree", { name: "Activity steps" })).toBeVisible();
@@ -1480,9 +2209,31 @@ test("Activity Definition publication reconciles an ambiguous response without d
   await openPublicationVersion(publicationDialog);
   await expect(publicationDialog.getByText("Minimum valid version: 1.0.0")).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
-  await expect(page.getByText("Published immutable version 1.0.0")).toBeVisible();
+  await expect(publicationDialog).not.toBeVisible();
+  await expect(page.getByRole("group", { name: "Published Browser graph activity 1.0.0" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "View publication" })).toBeFocused();
   expect(state.publicationWrites).toBe(1);
   expect(state.receiptLookups).toBe(1);
+});
+
+test("Activity Definition publication stays open and recoverable when its outcome is unknown", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  state.publishMode = "unknown";
+  await createBrowserActivity(page);
+
+  await page.getByRole("button", { name: "Review & publish" }).click();
+  const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
+  await openPublicationVersion(publicationDialog);
+  await page.getByRole("button", { name: "Publish 1.0.0" }).click();
+  await expect(publicationDialog).toBeVisible();
+  await expect(publicationDialog.getByRole("button", { name: "Reconcile authoritative status" })).toBeVisible();
+  await expect(page.getByRole("group", { name: /Published .* 1\.0\.0/ })).toHaveCount(0);
+  expect(state.appliedPublications).toBe(0);
+
+  await publicationDialog.getByRole("button", { name: "Reconcile authoritative status" }).click();
+  await expect(publicationDialog).toBeVisible();
+  await expect(page.getByRole("button", { name: "View publication" })).toHaveCount(0);
+  expect(state.publicationWrites).toBe(1);
 });
 
 test("Activity Definition publication blocks invalid preflight and reopens stale head review without writes", async ({ page }) => {
@@ -2085,7 +2836,7 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     lastProposalApply: null as unknown,
     receiptLookups: 0,
     requestedVersions: [] as string[],
-    publishMode: "normal" as "normal" | "ambiguous" | "stale",
+    publishMode: "normal" as "normal" | "ambiguous" | "stale" | "unknown",
     preflightMode: "valid" as "valid" | "invalid",
     latestReceipt: null as ReturnType<typeof browserPublicationReceipt> | null,
     testRunWrites: 0,
@@ -2335,6 +3086,10 @@ async function mockActivityDefinitionAuthoring(page: Page) {
         body: JSON.stringify({ title: "Stale review", errorCode: "activity.publication.review-stale" })
       });
     }
+    if (state.publishMode === "unknown") {
+      state.publishMode = "normal";
+      return route.abort("connectionreset");
+    }
     const versionId = `published-version-${state.appliedPublications + 1}`;
     state.appliedPublications += 1;
     state.headVersionId = versionId;
@@ -2429,6 +3184,75 @@ async function mockActivityDefinitionAuthoring(page: Page) {
       state.testRunExpired,
       state.latestTestRun?.draftRevision ?? state.draft.revision);
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.latestTestRun) });
+  });
+  await page.route(/\/runtime\/workflows\/instances\/[^/]+\/activity-executions\?.*$/, async route => {
+    const url = new URL(route.request().url());
+    const workflowExecutionId = decodeURIComponent(url.pathname.split("/")[4]);
+    const activityExecutionId = url.searchParams.get("anchorActivityExecutionId");
+    const run = state.latestTestRun;
+    if (!run || run.workflowExecutionId !== workflowExecutionId || run.outerActivityExecutionId !== activityExecutionId) {
+      return route.fulfill({ status: 404, contentType: "application/problem+json", body: JSON.stringify({ title: "Activity execution not found" }) });
+    }
+    const execution = {
+      activityExecutionId,
+      workflowExecutionId,
+      executableNodeId: "wrapper-node-browser",
+      authoredActivityId: "activity-definition-browser",
+      activityType: "Elsa.Test.ActivityDefinition",
+      activityTypeVersion: "1.0.0",
+      status: run.status,
+      executionSequence: 1,
+      scheduledAt: "2026-07-19T12:00:00Z",
+      startedAt: "2026-07-19T12:00:01Z",
+      completedAt: "2026-07-19T12:00:02Z",
+      parentActivityExecutionId: null,
+      schedulingActivityExecutionId: null,
+      outcomeNames: [],
+      metadata: {}
+    };
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      items: [{ execution, position: 1, previousActivityExecutionId: null, nextActivityExecutionId: null }],
+      totalCount: 1,
+      previousCursor: null,
+      nextCursor: null
+    }) });
+  });
+  await page.route(/\/runtime\/workflows\/instances\/[^/]+\/activity-executions\/[^/]+$/, async route => {
+    const segments = new URL(route.request().url()).pathname.split("/");
+    const workflowExecutionId = decodeURIComponent(segments[4]);
+    const activityExecutionId = decodeURIComponent(segments[6]);
+    const run = state.latestTestRun;
+    if (!run || run.workflowExecutionId !== workflowExecutionId || run.outerActivityExecutionId !== activityExecutionId) {
+      return route.fulfill({ status: 404, contentType: "application/problem+json", body: JSON.stringify({ title: "Activity execution not found" }) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      activityExecutionId,
+      workflowExecutionId,
+      executableNodeId: "wrapper-node-browser",
+      authoredActivityId: "activity-definition-browser",
+      activityType: "Elsa.Test.ActivityDefinition",
+      activityTypeVersion: "1.0.0",
+      status: run.status,
+      executionSequence: 1,
+      scheduledAt: "2026-07-19T12:00:00Z",
+      startedAt: "2026-07-19T12:00:01Z",
+      completedAt: "2026-07-19T12:00:02Z",
+      provenance: { parentActivityExecutionId: null, schedulingActivityExecutionId: null, branchId: null, iterationId: null, invocationOrigin: [] },
+      outcomeNames: [],
+      bookmarks: [],
+      incidents: [],
+      valueSnapshots: [{
+        name: "result",
+        subject: "ActivityOutput",
+        captureMode: "DiagnosticSnapshot",
+        capturedAt: "2026-07-19T12:00:02Z",
+        snapshot: { kind: "string", preview: "recorded output", length: 15 },
+        captureReason: "TestRun",
+        isSensitive: false,
+        metadata: {}
+      }],
+      metadata: {}
+    }) });
   });
   await page.route("**/design/activities/drafts/activity-draft-recovery", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) }));
   return state;
@@ -3061,6 +3885,9 @@ function authoringApiCapabilities() {
     { rel: "activity-draft-test-run-status", href: "publishing/activity-test-runs/{testRunId}", templated: true },
     { rel: "activity-draft-test-run-idempotency-status", href: "publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}", templated: true },
     { rel: "activity-draft-test-run-cancel", href: "publishing/activity-test-runs/{testRunId}/cancel", templated: true }
+  ] }, { id: "elsa.api.runtime", contractVersion: "1", links: [
+    { rel: "activity-executions", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions", templated: true },
+    { rel: "activity-execution", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true }
   ] }] };
 }
 
@@ -3256,13 +4083,13 @@ function browserActivityTestRun(
   const hasExecution = ["Running", "Suspended", "Completed", "Faulted", "Cancelled"].includes(status);
   const terminal = ["Completed", "Faulted", "Cancelled", "DispatchRejected", "ValidationRejected"].includes(status);
   return {
-    testRunId: `activity-test-run-browser-${ordinal}`,
+    testRunId: `activity-test-run-${"9".repeat(48)}-${ordinal}`,
     draftId: "activity-draft-browser",
     draftRevision,
-    artifactId: `wrapper-artifact-browser-${ordinal}`,
-    sourceReferenceId: `source-reference-browser-${ordinal}`,
-    workflowExecutionId: "workflow-execution-browser",
-    outerActivityExecutionId: hasExecution ? "outer-activity-browser" : null,
+    artifactId: `wrapper-artifact-${"a".repeat(48)}-${ordinal}`,
+    sourceReferenceId: `source-reference-${"b".repeat(48)}-${ordinal}`,
+    workflowExecutionId: `workflow-execution-${"c".repeat(48)}`,
+    outerActivityExecutionId: hasExecution ? `outer-activity-${"d".repeat(48)}-${ordinal}` : null,
     status,
     commandDispatchStatus: status === "DispatchRejected" ? "Rejected" : "Accepted",
     reason: null,

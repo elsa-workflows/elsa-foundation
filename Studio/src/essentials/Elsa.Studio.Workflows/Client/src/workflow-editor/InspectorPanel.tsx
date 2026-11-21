@@ -83,6 +83,7 @@ interface InspectorPanelProps {
   choicesForSlot?(owner: ActivityNode, slot: ChildSlot): ActivityCatalogItem[];
   placementNotice?: string;
   bpmnRoutingPanel?: ReactNode;
+  bpmnDetailsPanel?: ReactNode;
   catalogByVersion?: Map<string, ActivityCatalogItem>;
   selectedSupportsScopedVariables: boolean;
   variablesPanel?: ReactNode;
@@ -142,6 +143,7 @@ export function InspectorPanel({
   choicesForSlot,
   placementNotice,
   bpmnRoutingPanel,
+  bpmnDetailsPanel,
   catalogByVersion,
   selectedSupportsScopedVariables,
   variablesPanel,
@@ -437,6 +439,7 @@ export function InspectorPanel({
           </StudioTabPanel>
         ) : null}
         <StudioTabPanel {...tabPanelProps("details")}>
+          {bpmnDetailsPanel}
           <ActivityPresentationFields key={selectedNode.nodeId} presentation={selectedPresentation}
             label={selectedNodeLabel} onChange={onSelectedPresentationChange} />
           <CopyableIdentifier label="Activity type" value={selectedActivityType} />

@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { StudioButton, StudioPage, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioBreadcrumbs, StudioButton, StudioPage, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
 import { useStudioWorkspaceWhenActive, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createWorkflowTag, getWorkflowTag, updateWorkflowTag, workflowOperationKey, type WorkflowTag, type WorkflowTagInput } from "../api/workflowOrganization";
+import { StudioLink } from "../StudioLink";
 import { getNotifications } from "./notifications";
 import "./workflowTags.css";
 
 const newTag = (): WorkflowTagInput => ({ name: "", description: "", mode: "marker", cardinality: "single", values: [], deprecated: false });
 
-export function WorkflowTagEditor({ context, tag, onBack, onCreated }: {
-  context: StudioEndpointContext; tag?: WorkflowTag; onBack(): void; onCreated(tag: WorkflowTag): void;
+export function WorkflowTagEditor({ context, tag, onBack, navigate, onCreated }: {
+  context: StudioEndpointContext; tag?: WorkflowTag; onBack(): void; navigate(path: string): void; onCreated(tag: WorkflowTag): void;
 }) {
   const whenActive = useStudioWorkspaceWhenActive();
   const active = useRef(true);
@@ -50,9 +51,13 @@ export function WorkflowTagEditor({ context, tag, onBack, onCreated }: {
     } catch (caught) { complete(() => setError(caught instanceof Error ? caught.message : "Couldn't reload the selected tag.")); }
   };
   return <StudioPage className="wf-tag-page" aria-labelledby="workflow-tag-title">
-    <StudioPageHeader title={editingId ? "Edit workflow tag" : "Create workflow tag"} titleId="workflow-tag-title"
+    <StudioPageHeader breadcrumbs={<StudioBreadcrumbs items={[
+      { href: "/workflows/definitions", label: "Definitions" },
+      { href: "/workflows/tags", label: "Workflow tags" }
+    ]} current={editingId ? tag!.name : "Create tag"} renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />}
+      title={editingId ? "Edit workflow tag" : "Create workflow tag"} titleId="workflow-tag-title"
       description={editingId ? "Update this tag and its values." : "Create a reusable label or controlled classification for workflows."}
-      actions={<StudioButton onClick={onBack} disabled={busy}>Back to tags</StudioButton>} />
+    />
     <form className="wf-tag-form" onSubmit={event => { event.preventDefault(); void save(); }}>
         <StudioField label="Name"><input aria-label="Tag name" required maxLength={200} value={draft.name} disabled={busy} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} /></StudioField>
         <StudioField label="Description"><textarea aria-label="Tag description" value={draft.description ?? ""} maxLength={1000} disabled={busy} onChange={event => setDraft(current => ({ ...current, description: event.target.value }))} /></StudioField>

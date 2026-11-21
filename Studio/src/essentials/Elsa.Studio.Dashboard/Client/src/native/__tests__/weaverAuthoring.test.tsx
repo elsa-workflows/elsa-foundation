@@ -53,8 +53,14 @@ describe("Dashboard Weaver contribution admission", () => {
     ready.weaver.providerAvailability.set(false);
     const view = render(<DashboardAskWeaver controller={ready.controller} generationId="draft-one" />);
     expect(view.textContent).toContain("Ordinary editing, saving and refresh remain available");
-    expect(view.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+    expect(view.querySelector("form")).toBeNull();
+    expect(view.querySelector('button[type="submit"]')).toBeNull();
     expect(ready.weaver.dispatchPrompt).not.toHaveBeenCalled();
+
+    ready.weaver.providerAvailability.set(true);
+    const available = render(<DashboardAskWeaver controller={ready.controller} generationId="draft-one" />);
+    expect(available.querySelector("form")).not.toBeNull();
+    expect(available.querySelector('button[type="submit"]')).not.toBeNull();
   });
 
   it("collects one exact declarative draft without duplicate prompt attachments or protected result facts", async () => {

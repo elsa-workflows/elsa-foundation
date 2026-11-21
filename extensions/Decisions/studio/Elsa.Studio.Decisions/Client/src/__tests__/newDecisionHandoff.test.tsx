@@ -10,7 +10,7 @@ const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
 function mount(content: React.ReactNode) { const result = render(content); disposals.push(result.dispose); return result; }
 
-const created = { ...asset, id: "created", name: "Picker-created policy", revision: "r9" };
+const created = { ...asset, id: "created", name: "Picker-created policy", revision: "r9", publishedVersionId: null };
 const other = { ...asset, id: "other", name: "Other policy" };
 
 /** Captures workspace-tab requests the way the host does, so the picker believes a tab opened. */

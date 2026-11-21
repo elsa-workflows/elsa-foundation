@@ -3,8 +3,9 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioActivityDefinitionImplementationEditorProps } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDefinitionImplementationEditorProps, StudioDialogApi } from "@elsa-workflows/studio-sdk";
 import { ActivityGraphImplementationEditor } from "../ActivityGraphImplementationEditor";
+import { setDialogs } from "../workflow-editor/dialogs";
 import { forEachActivity, forEachNode, leafNode, sequenceActivity, sequenceNode, writeLine } from "./fixtures";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
 
@@ -25,7 +26,6 @@ vi.mock("../api/expressions", () => ({
 
 const branchKind = "tests.sequence-branch";
 const singleSequenceKind = "tests.single-sequence-body";
-const originalConfirm = window.confirm;
 let catalogItems: ActivityCatalogItem[] = [sequenceActivity, forEachActivity, writeLine, branchCatalogItem()];
 const mounted: Array<{ root: Root; container: HTMLDivElement }> = [];
 
@@ -34,7 +34,7 @@ afterEach(() => {
     flushSync(() => item.root.unmount());
     item.container.remove();
   }
-  window.confirm = originalConfirm;
+  setDialogs({ confirm: async () => true, prompt: async () => null, alert: async () => undefined });
   catalogItems = [sequenceActivity, forEachActivity, writeLine, branchCatalogItem()];
 });
 
@@ -214,6 +214,7 @@ describe("Activity Graph Sequence host", () => {
     click(cloneStep);
     confirmOnce();
     click(button(rendered.container, "Delete Branch (copy)", "aria-label"));
+    await vi.waitFor(() => expect(sequenceActivities(rendered.value()).map(activity => activity.nodeId)).toEqual(["branch-source", "tail"]));
     expect(sequenceActivities(rendered.value()).map(activity => activity.nodeId)).toEqual(["branch-source", "tail"]);
     expect(rendered.value().layout.map(record => record.nodeId)).not.toContain(clonedNested.nodeId);
 
@@ -229,6 +230,7 @@ describe("Activity Graph Sequence host", () => {
 
     click(button(rendered.container, "Delete Write Line", "aria-label"));
 
+    await vi.waitFor(() => expect(sequenceActivities(rendered.value())).toEqual([]));
     expect(sequenceActivities(rendered.value())).toEqual([]);
     const canvas = rendered.container.querySelector<HTMLElement>(".wf-sequence-designer");
     expect(canvas).not.toBeNull();
@@ -415,9 +417,6 @@ function click(element: Element) {
 }
 
 function confirmOnce() {
-  const original = window.confirm;
-  window.confirm = () => {
-    window.confirm = original;
-    return true;
-  };
+  const confirm: StudioDialogApi["confirm"] = async () => true;
+  setDialogs({ confirm, prompt: async () => null, alert: async () => undefined });
 }

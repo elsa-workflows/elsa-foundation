@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { definition, renderRegisteredRoute, response } from "./routeRenderingHelpers";
 
 describe("Executable Inspector toolbar", () => {
-  it("renders Run as the filled primary StudioButton and the rest as default StudioButtons", async () => {
+  it("renders Run as the filled primary StudioButton, quiet return navigation and default actions", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
@@ -43,7 +43,11 @@ describe("Executable Inspector toolbar", () => {
       if (!toolbarButton(container, "Run")) throw new Error("Timed out waiting for Run");
     });
 
-    const labels = ["Executables", "Refresh", "Run", "Explain", "Open source definition"];
+    const returnLink = container.querySelector<HTMLAnchorElement>(".wf-executable-toolbar nav[aria-label='Breadcrumb'] a");
+    expect(returnLink?.textContent).toBe("Executables");
+    expect(returnLink?.getAttribute("href")).toBe("/workflows/executables");
+
+    const labels = ["Refresh", "Run", "Explain", "Open source definition"];
     for (const label of labels) {
       const button = toolbarButton(container, label);
       expect(button, label).toBeTruthy();
@@ -51,19 +55,23 @@ describe("Executable Inspector toolbar", () => {
     }
 
     expect(toolbarButton(container, "Run")?.getAttribute("data-variant")).toBe("primary");
-    for (const label of ["Executables", "Refresh", "Explain", "Open source definition"]) {
+    for (const label of ["Refresh", "Explain", "Open source definition"]) {
       expect(toolbarButton(container, label)?.getAttribute("data-variant")).toBe("default");
     }
+    for (const label of ["Refresh"]) {
+      expect(toolbarButton(container, label)?.getAttribute("data-size")).toBe("sm");
+    }
 
-    expect(container.querySelector(".wf-instance-inspector .wf-panel-tab-list button")).toBeTruthy();
+    expect(container.querySelectorAll(".wf-instance-inspector .wf-panel-tab-list button")).toHaveLength(3);
     expect(container.querySelector(".wf-instance-inspector .wf-panel-action-button")).toBeTruthy();
+    expect(container.querySelector(".wf-instance-inspector [role='tab'][aria-selected='true']")?.textContent).toContain("Identity");
 
     await unmount();
   });
 });
 
 function toolbarButton(container: HTMLElement, text: string) {
-  return [...container.querySelectorAll<HTMLButtonElement>(".wf-toolbar button")]
+  return [...container.querySelectorAll<HTMLButtonElement>(".wf-executable-toolbar button")]
     .find(button => button.textContent?.replace(/\s+/g, " ").trim().includes(text)) ?? null;
 }
 

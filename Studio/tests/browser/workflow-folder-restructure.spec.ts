@@ -172,6 +172,13 @@ test("folder restructuring controls stay absent when mutation relations are not 
   await expect(page.getByText("Operations workflow")).toBeVisible();
   await expect(page.locator(".wf-folder-actions")).toHaveCount(0);
   expect(await page.evaluate(() => (window as Window & { folderMutationRequests?: unknown[] }).folderMutationRequests)).toBeUndefined();
+  await page.getByRole("button", { name: "Manage folders", exact: true }).click();
+  const manager = page.getByRole("dialog", { name: "Manage workflow folders" });
+  const actions = manager.getByRole("group", { name: "Folder management actions", exact: true });
+  await expect(actions.getByRole("button", { name: "Create folder", exact: true })).toBeVisible();
+  for (const name of ["Rename", "Move", "Delete"]) {
+    await expect(actions.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
 });
 
 test("folder navigation falls back to the flat inventory when folder capabilities are absent", async ({ page }) => {
@@ -216,15 +223,46 @@ for (const width of [390, 1440]) test(`Manage folders exposes the tree and selec
   const manage = page.getByRole("button", { name: "Manage folders", exact: true });
   await manage.click();
   const manager = page.getByRole("dialog", { name: "Manage workflow folders" });
-  await expect(manager.getByRole("button", { name: "Create folder", exact: true })).toBeVisible();
+  const actionGroup = manager.getByRole("group", { name: "Folder management actions", exact: true });
+  const create = actionGroup.getByRole("button", { name: "Create folder", exact: true });
+  await expect(create).toBeVisible();
+  await expect(create).toHaveAttribute("data-variant", "ghost");
+  await expect(create).toHaveAttribute("data-size", "sm");
   await expect(manager).toContainText("Select a folder to rename");
+  await expect(actionGroup.getByRole("button", { name: "Rename", exact: true })).toHaveCount(0);
+  const treeBox = (await manager.getByRole("tree").boundingBox())!;
+  const actionGroupBox = (await actionGroup.boundingBox())!;
+  expect(actionGroupBox.y).toBeGreaterThanOrEqual(treeBox.y + treeBox.height);
+
   await manager.locator('[data-folder-id="folder-platform"]').click();
   await expect(manager).toBeVisible();
-  await expect(manager.getByRole("button", { name: "Rename", exact: true })).toBeVisible();
-  await expect(manager.getByRole("button", { name: "Move", exact: true })).toBeVisible();
-  await expect(manager.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
+  for (const name of ["Rename", "Move", "Delete"]) {
+    const action = actionGroup.getByRole("button", { name, exact: true });
+    await expect(action).toBeVisible();
+    await expect(action).toHaveAttribute("data-variant", "ghost");
+    await expect(action).toHaveAttribute("data-size", "sm");
+  }
   await page.keyboard.press("Escape");
   await expect(manager).toBeHidden();
   await expect(manage).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});
+
+test("Create folder uses the top-level or selected-folder parent context", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?theme=light&mode=folder-restructure");
+  const manage = page.getByRole("button", { name: "Manage folders", exact: true });
+  await manage.click();
+
+  let manager = page.getByRole("dialog", { name: "Manage workflow folders" });
+  await manager.getByRole("group", { name: "Folder management actions" }).getByRole("button", { name: "Create folder", exact: true }).click();
+  await expect(manager).toBeHidden();
+  await expect.poll(() => page.evaluate(() => (window as Window & { folderPrompts?: { message: string }[] }).folderPrompts?.at(-1)?.message)).toBe("Enter a name for the top-level folder.");
+
+  await manage.click();
+  manager = page.getByRole("dialog", { name: "Manage workflow folders" });
+  await manager.locator('[data-folder-id="folder-platform"]').click();
+  await manager.getByRole("group", { name: "Folder management actions" }).getByRole("button", { name: "Create folder", exact: true }).click();
+  await expect(manager).toBeHidden();
+  await expect.poll(() => page.evaluate(() => (window as Window & { folderPrompts?: { message: string }[] }).folderPrompts?.at(-1)?.message)).toBe("Enter a name for the folder in the current folder.");
 });

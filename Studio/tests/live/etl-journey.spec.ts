@@ -261,7 +261,7 @@ async function createAndRunSequence(page: Page, {
   await sequenceRoot.press("Space");
   await expect(sequenceRoot).toBeChecked();
   await workflowDialog.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Definitions" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Definitions", exact: true })).toBeVisible();
   await expect(page.locator(".wf-sequence-designer")).toBeVisible();
 
   await addActivityByKeyboard(page, "Add the first step", "Run Etl");

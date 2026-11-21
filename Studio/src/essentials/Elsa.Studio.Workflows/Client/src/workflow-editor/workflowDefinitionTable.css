@@ -146,7 +146,8 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 }
 
 .wf-definitions-list .wf-definition-modified {
-  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
 }
 
 .wf-definitions-list .wf-definition-name > * {
@@ -409,22 +410,22 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 
 .wf-library-toolbar {
   display: grid;
-  gap: 14px;
+  gap: var(--studio-space-2);
   min-width: 0;
   margin: 8px 0 16px;
-  padding: 16px;
+  padding: var(--studio-space-3);
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-md);
   background: var(--studio-surface);
 }
 
-.wf-library-toolbar > .studio-collection-toolbar {
+.wf-library-toolbar .studio-collection-toolbar {
   align-items: center;
-  justify-content: space-between;
+  gap: var(--studio-space-2);
 }
 
 .wf-library-toolbar .studio-collection-toolbar > .studio-search {
-  flex: 1 1 240px;
+  flex: 1 1 10rem;
   max-width: 560px;
 }
 

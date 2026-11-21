@@ -4,9 +4,10 @@ export interface CopyableIdentifierProps {
   label: string;
   value: string;
   className?: string;
+  labelPlacement?: "internal" | "external";
 }
 
-export function CopyableIdentifier({ label, value, className }: CopyableIdentifierProps) {
+export function CopyableIdentifier({ label, value, className, labelPlacement = "internal" }: CopyableIdentifierProps) {
   const valueRef = useRef<HTMLSpanElement | null>(null);
   const [displayValue, setDisplayValue] = useState(value);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
@@ -51,8 +52,11 @@ export function CopyableIdentifier({ label, value, className }: CopyableIdentifi
       : "";
 
   return (
-    <div className={["studio-copyable-identifier", className].filter(Boolean).join(" ")}>
-      <span className="studio-copyable-identifier__label">{label}</span>
+    <div
+      className={["studio-copyable-identifier", className].filter(Boolean).join(" ")}
+      data-label-placement={labelPlacement}
+    >
+      {labelPlacement === "internal" ? <span className="studio-copyable-identifier__label">{label}</span> : null}
       <span
         ref={valueRef}
         className="studio-copyable-identifier__value"

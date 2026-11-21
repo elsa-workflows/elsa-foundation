@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { StudioAlert, StudioButton, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioTableContainer, StudioField, OverflowMenu } from "@elsa-workflows/studio-ui";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { can, deleteCase, deleteRun, failureMessage, getRun, history, listCases, runCases, saveCase, type DecisionAsset, type DecisionCase, type DecisionValue, type DecisionVersion, type Scalar, type TestRun } from "./decisionsApi";
+import { can, decisionFailure, deleteCase, deleteRun, failureMessage, getRun, history, listCases, runCases, saveCase, type DecisionAsset, type DecisionCase, type DecisionValue, type DecisionVersion, type Diagnostic, type Scalar, type TestRun } from "./decisionsApi";
 import { parseTable, type Clause } from "./decisionXml";
 import { labelsForXml, RuleExplanation, type ExplanationLabels } from "./RuleExplanation";
 export const initial = (type: string): Scalar => ({ kind: type === "number" ? "number" : type === "boolean" ? "boolean" : "string", value: type === "number" ? "0" : type === "boolean" ? "false" : "" });
@@ -44,12 +44,12 @@ export function ValueInput({ clause, value, onChange, label, unset = false }: { 
           })} /></StudioField>}
   </div>{unset ? <span id={missingId} className="decision-input-missing" role="status">{label} is not set. Runtime will refuse MissingInput until you enter or confirm a value.</span> : null}</div>;
 }
-export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChange }: { api: ElsaStudioModuleApi; asset: DecisionAsset; candidate?: DecisionVersion; xml: string; dirty: boolean; onDraftStateChange?(dirty: boolean, busy: boolean): void }) {
+export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChange, onReviewRules }: { api: ElsaStudioModuleApi; asset: DecisionAsset; candidate?: DecisionVersion; xml: string; dirty: boolean; onDraftStateChange?(dirty: boolean, busy: boolean): void; onReviewRules?(diagnostics: Diagnostic[]): void }) {
   const [cases, setCases] = useState<DecisionCase[]>([]), [runs, setRuns] = useState<TestRun[]>([]), [run, setRun] = useState<TestRun | null>(null);
-  const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(""), [runFailure, setRunFailure] = useState<{ message: string; diagnostics: Diagnostic[] } | null>(null);
   const [editing, setEditing] = useState<DecisionCase | "new" | null>(null), [name, setName] = useState(""), [inputs, setInputs] = useState<Record<string, Scalar>>({});
   const [expected, setExpected] = useState<Record<string, Scalar>[]>([]), [status, setStatus] = useState("Success"), [sensitive, setSensitive] = useState(false);
-  const form = useRef<HTMLFormElement>(null), opener = useRef<HTMLButtonElement | null>(null), baseline = useRef("");
+  const form = useRef<HTMLFormElement>(null), opener = useRef<HTMLButtonElement | null>(null), caseTriggers = useRef(new Map<string, HTMLButtonElement>()), baseline = useRef("");
   const restoreOpener = useRef(false);
   useLayoutEffect(() => {
     if (editing !== null) form.current?.querySelector<HTMLInputElement>("input")?.focus();
@@ -64,12 +64,25 @@ export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChang
   useEffect(() => { onDraftStateChange?.(caseChanged, busy); }, [caseChanged, busy, onDraftStateChange]);
   useEffect(() => () => onDraftStateChange?.(false, false), [onDraftStateChange]);
   let table; try { table = parseTable(xml); } catch { table = null; }
+  const diagnosticLocation = (item: Diagnostic) => {
+    const ruleIndex = item.ruleId && table ? table.rules.findIndex((rule: { id: string }) => rule.id === item.ruleId) : -1;
+    const clause = item.clauseId && table ? [...table.inputs, ...table.outputs].find((entry: Clause) => entry.id === item.clauseId) : undefined;
+    const locations = [item.ruleId ? ruleIndex >= 0 ? `Rule ${ruleIndex + 1}` : "Rule" : "", item.clauseId ? clause?.name ? `Column ${clause.name}` : "Column" : ""].filter(Boolean);
+    return locations.length ? ` · ${locations.join(" · ")}` : "";
+  };
   const alive = useRef(true); useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  useEffect(() => { let current = true; setLoading(true); setCases([]); setRun(null); setRuns([]); setEditing(null);
+  useEffect(() => { let current = true; setLoading(true); setCases([]); setRun(null); setRunFailure(null); setRuns([]); setEditing(null);
     void listCases(api, asset.id).then(items => { if (current) setCases(items); }, failure => { if (current) setError(failureMessage(failure)); }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
   }, [api, asset.id]);
   const work = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); setError(""); try { await action(); } catch (failure) { if (alive.current) setError(failureMessage(failure)); } finally { if (alive.current) setBusy(false); } };
+  const runSavedCases = async () => {
+    if (busy) return;
+    setBusy(true); setError(""); setRunFailure(null); setRun(null);
+    try { const result = await runCases(api, asset, cases, candidate); if (alive.current) setRun(result); }
+    catch (failure) { if (alive.current) setRunFailure(decisionFailure(failure)); }
+    finally { if (alive.current) setBusy(false); }
+  };
   const close = () => { restoreOpener.current = true; setEditing(null); };
   const edit = (item: DecisionCase | "new", button: HTMLButtonElement) => {
     if (!table || busy || caseChanged) return; restoreOpener.current = false; opener.current = button;
@@ -88,13 +101,19 @@ export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChang
   }); };
   return <section className="decision-cases" aria-labelledby="decision-cases-title"><div className="decision-section-heading"><div><h2 id="decision-cases-title">Saved cases</h2><p className="decision-muted">Check expected results against this {candidate ? `published version ${candidate.number}` : "saved draft"}.</p></div><div className="decision-actions">
     <StudioButton disabled={busy || caseChanged || !table || !can(api, "decisions:manage")} onClick={event => edit("new", event.currentTarget)}>Add case</StudioButton>
-    <StudioButton variant="primary" disabled={busy || loading || dirty || caseChanged || !cases.length} onClick={() => void work(async () => { const next = await runCases(api, asset, cases, candidate); if (alive.current) setRun(next); })}>Run saved cases</StudioButton>
+    <StudioButton variant="primary" disabled={busy || loading || dirty || caseChanged || !cases.length} onClick={() => void runSavedCases()}>Run saved cases</StudioButton>
   </div></div>
     {dirty ? <p className="decision-muted">Save the draft before running cases so the tested content is exact.</p> : null}
     {caseChanged ? <p className="decision-muted">Save or cancel this case before adding or editing another case.</p> : null}
     {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
+    {runFailure ? <div className="decision-case-run-failure"><StudioAlert tone="danger">{runFailure.message}</StudioAlert>
+      {runFailure.diagnostics.length ? <><ul aria-label="Decision compilation diagnostics">{runFailure.diagnostics.map((item, index) => <li key={`${item.code}-${index}`}><strong>{item.code}</strong> · {item.message}{diagnosticLocation(item)}</li>)}</ul><StudioButton onClick={() => onReviewRules?.(runFailure.diagnostics)}>Review rules</StudioButton></> : null}
+    </div> : null}
     {!table ? <p className="decision-muted">Table source is needed to edit case inputs. You can still run saved cases with your existing test permission.</p> : null}
-    {loading ? <p role="status">Loading cases…</p> : !cases.length ? <p className="decision-muted">No saved cases yet. Add representative inputs and expected results before changing a policy.</p> : <StudioTableContainer><table className="decision-case-table"><thead><tr><th scope="col">Case</th><th scope="col">Expected outcome</th><th scope="col">Actions</th></tr></thead><tbody>{cases.map(item => <tr key={item.id}><th scope="row">{item.name}</th><td>{item.expectedStatus}</td><td><div className="decision-actions"><StudioButton disabled={busy || caseChanged || !table || !item.inputs || !can(api, "decisions:manage")} onClick={event => edit(item, event.currentTarget)}>Edit {item.name}</StudioButton><StudioButton disabled={busy || !can(api, "decisions:manage")} onClick={() => void work(async () => { if (!await api.dialogs.confirm({ title: "Delete case", message: `Delete “${item.name}”?`, confirmLabel: "Delete", tone: "danger" })) return; await deleteCase(api, asset.id, item); if (alive.current) setCases(await listCases(api, asset.id)); })}>Delete {item.name}</StudioButton></div>{!item.inputs ? <span className="decision-muted">Protected inputs are unavailable.</span> : null}</td></tr>)}</tbody></table></StudioTableContainer>}
+    {loading ? <p role="status">Loading cases…</p> : !cases.length ? <p className="decision-muted">No saved cases yet. Add representative inputs and expected results before changing a policy.</p> : <StudioTableContainer role="region" aria-label="Saved decision cases table" tabIndex={0}><table className="studio-table decision-case-table"><thead><tr><th scope="col">Case</th><th scope="col">Expected outcome</th><th scope="col">Actions</th></tr></thead><tbody>{cases.map(item => <tr key={item.id}><th scope="row">{item.name}</th><td>{item.expectedStatus}</td><td><div className="decision-case-actions" ref={element => { const trigger = element?.querySelector<HTMLButtonElement>(".studio-overflow-menu-trigger"); if (trigger) caseTriggers.current.set(item.id, trigger); else caseTriggers.current.delete(item.id); }}><OverflowMenu ariaLabel={`Actions for ${item.name}`} items={[
+      { id: "edit", label: "Edit", disabled: busy || caseChanged || !table || !item.inputs || !can(api, "decisions:manage"), onSelect: () => { const trigger = caseTriggers.current.get(item.id); if (trigger) edit(item, trigger); } },
+      { id: "delete", label: "Delete", destructive: true, disabled: busy || !can(api, "decisions:manage"), onSelect: () => void work(async () => { if (!await api.dialogs.confirm({ title: "Delete case", message: `Delete “${item.name}”?`, confirmLabel: "Delete", tone: "danger" })) return; await deleteCase(api, asset.id, item); if (alive.current) setCases(await listCases(api, asset.id)); }) }
+    ]} /></div>{!item.inputs ? <span className="decision-muted">Protected inputs are unavailable.</span> : null}</td></tr>)}</tbody></table></StudioTableContainer>}
     {editing && table ? <form ref={form} className="decision-case-form" onSubmit={submit} onKeyDown={event => { if (event.key === "Escape" && !busy) { event.preventDefault(); close(); } }} aria-busy={busy} aria-label={editing === "new" ? "New decision case" : "Edit decision case"}><h3>{editing === "new" ? "New case" : "Edit case"}</h3>{caseChanged ? <p role="status">Unsaved case changes</p> : null}<fieldset disabled={busy} className="decision-case-form-fields"><legend className="decision-visually-hidden">Case details and expectations</legend><StudioField label="Case name"><input required value={name} onChange={event => setName(event.target.value)} /></StudioField>
       <fieldset><legend>Inputs</legend><div className="decision-form-grid">{table.inputs.map(clause => <ValueInput key={clause.id} clause={clause} label={`Case input ${clause.name}`} value={inputs[clause.name] ?? initial(clause.type)} onChange={value => setInputs(previous => ({ ...previous, [clause.name]: value }))} />)}</div></fieldset>
       <StudioField label="Expected outcome"><select value={status} onChange={event => setStatus(event.target.value)}><option>Success</option><option>NoMatch</option><option>HitPolicyViolation</option><option>InvalidInput</option></select></StudioField>

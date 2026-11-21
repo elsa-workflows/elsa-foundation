@@ -274,3 +274,56 @@ for (const style of styles) for (const mode of ["dark", "dim"]) {
     expect(violations).toEqual([]);
   });
 }
+
+test("Space Light keeps Linen workflow navigation readable beneath its starfield", async ({ page }, testInfo) => {
+  await open(page, "linen", "space", "light");
+
+  const sidebar = page.locator(".sidebar");
+  const normal = sidebar.locator(".nav-section a:not(.active)").first();
+  const active = sidebar.locator(".nav-section a.active").first();
+  await expect(page.getByRole("list", { name: "Sequence steps" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review & publish", exact: true })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-sidebar-backdrop", "starfield");
+  await expect(normal).toBeVisible();
+  await expect(active).toHaveAttribute("aria-current", "page");
+
+  const colors = await sidebar.evaluate(element => {
+    const resolve = (property: "background-color" | "color", token: string) => {
+      const probe = document.createElement("span");
+      probe.style.setProperty(property, `var(${token})`);
+      document.body.append(probe);
+      const value = getComputedStyle(probe).getPropertyValue(property);
+      probe.remove();
+      return value;
+    };
+    const style = getComputedStyle(element);
+    const normalLink = element.querySelector(".nav-section a:not(.active)")!;
+    const activeLink = element.querySelector(".nav-section a.active")!;
+    return {
+      background: style.backgroundColor,
+      expectedBackground: resolve("background-color", "--studio-nav-bg"),
+      image: style.backgroundImage,
+      normalForeground: getComputedStyle(normalLink).color,
+      expectedNormalForeground: resolve("color", "--studio-nav-text"),
+      activeBackground: getComputedStyle(activeLink).backgroundColor,
+      expectedActiveBackground: resolve("background-color", "--studio-nav-active"),
+      activeForeground: getComputedStyle(activeLink).color,
+      expectedActiveForeground: resolve("color", "--studio-nav-active-text")
+    };
+  });
+  expect(colors.background).toBe(colors.expectedBackground);
+  expect(colors.image).toContain("radial-gradient");
+  expect(colors.normalForeground).toBe(colors.expectedNormalForeground);
+  expect(colors.activeBackground).toBe(colors.expectedActiveBackground);
+  expect(colors.activeForeground).toBe(colors.expectedActiveForeground);
+
+  await page.addScriptTag({ content: axe.source });
+  const contrastViolations = [];
+  for (const link of [normal, active]) contrastViolations.push(await link.evaluate(async element => {
+    const result = await (window as Window & { axe: { run: (root: Element, options: object) => Promise<{ violations: Array<{ id: string }> }> } }).axe.run(element, { runOnly: ["color-contrast"] });
+    return result.violations.map(violation => violation.id);
+  }));
+  expect(contrastViolations).toEqual([[], []]);
+
+  await page.screenshot({ path: testInfo.outputPath("linen-space-light-sequence-sidebar.png"), fullPage: true, animations: "disabled" });
+});

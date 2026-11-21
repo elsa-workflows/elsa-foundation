@@ -2,25 +2,28 @@ import { expect, test } from "@playwright/test";
 
 test.use({ viewport: { width: 1440, height: 1000 } });
 
-test("opens purpose groups and moves domain destinations into local views", async ({ page }) => {
+test("opens purpose groups and keeps domain destinations nested under their parent", async ({ page }) => {
   await page.goto("/?mode=nav-placement");
   for (const name of ["Build", "Operate", "Integrations"]) await expect(page.getByRole("button", { name, exact: true })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("link", { name: "User tasks", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "More tools" })).toHaveCount(0);
   const sidebar = page.locator(".sidebar");
-  for (const name of ["Activity definitions", "Templates", "Executables", "Console", "Runtime evidence settings", "Activity availability"]) await expect(sidebar.getByRole("link", { name, exact: true })).toHaveCount(0);
-  await sidebar.getByRole("link", { name: "Library", exact: true }).click();
-  await page.getByRole("navigation", { name: "Library views" }).getByRole("link", { name: "Templates", exact: true }).click();
-  await expect(sidebar.getByRole("link", { name: "Library", exact: true })).toHaveAttribute("aria-current", "page");
-  await sidebar.getByRole("link", { name: "Workflows", exact: true }).click();
-  await page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true }).click();
-  await expect(sidebar.getByRole("link", { name: "Workflows", exact: true })).toHaveAttribute("aria-current", "page");
+  for (const name of ["Activity definitions", "Templates", "Definitions", "Executables"]) await expect(sidebar.getByRole("link", { name, exact: true })).toBeVisible();
+  for (const name of ["Console", "Runtime evidence settings", "Activity availability"]) await expect(sidebar.getByRole("link", { name, exact: true })).toHaveCount(0);
+  await sidebar.getByRole("link", { name: "Templates", exact: true }).click();
+  await expect(sidebar.getByRole("link", { name: "Templates", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Library views" })).toHaveCount(0);
+  await sidebar.getByRole("link", { name: "Definitions", exact: true }).click();
+  await expect(sidebar.getByRole("link", { name: "Definitions", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Workflows views" })).toHaveCount(0);
+  await sidebar.getByRole("link", { name: "Executables", exact: true }).click();
+  await expect(sidebar.getByRole("link", { name: "Executables", exact: true })).toHaveAttribute("aria-current", "page");
   await sidebar.getByRole("link", { name: "Diagnostics", exact: true }).click();
   await page.getByRole("navigation", { name: "Diagnostics views" }).getByRole("link", { name: "Structured logs", exact: true }).click();
   await expect(sidebar.getByRole("link", { name: "Diagnostics", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
-test("remembers collapse choices and reveals matching local views through search", async ({ page }) => {
+test("remembers collapse choices and reveals matching destinations through search", async ({ page }) => {
   await page.goto("/?mode=nav-placement");
   await page.getByRole("button", { name: "Build", exact: true }).click();
   await expect(page.getByRole("link", { name: "Agents", exact: true })).toBeHidden();
@@ -88,7 +91,7 @@ test("top search uses one results surface and Escape dismisses it with focus res
   await search.fill("templates");
   await results.getByRole("link", { name: "Templates", exact: true }).click();
   await expect(search).toHaveValue("");
-  await expect(page.getByRole("navigation", { name: "Library views" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Templates", exact: true })).toBeVisible();
 });
 
 test("a saved desktop rail preference does not lock narrow disclosure controls open", async ({ page }) => {
@@ -139,7 +142,7 @@ for (const width of [360, 390]) for (const appearance of ["light", "dark"]) test
   await search.fill("");
   await search.fill("templates");
   await target.click();
-  await expect(page.getByRole("navigation", { name: "Library views" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Templates", exact: true })).toBeVisible();
 });
 
 

@@ -290,6 +290,38 @@ describe("WorkflowActivityExecutionDetails", () => {
     }
   });
 
+  it("does not repeat a known-zero incident count as an empty evidence section", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("No runtime outcomes were recorded for this execution."));
+    expect(metadataValue(container, "Incidents")).toBe("0");
+    expect(container.querySelector('[aria-label="Activity incidents"]')).toBeNull();
+    expect(container.querySelector(".wf-activity-outcomes")?.getAttribute("data-state")).toBe("empty");
+    expect(container.querySelector(".wf-activity-outcome-state")?.textContent).toBe("No records");
+  });
+
+  it("keeps unavailable incident details distinct from a recorded zero", async () => {
+    const unavailableInspection = { ...inspection([]), incidents: undefined } as unknown as ActivityExecutionInspection;
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(unavailableInspection);
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, incidentCount: null, incidentIds: undefined }} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Incident details are unavailable for this execution."));
+    expect(metadataValue(container, "Incidents")).toBe("Unavailable");
+  });
+
+  it("shows incident evidence when incidents were recorded", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue({ ...inspection([]), incidents: [incident] });
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, incidentCount: 1 }} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Input failed to evaluate."));
+    expect(container.querySelector('[aria-label="Activity incidents"]')).not.toBeNull();
+    expect(metadataValue(container, "Incidents")).toBe("1");
+  });
+
   it("prefers projected bookmark counts and uses legacy IDs only when the count is absent", () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
@@ -443,6 +475,8 @@ describe("WorkflowActivityExecutionDetails", () => {
     const outcomes = [...container.querySelectorAll<HTMLElement>(".wf-instance-section")]
       .find(section => section.querySelector("h4")?.textContent?.includes("Outcomes"));
     expect(outcomes?.querySelectorAll("[role=listitem]")).toHaveLength(2);
+    expect(outcomes?.getAttribute("data-state")).toBe("recorded");
+    expect(outcomes?.querySelector(".wf-activity-outcome-state")?.textContent).toBe("Recorded");
     expect(outcomes?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("2");
     expect(outcomes?.textContent).toContain("Completed");
   });

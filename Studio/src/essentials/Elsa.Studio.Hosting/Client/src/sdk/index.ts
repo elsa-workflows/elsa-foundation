@@ -229,8 +229,8 @@ export interface StudioNavigationContribution extends StudioBackendAwareContribu
   order?: number;
   iconColor?: string;
   parentId?: string;
-  /** Render children as local route views instead of nested sidebar links. */
-  childDisplay?: "views";
+  /** Render children as nested sidebar links or local route views. */
+  childDisplay?: "links" | "views";
   /** Include the parent's own route as a local view, such as Definitions or Overview. */
   viewLabel?: string;
   /**
@@ -740,6 +740,64 @@ export interface StudioUserTaskFormContribution extends StudioBackendAwareContri
   component: ComponentType<StudioUserTaskFormProps>;
 }
 
+export type StudioUserTaskFieldValueKind = "string" | "number" | "boolean" | "object" | "array" | "any";
+
+/** Stable field data shared by module renderers and property editors. */
+export interface StudioUserTaskFieldDefinition {
+  key: string;
+  label: string;
+  kind: string;
+  required: boolean;
+  readOnly: boolean;
+  help?: string;
+  controlId?: string;
+  configuration?: Record<string, unknown>;
+  minimum?: number;
+  maximum?: number;
+  maxLength?: number;
+  choices?: string[];
+  presentation?: { display: string; trueLabel?: string; falseLabel?: string; unansweredLabel?: string };
+  mustBeTrue?: boolean;
+}
+
+/** Module-owned field renderer props; Forms continues to own validation, required and read-only semantics. */
+export interface StudioUserTaskFieldControlRenderProps {
+  field: StudioUserTaskFieldDefinition;
+  id: string;
+  disabled: boolean;
+  required: boolean;
+  value: unknown;
+  error?: string;
+  onChange(value: unknown): void;
+}
+
+/** A field control may edit only its field's custom configuration and type-specific settings. */
+export interface StudioUserTaskFieldControlEditorProps {
+  field: StudioUserTaskFieldDefinition;
+  disabled?: boolean;
+  onChange(field: unknown): void;
+}
+
+/** Module-owned user-task field control, shared by the designer, preview and recipient form. */
+export interface StudioUserTaskFieldControlContribution extends StudioBackendAwareContribution {
+  /** Stable namespaced identity with a major contract version, e.g. `acme.rating/1`. */
+  id: string;
+  label: string;
+  /** Response JSON value kind (for example `string`, `number`, or `boolean`). */
+  valueKind: StudioUserTaskFieldValueKind;
+  /** Legacy field kind this contribution can render without persisted control metadata. */
+  legacyKind?: string;
+  order?: number;
+  icon?: ReactNode;
+  propertiesLabel?: string;
+  /** Set when the renderer provides its own accessible label, e.g. a radio fieldset legend. */
+  ownsFieldLabel?: boolean;
+  createField(fields: readonly StudioUserTaskFieldDefinition[]): StudioUserTaskFieldDefinition;
+  component: ComponentType<StudioUserTaskFieldControlRenderProps>;
+  propertiesEditor?: ComponentType<StudioUserTaskFieldControlEditorProps>;
+  validateConfiguration?(configuration: unknown): string[];
+}
+
 export interface StudioActivityPropertyEditorProps {
   descriptor: StudioActivityInputDescriptor;
   value: unknown;
@@ -768,6 +826,12 @@ export interface StudioActivityPropertyEditorContribution extends StudioBackendA
   id: string;
   /** The editor presents its descriptor label in its own shared field. */
   presentsField?: boolean;
+  /** Groups this input's row with adjacent rows from contributions declaring the same group id. */
+  propertyGroup?: {
+    id: string;
+    label: string;
+    description?: string;
+  };
   order?: number;
   /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */
   supportsValidationReporting?: true;
@@ -1706,6 +1770,7 @@ export const studioSlotIds = {
   activityEditors: "workflow.activity.editors",
   propertyEditors: "workflow.activity.property-editors",
   userTaskForms: "user-task.form-renderers",
+  userTaskFieldControls: "user-task.field-controls",
   expressionEditors: "workflow.expression-editors",
   workflowRunInputEditors: "workflow.run-input.editors",
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
@@ -1800,6 +1865,7 @@ export const studioSlots = {
   toolbarActions: defineStudioSlot({ id: studioSlotIds.toolbarActions, kind: "toolbar-action", title: "Toolbar actions", owner: hostSlotOwner() }),
   activityEditors: defineStudioSlot({ id: studioSlotIds.activityEditors, kind: "activity-editor", title: "Activity editors", owner: hostSlotOwner() }),
   userTaskForms: defineStudioSlot({ id: studioSlotIds.userTaskForms, kind: "user-task-form-renderer", title: "User task form renderers", owner: hostSlotOwner() }),
+  userTaskFieldControls: defineStudioSlot({ id: studioSlotIds.userTaskFieldControls, kind: "user-task-field-control", title: "User task field controls", owner: hostSlotOwner() }),
   propertyEditors: defineStudioSlot({ id: studioSlotIds.propertyEditors, kind: "property-editor", title: "Activity property editors", owner: hostSlotOwner() }),
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
@@ -2145,6 +2211,8 @@ export interface ElsaStudioModuleApi {
   readonly activityEditors: StudioContributionRegistry<StudioActivityDefinitionImplementationEditorContribution>;
   readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
   readonly userTaskForms?: StudioContributionRegistry<StudioUserTaskFormContribution>;
+  /** Optional on older hosts; modules should guard before registering or composing field controls. */
+  readonly userTaskFieldControls?: StudioContributionRegistry<StudioUserTaskFieldControlContribution>;
   readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
   /** Available on hosts that support the workflow run-input editor Slot. */
   readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;

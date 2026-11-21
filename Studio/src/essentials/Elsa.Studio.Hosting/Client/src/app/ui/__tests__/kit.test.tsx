@@ -6,8 +6,10 @@ import { StudioButton } from "../forms/Button";
 import { StudioDialogFooter } from "../layout/DialogFooter";
 import { StudioSearchInput } from "../forms/SearchInput";
 import { StudioActionNotice } from "../feedback/ActionNotice";
+import { StatusChip } from "../feedback/StatusChip";
 import { StatusPill } from "../feedback/StatusPill";
 import { StudioListContainer, StudioListRow } from "../list/ListRow";
+import { StudioVersionHistory } from "../layout/VersionHistory";
 import { StudioSparkline, StudioStatTile } from "../stat/StatTile";
 import { CopyableIdentifier } from "../identity/CopyableIdentifier";
 
@@ -69,6 +71,22 @@ describe("CopyableIdentifier", () => {
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(value));
     await vi.waitFor(() =>
       expect(host.querySelector("[role='status']")?.textContent).toBe("Node ID copied"));
+  });
+
+  it("supports an externally rendered label without changing copy semantics", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const value = "definition-version-0123456789abcdef";
+    const host = mount(<CopyableIdentifier label="Definition version ID" value={value} labelPlacement="external" />);
+
+    expect(host.querySelector(".studio-copyable-identifier")?.getAttribute("data-label-placement")).toBe("external");
+    expect(host.querySelector(".studio-copyable-identifier__label")).toBeNull();
+    expect(host.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe(`Definition version ID: ${value}`);
+    host.querySelector<HTMLButtonElement>("button")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(value));
+    await vi.waitFor(() =>
+      expect(host.querySelector("[role='status']")?.textContent).toBe("Definition version ID copied"));
   });
 
   it("announces a local failure when clipboard and fallback copying are unavailable", async () => {
@@ -154,6 +172,39 @@ describe("StudioListRow", () => {
     row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     row.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
     expect(activations).toBe(3);
+  });
+});
+
+describe("StudioVersionHistory", () => {
+  it("renders selectable versions, their status, and a separate selected detail panel", () => {
+    const onSelect = vi.fn();
+    const host = mount(
+      <StudioVersionHistory
+        label="Workflow versions"
+        items={[
+          { id: "v1", ariaLabel: "Select version 1.0.0", title: "Version 1.0.0", subtitle: "June 1", status: <StatusChip>Saved</StatusChip> },
+          { id: "v2", ariaLabel: "Select version 2.0.0", title: "Version 2.0.0", subtitle: "June 2", status: <StatusChip tone="success">Latest</StatusChip> }
+        ]}
+        selectedId="v2"
+        onSelect={onSelect}
+        detail={<p>Immutable snapshot details</p>}
+      />
+    );
+
+    const selected = host.querySelector<HTMLButtonElement>('button[aria-label="Select version 2.0.0"]')!;
+    expect(selected.getAttribute("aria-pressed")).toBe("true");
+    expect(selected.textContent).toContain("Latest");
+    expect(host.querySelector('[aria-label="Workflow versions preview"]')?.textContent).toContain("Immutable snapshot details");
+    host.querySelector<HTMLButtonElement>('button[aria-label="Select version 1.0.0"]')!.click();
+    expect(onSelect).toHaveBeenCalledWith("v1");
+  });
+
+  it("shows an empty message and a selection hint without inventing a selected version", () => {
+    const host = mount(<StudioVersionHistory label="Form versions" items={[]} selectedId={null} onSelect={vi.fn()} emptyState="No published form versions." />);
+
+    expect(host.textContent).toContain("No published form versions.");
+    expect(host.textContent).toContain("Choose a version to inspect.");
+    expect(host.querySelector("button")).toBeNull();
   });
 });
 

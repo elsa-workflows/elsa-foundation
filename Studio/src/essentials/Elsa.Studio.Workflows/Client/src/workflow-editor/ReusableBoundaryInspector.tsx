@@ -572,14 +572,15 @@ function BoundaryStructurePane({
     );
   }
 
-  return <HistoricalBoundaryLayout layout={frame.layout} />;
+  return <HistoricalBoundaryLayout layout={frame.layout} compact />;
 }
 
-export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecutableNodeId, statusByNode }: {
+export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecutableNodeId, statusByNode, compact = false }: {
   layout: ActivityExecutionLayout;
   onSelectNode?(executableNodeId: string): void;
   selectedExecutableNodeId?: string;
   statusByNode?: ReadonlyMap<string, string>;
+  compact?: boolean;
 }) {
   const presentation = new Map((layout.activityPresentation ?? []).map(record => [record.executableNodeId, record]));
   const nodeLabel = (node: ActivityExecutionLayout["nodes"][number]) =>
@@ -589,15 +590,28 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
   const positioned = layout.nodes.filter(node => node.hasPinnedGeometry);
   if (positioned.length === 0) {
     return (
-      <div className="wf-boundary-layout wf-boundary-layout-list">
+      <div className={`wf-boundary-layout wf-boundary-layout-list${compact ? " wf-boundary-layout-compact wf-boundary-layout-list-compact" : ""}`}>
         <header className="wf-boundary-layout-heading">
           <strong>Activity structure</strong>
+          <small>{layout.nodes.length} {layout.nodes.length === 1 ? "activity" : "activities"}</small>
         </header>
-        {layout.nodes.map(node => (
-          <div className="wf-boundary-layout-list-row" key={node.executableNodeId} title={nodeDescription(node)}>
-            {onSelectNode ? <button type="button" aria-pressed={selectedExecutableNodeId === node.executableNodeId} onClick={() => onSelectNode(node.executableNodeId)}>{nodeLabel(node)}{statusByNode?.get(node.executableNodeId) ? ` · ${statusByNode.get(node.executableNodeId)}` : ""}</button> : <span>{nodeLabel(node)}</span>}
-          </div>
-        ))}
+        {layout.nodes.map(node => {
+          const status = statusByNode?.get(node.executableNodeId);
+          const selected = selectedExecutableNodeId === node.executableNodeId;
+          const contents = (
+            <>
+              <span className="wf-boundary-layout-list-identity">{nodeLabel(node)}</span>
+              {status ? <span className="wf-boundary-layout-list-status"><WorkflowStatusBadge status={status} /></span> : null}
+            </>
+          );
+
+          return (
+            <div className="wf-boundary-layout-list-row" data-selected={selected ? "true" : undefined} key={node.executableNodeId} title={nodeDescription(node)}>
+              {onSelectNode ? <button className="wf-boundary-layout-list-action" type="button" aria-pressed={selected} onClick={() => onSelectNode(node.executableNodeId)}>{contents}</button>
+                : <div className="wf-boundary-layout-list-action">{contents}</div>}
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -614,7 +628,7 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
   const translateY = padding - minY;
 
   return (
-    <figure className="wf-boundary-layout-canvas">
+    <figure className={`wf-boundary-layout-canvas${compact ? " wf-boundary-layout-compact" : ""}`}>
       <figcaption className="wf-boundary-layout-caption">
         <span className="wf-boundary-layout-heading">
           <strong>Saved activity layout</strong>
@@ -948,7 +962,7 @@ function BoundaryTechnicalDetails({
 
   return (
     <details key={selectedActivityExecutionId ?? "unselected"} className="wf-boundary-technical">
-      <summary>Technical details</summary>
+      <summary><ChevronRight size={14} aria-hidden="true" />Technical details</summary>
       <dl className="wf-boundary-technical-grid">
         <dt>Definition ID</dt>
         <dd>{boundary.definitionId}</dd>

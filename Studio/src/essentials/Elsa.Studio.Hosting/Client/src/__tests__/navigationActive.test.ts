@@ -47,4 +47,17 @@ describe("navigation active matching", () => {
     expect(isNavigationItemActive(runs, "/workflows/instances/exec-1", navigation)).toBe(true);
     expect(isNavigationItemActive(workflows, "/workflows/instances/exec-1", navigation)).toBe(false);
   });
+
+  it("prefers a nested destination over its parent when both share the default route", () => {
+    const definitions: StudioNavigationContribution = {
+      id: "workflows-definitions",
+      label: "Definitions",
+      path: workflows.path,
+      parentId: workflows.id
+    };
+    const items = [workflows, definitions];
+    expect(resolveActiveNavigationItem(workflows.path, items)?.id).toBe(definitions.id);
+    expect(isNavigationItemActive(workflows, workflows.path, items)).toBe(false);
+    expect(isNavigationItemActive(definitions, workflows.path, items)).toBe(true);
+  });
 });

@@ -58,7 +58,10 @@ html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime.is-se
   /* Keep the caption in the scrolling flow so compact cards cannot pass under it. */
   position: relative;
   display: flex;
-  justify-content: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
   padding: .75rem 1rem 0;
 }
 
@@ -72,6 +75,28 @@ html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime.is-se
   background: var(--studio-surface);
   font-size: .6875rem;
   line-height: 1.25;
+}
+
+.wf-sequence-preview-setting {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  gap: .375rem;
+  padding: .25rem .625rem;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  color: var(--studio-text-muted);
+  background: var(--studio-surface);
+  font: inherit;
+  font-size: .75rem;
+  cursor: pointer;
+}
+
+.wf-sequence-preview-setting:hover,
+.wf-sequence-preview-setting[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--studio-accent) 48%, var(--studio-border));
+  color: var(--studio-accent);
+  background: var(--studio-accent-soft);
 }
 
 .wf-sequence-content {
@@ -140,6 +165,7 @@ html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime.is-se
 
 .wf-sequence-step:focus-visible,
 .wf-sequence-insert:focus-visible,
+.wf-sequence-preview-setting:focus-visible,
 .wf-sequence-slot:focus-visible,
 .wf-sequence-actions button:focus-visible {
   outline: 2px solid var(--studio-focus);
@@ -226,6 +252,63 @@ html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime.is-se
   border-radius: 0 0 var(--studio-radius) var(--studio-radius);
   background: color-mix(in srgb, var(--studio-surface-muted) 48%, var(--studio-surface));
 }
+
+.wf-sequence-preview-toggle {
+  display: inline-flex;
+  min-height: 1.5rem;
+  align-self: flex-start;
+  align-items: center;
+  gap: .25rem;
+  padding: 0 .25rem;
+  border: 0;
+  color: var(--studio-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: .75rem;
+  cursor: pointer;
+}
+
+.wf-sequence-preview-toggle:hover { color: var(--studio-text); }
+.wf-sequence-preview-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+
+.wf-sequence-slot-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .375rem;
+}
+
+.wf-sequence-slot-list[data-expanded="true"] {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+}
+
+.wf-sequence-slot-list[data-expanded="true"] .wf-sequence-slot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: start;
+  gap: .375rem;
+  padding: .5rem;
+  border-style: solid;
+}
+
+.wf-sequence-slot-label,
+.wf-sequence-slot-contents { overflow-wrap: anywhere; }
+
+.wf-sequence-slot-contents {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: .25rem;
+}
+
+.wf-sequence-child,
+.wf-sequence-child-empty {
+  min-width: 0;
+  padding: .375rem .5rem;
+  border: 1px solid color-mix(in srgb, var(--studio-border) 58%, transparent);
+  border-radius: var(--studio-radius-sm, .25rem);
+  background: color-mix(in srgb, var(--studio-surface-muted) 68%, var(--studio-surface));
+}
+
+.wf-sequence-child-empty { color: var(--studio-text-muted); }
 
 .wf-sequence-slot {
   display: flex;

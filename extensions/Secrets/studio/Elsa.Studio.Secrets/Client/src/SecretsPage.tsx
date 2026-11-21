@@ -2,7 +2,7 @@ import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, KeyRound, Plus, RefreshCw, X } from "lucide-react";
 import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, useStudioRouteLocation, useStudioWorkspaceTab, type StudioDialogApi, type StudioNotificationApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem , StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar, StudioTableContainer, StudioResultState} from "@elsa-workflows/studio-ui";
+import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem , StudioPage, StudioPageHeader, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioTableContainer, StudioResultState, StudioTimestamp} from "@elsa-workflows/studio-ui";
 import { deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret } from "./secretsApi";
 import type { RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus } from "./secretTypes";
 import { CopySecretNameButton } from "./CopySecretNameButton";
@@ -287,7 +287,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
       ) : null}
 
       <section ref={collectionRoot} className="secrets-layout">
-        <StudioTableContainer>
+        {loading || loadError || filteredSecrets.length > 0 ? <StudioTableContainer>
           <table className="studio-table secrets-table" aria-label="Secrets">
             <thead>
               <tr>
@@ -309,11 +309,6 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
                   <StudioResultState headingLevel={3} tone="danger" title="Secrets could not be loaded." description="Check your connection and try again." icon={<AlertCircle size={20} />} actions={<StudioButton onClick={() => void load(attemptedSearch.current)}><RefreshCw size={14} aria-hidden /> Retry</StudioButton>} />
                 </td></tr>
               ) : null}
-              {!loading && !loadError && filteredSecrets.length === 0 ? (
-                <tr><td colSpan={7} className="secrets-empty">
-                  <StudioResultState headingLevel={3} title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton variant="primary" onClick={() => openEditor()} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</StudioButton>} />
-                </td></tr>
-              ) : null}
               {!loading && filteredSecrets.map(secret => (
                 <tr key={secret.name}>
                   <td className="secrets-name-cell">
@@ -327,7 +322,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
                   <td>{labelStore(descriptors, secret.storeName)}</td>
                   <td>{secret.scope || "-"}</td>
                   <td><StatusBadge status={secret.status} /></td>
-                  <td>{formatDate(secret.updatedAt ?? secret.createdAt)}</td>
+                  <td><StudioTimestamp value={secret.updatedAt ?? secret.createdAt} fallback={formatDate(secret.updatedAt ?? secret.createdAt)} /></td>
                   <td>
                     <div className="secrets-row-actions">
                       <StudioButton variant="default" size="sm" className="secrets-edit-action" data-secret-edit={secret.name} aria-label={`Edit ${secret.name}`} title={`Edit ${secret.displayName || secret.name}`} onClick={() => openEditor(secret.name)}>Edit</StudioButton>
@@ -346,7 +341,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
               ))}
             </tbody>
           </table>
-        </StudioTableContainer>
+        </StudioTableContainer> : <StudioCollectionEmptyState headingLevel={3} title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton variant="primary" onClick={() => openEditor()} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</StudioButton>} />}
 
       </section>
 
@@ -386,10 +381,9 @@ function SecretNotification({ message, onDismiss }: { message: string; onDismiss
 function FilterSelect({ label, value, options, helpText, description, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; helpText?: string; description?: string; onChange(value: string): void }) {
   const id = useId();
   const combinedDescription = helpText ? (description ? `${helpText}. ${description}` : helpText) : description;
-  const descriptionId = combinedDescription ? `${id}-description` : undefined;
   return (
-    <StudioField className="secrets-filter" controlId={id} label={label} description={combinedDescription ? <small id={descriptionId}>{combinedDescription}</small> : undefined}>
-      <select id={id} value={value} aria-describedby={descriptionId} onChange={event => onChange(event.target.value)}>
+    <StudioField className="secrets-filter" controlId={id} label={label} description={combinedDescription}>
+      <select id={id} value={value} onChange={event => onChange(event.target.value)}>
         <option value="">All</option>
         {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>

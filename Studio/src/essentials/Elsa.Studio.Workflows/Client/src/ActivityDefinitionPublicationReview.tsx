@@ -38,6 +38,7 @@ export function ActivityDefinitionPublicationReview({
   onOpenVersion,
   onOpenWorkflows,
   triggerRef,
+  openOnMount = false,
   mode = "full",
   titleLevel = "h2"
 }: {
@@ -56,6 +57,7 @@ export function ActivityDefinitionPublicationReview({
   onOpenVersion?(versionId: string): void;
   onOpenWorkflows?: () => void;
   triggerRef?: RefObject<HTMLButtonElement | null>;
+  openOnMount?: boolean;
   mode?: "full" | "toolbar";
   /** The review title's heading level where the review is embedded under another heading. */
   titleLevel?: "h2" | "h3";
@@ -76,6 +78,8 @@ export function ActivityDefinitionPublicationReview({
   const operationKeyRef = useRef<string | null>(null);
   const reviewedRecommendationRef = useRef<string | null>(null);
   const recommendationVerificationRef = useRef(0);
+  const openOnMountHandled = useRef(false);
+  const prepareRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     if ((!preflight && !rejectedDiagnostics.length) || !binding || phase === "publishing" || phase === "success") return;
@@ -130,6 +134,15 @@ export function ActivityDefinitionPublicationReview({
       setFailure(diagnostics ? null : publicationFailureMessage(error, "Publication preflight could not be confirmed. Nothing was published."));
     }
   };
+  prepareRef.current = prepare;
+
+  useEffect(() => {
+    if (!openOnMount) return;
+    setDialogOpen(true);
+    if (disabled || openOnMountHandled.current || phase !== "idle") return;
+    openOnMountHandled.current = true;
+    void prepareRef.current();
+  }, [disabled, openOnMount, phase]);
 
   const applyReceipt = (next: ActivityPublicationReceipt) => {
     if (!receiptMatchesReview(next, operationKeyRef.current, preflight, version)) {
@@ -147,6 +160,7 @@ export function ActivityDefinitionPublicationReview({
       setPhase("success");
       setFailure(null);
       onPublished(next.outcome);
+      if (mode === "toolbar") setDialogOpen(false);
       onPublicationPending(false);
       // Refresh the definition, drafts, and versions caches so the workbench's published-head and
       // recommendation panels reflect the new immutable version without a manual page reload.
@@ -283,9 +297,10 @@ export function ActivityDefinitionPublicationReview({
         </div>
       </div> : null;
 
+  const selectedVersion = phase === "success" ? receipt?.outcome?.version ?? version : version;
   const reviewDetails = preflight ? <>
       {blockerPanel}
-      <PublicationSummary preflight={preflight} blocked={publicationBlocked} publishedOutcome={phase === "success" ? receipt?.outcome ?? null : null} compact={mode === "toolbar"} />
+      <PublicationSummary preflight={preflight} blocked={publicationBlocked} publishedOutcome={phase === "success" ? receipt?.outcome ?? null : null} version={selectedVersion} compact={mode === "toolbar"} />
       {mode === "toolbar" ? <>
         {!preflight.hasBaseline ? <>
           <p>{phase === "success" ? "First version published. Existing workflows are unaffected." : "Publish the first version for use in workflows."}</p>
@@ -319,7 +334,7 @@ export function ActivityDefinitionPublicationReview({
       <footer className="ad-publication-actions">
         <span><ShieldCheck size={16} aria-hidden /> {mode === "toolbar" ? "Existing workflows keep the activity version they already use." : "Publication is atomic and idempotent for this reviewed revision and head."}</span>
         <button type="button" className="ad-primary-action" aria-describedby={publicationBlocked ? blockedReasonId : undefined} onClick={() => void publish()} disabled={disabled || phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
-          {phase === "publishing" ? "Publishing atomically…" : phase === "success" ? `Published ${receipt?.outcome?.version ?? version}` : `Publish ${version || "exact version"}`}
+          {phase === "publishing" ? "Publishing atomically…" : phase === "success" ? `Published ${selectedVersion}` : `Publish ${selectedVersion || "exact version"}`}
         </button>
       </footer>
     </> : null;
@@ -362,7 +377,7 @@ export function ActivityDefinitionPublicationReview({
   </div>;
 }
 
-function PublicationSummary({ preflight, publishedOutcome, compact = false, blocked = false }: { preflight: ActivityPublicationPreflight; blocked?: boolean; publishedOutcome: ActivityPublicationReceipt["outcome"]; compact?: boolean }) {
+function PublicationSummary({ preflight, publishedOutcome, version, compact = false, blocked = false }: { preflight: ActivityPublicationPreflight; blocked?: boolean; publishedOutcome: ActivityPublicationReceipt["outcome"]; version: string; compact?: boolean }) {
   if (!compact) return <dl className="ad-publication-summary">
     <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
     <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
@@ -371,7 +386,7 @@ function PublicationSummary({ preflight, publishedOutcome, compact = false, bloc
   </dl>;
   return <>
     <dl className="ad-publication-summary">
-      <div><dt>Version</dt><dd>{publishedOutcome?.version ?? preflight.minimumVersion}</dd></div>
+      <div><dt>Version</dt><dd>{version || "Not selected"}</dd></div>
       <div><dt>Readiness</dt><dd>{preflight.isPublishable && !blocked ? "Ready to publish" : "Blocked"}</dd></div>
       <div><dt>Change</dt><dd>{!preflight.hasBaseline ? "First publication" : preflight.diff?.requiredBump ? `${preflight.diff.requiredBump} version change` : "No version change required"}</dd></div>
       <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "No published baseline exists"}</dd></div>

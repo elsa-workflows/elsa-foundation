@@ -34,8 +34,9 @@ internal sealed class DecisionPinSource(IDecisionReader decisions, IDecisionComp
             var assetId = selection[..separator];
             var versionId = selection[(separator + 1)..];
             await authorization.EnsureAsync(tenant, assetId, cancellationToken);
-            if (versionId == "latest")
-                versionId = (await decisions.FindAssetAsync(tenant, assetId, cancellationToken))?.PublishedVersionId ?? throw Invalid();
+            var asset = await decisions.FindAssetAsync(tenant, assetId, cancellationToken);
+            if (asset is null || asset.Id != assetId || asset.DeletedAt is not null || asset.PublishedVersionId is null) throw Invalid();
+            if (versionId == "latest") versionId = asset.PublishedVersionId;
             var version = await decisions.FindVersionAsync(tenant, assetId, versionId, cancellationToken) ?? throw Invalid();
             if (version.AssetId != assetId || version.Id != versionId || version.IsSensitive ||
                 node.InputBindings.Values.Any(input => input.EffectivePolicy.HidesValue()))

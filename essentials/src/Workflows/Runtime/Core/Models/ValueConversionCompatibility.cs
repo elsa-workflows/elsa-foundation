@@ -10,7 +10,9 @@ public static class ValueConversionCompatibility
     private static readonly ValueTypeDescriptor StringType = new("String");
 
     public static bool CanFormatNumericAsString(ValueTypeDescriptor source, ValueRepresentation representation, ValueTypeDescriptor target) =>
-        representation == ValueRepresentation.TypedValue && SameType(source, DoubleType) && SameType(target, StringType);
+        representation == ValueRepresentation.TypedValue && SameType(source, DoubleType) && IsPlainString(target);
+
+    public static bool IsPlainString(ValueTypeDescriptor type) => SameType(type, StringType);
 
     public static bool SameType(ValueTypeDescriptor source, ValueTypeDescriptor target) =>
         source.CollectionKind == target.CollectionKind &&

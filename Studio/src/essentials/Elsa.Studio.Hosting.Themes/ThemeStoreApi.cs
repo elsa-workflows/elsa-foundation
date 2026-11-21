@@ -23,6 +23,7 @@ internal static class ThemeStoreApi
     // Mirrors studioThemeLayouts in the SDK's themeLayout.ts.
     private static readonly string[] ThemeLayoutNames = ["classic", "floating", "workbench", "editorial"];
     private static readonly string[] WorkspaceStyleNames = ["linen", "minimal", "quiet", "focus", "open"];
+    private static readonly string[] SidebarBackdropNames = ["solid", "gradient", "starfield"];
     internal static readonly HashSet<string> BuiltInThemeIds = new(StringComparer.OrdinalIgnoreCase)
     {
         "linen",
@@ -36,7 +37,8 @@ internal static class ThemeStoreApi
         "atelier",
         "elsa-cloud",
         "signal",
-        "dusk"
+        "dusk",
+        "space"
     };
     private static readonly HashSet<string> AllowedAssetContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -565,6 +567,8 @@ internal static class ThemeStoreApi
             return "Theme layout must be classic, floating, workbench or editorial.";
         if (theme.WorkspaceStyle is not null && !WorkspaceStyleNames.Contains(theme.WorkspaceStyle))
             return "Theme workspace style must be linen, minimal, quiet, focus or open.";
+        if (theme.SidebarBackdrop is not null && !SidebarBackdropNames.Contains(theme.SidebarBackdrop))
+            return "Theme sidebar backdrop must be solid, gradient or starfield.";
 
         foreach (var (name, value) in theme.Shape?.Values() ?? [])
         {
@@ -653,7 +657,8 @@ internal sealed record StudioThemeDefinition(
     string[]? SupportedModes = null,
     StudioThemeTypography? Typography = null,
     StudioThemeShape? Shape = null,
-    string? Layout = null)
+    string? Layout = null,
+    string? SidebarBackdrop = null)
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? WorkspaceStyle { get; init; }

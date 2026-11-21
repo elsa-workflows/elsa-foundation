@@ -3,10 +3,10 @@ import type { WorkflowWeaverController } from "../workflowWeaver";
 import type { WorkflowTemplate } from "../workflowTemplates";
 import { applyCreateDialogPrefill, applyListStateChange, createDialogAttachment, createDialogKind, libraryAttachment, libraryKind } from "./workflowLibraryWeaver";
 import { useWorkflowPageWeaver } from "./useWorkflowLibraryWeaver";
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { AlertCircle, Package, Plus, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioWeaverRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -15,7 +15,7 @@ import { getNotifications, notifySuccess } from "./notifications";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { CreateWorkflowDraft } from "./editorTypes";
 import { dispatchAiAction, findAiAction, getTotalPages } from "./editorListHelpers";
-import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
+import { WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
 import { WorkflowFolderNavigation, type WorkflowFolderSelection, selectedFolderId } from "./WorkflowFolderNavigation";
 import { clearUnavailableWorkflowBrowseConstraints, unavailableWorkflowBrowseConstraints, updateWorkflowDefinitionBrowseUrl, workflowFolderSelectionKey, workflowLibraryFilterKey, type WorkflowDefinitionBrowseLocation } from "./workflowDefinitionBrowseLocation";
@@ -155,6 +155,8 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   const [focusRefreshAfterMove, setFocusRefreshAfterMove] = useState(false);
   const [librarySupport, setLibrarySupport] = useState<Awaited<ReturnType<typeof workflowOrganizationSupport>> | null>(null);
   const [librarySupportError, setLibrarySupportError] = useState<string | null>(null);
+  const [manageFoldersAction, setManageFoldersAction] = useState<ReactNode>(null);
+  const reportManageFoldersAction = useCallback((action: ReactNode) => setManageFoldersAction(action), []);
   const [libraryPermissions, setLibraryPermissions] = useState<WorkflowOrganizationPermissions>({});
   // False until the library controls report the actor's permissions: until then the page cannot say what it offers.
   const [libraryPermissionsKnown, setLibraryPermissionsKnown] = useState(false);
@@ -772,6 +774,14 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   const showTagColumn = librarySupport?.tags === true && (browseLocation.columns?.includes("tags") ?? false);
   const showLocationColumn = folderCapability === "available" && (browseLocation.columns?.includes("location") ?? false);
   const hasLibrarySupport = librarySupport && (librarySupport.queryOptions || librarySupport.tags || librarySupport.folders || librarySupport.views);
+  const folderManagementFallback = manageFoldersAction ? (
+    <div className="wf-folder-management-fallback" role="group" aria-label="Workflow folder management">{manageFoldersAction}</div>
+  ) : null;
+  const searchControls = <StudioCollectionToolbar>
+    <StudioSearchInput aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
+    {listState === "all" ? <span className="wf-library-state-indicator">All workflow states</span> : null}
+    {effectiveFolderSelection !== "all" ? <StudioButton variant="ghost" size="sm" onClick={() => changeFolder("all")}>Search all workflows</StudioButton> : null}
+  </StudioCollectionToolbar>;
 
   return (
     <>
@@ -797,20 +807,14 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
           recycleBinSelected={recycleBinSelected}
           onAvailable={handleFolderAvailability}
           onFoldersMutated={foldersMutated}
+          onManageFoldersAction={reportManageFoldersAction}
           canManage={librarySupport === null ? false : librarySupport.organization ? libraryPermissions.canManageFolders === true : true}
         >
         <div className="wf-library-toolbar">
-        <StudioCollectionToolbar>
-          <StudioSearchInput aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
-          {listState === "all" ? <span className="wf-library-state-indicator">All workflow states</span> : null}
-
-          {effectiveFolderSelection !== "all" ? <StudioButton onClick={() => changeFolder("all")}>Search all workflows</StudioButton> : null}
-        </StudioCollectionToolbar>
-
-        {hasLibrarySupport ? <Suspense fallback={<p role="status">Loading library organization…</p>}><WorkflowLibraryControls
+        {hasLibrarySupport ? <Suspense fallback={<>{searchControls}{folderManagementFallback}<p role="status">Loading library organization…</p></>}><WorkflowLibraryControls
           key={`${context.baseUrl}:${authorityRevision}`} context={context} support={librarySupport}
-          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={reportLibraryPermissions} onViews={setLibraryViews} refreshKey={libraryRefresh} visibleTagIds={visibleTagIds}
-        /></Suspense> : null}
+          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={reportLibraryPermissions} onViews={setLibraryViews} refreshKey={libraryRefresh} visibleTagIds={visibleTagIds} manageFoldersAction={manageFoldersAction} searchControls={searchControls}
+        /></Suspense> : <>{searchControls}{folderManagementFallback}</>}
         </div>
         {browseScopeBlocked && browseSupport ? <div className="wf-alert" role="alert">
           Some organization filters are unavailable on this backend. Your link and saved column choices are preserved. Clear the unavailable filters to continue browsing.
@@ -848,12 +852,12 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
           <StudioButton onClick={() => setBulkDeleteResult(null)}>Dismiss</StudioButton>
         </div> : null}
         {displayState === "loading" && !renderResultRows ? <WfListSkeleton /> : null}
-        {isCurrentData && definitions.length === 0 ? (
-          <WfEmptyState
+        {isCurrentData && !currentError && definitions.length === 0 ? (
+          <StudioCollectionEmptyState headingLevel={3}
             icon={<Package size={22} />}
             title={emptyTitle}
             description={emptyDescription}
-            action={recycleBinSelected ? undefined : <StudioButton variant="primary" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>}
+            actions={recycleBinSelected ? undefined : <StudioButton variant="primary" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>}
           />
         ) : null}
         {renderResultRows && definitions.length > 0 ? (
@@ -958,7 +962,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
                     </span>
                     <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} />{isDeleted ? <span className="wf-status-badge" data-status="cancelled">Deleted</span> : null}</span>
                     <span className="wf-definition-version" role="cell"><PublishedDefinitionVersion definition={definition} /></span>
-                    <span className="wf-definition-modified" role="cell">{formatDate(definition.lastModifiedAt)}</span>
+                    <span className="wf-definition-modified" role="cell"><StudioTimestamp value={definition.lastModifiedAt} fallback="—" /></span>
                     {showTagColumn ? <span className="wf-library-tag-summary" role="cell" title={formatWorkflowTags(definition, tagCatalog)}>{formatWorkflowTags(definition, tagCatalog) || "—"}</span> : null}
                     {showLocationColumn ? <span className="wf-library-location" role="cell" title={definition.folderBreadcrumb?.map(folder => folder.name).join(" / ") || "Unfiled"}>{definition.folderBreadcrumb?.map(folder => folder.name).join(" / ") || "Unfiled"}</span> : null}
                     <span className="wf-row-actions" role="cell" onClick={isCurrentData ? event => event.stopPropagation() : undefined}>
