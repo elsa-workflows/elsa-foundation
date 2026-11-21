@@ -74,6 +74,11 @@ $SIM --contract-evolution --seeds 100                 # rolling state upgrade an
 $SIM --contract-evolution --seed 1 --flaw SkipUpgrade
 $SIM --contract-actors --seed 1 --flaw CancelKnownChildren
 $SIM --contract-actors --seed 1 --flaw KeepConsumedMessages
+$SIM --contract-events --seeds 100                   # sequences, waiters, correlation actors and event starts
+$SIM --contract-events --seed 1 --flaw CorrelationForgets
+$SIM --contract-events --seed 1 --flaw KeepConsumedMessages
+$SIM --contract-http --seeds 100                      # immediate, early, timer, job, and resumed requests
+$SIM --contract-http --seed 1 --flaw EmitBeforeCommit
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
 $SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
@@ -106,6 +111,13 @@ retries, and loss before and after a write. Two live owners run the family workl
 answer leaves one child per start, a pending timer crosses takeover, and each parent receives one final
 notice from the exact child. In the cancellation case the other owner takes its child scopes after the
 parent sends the cancel.
+
+The sequence and event workload runs Balanced and Durable sequences, live and keeping waiters,
+actor-managed correlation and event-created actors through the public turn. It checks each sequence's
+journal order and commit boundaries across a lost write and a lost answer. It also checks retained
+events versus live delivery, event expiry, duplicate publication and registration, and route removal.
+The sequence cases use durable ingress. The legacy suite covers unwritten Ephemeral starts.
+Actor-managed start-on-match stays outside this replay.
 
 The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
 response after takeover and an input that stays durable across local reset. The seeded actor workload

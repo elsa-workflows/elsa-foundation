@@ -33,6 +33,9 @@ var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntri
 
 NativeSwitch.On = args.Contains("--native");
 NativeSwitch.Flaws = (Arg("--native-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Native.NativeFlaw.None, (all, name) => all | Enum.Parse<Kernel.Native.NativeFlaw>(name, true));
+if (args.Contains("--contract-http"))
+    return await ContractHttpWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws);
 if (args.Contains("--contract-evolution"))
     return await ContractActorWorkload.RunEvolution(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
         Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws);
@@ -42,6 +45,9 @@ if (args.Contains("--contract-actors"))
 if (args.Contains("--contract-native"))
     return await ContractNativeWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
         Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws, NativeSwitch.Flaws);
+if (args.Contains("--contract-events"))
+    return await ContractEventWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws);
 if (args.Contains("--contract"))
     return await ContractWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
         Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), actions, count, flaws);

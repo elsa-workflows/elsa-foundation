@@ -320,6 +320,16 @@ internal static class ContractWorkload
             Require(_placementOwners.Count > 1, "the fault driver must exercise multiple virtual partitions");
         }
 
+        // Event admission cannot return a ref before the event-created actor starts. Only the host
+        // uses these pending scopes to schedule the pass. The workload sees births through public reads.
+        internal async Task StartPendingEventCreators()
+        {
+            var pending = _store.Messages.Values.Where(row => !row.Done && row.Message.InboxScope == InboxKey.EventCreatorScope)
+                .Select(row => row.Message.Target.Partition).Distinct().Order().ToArray();
+            foreach (var partition in pending)
+                if (_placementOwners.TryAdd(partition, 0)) await Take(partition, 0);
+        }
+
         // Exercise independent parent and child owners. Co-located children stay where their parent already runs.
         internal async Task<int> StartElsewhere(IReadOnlyList<(Contract.BoundScope Scope, Contract.ActorRef Ref)> actors)
         {
