@@ -10,7 +10,7 @@ public sealed partial class InMemoryStore
     private readonly Dictionary<(string Tenant, string Operation), CreatedRoot> _foundationStarts = [];
 
     internal FoundationStartReceipt AdmitGeneratedFoundationStart(string tenant, string id, StartSpec spec,
-        long? due, TimeSpan? keepFor)
+        long? due, TimeSpan? keepFor, string? replyTo = null)
     {
         if (spec.Parent is not null || spec.Creation is not null)
             throw new ArgumentException("The foundation assigns the generated actor's creation.", nameof(spec));
@@ -25,7 +25,7 @@ public sealed partial class InMemoryStore
             var name = tenant + "_" + Guid.NewGuid().ToString("N");
             var address = InstanceRef.In(InstanceRef.Spread(name, partitions), name);
             var exact = spec with { Creation = new CreationStart(1, 0, operation) };
-            var creator = new Message(id, address, Kinds.Start, spec.Input, Start: exact, Due: due, TargetCreation: 1)
+            var creator = new Message(id, address, Kinds.Start, spec.Input, Start: exact, Due: due, ReplyTo: replyTo, TargetCreation: 1)
             {
                 StorageId = "root:" + address.Id
             };
