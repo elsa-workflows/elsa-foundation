@@ -58,6 +58,10 @@ internal static class WorkflowActorChecks
         var terminate = new RecordingTurn(header with { TypeData = missingModel.TypeData }, JsonSerializer.Serialize("saved"), [new("t", Kinds.Terminate)]);
         await actor.TurnAsync(terminate, CancellationToken.None);
         Check(terminate.Ended is { Status: ActorStatus.Cancelled }, "the workflow actor handles terminate without entering a missing model");
+        Check(actor.TerminalGrowth(terminate.Header, terminate.State!) == 0 &&
+              actor.TerminalGrowth(newerTurn.Header, newerTurn.State!) == 0 &&
+              newer.TerminalGrowth(newerTurn.Header, newerTurn.State!) == 1,
+            "the workflow actor reserves model growth only when this version can enter the model's termination code");
         return faults == 0 ? 0 : 1;
     }
 
@@ -89,7 +93,7 @@ internal static class WorkflowActorChecks
         public RestorePlan RestoreWaits(InstanceInfo instance, object state) =>
             new([new("timer", "timer", "[1,2]", Now + 1)], [new("job", "\"job-args\"")], [new("event", "wait", true)]);
 
-        public long TerminalGrowth(InstanceInfo instance, object state) => 0;
+        public long TerminalGrowth(InstanceInfo instance, object state) => 1;
         public bool HandlesMetadata(Message message) => message.Kind == "metadata";
         public ValueTask MetadataAsync(ITurn turn, ActorStatus status, CancellationToken cancellationToken) => throw new InvalidOperationException("The future state is opaque.");
         public void TerminateMetadata(object state) { }

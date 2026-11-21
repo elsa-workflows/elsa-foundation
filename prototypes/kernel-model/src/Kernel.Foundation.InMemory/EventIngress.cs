@@ -50,6 +50,7 @@ internal sealed class EventIngress(Durable.InMemoryStore store, Durable.Requests
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
+        if (spec is not null) HeaderLimits.ValidateStart(spec.Type, spec.TypeData);
         var start = spec is null ? null : new Durable.StartSpec(spec.Type, spec.TypeData, spec.Input,
             Ephemeral: spec.Ephemeral, History: (Durable.History)spec.History);
         store.SetFoundationEventStart(scope.Tenant, correlationKey, wait, start);
