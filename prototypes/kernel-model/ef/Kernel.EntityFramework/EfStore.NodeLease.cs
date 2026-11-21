@@ -62,7 +62,6 @@ public sealed partial class EfStore
     /// for a 9 s lease, against the default 50). The take sets it back to the default as its last step, before its
     /// transaction ends whether it committed or not; a reset that fails is on a broken session, which leaves the pool.
     /// </summary>
-
     private sealed class Reset(KernelDb db) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()

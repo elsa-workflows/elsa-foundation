@@ -117,7 +117,7 @@ public sealed partial class MongoStore : IKernelStore
 
     // ---- ownership ---------------------------------------------------------------------------------------------------
 
-    /// <summary>The partition documents a take may take: free, already the node's, or with an expired lease.</summary>
+    /// <summary>Remember the commit clock read by this take for its partition and epoch.</summary>
     private void Known(int partition, long epoch, long clock)
     {
         if (!_options.FenceInBatch) return;

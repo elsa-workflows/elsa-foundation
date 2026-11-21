@@ -198,16 +198,17 @@ static async Task<int> Stress(string connection, int seconds, int messages, bool
         long nextHeartbeat = 0;
         while (!stop.IsCancellationRequested)
         {
-            if (!worker.Owns)
+            if (!worker.Owns && worker.Pending.Count == 0)
             {
                 await new DurableHost([worker]).ActivateAsync(worker.Partition);
-                if (!worker.Owns) await Task.Delay(20);
-                continue;
+                if (!worker.Owns)
+                {
+                    await Task.Delay(20);
+                    continue;
+                }
             }
-            await worker.PollAsync();
-            await worker.LoadAsync();
-            await worker.MeetAsync();
-            foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
+            // A Worker with only pending partitions still needs a pass to judge its next heartbeat.
+            await worker.WokenAsync(null);
             await worker.RunAsync();
             if (Environment.TickCount64 >= nextHeartbeat)
             {

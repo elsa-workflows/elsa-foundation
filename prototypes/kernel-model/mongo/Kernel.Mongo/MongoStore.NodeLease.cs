@@ -102,7 +102,7 @@ public sealed partial class MongoStore
     private static bool Deadline(Exception e, CancellationTokenSource? deadline, CancellationToken caller) =>
         !caller.IsCancellationRequested && (deadline?.IsCancellationRequested == true || e is MongoExecutionTimeoutException);
 
-    /// <summary>The take's $set without the per-partition lease: a death, the new owner and epoch, the primary's time.</summary>
+    /// <summary>The take's $set records a death, the new owner and epoch, and the primary's time.</summary>
     private static BsonDocument TakeSet(string node) => new()
     {
         { "died", new BsonDocument("$and", new BsonArray { new BsonDocument("$ne", new BsonArray { "$owner", BsonNull.Value }), new BsonDocument("$ne", new BsonArray { "$owner", new BsonDocument("$literal", node) }) }) },
