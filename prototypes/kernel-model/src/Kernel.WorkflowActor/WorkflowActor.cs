@@ -37,23 +37,31 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
             return;
         }
 
-        var model = _models[workflow.Model];
         if (command == Kinds.Terminate)
         {
-            if (turn.State is { } saved && workflow.Version <= model.StateVersion && model is IModelMetadata metadata)
+            if (turn.State is { } saved && _models.TryGetValue(workflow.Model, out var terminatingModel) &&
+                workflow.Version <= terminatingModel.StateVersion && terminatingModel is IModelMetadata metadata)
             {
-                var state = ReadState(model, workflow, saved, turn.Inbox);
+                var state = ReadState(terminatingModel, workflow, saved, turn.Inbox);
                 metadata.TerminateMetadata(state);
-                turn.State = JsonSerializer.Serialize(state, model.StateType);
-                WriteHeader(turn, workflow, workflow with { Version = model.StateVersion });
+                turn.State = JsonSerializer.Serialize(state, terminatingModel.StateType);
+                WriteHeader(turn, workflow, workflow with { Version = terminatingModel.StateVersion });
             }
             if (header.Status == ActorStatus.Running) turn.End(ActorStatus.Cancelled);
             return;
         }
 
+        var model = GetModel(workflow.Model);
         var reader = model as IModelMetadata;
         var inbox = header.Status == ActorStatus.Running ? turn.Inbox : turn.Inbox.Where(message => reader?.HandlesMetadata(message) == true).ToArray();
         if (inbox.Count == 0) return;
+        if (header.Status != ActorStatus.Running && workflow.Version is { } version && version > model.StateVersion)
+        {
+            var unavailable = new ModelMetadataUnavailable(header.Ref.Id, workflow.Model, version, model.StateVersion);
+            foreach (var query in inbox) turn.Reply(query, "response", unavailable);
+            turn.Record(unavailable);
+            return;
+        }
         var current = ReadState(model, workflow, turn.State, inbox);
         var modelTurn = new WorkflowTurn(turn, workflow, current, inbox);
         if (header.Status == ActorStatus.Running)
@@ -69,15 +77,15 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
 
     public ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
     {
-        var arguments = JsonSerializer.Deserialize<WorkflowJobArguments>(job.Arguments!) ??
+        if (job.Arguments is not { } payload || JsonSerializer.Deserialize<WorkflowJobArguments>(payload) is not { } arguments)
             throw new InvalidOperationException("The workflow job has no model.");
-        return _models[arguments.Model].ExecuteJobAsync(new WorkflowJob(job, arguments.Arguments), cancellationToken);
+        return GetModel(arguments.Model).ExecuteJobAsync(new WorkflowJob(job, arguments.Arguments), cancellationToken);
     }
 
     public RestorePlan RestoreWaits(ActorHeader header, string state)
     {
         var workflow = ReadHeader(header);
-        var model = _models[workflow.Model];
+        var model = GetModel(workflow.Model);
         var plan = model.RestoreWaits(Instance(header, workflow), ReadState(model, workflow, state, []));
         return plan with { Jobs = plan.Jobs.Select(job => job with { Arguments = JobArguments(workflow.Model, job.Arguments) }).ToArray() };
     }
@@ -85,7 +93,7 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
     public long TerminalGrowth(ActorHeader header, string state)
     {
         var workflow = ReadHeader(header);
-        var model = _models[workflow.Model];
+        var model = GetModel(workflow.Model);
         return model.TerminalGrowth(Instance(header, workflow), ReadState(model, workflow, state, []));
     }
 
@@ -95,6 +103,11 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
         return !_models.TryGetValue(workflow.Model, out var model) || workflow.Version > model.StateVersion ||
             model is IModelMetadata metadata && metadata.ProtectsDeletion(ReadState(model, workflow, state, []), header.EndedAt, now);
     }
+
+    private IExecutionModel GetModel(string model) => _models.TryGetValue(model, out var found) ? found :
+        throw new InvalidOperationException($"No execution model named '{model}' is registered.");
+
+    private sealed record ModelMetadataUnavailable(string Actor, string Model, int StoredVersion, int AvailableVersion);
 
     private static WorkflowHeader ReadHeader(ActorHeader header) =>
         JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData) ?? throw new InvalidOperationException("The workflow header is absent.");
