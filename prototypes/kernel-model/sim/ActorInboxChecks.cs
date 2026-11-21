@@ -73,6 +73,72 @@ internal static class ActorInboxChecks
         }
     }
 
+    public static async Task PublicHold(Action<bool, string> check)
+    {
+        const long now = 1_701_600_000_000;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("acme");
+        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("hold-order"), "hold-order");
+        Contract.IActorReads reads = new ActorList(store, 16);
+        var probe = new HeldProbe();
+        var start = new Contract.Target.Start(new(probe.Type, "probe"));
+        var subject = (await ingress.SendAsync(scope, start, "begin", Contract.Kinds.Start)).Actor!.Value;
+        var target = new Contract.Target.Ref(subject);
+        var owner = await Activate("hold-first");
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "a", "fc-hold");
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "b", "fc-hold");
+        await Pump(owner);
+        var duplicate = await ingress.SendAsync(scope, target, "a", "fc-hold");
+        check(duplicate.Outcome == Contract.AdmissionOutcome.Duplicate && (await reads.InboxAsync(scope, subject)).Items is
+            [{ Id: "a", State: Contract.DeliveryState.Held }, { Id: "b", State: Contract.DeliveryState.Held }] &&
+            Applied().Count == 0, "Hold keeps multiple public messages unconsumed in their original order");
+
+        await ingress.SendAsync(scope, target, "c", "release");
+        await Pump(owner);
+        check(Applied().SequenceEqual(["a", "b", "c"]) && (await reads.InboxAsync(scope, subject)).Items.Count == 0,
+            "the next public turn sees held inputs before fresh input and consumes each exactly once");
+
+        await ingress.SendAsync(scope, target, "d", "fc-hold");
+        await Pump(owner);
+        await owner.DisposeAsync();
+        await ingress.SendAsync(scope, target, "e", "release");
+        await using var successor = await Activate("hold-next");
+        await Pump(successor);
+        check(Applied().SequenceEqual(["a", "b", "c", "d", "e"]) && (await reads.InboxAsync(scope, subject)).Items.Count == 0,
+            "an owner change preserves the held input before the next fresh input");
+
+        async Task<IScopeActivation> Activate(string node)
+        {
+            var worker = new Worker(node, 0, store, new ActorAdapter(store, probe), new WorkerOptions { Monotonic = () => 0 });
+            return (await new DurableHost([worker]).ActivateAsync(0))!;
+        }
+
+        List<string> Applied() => Json.Read<List<string>>(store.ReadFoundationActor(scope.Tenant, subject.Id).Actor!.Row.State);
+    }
+
+    private sealed class HeldProbe : Contract.IActorType
+    {
+        public string Type => "hold-order";
+        public bool Withholds(Contract.ActorHeader header) => false;
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            var result = turn.State is null ? [] : Json.Read<List<string>>(turn.State);
+            if (turn.Inbox.Any(message => message.Kind == "release"))
+                result.AddRange(turn.Inbox.Select(message => message.Id));
+            else
+                foreach (var message in turn.Inbox.Where(message => message.Kind == "fc-hold")) turn.Hold(message);
+            turn.State = Json.Write(result);
+            return default;
+        }
+
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => new((object?)null);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+    }
+
     private static async Task Pump(IScopeActivation activation)
     {
         for (var step = 0; step < 20; step++)
