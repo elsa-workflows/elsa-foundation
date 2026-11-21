@@ -1,6 +1,6 @@
 using CShells.Lifecycle;
 
-namespace Elsa.Foundation.Host.Shells;
+namespace Elsa.Foundation.Hosting;
 
 /// <summary>
 /// What an EF module's refusal says of itself, however it was recognised, with the host's directory in its command. It is what
@@ -34,21 +34,15 @@ public sealed record ShellActivationFailure(
 }
 
 /// <summary>
-/// What the host knows of the shells it could not activate: written by <see cref="EagerShellActivationHostedService"/> as its
-/// attempts fail and succeed, read by the readiness probe (<see cref="Health.HealthEndpoints"/>) and the Attention
-/// contributor (<see cref="ShellActivationAttentionContributor"/>). A shell appears here from its first failed activation until
-/// an active transition is observed, by any path: the retry that activates it, a request that does, or a reload.
+/// Tracks consecutive activation failures for host diagnostics until the registry confirms a settled current generation.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Host-level state. The contributor is read from inside a shell, while the failing one is not running, so the one instance is
-/// registered on the host's container (<c>Program.cs</c>) and a shell's copy of that registration is the same object.
+/// The profile registers one instance on the host that shells also use. Unsupported custom registries cannot clear failures.
 /// </para>
 /// <para>
-/// Once <see cref="Observe"/> has attached the registry, the tracker is also the registry's lifecycle subscriber, which forgets
-/// a shell the moment it becomes active, and it reports only shells the registry does not hold active, so a record that outlived
-/// a lazy activation is never read. Failures use the runner callback's timestamp; <see cref="TimeProvider"/> stamps Attention
-/// observations. The host selects retry delays and jitter, while CShells owns scheduling.
+/// An Active notification can precede settlement. Diagnostic reads check the registry again so a successful request or reload
+/// can clear the failure even when its notification was provisional.
 /// </para>
 /// </remarks>
 public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : IShellLifecycleSubscriber
@@ -61,8 +55,7 @@ public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : 
     /// <summary>The clock that stamps Attention observations.</summary>
     public TimeProvider TimeProvider { get; } = timeProvider ?? TimeProvider.System;
 
-    /// <summary>Attaches <paramref name="registry"/>: what it holds active is not failing, and a shell it activates is forgotten.</summary>
-    public void Observe(IShellRegistry registry)
+    internal void Observe(IShellRegistry registry)
     {
         lock (_gate)
         {
@@ -81,23 +74,27 @@ public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : 
     public IReadOnlyList<ShellActivationFailure> Failing()
     {
         lock (_gate)
-            return [.. _failing.Values.Where(failure => !IsActive(failure.Shell)).OrderBy(failure => failure.Shell, StringComparer.OrdinalIgnoreCase)];
+        {
+            foreach (var shell in _failing.Keys.ToArray())
+                ObserveSettlement(shell);
+
+            return [.. _failing.Values.OrderBy(failure => failure.Shell, StringComparer.OrdinalIgnoreCase)];
+        }
     }
 
     /// <summary>The failure of <paramref name="shell"/>, or <see langword="null"/> when it has not failed since it last was active, or is active.</summary>
     public ShellActivationFailure? FailureOf(string shell)
     {
         lock (_gate)
-            return _failing.GetValueOrDefault(shell) is { } failure && !IsActive(shell) ? failure : null;
+            return _failing.ContainsKey(shell) && !ObserveSettlement(shell) ? _failing[shell] : null;
     }
 
     /// <summary>
     /// Projects a runner callback into the existing failure row and selects its one retry delay. The runner's cumulative
     /// attempt number is the source of sequence; this tracker only keeps the offset needed to preserve Elsa's consecutive
-    /// visible-failure semantics across a reset. A failure hidden by a raw Active read retains a previous row, but rebases the
-    /// projection so the hidden callback does not inflate the next visible count.
+    /// visible-failure semantics across a reset. An attempt superseded by a settled generation does not create a failure row.
     /// </summary>
-    public ShellActivationFailure FailedAttempt(
+    internal ShellActivationFailure FailedAttempt(
         string shell,
         int attemptNumber,
         string failureType,
@@ -109,24 +106,13 @@ public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : 
 
         lock (_gate)
         {
+            var settled = ObserveSettlement(shell);
             var previous = _failing.GetValueOrDefault(shell);
-            var active = IsActive(shell);
-            long attemptBase;
-            int attempts;
+            var attempts = 1;
 
-            if (active)
+            if (!settled)
             {
-                // A raw Active read suppresses this write but is not proof of a lifecycle reset. Preserve any old row and
-                // move its offset past the suppressed callback so the next visible failure increments only once.
-                attempts = (previous?.Attempts ?? 0) + 1;
-                if (previous is null)
-                    _attemptBases.Remove(shell);
-                else
-                    _attemptBases[shell] = (long)attemptNumber - previous.Attempts;
-            }
-            else
-            {
-                if (!_attemptBases.TryGetValue(shell, out attemptBase))
+                if (!_attemptBases.TryGetValue(shell, out var attemptBase))
                 {
                     // If a prior row survived a new runner instance, continue its visible failure streak. Otherwise this is
                     // the first visible failure after an observed reset (or the first row for this shell).
@@ -146,33 +132,35 @@ public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : 
                 failedAt,
                 retry.NextDelay(attempts, refused: refusal is not null));
 
-            if (!active)
+            if (!settled)
                 _failing[shell] = failure;
 
             return failure;
         }
     }
 
-    /// <summary>Forgets the failure of <paramref name="shell"/>: it is active.</summary>
-    public void Activated(string shell)
+    internal bool ObserveSettlement(string shell, IShell? expected = null)
     {
         lock (_gate)
         {
+            var settled = (_registry as ISettledShellRegistry)?.GetSettledActive(shell);
+            if (settled is null || (expected is not null && !ReferenceEquals(expected, settled)))
+                return false;
+
             _failing.Remove(shell);
             _attemptBases.Remove(shell);
+            return true;
         }
     }
 
-    /// <summary>Forgets a shell as it becomes active, whoever activated it: the eager attempt, a request, a reload.</summary>
-    public Task OnStateChangedAsync(IShell shell, ShellLifecycleState previous, ShellLifecycleState current, CancellationToken cancellationToken = default)
+    Task IShellLifecycleSubscriber.OnStateChangedAsync(IShell shell, ShellLifecycleState previous, ShellLifecycleState current, CancellationToken cancellationToken)
     {
         if (current == ShellLifecycleState.Active)
-            Activated(shell.Descriptor.Name);
+            ObserveSettlement(shell.Descriptor.Name, shell);
 
         return Task.CompletedTask;
     }
 
-    private bool IsActive(string shell) => _registry?.GetActive(shell)?.State == ShellLifecycleState.Active;
 
     private static int ProjectAttemptCount(int attemptNumber, long attemptBase) =>
         (int)Math.Clamp((long)attemptNumber - attemptBase, 1, int.MaxValue);

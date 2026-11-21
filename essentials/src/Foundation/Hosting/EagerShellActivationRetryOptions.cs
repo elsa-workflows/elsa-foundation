@@ -1,4 +1,6 @@
-namespace Elsa.Foundation.Host.Shells;
+using Microsoft.Extensions.Configuration;
+
+namespace Elsa.Foundation.Hosting;
 
 /// <summary>
 /// How long <see cref="EagerShellActivationHostedService"/> waits between attempts to activate a shell that failed: the delay
@@ -10,7 +12,7 @@ namespace Elsa.Foundation.Host.Shells;
 /// <c>Elsa:Boot:EagerShellActivation:Retry:InitialDelay</c> and <c>MaxDelay</c>, as <c>TimeSpan</c>s. A value that is absent,
 /// unparseable or not positive is the default, and a <c>MaxDelay</c> below <c>InitialDelay</c> is raised to it.
 /// </remarks>
-public sealed record EagerShellActivationRetryOptions
+internal sealed record EagerShellActivationRetryOptions
 {
     public const string SectionKey = "Elsa:Boot:EagerShellActivation:Retry";
 

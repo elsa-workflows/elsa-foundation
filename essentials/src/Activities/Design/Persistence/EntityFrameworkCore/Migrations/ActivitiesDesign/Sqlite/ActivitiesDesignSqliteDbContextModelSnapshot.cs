@@ -136,6 +136,9 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasMaxLength(450)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RecommendedVersionIdIdentityHash")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -574,6 +577,9 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ValidFromKey")

@@ -570,6 +570,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@19.2.7)
+      '@elsa-workflows/studio-code-editor':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk

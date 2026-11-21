@@ -40,7 +40,7 @@ public sealed class OpenApiLifetimeBoundaryTests
             .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId == "Elsa.Activities.Design.Api")
             .ToArray();
 
-        Assert.Equal(40, endpoints.Length);
+        Assert.Equal(41, endpoints.Length);
         var dataContext = Assert.Single(endpoints.OfType<RouteEndpoint>(), endpoint => endpoint.RoutePattern.RawText ==
             "/design/activities/drafts/{draftId}/activity-data/context");
         Assert.Equal([HttpMethods.Post], dataContext.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods);

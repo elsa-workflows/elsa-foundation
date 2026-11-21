@@ -11,7 +11,7 @@ using Elsa.Cluster.Readability;
 using Elsa.Foundation.DataProtection.EntityFrameworkCore;
 using Elsa.ExtensionBuilder.Api.Extensions;
 using Elsa.Foundation.Host.ModuleManagement;
-using Elsa.Foundation.Host.Shells;
+using Elsa.Foundation.Hosting;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workbench;

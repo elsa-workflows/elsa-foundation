@@ -157,8 +157,9 @@ test("editor Back restores the later workflow page with its observed opaque curs
   await openSecondPage(page);
   const requestCountBeforeOpen = (await recordedPageRequests(page)).length;
   await page.getByRole("link", { name: "Second page renewal" }).click();
-  await expect(page.getByRole("button", { name: "Definitions", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Definitions", exact: true }).click();
+  const definitionsLink = page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Definitions", exact: true });
+  await expect(definitionsLink).toBeVisible();
+  await definitionsLink.click();
   await expect(page.getByRole("button", { name: "Next page" })).toBeVisible();
 
   await expectRestoredPageRequest(page, requestCountBeforeOpen);
@@ -392,7 +393,7 @@ test("browser Back restores the later workflow page with its observed opaque cur
   await openSecondPage(page);
   const requestCountBeforeOpen = (await recordedPageRequests(page)).length;
   await page.getByRole("link", { name: "Second page renewal" }).click();
-  await expect(page.getByRole("button", { name: "Definitions", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Definitions", exact: true })).toBeVisible();
   await page.goBack();
   await expect(page).not.toHaveURL(/definition=/);
 

@@ -82,6 +82,7 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
   const groups = connections.kind === "ready" || connections.kind === "loading" ? lastGroups.current : [];
   const selected = groups.find(group => group.provider.providerKey === providerKey)?.items.find(item => item.name === connectionName);
   const savedMissing = Boolean(connectionName) && !selected;
+  const savedConnectionUnavailable = savedMissing && connections.kind === "ready" && capabilities.kind === "unusable";
   // Once offered, the search stays: clearing or narrowing it must not unmount the field being typed in.
   const searchOffered = useRef(false);
   if (groups.some(group => group.items.length >= connectionPickerLimit) || search !== "" || query !== "") searchOffered.current = true;
@@ -208,10 +209,11 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
           </select>
           {problems.model ? <small id={`${id}-model-problem`} className="agent-field-problem">{problems.model}</small> : null}
         </StudioField>
-        {connections.kind === "ready" && groups.every(group => group.items.length === 0) ? <StudioAlert tone="info">{query ? `No model connections match “${query}”.` : "There are no model connections you can use yet. Create one in Connections, then choose it here."}</StudioAlert> : null}
+        {connections.kind === "ready" && !savedMissing && groups.every(group => group.items.length === 0) ? <StudioAlert tone="info">{query ? `No model connections match “${query}”.` : "There are no model connections you can use yet. Create one in Connections, then choose it here."}</StudioAlert> : null}
         {connections.kind === "denied" ? <StudioAlert tone="info">Listing connections needs permission to read workflow designs or manage connections. The saved connection is kept.</StudioAlert> : null}
         {connections.kind === "unavailable" ? <StudioAlert tone="warning">Connections could not be loaded. The saved connection is kept. {retry}</StudioAlert> : null}
-        {savedMissing && connections.kind === "ready" ? <StudioAlert tone="warning">The saved connection “{connectionName}” is not {query ? "among the connections matching this search" : "available to you"}. It is kept until you choose another one.</StudioAlert> : null}
+        {savedConnectionUnavailable ? <StudioAlert tone="warning">The saved connection “{connectionName}” is unavailable. It’s still saved. Review it in Connections or set up a replacement. {retry}</StudioAlert> : null}
+        {savedMissing && connections.kind === "ready" && !savedConnectionUnavailable ? <StudioAlert tone="warning">The saved connection “{connectionName}” is not {query ? "among the connections matching this search" : "available to you"}. It is kept until you choose another one.</StudioAlert> : null}
         {selected && selected.modelId && selected.modelId !== modelId ? (
           <StudioAlert tone="warning">
             This connection now uses {selected.modelId}, but the agent still names {modelId || "no model"}.{" "}
@@ -219,7 +221,7 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
           </StudioAlert>
         ) : null}
         {capabilities.kind === "denied" ? <StudioAlert tone="info">Reading what this model supports needs permission to author agents.</StudioAlert> : null}
-        {capabilities.kind === "unusable" ? <StudioAlert tone="warning">This model connection isn't available for agents right now — for example, credentials may be missing or the endpoint is unreachable. Review the connection in Connections, or pick a different model. {retry}</StudioAlert> : null}
+        {capabilities.kind === "unusable" && !savedConnectionUnavailable ? <StudioAlert tone="warning">This model connection isn't available for agents right now. Review the connection in Connections, or pick a different model. {retry}</StudioAlert> : null}
         {capabilities.kind === "unavailable" ? <StudioAlert tone="warning">What this model supports could not be read. {retry}</StudioAlert> : null}
         {model && !model.supportsJsonSchema ? <StudioAlert tone="warning">This model does not declare structured JSON results, so the agent cannot be published with it.</StudioAlert> : null}
         {modelId || connectionName ? (

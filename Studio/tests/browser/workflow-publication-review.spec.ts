@@ -123,6 +123,8 @@ test("lists validation warnings without blocking Publish", async ({ page }) => {
   await expect(warnings).toBeVisible();
   await expect(warnings.getByRole("listitem")).toHaveCount(2);
   await expect(warnings.getByRole("listitem").first()).toContainText("\"Charge card\" is marked safe to repeat");
+  await expect(warnings.getByRole("listitem").first()).toContainText("If this is demo-only logging, no action is needed.");
+  await expect(warnings.getByRole("listitem").last()).toContainText("make the undo safe to retry with an idempotency key.");
   await expect(warnings).toContainText("These do not block publishing.");
   await expect(dialog.getByRole("alert")).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Publish" })).toBeEnabled();
@@ -139,6 +141,7 @@ for (const theme of ["light", "dark"]) {
       const dialog = page.getByRole("dialog", { name: "Publish workflow" });
       const warnings = dialog.getByRole("region", { name: "Warnings" });
       await expect(warnings).toBeVisible();
+      await expect(warnings.getByRole("listitem").first()).toContainText("no action is needed");
       await expect(dialog.locator(".wf-publication-footer").getByRole("button", { name: "Publish" })).toBeVisible();
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);

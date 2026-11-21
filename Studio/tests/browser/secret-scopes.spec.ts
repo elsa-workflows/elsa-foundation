@@ -55,6 +55,66 @@ async function beginCustomScopeRefresh(dialog: import("@playwright/test").Locato
   return custom;
 }
 
+test("filter controls stay aligned above their descriptions at wide and wrapped widths", async ({ page }) => {
+  for (const paneWidth of [1280, 760]) {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/secret-scopes.html");
+    if (paneWidth < 1280) {
+      await page.locator(".secrets-shell").evaluate((element, width) => { element.style.width = `${width}px`; }, paneWidth);
+    }
+
+    const geometry = await page.evaluate(() => {
+      const bounds = (element: Element) => {
+        const rect = element.getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+      };
+      const fields = [...document.querySelectorAll<HTMLElement>(".secrets-filter")].map(field => ({
+        control: bounds(field.querySelector(".studio-form-control")!),
+        description: field.querySelector<HTMLElement>(".studio-field-hint") ? {
+          ...bounds(field.querySelector<HTMLElement>(".studio-field-hint")!),
+          id: field.querySelector<HTMLElement>(".studio-field-hint")!.id,
+          describedBy: field.querySelector("select")!.getAttribute("aria-describedby")?.split(/\s+/) ?? []
+        } : null
+      }));
+      const toolbar = document.querySelector<HTMLElement>(".secrets-toolbar")!;
+      return {
+        viewportWidth: window.innerWidth,
+        toolbar: bounds(toolbar),
+        search: [
+          bounds(toolbar.querySelector(".secrets-search-control")!),
+          bounds(toolbar.querySelector(".secrets-search-action")!)
+        ],
+        fields
+      };
+    });
+
+    expect(geometry.fields).toHaveLength(4);
+    expect(geometry.toolbar.right).toBeLessThanOrEqual(geometry.viewportWidth);
+    expect(geometry.toolbar.right - geometry.toolbar.left).toBeLessThanOrEqual(paneWidth);
+    for (const field of geometry.fields) {
+      if (field.description) {
+        expect(field.description.top).toBeGreaterThanOrEqual(field.control.bottom);
+        expect(field.description.describedBy).toContain(field.description.id);
+      }
+    }
+
+    if (paneWidth > 960) {
+      const bottoms = [...geometry.search.map(control => control.bottom), ...geometry.fields.map(field => field.control.bottom)];
+      expect(Math.max(...bottoms) - Math.min(...bottoms), JSON.stringify({ paneWidth, ...geometry })).toBeLessThanOrEqual(1);
+    } else {
+      expect(Math.min(...geometry.fields.map(field => field.control.top))).toBeGreaterThanOrEqual(Math.max(...geometry.search.map(control => control.bottom)));
+      const filterRows = new Map<number, number[]>();
+      for (const field of geometry.fields) {
+        const row = Math.round(field.control.top);
+        filterRows.set(row, [...(filterRows.get(row) ?? []), field.control.bottom]);
+      }
+      for (const bottoms of filterRows.values()) {
+        expect(Math.max(...bottoms) - Math.min(...bottoms)).toBeLessThanOrEqual(1);
+      }
+    }
+  }
+});
+
 test("inventory coverage stays truthful through search, local scope filtering and detail return", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1280, height: 800 });

@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { SkeletonRows, StudioButton, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, StudioBreadcrumbs, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import { Bookmark, Trash2 } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { deleteWorkflowView, listWorkflowViews, saveWorkflowView, workflowOrganizationSupport, type WorkflowLibraryView } from "../api/workflowOrganization";
+import { StudioLink } from "../StudioLink";
 import { useDialogFocus } from "./useDialogFocus";
 import "./workflowOrganization.css";
 
 type View = "list" | "create" | "edit";
 type Loaded = { context: StudioEndpointContext; views?: WorkflowLibraryView[]; unsupported?: boolean; error?: string };
 const message = (error: unknown) => error instanceof Error ? error.message : "Check your access and try again.";
+
+function SavedViewsBreadcrumbs({ navigate }: { navigate(path: string): void }) {
+  return <StudioBreadcrumbs items={[{ href: "/workflows/definitions", label: "Definitions" }]} current="Saved views"
+    renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />;
+}
 
 export function WorkflowViewsRoute({ context, view, navigate }: { context: StudioEndpointContext; view: View; navigate(path: string): void }) {
   const [loaded, setLoaded] = useState<Loaded>();
@@ -37,7 +43,7 @@ export function WorkflowViewsRoute({ context, view, navigate }: { context: Studi
 
   if (!loaded || loaded.context !== context) return <SkeletonRows label="Loading saved views" />;
   if (loaded.error || loaded.unsupported) {
-    return <StudioPage><StudioPageHeader title="Saved views" actions={<StudioButton onClick={() => navigate("/workflows/definitions")}>Back to workflows</StudioButton>} />
+    return <StudioPage><StudioPageHeader title="Saved views" breadcrumbs={<SavedViewsBreadcrumbs navigate={navigate} />} />
       <StudioResultState tone={loaded.error ? "danger" : undefined}
         title={loaded.error ? "Could not load saved views" : "Saved views unavailable"}
         description={loaded.error ?? "This backend does not support saved views."}
@@ -94,9 +100,8 @@ function WorkflowViewsPage({ context, initialViews, navigate }: { context: Studi
   const viewsSaved = () => { setEditingView(null); void refresh(); };
 
   return <StudioPage className="wf-tag-page" aria-labelledby="workflow-views-title">
-    <StudioPageHeader title="Saved views" titleId="workflow-views-title" description="Manage your saved workflow library views."
+    <StudioPageHeader title="Saved views" titleId="workflow-views-title" breadcrumbs={<SavedViewsBreadcrumbs navigate={navigate} />} description="Manage your saved workflow library views."
       actions={<>
-        <StudioButton onClick={() => navigate("/workflows/definitions")}>Back to workflows</StudioButton>
         <StudioButton disabled={busy} onClick={() => void refresh()}>Refresh</StudioButton>
       </>} />
     {error ? <StudioResultState tone="danger" title="Could not load saved views" description={error}
@@ -116,7 +121,7 @@ function WorkflowViewsPage({ context, initialViews, navigate }: { context: Studi
           </td>
         </tr>)}</tbody>
       </table>
-    </StudioTableContainer> : !error ? <StudioResultState title="No saved views"
+    </StudioTableContainer> : !error ? <StudioCollectionEmptyState title="No saved views"
       description="Save a view from the workflow definitions page to organize your filters and sort order." /> : null}
     <StudioCollectionFooter>
       <span>{views.length} saved view{views.length === 1 ? "" : "s"}</span>

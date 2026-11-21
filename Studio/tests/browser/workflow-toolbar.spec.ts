@@ -14,8 +14,8 @@ for (const width of [320, 768, 1024, 1440]) {
     const title = toolbar.locator("strong[title]");
     const badge = toolbar.getByText("Draft", { exact: true });
     const titleRow = toolbar.locator(".wf-editor-title");
-    const definitions = toolbar.getByRole("button", { name: "Definitions", exact: true });
-    const breadcrumbChevron = toolbar.locator(".wf-editor-identity > svg");
+    const definitions = toolbar.getByRole("link", { name: "Definitions", exact: true });
+    const breadcrumbChevron = toolbar.locator(".studio-breadcrumb-separator");
     const save = toolbar.getByRole("button", { name: "Save", exact: true });
     const canvasTools = toolbar.locator(".wf-canvas-tools");
     const initialTitle = await title.boundingBox();

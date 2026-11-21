@@ -14,10 +14,10 @@ const connections = new BackendConnections({profileApiPath:"/_elsa/studio/backen
 });
 
 function Fixture() {
-  const [path,setPath] = useState("/settings/backends");
+  const [path,setPath] = useState(() => new URLSearchParams(window.location.search).get("path") ?? "/settings/backends");
   const snapshot=useSyncExternalStore(connections.subscribe,connections.getSnapshot);
   useEffect(()=>{void connections.initialize();},[]);
-  const navigate=(next:string)=>setPath(next);
+  const navigate=(next:string)=>setPath(new URL(next,window.location.origin).pathname);
   return <ThemeProvider><main style={{padding:20,minWidth:0}}>
     <BackendSwitcher connections={connections} onNavigate={navigate} />
     <BackendConnectionNotice connections={connections} />

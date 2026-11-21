@@ -1,6 +1,6 @@
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Host.Shells;
+using Elsa.Foundation.Hosting;
 
 namespace Elsa.Foundation.Host.Health;
 
@@ -8,12 +8,11 @@ namespace Elsa.Foundation.Host.Health;
 /// Host-level health probes. These report HOST-infrastructure state only:
 /// <list type="bullet">
 ///   <item><c>/health/live</c> — the process is up and the root pipeline serves. Liveness.</item>
-///   <item><c>/health/ready</c> — the configured shell(s) have activated (reached
-///   <see cref="ShellLifecycleState.Active"/>). With eager activation on this flips shortly after boot; with
+///   <item><c>/health/ready</c> — the configured shell(s) have settled as current. With eager activation on this flips shortly after boot; with
 ///   lazy activation it flips on each shell's first request. Readiness.</item>
 /// </list>
-/// Readiness is read live from <see cref="IShellRegistry.GetActive(string)"/> — it reflects the shell's real
-/// state, so it is correct whether the shell was activated eagerly or lazily, and it drops back to not-ready
+/// Readiness is read live from <see cref="ISettledShellRegistry.GetSettledActive(string)"/> on the host's registry.
+/// It fails closed without that capability, and drops back to not-ready
 /// for the window a shell is mid-reload. A shell that is not active says why in its <c>reason</c>
 /// (<see cref="ShellNotActiveReason"/>), from what eager activation's failed attempts left in
 /// <see cref="ShellActivationTracker"/>; the probe itself activates nothing, the eager activation keeps retrying.
@@ -42,14 +41,15 @@ public static class HealthEndpoints
 
             var shells = shellNames.Select(name =>
             {
-                var active = registry.GetActive(name);
+                var active = (registry as ISettledShellRegistry)?.GetSettledActive(name);
+                var failure = tracker.FailureOf(name);
                 return new
                 {
                     name,
                     state = active is null ? "inactive" : active.State.ToString(),
                     generation = active?.Descriptor.Generation,
-                    active = active?.State == ShellLifecycleState.Active,
-                    reason = active?.State == ShellLifecycleState.Active ? null : ShellNotActiveReason.For(active, tracker.FailureOf(name))
+                    active = active is not null,
+                    reason = active is not null ? null : ShellNotActiveReason.For(failure is null ? registry.GetActive(name) : null, failure)
                 };
             }).ToArray();
 

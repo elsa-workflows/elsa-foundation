@@ -1,5 +1,5 @@
-import { studioRowInteraction, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
-import React, { useEffect, useMemo, useState } from "react";
+import { studioRowInteraction, StudioField, StudioPageHeader, StudioResizeHandle } from "@elsa-workflows/studio-ui";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioRouteComponentProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
@@ -459,9 +459,78 @@ function OverviewPanel({ state }: { state: OTelState }) {
 }
 
 function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState; selectedTrace: OTelTraceDetail | null; selectedSpan: OTelSpan | null }) {
+  const instanceId = useId();
+  const traceListId = `otel-trace-list-${instanceId}`;
+  const traceDetailId = `otel-trace-detail-${instanceId}`;
+  const spanInspectorId = `otel-span-inspector-${instanceId}`;
+  const tracesLayoutRef = useRef<HTMLDivElement>(null);
+  const traceDetailBodyRef = useRef<HTMLDivElement>(null);
+  const activeResize = useRef<{ split: "width" | "height"; pointerId: number; bounds: DOMRect } | null>(null);
+  const [isStacked, setIsStacked] = useState(false);
+  const [traceListRatio, setTraceListRatio] = useState(45);
+  const [waterfallRatio, setWaterfallRatio] = useState(56);
+
+  useEffect(() => {
+    const layout = tracesLayoutRef.current;
+    if (!layout) return;
+
+    const updateLayout = (width: number) => setIsStacked(width <= 900);
+    updateLayout(layout.getBoundingClientRect().width);
+    if (typeof ResizeObserver === "undefined") {
+      const update = () => updateLayout(layout.getBoundingClientRect().width);
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+
+    const observer = new ResizeObserver(entries => updateLayout(entries[0]?.contentRect.width ?? layout.getBoundingClientRect().width));
+    observer.observe(layout);
+    return () => observer.disconnect();
+  }, []);
+
+  function beginResize(split: "width" | "height", event: React.PointerEvent<HTMLDivElement>) {
+    const container = split === "width" ? tracesLayoutRef.current : traceDetailBodyRef.current;
+    if (!container) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    activeResize.current = { split, pointerId: event.pointerId, bounds: container.getBoundingClientRect() };
+  }
+
+  function moveResize(split: "width" | "height", event: React.PointerEvent<HTMLDivElement>) {
+    const active = activeResize.current;
+    if (!active || active.split !== split || active.pointerId !== event.pointerId) return;
+
+    const isWidth = split === "width";
+    const extent = isWidth ? active.bounds.width - 10 : active.bounds.height - 10;
+    const position = isWidth
+      ? event.clientX - active.bounds.left - 5
+      : event.clientY - active.bounds.top - 5;
+    const nextRatio = Math.round((position / Math.max(1, extent)) * 100);
+    if (isWidth) setTraceListRatio(Math.min(70, Math.max(30, nextRatio)));
+    else setWaterfallRatio(Math.min(75, Math.max(25, nextRatio)));
+  }
+
+  function endResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (activeResize.current?.pointerId === event.pointerId) activeResize.current = null;
+  }
+
+  function resizeByKeyboard(split: "width" | "height", event: React.KeyboardEvent<HTMLDivElement>) {
+    const isWidth = split === "width";
+    const minimum = isWidth ? 30 : 25;
+    const maximum = isWidth ? 70 : 75;
+    const current = isWidth ? traceListRatio : waterfallRatio;
+    const increase = isWidth ? event.key === "ArrowRight" : event.key === "ArrowDown";
+    const decrease = isWidth ? event.key === "ArrowLeft" : event.key === "ArrowUp";
+    if (!increase && !decrease && event.key !== "Home" && event.key !== "End") return;
+
+    event.preventDefault();
+    const next = event.key === "Home" ? minimum : event.key === "End" ? maximum : current + (increase ? 2 : -2);
+    if (isWidth) setTraceListRatio(Math.min(maximum, Math.max(minimum, next)));
+    else setWaterfallRatio(Math.min(maximum, Math.max(minimum, next)));
+  }
+
   return (
-    <div className="otel-traces-layout">
-      <section className="otel-trace-list">
+    <div className={isStacked ? "otel-traces-layout is-stacked" : "otel-traces-layout"} ref={tracesLayoutRef}
+      style={isStacked ? undefined : { gridTemplateColumns: `minmax(0, ${traceListRatio}fr) 10px minmax(0, ${100 - traceListRatio}fr)` }}>
+      <section className="otel-trace-list" id={traceListId}>
         <TraceToolbar state={state} />
         <div className="otel-trace-table" role="table" aria-label="Trace summaries">
           <div className="otel-trace-row header" role="row">
@@ -484,12 +553,46 @@ function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState;
         </div>
       </section>
 
-      <section className="otel-trace-detail">
+      {!isStacked ? <StudioResizeHandle
+        orientation="vertical"
+        label="Resize trace details panel"
+        controls={traceDetailId}
+        value={traceListRatio}
+        min={30}
+        max={70}
+        onPointerDown={event => beginResize("width", event)}
+        onPointerMove={event => moveResize("width", event)}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+        onLostPointerCapture={endResize}
+        onKeyDown={event => resizeByKeyboard("width", event)}
+      /> : null}
+
+      <section className="otel-trace-detail" id={traceDetailId}>
         {selectedTrace ? (
           <>
             <TraceDetailHeader trace={selectedTrace} onCopy={state.copyTrace} onDownload={state.downloadTrace} />
-            <TraceWaterfall trace={selectedTrace} selectedSpanId={state.selectedSpanId} onSelectSpan={state.setSelectedSpanId} />
-            {selectedSpan ? <SpanInspector span={selectedSpan} /> : null}
+            <div className={selectedSpan ? "otel-trace-detail-body has-span-details" : "otel-trace-detail-body"} ref={traceDetailBodyRef}
+              style={selectedSpan ? { gridTemplateRows: `minmax(0, ${waterfallRatio}fr) 10px minmax(0, ${100 - waterfallRatio}fr)` } : undefined}>
+              <TraceWaterfall trace={selectedTrace} selectedSpanId={state.selectedSpanId} onSelectSpan={state.setSelectedSpanId} />
+              {selectedSpan ? <>
+                <StudioResizeHandle
+                  orientation="horizontal"
+                  label="Resize span details"
+                  controls={spanInspectorId}
+                  value={waterfallRatio}
+                  min={25}
+                  max={75}
+                  onPointerDown={event => beginResize("height", event)}
+                  onPointerMove={event => moveResize("height", event)}
+                  onPointerUp={endResize}
+                  onPointerCancel={endResize}
+                  onLostPointerCapture={endResize}
+                  onKeyDown={event => resizeByKeyboard("height", event)}
+                />
+                <SpanInspector span={selectedSpan} id={spanInspectorId} />
+              </> : null}
+            </div>
           </>
         ) : <div className="otel-empty">{state.detailMessage}</div>}
       </section>
@@ -560,9 +663,9 @@ function TraceWaterfall({ trace, selectedSpanId, onSelectSpan }: { trace: OTelTr
   );
 }
 
-function SpanInspector({ span }: { span: OTelSpan }) {
+function SpanInspector({ span, id }: { span: OTelSpan; id: string }) {
   return (
-    <aside className="otel-span-inspector" aria-label="Span details">
+    <aside className="otel-span-inspector" id={id} aria-label="Span details">
       <header>
         <span>{span.kind} · {span.status}</span>
         <h3>{span.name}</h3>

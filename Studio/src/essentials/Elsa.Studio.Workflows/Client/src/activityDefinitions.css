@@ -5,7 +5,7 @@
 }
 
 .ad-page *, .ad-page *::before, .ad-page *::after { box-sizing: border-box; }
-.ad-page button, .ad-page input, .ad-page select, .ad-page textarea { font: inherit; }
+.ad-page button, .ad-page input:not(:where(.studio-search-input)), .ad-page select, .ad-page textarea { font: inherit; }
 .ad-page button { color: inherit; }
 .ad-page button:focus-visible, .ad-page input:focus-visible, .ad-page select:focus-visible, .ad-page textarea:focus-visible { outline: 3px solid var(--studio-focus); outline-offset: 2px; }
 
@@ -102,8 +102,32 @@
 .ad-child-list small { color: var(--studio-text-muted); }
 .ad-selected-record { display: grid; gap: .25rem; margin-bottom: .8rem; padding: .75rem 1rem; border-left: 4px solid var(--studio-accent); border-radius: var(--studio-radius); background: var(--studio-accent-soft); }
 .ad-selected-record button { justify-self: start; min-height: 2.35rem; margin-top: .35rem; padding: .4rem .7rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: inherit; background: var(--studio-surface); cursor: pointer; }
-.ad-selected-version { display: grid; gap: .75rem; margin-bottom: .8rem; }
-.ad-selected-version .ad-selected-record { margin-bottom: 0; }
+.ad-version-list { gap: 0; }
+.ad-version-history { max-width: 64rem; }
+.ad-version-row { min-width: 0; }
+.ad-version-row + .ad-version-row { border-top: 1px solid var(--studio-border); }
+.ad-version-row > button { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: .75rem; padding: .75rem 1rem; border: 0; border-radius: 0; color: var(--studio-text); text-align: left; background: transparent; cursor: pointer; }
+.ad-version-row > button:hover, .ad-version-row > button.is-selected { background: var(--studio-accent-soft); }
+.ad-version-row > button > span { display: grid; gap: .2rem; min-width: 0; overflow-wrap: anywhere; }
+.ad-version-row > button small { color: var(--studio-text-muted); }
+.ad-version-primary strong { overflow-wrap: anywhere; }
+.ad-version-row > button > .ad-version-badges { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.ad-version-lifecycle, .ad-version-recommended { display: inline-flex; align-items: center; min-height: 1.5rem; padding: .15rem .45rem; border: 1px solid var(--studio-border); border-radius: 999px; font-size: var(--studio-label-size); font-weight: 650; white-space: nowrap; }
+.ad-version-lifecycle { color: var(--studio-text-muted); background: var(--studio-surface); }
+.ad-version-recommended { border-color: var(--studio-accent); color: var(--studio-accent); background: var(--studio-accent-soft); }
+.ad-version-row > button > .ad-version-disclosure { display: flex; align-items: center; gap: .35rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); white-space: nowrap; }
+.ad-version-disclosure svg { transition: transform 120ms ease; }
+.ad-version-row > button[aria-expanded="true"] .ad-version-disclosure svg { transform: rotate(180deg); }
+.ad-version-expanded { padding: .85rem 1rem 1rem; border-top: 1px solid var(--studio-border); background: var(--studio-surface); }
+.ad-version-detail { display: grid; gap: .75rem; min-width: 0; }
+.ad-version-detail-heading { display: grid; gap: .2rem; padding: .75rem 1rem; border-left: 4px solid var(--studio-accent); border-radius: var(--studio-radius); background: var(--studio-accent-soft); }
+.ad-version-detail-heading span { color: var(--studio-text-muted); }
+.ad-version-identifiers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin: .5rem 0 0; }
+.ad-version-identifiers > div { display: grid; gap: .15rem; min-width: 0; }
+.ad-version-identifiers dt { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.ad-version-identifiers dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.ad-version-details > button { justify-self: start; min-height: 2.35rem; margin-top: .5rem; padding: .4rem .7rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: inherit; background: var(--studio-surface); cursor: pointer; }
+.ad-version-details > button:hover { background: var(--studio-surface-muted); }
 .ad-historical-contract { display: grid; gap: .65rem; padding: .85rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); }
 .ad-historical-contract > header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .ad-historical-contract h2, .ad-historical-contract h3, .ad-historical-contract h4 { margin: 0; font-size: var(--studio-section-title-size); }
@@ -115,6 +139,8 @@
 
 .ad-header-actions { display: flex; gap: .5rem; }
 .ad-header-actions > button:not(.studio-button), .ad-dialog button, .ad-conflict-card button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.4rem; padding: .45rem .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: inherit; background: var(--studio-surface); cursor: pointer; }
+.ad-header-actions > .ad-back-to-designer { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.4rem; padding: .45rem .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); text-decoration: none; background: var(--studio-surface); }
+.ad-header-actions > .ad-back-to-designer:hover { background: var(--studio-surface-muted); }
 .ad-dialog-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 1rem; background: color-mix(in srgb, var(--studio-text) 38%, transparent); }
 .ad-dialog { display: grid; gap: 1rem; width: min(42rem, 100%); max-height: min(50rem, calc(100vh - 2rem)); overflow: auto; padding: 1.15rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); color: var(--studio-text); background: var(--studio-surface); box-shadow: var(--studio-shadow-lg); }
 .ad-dialog > header, .ad-dialog > footer { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
@@ -304,29 +330,33 @@
 .ad-graph-outcome-mappings li, .ad-graph-outcome-mapping-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: end; }
 .ad-graph-outcome-mapping-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
 .ad-graph-node-actions { display: flex; align-items: center; gap: .4rem; padding: .65rem .75rem 0; }
+.ad-graph-center-content { display: flex; min-width: 0; min-height: 0; flex: 1 1 0; flex-direction: column; overflow: auto; }
+.ad-graph-designer-panel { display: flex; min-width: 0; min-height: 0; flex: 1 1 0; flex-direction: column; }
+.ad-graph-designer-panel[hidden] { display: none; }
+.ad-graph-authoring-view-host { min-width: 0; min-height: 0; flex: 1 1 0; overflow: auto; }
+.ad-graph-authoring-view-host[hidden] { display: none; }
+.ad-graph-authoring-view-host:empty { display: none; }
 /* Canvas fill is inherited from the shared .wf-canvas-shell tone; only the host-specific
    sizing/overflow belongs here. */
 .ad-graph-canvas { min-width: 0; padding: 0; overflow: hidden; }
-/* Wrapped block actions and scope labels must not collapse the narrow canvas beneath its sticky
-   heading. Let the owning pane scroll while each native designer retains usable interaction space. */
+/* Wrapped block actions must not collapse the narrow canvas. Let the owning pane scroll while each
+   native designer retains usable interaction space. */
 @media (max-width: 48rem) {
-  .ad-graph-canvas { overflow-y: auto; }
-  .ad-graph-canvas > .wf-block-commands,
-  .ad-graph-canvas > .wf-block-command-notice { flex-shrink: 0; }
-  .ad-graph-canvas > .wf-canvas,
-  .ad-graph-canvas > .wf-sequence-designer { flex: 1 0 20rem; min-height: 20rem; }
+  .ad-graph-designer-panel > .wf-block-commands,
+  .ad-graph-designer-panel > .wf-block-command-notice { flex-shrink: 0; }
+  .ad-graph-designer-panel > .wf-canvas,
+  .ad-graph-designer-panel > .wf-sequence-designer { flex: 1 0 20rem; min-height: 20rem; }
 }
 
-/* Scope navigation is the shared .wf-breadcrumb; only the trailing border that separates it from the
-   scope label below is host-specific. */
-.ad-graph-canvas > .wf-breadcrumb { border-bottom: 1px solid var(--wf-border); }
+/* Scope navigation is the shared .wf-breadcrumb; its border separates it from the canvas content. */
+.ad-graph-designer-panel > .wf-breadcrumb { border-bottom: 1px solid var(--studio-border); }
+.ad-graph-canvas[data-graph-root-location]:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: -2px; }
+.ad-graph-scope-label { display: flex; min-width: 0; min-height: 2.7rem; flex: 0 0 auto; align-items: center; gap: .55rem; margin: 0; padding-inline: .75rem; border-bottom: 1px solid var(--studio-border); background: var(--studio-surface); }
+.ad-graph-scope-label > span, .ad-graph-scope-label > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-graph-scope-label > span { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 /* Stand-in canvas shown before a composition is chosen. It carries .wf-canvas so it is the same drop
    target geometry the shared interaction layer measures against. */
 .ad-graph-canvas-placeholder { display: grid; place-items: center; }
-.ad-graph-scope-label { display: flex; min-width: 0; min-height: 2.7rem; flex: 0 0 auto; align-items: center; gap: .55rem; margin: 0; padding-inline: .75rem; border-bottom: 1px solid var(--studio-border); }
-.ad-graph-scope-label .wf-canvas-tools { flex: 0 0 auto; margin-left: auto; }
-.ad-graph-scope-label > span, .ad-graph-scope-label > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ad-graph-scope-label > span { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .ad-graph-empty { display: grid; place-self: center; gap: .4rem; max-width: 25rem; padding: 1.5rem; border: 2px dashed var(--studio-border); border-radius: var(--studio-radius-md); color: var(--studio-text-muted); text-align: center; background: var(--studio-surface); }
 .ad-graph-public-interface { display: grid; gap: .9rem; margin-top: .9rem; }
 .ad-graph-output-mappings, .ad-graph-outcome-mappings { display: grid; gap: .7rem; padding: .85rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); }
@@ -343,6 +373,8 @@
   flex-direction: column;
   overflow: hidden;
   padding: 0;
+  border: 1px solid var(--studio-edge-subtle);
+  border-radius: var(--studio-radius-md);
 }
 
 .ad-draft-editor.is-graph-designer .ad-draft-lifecycle {
@@ -373,6 +405,7 @@
 .ad-draft-editor.is-graph-designer .ad-designer-view,
 .ad-draft-editor.is-graph-designer .ad-implementation-shell {
   display: flex;
+  min-width: 0;
   min-height: 0;
   flex: 1;
 }
@@ -386,6 +419,13 @@
   border-radius: 0;
 }
 
+.ad-draft-editor.is-graph-designer .ad-graph-workspace {
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .ad-draft-editor.is-graph-designer .ad-designer-view[hidden] {
   display: none;
 }
@@ -396,6 +436,7 @@
   flex: 0 0 auto;
   margin: 0;
   border-width: 1px 0 0;
+  border-top-color: var(--studio-edge-subtle);
   border-radius: 0;
 }
 
@@ -412,6 +453,8 @@ html[data-theme-material] .ad-child-list,
 html[data-theme-material] .ad-publication-review { background: var(--studio-material-panel-bg); background-size: var(--studio-material-panel-bg-size); }
 html[data-theme-material] .ad-child-list > button { background: var(--studio-material-row-bg); background-size: var(--studio-material-row-bg-size); }
 html[data-theme-material] .ad-filters input, html[data-theme-material] .ad-filters select, html[data-theme-material] .ad-input-shell { background: var(--studio-material-well-bg); background-size: var(--studio-material-well-bg-size); box-shadow: var(--studio-material-well-shadow); }
+html[data-theme-material] .ad-version-row > button { background: var(--studio-material-row-bg); background-size: var(--studio-material-row-bg-size); }
+html[data-theme-material] .ad-version-row > button:hover, html[data-theme-material] .ad-version-row > button.is-selected { background: var(--studio-accent-soft); }
 
 @media (max-width: 980px) {
   .ad-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -439,6 +482,10 @@ html[data-theme-material] .ad-filters input, html[data-theme-material] .ad-filte
   .ad-choice-grid, .ad-review-facts { grid-template-columns: 1fr; }
   .ad-section-heading-row { align-items: stretch; flex-direction: column; }
   .ad-inline-pager { align-items: stretch; flex-direction: column; }
+  .ad-version-identifiers { grid-template-columns: 1fr; }
+  .ad-version-row > button { grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
+  .ad-version-row > button > .ad-version-badges { grid-column: 1; grid-row: 2; }
+  .ad-version-row > button > .ad-version-disclosure { grid-column: 2; grid-row: 1 / span 2; }
   .ad-contract-fields, .ad-impact-facts { grid-template-columns: 1fr; }
   .ad-historical-contract-groups { grid-template-columns: 1fr; }
   .ad-contract-staged-field { grid-template-columns: 1fr; }
@@ -467,3 +514,8 @@ html[data-theme-material] .ad-filters input, html[data-theme-material] .ad-filte
 .ad-diagnostic-help p { margin-top: var(--studio-space-2); }
 
 .ad-diagnostics-panel > details[open] > summary .ad-diagnostics-chevron { transform: rotate(90deg); }
+
+@media (max-width: 48rem) {
+  .ad-draft-editor.is-graph-designer { height: auto; min-height: 100%; overflow-x: hidden; overflow-y: auto; }
+  .ad-draft-editor.is-graph-designer .ad-designer-view { flex: 1 0 20rem; }
+}

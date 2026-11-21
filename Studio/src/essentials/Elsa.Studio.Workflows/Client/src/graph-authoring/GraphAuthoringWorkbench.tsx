@@ -1,6 +1,6 @@
-import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
 import type React from "react";
 import type { StudioGraphAuthoringResourceKind } from "@elsa-workflows/studio-sdk";
+import { StudioSidePanelActions, StudioSidePanelResizeHandle } from "@elsa-workflows/studio-ui";
 import {
   maxInspectorWidth,
   maxPaletteWidth
@@ -17,6 +17,7 @@ type SidePanelLayout = ReturnType<typeof useSidePanelLayout>;
 interface WorkbenchPanel {
   ariaLabel: string;
   tabLabel: string;
+  className?: string;
   tabs: WorkflowEditorPanelTab[];
   activeTabId: string;
   /** Opt into stable panel containers, retaining these tabs when inactive. Hidden panels are inert. */
@@ -32,7 +33,7 @@ export function GraphAuthoringWorkbench({
   canvas,
   inspector
 }: {
-  resourceKind: StudioGraphAuthoringResourceKind;
+  resourceKind?: StudioGraphAuthoringResourceKind;
   className?: string;
   layout: SidePanelLayout;
   /** Absent when the resource has no left panel to show (e.g. the editorial layout's inline authoring). */
@@ -66,28 +67,36 @@ export function GraphAuthoringWorkbench({
         </aside>
       ) : null}
       paletteResizeHandle={palette ? (
-        <WorkbenchResizeHandle
+        <StudioSidePanelResizeHandle
           side="palette"
           visible={layout.paletteExpanded && !layout.maximizedSidePanel}
           value={layout.paletteWidth}
           min={layout.paletteMinimumWidth}
+          max={maxPaletteWidth}
+          panelLabel="activities"
           onPointerDown={event => layout.startSidePanelResize("palette", event)}
           onKeyDown={event => layout.handleSidePanelResizeKeyDown("palette", event)}
+          className="wf-side-resize-handle"
+          spacerClassName="wf-side-resize-spacer"
         />
       ) : null}
       canvas={canvas}
       inspectorResizeHandle={(
-        <WorkbenchResizeHandle
+        <StudioSidePanelResizeHandle
           side="inspector"
           visible={layout.inspectorExpanded && !layout.maximizedSidePanel}
           value={layout.inspectorWidth}
           min={layout.inspectorMinimumWidth}
+          max={maxInspectorWidth}
+          panelLabel="inspector"
           onPointerDown={event => layout.startSidePanelResize("inspector", event)}
           onKeyDown={event => layout.handleSidePanelResizeKeyDown("inspector", event)}
+          className="wf-side-resize-handle"
+          spacerClassName="wf-side-resize-spacer"
         />
       )}
       inspector={(
-        <aside className="wf-inspector" aria-label={inspector.ariaLabel}>
+        <aside className={["wf-inspector", inspector.className].filter(Boolean).join(" ")} aria-label={inspector.ariaLabel}>
           <WorkbenchPanelHeader
             side="inspector"
             tabLabel={inspector.tabLabel}
@@ -132,68 +141,21 @@ function WorkbenchPanelHeader({
   onToggleCollapsed(): void;
   onToggleMaximized(): void;
 }) {
-  const expandIcon = side === "palette" ? <ChevronRight size={14} /> : <ChevronLeft size={14} />;
-  const collapseIcon = side === "palette" ? <ChevronLeft size={14} /> : <ChevronRight size={14} />;
   const panelName = side === "palette" ? "activities" : "inspector";
 
   return (
     <div className="wf-panel-title">
       <PanelTabList label={tabLabel} tabs={tabs} activeTabId={activeTabId} onSelect={onSelect} />
-      <span className="wf-panel-actions">
-        <button
-          type="button"
-          className="wf-panel-action-button"
-          aria-label={collapsed ? `Expand ${panelName} panel` : `Collapse ${panelName} panel`}
-          title={collapsed ? "Expand" : "Collapse"}
-          onClick={onToggleCollapsed}
-        >
-          {collapsed ? expandIcon : collapseIcon}
-        </button>
-        {!collapsed ? (
-          <button
-            type="button"
-            className="wf-panel-action-button"
-            aria-label={maximized ? `Restore ${panelName} panel` : `Maximize ${panelName} panel`}
-            title={maximized ? "Restore" : "Maximize"}
-            onClick={onToggleMaximized}
-          >
-            {maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </button>
-        ) : null}
-      </span>
+      <StudioSidePanelActions
+        side={side}
+        panelLabel={panelName}
+        collapsed={collapsed}
+        maximized={maximized}
+        onToggleCollapsed={onToggleCollapsed}
+        onToggleMaximized={onToggleMaximized}
+        className="wf-panel-actions"
+        buttonClassName="wf-panel-action-button"
+      />
     </div>
-  );
-}
-
-function WorkbenchResizeHandle({
-  side,
-  visible,
-  value,
-  min,
-  onPointerDown,
-  onKeyDown
-}: {
-  side: "palette" | "inspector";
-  visible: boolean;
-  value: number;
-  min: number;
-  onPointerDown(event: React.PointerEvent<HTMLDivElement>): void;
-  onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void;
-}) {
-  if (!visible) return <div className="wf-side-resize-spacer" />;
-  const palette = side === "palette";
-  return (
-    <div
-      className={`wf-side-resize-handle ${palette ? "left" : "right"}`}
-      role="separator"
-      aria-label={`Resize ${palette ? "activities" : "inspector"} panel`}
-      aria-orientation="vertical"
-      aria-valuemin={min}
-      aria-valuemax={palette ? maxPaletteWidth : maxInspectorWidth}
-      aria-valuenow={value}
-      tabIndex={0}
-      onPointerDown={onPointerDown}
-      onKeyDown={onKeyDown}
-    />
   );
 }

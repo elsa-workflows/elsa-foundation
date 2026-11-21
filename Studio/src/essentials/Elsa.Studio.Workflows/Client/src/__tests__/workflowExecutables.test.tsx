@@ -5,8 +5,9 @@ import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflow
 import { StudioHttpError } from "@elsa-workflows/studio-sdk";
 import { listExecutables } from "../api/runtime";
 import { listDefinitions } from "../api/workflowDesign";
-import type { WorkflowDefinitionSummary, WorkflowExecutableSummary } from "../workflowTypes";
+import type { WorkflowDefinitionSummary, WorkflowExecutableReference, WorkflowExecutableSummary } from "../workflowTypes";
 import { WorkflowExecutables } from "../workflow-editor/WorkflowExecutables";
+import { updateWorkflowDefinitionIdInUrl } from "../workflow-editor/workflowDefinitionUrl";
 
 vi.mock("../api/runtime", () => ({ listExecutables: vi.fn() }));
 vi.mock("../api/workflowDesign", () => ({ listDefinitions: vi.fn() }));
@@ -162,8 +163,118 @@ describe("WorkflowExecutables", () => {
 
     const published = container.querySelector<HTMLTimeElement>(".wf-executable-published time");
     const publishedAt = new Date("2026-10-18T00:00:00Z");
-    expect(published?.textContent?.trim()).toBe(publishedAt.toLocaleDateString());
-    expect(published?.getAttribute("title")).toBe(publishedAt.toLocaleString());
+    expect(published?.querySelector(".studio-timestamp-date")?.textContent).toBe(new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(publishedAt));
+    expect(published?.querySelector(".studio-timestamp-time")?.textContent).toBe(new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(publishedAt));
+    expect(published?.getAttribute("title")).toBe(new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "long" }).format(publishedAt));
+  });
+
+  it("offers publication management choices for distinct published workflow references", async () => {
+    const firstDefinitionId = "workflow/opaque ?#";
+    const secondDefinitionId = "workflow/shared";
+    const executable = executableSummary({
+      definitionId: "legacy-primary-source",
+      references: [
+        executableReference({ sourceReferenceId: "published-first", definitionId: firstDefinitionId }),
+        executableReference({ sourceReferenceId: "published-first-again", definitionId: firstDefinitionId }),
+        executableReference({ sourceReferenceId: "published-second", definitionId: secondDefinitionId }),
+        executableReference({ sourceReferenceId: "test-run-only", scope: "TestRun", definitionId: "test-run-definition" })
+      ]
+    });
+    vi.mocked(listExecutables).mockResolvedValue([executable]);
+    vi.mocked(listDefinitions).mockResolvedValue({ definitions: [
+      definitionSummary("Orders", firstDefinitionId),
+      definitionSummary("Orders", secondDefinitionId),
+      definitionSummary("Test-run source", "test-run-definition")
+    ], page: 1, pageSize: 100, totalCount: 3 });
+    window.history.replaceState({}, "", "/workflows/executables?backend=selected");
+
+    flushSync(() => root.render(<WorkflowExecutables
+      context={{} as StudioEndpointContext}
+      ai={emptyAi()}
+      runInputEditors={[]}
+      definitionFilter={null}
+      onDefinitionFilterChange={() => {}}
+      canManagePublications
+    />));
+    await flushAsyncUpdates();
+
+    const row = container.querySelector<HTMLElement>('[aria-label="Inspect executable artifact-1"]')!;
+    const trigger = row.querySelector<HTMLButtonElement>('button[aria-label^="Actions for"]')!;
+    flushSync(() => trigger.click());
+    await flushAsyncUpdates();
+
+    const menu = document.body.querySelector<HTMLElement>('[role="menu"]')!;
+    const manageChoices = Array.from(menu.querySelectorAll<HTMLButtonElement>("button"))
+      .filter(button => button.textContent?.includes("Manage publication"));
+    expect(manageChoices.map(button => button.textContent?.replace(/\s+/g, " ").trim())).toEqual([
+      "Manage publication · Orders (workflow/opaque ?#)",
+      "Manage publication · Orders (workflow/shared)"
+    ]);
+
+    flushSync(() => manageChoices[0].click());
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(new URLSearchParams(window.location.search)).toEqual(new URLSearchParams("?backend=selected&definition=workflow%2Fopaque+%3F%23&panel=artifacts"));
+  });
+
+  it("preserves backend selection and removes the panel request for ordinary definition navigation", () => {
+    const source = new URL("https://studio.example/workflows/definitions?backend=selected&definition=old#canvas");
+    const managed = updateWorkflowDefinitionIdInUrl(source, "workflow/opaque ?#", "artifacts");
+    expect(`${managed.pathname}${managed.search}${managed.hash}`).toBe(
+      "/workflows/definitions?backend=selected&definition=workflow%2Fopaque+%3F%23&panel=artifacts#canvas"
+    );
+
+    const ordinary = updateWorkflowDefinitionIdInUrl(managed, "another-definition");
+    expect(ordinary.searchParams.get("definition")).toBe("another-definition");
+    expect(ordinary.searchParams.has("panel")).toBe(false);
+    expect(ordinary.searchParams.get("backend")).toBe("selected");
+
+    const backToList = updateWorkflowDefinitionIdInUrl(ordinary, null);
+    expect(backToList.searchParams.has("definition")).toBe(false);
+    expect(backToList.searchParams.has("panel")).toBe(false);
+    expect(backToList.searchParams.get("backend")).toBe("selected");
+  });
+
+  it("does not offer publication management for test-run-only, unmappable, or runtime-only rows", async () => {
+    const testRunOnly = executableSummary({
+      artifactId: "test-run-artifact",
+      references: [executableReference({ scope: "TestRun", definitionId: "test-definition" })]
+    });
+    const unmappable = executableSummary({
+      artifactId: "unmappable-artifact",
+      references: [executableReference({ definitionId: "   " })]
+    });
+    const published = executableSummary({ artifactId: "runtime-only-artifact", references: [executableReference()] });
+    vi.mocked(listExecutables).mockResolvedValue([testRunOnly, unmappable, published]);
+    vi.mocked(listDefinitions).mockResolvedValue({ definitions: [definitionSummary("Nightly orders")], page: 1, pageSize: 100, totalCount: 1 });
+
+    flushSync(() => root.render(<WorkflowExecutables
+      context={{} as StudioEndpointContext}
+      ai={emptyAi()}
+      runInputEditors={[]}
+      definitionFilter={null}
+      onDefinitionFilterChange={() => {}}
+      canManagePublications
+    />));
+    await flushAsyncUpdates();
+
+    for (const artifactId of ["test-run-artifact", "unmappable-artifact"]) {
+      const row = container.querySelector<HTMLElement>(`[aria-label="Inspect executable ${artifactId}"]`)!;
+      expect(row.querySelector(".studio-overflow-menu")).toBeNull();
+    }
+
+    vi.mocked(listExecutables).mockResolvedValue([published]);
+    flushSync(() => root.render(<WorkflowExecutables
+      context={{} as StudioEndpointContext}
+      ai={emptyAi()}
+      runInputEditors={[]}
+      definitionFilter={null}
+      onDefinitionFilterChange={() => {}}
+      canManagePublications={false}
+    />));
+    await flushAsyncUpdates();
+
+    const runtimeRow = container.querySelector<HTMLElement>('[aria-label="Inspect executable runtime-only-artifact"]')!;
+    expect(runtimeRow.querySelector(".studio-overflow-menu")).toBeNull();
   });
 
   it("shows a primary empty-state action and preserves the backend when opening definitions", async () => {
@@ -229,7 +340,7 @@ describe("WorkflowExecutables", () => {
   });
 });
 
-function executableSummary(): WorkflowExecutableSummary {
+function executableSummary(overrides: Partial<WorkflowExecutableSummary> = {}): WorkflowExecutableSummary {
   return {
     artifactId: "artifact-1",
     artifactVersion: "12.4",
@@ -244,13 +355,27 @@ function executableSummary(): WorkflowExecutableSummary {
     rootActivityVersion: "1.0.0",
     nodeCount: 1,
     resumeTargetCount: 0,
-    references: []
+    references: [],
+    ...overrides
   };
 }
 
-function definitionSummary(name: string): WorkflowDefinitionSummary {
+function executableReference(overrides: Partial<WorkflowExecutableReference> = {}): WorkflowExecutableReference {
   return {
-    id: "definition-1",
+    sourceReferenceId: "reference-1",
+    artifactId: "artifact-1",
+    definitionId: "definition-1",
+    definitionVersionId: "definition-version-1",
+    artifactVersion: "12.4",
+    createdAt: "2026-10-18T00:00:00Z",
+    scope: "Published",
+    ...overrides
+  };
+}
+
+function definitionSummary(name: string, id = "definition-1"): WorkflowDefinitionSummary {
+  return {
+    id,
     name,
     createdAt: "2026-10-18T00:00:00Z",
     lastModifiedAt: "2026-10-18T00:00:00Z",

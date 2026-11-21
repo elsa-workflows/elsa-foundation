@@ -9,7 +9,9 @@ using CShells.Lifecycle;
 using Elsa.Attention.Core;
 using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.Shells;
+using Elsa.Foundation.Hosting;
 using Elsa.Modularity.Api.Authorization;
+using Elsa.Modularity.Tests;
 using Elsa.Persistence.Schema;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -20,7 +22,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
-namespace Elsa.Modularity.Tests;
+namespace Elsa.Foundation.Hosting.Tests;
 
 /// <summary>
 /// <c>Elsa.Foundation.Host</c>'s eager shell activation when an attempt fails: a database that is not up yet, a seeder that
@@ -342,33 +344,40 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
         }
     }
 
-    [Theory]
-    [InlineData(false, 2)]
-    [InlineData(true, 1)]
-    public async Task Repeated_raw_active_suppressed_failures_rebase_the_next_visible_count_and_only_a_notification_clears_the_prior_row(bool notify, int expected)
+    [Fact]
+    public async Task Provisional_activation_does_not_grant_readiness_or_clear_failure_across_rollback()
     {
         _registry.Script(Fault());
         await _service.StartAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
-        var original = _tracker.FailureOf(Shell)!;
-        _registry.DuringAttempt = () => _registry.BecomeActiveAsync(Shell, notify);
-        await AdvanceToNextAttemptAsync();
-        await WaitUntilAsync(() => _time.Timers == 2);
-        Assert.Null(_tracker.FailureOf(Shell));
-        _time.Advance(2 * Second);
-        await WaitUntilAsync(() => _time.Timers == 3);
-        Assert.Null(_tracker.FailureOf(Shell));
+        var original = Assert.IsType<ShellActivationFailure>(_tracker.FailureOf(Shell));
+        using var client = await HealthClientAsync();
 
-        _registry.DuringAttempt = null;
+        await _registry.BecomeActiveAsync(Shell, notify: true, settled: false);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await ReadyAsync(client)).Status);
+        Assert.Same(original, _tracker.FailureOf(Shell));
         _registry.Deactivate(Shell);
-        if (notify)
-            Assert.Null(_tracker.FailureOf(Shell));
-        else
-            Assert.Same(original, _tracker.FailureOf(Shell));
-        _time.Advance(2 * Second);
-        await WaitUntilAsync(() => _registry.Attempts == 4 && _time.Timers == 4);
+        await AdvanceToNextAttemptAsync();
+        await WaitUntilAsync(() => _tracker.FailureOf(Shell)?.Attempts == 2);
+        AssertDelay(2 * Second);
 
-        Assert.Equal(expected, _tracker.FailureOf(Shell)!.Attempts);
-        AssertDelay(expected * Second);
+        await _registry.BecomeActiveAsync(Shell, notify: true, settled: false);
+        _registry.Settle(Shell);
+        Assert.Equal(HttpStatusCode.OK, (await ReadyAsync(client)).Status);
+        _registry.Deactivate(Shell);
+        Assert.Null(_tracker.FailureOf(Shell));
+    }
+
+    [Fact]
+    public async Task A_registry_without_settled_observation_cannot_grant_readiness_or_clear_failure()
+    {
+        var registry = new RawShellRegistry();
+        _tracker.Observe(registry);
+        var original = _tracker.FailedAttempt(Shell, 1, "TestFailure", null, _time.GetUtcNow(), EagerShellActivationRetryOptions.Read(_configuration));
+        await registry.BecomeActiveAsync(Shell, notify: true);
+        using var client = await HealthClientAsync(registry);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await ReadyAsync(client)).Status);
+        Assert.Same(original, _tracker.FailureOf(Shell));
     }
 
     [Fact]
@@ -930,12 +939,12 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
 
     private static AttentionContributorContext Context() => new(new(new ClaimsPrincipal(), null), new(1), new Dictionary<string, string>());
 
-    private async Task<HttpClient> HealthClientAsync()
+    private async Task<HttpClient> HealthClientAsync(IShellRegistry? registry = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Configuration.AddConfiguration(Configuration());
-        builder.Services.AddSingleton<IShellRegistry>(_registry);
+        builder.Services.AddSingleton(registry ?? _registry);
         builder.Services.AddSingleton(_tracker);
         _app = builder.Build();
         _app.MapHostHealth();
@@ -971,9 +980,14 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
     /// the last entry repeating, or never when <see cref="Hang"/> is set. A shell becomes active when a test says a request or a
     /// reload activated it, with the lifecycle notification the real registry sends, or without it.
     /// </summary>
-    private sealed class ScriptedShellRegistry : IShellRegistry
+    private sealed class ScriptedShellRegistry : RawShellRegistry, ISettledShellRegistry
     {
-        private readonly ConcurrentDictionary<string, IShell> _active = new(StringComparer.OrdinalIgnoreCase);
+        public IShell? GetSettledActive(string name) => Active.TryGetValue(name, out var entry) && entry.Settled ? entry.Shell : null;
+    }
+
+    private class RawShellRegistry : IShellRegistry
+    {
+        protected readonly ConcurrentDictionary<string, (IShell Shell, bool Settled)> Active = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<IShellLifecycleSubscriber> _subscribers = [];
         private Exception?[] _script = [];
 
@@ -991,17 +1005,19 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
 
         public void Script(params Exception?[] script) => _script = script;
 
-        public Task BecomeActiveAsync(string name, bool notify) => BecomeActiveAsync(new StubShell(name), notify);
+        public Task BecomeActiveAsync(string name, bool notify, bool settled = true) => BecomeActiveAsync(new StubShell(name), notify, settled);
 
-        public async Task BecomeActiveAsync(IShell shell, bool notify)
+        public async Task BecomeActiveAsync(IShell shell, bool notify, bool settled = true)
         {
-            _active[shell.Descriptor.Name] = shell;
+            Active[shell.Descriptor.Name] = (shell, settled);
             if (notify)
                 foreach (var subscriber in _subscribers)
                     await subscriber.OnStateChangedAsync(shell, ShellLifecycleState.Initializing, ShellLifecycleState.Active);
         }
 
-        public void Deactivate(string name) => _active.TryRemove(name, out _);
+        public void Settle(string name) => Active[name] = (Active[name].Shell, true);
+
+        public void Deactivate(string name) => Active.TryRemove(name, out _);
 
         public async Task<IShell> GetOrActivateAsync(string name, CancellationToken cancellationToken = default)
         {
@@ -1017,12 +1033,12 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
             if (step is not null)
                 throw step;
             await BecomeActiveAsync(name, notify: false);
-            return _active[name];
+            return Active[name].Shell;
         }
 
         public void Subscribe(IShellLifecycleSubscriber subscriber) => _subscribers.Add(subscriber);
         public void Unsubscribe(IShellLifecycleSubscriber subscriber) => _subscribers.Remove(subscriber);
-        public IShell? GetActive(string name) => _active.GetValueOrDefault(name);
+        public IShell? GetActive(string name) => Active.GetValueOrDefault(name).Shell;
 
         public Task<IShell> ActivateAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ReloadResult> ReloadAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -1033,7 +1049,7 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
         public Task<IShellBlueprintManager?> GetManagerAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ShellPage> ListAsync(ShellListQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public IReadOnlyCollection<IShell> GetAll(string name) => [];
-        public IReadOnlyCollection<IShell> GetActiveShells() => [.. _active.Values];
+        public IReadOnlyCollection<IShell> GetActiveShells() => [.. Active.Values.Select(entry => entry.Shell)];
     }
 
     /// <summary>An active generation of a shell, as far as the tracker reads one: its name and its state.</summary>

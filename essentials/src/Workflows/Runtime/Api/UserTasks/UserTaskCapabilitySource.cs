@@ -34,5 +34,12 @@ internal sealed class UserTaskCapabilitySource(IServiceProvider services) : IApi
             [new("tasks", "runtime/user-tasks"), new("task", "runtime/user-tasks/{id}", templated: true),
              new("claim", "runtime/user-tasks/{id}/claim", templated: true), new("release", "runtime/user-tasks/{id}/release", templated: true),
              new("complete", "runtime/user-tasks/{id}/complete", templated: true), new("reassign", "runtime/user-tasks/{id}/reassign", templated: true),
-             new("forms", "runtime/user-task-forms"), new("form-version", "runtime/user-task-forms/{id}/versions/{version}", templated: true), new("targets", "runtime/user-task-targets"), new("identity", "runtime/user-task-identity")], "WorkflowsRuntimeApi.UserTasks");
+             new("forms", "runtime/user-task-forms"), new("form-definitions", "runtime/user-task-forms/definitions"),
+             new("form-definition", "runtime/user-task-forms/{id}/definition", templated: true),
+             new("form-history", "runtime/user-task-forms/{id}/versions", templated: true),
+             new("save-form-draft", "runtime/user-task-forms/{id}/draft", templated: true),
+             new("discard-form-draft", "runtime/user-task-forms/{id}/discard", templated: true),
+             new("publish-form", "runtime/user-task-forms/{id}/publish", templated: true),
+             new("delete-form", "runtime/user-task-forms/{id}/delete", templated: true),
+             new("form-version", "runtime/user-task-forms/{id}/versions/{version}", templated: true), new("targets", "runtime/user-task-targets"), new("identity", "runtime/user-task-identity")], "WorkflowsRuntimeApi.UserTasks");
 }

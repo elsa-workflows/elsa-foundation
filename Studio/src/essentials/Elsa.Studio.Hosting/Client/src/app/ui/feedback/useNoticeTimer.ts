@@ -60,12 +60,16 @@ export function useNoticeTimer({ durationMs, onElapse, resetKey }: NoticeTimerOp
   }, [startTimer]);
 
   useEffect(() => {
-    hoveredRef.current = false;
-    focusedRef.current = false;
     activeRef.current = durationMs != null;
     if (durationMs == null) {
+      remainingMsRef.current = 0;
       clearTimer();
       return;
+    }
+    remainingMsRef.current = durationMs;
+    if (hoveredRef.current || focusedRef.current) {
+      clearTimer();
+      return clearTimer;
     }
     startTimer(durationMs);
     return clearTimer;

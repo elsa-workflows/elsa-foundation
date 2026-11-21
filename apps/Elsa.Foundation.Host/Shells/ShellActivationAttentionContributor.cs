@@ -1,4 +1,5 @@
 using Elsa.Attention.Core;
+using Elsa.Foundation.Hosting;
 
 namespace Elsa.Foundation.Host.Shells;
 

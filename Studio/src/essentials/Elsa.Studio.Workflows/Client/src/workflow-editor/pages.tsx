@@ -1,4 +1,3 @@
-import { CopyableIdentifier, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
 import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioWeaverRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution, StudioIncidentRootCauseProviderContribution } from "@elsa-workflows/studio-sdk";
@@ -49,6 +48,7 @@ export function WorkflowManagementPage({
   operations?: {publishing:StudioContributionAvailability;testRuns:StudioContributionAvailability};
 }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
+  const [requestedPanel, setRequestedPanel] = useState(readWorkflowEditorPanelFromUrl);
   const [homeCreateRequestId, setHomeCreateRequestId] = useState<string | null>(null);
   const homeCreateSequence = useRef(0);
   const browseSession = useWorkflowDefinitionBrowseSession(context);
@@ -63,6 +63,7 @@ export function WorkflowManagementPage({
         window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
       }
       setDefinitionId(selectedDefinitionId);
+      setRequestedPanel(selectedDefinitionId && url.searchParams.get("panel") === "artifacts" ? "artifacts" : null);
       setHomeCreateRequestId(shouldCreate && !selectedDefinitionId
         ? `home-create-${++homeCreateSequence.current}`
         : null);
@@ -84,8 +85,8 @@ export function WorkflowManagementPage({
 
   return definitionId
     ? (
-      <WorkflowLazyBoundary label="workflow designer">
-        <WorkflowEditor onOpenBpmnProcesses={onOpenBpmnProcesses} backendSession={backendSession} operations={operations} key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} runRelatedLinks={runRelatedLinks} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+      <WorkflowLazyBoundary label="workflow designer" backdropOptOut>
+        <WorkflowEditor onOpenBpmnProcesses={onOpenBpmnProcesses} backendSession={backendSession} operations={operations} key={definitionId} context={context} definitionId={definitionId} requestedPanel={requestedPanel} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} runRelatedLinks={runRelatedLinks} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
       </WorkflowLazyBoundary>
     )
     : (
@@ -97,7 +98,7 @@ export function WorkflowManagementPage({
     );
 }
 
-export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrowseDefinitions }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; canBrowseDefinitions?: boolean }) {
+export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrowseDefinitions, canManagePublications }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; canBrowseDefinitions?: boolean; canManagePublications?: boolean }) {
   const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
 
   useEffect(() => {
@@ -123,7 +124,7 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrows
   return (
     <WorkflowsPageFrame>
       <WorkflowLazyBoundary label="workflow executables">
-        <WorkflowExecutables context={context} ai={ai} runInputEditors={runInputEditors} canBrowseDefinitions={canBrowseDefinitions} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
+        <WorkflowExecutables context={context} ai={ai} runInputEditors={runInputEditors} canBrowseDefinitions={canBrowseDefinitions} canManagePublications={canManagePublications} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
@@ -192,13 +193,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
           : "timeline";
 
   return (
-    <WorkflowsPageFrame
-      title={runTitle}
-      workbench
-      context={workflowExecutionId ? (
-        <CopyableIdentifier label="Workflow Instance ID" value={workflowExecutionId} />
-      ) : null}
-    >
+    <WorkflowsPageFrame workbench>
       <WorkflowLazyBoundary label="workflow run">
         <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} incidentRootCauseProviders={incidentRootCauseProviders} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} onRunTitleChange={setRunTitle} />
       </WorkflowLazyBoundary>
@@ -206,16 +201,13 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   );
 }
 
-function WorkflowsPageFrame({ title, context, workbench = false, definitions = false, children }: {
-  title?: string;
-  context?: React.ReactNode;
+function WorkflowsPageFrame({ workbench = false, definitions = false, children }: {
   workbench?: boolean;
   definitions?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className={`studio-page wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`}>
-      {title ? <StudioPageHeader title={title} headingLevel={2} actions={context} /> : null}
+    <section className={`studio-page wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`} data-studio-workspace-backdrop={workbench ? "none" : undefined}>
       {children}
     </section>
   );
@@ -223,6 +215,11 @@ function WorkflowsPageFrame({ title, context, workbench = false, definitions = f
 
 function readDefinitionIdFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
+}
+
+function readWorkflowEditorPanelFromUrl(): "artifacts" | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("definition") && params.get("panel") === "artifacts" ? "artifacts" : null;
 }
 
 function readExecutableDefinitionFilterFromUrl() {

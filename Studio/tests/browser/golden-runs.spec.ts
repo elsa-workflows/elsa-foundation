@@ -31,6 +31,60 @@ test("primary triage filters active health across pages and composes with Runnin
   await expect(inspectRun(page, "run-12")).toHaveCount(0);
 });
 
+test("Run Kind labels fit on one line with aligned columns and local narrow-screen overflow", async ({ page }) => {
+  for (const fixture of [
+    { query: "", deletable: true },
+    { query: "?deletion=unsupported", deletable: false }
+  ]) {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(`/golden-runs.html${fixture.query}`);
+
+    const table = page.locator(".wf-instance-grid");
+    await expect(table).toBeVisible();
+    if (fixture.deletable) await expect(table).toHaveClass(/wf-instance-grid--deletable/);
+    else await expect(table).not.toHaveClass(/wf-instance-grid--deletable/);
+
+    for (const [executionId, expectedKind] of [
+      ["run-01", "Published Run"],
+      ["run-13", "Background Weaver Run"]
+    ]) {
+      const row = runRow(page, executionId);
+      const kindCell = row.getByRole("cell").nth(3);
+      await expect(kindCell).toHaveText(expectedKind);
+
+      const geometry = await kindCell.evaluate(element => {
+        const row = element.parentElement!;
+        const grid = row.parentElement!;
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const kindHeader = grid.querySelector<HTMLElement>(".wf-grid-head > [role=columnheader]:nth-child(4)")!;
+        const statusHeader = grid.querySelector<HTMLElement>(".wf-grid-head > [role=columnheader]:nth-child(5)")!;
+        const statusCell = row.children[4] as HTMLElement;
+        return {
+          lineCount: range.getClientRects().length,
+          kindHeaderLeft: kindHeader.getBoundingClientRect().left,
+          kindCellLeft: element.getBoundingClientRect().left,
+          statusHeaderLeft: statusHeader.getBoundingClientRect().left,
+          statusCellLeft: statusCell.getBoundingClientRect().left
+        };
+      });
+
+      expect(geometry.lineCount, `${expectedKind} rendered lines`).toBe(1);
+      expect(Math.abs(geometry.kindHeaderLeft - geometry.kindCellLeft), `${expectedKind} Kind header alignment`).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.statusHeaderLeft - geometry.statusCellLeft), `${expectedKind} Status header alignment`).toBeLessThanOrEqual(1);
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const narrowOverflow = await table.evaluate(element => ({
+      hasLocalOverflow: element.scrollWidth > element.clientWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth
+    }));
+    expect(narrowOverflow.hasLocalOverflow).toBe(true);
+    expect(narrowOverflow.documentWidth).toBeLessThanOrEqual(narrowOverflow.viewportWidth);
+  }
+});
+
 test("workflow choice, advanced drafts, applied chips, selection and exact copy stay separate", async ({ page }) => {
   await openRuns(page);
   await page.getByLabel("Workflow run page size").selectOption("50");
@@ -106,8 +160,13 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await page.getByRole("button", { name: "Next workflow run page" }).click();
   await expect(inspectRun(page, "run-12")).toBeVisible();
   await inspectRun(page, "run-12").click();
-  await expect(canvasHeading(page)).toBeVisible();
+  await expect(detailHeading(page)).toBeVisible();
   await page.getByRole("tab", { name: "Details" }).click();
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const instanceIdCopy = page.getByRole("button", { name: "Copy Workflow Instance ID", exact: true });
+  await expect(instanceIdCopy).toBeVisible();
+  await instanceIdCopy.click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("run-12");
   await expect(page.locator(".wf-instance-meta")).toContainText("corr-12");
   await expect(page.locator(".wf-instance-meta")).toContainText("Checkpoint cadence");
   await expect(page.locator(".wf-instance-meta")).toContainText("Balanced");
@@ -125,7 +184,7 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await expect(inspectRun(page, "run-12")).toBeVisible();
 
   await inspectRun(page, "run-12").click();
-  await expect(canvasHeading(page)).toBeVisible();
+  await expect(detailHeading(page)).toBeVisible();
   const returnTo = new URL(page.url()).searchParams.get("returnTo");
   expect(returnTo).toBeTruthy();
   const returnUrl = new URL(returnTo!, "http://golden-runs.fixture");
@@ -134,13 +193,19 @@ test("detail restores the filtered second page through Runs and browser Back", a
   expect(returnUrl.searchParams.get("cursor")).toBe("golden-runs-page-2");
   expect(returnUrl.searchParams.get("pageSize")).toBe("10");
 
-  await page.getByRole("button", { name: "Runs", exact: true }).click();
+  const runsBreadcrumb = page.getByRole("link", { name: "Runs", exact: true });
+  const runsReturn = new URL((await runsBreadcrumb.getAttribute("href"))!, page.url());
+  expect(runsReturn.pathname).toBe("/workflows/instances");
+  expect(runsReturn.searchParams.get("incidentHealth")).toBe("active");
+  expect(runsReturn.searchParams.get("cursor")).toBe("golden-runs-page-2");
+  await runsBreadcrumb.focus();
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/incidentHealth=active/);
   await expect(page).toHaveURL(/cursor=golden-runs-page-2/);
   await expect(inspectRun(page, "run-12")).toBeVisible();
   await page.getByRole("button", { name: "Clear filters" }).click();
   await inspectRun(page, "run-01").click();
-  await expect(canvasHeading(page)).toBeVisible();
+  await expect(detailHeading(page)).toBeVisible();
   await page.getByRole("tab", { name: "Details" }).click();
   await expect(page.locator(".wf-instance-meta")).toContainText("Durable");
   await expect(page.locator(".wf-instance-meta")).toContainText("Inspection detail");
@@ -153,9 +218,10 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await expect(page.locator(".wf-instance-incident")).toContainText("Needs intervention · Active");
 
   await page.goto("/golden-runs.html?directRun=run-01");
-  await expect(canvasHeading(page)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Runs", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Runs", exact: true }).click();
+  await expect(detailHeading(page)).toBeVisible();
+  const directRunsBreadcrumb = page.getByRole("link", { name: "Runs", exact: true });
+  await expect(directRunsBreadcrumb).toHaveAttribute("href", "/workflows/instances");
+  await directRunsBreadcrumb.click();
   await expect(page).toHaveURL(/\/workflows\/instances(?:\?|$)/);
   await expect(page).not.toHaveURL(/returnTo=/);
 });
@@ -166,7 +232,7 @@ test("older hosts omit checkpoint cadence and inspection without changing the de
     localStorage.setItem("elsa-studio-theme-mode", "light");
   });
   await page.goto("/golden-runs.html?directRun=run-13");
-  await expect(canvasHeading(page)).toBeVisible();
+  await expect(detailHeading(page)).toBeVisible();
   await page.getByRole("tab", { name: "Details" }).click();
   await expect(page.locator(".wf-instance-meta")).toContainText("corr-13");
   await expect(page.locator(".wf-instance-meta")).not.toContainText("Checkpoint cadence");
@@ -227,7 +293,7 @@ for (const mode of ["light", "dark"] as const) for (const width of [1280, 1440, 
     await expect(page.locator(".wf-instance-canvas-shell")).toHaveCount(0);
     await row.focus();
     await row.press("Enter");
-    await expect(canvasHeading(page)).toBeVisible();
+    await expect(detailHeading(page)).toBeVisible();
   });
 }
 
@@ -320,6 +386,26 @@ test("loading, empty, unsupported and failed states stay distinct and failure ca
   expect(violations).toEqual([]);
 });
 
+test("Run detail keeps navigation and refresh available without stale identity while loading or failed", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/golden-runs.html?directRun=run-01&fixtureDelay=1");
+
+  const header = page.locator(".wf-detail-header");
+  await expect(header.getByRole("heading", { name: "Run", exact: true })).toBeVisible();
+  await expect(header.getByRole("link", { name: "Runs", exact: true })).toBeVisible();
+  await expect(header.getByRole("button", { name: "Refresh execution", exact: true })).toBeVisible();
+  await expect(header).not.toContainText("Billing workflow");
+  await expect(header).not.toContainText("Running");
+  await expect(page.getByText("Loading workflow run...", { exact: true })).toBeVisible();
+
+  await page.goto("/golden-runs.html?directRun=missing-run");
+  await expect(header.getByRole("heading", { name: "Run", exact: true })).toBeVisible();
+  await expect(header.getByRole("link", { name: "Runs", exact: true })).toBeVisible();
+  await expect(header.getByRole("button", { name: "Refresh execution", exact: true })).toBeVisible();
+  await expect(header).not.toContainText("Billing workflow");
+  await expect(page.getByText("Unknown fixture run missing-run")).toBeVisible();
+});
+
 async function openRuns(page: Page) {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/golden-runs.html");
@@ -327,8 +413,8 @@ async function openRuns(page: Page) {
   await expect(page.getByRole("row", { name: /run-01/ })).toBeVisible();
 }
 
-function canvasHeading(page: Page) {
-  return page.locator(".wf-instance-canvas-shell > header").getByRole("heading", { level: 3 });
+function detailHeading(page: Page) {
+  return page.locator(".wf-detail-header").getByRole("heading", { level: 2 });
 }
 
 async function openMoreFilters(page: Page) {

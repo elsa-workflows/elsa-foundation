@@ -17,6 +17,7 @@ import {
 } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionsPage } from "../ActivityDefinitionsPage";
 import { ActivityDefinitionDraftEditor } from "../ActivityDefinitionDraftEditor";
+import { ActivityDefinitionAuthoringTabsHostContext } from "../activityDefinitionAuthoringTabsHost";
 import { useNativeBlockAuthority } from "../graph-authoring/nativeBlockAuthority";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { activityDesignKeys } from "../api/activityDesign";
@@ -146,8 +147,16 @@ describe("Activity Definition authoring", () => {
     });
     const rendered = renderPage({ editor: { versionId: version.versionId, onManage: vi.fn() }, contributions: [contribution], getJson, postJson, putJson });
     await waitForText(rendered.container, "Edit implementation 0");
+    const toolbar = rendered.container.querySelector<HTMLElement>(".wf-editor-toolbar");
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.querySelector("nav[aria-label='Breadcrumb']")?.textContent).toContain("Activity Definitions");
+    expect(toolbar?.querySelector(".wf-editor-title")?.textContent).toContain("Published");
+    expect(toolbar?.querySelector(".ad-authoring-toolbar-actions")?.textContent).toContain("Test Run");
+    expect(toolbar?.querySelector(".ad-authoring-history")).not.toBeNull();
+    expect(toolbar?.querySelector(".ad-authoring-advanced")).not.toBeNull();
+    expect(rendered.container.querySelectorAll(".ad-authoring-view-tabs")).toHaveLength(1);
     expect(buttonByText(rendered.container, "Edit implementation 0").disabled).toBe(true);
-    expect(rendered.container.querySelector(".ad-draft-context")?.textContent).toBe("Published");
+    expect(rendered.container.querySelector(".ad-draft-context")?.textContent).toContain("Version 1.0.0");
     flushSync(() => capture.current!({ payload: { edit: 1 }, layout: [] }));
     expect(postJson).not.toHaveBeenCalled();
     rendered.rerender({ allowStartEditing: true });
@@ -331,7 +340,7 @@ describe("Activity Definition authoring", () => {
       expect(history.open).toBe(false);
       expect(document.activeElement).toBe(summary);
     }
-    expect(buttonByText(rendered.container, "Activity Definitions")).toBeTruthy();
+    expect(activityDefinitionBackLink(rendered.container).textContent).toBe("Activity Definitions");
   });
 
   it("marks local invalid JSON diagnostics as needing attention and reveals them from the header", async () => {
@@ -506,9 +515,21 @@ describe("Activity Definition authoring", () => {
     expect(advanced.open).toBe(false);
     expect(rendered.container.querySelector(".ad-publication-toolbar-trigger")).not.toBeNull();
     expect(rendered.container.querySelector(".ad-designer-view")?.textContent).toContain("Graph implementation editor");
-    click(rendered.container.querySelector<HTMLButtonElement>("[data-tab-id=inputs]")!);
-    expect(rendered.container.querySelector(".ad-draft-editor")?.classList.contains("is-graph-designer")).toBe(false);
+    expect(rendered.container.querySelectorAll(".ad-authoring-view-tabs")).toHaveLength(1);
+    expect(rendered.container.querySelector(".ad-graph-canvas .ad-authoring-view-tabs")).not.toBeNull();
+    const inputsTab = rendered.container.querySelector<HTMLButtonElement>("[data-tab-id=inputs]")!;
+    inputsTab.focus();
+    click(inputsTab);
+    expect(rendered.container.querySelector(".ad-graph-canvas .ad-authoring-view-tabs")).not.toBeNull();
+    expect(document.activeElement?.getAttribute("data-tab-id")).toBe("inputs");
+    expect(rendered.container.querySelector<HTMLElement>(".ad-public-interface-view")?.hidden).toBe(false);
+    expect(rendered.container.querySelector(".ad-draft-editor")?.classList.contains("is-graph-designer")).toBe(true);
     expect(advanced.open).toBe(false);
+    const designerTab = rendered.container.querySelector<HTMLButtonElement>("[data-tab-id=designer]")!;
+    designerTab.focus();
+    click(designerTab);
+    expect(rendered.container.querySelector(".ad-graph-canvas .ad-authoring-view-tabs")).not.toBeNull();
+    expect(document.activeElement?.getAttribute("data-tab-id")).toBe("designer");
     await rendered.unmount();
   }, 10_000);
 
@@ -682,9 +703,35 @@ describe("Activity Definition authoring", () => {
     expect(rendered.container.textContent).toContain("Saved revision 3");
     expect(rendered.container.textContent).not.toContain("provider render detail");
     expect(buttonByText(rendered.container, "Validate saved revision")).toBeTruthy();
+    expect(rendered.container.querySelector(".ad-designer-view [role='alert'] button")).toBeNull();
     expect(observations).toContainEqual(expect.objectContaining({ event: "provider-editor", outcome: "unavailable", providerKey: "elsa.activity-graph", providerSchemaVersion: "1" }));
     await rendered.unmount();
     window.removeEventListener(activityDefinitionsObservationEvent, observe);
+    consoleError.mockRestore();
+  });
+
+  it("offers a draft reload for provider asset failures without trapping other authoring views", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [{ ...graphContribution(), component: () => { throw new Error("Failed to fetch dynamically imported module: /assets/ActivityGraphImplementationEditor.js"); } }],
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Implementation editor unavailable");
+    const alert = rendered.container.querySelector(".ad-designer-view [role='alert']");
+    expect(alert?.textContent).toContain("Studio assets");
+    expect(buttonByText(alert as HTMLElement, "Reload draft")).toBeTruthy();
+    click(rendered.container.querySelector(".ad-authoring-view-tabs [data-tab-id='inputs']")!);
+    expect(rendered.container.querySelector("[data-tab-id='inputs']")?.getAttribute("aria-selected")).toBe("true");
+    expect(rendered.container.querySelector(".ad-designer-view [role='alert']")).toBeTruthy();
+    expect(rendered.container.textContent).toContain("Saved revision 3");
+
+    await rendered.unmount();
     consoleError.mockRestore();
   });
 
@@ -1556,7 +1603,7 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Published revision 3 is read-only.");
     await waitFor(() => expect(window.localStorage.length).toBe(0));
     expect(rendered.container.textContent).not.toContain("Unsaved local recovery available");
-    expect((buttonByText(rendered.container, "Activity Definition") as HTMLButtonElement).disabled).toBe(false);
+    expect(activityDefinitionBackLink(rendered.container).getAttribute("aria-disabled")).toBeNull();
     expect((buttonByText(rendered.container, "Edit implementation 0") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Migrate provider") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
@@ -2330,7 +2377,7 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Saved revision 3");
     click(buttonByText(rendered.container, "Edit implementation 0"));
     await waitForText(rendered.container, "Save failed");
-    expect((buttonByText(rendered.container, "Activity Definition") as HTMLButtonElement).disabled).toBe(true);
+    expect(activityDefinitionBackLink(rendered.container).getAttribute("aria-disabled")).toBe("true");
     window.history.pushState({}, "", "/workflows/activity-definitions");
     window.dispatchEvent(new PopStateEvent("popstate"));
     expect(new URLSearchParams(window.location.search).get("section")).toBe("editor");
@@ -2510,6 +2557,8 @@ describe("Activity Definition publication", () => {
     expect((controlByLabel<HTMLInputElement>(rendered.container, "Publication version")).value).toBe("2.0.0");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Publication version"), "3.2.1");
     click(buttonByText(rendered.container, "Publish 3.2.1"));
+    await waitForText(rendered.container, "Version 3.2.1");
+    click(buttonByText(rendered.container, "View publication"));
     await waitForText(rendered.container, "Published immutable version 3.2.1");
     await waitForText(rendered.container, "Published revision 4 is read-only.");
     expect(rendered.container.textContent).toContain("recommendation stayed unchanged");
@@ -2520,7 +2569,7 @@ describe("Activity Definition publication", () => {
       version: "3.2.1",
       reviewToken: "sha256:review"
     }));
-    expect((buttonByText(rendered.container, "Activity Definition") as HTMLButtonElement).disabled).toBe(false);
+    expect(activityDefinitionBackLink(rendered.container).getAttribute("aria-disabled")).toBeNull();
     expect((buttonByText(rendered.container, "Edit implementation 1") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
@@ -2559,13 +2608,15 @@ describe("Activity Definition publication", () => {
     await waitForText(rendered.container, "No published head");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
 
+    await waitForText(rendered.container, "Version 1.0.0");
+    click(buttonByText(rendered.container, "View publication"));
     await waitForText(rendered.container, "Published immutable version 1.0.0");
     // The published-head summary refreshes in place (no manual reload) and no longer shows the stale head.
     const summary = [...rendered.container.querySelectorAll<HTMLElement>(".ad-publication-summary")].find(element => element.textContent?.includes("version-published"))!;
     expect(summary.textContent).toContain("version-published");
     expect(summary.textContent).not.toContain("No published head");
     // The action affordance no longer invites a repeat publish of the same version.
-    expect(buttonByText(rendered.container, "Published 1.0.0")).toBeTruthy();
+    expect(buttonByText(rendered.container, "View publication")).toBeTruthy();
     expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Publish 1.0.0")).toBe(false);
     // The definition management view is re-fetched so downstream panels reflect the new version.
     await waitFor(() => expect(postJson.mock.calls.filter(([url]) => String(url).endsWith("/publish"))).toHaveLength(1));
@@ -2651,6 +2702,8 @@ describe("Activity Definition publication", () => {
     expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
     expect(controlByLabel<HTMLInputElement>(rendered.container, "Publication version").disabled).toBe(true);
     click(buttonByText(rendered.container, "Reconcile authoritative status"));
+    await waitForText(rendered.container, "Version 1.0.0");
+    click(buttonByText(rendered.container, "View publication"));
     await waitForText(rendered.container, "Published immutable version 1.0.0");
     expect(receiptCalls).toBe(1);
     expect(putJson).toHaveBeenCalledTimes(1);
@@ -2787,6 +2840,8 @@ describe("Activity Definition publication", () => {
     click(buttonByText(rendered.container, "Review & publish"));
     await waitForText(rendered.container, "Minimum valid version: 1.0.0");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
+    await waitForText(rendered.container, "Version 1.0.0");
+    click(buttonByText(rendered.container, "View publication"));
     await waitForText(rendered.container, "Published immutable version 1.0.0");
     expect(publishCalls).toBe(1);
     expect(receiptCalls).toBe(1);
@@ -2985,7 +3040,16 @@ function graphContribution(providerSchemaVersion = "1"): StudioActivityDefinitio
       },
       layout: []
     }),
-    component: () => <div>Graph implementation editor</div>
+    component: function GraphImplementationFixture() {
+      const authoringTabsHostRef = React.useContext(ActivityDefinitionAuthoringTabsHostContext);
+      return <main className="wf-canvas-shell ad-graph-canvas">
+        <div ref={authoringTabsHostRef?.setTablistHost} className="wf-canvas-tabs ad-authoring-canvas-tabs" />
+        <div className="ad-graph-center-content">
+          <section id={authoringTabsHostRef?.designerPanelId} className="ad-graph-designer-panel" role="tabpanel" aria-label="Designer" aria-labelledby={authoringTabsHostRef?.designerTabId} hidden={authoringTabsHostRef?.activeView !== "designer"}>Graph implementation editor</section>
+          <div ref={authoringTabsHostRef?.setCenterViewHost} className="ad-graph-authoring-view-host" />
+        </div>
+      </main>;
+    }
   };
 }
 
@@ -3264,6 +3328,13 @@ function buttonByText(container: HTMLElement, text: string) {
   const button = [...container.querySelectorAll("button")].find(candidate => (candidate.textContent?.includes(text) || candidate.getAttribute("aria-label") === text));
   if (!button) throw new Error(`Button '${text}' not found.`);
   return button;
+}
+
+function activityDefinitionBackLink(container: HTMLElement) {
+  const link = [...container.querySelectorAll<HTMLAnchorElement>("nav[aria-label='Breadcrumb'] a")]
+    .find(candidate => candidate.textContent?.trim().startsWith("Activity Definition"));
+  if (!link) throw new Error("Activity Definition breadcrumb link not found.");
+  return link;
 }
 
 function click(element: Element) {

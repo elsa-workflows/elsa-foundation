@@ -223,9 +223,9 @@ export function ActivityDefinitionDependencyExplorer({
     </details> : null}
 
     {dependenciesQuery.isSuccess && rootVersion && rows.length === 0 ? <div className="ad-inline-status" role="status">No evidence matches this version and filters.</div> : null}
-    {rows.length ? <div className="ad-dependency-table-scroll" onScroll={onScroll}>
-      <table className="ad-dependency-table" aria-label={direction === "outbound" ? "Dependency evidence" : "Used by evidence"}>
-        <thead><tr><th>{direction === "inbound" ? "Used in" : "Version"}</th><th>Where</th><th>{direction === "inbound" ? "Activity" : "Uses"}</th><th>Evidence</th><th>Path</th></tr></thead>
+    {rows.length ? <div className="studio-table-container ad-dependency-table-scroll" role="region" aria-label={direction === "outbound" ? "Dependency evidence table" : "Used by evidence table"} tabIndex={0} onScroll={onScroll}>
+      <table className="studio-table ad-dependency-table" aria-label={direction === "outbound" ? "Dependency evidence" : "Used by evidence"}>
+        <thead><tr><th scope="col">{direction === "inbound" ? "Used in" : "Version"}</th><th scope="col">Where</th><th scope="col">{direction === "inbound" ? "Activity" : "Uses"}</th><th scope="col">Evidence</th><th scope="col">Path</th></tr></thead>
         <tbody>
           {start > 0 ? <tr aria-hidden><td colSpan={5} style={{ height: start * dependencyRowHeight, padding: 0 }} /></tr> : null}
           {visibleRows.map(item => <DependencyRow

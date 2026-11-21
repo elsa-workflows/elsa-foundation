@@ -165,6 +165,57 @@ public sealed class DecisionApiTests
     }
 
     [Fact]
+    public async Task Lifecycle_endpoints_unpublish_recycle_restore_and_purge_with_tenant_and_revision_guards()
+    {
+        await using var fixture = await ApiFixture.Create();
+        var asset = await fixture.CreateAsset();
+        using var publish = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/publish", new PublishDecisionRequest("publish", asset.Revision));
+        Assert.Equal(HttpStatusCode.OK, publish.StatusCode);
+        var version = (await publish.Content.ReadFromJsonAsync<DecisionVersionView>())!;
+        var current = (await (await fixture.Send(HttpMethod.Get, $"/decisions/{asset.Id}")).Content.ReadFromJsonAsync<DecisionAssetView>())!;
+
+        using var denied = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/unpublish", new DecisionLifecycleRequest("denied", current.Revision), grants: "decisions:manage");
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        using var unpublish = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/unpublish", new DecisionLifecycleRequest("unpublish", current.Revision));
+        Assert.Equal(HttpStatusCode.OK, unpublish.StatusCode);
+        var unpublished = (await (await fixture.Send(HttpMethod.Get, $"/decisions/{asset.Id}")).Content.ReadFromJsonAsync<DecisionAssetView>())!;
+        Assert.Null(unpublished.PublishedVersionId);
+        using var versions = await fixture.Send(HttpMethod.Get, $"/decisions/{asset.Id}/versions");
+        Assert.Equal(version.Id, Assert.Single((await versions.Content.ReadFromJsonAsync<DecisionVersionsResponse>())!.Items).Id);
+
+        using var recycle = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/recycle", new DecisionLifecycleRequest("recycle", unpublished.Revision));
+        Assert.Equal(HttpStatusCode.OK, recycle.StatusCode);
+        using var unavailable = await fixture.Send(HttpMethod.Get, $"/decisions/{asset.Id}");
+        Assert.Equal(HttpStatusCode.NotFound, unavailable.StatusCode);
+        var active = await fixture.Send(HttpMethod.Get, "/decisions");
+        Assert.Empty((await active.Content.ReadFromJsonAsync<DecisionAssetsResponse>())!.Items);
+        var bin = await fixture.Send(HttpMethod.Get, "/decisions/recycle-bin");
+        var deleted = Assert.Single((await bin.Content.ReadFromJsonAsync<DecisionAssetsResponse>())!.Items);
+        Assert.Equal(asset.Id, deleted.Id);
+        Assert.NotNull(deleted.DeletedAt);
+        var foreignBin = await fixture.Send(HttpMethod.Get, "/decisions/recycle-bin", tenant: "tenant-b");
+        Assert.Empty((await foreignBin.Content.ReadFromJsonAsync<DecisionAssetsResponse>())!.Items);
+
+        using var restore = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/restore", new DecisionLifecycleRequest("restore", deleted.Revision));
+        Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
+        var restored = (await (await fixture.Send(HttpMethod.Get, $"/decisions/{asset.Id}")).Content.ReadFromJsonAsync<DecisionAssetView>())!;
+        Assert.Null(restored.DeletedAt);
+        Assert.Null(restored.PublishedVersionId);
+
+        using var recycleAgain = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/recycle", new DecisionLifecycleRequest("recycle-again", restored.Revision));
+        var secondBin = Assert.Single((await (await fixture.Send(HttpMethod.Get, "/decisions/recycle-bin")).Content.ReadFromJsonAsync<DecisionAssetsResponse>())!.Items);
+        using var stalePurge = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/purge", new DecisionLifecycleRequest("stale-purge", "stale"));
+        Assert.Equal(HttpStatusCode.Conflict, stalePurge.StatusCode);
+        var purgeRequest = new DecisionLifecycleRequest("purge", secondBin.Revision);
+        using var purge = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/purge", purgeRequest);
+        Assert.Equal(HttpStatusCode.OK, purge.StatusCode);
+        using var replay = await fixture.Send(HttpMethod.Post, $"/decisions/{asset.Id}/purge", purgeRequest);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        using var emptyBin = await fixture.Send(HttpMethod.Get, "/decisions/recycle-bin");
+        Assert.Empty((await emptyBin.Content.ReadFromJsonAsync<DecisionAssetsResponse>())!.Items);
+    }
+
+    [Fact]
     public async Task Malformed_or_unsafe_input_has_safe_failure_without_storing_values()
     {
         await using var fixture = await ApiFixture.Create();

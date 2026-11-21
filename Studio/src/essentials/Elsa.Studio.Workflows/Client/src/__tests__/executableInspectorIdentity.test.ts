@@ -29,4 +29,9 @@ describe("executable inspector identity", () => {
     expect(describeExecutableReferenceSelection("newest", "ref-3")).toBe("Showing newest reference ref-3 (no live references remain)");
     expect(describeExecutableReferenceSelection("other", "ref-4")).toBe("Showing reference ref-4");
   });
+
+  it("falls back to a generic reference caption when selection metadata is absent", () => {
+    expect(describeExecutableReferenceSelection(undefined, "ref-5")).toBe("Showing reference ref-5");
+    expect(describeExecutableReferenceSelection(null, "  ")).toBe("Showing reference unknown reference");
+  });
 });

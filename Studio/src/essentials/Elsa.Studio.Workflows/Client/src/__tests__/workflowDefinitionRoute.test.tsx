@@ -18,13 +18,17 @@ import {
   workflowEditorResponse
 } from "./workflowDefinitionTestHelpers";
 
+function definitionsBreadcrumb(container: ParentNode) {
+  return container.querySelector('nav[aria-label="Breadcrumb"] a[href="/workflows/definitions"]');
+}
+
 async function openSecondPageEditor(fetchMock: typeof fetch) {
   const rendered = await renderWorkflowRoute("/workflows/definitions", fetchMock, pagedDefinitionCapabilities());
   await waitForText(rendered.container, "First page workflow");
   await click(button(rendered.container, "Next"));
   await waitForText(rendered.container, "Second page workflow");
   await click(row(rendered.container, "Second page workflow"));
-  await waitForCondition(() => expect(button(rendered.container, "Definitions")).not.toBeNull());
+  await waitForCondition(() => expect(definitionsBreadcrumb(rendered.container)?.textContent).toBe("Definitions"));
   return rendered;
 }
 
@@ -258,10 +262,10 @@ describe("workflow definition route browse session", () => {
 
     const requestsBeforeEditor = pageRequests.length;
     await click(row(container, "Second page workflow"));
-    await waitForCondition(() => expect(button(container, "Definitions")).not.toBeNull());
+    await waitForCondition(() => expect(definitionsBreadcrumb(container)?.textContent).toBe("Definitions"));
     expect(requestsBeforeEditor).toBe(3);
     expect(pageRequests).toHaveLength(requestsBeforeEditor);
-    await click(button(container, "Definitions"));
+    await click(definitionsBreadcrumb(container));
 
     await waitForCondition(() => expect(folderListRequests).toBe(2));
     resolveReturnedFolders?.(response({ items: [folder], nextContinuationToken: null }));
@@ -336,7 +340,7 @@ describe("workflow definition route browse session", () => {
     const { container, updateEndpoint } = await openSecondPageEditor(fetchMock);
 
     updateEndpoint("https://new-server.example/");
-    await click(button(container, "Definitions"));
+    await click(definitionsBreadcrumb(container));
 
     await waitForCondition(() => expect(requests.some(url => url.startsWith("https://new-server.example/") && url.includes("definition-pages"))).toBe(true));
     const newEndpointRequests = requests
@@ -400,7 +404,7 @@ describe("workflow definition route browse session", () => {
     const { container } = await openSecondPageEditor(fetchMock);
 
     window.dispatchEvent(new Event(eventName));
-    await click(button(container, "Definitions"));
+    await click(definitionsBreadcrumb(container));
     await waitForCondition(() => expect(requests).toHaveLength(3));
     const returnedRequest = new URL(requests.at(-1)!);
     expect(returnedRequest.searchParams.has("continuationToken")).toBe(false);

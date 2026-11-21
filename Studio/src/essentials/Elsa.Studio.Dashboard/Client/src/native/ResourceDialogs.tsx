@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioButton, StudioVersionHistory } from "@elsa-workflows/studio-ui";
 import { useHomeDialogFocus } from "../useHomeDialogFocus";
 import type { DashboardApi } from "./api";
 import type { AudienceCandidate, AudienceGrant, DashboardResource, DashboardTile, DefinitionRevision, QueryValue, Visualization } from "./types";
@@ -56,45 +56,96 @@ export function ShareDialog({ api, resource, onClose, onSaved }: { api: Dashboar
   </NativeDialog>;
 }
 
-export function HistoryDialog({ api, resource, onClose, onRestored, onAccessLost }: { api: DashboardApi; resource: DashboardResource; onClose(): void; onRestored(resource: DashboardResource): void; onAccessLost(message: string): void }) {
+export function HistoryDialog({ api, resource, onClose, onRestored, onAccessLost, hasUnsavedChanges = false }: { api: DashboardApi; resource: DashboardResource; onClose(): void; onRestored(resource: DashboardResource): void; onAccessLost(message: string): void; hasUnsavedChanges?: boolean }) {
   const lifetime = useRequestLifetime();
   const [items, setItems] = useState<DefinitionRevision[]>();
   const [error, setError] = useState<string>();
   const [selected, setSelected] = useState<DashboardResource>();
+  const [selectedRevision, setSelectedRevision] = useState<string | null>(null);
+  const [confirmingRevision, setConfirmingRevision] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [historyAccessLost, setHistoryAccessLost] = useState(false);
   const failed = useCallback((cause: unknown) => {
     setError(errorMessage(cause));
     if (accessLost(cause)) {
-      lifetime.invalidate(); setItems([]); setSelected(undefined); setBusy(false);
+      lifetime.invalidate(); setHistoryAccessLost(true); setItems([]); setSelected(undefined); setSelectedRevision(null); setConfirmingRevision(undefined); setBusy(false);
       onAccessLost(errorMessage(cause));
     }
   }, [lifetime, onAccessLost]);
   useEffect(() => {
-    const request = lifetime.begin("load"); setItems(undefined); setSelected(undefined); setError(undefined);
-    void api.history(resource, request.signal).then(value => { if (request.current()) setItems(value.items); })
+    const request = lifetime.begin("load"); setItems(undefined); setSelected(undefined); setSelectedRevision(null); setConfirmingRevision(undefined); setHistoryAccessLost(false); setError(undefined);
+    void api.history(resource, request.signal).then(value => {
+      if (request.current()) {
+        setItems(value.items);
+        if (value.items.length) { setSelected(resource); setSelectedRevision(resource.revision); }
+      }
+    })
       .catch(cause => { if (request.current()) failed(cause); }).finally(request.finish);
     return () => lifetime.cancel("load");
-  }, [api, resource, lifetime, failed]);
+  }, [api, resource, lifetime, failed, loadAttempt]);
   const inspect = (revision: string) => {
-    const request = lifetime.begin("inspect"); setError(undefined); setSelected(undefined);
+    setSelectedRevision(revision); setConfirmingRevision(undefined); setError(undefined);
+    if (revision === resource.revision) { lifetime.cancel("inspect"); setSelected(resource); return; }
+    const request = lifetime.begin("inspect"); setSelected(undefined);
     void api.revision(resource, revision, request.signal).then(value => { if (request.current()) setSelected(value); })
       .catch(cause => { if (request.current()) failed(cause); }).finally(request.finish);
   };
   const restore = (revision: string) => {
-    if (busy) return;
-    const request = lifetime.begin("restore"); setBusy(true); setError(undefined);
+    if (busy || revision === resource.revision) return;
+    const request = lifetime.begin("restore"); setBusy(true); setError(undefined); setConfirmingRevision(undefined);
     void api.restore(resource, revision, request.signal).then(value => { if (request.current()) onRestored(value); })
       .catch(cause => { if (request.current()) failed(cause); })
       .finally(() => { if (request.current()) setBusy(false); request.finish(); });
   };
-  return <NativeDialog title="Definition history" onClose={onClose}><p>History stores definitions, not historical query results. Restoring creates a new validated revision and preserves the current audience.</p>
+  const historyItems = items?.length && !historyAccessLost ? (items.some(item => item.revision === resource.revision) ? items : [
+    { revision: resource.revision, name: "", description: "", actorId: "", updatedAt: resource.updatedAt }, ...items
+  ]) : [];
+  const selectedIsWithheld = selected?.definitionState === "withheld";
+  const selectedDefinition = selected?.kind === "question" ? selected.definition : selected?.tiles;
+  const detail = selected ? selectedIsWithheld ? <>
+    <StatusChip tone="warning">Definition withheld</StatusChip>
+    <p>Definition details are withheld under your current access.</p>
+  </> : <div className="named-history-detail">
+    <div><StatusChip tone={selected.revision === resource.revision ? "accent" : "neutral"}>{selected.revision === resource.revision ? "Current" : "Saved revision"}</StatusChip></div>
+    <h4>{selected.name}</h4>
+    <p>Revision {selected.revision} · <time dateTime={selected.updatedAt}>{new Date(selected.updatedAt).toLocaleString()}</time></p>
+    {selected.description ? <p>{selected.description}</p> : null}
+    {selected.kind === "question" && selected.definition ? <dl className="named-history-summary">
+      <div><dt>Dataset</dt><dd>{selected.definition.query.dataset.id || "Not selected"}</dd></div>
+      <div><dt>Query</dt><dd>{selected.definition.query.form === "records" ? "Records" : "Grouped metrics"}</dd></div>
+      <div><dt>Grouping</dt><dd>{selected.definition.query.groupBy.length ? selected.definition.query.groupBy.join(", ") : "None"}</dd></div>
+      <div><dt>Metrics</dt><dd>{selected.definition.query.metrics.length ? selected.definition.query.metrics.map(item => item.alias).join(", ") : "None"}</dd></div>
+      <div><dt>Visualization</dt><dd>{selected.definition.visualization.kind}</dd></div>
+    </dl> : selected.kind === "dashboard" ? <>
+      <h5>Dashboard layout</h5>
+      {selected.tiles?.length ? <ul>{selected.tiles.map((tile, index) => <li key={tile.id}>Question {index + 1} · {tile.size}</li>)}</ul> : <p>No questions on this dashboard.</p>}
+    </> : <p>No definition details are available for this revision.</p>}
+    {selectedDefinition ? <details className="named-history-technical"><summary>View technical definition</summary><pre className="named-definition-inspection">{JSON.stringify(selectedDefinition, null, 2)}</pre></details> : null}
+    {selected.revision !== resource.revision && resource.capabilities.canEdit ? <div className="named-history-restore">
+      {confirmingRevision === selected.revision ? <div className="named-history-confirmation" role="alert">
+        <p>Restoring revision {selected.revision} creates a new revision and preserves the current audience.{hasUnsavedChanges ? " Unsaved changes will be replaced." : ""}</p>
+        <div className="named-actions"><StudioButton type="button" disabled={busy} onClick={() => setConfirmingRevision(undefined)}>Cancel restore</StudioButton><StudioButton type="button" variant="primary" disabled={busy} onClick={() => restore(selected.revision)}>Confirm restore {selected.revision}</StudioButton></div>
+      </div> : <StudioButton type="button" disabled={busy} onClick={() => setConfirmingRevision(selected.revision)} aria-label={`Restore revision ${selected.revision}`}>Restore this revision</StudioButton>}
+    </div> : null}
+  </div> : selectedRevision ? <p role="status">Loading revision snapshot…</p> : <p role="status">Choose a revision to inspect.</p>;
+  return <NativeDialog title="Definition history" onClose={onClose}>
+    <p>History stores definitions, not historical query results. Choose a revision to inspect; restoring creates a new validated revision and preserves the current audience.</p>
     {error ? <p role="alert">{error}</p> : null}
-    {!items ? <p role="status">{error ? "History could not be loaded. Close and reopen to retry." : "Loading history…"}</p> : <ul className="named-picker-list">{items.map(item => <li key={item.revision}>
-      <span>{item.name} — <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleString()}</time></span>
-      <StudioButton type="button" disabled={busy} onClick={() => inspect(item.revision)}>Inspect revision {item.revision}</StudioButton>
-      {resource.capabilities.canEdit ? <StudioButton type="button" disabled={busy} onClick={() => restore(item.revision)}>Restore revision {item.revision}</StudioButton> : null}
-    </li>)}</ul>}
-    {selected ? <section><h4>{selected.name}: revision {selected.revision}</h4><p>{selected.description}</p>{selected.definitionState === "withheld" ? <p>Definition withheld under current access.</p> : <pre className="named-definition-inspection">{JSON.stringify(selected.definition ?? selected.tiles, null, 2)}</pre>}</section> : null}
+    {!items ? <div><p role="status">{error ? "History could not be loaded." : "Loading history…"}</p>{error ? <StudioButton type="button" onClick={() => setLoadAttempt(value => value + 1)}>Retry history</StudioButton> : null}</div> : <StudioVersionHistory
+      label="Definition history"
+      items={historyItems.map(item => ({
+        id: item.revision,
+        ariaLabel: `Inspect revision ${item.revision}`,
+        title: `Revision ${item.revision}`,
+        subtitle: <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleString()}</time>,
+        status: item.revision === resource.revision ? <StatusChip tone="accent">Current</StatusChip> : undefined
+      }))}
+      selectedId={selectedRevision}
+      onSelect={inspect}
+      emptyState="No saved revisions yet."
+      detail={detail}
+    />}
   </NativeDialog>;
 }
 

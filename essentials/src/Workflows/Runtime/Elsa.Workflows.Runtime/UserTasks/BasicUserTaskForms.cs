@@ -6,6 +6,14 @@ namespace Elsa.Workflows.Runtime.UserTasks;
 
 internal sealed class BasicUserTaskForms : IUserTaskFormProvider
 {
+    private const int ConfigurationSizeLimit = 16_384;
+    private const int ConfigurationDepthLimit = 16;
+    private readonly IUserTaskFieldControlValidator[] _fieldControls;
+
+    public BasicUserTaskForms() : this([]) { }
+
+    public BasicUserTaskForms(IEnumerable<IUserTaskFieldControlValidator> fieldControls) => _fieldControls = fieldControls.ToArray();
+
     public string Provider => UserTaskProtocol.BasicForms;
 
     public void ValidateDefinition(UserTaskForm form)
@@ -16,14 +24,32 @@ internal sealed class BasicUserTaskForms : IUserTaskFormProvider
             throw Invalid("The form identity, version and unique fields are required (maximum 100 fields).");
         foreach (var field in form.Fields)
         {
+            var custom = field.ControlId is null ? null : FindFieldControl(field.ControlId);
             if (string.IsNullOrWhiteSpace(field.Key) || field.Key.Length > 256 || string.IsNullOrWhiteSpace(field.Label) ||
-                field.Kind is not ("text" or "multiline" or "number" or "boolean" or "date" or "choice") ||
+                field.Kind is null || field.Kind.Length > 64 ||
+                (custom is null && field.Kind is not ("text" or "multiline" or "number" or "boolean" or "date" or "choice")) ||
+                (custom is null && field.Configuration is not null) ||
                 field.MaxLength is < 1 or > 100000 || field.Minimum > field.Maximum ||
-                (field.MaxLength is not null && field.Kind is not ("text" or "multiline")) ||
-                ((field.Minimum is not null || field.Maximum is not null) && field.Kind != "number") ||
+                (custom is null && field.MaxLength is not null && field.Kind is not ("text" or "multiline")) ||
+                (custom is null && (field.Minimum is not null || field.Maximum is not null) && field.Kind != "number") ||
+                (custom is null && field.MustBeTrue && field.Kind != "boolean") ||
+                (custom is not null && (field.Kind != custom.ValueKind || field.MaxLength is not null || field.Minimum is not null || field.Maximum is not null ||
+                    field.Choices is not null || field.Presentation is not null || field.MustBeTrue)) ||
+                (field.ControlId is { Length: > 128 }) || !ValidConfiguration(field.Configuration) ||
+                (field.Presentation is { } presentation &&
+                    ((field.Kind == "boolean" ? presentation.Display is not ("checkbox" or "dropdown" or "radio") :
+                        field.Kind == "choice" ? presentation.Display is not ("dropdown" or "radio") : true) ||
+                     (field.Kind != "boolean" && (presentation.TrueLabel is not null || presentation.FalseLabel is not null || presentation.UnansweredLabel is not null)) ||
+                     new[] { presentation.TrueLabel, presentation.FalseLabel, presentation.UnansweredLabel }.Any(label =>
+                         label is { Length: > 256 } || (label is not null && string.IsNullOrWhiteSpace(label))))) ||
                 (field.Kind == "choice" && (field.Choices is not { Count: > 0 } || field.Choices.Any(string.IsNullOrWhiteSpace) ||
                     field.Choices.Distinct(StringComparer.Ordinal).Count() != field.Choices.Count)))
                 throw Invalid("A form field has an invalid key, label, kind, constraint or choice list.");
+            if (custom is not null)
+            {
+                var errors = custom.ValidateDefinition(field);
+                if (errors.Count != 0) throw Invalid(string.Join(" ", errors));
+            }
         }
     }
 
@@ -43,15 +69,26 @@ internal sealed class BasicUserTaskForms : IUserTaskFormProvider
             if (!names.Add(property.Name) || !form.Fields.Any(x => x.Key == property.Name)) errors[property.Name] = "Unknown or duplicated field.";
         foreach (var field in form.Fields)
         {
+            var custom = field.ControlId is null ? null : FindFieldControl(field.ControlId);
             var has = response.TryGetProperty(field.Key, out var value) && value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
+            var emptyString = has && value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString());
+            if (field.MustBeTrue && requireFields && (!has || value.ValueKind != JsonValueKind.True))
+            {
+                errors[field.Key] = "This field must be checked.";
+                continue;
+            }
             if (has && value.ValueKind == JsonValueKind.String && field.MaxLength is { } maximum && value.GetString()!.Length > maximum)
                 errors[field.Key] = "Enter a value matching this field's type and constraints.";
-            if (!has || (field.Kind is "text" or "multiline" && value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString())))
+            if (!has || (requireFields && field.Required && emptyString) || (field.ControlId is not null && emptyString) ||
+                (field.Kind is "text" or "multiline" && emptyString))
             {
                 if (field.Required && requireFields) errors[field.Key] = "This field is required.";
                 continue;
             }
-            var valid = field.Kind switch
+            var customError = custom is null ? null : custom.ValidateResponse(field, value);
+            var valid = custom is not null
+                ? ValueMatchesKind(custom.ValueKind, value) && customError is null
+                : field.Kind switch
             {
                 "text" or "multiline" => value.ValueKind == JsonValueKind.String && (field.MaxLength is null || value.GetString()!.Length <= field.MaxLength),
                 "number" => value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number) &&
@@ -61,7 +98,7 @@ internal sealed class BasicUserTaskForms : IUserTaskFormProvider
                 "choice" => value.ValueKind == JsonValueKind.String && field.Choices!.Contains(value.GetString()!, StringComparer.Ordinal),
                 _ => false
             };
-            if (!valid) errors[field.Key] = "Enter a value matching this field's type and constraints.";
+            if (!valid) errors[field.Key] = customError ?? "Enter a value matching this field's type and constraints.";
             if (field.ReadOnly && (!prefill.TryGetProperty(field.Key, out var initial) || !JsonElement.DeepEquals(initial, value)))
                 errors[field.Key] = "This value cannot be changed.";
         }
@@ -76,4 +113,35 @@ internal sealed class BasicUserTaskForms : IUserTaskFormProvider
     }
 
     private static UserTaskException Invalid(string message) => new("validation", message);
+
+    private IUserTaskFieldControlValidator FindFieldControl(string id)
+    {
+        var matches = _fieldControls.Where(control => string.Equals(control.Id, id, StringComparison.Ordinal)).ToArray();
+        return matches.Length == 1 ? matches[0] : throw Invalid($"Field control “{id}” is unavailable or ambiguous.");
+    }
+
+    private static bool ValueMatchesKind(string kind, JsonElement value) => kind switch
+    {
+        "string" => value.ValueKind == JsonValueKind.String,
+        "number" => value.ValueKind == JsonValueKind.Number,
+        "boolean" => value.ValueKind is JsonValueKind.True or JsonValueKind.False,
+        "object" => value.ValueKind == JsonValueKind.Object,
+        "array" => value.ValueKind == JsonValueKind.Array,
+        "any" => value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined),
+        _ => false
+    };
+
+    private static bool ValidConfiguration(JsonElement? configuration)
+    {
+        if (configuration is null) return true;
+        var value = configuration.Value;
+        return value.ValueKind == JsonValueKind.Object && value.GetRawText().Length <= ConfigurationSizeLimit && JsonDepth(value, 0) <= ConfigurationDepthLimit;
+    }
+
+    private static int JsonDepth(JsonElement value, int depth) => value.ValueKind switch
+    {
+        JsonValueKind.Object => value.EnumerateObject().Select(property => JsonDepth(property.Value, depth + 1)).DefaultIfEmpty(depth).Max(),
+        JsonValueKind.Array => value.EnumerateArray().Select(item => JsonDepth(item, depth + 1)).DefaultIfEmpty(depth).Max(),
+        _ => depth
+    };
 }

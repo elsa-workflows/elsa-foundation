@@ -59,6 +59,7 @@ COPY essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj essentia
 COPY essentials/src/Events/Core/Elsa.Events.Core.csproj essentials/src/Events/Core/packages.lock.json essentials/src/Events/Core/
 COPY essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj essentials/src/Expressions/Core/packages.lock.json essentials/src/Expressions/Core/
 COPY essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj essentials/src/Foundation/DataProtection/EntityFrameworkCore/packages.lock.json essentials/src/Foundation/DataProtection/EntityFrameworkCore/
+COPY essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj essentials/src/Foundation/Hosting/packages.lock.json essentials/src/Foundation/Hosting/
 COPY essentials/src/Locking/Core/Elsa.Locking.Core.csproj essentials/src/Locking/Core/packages.lock.json essentials/src/Locking/Core/
 COPY essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj essentials/src/Mediator/Core/packages.lock.json essentials/src/Mediator/Core/
 COPY essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj essentials/src/Persistence/EntityFramework/packages.lock.json essentials/src/Persistence/EntityFramework/
@@ -89,6 +90,7 @@ COPY essentials/src/Cluster/Readability/ essentials/src/Cluster/Readability/
 COPY essentials/src/Events/Core/ essentials/src/Events/Core/
 COPY essentials/src/Expressions/Core/ essentials/src/Expressions/Core/
 COPY essentials/src/Foundation/DataProtection/EntityFrameworkCore/ essentials/src/Foundation/DataProtection/EntityFrameworkCore/
+COPY essentials/src/Foundation/Hosting/ essentials/src/Foundation/Hosting/
 COPY essentials/src/Locking/Core/ essentials/src/Locking/Core/
 COPY essentials/src/Mediator/Core/ essentials/src/Mediator/Core/
 COPY essentials/src/Persistence/EntityFramework/ essentials/src/Persistence/EntityFramework/

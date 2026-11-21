@@ -148,7 +148,7 @@ function propertyLabels(container: HTMLElement) {
 }
 
 function toggleWorkflowInputBindings(container: HTMLElement) {
-  const button = container.querySelector<HTMLButtonElement>(".wf-js-input-bindings > button")!;
+  const button = container.querySelector<HTMLButtonElement>(".wf-input-bindings-toggle")!;
   flushSync(() => button.click());
   return button;
 }
@@ -182,6 +182,48 @@ it("refreshes a contributed editor when only a sibling literal input changes", a
 });
 
 describe("activity property organization", () => {
+  it("groups adjacent editor rows under an accessible heading regardless of syntax or editability", () => {
+    const propertyGroup = { id: "assignment", label: "Assignment", description: "Choose one person or one group." };
+    const editors: StudioActivityPropertyEditorContribution[] = [
+      {
+        id: "assignment.assignee",
+        propertyGroup,
+        supports: descriptor => descriptor.uiHint === "assignment-assignee",
+        component: ({ value }) => <output>{String(value ?? "")}</output>
+      },
+      {
+        id: "assignment.group",
+        propertyGroup,
+        supports: descriptor => descriptor.uiHint === "assignment-group",
+        component: ({ value }) => <output>{String(value ?? "")}</output>
+      }
+    ];
+    const container = renderPanel([
+      input("AssigneeId", { referenceKey: "assigneeId", uiHint: "assignment-assignee", isWrapped: true }),
+      input("GroupId", { referenceKey: "groupId", uiHint: "assignment-group", isWrapped: true }),
+      input("Other", { isWrapped: false })
+    ], {
+      editors,
+      readOnly: true,
+      activity: activity({
+        assigneeId: { typeName: "System.String", expression: { type: "Literal", value: "alice" } },
+        groupId: { typeName: "System.String", expression: { type: "JavaScript", value: "currentGroup()" } }
+      })
+    });
+
+    const group = container.querySelector<HTMLFieldSetElement>("fieldset.wf-property-editor-group");
+    expect(group?.querySelector("legend")?.textContent).toBe("Assignment");
+    const descriptionId = group?.getAttribute("aria-describedby");
+    expect(descriptionId).toBeTruthy();
+    expect(document.getElementById(descriptionId!)?.textContent).toBe("Choose one person or one group.");
+    const rows = [...group!.querySelectorAll<HTMLElement>(".wf-property-row")];
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.getAttribute("aria-label")).toBe("AssigneeId property");
+    expect(rows[1]?.getAttribute("aria-label")).toBe("GroupId property");
+    expect(rows[1]?.querySelector(".wf-syntax-picker-trigger")?.getAttribute("aria-label")).toContain("GroupId expression syntax");
+    expect(container.querySelector<HTMLElement>('[aria-label="Other property"]')?.closest("fieldset")).toBeNull();
+  });
+
   it("binds a selected workflow input into JavaScript args and preserves the expression source", async () => {
     const changes: ActivityNode[] = [];
     const source = "`Started Order ID: ${args.OrderId}`";
@@ -206,10 +248,10 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
-    const disclosure = container.querySelector<HTMLButtonElement>(".wf-js-input-bindings > button")!;
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-input-bindings-toggle")!;
     expect(disclosure.getAttribute("aria-expanded")).toBe("false");
-    expect(disclosure.textContent).toBe("Workflow input bindings");
+    expect(disclosure.getAttribute("aria-label")).toBe("Workflow input bindings");
     expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
     toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
@@ -230,7 +272,7 @@ describe("activity property organization", () => {
         OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" }
       }
     });
-    expect(container.querySelector(".wf-js-input-bindings > button")?.textContent).toBe("Workflow input bindings (1)");
+    expect(container.querySelector(".wf-input-bindings-toggle")?.getAttribute("aria-label")).toBe("Workflow input bindings (1)");
     expect(container.textContent).toContain("args.OrderId");
 
     const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
@@ -241,7 +283,7 @@ describe("activity property organization", () => {
       parameters: { Existing: { kind: "Literal", value: "preserve me" } }
     });
     expect(Object.keys(removed.parameters)).toEqual(["Existing"]);
-    expect(container.querySelector(".wf-js-input-bindings > button")?.textContent).toBe("Workflow input bindings");
+    expect(container.querySelector(".wf-input-bindings-toggle")?.getAttribute("aria-label")).toBe("Workflow input bindings");
   });
 
   it("keeps workflow input bindings collapsed and intact when reopened", async () => {
@@ -265,10 +307,10 @@ describe("activity property organization", () => {
       workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] }
     });
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
-    const disclosure = container.querySelector<HTMLButtonElement>(".wf-js-input-bindings > button")!;
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-input-bindings-toggle")!;
     expect(disclosure.getAttribute("aria-expanded")).toBe("false");
-    expect(disclosure.textContent).toBe("Workflow input bindings (1)");
+    expect(disclosure.getAttribute("aria-label")).toBe("Workflow input bindings (1)");
     expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
     expect(container.querySelector("[aria-label='Bound workflow inputs']")).toBeNull();
 
@@ -307,8 +349,8 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
-    const disclosure = container.querySelector<HTMLButtonElement>(".wf-js-input-bindings > button")!;
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-input-bindings-toggle")!;
     expect(disclosure.disabled).toBe(false);
     toggleWorkflowInputBindings(container);
     expect(container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")?.disabled).toBe(true);
@@ -338,7 +380,7 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
     toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
@@ -372,7 +414,7 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
     toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     expect(container.textContent).toContain("Unknown workflow input (invalid workflow input binding)");
@@ -401,7 +443,7 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings > button")).not.toBeNull());
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
     toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
@@ -2063,6 +2105,8 @@ describe("activity property organization", () => {
     expect(container.querySelector<HTMLInputElement>("input[aria-label='Template expression']")?.value).toBe("{{ order.{");
     expect(container.querySelector(".wf-expression-editor-diagnostic.warning")?.textContent)
       .toContain("Expression is incomplete.");
+    expect(container.querySelector(".wf-conversion-toggle")).not.toBeNull();
+    expect(container.querySelector(".wf-property-row-header-meta > span")).toBeNull();
   });
 
   it("uses text mode instead of a collection repeater for collection-typed expressions", () => {

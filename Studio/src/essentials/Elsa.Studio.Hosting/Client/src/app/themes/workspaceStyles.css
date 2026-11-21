@@ -154,6 +154,29 @@ html[data-workspace-style] .content {
   background: var(--studio-bg);
 }
 
+html[data-color-scheme="space"]:not([data-theme-appearance="high-contrast"]) .content:not(:has(> [data-studio-workspace-backdrop="none"], > .studio-workspace-panel:not([hidden]) > [data-studio-workspace-backdrop="none"])) {
+  --studio-workspace-frame-bg: transparent;
+  background-image:
+    radial-gradient(circle at 0.8% 14%, color-mix(in srgb, var(--studio-text-muted) 32%, transparent) 0.85px, transparent 1.4px),
+    radial-gradient(circle at 1.6% 42%, color-mix(in srgb, var(--studio-text-muted) 27%, transparent) 0.8px, transparent 1.3px),
+    radial-gradient(circle at 0.9% 78%, color-mix(in srgb, var(--studio-text-muted) 30%, transparent) 0.85px, transparent 1.4px),
+    radial-gradient(circle at 99.2% 20%, color-mix(in srgb, var(--studio-text-muted) 31%, transparent) 0.85px, transparent 1.4px),
+    radial-gradient(circle at 98.4% 54%, color-mix(in srgb, var(--studio-text-muted) 25%, transparent) 0.8px, transparent 1.3px),
+    radial-gradient(circle at 99% 86%, color-mix(in srgb, var(--studio-text-muted) 30%, transparent) 0.85px, transparent 1.4px),
+    radial-gradient(circle at 2.1% 66%, color-mix(in srgb, var(--studio-text-muted) 12%, transparent) 0.7px, transparent 1.2px),
+    radial-gradient(circle at 21% 24%, color-mix(in srgb, var(--studio-text-muted) 10%, transparent) 0.7px, transparent 1.2px),
+    radial-gradient(circle at 78% 32%, color-mix(in srgb, var(--studio-text-muted) 11%, transparent) 0.75px, transparent 1.25px),
+    radial-gradient(circle at 18% 72%, color-mix(in srgb, var(--studio-text-muted) 9%, transparent) 0.65px, transparent 1.15px),
+    radial-gradient(circle at 84% 78%, color-mix(in srgb, var(--studio-text-muted) 10%, transparent) 0.7px, transparent 1.2px);
+}
+
+@media (forced-colors: active) {
+  html[data-color-scheme="space"]:not([data-theme-appearance="high-contrast"]) .content {
+    --studio-workspace-frame-bg: var(--studio-bg);
+    background-image: none;
+  }
+}
+
 html[data-workspace-style] .content:has(> :is(.wf-editor, .wf-page--run-workbench), > .studio-workspace-panel:not([hidden]) > :is(.wf-editor, .wf-page--run-workbench)) {
   --studio-content-padding-block: 0px;
   --studio-content-padding-inline: 0px;
@@ -176,7 +199,7 @@ html[data-workspace-style] :is(.studio-tabs button, .bottom-panel-tab-list butto
 }
 
 html[data-workspace-style] :is(.studio-tabs button, .bottom-panel-tab-list button)[aria-selected="true"] {
-  color: var(--studio-accent);
+  color: var(--studio-text);
   box-shadow: inset 0 -2px var(--studio-accent);
 }
 
@@ -308,7 +331,8 @@ html[data-workspace-style="linen"] .sidebar {
   --studio-surface: var(--studio-nav-bg);
   --studio-accent-soft: var(--studio-nav-active);
   --studio-focus: var(--studio-nav-text);
-  background: linear-gradient(160deg, color-mix(in srgb, var(--studio-nav-text) 3%, var(--studio-nav-bg)), var(--studio-nav-bg) 65%);
+  background-color: var(--studio-nav-bg);
+  background-image: linear-gradient(160deg, color-mix(in srgb, var(--studio-nav-text) 3%, var(--studio-nav-bg)), var(--studio-nav-bg) 65%);
   color: var(--studio-nav-text);
   padding: 22px 12px 14px;
 }

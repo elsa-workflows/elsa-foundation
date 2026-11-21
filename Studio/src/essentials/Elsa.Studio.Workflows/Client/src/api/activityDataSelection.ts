@@ -147,6 +147,7 @@ export interface ActivityDataContextResult {
     targetType: ActivityDataType;
     operation: string | null;
     rejection: string | null;
+    canSerializeJsonString?: boolean;
   };
 }
 
@@ -284,7 +285,7 @@ export function readActivityDataContextResult(response: unknown, requestedDocume
   const operation = readString(conversion?.operation);
   const rejection = readString(conversion?.rejection);
   if (result.target?.target && sourceType && targetType && !!operation !== !!rejection)
-    result.bindingConversion = { sourceType, targetType, operation, rejection };
+    result.bindingConversion = { sourceType, targetType, operation, rejection, canSerializeJsonString: conversion?.canSerializeJsonString === true };
   const budget = { members: memberShapeLimits.maximumMembers };
   result.sources = Array.isArray(analysis?.sources) ? analysis.sources.slice(0, 100).flatMap(source => readSource(source, budget)) : [];
   result.hasMoreSources = analysis?.hasMoreSources === true || (Array.isArray(analysis?.sources) && analysis.sources.length > 100);

@@ -22,6 +22,7 @@ function render(children: React.ReactNode) {
   disposers.push(dispose); return { container, dispose };
 }
 function button(container: HTMLElement, text: string) { const target = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text); expect(target).toBeDefined(); flushSync(() => target!.click()); }
+function openDisclosure(container: HTMLElement, selector: string) { const details = container.querySelector<HTMLDetailsElement>(selector)!; if (!details.open) flushSync(() => details.querySelector("summary")!.click()); expect(details.open).toBe(true); }
 function inputValue(input: HTMLInputElement, value: string) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true }))); }
 afterEach(() => { disposers.splice(0).forEach(dispose => { try { dispose(); } catch { /* An explicitly closed surface was already unmounted. */ } }); vi.restoreAllMocks(); });
 
@@ -84,6 +85,7 @@ describe("private draft recovery", () => {
     await waitUntil(() => Boolean(container.querySelector('input[value="Question q1"]')));
     const name = [...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
     inputValue(name, "My unsaved refinement");
+    openDisclosure(container, ".named-question-actions");
     button(container, "Save draft as new question"); await waitUntil(() => container.textContent?.includes("Connection lost after create attempt") === true);
     expect(name.value).toBe("My unsaved refinement");
     button(container, "Save draft as new question"); await waitUntil(() => navigate.mock.calls.length > 0);
@@ -145,6 +147,7 @@ describe("declared editing bounds and chart semantics", () => {
     let latest: QuestionDefinition = initialDefinition(dataset);
     function Editor() { const [definition, setDefinition] = useState(latest); return <QueryControls definition={definition} datasets={[dataset]} disabled={false} onChange={value => { latest = value; setDefinition(value); }} />; }
     const { container } = render(<Editor />);
+    openDisclosure(container, '.named-query-controls details[data-query-path="query.filters"]');
     const filters = [...container.querySelectorAll("fieldset")].find(fieldset => fieldset.querySelector(":scope > legend")?.textContent === "Source filters")!;
     button(filters, "Add condition group");
     expect(filters.querySelectorAll("button").length).toBeGreaterThan(0);

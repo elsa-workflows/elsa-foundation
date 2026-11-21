@@ -1,5 +1,5 @@
 import { Suspense, useState, type ReactNode } from "react";
-import { AlertCircle, Check, Flag, Layers, MapPin, Wrench } from "lucide-react";
+import { AlertCircle, AlertTriangle, Check, Flag, Layers, MapPin, Wrench } from "lucide-react";
 import { CopyableIdentifier, DisclosureFold, StudioButton, TechnicalDetails } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ValidationError, WorkflowDraft, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
@@ -17,11 +17,12 @@ import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { LazyWorkflowTestRunControls } from "./lazyTestDriveUi";
 import type { TestRunObservation } from "./useTestRunObservation";
 import { StudioLink } from "../StudioLink";
+import { isWarningSeverity } from "./publicationReview";
 
 /**
  * Renders the unified draft-validation surface (issue #453). `errors` (server-derived + reconciled +
  * structural, merged by the caller) overrides the draft's own list when provided, so the footer never
- * says "No validation errors" while the promotion gate would refuse. Each error offers a "Repair" jump
+ * says "No validation errors" while the promotion gate would refuse. Each entry offers a "Repair" jump
  * for unresolved-variable references and a "Go to" jump for any error that resolves to a node.
  */
 export function ValidationPanel({
@@ -64,12 +65,19 @@ export function ValidationPanel({
 
   const repairItems = collectVariableRepairItems(errors);
   const repairByError = new Map(repairItems.map(item => [item.error, item]));
+  const warningCount = errors.filter(error => isWarningSeverity(error.severity)).length;
+  const errorCount = errors.length - warningCount;
+  const summary = warningCount === errors.length
+    ? `${warningCount} warning${warningCount === 1 ? "" : "s"} · publishing is not blocked`
+    : warningCount > 0
+      ? `${errorCount} error${errorCount === 1 ? "" : "s"} · ${warningCount} warning${warningCount === 1 ? "" : "s"}`
+      : `${errors.length} validation issue${errors.length === 1 ? "" : "s"}`;
 
   return (
     <div className="wf-validation">
       <div className="wf-validation-summary">
-        <AlertCircle size={14} />
-        {errors.length} validation issue{errors.length === 1 ? "" : "s"}
+        {errorCount === 0 ? <AlertTriangle size={14} /> : <AlertCircle size={14} />}
+        {summary}
         {repairItems.length > 0 ? (
           <span className="wf-validation-variable-count"> · {repairItems.length} invalid variable reference{repairItems.length === 1 ? "" : "s"}</span>
         ) : null}
@@ -79,8 +87,9 @@ export function ValidationPanel({
           const repair = repairByError.get(error);
           const nodeId = repair?.path.nodeId ?? parseValidationErrorPath(error.path).nodeId;
           const startNodeFix = onSetAsStartNode && nodeId && isStartNodeError(error) ? nodeId : null;
+          const warning = isWarningSeverity(error.severity);
           return (
-            <li key={index} className={repair ? "wf-validation-item repairable" : "wf-validation-item"}>
+            <li key={index} className={`wf-validation-item${repair ? " repairable" : ""}${warning ? " warning" : ""}`}>
               <span className="wf-validation-message" title={nodeId ?? undefined}>{error.message ?? "Validation issue."}</span>
               {startNodeFix ? (
                 <button type="button" className="wf-validation-repair" onClick={() => onSetAsStartNode?.(startNodeFix)}>

@@ -2,7 +2,7 @@ import { qualifyStudioBackendPath, isStudioWorkspaceTabClick, openStudioWorkspac
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Inbox, RefreshCw } from "lucide-react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, SkeletonRows, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
 import { FormsPage } from "./FormsPage";
 import { actor, list, message, statusOf, type TaskActor, type TaskPage } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
@@ -55,14 +55,13 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
       {clearInToolbar && <StudioButton variant="ghost" onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton>}
     </StudioCollectionToolbar>}
       <div className="user-task-results" aria-busy={loading}>
-        <StudioTableContainer role="region" aria-label="Task inbox" tabIndex={0}>
-          {loading && !page ? <SkeletonRows rows={3} label="Loading tasks" /> : error ?
-            <StudioResultState tone="danger" title="Tasks unavailable" description={error} actions={<><StudioButton onClick={() => void refresh()}>Retry</StudioButton>{cursor ? <StudioButton onClick={() => changeBrowse({ ...browse, cursor: null })}>First page</StudioButton> : null}</>} /> : denied ?
-            <StudioResultState title="Task access unavailable" description="You do not have permission to view tasks." /> : page?.items.length === 0 ?
-            <StudioResultState icon={<Inbox size={32} />} title={filtered ? "No matching tasks" : cursor ? "No more tasks" : view === "queue" ? "No group tasks available" : view === "history" ? "No task history yet" : "No tasks here"}
-              description={filtered ? "Try a different search or clear it to see your inbox." : "Choose another inbox or refresh when new work arrives."}
-              actions={filtered ? <StudioButton onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton> : cursor ? <StudioButton onClick={() => changeBrowse({ ...browse, cursor: null })}>First page</StudioButton> : undefined} /> : page ?
-            <table className="studio-table user-task-table" aria-label="User Tasks"><thead><tr><th scope="col">Task</th><th scope="col">Status</th><th scope="col">Assignment</th></tr></thead>
+        {loading && !page ? <StudioTableContainer role="region" aria-label="Task inbox" tabIndex={0}><SkeletonRows rows={3} label="Loading tasks" /></StudioTableContainer> : error ?
+          <StudioTableContainer role="region" aria-label="Task inbox" tabIndex={0}><StudioResultState tone="danger" title="Tasks unavailable" description={error} actions={<><StudioButton onClick={() => void refresh()}>Retry</StudioButton>{cursor ? <StudioButton onClick={() => changeBrowse({ ...browse, cursor: null })}>First page</StudioButton> : null}</>} /></StudioTableContainer> : denied ?
+          <StudioTableContainer role="region" aria-label="Task inbox" tabIndex={0}><StudioResultState title="Task access unavailable" description="You do not have permission to view tasks." /></StudioTableContainer> : page?.items.length === 0 ?
+          <StudioCollectionEmptyState aria-label="Task inbox" icon={<Inbox size={32} />} title={filtered ? "No matching tasks" : cursor ? "No more tasks" : view === "queue" ? "No group tasks available" : view === "history" ? "No task history yet" : "No tasks here"}
+            description={filtered ? "Try a different search or clear it to see your inbox." : "Choose another inbox or refresh when new work arrives."}
+            actions={filtered ? <StudioButton onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton> : cursor ? <StudioButton onClick={() => changeBrowse({ ...browse, cursor: null })}>First page</StudioButton> : undefined} /> : page ?
+            <StudioTableContainer role="region" aria-label="Task inbox" tabIndex={0}><table className="studio-table user-task-table" aria-label="User Tasks"><thead><tr><th scope="col">Task</th><th scope="col">Status</th><th scope="col">Assignment</th></tr></thead>
               <tbody>{page.items.map(task => <tr key={task.id} {...studioRowInteraction<HTMLTableRowElement>(() => { const path = taskDetailPath(task.id, browse); replaceTaskBrowseLocation(browse, task.id); if (navigate) navigate(path); else window.location.assign(path); })}>
                 <td data-label="Task"><a data-task-id={task.id} className="user-task-link studio-row-link" href={taskDetailPath(task.id, browse)} onClick={event => {
                   const path = taskDetailPath(task.id, browse);
@@ -72,8 +71,7 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
                   if (navigate) { event.preventDefault(); navigate(path); }
                 }}>{task.title}</a></td>
                 <td data-label="Status"><TaskStatus status={task.status} /></td><td data-label="Assignment">{taskAssignment(identity, task) || "Unassigned"}</td>
-              </tr>)}</tbody></table> : null}
-        </StudioTableContainer>
+              </tr>)}</tbody></table></StudioTableContainer> : null}
         {!loading && !error && !denied && page && <StudioCollectionFooter>
           <span>{page.items.length} {page.items.length === 1 ? "task" : "tasks"} shown</span>
           {(cursor || page.next) && <div role="group" aria-label="Task pages">

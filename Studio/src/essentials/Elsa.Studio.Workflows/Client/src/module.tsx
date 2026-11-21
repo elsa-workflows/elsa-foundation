@@ -120,7 +120,7 @@ export function register(api: ElsaStudioModuleApi) {
       path: "/workflows/definitions",
       iconColor: "#0ea5e9",
       placement: "build",
-      childDisplay: "views",
+      childDisplay: "links",
       order: 20,
       items: [
         { id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}], title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9", placement: "build", parentId: "workflows", order: 10 },
@@ -192,7 +192,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/executables",
         label: "Workflow executables",
-        component: () => deferred("workflow executables", <WorkflowExecutablesPage canBrowseDefinitions={evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.workflow-design",contractVersion:"1"}]).state === "available"} context={api.backend} ai={api.weaver} runInputEditors={runInputEditors()} />)
+        component: () => deferred("workflow executables", <WorkflowExecutablesPage canBrowseDefinitions={evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.workflow-design",contractVersion:"1"}]).state === "available"} canManagePublications={operationAvailability().publishing.state === "available"} context={api.backend} ai={api.weaver} runInputEditors={runInputEditors()} />)
       },
       {
         id: "workflows-executable-inspector", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],

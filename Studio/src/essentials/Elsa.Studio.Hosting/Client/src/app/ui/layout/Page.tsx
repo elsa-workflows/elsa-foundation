@@ -8,6 +8,7 @@ export function StudioPage({ className, ...props }: React.ComponentPropsWithoutR
 
 export interface StudioPageHeaderProps extends Omit<React.ComponentPropsWithoutRef<"header">, "title"> {
   title: React.ReactNode;
+  breadcrumbs?: React.ReactNode;
   description?: React.ReactNode;
   /** Optional context, only when it adds information beyond the title/navigation. */
   eyebrow?: React.ReactNode;
@@ -21,10 +22,11 @@ export interface StudioPageHeaderProps extends Omit<React.ComponentPropsWithoutR
   headingLevel?: 1 | 2;
 }
 
-export function StudioPageHeader({ title, description, eyebrow, icon, actions, actionsLabel, refresh, titleId, headingLevel = 1, className, children, ...props }: StudioPageHeaderProps) {
+export function StudioPageHeader({ title, breadcrumbs, description, eyebrow, icon, actions, actionsLabel, refresh, titleId, headingLevel = 1, className, children, ...props }: StudioPageHeaderProps) {
   const Heading = headingLevel === 2 ? "h2" : "h1";
   return <header className={["studio-page-header", className].filter(Boolean).join(" ")} {...props}>
     <div className="studio-page-header-copy">
+      {breadcrumbs}
       {eyebrow ? <span className="studio-page-eyebrow">{eyebrow}</span> : null}
       <Heading id={titleId} title={typeof title === "string" ? title : undefined}>{icon ? <span aria-hidden="true">{icon}</span> : null}{title}</Heading>
       {description ? <p>{description}</p> : null}
@@ -72,4 +74,9 @@ export function StudioResultState({ title, description, actions, icon, tone = "n
     {children}
     {actions ? <div className="studio-page-actions">{actions}</div> : null}
   </div>;
+}
+
+/** Empty state for a collection with no rows. Keeps error and loading feedback distinct. */
+export function StudioCollectionEmptyState({ className, ...props }: StudioResultStateProps) {
+  return <StudioResultState {...props} className={["studio-collection-empty", className].filter(Boolean).join(" ")} />;
 }

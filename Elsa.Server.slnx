@@ -360,7 +360,9 @@
     <Project Path="essentials/src/Http/Elsa.Http/Elsa.Http.csproj" />
     <Project Path="essentials/src/Http/JavaScript/Elsa.Http.JavaScript.csproj" />
   </Folder>
-  <Folder Name="/essentials/src/Foundation/" />
+  <Folder Name="/essentials/src/Foundation/">
+    <Project Path="essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj" />
+  </Folder>
   <Folder Name="/essentials/src/Foundation/DataProtection/">
     <Project Path="essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
   </Folder>
@@ -995,5 +997,8 @@
   </Folder>
   <Folder Name="/extensions/Examples/tests/">
     <Project Path="extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Foundation/Hosting/">
+    <Project Path="essentials/tests/Foundation/Hosting/Tests/Elsa.Foundation.Hosting.Tests.csproj" />
   </Folder>
 </Solution>

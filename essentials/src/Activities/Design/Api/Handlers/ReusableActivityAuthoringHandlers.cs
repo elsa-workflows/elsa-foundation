@@ -42,7 +42,8 @@ public sealed class ReusableActivityAuthoringService(
     IActivityAuthoringContextAsync context,
     IEnumerable<IActivityAuthoringCatalog>? candidateCatalogs = null,
     IEnumerable<IActivityDataSelectionDocumentProjector>? candidateProjectors = null,
-    IActivityStructureService? candidateStructures = null) : IReusableActivityAuthoringService
+    IActivityStructureService? candidateStructures = null,
+    IArchiveActivityDefinitionCommand? archiveDefinition = null) : IReusableActivityAuthoringService
 {
     // Preserve the original public constructor for existing binary consumers. Compositions that do
     // not install the request-only candidate dependencies retain their existing authoring behavior.
@@ -71,7 +72,7 @@ public sealed class ReusableActivityAuthoringService(
         definitions, authoringStore, draftStore, publicationStore, layoutStore, validationStore,
         createDefinition, updateDefinitionPresentation, createDraft, updateDraftPresentation, createConflictCopy,
         replaceDraft, discardDraft, storeValidation, providers, validator, contractAuthoringValidator,
-        typeKeyPolicy, identityGenerator, timeProvider, context, null, null, null)
+        typeKeyPolicy, identityGenerator, timeProvider, context, null, null, null, null)
     {
     }
 
@@ -128,6 +129,26 @@ public sealed class ReusableActivityAuthoringService(
             timeProvider.GetUtcNow()), cancellationToken);
 
         return ToIdentity(updated, authoring);
+    }
+
+    public async Task ArchiveDefinitionAsync(ArchiveReusableActivityDefinition command, CancellationToken cancellationToken)
+    {
+        if (archiveDefinition is null)
+            throw OperationFailed("Activity Definition archiving is not supported by the configured persistence backend.");
+
+        var definition = await GetDefinitionEntityAsync(command.DefinitionId, cancellationToken);
+        var authoring = await GetAuthoringAsync(command.DefinitionId, cancellationToken);
+        EnsureVisible(definition.TenantId);
+        EnsureVisible(authoring.TenantId);
+        EnsureDesignAuthority(authoring, allowArchived: true);
+        if (authoring.ArchivedAt is not null)
+            return;
+
+        await archiveDefinition.ExecuteAsync(new(
+            command.DefinitionId,
+            authoring.TenantId,
+            context.TenantId,
+            timeProvider.GetUtcNow()), cancellationToken);
     }
 
     public async Task<ReusableActivityDraftView> CreateDraftAsync(
@@ -708,13 +729,18 @@ public sealed class ReusableActivityAuthoringService(
 
     private bool IsVisible(string? tenantId) => tenantId is null || string.Equals(tenantId, context.TenantId, StringComparison.Ordinal);
 
-    private static void EnsureDesignAuthority(ActivityDefinitionAuthoringState authoring)
+    private static void EnsureDesignAuthority(ActivityDefinitionAuthoringState authoring, bool allowArchived = false)
     {
         if (authoring.ContentAuthority.Kind != ActivityContentAuthorityKind.Design)
             throw Conflict(
                 "activity.definition.content-authority",
                 "Activity definition is source-owned",
                 "This operation cannot modify a source-owned activity definition. Fork an exact version into a new identity instead.");
+        if (!allowArchived && authoring.ArchivedAt is not null)
+            throw Conflict(
+                "activity.definition.archived",
+                "Activity definition is archived",
+                "Archived Activity Definitions cannot be authored or published.");
     }
 
     private static void EnsureDisplayName(string displayName)
@@ -914,6 +940,7 @@ public interface IReusableActivityAuthoringService
 {
     Task<ReusableActivityDefinitionMutationView> CreateDefinitionAsync(CreateReusableActivityDefinition command, CancellationToken cancellationToken);
     Task<ActivityDefinitionIdentityView> UpdateDefinitionAsync(UpdateReusableActivityDefinition command, CancellationToken cancellationToken);
+    Task ArchiveDefinitionAsync(ArchiveReusableActivityDefinition command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> CreateDraftAsync(CreateReusableActivityDraft command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> ReplaceDraftAsync(ReplaceReusableActivityDraft command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> UpdateDraftPresentationAsync(UpdateReusableActivityDraftPresentation command, CancellationToken cancellationToken);

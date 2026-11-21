@@ -12,16 +12,19 @@ import type {
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { authSessionEndedEvent, authSessionStartedEvent, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, StudioButton, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows, StudioField } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows, StudioField, StudioTimestamp, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import {
+  isActivityDefinitionEnumValue,
   type ActivityDefinitionCollectionRequest,
   type ActivityDefinitionManagementView
 } from "./activityDefinitionTypes";
-import { formatActivityDefinitionDate, formatActivityVersion, resolveActivityDefinitionTitle } from "./workflowFormatting";
-import { activityDesignKeys, classifyActivityDefinitionReadFailure, isInvalidActivityDefinitionCursor, redactActivityDefinitionManagementCache, useActivityAuthoringCapabilities, useActivityDefinitions } from "./api/activityDesign";
+import { isActivityDefinitionTimestamp, formatActivityVersion, resolveActivityDefinitionTitle } from "./workflowFormatting";
+import { activityDesignKeys, archiveActivityDefinition, classifyActivityDefinitionReadFailure, isInvalidActivityDefinitionCursor, redactActivityDefinitionManagementCache, useActivityAuthoringCapabilities, useActivityDefinitions } from "./api/activityDesign";
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
 import { WorkflowListIdentifiers } from "./workflow-editor/WorkflowListIdentifiers";
+import { getDialogs } from "./workflow-editor/dialogs";
+import { getNotifications } from "./workflow-editor/notifications";
 import "./activityDefinitions.css";
 import "./activityDefinitionCollection.css";
 import "./workflow-editor/cleanListTables.css";
@@ -36,8 +39,11 @@ type RouteState = {
   section: string | null;
   draftId: string | null;
   versionId: string | null;
+  originDraftId?: string | null;
+  originVersionId?: string | null;
   draftActionVersionId?: string | null;
   returnPlanId?: string | null;
+  publicationReview?: boolean;
 };
 
 type ActivityCollectionHistoryContext = {
@@ -183,7 +189,7 @@ export function ActivityDefinitionsPage({
   if (route.definitionId) {
     if (route.section === "editor" && (route.draftId || route.versionId)) {
       const extensions = graphExtensions();
-      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId ?? undefined} versionId={route.versionId ?? undefined} allowStartEditing={!route.draftId && Boolean(route.versionId)} activityEditors={activityEditors()} propertyEditors={extensions.properties} expressionEditors={extensions.expressions} graphAuthoringPanels={extensions.panels} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
+      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId ?? undefined} versionId={route.versionId ?? undefined} allowStartEditing={!route.draftId && Boolean(route.versionId)} openPublicationReviewOnMount={route.publicationReview} activityEditors={activityEditors()} propertyEditors={extensions.properties} expressionEditors={extensions.expressions} graphAuthoringPanels={extensions.panels} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
         if (route.returnPlanId) {
           navigationBlockedRef.current = false;
           navigateToStudioPath(`/workflows/activity-definitions/upgrades?plan=${encodeURIComponent(route.returnPlanId)}`);
@@ -191,17 +197,28 @@ export function ActivityDefinitionsPage({
         }
         void queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionCollections });
         navigate({ definitionId: null, section: null, draftId: null, versionId: null }, force);
-      }} onManage={section => navigate({ definitionId: route.definitionId, section, draftId: null, versionId: null, returnPlanId: route.returnPlanId })} onOpenDraft={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null, returnPlanId: route.returnPlanId }, true)} onOpenVersion={(definitionId, versionId) => navigate({ definitionId, section: "versions", draftId: null, versionId, returnPlanId: route.returnPlanId }, true)} onOpenStudioPath={navigateToStudioPath} /></WorkflowLazyBoundary>;
+      }} onManage={section => navigate({ definitionId: route.definitionId, section, draftId: null, versionId: null, originDraftId: route.draftId, originVersionId: route.versionId, returnPlanId: route.returnPlanId })} onOpenDraft={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null, returnPlanId: route.returnPlanId }, true)} onOpenVersion={(definitionId, versionId) => navigate({ definitionId, section: "versions", draftId: null, versionId, originDraftId: route.draftId, originVersionId: route.versionId, returnPlanId: route.returnPlanId }, true)} onOpenStudioPath={navigateToStudioPath} /></WorkflowLazyBoundary>;
     }
     return (
       <WorkflowLazyBoundary label="activity definition workbench">
-        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} requestedDraftActionVersionId={route.draftActionVersionId} activityEditors={activityEditors()} onNavigate={(next, replace) => navigate(next, false, replace)} onOpenWorkflows={() => navigateToStudioPath("/workflows/definitions")} onPlanUpgrade={(kind, id) => navigateToStudioPath(`/workflows/activity-definitions/upgrades?rootKind=${encodeURIComponent(kind)}&rootId=${encodeURIComponent(id)}`)} />
+        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} originDraftId={route.originDraftId} originVersionId={route.originVersionId} returnPlanId={route.returnPlanId} requestedDraftActionVersionId={route.draftActionVersionId} requestedPublicationReview={route.publicationReview} activityEditors={activityEditors()} onNavigate={(next, replace) => {
+          const sameDefinition = next.definitionId !== null && next.definitionId === route.definitionId;
+          const destination = sameDefinition ? {
+            ...next,
+            returnPlanId: next.returnPlanId ?? route.returnPlanId,
+            ...(next.section === "editor" ? {} : {
+              originDraftId: next.originDraftId ?? route.originDraftId,
+              originVersionId: next.originVersionId ?? route.originVersionId
+            })
+          } : next;
+          navigate(destination, false, replace);
+        }} onOpenWorkflows={() => navigateToStudioPath("/workflows/definitions")} onPlanUpgrade={(kind, id) => navigateToStudioPath(`/workflows/activity-definitions/upgrades?rootKind=${encodeURIComponent(kind)}&rootId=${encodeURIComponent(id)}`)} />
       </WorkflowLazyBoundary>
     );
   }
 
   // Popstate changes the revision; persisting this entry's metadata must not remount an open form.
-  return <ActivityDefinitionCollection key={historyRevision} context={context} baseUrl={context.baseUrl} authorityRevision={authorizationRevision} authorizationInvalidating={authorizationInvalidating} activityEditors={activityEditors()} onHistoryContextChange={updateRouteCollectionContext} onImport={() => navigateToStudioPath("/workflows/activity-definitions/import-elsa3")} onPlanUpgrade={() => navigateToStudioPath("/workflows/activity-definitions/upgrades")} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
+  return <ActivityDefinitionCollection key={historyRevision} context={context} baseUrl={context.baseUrl} authorityRevision={authorizationRevision} authorizationInvalidating={authorizationInvalidating} activityEditors={activityEditors()} onHistoryContextChange={updateRouteCollectionContext} onImport={() => navigateToStudioPath("/workflows/activity-definitions/import-elsa3")} onPlanUpgrade={() => navigateToStudioPath("/workflows/activity-definitions/upgrades")} onOpen={(definitionId, section, publicationReview) => navigate({ definitionId, section: section ?? null, draftId: null, versionId: null, publicationReview })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
 }
 
 function defaultStudioPathNavigation(path: string) {
@@ -215,8 +232,11 @@ function writeRouteState(route: RouteState, mode: "push" | "replace", collection
   if (route.section) parameters.set("section", route.section);
   if (route.draftId) parameters.set("draft", route.draftId);
   if (route.versionId) parameters.set("version", route.versionId);
+  if (route.originDraftId) parameters.set("originDraft", route.originDraftId);
+  if (route.originVersionId) parameters.set("originVersion", route.originVersionId);
   if (route.draftActionVersionId) parameters.set("createDraftFrom", route.draftActionVersionId);
   if (route.returnPlanId) parameters.set("returnPlan", route.returnPlanId);
+  if (route.publicationReview) parameters.set("reviewPublication", "true");
   const query = parameters.toString();
   const state = historyStateRecord(window.history.state);
   const metadata = readActivityHistoryMetadata(state) ?? {};
@@ -225,7 +245,7 @@ function writeRouteState(route: RouteState, mode: "push" | "replace", collection
   window.history[mode === "push" ? "pushState" : "replaceState"]({ ...state, [activityHistoryStateKey]: metadata }, "", qualifyStudioBackendPath(`/workflows/activity-definitions${query ? `?${query}` : ""}`));
 }
 
-function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, authorizationInvalidating, activityEditors, onHistoryContextChange, onImport, onPlanUpgrade, onOpen, onCreated }: { context: StudioEndpointContext; baseUrl: string; authorityRevision: number; authorizationInvalidating: boolean; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onHistoryContextChange(context: ActivityCollectionHistoryContext): void; onImport(): void; onPlanUpgrade(): void; onOpen(definitionId: string): void; onCreated(definitionId: string, draftId: string): void }) {
+function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, authorizationInvalidating, activityEditors, onHistoryContextChange, onImport, onPlanUpgrade, onOpen, onCreated }: { context: StudioEndpointContext; baseUrl: string; authorityRevision: number; authorizationInvalidating: boolean; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onHistoryContextChange(context: ActivityCollectionHistoryContext): void; onImport(): void; onPlanUpgrade(): void; onOpen(definitionId: string, section?: string | null, publicationReview?: boolean): void; onCreated(definitionId: string, draftId: string): void }) {
   const queryClient = useQueryClient();
   const capabilitiesQuery = useActivityAuthoringCapabilities(context);
   const providers = capabilitiesQuery.data?.providers ?? [];
@@ -244,6 +264,11 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   const [freshPageRequired, setFreshPageRequired] = useState(false);
   const [scopeRecoveryNotice, setScopeRecoveryNotice] = useState(Boolean(restoredContext && !restoredScopeMatches && restoredContext.cursorIndex > 0));
   const [createOpen, setCreateOpen] = useState(false);
+  const [refreshPending, setRefreshPending] = useState(false);
+  const [archivingDefinitionId, setArchivingDefinitionId] = useState<string | null>(null);
+  const [archiveFailure, setArchiveFailure] = useState<{ definition: ActivityDefinitionManagementView; message: string } | null>(null);
+  const refreshPendingRef = useRef(false);
+  const archiveInFlightRef = useRef(false);
   const observation = useRef({ fetching: false, startedAt: 0 });
   const entryId = useRef(restoredContext?.entryId ?? createActivityHistoryEntryId());
   const scopeRef = useRef({ baseUrl: restoredContext?.baseUrl ?? baseUrl, authorityRevision: restoredContext?.authorityRevision ?? authorityRevision });
@@ -276,6 +301,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   const mustDiscardData = failure === "forbidden" || failure === "unavailable";
   const rejectedContinuation = failure === "expired" || invalidCursor;
   const data = authorizationInvalidating || scopeChanged || mustDiscardData || rejectedContinuation || freshPageRequired ? undefined : query.data;
+  const canOpenRowActions = Boolean(data && query.isSuccess && !query.isError && !query.isPlaceholderData && !authorizationInvalidating && !scopeChanged && !mustDiscardData && !rejectedContinuation && !freshPageRequired);
   const defaultDesignedView = authority === "Design" && !searchInput.trim() && !selectedProviderKey;
   const filtersActive = Boolean(searchInput.trim() || selectedProviderKey || authority !== "Design");
 
@@ -335,15 +361,24 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
     else if (query.data) observeActivityDefinitions({ event: "query-success", surface: "collection", outcome: query.data.totalCount === 0 ? "empty" : "ready", resultBand: activityDefinitionResultBand(query.data.totalCount), durationBucket });
   }, [authority, failure, pageSize, providerKey, query.data, query.error, query.isFetching, search]);
 
-  const openDefinition = (definition: ActivityDefinitionManagementView) => {
+  const openDefinition = (definition: ActivityDefinitionManagementView, section: string | null = null, publicationReview = false) => {
     observeActivityDefinitions({ event: "open-definition", surface: "collection" });
     onHistoryContextChange(historyContext);
-    onOpen(definition.definition.definitionId);
+    onOpen(definition.definition.definitionId, section, publicationReview);
   };
   const refresh = () => {
+    if (refreshPendingRef.current) return;
+    refreshPendingRef.current = true;
+    setRefreshPending(true);
     setPrivacyFailure(null);
     observeActivityDefinitions({ event: "refresh", surface: "collection" });
-    void query.refetch();
+    void query.refetch({ cancelRefetch: false }).then(() => {
+      refreshPendingRef.current = false;
+      setRefreshPending(false);
+    }, () => {
+      refreshPendingRef.current = false;
+      setRefreshPending(false);
+    });
   };
   const restartPaging = () => {
     setPrivacyFailure(null);
@@ -357,6 +392,38 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
     setCursorStack([null]);
     setCursorIndex(0);
   };
+  const archiveDefinition = async (definition: ActivityDefinitionManagementView, confirm = true) => {
+    if (archiveInFlightRef.current) return;
+    archiveInFlightRef.current = true;
+    setArchivingDefinitionId(definition.definition.definitionId);
+    try {
+      if (confirm && !(await getDialogs().confirm({
+        title: "Archive Activity Definition",
+        message: `Archive "${resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey)}"? It will disappear from new authoring and activity selection. Existing drafts, published versions, and workflow references will remain intact; archived definitions cannot currently be restored from Studio.`,
+        confirmLabel: "Archive",
+        tone: "danger"
+      }))) return;
+
+      setArchiveFailure(null);
+      await archiveActivityDefinition(context, definition.definition.definitionId);
+      getNotifications().notify({ level: "success", title: `Archived ${resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey)}` });
+      setPrivacyFailure(null);
+      setFreshPageRequired(true);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionCollections, refetchType: "none" }),
+        queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionResources }),
+        queryClient.invalidateQueries({ queryKey: activityDesignKeys.recommendedDefinitions })
+      ]);
+      setCursorStack([null]);
+      setCursorIndex(0);
+      if (cursorIndex === 0) void query.refetch();
+    } catch {
+      setArchiveFailure({ definition, message: "The archive request failed. The definition remains available in this list; retry when the service is available." });
+    } finally {
+      archiveInFlightRef.current = false;
+      setArchivingDefinitionId(null);
+    }
+  };
   const nextPage = () => {
     const continuation = data?.continuation;
     if (!continuation) return;
@@ -366,7 +433,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
 
   return (
     <main className="studio-page ad-page ad-designed-collection" aria-labelledby="activity-definitions-title">
-      <StudioPageHeader title="Activity definitions" titleId="activity-definitions-title" description="Design reusable activities here. Drafts stay editable, while published versions remain in history." actions={<div className="studio-page-actions"><StudioButton variant="primary" size="md" onClick={() => setCreateOpen(true)}>Create activity</StudioButton><StudioButton variant="default" size="md" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</StudioButton><details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={onPlanUpgrade}>Plan broad upgrade</button></div></details></div>} />
+      <StudioPageHeader title="Activity definitions" titleId="activity-definitions-title" description="Design reusable activities here. Drafts stay editable, while published versions remain in history." actions={<div className="studio-page-actions"><StudioButton variant="primary" size="md" onClick={() => setCreateOpen(true)}>Create activity</StudioButton><StudioButton variant="default" size="md" onClick={refresh} aria-busy={refreshPending}><RefreshCw size={16} aria-hidden /> Refresh</StudioButton><details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={onPlanUpgrade}>Plan broad upgrade</button></div></details></div>} />
 
       <section className="studio-collection-toolbar ad-collection-filters" aria-label="Activity Definition filters">
         <StudioSearchInput aria-label="Search" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Name, type key, or category" />
@@ -386,19 +453,19 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
 
       {authorizationInvalidating ? <div className="ad-inline-status" role="status">The access scope changed. Reloading the authorized collection while keeping your filters and page size.</div> : null}
       {!authorizationInvalidating && scopeRecoveryNotice ? <div className="ad-inline-status" role="status">The collection scope changed, so Studio restarted at the first page and kept your filters and page size.</div> : null}
-      {query.isFetching && data ? <div className="ad-inline-status" role="status" aria-live="polite">Refreshing the authorized collection while keeping the last confirmed page visible.</div> : null}
       {query.isError && data && failure !== "expired" && !invalidCursor ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained data</strong><span>Last confirmed {formatTimestamp(lastConfirmedAt)}. Retry to request a new snapshot.</span></div><button type="button" onClick={refresh}>Retry</button></div> : null}
       {!data && !authorizationInvalidating && (query.isPending || query.isFetching) && !failure ? <ActivityDefinitionSkeleton /> : null}
       {!data && !authorizationInvalidating && failure ? <ActivityDefinitionFailure kind={failure} cursorInvalid={invalidCursor} onRetry={failure === "expired" || invalidCursor ? restartPaging : refresh} /> : null}
-      {data && data.items.length === 0 ? <div className="studio-table-container"><StudioResultState
+      {archiveFailure ? <p className="ad-inline-status" role="alert">Couldn’t archive this Activity Definition: {archiveFailure.message} <button type="button" disabled={archivingDefinitionId !== null} onClick={() => void archiveDefinition(archiveFailure.definition, false)}>Retry archive</button></p> : null}
+      {data && !query.isError && !authorizationInvalidating && data.items.length === 0 ? <StudioCollectionEmptyState
         icon={<Database size={24} aria-hidden />}
         title={defaultDesignedView ? "No designed activities yet" : filtersActive ? "No Activity Definitions match" : "No Activity Definitions available"}
         description={defaultDesignedView ? "Create a reusable activity definition, or browse built-in activities to see source-owned entries." : filtersActive ? "Clear or change the server-side filters to search the authorized collection again." : "No authorized Activity Definitions are available in this scope."}
         actions={defaultDesignedView ? <><StudioButton variant="primary" onClick={() => setCreateOpen(true)}>Create activity</StudioButton><StudioButton onClick={() => setAuthority("ProviderSource")}>Browse built-in activities</StudioButton></> : filtersActive ? <StudioButton onClick={() => { setSearchInput(""); setSelectedProviderKey(""); setAuthority("Design"); }}>Clear filters</StudioButton> : null}
-      /></div> : null}
+      /> : null}
       {data && data.items.length > 0 ? <>
         <div className="studio-table-container studio-collection-table ad-collection" role="table" aria-label="Activity Definitions" aria-rowcount={data.totalCount}>
-          <div className="ad-collection-head" role="row"><span role="columnheader">Activity</span><span role="columnheader">Definition ID</span><span role="columnheader">Provider</span><span role="columnheader">Identifiers</span><span role="columnheader">State</span><span role="columnheader">Updated</span></div>
+          <div className="ad-collection-head" role="row"><span role="columnheader">Activity</span><span role="columnheader">Definition ID</span><span role="columnheader">Provider</span><span role="columnheader">Identifiers</span><span role="columnheader">State</span><span role="columnheader">Updated</span><span className="ad-collection-actions-header" role="columnheader">{canOpenRowActions ? "Actions" : ""}</span></div>
           {data.items.map(definition => {
             const title = resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey);
             const recommendation = definition.lifecycle.recommendation;
@@ -406,6 +473,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
             const providerKey = recommendation?.providerKey ?? definition.lifecycle.head?.providerKey;
             const providerLabel = providerKey ?? "Not established";
             const authorityKind = definition.definition.contentAuthority.kind;
+            const designOwned = isActivityDefinitionEnumValue(authorityKind, "Design");
             const rowDetails = [
               `Activity Type Key: ${definition.definition.activityTypeKey}`,
               providerKey ? `Provider: ${providerKey}` : null,
@@ -416,6 +484,17 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
               { label: "Head Version ID", value: definition.definition.headVersionId ?? definition.lifecycle.head?.versionId ?? "" },
               { label: "Recommended Version ID", value: definition.definition.recommendedVersionId ?? definition.lifecycle.recommendation?.versionId ?? "" }
             ].filter(identifier => identifier.value);
+            const menuItems: OverflowMenuItem[] = canOpenRowActions ? [
+              ...(designOwned ? [
+                { id: "edit", label: "Edit", onSelect: () => openDefinition(definition) },
+                ...(definition.lifecycle.draftCount > 0 ? [{ id: "publish", label: "Publish", onSelect: () => openDefinition(definition, "drafts", true) }] : []),
+                ...(definition.actions.some(action => action.action === "archive-definition" && action.allowed)
+                  ? [{ id: "archive", label: "Archive", onSelect: () => void archiveDefinition(definition) }]
+                  : [])
+              ] : []),
+              { id: "versions", label: "Version history", onSelect: () => openDefinition(definition, "versions") },
+              { id: "usage", label: "Usage", onSelect: () => openDefinition(definition, "relationships") }
+            ] : [];
             return <div key={definition.definition.definitionId} className="ad-collection-row" role="row" tabIndex={0} aria-label={`Open Activity Definition ${title}`} title={rowDetails} onClick={event => { if ((event.target as HTMLElement).closest("button, input, label, a")) return; openDefinition(definition); }} onKeyDown={event => { if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); openDefinition(definition); }}>
             <span role="cell" data-label="Activity" className="ad-collection-activity"><strong title={title}>{title}</strong></span>
             <span role="cell" data-label="Definition ID" className="wf-list-primary-id ad-primary-identifier"><CopyableIdentifier label="Definition ID" value={definition.definition.definitionId} /></span>
@@ -430,7 +509,10 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
               {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount === 0 ? <span className="ad-status-copy">No versions yet</span> : null}
               {recommendedVersion ? <small title={`Exact recommended version ${recommendedVersion.full}`}>Recommended {recommendedVersion.short}</small> : definition.lifecycle.versionCount > 0 ? <small>No recommended version</small> : null}
             </span>
-            <span role="cell" data-label="Updated">{formatActivityDefinitionDate(definition.updatedAt)}</span>
+            <span role="cell" data-label="Updated"><StudioTimestamp value={isActivityDefinitionTimestamp(definition.updatedAt) ? definition.updatedAt : null} fallback="—" /></span>
+            <span role="cell" data-label="Actions" className="ad-collection-actions" onClick={canOpenRowActions ? event => event.stopPropagation() : undefined}>
+              {canOpenRowActions ? <OverflowMenu items={menuItems} ariaLabel={`Actions for ${title}`} /> : null}
+            </span>
           </div>;
           })}
         </div>
@@ -522,8 +604,11 @@ function readRouteState(): RouteState {
     section: parameters.get("section"),
     draftId: parameters.get("draft"),
     versionId: parameters.get("version"),
+    originDraftId: parameters.get("originDraft"),
+    originVersionId: parameters.get("originVersion"),
     draftActionVersionId: parameters.get("createDraftFrom"),
-    returnPlanId: parameters.get("returnPlan")
+    returnPlanId: parameters.get("returnPlan"),
+    publicationReview: parameters.get("reviewPublication") === "true"
   };
 }
 

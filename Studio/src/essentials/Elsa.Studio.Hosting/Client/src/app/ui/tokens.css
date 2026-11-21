@@ -41,6 +41,7 @@
   --studio-panel: var(--studio-surface);
   /* Background-only recipes: neutral for independently hosted modules. */
   --studio-workspace-page-background: var(--studio-bg);
+  --studio-workspace-frame-bg: var(--studio-bg);
   --studio-workspace-panel-background: var(--studio-panel);
   --studio-accent: var(--primary);
   --studio-accent-text: var(--primary-foreground);

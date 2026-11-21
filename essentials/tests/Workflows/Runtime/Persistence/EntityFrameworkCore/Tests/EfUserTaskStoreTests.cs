@@ -74,6 +74,82 @@ public sealed class EfUserTaskStoreTests
     }
 
     [Fact]
+    public async Task Form_drafts_survive_restart_and_publish_clears_them_only_with_an_immutable_version()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options;
+        var form = new UserTaskForm("purchase", "1", "Purchase", UserTaskProtocol.BasicForms,
+        [
+            new UserTaskField("accepted", "Accept terms", "boolean", Required: true) { Presentation = new("checkbox", TrueLabel: "Accepted"), MustBeTrue = true },
+            new UserTaskField("channel", "Channel", "choice", Choices: ["Email", "Phone"]) { Presentation = new("radio") },
+            new UserTaskField("rating", "Rating", "number") { ControlId = "example.rating/1", Configuration = JsonSerializer.SerializeToElement(new { maximum = 5 }) }
+        ]);
+        await using (var context = new RuntimeSqliteDbContext(options))
+        {
+            await context.Database.EnsureCreatedAsync();
+            var store = new EfUserTaskStore(context, new Accessor("tenant"));
+            Assert.True(await store.TryWriteFormDraftAsync(new("tenant", "purchase", form, 1, Now, "author"), 0));
+            Assert.Empty((await store.ListFormsAsync("tenant", 25)).Items);
+        }
+
+        await using (var restarted = new RuntimeSqliteDbContext(options))
+        {
+            var store = new EfUserTaskStore(restarted, new Accessor("tenant"));
+            var definition = (await store.FindFormDefinitionAsync("tenant", "purchase"))!;
+            Assert.Equal(1, definition.Revision); Assert.Equal(form.Id, definition.Draft!.Form!.Id);
+            Assert.Equal(form.Name, definition.Draft.Form.Name);
+            Assert.Equal(new UserTaskFieldPresentation("checkbox", "Accepted"), definition.Draft.Form.Fields[0].Presentation);
+            Assert.True(definition.Draft.Form.Fields[0].MustBeTrue);
+            Assert.Equal(new UserTaskFieldPresentation("radio"), definition.Draft.Form.Fields[1].Presentation);
+            Assert.Equal("example.rating/1", definition.Draft.Form.Fields[2].ControlId);
+            Assert.Equal(5, definition.Draft.Form.Fields[2].Configuration?.GetProperty("maximum").GetInt32());
+            Assert.False(await store.TryWriteFormDraftAsync(new("tenant", "purchase", form with { Name = "stale" }, 1, Now, "bob"), 0));
+
+            var publication = new UserTaskFormVersion("tenant", form, Now, "author");
+            Assert.True(await store.TryPublishFormAsync(publication, new("tenant", "purchase", null, 2, Now, "author"), 1));
+            Assert.False(await store.TryPublishFormAsync(publication with { Form = form with { Name = "collision" } }, new("tenant", "purchase", null, 3, Now, "author"), 2));
+        }
+
+        await using var verification = new RuntimeSqliteDbContext(options);
+        var persisted = new EfUserTaskStore(verification, new Accessor("tenant"));
+        var result = (await persisted.FindFormDefinitionAsync("tenant", "purchase"))!;
+        Assert.Equal(2, result.Revision); Assert.Null(result.Draft); Assert.Equal("Purchase", result.LatestPublished!.Form.Name);
+        Assert.Single((await persisted.ListFormVersionsAsync("tenant", "purchase", 25)).Items);
+        Assert.Single((await persisted.ListFormsAsync("tenant", 25)).Items);
+    }
+
+    [Fact]
+    public async Task Form_deletion_tombstone_survives_restart_hides_lists_and_keeps_exact_published_reads()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options;
+        var form = new UserTaskForm("purchase", "1", "Purchase", UserTaskProtocol.BasicForms, []);
+        await using (var context = new RuntimeSqliteDbContext(options))
+        {
+            await context.Database.EnsureCreatedAsync();
+            var store = new EfUserTaskStore(context, new Accessor("tenant"));
+            Assert.True(await store.TryCreateFormAsync(new("tenant", form, Now, "author")));
+            var deleted = new UserTaskFormDraft("tenant", "purchase", null, 1, Now, "author") { Deleted = true };
+            Assert.True(await store.TryWriteFormDraftAsync(deleted, 0));
+            Assert.False(await store.TryWriteFormDraftAsync(new("tenant", "purchase", form, 1, Now, "stale"), 0));
+        }
+
+        await using var verification = new RuntimeSqliteDbContext(options);
+        var persisted = new EfUserTaskStore(verification, new Accessor("tenant"));
+        var definition = (await persisted.FindFormDefinitionAsync("tenant", "purchase"))!;
+        Assert.True(definition.Deleted); Assert.Equal(1, definition.Revision); Assert.Null(definition.Draft);
+        Assert.Empty((await persisted.ListFormDefinitionsAsync("tenant", 25)).Items);
+        Assert.Empty((await persisted.ListFormsAsync("tenant", 25)).Items);
+        Assert.Empty((await persisted.ListFormVersionsAsync("tenant", "purchase", 25)).Items);
+        var retained = (await persisted.FindFormAsync("tenant", "purchase", "1"))!.Form;
+        Assert.Equal(form.Id, retained.Id); Assert.Equal(form.Version, retained.Version); Assert.Equal(form.Name, retained.Name);
+        Assert.False(await persisted.TryCreateFormAsync(new("tenant", form with { Version = "2" }, Now, "author")));
+        Assert.False(await persisted.TryWriteFormDraftAsync(new("tenant", "purchase", form, 2, Now, "stale"), 1));
+        Assert.False(await persisted.TryPublishFormAsync(new("tenant", form with { Version = "2" }, Now, "author"),
+            new("tenant", "purchase", null, 2, Now, "stale"), 1));
+    }
+
+    [Fact]
     public async Task Query_filters_assignment_before_take_and_recovery_advances_over_pending_work()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();

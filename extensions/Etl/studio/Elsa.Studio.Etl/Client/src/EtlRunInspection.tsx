@@ -1,4 +1,5 @@
 import React from "react";
+import { StudioTimestamp } from "@elsa-workflows/studio-ui";
 import type {
   EtlRunConnectorPartitionView,
   EtlRunDetailView,
@@ -124,7 +125,7 @@ export function EtlPartitionTable({ partitions, now = Date.now() }: {
             <th scope="row">{partition.partitionOrdinal}</th>
             <td>{partition.startOrdinal}–{partition.endOrdinalExclusive} (end exclusive)</td>
             <td>{partition.nextOrdinal}{partition.nextOrdinal === partition.endOrdinalExclusive ? " · Complete" : ""}</td>
-            <td>{claim}{partition.claimExpiresAt && <><br /><time dateTime={partition.claimExpiresAt}>{partition.claimExpiresAt}</time></>}</td>
+            <td>{claim}{partition.claimExpiresAt && <><br /><StudioTimestamp value={partition.claimExpiresAt} /></>}</td>
             <td>{partition.owedBatch ? <>{partition.owedBatch.startOrdinal}–{partition.owedBatch.endOrdinalExclusive} (end exclusive), {partition.owedBatch.inputBytes} bytes</> : "None"}</td>
           </tr>;
         })}</tbody>
@@ -157,9 +158,9 @@ export function EtlConnectorPartitionTable({ partitions, now = Date.now() }: {
           return <tr key={partition.partitionOrdinal}>
             <th scope="row">{partition.partitionOrdinal}</th>
             <td>{sourcePosition}{partition.nextPollAt
-              ? <><br />Next poll at <time dateTime={partition.nextPollAt}>{partition.nextPollAt}</time></>
-              : partition.notBefore ? <><br />Eligible after <time dateTime={partition.notBefore}>{partition.notBefore}</time></> : null}</td>
-            <td>{claim}{partition.claimExpiresAt ? <><br /><time dateTime={partition.claimExpiresAt}>{partition.claimExpiresAt}</time></> : null}</td>
+              ? <><br />Next poll at <StudioTimestamp value={partition.nextPollAt} /></>
+              : partition.notBefore ? <><br />Eligible after <StudioTimestamp value={partition.notBefore} /></> : null}</td>
+            <td>{claim}{partition.claimExpiresAt ? <><br /><StudioTimestamp value={partition.claimExpiresAt} /></> : null}</td>
             <td>{partition.http?.fetch ? <RetryProgress retry={partition.http.fetch} /> : "No fetch retry scheduled"}</td>
             <td>{partition.owedBatch ? <OwedOutput owed={partition.owedBatch} /> : "None"}</td>
             <td>Main: {partition.acceptedMainEffects}; errors: {partition.acceptedErrorEffects}</td>
@@ -201,10 +202,10 @@ function effectStateLabel(state: string) {
 function RetryProgress({ retry }: { retry: EtlRunRetryView }) {
   return <div>
     <p>Retry phase: {retryPhaseLabel(retry.phase)}; attempt {retry.attemptCount}.</p>
-    <p>Deadline: <time dateTime={retry.deadline}>{retry.deadline}</time>.</p>
-    <p>{retry.notBefore
-      ? <>Next attempt after <time dateTime={retry.notBefore}>{retry.notBefore}</time>.</>
-      : "Next attempt time not scheduled."}</p>
+    <p>Deadline:</p>
+    <StudioTimestamp value={retry.deadline} />
+    <p>{retry.notBefore ? "Next attempt after:" : "Next attempt time not scheduled."}</p>
+    {retry.notBefore ? <StudioTimestamp value={retry.notBefore} /> : null}
     {retry.lastStatusCode !== null ? <p>Last HTTP status: {retry.lastStatusCode}.</p> : null}
   </div>;
 }

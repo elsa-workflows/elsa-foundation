@@ -289,6 +289,11 @@
       "medianMinutes": 0.13
     },
     {
+      "project": "essentials/tests/Foundation/Hosting/Tests/Elsa.Foundation.Hosting.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "essentials/tests/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.33
@@ -1014,6 +1019,7 @@
           "essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
           "essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj",
           "essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
+          "essentials/tests/Foundation/Hosting/Tests/Elsa.Foundation.Hosting.Tests.csproj",
           "essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
           "essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
           "extensions/Weaver/tests/Dashboard/Tests/Elsa.Weaver.Dashboard.Tests.csproj",

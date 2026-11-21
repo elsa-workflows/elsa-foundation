@@ -1,6 +1,34 @@
 import { expect, test } from "@playwright/test";
 
 for (const theme of ["light", "dark"]) {
+  test(`colors Workflow JSON tokens and preserves editing, reset, and scrolling (${theme})`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 700 });
+    await page.goto(`/?mode=activity-duplicate-editor&theme=${theme}`);
+    await page.getByRole("tablist", { name: "Editor view tabs" }).getByRole("tab", { name: "Code", exact: true }).click();
+
+    const codeView = page.locator(".wf-code-view");
+    const richSurface = codeView.locator('[data-studio-code-editor-surface="codemirror"]');
+    const content = richSurface.locator(".cm-content");
+    await expect(content).toBeVisible({ timeout: 15_000 });
+    const tokenColors = () => content.locator("span").evaluateAll(spans => Array.from(new Set(spans.map(span => getComputedStyle(span).color))));
+    await expect.poll(async () => (await tokenColors()).length).toBeGreaterThan(1);
+    await page.screenshot({ path: testInfo.outputPath(`workflow-json-syntax-${theme}.png`) });
+
+    const scroller = richSurface.locator(".cm-scroller");
+    const scrollMetrics = await scroller.evaluate(element => ({ scrollHeight: element.scrollHeight, clientHeight: element.clientHeight }));
+    expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+    await scroller.hover();
+    await page.mouse.wheel(0, 800);
+    await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+
+    await content.click();
+    await content.press("ControlOrMeta+End");
+    await page.keyboard.insertText(" ");
+    await expect(codeView.getByRole("button", { name: "Apply", exact: true })).toBeEnabled();
+    await codeView.getByRole("button", { name: "Reset", exact: true }).click();
+    await expect(codeView.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
+  });
+
   for (const dismissal of ["manual", "automatic"]) test(`keeps run status and navigation after ${dismissal} toast dismissal (${theme})`, async ({ page }, testInfo) => {
     await page.goto(`/?mode=activity-duplicate-editor&run-canvas=unique&theme=${theme}`);
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
@@ -117,6 +145,10 @@ for (const theme of ["light", "dark"]) {
     await expect(page.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
     // The inspector can also contain a read-only expression editor for this snapshot.
     await expect(page.locator('.wf-code-view .studio-code-editor[data-readonly="true"]')).toHaveCount(1);
+    const snapshotContent = page.locator('.wf-code-view [data-studio-code-editor-surface="codemirror"] .cm-content');
+    await expect(snapshotContent).toBeVisible({ timeout: 15_000 });
+    await expect(snapshotContent).toHaveAttribute("contenteditable", "false");
+    await expect(snapshotContent).toHaveAttribute("aria-readonly", "true");
     await expect(inspector.locator('.studio-code-editor:not([data-readonly="true"])')).toHaveCount(0);
     await page.getByRole("tab", { name: "Designer", exact: true }).click();
     await page.getByRole("tab", { name: "Runtime", exact: true }).click();

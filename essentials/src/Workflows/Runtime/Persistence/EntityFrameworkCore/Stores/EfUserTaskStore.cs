@@ -98,6 +98,7 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
 
     public async ValueTask<UserTaskFormVersion?> FindFormAsync(string tenantId, string id, string version, CancellationToken cancellationToken = default)
     {
+        if (version == UserTaskProtocol.FormDraftVersion) return null;
         var scope = Scope; var key = CompositeId(scope, tenantId, id, version);
         var row = await context.UserTaskForms.AsNoTracking().SingleOrDefaultAsync(x => x.Id == key, cancellationToken);
         if (row is null) return null;
@@ -110,16 +111,50 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
     {
         ValidateLimit(limit);
         var scope = Scope; var sh = Hash(scope); var sk = Encode(scope); var tk = Encode(tenantId); var th = Hash(tenantId);
-        var source = context.UserTaskForms.AsNoTracking().Where(x => x.ScopeHash == sh && x.ScopeKey == sk && x.TenantHash == th && x.TenantKey == tk);
+        var tombstones = await context.UserTaskForms.AsNoTracking().Where(x => x.ScopeHash == sh && x.ScopeKey == sk && x.TenantHash == th &&
+            x.TenantKey == tk && x.VersionKey == Encode(UserTaskProtocol.FormDraftVersion)).ToArrayAsync(cancellationToken);
+        var deleted = tombstones.Where(x => ReadDraft(x, scope).Deleted).Select(x => x.FormKey).ToHashSet(StringComparer.Ordinal);
+        var source = context.UserTaskForms.AsNoTracking().Where(x => x.ScopeHash == sh && x.ScopeKey == sk && x.TenantHash == th && x.TenantKey == tk && x.VersionKey != Encode(UserTaskProtocol.FormDraftVersion));
+        var rows = new List<UserTaskFormEntity>();
+        var cursor = after;
+        while (rows.Count <= limit)
+        {
+            var page = source;
+            if (cursor is not null) page = page.Where(x => string.Compare(x.Id, cursor) > 0);
+            var batch = await page.OrderBy(x => x.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
+            if (batch.Length == 0) break;
+            foreach (var row in batch)
+            {
+                cursor = row.Id;
+                if (!deleted.Contains(row.FormKey)) rows.Add(row);
+                if (rows.Count > limit) break;
+            }
+            if (batch.Length < limit + 1) break;
+        }
+        return new(rows.Take(limit).Select(x => ReadForm(x, scope)).ToArray(), rows.Count > limit ? rows[limit - 1].Id : null);
+    }
+
+    public async ValueTask<UserTaskFormPage> ListFormVersionsAsync(string tenantId, string id, int limit, string? after = null, CancellationToken cancellationToken = default)
+    {
+        ValidateLimit(limit); access.Current.EnsureTenantScope(tenantId);
+        var scope = Scope; var key = Encode(id);
+        var draft = await context.UserTaskForms.AsNoTracking().SingleOrDefaultAsync(x => x.Id == CompositeId(scope, tenantId, id, UserTaskProtocol.FormDraftVersion), cancellationToken);
+        if (draft is not null && ReadDraft(draft, scope).Deleted) return new UserTaskFormPage([], null);
+        var source = context.UserTaskForms.AsNoTracking().Where(x => x.ScopeHash == Hash(scope) && x.ScopeKey == Encode(scope) &&
+            x.TenantHash == Hash(tenantId) && x.TenantKey == Encode(tenantId) && x.FormKey == key && x.VersionKey != Encode(UserTaskProtocol.FormDraftVersion));
         if (after is not null) source = source.Where(x => string.Compare(x.Id, after) > 0);
         var rows = await source.OrderBy(x => x.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
-        return new(rows.Take(limit).Select(x => ReadForm(x, scope)).ToArray(), rows.Length > limit ? rows[limit - 1].Id : null);
+        return new UserTaskFormPage(rows.Take(limit).Select(x => ReadForm(x, scope)).ToArray(), rows.Length > limit ? rows[limit - 1].Id : null);
     }
 
     public async ValueTask<bool> TryCreateFormAsync(UserTaskFormVersion version, CancellationToken cancellationToken = default)
     {
+        if (version.Form.Version == UserTaskProtocol.FormDraftVersion) return false;
         EnsureClean(); access.Current.EnsureTenantScope(version.TenantId);
         var scope = Scope;
+        var draft = await context.UserTaskForms.AsNoTracking().SingleOrDefaultAsync(x =>
+            x.Id == CompositeId(scope, version.TenantId, version.Form.Id, UserTaskProtocol.FormDraftVersion), cancellationToken);
+        if (draft is not null && ReadDraft(draft, scope).Deleted) return false;
         var row = new UserTaskFormEntity { Id = CompositeId(scope, version.TenantId, version.Form.Id, version.Form.Version),
             ScopeKey = Encode(scope), ScopeHash = Hash(scope), TenantKey = Encode(version.TenantId), TenantHash = Hash(version.TenantId), FormKey = Encode(version.Form.Id),
             VersionKey = Encode(version.Form.Version), ContentJson = JsonSerializer.Serialize(version) };
@@ -127,6 +162,135 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
         try { await context.SaveChangesAsync(cancellationToken); return true; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey)) { return false; }
         finally { context.Entry(row).State = EntityState.Detached; }
+    }
+
+    public async ValueTask<UserTaskFormDefinition?> FindFormDefinitionAsync(string tenantId, string id, CancellationToken cancellationToken = default)
+    {
+        var scope = Scope; access.Current.EnsureTenantScope(tenantId);
+        var rows = await context.UserTaskForms.AsNoTracking().Where(x => x.ScopeHash == Hash(scope) && x.ScopeKey == Encode(scope) &&
+            x.TenantHash == Hash(tenantId) && x.TenantKey == Encode(tenantId) && x.FormKey == Encode(id)).ToArrayAsync(cancellationToken);
+        return rows.Length == 0 ? null : Definition(tenantId, id, rows, scope);
+    }
+
+    public async ValueTask<UserTaskFormDefinitionPage> ListFormDefinitionsAsync(string tenantId, int limit, string? after = null, CancellationToken cancellationToken = default)
+    {
+        ValidateLimit(limit); access.Current.EnsureTenantScope(tenantId);
+        var scope = Scope; var source = context.UserTaskForms.AsNoTracking().Where(x => x.ScopeHash == Hash(scope) && x.ScopeKey == Encode(scope) &&
+            x.TenantHash == Hash(tenantId) && x.TenantKey == Encode(tenantId));
+        var publishedIds = await source.Where(x => x.VersionKey != Encode(UserTaskProtocol.FormDraftVersion)).Select(x => x.FormKey).Distinct().ToArrayAsync(cancellationToken);
+        var activeDraftRows = await source.Where(x => x.VersionKey == Encode(UserTaskProtocol.FormDraftVersion)).ToArrayAsync(cancellationToken);
+        var deletedIds = activeDraftRows.Where(x => ReadDraft(x, scope).Deleted).Select(x => x.FormKey).ToHashSet(StringComparer.Ordinal);
+        var draftIds = activeDraftRows.Where(x => !ReadDraft(x, scope).Deleted && ReadDraft(x, scope).Form is not null).Select(x => x.FormKey).ToArray();
+        var ids = publishedIds.Where(x => !deletedIds.Contains(x)).Concat(draftIds).Distinct(StringComparer.Ordinal).Select(Decode)
+            .Where(x => after is null || StringComparer.Ordinal.Compare(x, after) > 0).OrderBy(x => x, StringComparer.Ordinal).Take(limit + 1).ToArray();
+        var selectedIds = ids.Take(limit).ToArray();
+        if (selectedIds.Length == 0) return new UserTaskFormDefinitionPage([], null);
+        var keys = selectedIds.Select(Encode).ToArray();
+        var rows = await source.Where(x => keys.Contains(x.FormKey)).ToArrayAsync(cancellationToken);
+        var items = selectedIds.Select(id => Definition(tenantId, id, rows.Where(x => x.FormKey == Encode(id)).ToArray(), scope)).ToArray();
+        return new UserTaskFormDefinitionPage(items, ids.Length > limit ? ids[limit - 1] : null);
+    }
+
+    public async ValueTask<bool> TryWriteFormDraftAsync(UserTaskFormDraft draft, long expectedRevision, CancellationToken cancellationToken = default)
+    {
+        if (draft.Revision != expectedRevision + 1 || draft.Form is { } form && form.Id != draft.Id)
+            throw new ArgumentException("A form draft write must advance one revision and retain its form identity.");
+        EnsureClean(); access.Current.EnsureTenantScope(draft.TenantId);
+        var scope = Scope; var key = CompositeId(scope, draft.TenantId, draft.Id, UserTaskProtocol.FormDraftVersion);
+        var existing = await context.UserTaskForms.AsNoTracking().SingleOrDefaultAsync(x => x.Id == key, cancellationToken);
+        if (existing is not null && (ReadDraft(existing, scope).Revision != expectedRevision || ReadDraft(existing, scope).Deleted)) return false;
+        var row = ToDraftRow(draft, scope);
+        if (existing is null)
+        {
+            context.UserTaskForms.Add(row);
+            try { await context.SaveChangesAsync(cancellationToken); return true; }
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey)) { return false; }
+            finally { context.Entry(row).State = EntityState.Detached; }
+        }
+        try
+        {
+            var changed = await context.UserTaskForms.Where(x => x.Id == key && x.ContentJson == existing.ContentJson)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.ContentJson, row.ContentJson), cancellationToken);
+            return changed == 1;
+        }
+        finally { context.Entry(row).State = EntityState.Detached; }
+    }
+
+    public async ValueTask<bool> TryPublishFormAsync(UserTaskFormVersion version, UserTaskFormDraft definitionState, long expectedRevision, CancellationToken cancellationToken = default)
+    {
+        if (definitionState.TenantId != version.TenantId || definitionState.Id != version.Form.Id || definitionState.Form is not null ||
+            definitionState.Revision != expectedRevision + 1 || version.Form.Version == UserTaskProtocol.FormDraftVersion)
+            throw new ArgumentException("A form publication must atomically advance the matching definition revision.");
+        EnsureClean(); access.Current.EnsureTenantScope(version.TenantId);
+        var scope = Scope; var draftId = CompositeId(scope, version.TenantId, version.Form.Id, UserTaskProtocol.FormDraftVersion);
+        var existing = default(UserTaskFormEntity);
+        var draftRow = ToDraftRow(definitionState, scope);
+        var publishedRow = ToFormRow(version, scope);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            existing = await context.UserTaskForms.AsNoTracking().SingleOrDefaultAsync(x => x.Id == draftId, cancellationToken);
+            if (existing is not null && (ReadDraft(existing, scope).Revision != expectedRevision || ReadDraft(existing, scope).Deleted))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
+            if (existing is null)
+                context.UserTaskForms.Add(draftRow);
+            else
+            {
+                var changed = await context.UserTaskForms.Where(x => x.Id == draftId && x.ContentJson == existing.ContentJson)
+                    .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.ContentJson, draftRow.ContentJson), cancellationToken);
+                if (changed != 1)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return false;
+                }
+            }
+            context.UserTaskForms.Add(publishedRow);
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey | EfWriteConflict.Concurrency))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+        finally
+        {
+            context.Entry(draftRow).State = EntityState.Detached;
+            context.Entry(publishedRow).State = EntityState.Detached;
+        }
+    }
+
+    private static UserTaskFormEntity ToFormRow(UserTaskFormVersion version, string scope) => new()
+    {
+        Id = CompositeId(scope, version.TenantId, version.Form.Id, version.Form.Version), ScopeKey = Encode(scope), ScopeHash = Hash(scope),
+        TenantKey = Encode(version.TenantId), TenantHash = Hash(version.TenantId), FormKey = Encode(version.Form.Id),
+        VersionKey = Encode(version.Form.Version), ContentJson = JsonSerializer.Serialize(version)
+    };
+
+    private static UserTaskFormEntity ToDraftRow(UserTaskFormDraft draft, string scope) => new()
+    {
+        Id = CompositeId(scope, draft.TenantId, draft.Id, UserTaskProtocol.FormDraftVersion), ScopeKey = Encode(scope), ScopeHash = Hash(scope),
+        TenantKey = Encode(draft.TenantId), TenantHash = Hash(draft.TenantId), FormKey = Encode(draft.Id),
+        VersionKey = Encode(UserTaskProtocol.FormDraftVersion), ContentJson = JsonSerializer.Serialize(draft)
+    };
+
+    private static UserTaskFormDefinition Definition(string tenantId, string id, IReadOnlyCollection<UserTaskFormEntity> rows, string scope)
+    {
+        var versions = rows.Where(x => x.VersionKey != Encode(UserTaskProtocol.FormDraftVersion)).Select(x => ReadForm(x, scope)).ToArray();
+        var latestNumeric = versions.Where(x => int.TryParse(x.Form.Version, out _)).OrderByDescending(x => int.Parse(x.Form.Version, System.Globalization.CultureInfo.InvariantCulture))
+            .ThenByDescending(x => x.CreatedAt).FirstOrDefault();
+        var latest = latestNumeric ?? versions.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Form.Version, StringComparer.Ordinal).FirstOrDefault();
+        var draftRow = rows.FirstOrDefault(x => x.VersionKey == Encode(UserTaskProtocol.FormDraftVersion));
+        var state = draftRow is null ? null : ReadDraft(draftRow, scope);
+        if (state is not null && (state.TenantId != tenantId || state.Id != id)) throw new InvalidDataException("The form draft identity differs.");
+        return new UserTaskFormDefinition(tenantId, id, latest, state?.Form is null ? null : state, state?.Revision ?? 0)
+        {
+            Deleted = state?.Deleted == true
+        };
     }
 
     private static UserTaskEntity ToRow(UserTaskRecord task, string scope) => new()
@@ -155,6 +319,16 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
         if (row.ScopeKey != Encode(scope) || row.ScopeHash != Hash(scope) || row.TenantKey != Encode(value.TenantId) || row.TenantHash != Hash(value.TenantId) ||
             row.FormKey != Encode(value.Form.Id) || row.VersionKey != Encode(value.Form.Version) || row.Id != CompositeId(scope, value.TenantId, value.Form.Id, value.Form.Version))
             throw new InvalidDataException("The form identity or projection differs.");
+        return value;
+    }
+    private static UserTaskFormDraft ReadDraft(UserTaskFormEntity row, string scope)
+    {
+        var content = UserTasksEfModule.Chain.Upcast<UserTaskFormEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
+        var value = JsonSerializer.Deserialize<UserTaskFormDraft>(content) ?? throw new InvalidDataException("The form draft is invalid.");
+        if (row.ScopeKey != Encode(scope) || row.ScopeHash != Hash(scope) || row.TenantKey != Encode(value.TenantId) || row.TenantHash != Hash(value.TenantId) ||
+            row.FormKey != Encode(value.Id) || row.VersionKey != Encode(UserTaskProtocol.FormDraftVersion) || row.Id != CompositeId(scope, value.TenantId, value.Id, UserTaskProtocol.FormDraftVersion) ||
+            value.Revision < 1 || value.Form is { } form && form.Id != value.Id)
+            throw new InvalidDataException("The form draft identity or revision differs.");
         return value;
     }
     private void EnsureClean()

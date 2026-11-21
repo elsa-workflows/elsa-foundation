@@ -19,7 +19,7 @@ export function selectedFolderId(selection: WorkflowFolderSelection) {
   return typeof selection === "object" ? selection.id : null;
 }
 
-export function WorkflowFolderNavigation({ context, selection, onSelect, onSelectRecycleBin, recycleBinSelected, onAvailable, onFoldersMutated, canManage = true, children: browseContent }: {
+export function WorkflowFolderNavigation({ context, selection, onSelect, onSelectRecycleBin, recycleBinSelected, onAvailable, onFoldersMutated, onManageFoldersAction, canManage = true, children: browseContent }: {
   context: StudioEndpointContext;
   selection: WorkflowFolderSelection;
   onSelect(selection: WorkflowFolderSelection): void;
@@ -27,6 +27,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onSelec
   recycleBinSelected: boolean;
   onAvailable(available: boolean): void;
   onFoldersMutated?(selection?: WorkflowFolderSelection): Promise<void> | void;
+  onManageFoldersAction?(action: ReactNode): void;
   canManage?: boolean;
   children?: ReactNode;
 }) {
@@ -271,8 +272,11 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onSelec
       }
     }
   };
-
   const closeDrawer = () => { setDrawerOpen(false); setManagerOpen(false); };
+  const closeManagerDrawer = () => {
+    closeDrawer();
+    requestAnimationFrame(() => manageButtonRef.current?.focus());
+  };
   const recycleBinEntry = (isCollapsed = false) => <button
     type="button"
     className="wf-recycle-bin-nav"
@@ -284,13 +288,22 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onSelec
   const collapseLabel = canBrowseFolders
     ? collapsed ? "Expand folders" : "Collapse folders"
     : collapsed ? "Expand workflows" : "Collapse workflows";
+  const actionButtonProps = managerOpen ? { variant: "ghost" as const, size: "sm" as const } : {};
   const folderActions = canManage && selectedFolder && (mutationSupport.rename || mutationSupport.move || mutationSupport.deleteEmpty || mutationSupport.deleteContents) ? (
     <div className="wf-folder-actions" role="group" aria-label={`Actions for ${selectedFolder.name}`}>
-      {mutationSupport.rename ? <StudioButton ref={renameButtonRef} onClick={() => { closeDrawer(); setMutationDialog("rename"); }}><FolderPen size={14} aria-hidden="true" /> Rename</StudioButton> : null}
-      {mutationSupport.move ? <StudioButton ref={moveButtonRef} onClick={() => { closeDrawer(); setMutationDialog("move"); }}><Move size={14} aria-hidden="true" /> Move</StudioButton> : null}
-      {mutationSupport.deleteEmpty || mutationSupport.deleteContents ? <StudioButton ref={deleteButtonRef} className="wf-delete-action" onClick={() => { closeDrawer(); if (mutationSupport.deleteContents) setMutationDialog("delete"); else void deleteFolder(); }}><Trash2 size={14} aria-hidden="true" /> Delete</StudioButton> : null}
+      {mutationSupport.rename ? <StudioButton {...actionButtonProps} ref={renameButtonRef} onClick={() => { closeDrawer(); setMutationDialog("rename"); }}><FolderPen size={14} aria-hidden="true" /> Rename</StudioButton> : null}
+      {mutationSupport.move ? <StudioButton {...actionButtonProps} ref={moveButtonRef} onClick={() => { closeDrawer(); setMutationDialog("move"); }}><Move size={14} aria-hidden="true" /> Move</StudioButton> : null}
+      {mutationSupport.deleteEmpty || mutationSupport.deleteContents ? <StudioButton {...actionButtonProps} ref={deleteButtonRef} className="wf-delete-action" onClick={() => { closeDrawer(); if (mutationSupport.deleteContents) setMutationDialog("delete"); else void deleteFolder(); }}><Trash2 size={14} aria-hidden="true" /> Delete</StudioButton> : null}
     </div>
   ) : null;
+  const createFolderAction = canBrowseFolders && canManage ? <StudioButton {...actionButtonProps} aria-label="Create folder" onClick={() => { closeDrawer(); void createFolder(); }}><FolderPlus size={16} aria-hidden="true" /> Create folder</StudioButton> : null;
+  const manageFoldersAction = useMemo(() => canBrowseFolders && canManage ? <StudioButton ref={manageButtonRef} variant="ghost" size="sm" aria-haspopup="dialog" onClick={() => { setManagerOpen(true); setDrawerOpen(true); }}>Manage folders</StudioButton> : null, [canBrowseFolders, canManage]);
+
+  useEffect(() => {
+    if (!onManageFoldersAction) return;
+    onManageFoldersAction(manageFoldersAction);
+    return () => { onManageFoldersAction(null); };
+  }, [manageFoldersAction, onManageFoldersAction]);
 
   return <>
     <div className="wf-folder-browser" data-folders-available={available ? "true" : undefined} data-folders-collapsed={collapsed ? "true" : undefined}>
@@ -319,7 +332,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onSelec
         {canBrowseFolders ? <>
           <div className="wf-folder-content-heading">
           {recycleBinSelected ? <div className="wf-folder-breadcrumb" aria-label="Workflow location">Recycle bin</div> : <WorkflowFolderBreadcrumb crumbs={crumbs} state={breadcrumbState} error={breadcrumbError} selection={selection} onSelect={select} />}
-          {canManage ? <StudioButton ref={manageButtonRef} aria-haspopup="dialog" onClick={() => { setManagerOpen(true); setDrawerOpen(true); }}><FolderPen size={15} aria-hidden="true" /> Manage folders</StudioButton> : null}
+          {onManageFoldersAction ? null : manageFoldersAction}
           </div>
           {!managerOpen ? folderActions : null}
         </> : null}
@@ -327,12 +340,15 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onSelec
         {browseContent}
       </div>
     </div>
-    {drawerOpen ? <FolderDrawer title={navigationLabel} managing={managerOpen} onClose={closeDrawer} onCreate={canBrowseFolders && canManage ? async () => { closeDrawer(); await createFolder(); } : undefined}>
+    {drawerOpen ? <FolderDrawer title={navigationLabel} managing={managerOpen} onClose={managerOpen ? closeManagerDrawer : closeDrawer} createAction={createFolderAction}>
       <FolderTree {...treeProps} />
       {recycleBinEntry()}
       {managerOpen ? <div className="wf-folder-management">
         <p>{selectedFolder ? `Selected folder: ${selectedFolder.name}` : "Select a folder to rename, move, or delete it. Only empty folders can be deleted."}</p>
-        {folderActions}
+        <div className="wf-folder-management-actions" role="group" aria-label="Folder management actions">
+          {createFolderAction}
+          {folderActions}
+        </div>
       </div> : null}
     </FolderDrawer> : null}
     <Suspense fallback={<p role="status">Loading folder actions…</p>}>
@@ -663,12 +679,12 @@ function findFolder(roots: WorkflowFolder[], children: ReadonlyMap<string, Workf
   return [...roots, ...[...children.values()].flat()].find(folder => folder.id === id);
 }
 
-function FolderDrawer({ children, onClose, onCreate, title, managing = false }: { children: ReactNode; onClose(): void; onCreate?: () => void; title: string; managing?: boolean }) {
+function FolderDrawer({ children, createAction, onClose, title, managing = false }: { children: ReactNode; createAction?: ReactNode; onClose(): void; title: string; managing?: boolean }) {
   const ref = useRef<HTMLElement | null>(null);
   const id = useId();
   useDialogFocus(ref, onClose);
   return <div className="wf-folder-drawer-backdrop" role="presentation"><aside ref={ref} id="workflow-folder-picker" className="wf-folder-drawer" role="dialog" aria-modal="true" aria-labelledby={id}><div><strong id={id}>{managing ? "Manage workflow folders" : title}</strong><button type="button" aria-label={title === "Workflows" ? "Close workflow navigation" : "Close folder picker"} onClick={onClose}><X size={16} aria-hidden="true" /></button></div>
-    {onCreate ? <StudioButton aria-label="Create folder" onClick={() => void onCreate()}><FolderPlus size={16} aria-hidden="true" /> Create folder</StudioButton> : null}
+    {!managing ? createAction : null}
     {children}
   </aside></div>;
 }

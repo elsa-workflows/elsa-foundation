@@ -24,14 +24,18 @@ const parameters = [
   { name: "minimum", type: "integer", required: false, nullable: false, default: { type: "integer", literal: "1" } }
 ];
 function Fixture() {
-  const [definition, setDefinition] = useState(() => ({ ...initialDefinition(dataset), query: { ...initialDefinition(dataset).query, parameters } }));
+  const emptyQuestion = new URLSearchParams(window.location.search).has("emptyQuestion");
+  const [definition, setDefinition] = useState(() => ({ ...initialDefinition(emptyQuestion ? undefined : dataset), query: { ...initialDefinition(emptyQuestion ? undefined : dataset).query, parameters } }));
   const [showTile, setShowTile] = useState(false);
   const [tile, setTile] = useState<DashboardTile>({ id: "tile", questionId: "question", size: "medium", referenceState: "available" });
   const question: DashboardResource = { id: "question", kind: "question", revision: "1", name: "Runs", description: "", ownerId: "viewer", definition,
     capabilities: { canRead: true, canEdit: true, canCopy: true, canDelete: true, canShare: true }, createdAt: "", updatedAt: "" };
   const api = { get: async () => question } as unknown as DashboardApi;
   return <main className="named-workspace" style={{ padding: 24 }}>
-    <QueryControls definition={definition} datasets={[dataset]} disabled={false} onChange={setDefinition} />
+    <div className="named-authoring" data-dataset-selected={definition.query.dataset.id ? "true" : "false"}>
+      <QueryControls definition={definition} datasets={[dataset]} disabled={false} onChange={setDefinition} />
+      {definition.query.dataset.id ? <section className="named-preview" aria-label="Preview"><h3>Preview</h3><p>Results use your current access.</p></section> : null}
+    </div>
     <output aria-label="Selected grouping fields">{definition.query.groupBy.join(", ")}</output>
     <button type="button" onClick={() => setShowTile(true)}>Open tile settings</button>
     <output aria-label="Tile parameter overrides">{JSON.stringify(tile.parameters ?? {})}</output>

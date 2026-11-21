@@ -44,25 +44,29 @@ describe("Decisions workspace tab titles", () => {
   it("leaves the tab unnamed while a decision opened from the list in the same tab is still loading", async () => {
     const api = stubApi(), { host, setTitle, update } = mountInTab({ api });
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
-    let release: (value: unknown) => void = () => undefined;
+    let release: ((value: unknown) => void) | undefined;
     api.backend.http.getJson.mockImplementation(async (path: string) => path.endsWith("/versions") || path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : new Promise(resolve => { release = resolve; }));
     setTitle.mockClear(); update({ api, assetId: asset.id });
-    await vi.waitFor(() => expect(host.querySelector('[aria-label="Loading decisions"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Loading decision"]')).not.toBeNull());
     expect(setTitle).not.toHaveBeenCalled();
-    release(asset);
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    release!(asset);
+    await vi.waitFor(() => expect(host.querySelector("h1#decision-title")?.textContent).toBe("Approval"));
     await vi.waitFor(() => expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Draft" }));
     expect(setTitle).toHaveBeenCalledTimes(1);
   });
   it("does not carry one version's name to another version while it loads in the same tab", async () => {
     const api = stubApi(), first = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt }, second = { ...first, id: "v2", number: 2 };
-    let release: (value: unknown) => void = () => undefined;
+    let release: ((value: unknown) => void) | undefined;
     api.backend.http.getJson.mockImplementation(async (path: string) => path.endsWith("/versions") ? { items: [first, second] } : path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : path.endsWith("/versions/v1") ? first : path.endsWith("/versions/v2") ? new Promise(resolve => { release = resolve; }) : asset);
     const { host, setTitle, update } = mountInTab({ api, assetId: asset.id, versionId: "v1" });
     await vi.waitFor(() => expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Version 1" }));
     setTitle.mockClear(); update({ api, assetId: asset.id, versionId: "v2" });
-    await vi.waitFor(() => expect(host.querySelector('[aria-label="Loading decisions"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Loading decision"]')).not.toBeNull());
     expect(setTitle).not.toHaveBeenCalled();
-    release(second);
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    release!(second);
+    await vi.waitFor(() => expect(host.querySelector("h1#decision-title")?.textContent).toBe("Approval"));
     await vi.waitFor(() => expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Version 2" }));
     expect(setTitle).toHaveBeenCalledTimes(1);
   });
@@ -87,7 +91,7 @@ describe("Decisions workspace tab titles", () => {
     await vi.waitFor(() => expect(host.textContent).toContain("Unavailable"));
     api.backend.http.getJson.mockImplementation(async (path: string) => path.endsWith("/versions") || path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : new Promise(() => undefined));
     setTitle.mockClear(); update({ api, assetId: asset.id });
-    await vi.waitFor(() => expect(host.querySelector('[aria-label="Loading decisions"]')).not.toBeNull());
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Loading decision"]')).not.toBeNull());
     expect(setTitle).not.toHaveBeenCalled();
   });
   it("names a decision that could not be loaded Decision rather than the list", async () => {

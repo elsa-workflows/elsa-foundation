@@ -169,7 +169,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows", title: "Workflows", ownedPaths: ["/workflows"], required: true, defaultEnabled: true })
     ]);
     expect(api.navigation.list()).toEqual([
-      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows", placement: "build", childDisplay: "views" }),
+      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows", placement: "build", childDisplay: "links" }),
       expect.objectContaining({ id: "workflows-definitions", label: "Definitions", parentId: "workflows", placement: "build" }),
       expect.objectContaining({ id: "workflows-runs", label: "Runs", path: "/workflows/instances", placement: "operate", parentId: undefined }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", placement: "build", parentId: "workflows" }),
@@ -240,24 +240,57 @@ describe("workflows module", () => {
     onTestFinished(() => expect(container.isConnected).toBe(false));
   });
 
-  it("offers an accessible recovery action when a deferred workflow surface fails", () => {
+  it("returns to the template catalog without reloading when a deferred designer fails", () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const BrokenSurface = () => { throw new Error("chunk unavailable"); };
+    const TemplateRoute = () => {
+      const [showCatalog, setShowCatalog] = React.useState(false);
+      return showCatalog ? <h1>Your templates</h1> : (
+        <WorkflowLazyBoundary label="template designer" recoveryAction={{ label: "Back to templates", onClick: () => setShowCatalog(true) }}>
+          <BrokenSurface />
+        </WorkflowLazyBoundary>
+      );
+    };
+
+    try {
+      flushSync(() => root.render(<TemplateRoute />));
+
+      const alert = container.querySelector("[role='alert']");
+      expect(alert?.textContent).toContain("Unable to load template designer");
+      expect(alert?.textContent).toContain("unexpected error");
+      expect(alert?.textContent).not.toContain("updated while this page was open");
+      expect(buttonByText(container, "Reload page")).toBeTruthy();
+      flushSync(() => buttonByText(container, "Back to templates")?.click());
+      expect(container.textContent).toContain("Your templates");
+      expect(buttonByText(container, "Back to templates")).toBeNull();
+    } finally {
+      flushSync(() => root.unmount());
+      consoleError.mockRestore();
+    }
+  });
+
+  it.each([
+    "Unable to preload CSS for /assets/WorkflowEditor.css",
+    "The requested module '/assets/WorkflowEditor.js' does not provide an export named 'WorkflowEditor'"
+  ])("recognizes a deferred module asset failure: %s", message => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const BrokenSurface = () => { throw new Error(message); };
 
     try {
       flushSync(() => root.render(
-        <WorkflowLazyBoundary label="workflow designer">
+        <WorkflowLazyBoundary label="template designer">
           <BrokenSurface />
         </WorkflowLazyBoundary>
       ));
 
       const alert = container.querySelector("[role='alert']");
-      expect(alert?.textContent).toContain("Unable to load workflow designer");
-      expect(alert?.textContent).toContain("unexpected error");
-      expect(alert?.textContent).not.toContain("updated while this page was open");
-      expect(buttonByText(container, "Reload page")).toBeTruthy();
+      expect(alert?.textContent).toContain("Unable to load template designer");
+      expect(alert?.textContent).toContain("updated while this page was open");
+      expect(alert?.textContent).not.toContain("unexpected error");
     } finally {
       flushSync(() => root.unmount());
       consoleError.mockRestore();
@@ -1815,11 +1848,6 @@ describe("workflows module", () => {
       .find(node => node.textContent?.includes("Write Lines")) ?? null);
     await waitForText(container, "Lines");
 
-    // The type badge shows a friendly label for the assembly-qualified generic collection type rather
-    // than leaking an assembly-qualifier fragment ("0, Culture=neutral, PublicKeyToken=…").
-    const typeBadge = container.querySelector(".wf-property-row-header-meta > span");
-    expect(typeBadge?.textContent).toBe("ICollection<String>");
-
     // The collection input renders the repeater (not a single text box) and starts empty.
     const repeater = container.querySelector(".wf-collection-editor");
     expect(repeater).toBeTruthy();
@@ -1832,6 +1860,10 @@ describe("workflows module", () => {
     const syntaxPicker = container.querySelector(".wf-syntax-picker");
     expect(syntaxPicker).toBeTruthy();
     expect(syntaxPicker?.classList.contains("inline")).toBe(false);
+
+    // The conversion disclosure shows a friendly label for the assembly-qualified collection type.
+    await click(container.querySelector('[aria-label="Lines property"] .wf-conversion-toggle'));
+    expect(container.querySelector(".wf-conversion-expected-type")?.textContent).toBe("Expected type: ICollection<String>");
 
     const addButton = buttonByText(container, "Add item");
     await click(addButton);
@@ -2317,7 +2349,7 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Open Run wfexec-published-1");
     await click(buttonByText(container, "Open Run wfexec-published-1"));
-    await waitForText(container, "Pinned Runtime executable");
+    await waitForRunWorkbench(container);
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/runtime/workflows/executables/artifact-1/execute",
@@ -2580,20 +2612,29 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("sha256:abc");
     expect(container.textContent).toContain("Resume targets");
     await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Hello World · 2.0.0"));
-    expect(container.querySelector(".studio-page-eyebrow")?.textContent).toBe("Inspector");
     expect(container.querySelector('[aria-label="Copy Artifact ID"]')).toBeTruthy();
-    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("Hello World");
-    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).not.toContain("artifact-1");
+    expect(container.querySelector(".wf-executable-toolbar h2")?.textContent).toBe("Hello World · 2.0.0");
+    expect(container.querySelector(".wf-executable-canvas > header")).toBeNull();
     await waitForText(container, "Hello World");
     const inspector = container.querySelector(".wf-instance-inspector");
-    expect(inspector?.querySelector("h3")?.textContent).toBe("Hello World");
+    expect(inspector?.querySelector("h3")).toBeNull();
     expect(inspector?.textContent).not.toContain("Executable Artifact");
     expect(inspector?.textContent).not.toContain("Elsa.Activities.Sequence.Activities.Sequence");
     const identityTerms = [...inspector?.querySelectorAll(".wf-instance-meta dt") ?? []].map(dt => dt.textContent);
-    expect(identityTerms).toEqual(expect.arrayContaining(["Root activity", "Nodes", "Resume targets", "Created"]));
-    expect(identityTerms).not.toContain("Artifact ID");
-    expect(identityTerms).not.toContain("Artifact Hash");
-    expect(identityTerms).not.toContain("Definition");
+    expect(identityTerms).toEqual(expect.arrayContaining([
+      "Artifact ID", "Artifact hash", "Root activity", "Nodes", "Resume targets", "Created", "Kind", "Scope",
+      "Layout source", "Definition ID", "Definition version ID"
+    ]));
+    for (const label of ["Artifact ID", "Artifact hash", "Definition ID", "Definition version ID"]) {
+      const term = [...inspector?.querySelectorAll(".wf-instance-meta dt") ?? []].find(dt => dt.textContent === label);
+      const value = term?.nextElementSibling as HTMLElement | null;
+      const identifier = value?.querySelector(".studio-copyable-identifier");
+      expect(value?.tagName).toBe("DD");
+      expect(identifier?.getAttribute("data-label-placement")).toBe("external");
+      expect(identifier?.querySelector(".studio-copyable-identifier__label")).toBeNull();
+      expect(identifier?.querySelector("button")?.getAttribute("aria-label")).toBe(`Copy ${label}`);
+    }
+    expect(container.querySelector(".wf-instance-inspector [role='tab'][aria-selected='true']")?.textContent).toContain("Identity");
 
     // Canvas: catalog hit renders its display name; the catalog miss is an honest ghost.
     await waitForText(container, "Log greeting");
@@ -2603,6 +2644,7 @@ describe("workflows module", () => {
       .find(node => node.textContent?.includes("Log greeting"));
     expect(namedNode).toBeTruthy();
     await click(namedNode!);
+    expect(container.querySelector(".wf-instance-inspector [role='tab'][aria-selected='true']")?.textContent).toContain("Activity");
     expect(container.textContent).toContain("Writes the user-facing greeting to the console.");
 
     // The reference is current with the definition's latest version: no drift caption, source link enabled.
@@ -2617,6 +2659,7 @@ describe("workflows module", () => {
     expect(referenceList?.textContent).toContain("2.0.0");
     expect(referenceList?.textContent).toContain("Published");
     await click(buttonByLabel(container, "Show Hello World version 1.0.0"));
+    await click(buttonByText(container, "Identity"));
     await waitForText(container, "Showing requested reference ref-0");
 
     expect(new URLSearchParams(window.location.search).get("ref")).toBe("ref-0");
@@ -2632,8 +2675,12 @@ describe("workflows module", () => {
       disconnect() {}
     });
     let releaseNextExecutable: ((value: Response) => void) | undefined;
+    let releaseNextDefinition: ((value: Response) => void) | undefined;
     const nextExecutable = new Promise<Response>(resolve => {
       releaseNextExecutable = resolve;
+    });
+    const nextDefinition = new Promise<Response>(resolve => {
+      releaseNextDefinition = resolve;
     });
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -2643,9 +2690,7 @@ describe("workflows module", () => {
       if (url.includes("/definitions/definition-1")) {
         return response({ definition: definition({ latestVersionId: "version-2", latestVersion: "2.0.0" }), draft: null, versions: [] });
       }
-      if (url.includes("/definitions/definition-2")) {
-        return response({ definition: definition({ id: "definition-2", name: "Invoice settlement" }), draft: null, versions: [] });
-      }
+      if (url.includes("/definitions/definition-2")) return nextDefinition;
       return response(null, 404);
     }));
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
@@ -2670,6 +2715,14 @@ describe("workflows module", () => {
       })]
     })));
 
+    await vi.waitFor(() => {
+      const sourceAction = [...container.querySelectorAll<HTMLButtonElement>(".wf-executable-toolbar button")]
+        .find(button => button.getAttribute("aria-label")?.startsWith("Open source definition unavailable:"));
+      expect(sourceAction?.disabled).toBe(true);
+      expect(sourceAction?.getAttribute("aria-label")).toContain("Checking the source definition");
+    });
+
+    releaseNextDefinition?.(response({ definition: definition({ id: "definition-2", name: "Invoice settlement" }), draft: null, versions: [] }));
     await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Invoice settlement · 1.0.0"));
     await unmount();
   });
@@ -2712,26 +2765,25 @@ describe("workflows module", () => {
 
     await waitForText(container, "Invoice settlement");
     const inspector = container.querySelector(".wf-instance-inspector")!;
-    expect(inspector.querySelector(".wf-executable-identity h3")?.textContent).toBe("Invoice settlement");
+    expect(container.querySelectorAll(".wf-executable-toolbar h2")).toHaveLength(1);
+    expect(container.querySelector(".wf-executable-toolbar h2")?.textContent).toBe("Invoice settlement · 2.0.0");
+    expect(inspector.querySelector(".wf-executable-identity h3")).toBeNull();
     expect(inspector.textContent).not.toContain("Executable Artifact");
     expect(inspector.textContent).not.toContain("Elsa.Activities.Primitives.Activities.WriteLine");
     expect(inspector.querySelector(".wf-identity-cell")?.textContent).toContain("Write Line");
 
-    const copyableLabels = [...inspector.querySelectorAll(".studio-copyable-identifier__label")].map(label => label.textContent);
-    expect(copyableLabels).toEqual(["Artifact ID", "Artifact hash", "Definition ID", "Definition version ID"]);
-    const copyableValues = [...inspector.querySelectorAll(".studio-copyable-identifier")].map(row => ({
-      label: row.querySelector(".studio-copyable-identifier__label")?.textContent,
-      value: row.querySelector(".studio-copyable-identifier__value")?.getAttribute("title")
-        ?? row.querySelector(".studio-copyable-identifier__value")?.textContent
-    }));
-    expect(copyableValues).toEqual([
-      { label: "Artifact ID", value: "artifact-1" },
-      { label: "Artifact hash", value: "sha256:abc" },
-      { label: "Definition ID", value: "definition-1" },
-      { label: "Definition version ID", value: "version-2" }
+    const copyableValues = [...inspector.querySelectorAll(".studio-copyable-identifier")];
+    expect(copyableValues.map(row => row.getAttribute("data-label-placement"))).toEqual(["external", "external", "external", "external"]);
+    expect(copyableValues.map(row => row.querySelector(".studio-copyable-identifier__value")?.getAttribute("title"))).toEqual([
+      "artifact-1", "sha256:abc", "definition-1", "version-2"
     ]);
-    expect(inspector.querySelectorAll(".wf-executable-source-ids .studio-copyable-identifier")).toHaveLength(2);
-    expect([...inspector.querySelectorAll(".wf-instance-meta dt")].map(dt => dt.textContent)).not.toContain("Artifact ID");
+    expect(copyableValues.map(row => row.querySelector("button")?.getAttribute("aria-label"))).toEqual([
+      "Copy Artifact ID", "Copy Artifact hash", "Copy Definition ID", "Copy Definition version ID"
+    ]);
+    expect(copyableValues.every(row => row.querySelector(".studio-copyable-identifier__label") === null)).toBe(true);
+    expect([...inspector.querySelectorAll(".wf-instance-meta dt")].map(dt => dt.textContent)).toEqual(expect.arrayContaining([
+      "Artifact ID", "Artifact hash", "Definition ID", "Definition version ID"
+    ]));
 
     await click(buttonByText(container, "References (2)"));
     const items = [...container.querySelectorAll(".wf-reference-list--collection .wf-reference-item")];
@@ -2766,7 +2818,7 @@ describe("workflows module", () => {
       }));
       const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
       await waitForText(container, "Resume targets");
-      await vi.waitFor(() => expect(container.querySelector(".wf-executable-identity h3")?.textContent).toBe("Executable"));
+      await vi.waitFor(() => expect(container.querySelector(".wf-executable-toolbar h2")?.textContent).toBe("Executable artifact-1"));
       await unmount();
     }
   });
@@ -3218,6 +3270,72 @@ describe("workflows module", () => {
       if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
       else Reflect.deleteProperty(navigator, "clipboard");
     }
+  });
+
+  it("opens publication management for the selected published workflow from a shared executable", async () => {
+    const definitionId = "workflow/opaque ?#";
+    const otherDefinitionId = "workflow/shared";
+    const capabilities = capabilityDocument();
+    capabilities.capabilities.find(capability => capability.id === "elsa.api.publishing")!.links.push({
+      rel: "publication-snapshot-preflight",
+      href: "publishing/workflows/{versionId}/preflight",
+      templated: true
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/runtime/workflows/activation-slots/")) return response({ items: [activationSlot("default")] });
+      if (url.includes("/runtime/workflows/executables")) return response([executable({
+        artifactId: "shared-artifact",
+        definitionId: "legacy-primary-source",
+        references: [
+          executableReference({ sourceReferenceId: "published-first", artifactId: "shared-artifact", definitionId }),
+          executableReference({ sourceReferenceId: "published-first-again", artifactId: "shared-artifact", definitionId }),
+          executableReference({ sourceReferenceId: "published-second", artifactId: "shared-artifact", definitionId: otherDefinitionId }),
+          executableReference({ sourceReferenceId: "test-run", artifactId: "shared-artifact", scope: "TestRun", definitionId: "test-run-source" })
+        ]
+      })]);
+      if (url.includes(`/design/workflows/definitions/${encodeURIComponent(definitionId)}`)) {
+        return response({ definition: definition({ id: definitionId, name: "Orders" }), draft: workflowDraft({ definitionId }), versions: [] });
+      }
+      if (url.includes("/design/workflows/definitions")) return response({ items: [
+        definition({ id: definitionId, name: "Orders" }),
+        definition({ id: otherDefinitionId, name: "Orders" }),
+        definition({ id: "test-run-source", name: "Test run workflow" })
+      ], page: 1, pageSize: 100, totalCount: 3 });
+      if (url.includes("/activities")) return response({ activities: [] });
+      return response({ items: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables?backend=selected", api => {
+      Object.defineProperty(api, "backendSession", { value: {
+        key: "selected-lifetime", profile: { id: "selected", name: "Selected", baseUrl: api.backend.baseUrl, environment: "Test", source: "configuration" },
+        context: api.backend, identity: { status: "anonymous", roles: [], permissions: [] }, capabilities,
+        pendingWrites: 0, disposed: false, refreshCapabilities: async () => capabilities
+      } satisfies StudioBackendSession });
+    }, true, capabilities);
+
+    await waitForText(container, "shared-artifact");
+    const row = rowByLabel(container, "Inspect executable shared-artifact")!;
+    const trigger = row.querySelector<HTMLButtonElement>('button[aria-label^="Actions for"]')!;
+    await click(trigger);
+    const menu = document.body.querySelector<HTMLElement>('[role="menu"]')!;
+    const manageChoices = Array.from(menu.querySelectorAll<HTMLElement>("[role='menuitem']"))
+      .filter(item => item.textContent?.includes("Manage publication"));
+    expect(manageChoices.map(item => item.textContent?.replace(/\s+/g, " ").trim())).toEqual([
+      `Manage publication · Orders (${definitionId})`,
+      `Manage publication · Orders (${otherDefinitionId})`
+    ]);
+
+    await click(manageChoices[0]);
+    await waitForEditor(container);
+    await waitForText(container, "Slot default");
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(new URLSearchParams(window.location.search).get("backend")).toBe("selected");
+    expect(new URLSearchParams(window.location.search).get("definition")).toBe(definitionId);
+    expect(new URLSearchParams(window.location.search).get("panel")).toBe("artifacts");
+    expect(container.querySelector('[aria-label="Inspector panel tabs"] [role="tab"][aria-selected="true"]')?.textContent).toContain("Artifacts");
+
+    await unmount();
   });
 
   it("dispatches executable Explain actions to Weaver", async () => {
@@ -3735,17 +3853,19 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
-    await waitForText(container, "Pinned Runtime executable");
+    await waitForRunWorkbench(container);
     await waitForText(container, "Open definition");
     await waitForText(container, "Run · Order fulfillment");
-    expect(container.querySelector(".studio-page-header h2")?.textContent).toBe("Run · Order fulfillment");
-    expect(container.querySelector(".studio-page-header h2")?.getAttribute("title")).toBe("Run · Order fulfillment");
-    expect(container.textContent).toContain("Workflow Instance ID");
-    expect(container.querySelector(".studio-page-header .studio-copyable-identifier__value")?.textContent).toContain("wfexec-1");
+    expect(container.querySelector(".wf-detail-header h2")?.textContent).toBe("Run · Order fulfillment");
+    expect(container.querySelector(".wf-detail-header h2")?.getAttribute("title")).toBe("Run · Order fulfillment");
     const runInspector = container.querySelector(".wf-instance-inspector");
     expect(runInspector).not.toBeNull();
     expect(runInspector?.textContent).not.toContain("Workflow Instance ID");
     expect([...runInspector!.querySelectorAll("button")].filter(button => button.textContent?.includes("Explain"))).toHaveLength(0);
+    await click(buttonByText(container, "Details"));
+    expect(runInspector?.textContent).toContain("Workflow Instance ID");
+    expect(runInspector?.querySelector("[aria-label='Copy Workflow Instance ID']")).toBeTruthy();
+    await click(buttonByText(container, "Timeline"));
     await click(buttonByText(container, "Open definition"));
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
@@ -3809,7 +3929,7 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", undefined, true);
 
-    await waitForText(container, "Pinned Runtime executable");
+    await waitForRunWorkbench(container);
     await waitForText(container, "Open definition");
     await click(buttonByText(container, "Open definition"));
     await waitForEditor(container);
@@ -3819,7 +3939,7 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
 
     window.history.back();
-    await waitForText(container, "Pinned Runtime executable");
+    await waitForRunWorkbench(container);
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-1");
     expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy();
 
@@ -3828,7 +3948,7 @@ describe("workflows module", () => {
     expect(window.location.pathname).toBe("/workflows/definitions");
 
     window.history.back();
-    await waitForText(container, "Pinned Runtime executable");
+    await waitForRunWorkbench(container);
 
     const openTab = async (tab: "Activity" | "Issues" | "Details") => {
       if (tab === "Activity") {
@@ -3849,7 +3969,7 @@ describe("workflows module", () => {
       expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
 
       window.history.back();
-      await waitForText(container, "Pinned Runtime executable");
+      await waitForRunWorkbench(container);
     }
 
     await unmount();
@@ -3946,10 +4066,8 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
-    await waitForText(container, "Pinned Runtime executable");
-    const canvasHeader = container.querySelector(".wf-instance-canvas-shell > header");
-    expect(canvasHeader?.textContent).toContain("Pinned Runtime executable");
-    expect(canvasHeader?.querySelector("small")?.textContent).toBe("1.0.0");
+    await waitForRunWorkbench(container);
+    expect(container.querySelector(".wf-instance-canvas-shell > header")).toBeNull();
     const canvasText = () => container.querySelector(".wf-instance-canvas")?.textContent ?? "";
     expect(canvasText()).toContain("Write Line");
     expect(canvasText()).not.toContain("No workflow activities are available");
@@ -4028,7 +4146,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     try {
-      await waitForText(container, "Pinned Runtime executable");
+      await waitForRunWorkbench(container);
       await click(buttonByText(container, "Issues (1)"));
 
       expect(container.textContent).toContain("InputMaterializationFailed");
@@ -4105,7 +4223,7 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
-    await waitForText(container, "Pinned Runtime executable");
+    await waitForRunWorkbench(container);
     // Timeline is the default tab and renders the executed activity.
     expect(container.textContent).toContain("Timeline");
     expect(container.textContent).toContain("WriteLine");
@@ -6399,6 +6517,10 @@ function stubElementFromPoint(element: HTMLElement) {
 
 async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function waitForRunWorkbench(container: HTMLElement) {
+  await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
 }
 
 async function waitForText(container: HTMLElement, text: string) {

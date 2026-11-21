@@ -265,9 +265,9 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
 
     await waitFor(() => expect(publishRequest).not.toBeNull());
     resolvePublish(publicationReceipt(publishRequest));
-    await waitFor(() => expect(harness.container.textContent).toContain("Published immutable version 1.0.0"));
-    expect(harness.container.textContent).toContain("First version published. Existing workflows are unaffected.");
-    expect(harness.container.textContent).not.toContain("Publish the first version for use in workflows.");
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
+    expect(harness.container.textContent).toContain("View publication");
+    expect(publicationPending.mock.calls.map(call => call[0])).toEqual([true, false]);
     await harness.unmount();
   });
 

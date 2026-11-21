@@ -239,6 +239,29 @@ describe("agent editor", () => {
     expect(postJson).toHaveBeenLastCalledWith("/connections/picker", { typeName: "agent-azure-openai" }, expect.anything());
   });
 
+  it("consolidates an unavailable saved connection warning and retries without changing the saved model", async () => {
+    const fixture: Fixture = { capabilities: "unusable", connections: {} };
+    const { context, postJson } = fakeContext(fixture);
+    const saved = configured();
+    const { container, latest } = await render(context, saved, { readOnly: true });
+
+    const alerts = [...container.querySelectorAll<HTMLElement>(".agent-model > .studio-alert")];
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].dataset.tone).toBe("warning");
+    expect(alerts[0].textContent).toContain('The saved connection “writer” is unavailable.');
+    expect(alerts[0].textContent).toContain("It’s still saved.");
+    expect(alerts[0].textContent).toContain("Connections");
+    expect(alerts[0].textContent).toContain("Retry");
+    expect(latest().model).toEqual(saved.model);
+
+    fixture.capabilities = undefined;
+    button(container, "Retry")!.click();
+    await settle();
+
+    expect(postJson.mock.calls.filter(call => call[0] === "/agent/model-capabilities").length).toBeGreaterThan(1);
+    expect(latest().model).toEqual(saved.model);
+  });
+
   it("offers the connection's current model when the saved one is stale", async () => {
     const { context } = fakeContext({ capabilities: "unusable" });
     const { container, latest } = await render(context, { ...configured(), model: { providerKey: "anthropic", connectionName: "writer", modelId: "old-model" } });

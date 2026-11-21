@@ -196,7 +196,8 @@
 }
 
 .wf-data-chooser-notice button,
-.wf-data-reference-actions button {
+.wf-data-reference-actions button,
+.wf-data-reference-conversion {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -214,7 +215,9 @@
 .wf-data-chooser-notice button:hover,
 .wf-data-chooser-notice button:focus-visible,
 .wf-data-reference-actions button:hover,
-.wf-data-reference-actions button:focus-visible {
+.wf-data-reference-actions button:focus-visible,
+.wf-data-reference-conversion:hover,
+.wf-data-reference-conversion:focus-visible {
   border-color: color-mix(in srgb, var(--studio-accent) 45%, var(--studio-border));
   background: var(--studio-accent-soft);
   outline: none;

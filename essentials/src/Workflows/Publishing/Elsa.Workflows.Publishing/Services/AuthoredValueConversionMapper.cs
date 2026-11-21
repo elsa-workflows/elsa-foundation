@@ -11,15 +11,18 @@ internal static class AuthoredValueConversionMapper
         {
             AuthoredValueConversionMode.None => ValueConversionMode.None,
             AuthoredValueConversionMode.Json => ValueConversionMode.Json,
+            AuthoredValueConversionMode.JsonString => ValueConversionMode.JsonString,
             AuthoredValueConversionMode.Xml => ValueConversionMode.Xml,
             AuthoredValueConversionMode.Profile => ValueConversionMode.Profile,
             _ => ValueConversionMode.Auto
         };
 
     public static ValueConversionProfileReference? Profile(AuthoredValueConversionRequest? request) =>
-        request?.Profile is null
-            ? null
-            : new ValueConversionProfileReference(request.Profile.Id, request.Profile.Version);
+        request?.Mode == AuthoredValueConversionMode.JsonString
+            ? new ValueConversionProfileReference("elsa.json-string", "1")
+            : request?.Profile is null
+                ? null
+                : new ValueConversionProfileReference(request.Profile.Id, request.Profile.Version);
 
     public static ValueConversionLimits? Limits(AuthoredValueConversionRequest? request)
     {

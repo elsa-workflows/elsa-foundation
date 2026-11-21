@@ -106,18 +106,39 @@ public sealed class ActivitiesDesignApiContractTests
     };
 
     [Fact]
-    public async Task Real_host_retains_all_38_reviewed_operations_and_the_additive_data_context_and_candidate_validation()
+    public async Task Real_host_retains_the_38_reviewed_operations_and_additive_data_context_candidate_validation_and_archive()
     {
         await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
         var endpoints = OwnedEndpoints(host).ToArray();
 
-        Assert.Equal(40, endpoints.Length);
-        Assert.Equal(40, endpoints.Select(endpoint => Identity(endpoint)).Distinct().Count());
+        Assert.Equal(41, endpoints.Length);
+        Assert.Equal(41, endpoints.Select(endpoint => Identity(endpoint)).Distinct().Count());
         Assert.Equal(
             ActivitiesDesignCompatibilityCases.Manifest.Select(route => route.Endpoint)
                 .Append(new EndpointIdentity("/design/activities/drafts/{draftId}/activity-data/context", "POST"))
-                .Append(new EndpointIdentity("/design/activities/drafts/{draftId}/candidate-validation", "POST")).OrderBy(endpoint => endpoint.ToString()),
+                .Append(new EndpointIdentity("/design/activities/drafts/{draftId}/candidate-validation", "POST"))
+                .Append(new EndpointIdentity("/design/activities/definitions/{definitionId}", "DELETE")).OrderBy(endpoint => endpoint.ToString()),
             endpoints.Select(Identity).OrderBy(endpoint => endpoint.ToString()));
+    }
+
+    [Fact]
+    public async Task Definition_archive_has_manage_metadata_and_no_request_body()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var endpoint = Assert.Single(OwnedEndpoints(host), candidate => Identity(candidate) ==
+            new EndpointIdentity("/design/activities/definitions/{definitionId}", "DELETE"));
+
+        Assert.Equal(OperationPrefix + "DefinitionsArchive", endpoint.Metadata.GetMetadata<EndpointNameMetadata>()?.EndpointName);
+        Assert.Equal(OwnerId, endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId);
+        Assert.Equal([OwnerId], endpoint.Metadata.GetMetadata<ITagsMetadata>()?.Tags);
+        Assert.Null(endpoint.Metadata.GetMetadata<IAcceptsMetadata>());
+        var disposition = Assert.IsType<EndpointSecurityDispositionMetadata>(endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>());
+        var policy = new PermissionPolicyCodec().Parse(disposition.Value!);
+        Assert.Equal([PermissionKey.Normalize("activities/design:manage")], policy.Descriptor!.Permissions);
+        var produced = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>();
+        Assert.Contains(produced, metadata => metadata.StatusCode == StatusCodes.Status204NoContent);
+        Assert.Contains(produced, metadata => metadata.StatusCode == StatusCodes.Status401Unauthorized);
+        Assert.Contains(produced, metadata => metadata.StatusCode == StatusCodes.Status403Forbidden);
     }
 
     [Fact]

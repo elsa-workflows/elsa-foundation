@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ShellFrame, getStudioNavigation } from "../app/App";
 import { ThemeProvider } from "../app/components/ThemeProvider";
-import { filterAccessibleNavigation, getNavigationPlacement } from "../app/navigation/placement";
+import { filterAccessibleNavigation, getChildNavigationItems, getNavigationPlacement } from "../app/navigation/placement";
 import { findNavigationViews } from "../app/navigation/NavigationViews";
 import { getSettingsSectionGroups, isSettingsSurfacePath } from "../app/settings/settingsSections";
 import type { StudioNavigationContribution } from "../sdk";
@@ -21,30 +21,43 @@ describe("grouped navigation", () => {
     expect(getNavigationPlacement({ id: "example", path: "/example" })).toBeUndefined();
   });
 
-  it("keeps Library as a sidebar parent with child links", () => {
+  it("routes Library to its first accessible child and hides it when no child is accessible", () => {
     const entries: StudioNavigationContribution[] = [
       { id: "activities", label: "Activity definitions", path: "/activities", parentId: "library", placement: "build", requiresPermission: "activities:read", order: 10 },
       { id: "templates", label: "Templates", path: "/templates", parentId: "library", placement: "build", requiresPermission: "templates:read", order: 20 }
     ];
     const navigation = getStudioNavigation(entries);
+    const all = filterAccessibleNavigation(navigation, { authenticated: true, permissions: ["activities:read", "templates:read"] });
+    expect(all.find(item => item.id === "library")?.path).toBe("/activities");
+
     const visible = filterAccessibleNavigation(navigation, { authenticated: true, permissions: ["templates:read"] });
-    expect(visible.find(item => item.id === "library")?.path).toBe("/library");
+    expect(visible.find(item => item.id === "library")?.path).toBe("/templates");
+    expect(getChildNavigationItems(visible, visible.find(item => item.id === "library")!).map(item => item.id)).toEqual(["templates"]);
     expect(findNavigationViews("/templates", visible)).toBeUndefined();
-    // Without childDisplay: "views", the Library parent remains even when children are hidden.
+
     const hidden = filterAccessibleNavigation(navigation, { authenticated: true, permissions: [] });
-    expect(hidden.find(item => item.id === "library")).toBeDefined();
+    expect(hidden.find(item => item.id === "library")).toBeUndefined();
     expect(hidden.some(item => item.id === "templates")).toBe(false);
   });
 
-  it("retains executable views on runtime-only hosts without a dead Definitions link", () => {
+  it("retains executable links on runtime-only hosts without a dead Definitions link", () => {
     const navigation: StudioNavigationContribution[] = [
-      { id: "workflows", label: "Workflows", path: "/definitions", placement: "build", childDisplay: "views" },
+      { id: "workflows", label: "Workflows", path: "/definitions", placement: "build", childDisplay: "links" },
       { id: "definitions", label: "Definitions", path: "/definitions", parentId: "workflows", requiresFeature: "design" },
       { id: "executables", label: "Executables", path: "/executables", parentId: "workflows", requiresFeature: "runtime" }
     ];
     const visible = filterAccessibleNavigation(navigation, { enabledFeatures: ["runtime"] });
     expect(visible.find(item => item.id === "workflows")?.path).toBe("/executables");
-    expect(findNavigationViews("/executables", visible)?.views.map(item => item.id)).toEqual(["executables"]);
+    expect(getChildNavigationItems(visible, visible.find(item => item.id === "workflows")!).map(item => item.id)).toEqual(["executables"]);
+    expect(findNavigationViews("/executables", visible)).toBeUndefined();
+  });
+
+  it("omits an empty links parent instead of retaining a dead default route", () => {
+    const navigation: StudioNavigationContribution[] = [
+      { id: "workflows", label: "Workflows", path: "/definitions", placement: "build", childDisplay: "links" },
+      { id: "definitions", label: "Definitions", path: "/definitions", parentId: "workflows", requiresFeature: "design" }
+    ];
+    expect(filterAccessibleNavigation(navigation, { enabledFeatures: [] })).toEqual([]);
   });
 
   it("keeps moved settings deep links and their own permissions without adding the host-control gate", () => {

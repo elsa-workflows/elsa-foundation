@@ -936,7 +936,7 @@ test("workflow template metadata defaults", async ({ page }, info) => {
     await sequence.press("Space");
     await expect(sequence).toBeChecked();
     await dialog.getByRole("button", { name: "Create template", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Templates", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Templates", exact: true })).toBeVisible();
   }
 
   const submitAndInspect = async (expectedName: string, expectedDescription: string) => {

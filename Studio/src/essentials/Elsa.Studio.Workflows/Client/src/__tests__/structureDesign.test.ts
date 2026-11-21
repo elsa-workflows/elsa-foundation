@@ -36,14 +36,33 @@ describe("structure design slot declarations", () => {
     }).payload?.slots).toEqual([fixed, branch]);
   });
 
+  it("accepts catalog nulls for optional fixed-slot fields without changing the initial payload", () => {
+    const result = parseStructureDesignFacetPayload({
+      mode: "generic",
+      supportsScopedVariables: false,
+      slots: [
+        { name: "If.Then", property: "then", displayName: "Then", cardinality: "single", collectionProperty: null, childProperty: null, labelProperty: null, slotNameTemplate: null },
+        { name: "If.Else", property: "else", displayName: "Else", cardinality: "single", collectionProperty: null, childProperty: null, labelProperty: null, slotNameTemplate: null }
+      ],
+      initialPayload: { then: null, else: null }
+    });
+
+    expect(result.payload?.slots).toEqual([
+      { name: "If.Then", property: "then", displayName: "Then", cardinality: "single" },
+      { name: "If.Else", property: "else", displayName: "Else", cardinality: "single" }
+    ]);
+    expect(result.payload?.initialPayload).toEqual({ then: null, else: null });
+  });
+
   it("rejects incomplete collection metadata and malformed placeholders as a whole", () => {
     const incomplete = rawBranch({ childProperty: undefined });
     const missingPlaceholder = rawBranch({ slotNameTemplate: "Parallel.Branch[name]" });
     const repeatedPlaceholder = rawBranch({ slotNameTemplate: "Parallel[{name}].Branch[{name}]" });
     const extraPlaceholder = rawBranch({ slotNameTemplate: "Parallel[{name}].Branch[{other}]" });
     const blankAddress = rawBranch({ collectionProperty: " " });
+    const nullCollectionAddress = rawBranch({ collectionProperty: null });
 
-    for (const slot of [incomplete, missingPlaceholder, repeatedPlaceholder, extraPlaceholder, blankAddress]) {
+    for (const slot of [incomplete, missingPlaceholder, repeatedPlaceholder, extraPlaceholder, blankAddress, nullCollectionAddress]) {
       expect(parsePayload([slot]).payload).toBeNull();
     }
   });

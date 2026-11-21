@@ -49,6 +49,13 @@ public sealed class ValueConversionPlanResolverTests
         Assert.Equal(ValueConversionOperation.CanonicalAny, resolver.Resolve(Type("Customer"), ValueRepresentation.TypedValue, Type("Elsa.Any")).Operation);
     }
 
+    [Fact]
+    public void Auto_does_not_infer_json_string_serialization_for_a_typed_model()
+    {
+        Assert.Throws<ValueConversionPublicationException>(() =>
+            resolver.Resolve(Type("Acme.Customer"), ValueRepresentation.TypedValue, Type("String")));
+    }
+
     [Theory]
     [InlineData("Int64", "Int32")]
     [InlineData("Double", "Decimal")]
@@ -114,12 +121,77 @@ public sealed class ValueConversionPlanResolverTests
         Assert.Equal("JsonObject", autoJson.TargetType.Alias);
     }
 
+    [Theory]
+    [InlineData("Acme.Customer", ValueRepresentation.TypedValue, CollectionKind.Single, "String")]
+    [InlineData("JsonNode", ValueRepresentation.StructuredValue, CollectionKind.List, "System.String")]
+    public void Named_json_string_profile_pins_typed_and_structured_values_to_plain_string(
+        string sourceAlias, ValueRepresentation representation, CollectionKind collection, string targetAlias)
+    {
+        var plan = resolver.Resolve(
+            Type(sourceAlias, collection),
+            representation,
+            Type(targetAlias),
+            ValueConversionMode.Profile,
+            new ValueConversionProfileReference("elsa.json-string", "1"));
+
+        Assert.Equal(ValueConversionOperation.Profile, plan.Operation);
+        Assert.Equal(ValueConversionMode.Profile, plan.Mode);
+        Assert.Equal("elsa.json-string", plan.Profile!.Id);
+        Assert.Equal("1", plan.Profile.Version);
+        Assert.Equal("String", ValueConversionCompatibility.NormalizeAlias(plan.TargetType.Alias));
+    }
+
+    [Theory]
+    [InlineData(ValueRepresentation.TextValue)]
+    [InlineData(ValueRepresentation.FormattedContent)]
+    [InlineData(ValueRepresentation.BinaryContent)]
+    [InlineData(ValueRepresentation.DurableReference)]
+    public void Named_json_string_profile_rejects_non_json_value_representations(ValueRepresentation representation)
+    {
+        var exception = Assert.Throws<ValueConversionPublicationException>(() => resolver.Resolve(
+            Type("Acme.Customer"), representation, Type("String"), ValueConversionMode.Profile,
+            new ValueConversionProfileReference("elsa.json-string", "1")));
+
+        Assert.Equal(ValueConversionRejectionReason.ProfileUnsupportedContract, exception.ReasonCode);
+    }
+
+    [Fact]
+    public void Named_json_string_profile_requires_a_plain_scalar_string_target()
+    {
+        var profile = new ValueConversionProfileReference("elsa.json-string", "1");
+
+        Assert.Throws<ValueConversionPublicationException>(() => resolver.Resolve(
+            Type("Acme.Customer"), ValueRepresentation.TypedValue, Type("Int32"), ValueConversionMode.Profile, profile));
+        Assert.Throws<ValueConversionPublicationException>(() => resolver.Resolve(
+            Type("Acme.Customer"), ValueRepresentation.TypedValue, Type("String", CollectionKind.List), ValueConversionMode.Profile, profile));
+    }
+
+    [Fact]
+    public void Authored_json_string_mode_pins_its_builtin_profile_and_preview_advertises_eligibility()
+    {
+        var authored = new AuthoredValueConversionRequest(AuthoredValueConversionMode.JsonString);
+        var plan = resolver.Resolve(
+            Type("Acme.Customer"),
+            ValueRepresentation.StructuredValue,
+            Type("String"),
+            AuthoredValueConversionMapper.Mode(authored),
+            AuthoredValueConversionMapper.Profile(authored));
+        var previewer = new ActivityBindingConversionPreviewer(resolver);
+        var eligible = previewer.Preview(new("Acme.Customer"), ValueRepresentation.StructuredValue, new("String"), null);
+        var ineligible = previewer.Preview(new("String"), ValueRepresentation.TextValue, new("String"), null);
+
+        Assert.Equal(ValueConversionMode.JsonString, plan.Mode);
+        Assert.Equal("elsa.json-string", plan.Profile!.Id);
+        Assert.True(eligible.CanSerializeJsonString);
+        Assert.False(ineligible.CanSerializeJsonString);
+    }
+
     [Fact]
     public void Built_in_profile_registry_lists_profiles_for_authoring_surfaces()
     {
         var profiles = BuiltInValueConversionProfileRegistry.Instance.List();
 
-        Assert.Equal(["elsa.json", "elsa.xml"], profiles.Select(profile => profile.Profile.Id));
+        Assert.Equal(["elsa.json", "elsa.json-string", "elsa.xml"], profiles.Select(profile => profile.Profile.Id));
         Assert.All(profiles, profile => Assert.Equal("1", profile.Profile.Version));
     }
 

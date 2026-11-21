@@ -65,6 +65,7 @@
       "essentials/src/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/Elsa.Expressions.JavaScript.Rendering.csproj",
       "essentials/src/Expressions/Liquid/Elsa.Expressions.Liquid.csproj",
       "essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj",
+      "essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj",
       "essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj",
       "essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj",
       "essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj",

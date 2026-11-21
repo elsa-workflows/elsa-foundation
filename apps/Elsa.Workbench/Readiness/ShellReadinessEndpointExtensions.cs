@@ -16,8 +16,8 @@ public static class ShellReadinessEndpointExtensions
         {
             var shellName = options.Value.DefaultShellName;
             var snapshot = state.Snapshot;
-            var active = registry.GetActive(shellName);
-            if (active?.State == ShellLifecycleState.Active
+            var active = (registry as ISettledShellRegistry)?.GetSettledActive(shellName);
+            if (active is not null
                 && snapshot.Status is ShellReadinessStatus.Ready or ShellReadinessStatus.Disabled)
             {
                 var generation = active.Descriptor.Generation;
