@@ -33,6 +33,8 @@ public interface IActorTurn
 
     /// <summary>The foundation's reading in Unix milliseconds, fixed for the turn.</summary>
     long Now { get; }
+
+    /// <summary>Messages in delivery order. A command is delivered alone.</summary>
     IReadOnlyList<Message> Inbox { get; }
     string? State { get; set; }
     object? Ambient { get; }

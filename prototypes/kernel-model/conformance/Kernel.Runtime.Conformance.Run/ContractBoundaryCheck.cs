@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using Kernel.Foundation.Contracts;
 using Kernel.Model.Contracts;
 using Kernel.Store.Conformance;
+using Kernel.WorkflowActor;
 
 internal static class ContractBoundaryCheck
 {
@@ -14,8 +15,9 @@ internal static class ContractBoundaryCheck
         var foundation = typeof(ActorRef).Assembly;
         var model = typeof(EffectKey).Assembly;
         var faults = new List<string>();
-        Check(foundation, null, faults);
-        Check(model, foundation.GetName().Name, faults);
+        Check(foundation, faults);
+        Check(model, faults, foundation);
+        Check(typeof(WorkflowActor).Assembly, faults, foundation, model);
         CheckScope(typeof(IIngress), faults);
         CheckScope(typeof(IActorReads), faults);
         if (typeof(BoundScope).GetConstructors().Length != 0 || typeof(BoundScope).GetProperty(nameof(BoundScope.Tenant))?.CanWrite != false)
@@ -42,10 +44,11 @@ internal static class ContractBoundaryCheck
         }
     }
 
-    private static void Check(Assembly assembly, string? allowedContract, List<string> faults)
+    private static void Check(Assembly assembly, List<string> faults, params Assembly[] allowedContracts)
     {
+        var allowed = allowedContracts.Select(contract => contract.GetName().Name).ToHashSet(StringComparer.Ordinal);
         foreach (var reference in assembly.GetReferencedAssemblies())
-            if (reference.Name is { } name && name != allowedContract && name is not ("System" or "netstandard") && !name.StartsWith("System.", StringComparison.Ordinal))
+            if (reference.Name is { } name && !allowed.Contains(name) && name is not ("System" or "netstandard") && !name.StartsWith("System.", StringComparison.Ordinal))
                 faults.Add($"{assembly.GetName().Name} references {name}");
 
         foreach (var type in assembly.GetExportedTypes())
