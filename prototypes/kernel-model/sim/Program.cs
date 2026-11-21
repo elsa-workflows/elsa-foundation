@@ -184,10 +184,10 @@ int NativeMutations(int seeds)
         var clock = Stopwatch.StartNew();
         (int Seed, string Violation)? caught = null;
         long acts = 0;
-        // The node-lease schedule first hits the loop-key swap beyond the ordinary sweep.
-        if (mutation == Kernel.Native.NativeFlaw.FreshTurnSwapsLoopKeys)
+        // The old partition-lease schedule caught this at 3589. The node-lease nightly reaches 14396 unaided.
+        const int witness = 14396;
+        if (mutation == Kernel.Native.NativeFlaw.FreshTurnSwapsLoopKeys && seeds < witness)
         {
-            const int witness = 14396;
             var (violation, done) = Run(witness, Flaw.None);
             acts += done.Count;
             if (violation is not null) caught = (witness, violation);

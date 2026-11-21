@@ -626,30 +626,38 @@ internal static class NodeLeaseChecks
     // An answer sent before a reset is discarded on both sides: the retaken partitions are neither stood down nor renewed by it.
     private static async Task DiscardsAnAnswerFromBeforeAReset(Action<bool, string> check)
     {
-        var (store, clock, _) = World(3, out _);
-        var worker = Owner(store, [0, 1], clock);
-        await new DurableHost([worker]).ActivateAsync(0);
-        // The old answer carries a partition whose take landed without the Worker installing it.
-        var orphan = await store.TakeAsync(2, worker.Node, Lease);
-        var sent = worker.BeforeHeartbeat();
-        var answer = await store.NodeHeartbeatAsync(worker.Node, Lease, Window);
-        worker.HeartbeatAnswered(sent, answer);
-        var recorded = worker.AnswerWaiting;
+        foreach (var recordedBeforeReset in new[] { true, false })
+        {
+            var (store, clock, advance) = World(3, out _);
+            var worker = Owner(store, [0, 1], clock);
+            await new DurableHost([worker]).ActivateAsync(0);
+            // The old answer carries a partition whose take landed without the Worker installing it.
+            var orphan = await store.TakeAsync(2, worker.Node, Lease);
+            var sent = worker.BeforeHeartbeat();
+            var answer = await store.NodeHeartbeatAsync(worker.Node, Lease, Window);
+            if (recordedBeforeReset) worker.HeartbeatAnswered(sent, answer);
+            var recorded = worker.AnswerWaiting;
 
-        // A refused fence resets the Worker before the scheduled pass can judge the answer.
-        store.Partitions[0].Position++;
-        await store.AddAsync(new Message("m", InstanceRef.In(0, "x"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
-        await worker.PollAsync();
-        await worker.FlushAsync();
-        var retaken = worker.Fences;
-        await worker.RunAsync();
-        check(orphan is not null && recorded && !worker.AnswerWaiting && store.Partitions[2].Owner == worker.Node
-            && retaken.Count == 2 && worker.Fences.SequenceEqual(retaken),
-            "NL-8: a recorded heartbeat cannot release an unclaimed row after the Worker resets");
+            // Expiry resets the Worker before it handles the answer. There has been no take or retake, so the
+            // counter guard cannot substitute for the generation check when the next pass judges the release.
+            advance((long)Lease.TotalMilliseconds + 1);
+            await worker.RunAsync();
+            var reset = worker.BeforeHeartbeat();
+            var stoodDown = !worker.Owns && worker.Pending.Count == 2 && reset.Generation != sent.Generation && reset.Takes == sent.Takes;
 
-        worker.HeartbeatAnswered(sent, answer);
-        check(sent.Generation != worker.BeforeHeartbeat().Generation && !worker.AnswerWaiting,
-            "NL-8: a heartbeat answered after reset is discarded before it is recorded");
+            if (recordedBeforeReset)
+            {
+                await worker.RunAsync();
+                check(orphan is not null && recorded && stoodDown && !worker.AnswerWaiting && store.Partitions[2].Owner == worker.Node,
+                    "NL-8: a recorded heartbeat cannot release an unclaimed row after the Worker resets");
+            }
+            else
+            {
+                worker.HeartbeatAnswered(sent, answer);
+                check(stoodDown && !worker.AnswerWaiting,
+                    "NL-8: a heartbeat answered after reset is discarded before it is recorded");
+            }
+        }
     }
 
     // NL-7's schedules: q's gain of partition 1 is sent at 0 and answered at 11 s. A heartbeat answered at 5 s set the guard

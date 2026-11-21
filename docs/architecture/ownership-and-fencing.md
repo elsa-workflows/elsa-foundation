@@ -53,9 +53,9 @@ also counts a death on the partitions it moved, by its read; a race between a re
 one death count, and the fence, not the count, protects correctness. Safety does
 not rest on that read: the epoch the take increments fences the previous owner out, as before.
 
-The relational stores read leases at READ COMMITTED in the take transaction. MongoDB reads the owners’ leases from the
-primary outside the transaction snapshot, before any writes. A renewal between the snapshot’s partition read and this
-lease read then counts as live. A concurrent change to a partition document still conflicts with the take’s write.
+The relational stores read leases at READ COMMITTED in the take transaction. MongoDB reads the owners' leases from the
+primary outside the transaction snapshot, before any writes. A renewal between the snapshot's partition read and this
+lease read then counts as live. A concurrent change to a partition document still conflicts with the take's write.
 
 **A take that changes zero rows returns nothing.** It has acquired no authority and must not return a separately read position as though it had succeeded. A take that succeeds learns the true position, including any commit that finished before it.
 
@@ -213,7 +213,8 @@ every third of a lease, so it closes a stuck call between 2 and 2⅓ leases afte
 ⅓ to ⅔ of a lease after that close: about 3 leases after the send in the worst case. In the Embedded profile, where
 the host process is the application, that last step is the application's policy. A batch's command timeout is at most the lease. This is the bound on SQL Server,
 where `LOCK_TIMEOUT` cancels only the waiting take and keepalive detects only a dead peer. K4 qualifies these bounds on
-each provider, the server-side heartbeat timeout and a stuck holder on a live connection included. With one Worker per node (D1) that Worker is the node's; a fixed host with a Worker per
+each provider, including the server-side heartbeat timeout and a stuck holder on a live connection. With one Worker per
+node (D1), that Worker is the node's. A fixed host with a Worker per
 partition stops renewing when any of its Workers is wedged, and so gives up all its partitions.
 
 A turn whose body loops runs off the pass, so passes keep completing; that was so under the per-partition beat too, and

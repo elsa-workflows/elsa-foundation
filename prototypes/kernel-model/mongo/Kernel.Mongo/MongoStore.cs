@@ -43,7 +43,7 @@ public sealed partial class MongoStore : IKernelStore
     {
         _client = client;
         _options = options ?? new MongoStoreOptions();
-        // Every read outside a transaction is majority: it never sees a write that a failover could roll back.
+        // Reads use majority by default. The take reads leases from the primary, where a rolled-back renewal can only delay a take.
         var db = client.GetDatabase(database, new MongoDatabaseSettings { ReadConcern = ReadConcern.Majority, WriteConcern = WriteConcern.WMajority, ReadPreference = ReadPreference.Primary });
         Database = db;
         _partitions = db.GetCollection<BsonDocument>("partitions");

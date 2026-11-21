@@ -182,9 +182,9 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
             if (!node.Holds(scope.Scope)) return null;
             _calls++;
             // Another scope's pass ran since this scope's last call, and no wake or job result came since: that pass
-            // served this scope too. Its answer stands, less the time gone since; once that has run out (a timer is due,
-            // the poll interval, or under the per-partition lease a beat), this call runs the pass, whichever scope ran the
-            // last one and whether it is still held. A heartbeat answer that waits wants a pass (PassWanted), so it runs one.
+            // served this scope too. Its answer stands until its delay runs out. Then this call runs the pass,
+            // regardless of which scope passed last or whether that scope is still held.
+            // A pending heartbeat answer wants a pass (PassWanted) immediately.
             if (scope.Seen < _passes && !node.PassWanted && _last is { } last)
             {
                 var left = last - TimeSpan.FromMilliseconds(node.Monotonic - _lastAt);
