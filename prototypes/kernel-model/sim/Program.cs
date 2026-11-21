@@ -69,6 +69,7 @@ if (args.Contains("--public-owner-check"))
 }
 
 if (args.Contains("--lease-check")) return await LeaseChecks.Run(flaws);
+if (args.Contains("--job-trial-check")) return await ContractActorWorkload.RunJobTrialChecks(count, flaws);
 if (args.Contains("--landed-check")) return LandedChecks.Run();
 if (args.Contains("--placement-check")) return PlacementChecks.Run(flaws);
 if (args.Contains("--native-mutations")) return NativeMutations(int.Parse(Arg("--seeds") ?? "2000"));

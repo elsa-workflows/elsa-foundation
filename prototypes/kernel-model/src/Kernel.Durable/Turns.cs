@@ -17,6 +17,12 @@ public interface IActorType
 
     internal bool SupportsFoundationInlineStart(string type) => false;
 
+    /// <summary>Whether this actor type can verify the operator or parent authority of a terminate.</summary>
+    internal bool SupportsTrialWithdrawal => false;
+
+    /// <summary>Checks whether the queued terminate has authority over the target's current life.</summary>
+    internal bool AuthorizesTrialWithdrawal(InstanceRow? row, Message message, Message? creator = null) => false;
+
     /// <summary>An owner command that needs a single-message boundary but still obeys normal withholding.</summary>
     bool SingleMessage(Message message) => false;
 
@@ -120,8 +126,11 @@ public sealed class Delivery(Message message, long seq)
     internal bool DiscardedInput => SuppliedCompletion || SuppliedTicket;
     internal bool DiscardedAt(Slot slot) => DiscardedInput || Message.SuppliedCreator && slot.CurrentRow is null;
     internal bool JobEntered;         // physical model entry, distinct from a scheduled driver
+    internal volatile bool WithdrawingJob; // set under the publication lock before signalling cancellation
     internal long? JobDeadline;
     internal bool JobDeadlineClosed;
+    internal bool RetainsTrialGate;   // a logical outcome can land while the physical driver exits
+    internal bool AbandonedTrial;     // a local reset keeps only this physical guard until the callback exits
     internal int JobEntries;         // physical starts seen by this delivery, a lower bound after a takeover
     internal bool DeferredJobTrial;   // durable fence retained while runtime trial isolation is yielded before entry
     internal long DeferredTrialObserved; // preserve the original cohort horizon when isolation is reacquired
