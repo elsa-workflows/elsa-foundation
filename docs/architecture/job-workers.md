@@ -58,6 +58,14 @@ attempt states). Its own store measured, on PostgreSQL 17, separate operations o
 ([#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6867483419)). They count
 that store's own operations and serve as a comparison point only; they set no kernel budget.
 
+## Cooperative cancellation of recovered attempts
+
+Release 1 requires an in-process job to observe cancellation and leave its callback promptly for bounded termination
+progress. A recovered attempt may need to yield to an eligible ancestor termination. Its physical execution must end
+before the trial can yield. The logical job stays pending until its result or cancellation commits. The next physical
+attempt gets a fresh attempt id and retains the logical effect key. Uncooperative code can hold the trial.
+[Owner decisions for K2](decisions.md#owner-decisions-for-k2-acceptance-21-november)
+
 ## Where it lives
 
 The contract below (attempt lease, heartbeat, timeouts, worker-classified retries, the effect key, the wire records and

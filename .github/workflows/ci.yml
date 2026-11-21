@@ -1810,6 +1810,7 @@ jobs:
           expect_contract_failure "an expired inline owner cannot return a successful write-free response" --inline-ephemeral-check --flaw IgnoreLeaseDeadline
           expect_contract_failure "Runner's job did not survive takeover with a distinct successor attempt" --contract-jobs --seed 1 --flaw VolatileJobTicket
           expect_contract_failure "Fragile failed to park with on trial when 3 owners were lost" --contract-jobs --seed 1 --flaw JobPoisonAsError
+          expect_contract_failure "the stale actor turn cannot replace the successor" --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
 
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
       # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 3208 (6946 before K1 slice 7's set worlds), a seed
