@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Kernel.Runtime/Kernel.Runtime.csproj" />
+    <InternalsVisibleTo Include="Kernel.Workflows" />
     <InternalsVisibleTo Include="Kernel.Sim" />     <!-- test-only counters, such as Worker.ClaimedLookups -->
   </ItemGroup>
 </Project>

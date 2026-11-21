@@ -40,6 +40,8 @@ public sealed record Message(
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public long InboxScope { get; private init; }
+    internal bool ActorAuthored { get; init; }
+    internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]
     public string? EventMatch { get; private init; }
     [System.Text.Json.Serialization.JsonIgnore]

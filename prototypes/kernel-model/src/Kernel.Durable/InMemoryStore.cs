@@ -200,7 +200,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         if (revision != turn.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {turn.Expected?.ToString() ?? "none"}");
                         if (!row.Retired) CommitClockFacts.Validate(row, Instances.GetValueOrDefault(row.Id));
                     }
-                    CreationProtocol.Validate(turn, Instances.GetValueOrDefault(turn.Instance));
+                    var previous = Instances.GetValueOrDefault(turn.Instance);
+                    CreationProtocol.Validate(turn, previous);
+                    StoreBatchRules.ValidateActorSends(turn, previous);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)

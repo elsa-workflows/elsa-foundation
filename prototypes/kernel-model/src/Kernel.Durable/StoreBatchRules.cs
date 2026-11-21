@@ -69,6 +69,22 @@ public static class StoreBatchRules
         catch (Exception e) when (e is FormatException or OverflowException or ArgumentOutOfRangeException) { return null; }
     }
 
+    internal static void ValidateActorSends(TurnCommit turn, InstanceRow? previous)
+    {
+        List<CreationAddress>? children = null;
+        foreach (var message in turn.Sent)
+        {
+            if (!message.ActorControl) continue;
+            if (message.Kind == Kinds.Terminate && message.TargetCreation is > 0)
+            {
+                children ??= ChildRegistry.Read(turn.Row is { } row ? row.Children : previous?.Children);
+                if (children.Contains(new CreationAddress(message.Target.Id, message.TargetCreation.Value))) continue;
+            }
+
+            throw new StoreException(Failure.Definite, "Actor turns may send only Terminate to a registered child creation.");
+        }
+    }
+
     public static void ValidateIdentity(InstanceRow row)
     {
         if (row.IdentityMetadataRequired && !row.IdentityOnly)
