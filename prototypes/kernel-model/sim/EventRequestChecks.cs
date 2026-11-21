@@ -106,6 +106,21 @@ internal static class EventRequestChecks
         time += 10;
         check((await timed.WaitAsync(TimeSpan.FromSeconds(2))) is { Error: "timeout" } && requests.All.Count == 0,
             "a bound event request releases its reply registration at the shared clock deadline");
+
+        using var cancellation = new CancellationTokenSource();
+        var cancelled = bound.RequestAsync(scope, eventTarget, "cancelled-caller", "typed", keep, options, cancellation.Token).AsTask();
+        cancellation.Cancel();
+        var cancelledWait = false;
+        try { await cancelled.WaitAsync(TimeSpan.FromSeconds(2)); }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelledWait = true; }
+        check(cancelledWait && requests.All.Count == 0 &&
+              store.Messages.Values.Any(row => Events.Delivered(row.Message) is { Event: "cancelled-caller" }),
+            "cancelling the caller closes its registration and keeps the admitted delivery");
+
+        await store.SweepAsync();
+        check(!store.EventRows.ContainsKey(("acme_typed", "typed-request")) &&
+              store.EventRows.ContainsKey(("acme_typed", "cancelled-caller")),
+            "sweep removes an admitted event without a keep window and preserves one still kept");
     }
 
     private sealed class EventProbe : Model<List<string>>

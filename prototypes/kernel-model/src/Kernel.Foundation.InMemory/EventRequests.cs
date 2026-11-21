@@ -3,7 +3,10 @@ using Durable = Kernel.Durable;
 
 namespace Kernel.Foundation.InMemory;
 
-/// <summary>The event route of the built-in foundation's bound ingress.</summary>
+/// <summary>
+/// The event route of the built-in foundation's bound ingress. Cancellation releases the reply registration.
+/// A request's deliveries remain eligible once they are committed.
+/// </summary>
 internal sealed class EventRequests(Durable.InMemoryStore store, Durable.Requests requests, string node)
 {
     public async ValueTask<Reply> RequestAsync(BoundScope scope, Target.Event target, string id, string? payload,

@@ -68,7 +68,7 @@ public sealed class Request(string id, long deadline)
     private TaskCompletionSource<Reply>? _completion;
 
     internal Task<Reply> Completion() => Done
-        ? Task.FromResult(AcceptedResponse ?? new Reply(Registration, "", null, null, Status, Error))
+        ? Task.FromResult(AcceptedResponse ?? new Reply(Registration, Key: "", Channel: null, Item: null, Status: Status, Error: Error))
         : (_completion ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
 
     internal void Receive(Reply reply, bool again)
