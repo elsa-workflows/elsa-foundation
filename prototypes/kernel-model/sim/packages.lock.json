@@ -11,6 +11,13 @@
       "kernel.foundation.contracts": {
         "type": "Project"
       },
+      "kernel.foundation.inmemory": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Durable": "[1.0.0, )",
+          "Kernel.Foundation.Contracts": "[1.0.0, )"
+        }
+      },
       "kernel.graph": {
         "type": "Project"
       },

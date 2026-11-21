@@ -12,6 +12,7 @@ public static class LeaseChecks
         await FoundationClockChecks.Run(Check);
         await FoundationReferenceChecks.Run(Check);
         await FoundationChildReferences.Run(Check);
+        await EventRequestChecks.Run(Check);
         await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
