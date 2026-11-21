@@ -67,7 +67,7 @@ internal static class EventRequestChecks
             "an admitted request attaches its reply route to every matched start and qualified active wait");
 
         var duplicate = store.PublishRequest(fanout with { Payload = "changed" }, "duplicate");
-        check(duplicate is { Count: 2 } && duplicate.All(receipt => !receipt.Added) && store.Messages.Count == 3 &&
+        check(duplicate is { Count: 0 } && store.Messages.Count == 3 &&
               store.EventRows[(key, "fanout")].Payload == "original",
             "repeating an accepted event id preserves its payload and inserts no second matched delivery");
 
@@ -83,6 +83,18 @@ internal static class EventRequestChecks
             "both the active actor and the new actor commit the event through the real owners");
         check(caller is { Responses: 1, Answer: "original" } && transport.Sent == 2,
             "the first committed answer wins the request even though both actors answer");
+
+        var lateWaiter = InstanceRef.In(1, "acme_late_waiter");
+        await store.AddAsync(new Message("arm-late", lateWaiter, "arm", Json.Write(key),
+            Start: spec with { Creation = new(1, 0, "late-waiter") }, TargetCreation: 1));
+        await Pump();
+        check(store.Subscriptions.Any(wait => wait.Instance == lateWaiter.Id && wait.Creation == 1),
+            "a subsequent non-keeping wait is committed after the first publication");
+        var laterDuplicate = store.PublishRequest(fanout, "duplicate-after-registration");
+        await Pump();
+        check(laterDuplicate is { Count: 0 } && Json.Read<List<string>>(store.Instances[lateWaiter.Id].State).Count == 0 &&
+              store.Messages.Values.All(row => row.Message.Target != lateWaiter || Events.Delivered(row.Message)?.Event != fanout.Id),
+            "repeating the event id cannot deliver the old publication to a new non-keeping wait");
 
         var bound = new EventRequests(store, requests, "caller");
         var scope = new Contract.BoundScope("acme");

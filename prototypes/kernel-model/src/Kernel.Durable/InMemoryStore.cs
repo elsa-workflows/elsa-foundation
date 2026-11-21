@@ -411,17 +411,18 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         {
             cancellationToken.ThrowIfCancellationRequested();
             var key = (request.Key, request.Id);
-            var published = EventRows.GetValueOrDefault(key) ?? request;
-            var deliveries = Subscriptions.Where(wait => wait.Key == published.Key)
+            // The original match and deliveries were committed atomically. A retry cannot match new waits.
+            if (EventRows.ContainsKey(key)) return [];
+            var deliveries = Subscriptions.Where(wait => wait.Key == request.Key)
                 .OrderBy(wait => wait.Instance, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal)
-                .Select(wait => Events.Route(published, wait, partitions, replyTo)).ToArray();
+                .Select(wait => Events.Route(request, wait, partitions, replyTo)).ToArray();
             if (deliveries.Length == 0) return null;
 
             if (!CreationIdentityAvailable)
                 foreach (var delivery in deliveries) CreationProtocol.RejectUnsupported(delivery.Message);
             var starts = deliveries.Count(delivery => delivery.Message.Start is not null && !Messages.ContainsKey(delivery.Message.InboxKey));
             _ = checked(_eventSerial + starts);
-            EventRows.TryAdd(key, published);
+            EventRows.Add(key, request);
             return Array.ConvertAll(deliveries, InsertEventDelivery);
         }
     }
