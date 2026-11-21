@@ -16,7 +16,7 @@ internal sealed partial class Burst
 
     internal void RequestCheckpoint()
     {
-        if (turn.Instance.Creation <= 0 || _s.Mode is not (Modes.Balanced or Modes.Durable))
+        if (!turn.HasExactIdentity || _s.Mode is not (Modes.Balanced or Modes.Durable))
             throw new NotSupportedException("Checkpoint request requires a qualified native invocation.");
         // The normal turn return seals its row and owed Continue; the flag itself is no commit evidence.
         _s.CheckpointControl = true;

@@ -95,7 +95,7 @@ internal static class WorkflowActorChecks
 
         public long TerminalGrowth(InstanceInfo instance, object state) => 1;
         public bool HandlesMetadata(Message message) => message.Kind == "metadata";
-        public ValueTask MetadataAsync(ITurn turn, ActorStatus status, CancellationToken cancellationToken) => throw new InvalidOperationException("The future state is opaque.");
+        public ValueTask MetadataAsync(ITurn turn, ActorStatus status, long? endedAt, CancellationToken cancellationToken) => throw new InvalidOperationException("The future state is opaque.");
         public void TerminateMetadata(object state) { }
         public bool ProtectsDeletion(object state, long? endedAt, long now) => false;
     }

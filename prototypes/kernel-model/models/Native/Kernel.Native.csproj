@@ -1,16 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>Kernel.Native</RootNamespace>
+    <KernelContractOnly>true</KernelContractOnly>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Kernel.Workflows/Kernel.Workflows.csproj" />
+    <ProjectReference Include="../../src/Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
+    <ProjectReference Include="../../src/Kernel.Model.Contracts/Kernel.Model.Contracts.csproj" />
     <ProjectReference Include="../Graph/Kernel.Graph.csproj" />
     <ProjectReference Include="../Native.Activities/Kernel.Native.Activities.csproj" />
   </ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="Kernel.Native.Scopes.Run" /><InternalsVisibleTo Include="Kernel.Native.Recovery.Run" /><InternalsVisibleTo Include="Kernel.Statecharts.Native" /><InternalsVisibleTo Include="Kernel.Statecharts.Run" /></ItemGroup>
-  <ItemGroup>
-    <Using Include="Kernel.Runtime" />
-    <Using Include="Kernel.Durable" />
-    <Using Include="Kernel.Workflows" />
-  </ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Kernel.Native.Legacy" /></ItemGroup>
 </Project>

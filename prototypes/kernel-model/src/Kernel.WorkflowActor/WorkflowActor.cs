@@ -67,7 +67,7 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
         if (header.Status == ActorStatus.Running)
             await model.TurnAsync(modelTurn, cancellationToken);
         else
-            await reader!.MetadataAsync(modelTurn, header.Status, cancellationToken);
+            await reader!.MetadataAsync(modelTurn, header.Status, header.EndedAt, cancellationToken);
 
         turn.State = JsonSerializer.Serialize(modelTurn.State, model.StateType);
         WriteHeader(turn, workflow, modelTurn.Workflow with { Version = model.StateVersion });

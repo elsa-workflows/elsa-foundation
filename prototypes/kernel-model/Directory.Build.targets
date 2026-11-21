@@ -2,7 +2,7 @@
   <!-- Standalone prototype: nothing is inherited from the repository. -->
   <Target Name="CheckKernelContractReferences" BeforeTargets="ResolveReferences" Condition="'$(KernelContractOnly)' == 'true'">
     <ItemGroup>
-      <_UnexpectedKernelProject Include="@(ProjectReference)" Condition="'%(ProjectReference.Filename)' != 'Kernel.Foundation.Contracts' And '%(ProjectReference.Filename)' != 'Kernel.Model.Contracts'" />
+      <_UnexpectedKernelProject Include="@(ProjectReference)" Condition="'%(ProjectReference.Filename)' != 'Kernel.Foundation.Contracts' And '%(ProjectReference.Filename)' != 'Kernel.Model.Contracts' And ('$(MSBuildProjectName)' != 'Kernel.Native' Or ('%(ProjectReference.Filename)' != 'Kernel.Graph' And '%(ProjectReference.Filename)' != 'Kernel.Native.Activities'))" />
     </ItemGroup>
     <Error Condition="'@(_UnexpectedKernelProject)' != ''" Text="Layer 3 may reference only the kernel contract projects. Unexpected project: @(_UnexpectedKernelProject)" />
   </Target>

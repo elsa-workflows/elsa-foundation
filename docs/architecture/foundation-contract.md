@@ -160,7 +160,7 @@ and `End`, plus `Instance` (`Ref`, `Tenant`, `Model`, `Definition`, `Parent`), `
 `SetStatus(status, subStatus, output)`; `Start` takes a `WorkflowStart(Model, Definition, Input, Ephemeral, History)`.
 `IExecutionModel` keeps `Key`, `StateType`, `StateVersion`, `CreateState`, `UpgradeState`, `TurnAsync`,
 `ExecuteJobAsync`, `RestoreWaits` and `TerminalGrowth`; `IModelMetadata` keeps `HandlesMetadata`, `MetadataAsync`,
-`TerminateMetadata` and `ProtectsDeletion`. `EffectKey.For(origin, node, iterationPath, attempt)` and `RootPath` live
+`TerminateMetadata` and `ProtectsDeletion`. Ended metadata and deletion protection use the same persisted `EndedAt`. `EffectKey.For(origin, node, iterationPath, attempt)` and `RootPath` live
 here: `{instance origin}/{node}/{iteration path}/{attempt}` (owner, 16 November), with `Instance.Ref.Id` as the origin.
 Everything here is layer 3's own, ships as the model contract package (owner decision 4; the name is provisional) and
 reaches the foundation only through `IActorTurn`.
