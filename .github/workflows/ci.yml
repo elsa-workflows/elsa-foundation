@@ -1788,6 +1788,8 @@ jobs:
           $SIM --contract-events --seeds 100
           $SIM --contract-http --seeds 100
           $SIM --contract-jobs --seeds 100
+          $SIM --job-trial-check
+          $SIM --contract-jobs --seed 1 --tree-stall
           expect_contract_failure() {
             local expected="$1"
             shift
@@ -1810,6 +1812,7 @@ jobs:
           expect_contract_failure "an expired inline owner cannot return a successful write-free response" --inline-ephemeral-check --flaw IgnoreLeaseDeadline
           expect_contract_failure "Runner's job did not survive takeover with a distinct successor attempt" --contract-jobs --seed 1 --flaw VolatileJobTicket
           expect_contract_failure "Fragile failed to park with on trial when 3 owners were lost" --contract-jobs --seed 1 --flaw JobPoisonAsError
+          expect_contract_failure "the job did not retry with a fresh physical attempt" --job-trial-check --flaw NoResetAfterFailedCommit
           expect_contract_failure "the stale actor turn cannot replace the successor" --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
 
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
@@ -1902,6 +1905,10 @@ jobs:
           $SIM --contract-events --seeds 1000
           $SIM --contract-http --seeds 1000
           $SIM --contract-jobs --seeds 1000
+          $SIM --job-trial-check
+          $SIM --contract-jobs --seed 1 --tree-stall
+          code=0; out=$($SIM --job-trial-check --flaw NoResetAfterFailedCommit 2>&1) || code=$?
+          if [ "$code" -ne 1 ] || ! grep -Fq "the job did not retry with a fresh physical attempt" <<<"$out"; then printf 'Unexpected job-trial control (exit %s): %s\n' "$code" "$out"; exit 1; fi
           $SIM --lease-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
@@ -2003,6 +2010,10 @@ jobs:
           $SIM --contract-events --seeds 1000 --count 4096
           $SIM --contract-http --seeds 1000 --count 4096
           $SIM --contract-jobs --seeds 1000 --count 4096
+          $SIM --job-trial-check --count 4096
+          $SIM --contract-jobs --seed 1 --tree-stall --count 4096
+          code=0; out=$($SIM --job-trial-check --count 4096 --flaw NoResetAfterFailedCommit 2>&1) || code=$?
+          if [ "$code" -ne 1 ] || ! grep -Fq "the job did not retry with a fresh physical attempt" <<<"$out"; then printf 'Unexpected job-trial control (exit %s): %s\n' "$code" "$out"; exit 1; fi
 
       - name: Runtime conformance at 4,096, built-in runtime
         run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096

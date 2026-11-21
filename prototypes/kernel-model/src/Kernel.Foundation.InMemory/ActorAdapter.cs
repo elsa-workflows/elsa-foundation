@@ -19,6 +19,29 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => row?.Model == actor.Type;
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => type == actor.Type;
 
+    bool Durable.IActorType.SupportsTrialWithdrawal => true;
+
+    bool Durable.IActorType.AuthorizesTrialWithdrawal(Durable.InstanceRow? row, Durable.Message message, Durable.Message? creator)
+    {
+        if (message.Kind != Contract.Kinds.Terminate) return false;
+        if (row is null)
+            return creator is { BindFoundationChild: true, InboxScope: Durable.InboxKey.ChildCreatorScope,
+                   Start: { Parent: { } creatorParent, ParentCreation: > 0, Creation.Generation: var creation } start } &&
+                start.Model == actor.Type && creator.Target == message.Target && creator.TargetCreation == creation &&
+                message.TargetCreation == creation && message.Operator is null && message.InboxKey.HasIssuedOrigin &&
+                message.Sender == creatorParent && message.SenderCreation == start.ParentCreation;
+        if (!SupportsFoundationOperator(row) || store.FoundationTurnHeader(row).Park is not null) return false;
+        if (message.Operator is { Selection: { } selection })
+        {
+            if (row.Status != Durable.InstanceStatus.Running && row.Children is null && row.Jobs is null) return false;
+            var identity = store.FoundationIdentity(row.Id, row.Creation);
+            return store.MatchesFoundationSelection(identity.Tenant, identity.Reference, selection);
+        }
+        if (row.Status != Durable.InstanceStatus.Running && (row.Children is null || message.ActorAuthored)) return false;
+        return row.Parent is not null && message.InboxKey.HasIssuedOrigin &&
+            message.Sender == row.Parent && message.SenderCreation == row.ParentCreation;
+    }
+
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
         var checkpoint = store.FoundationTurnHeader(row);

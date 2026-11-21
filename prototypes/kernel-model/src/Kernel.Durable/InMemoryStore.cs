@@ -147,6 +147,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public Action<int>? Locking { get; set; }
 
     public bool SupportsCommitWindow => true;
+    public bool SupportsJobTrialClear => true;
 
     // FenceSubset: the batch cut to the partitions whose fence matches, or null when none does or every one does.
     private CommitBatch? Subset(CommitBatch batch, int stale)
@@ -156,12 +157,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         var kept = current.Select(f => f.Partition).ToHashSet();
         bool Kept(InboxKey id) => Messages.GetValueOrDefault(id) is { } row && kept.Contains(row.Message.Target.Partition);
         var turns = batch.Turns.Where(t => batch.PartitionOf(t) is var p && kept.Contains(p)).ToList();
-        return CommitBatch.Owned(current, batch.Lease, batch.HandOver, turns, [.. batch.Seen.Where(Kept)], [.. batch.Trial.Where(Kept)]) with { Window = batch.Window };
+        return CommitBatch.Owned(current, batch.Lease, batch.HandOver, turns, [.. batch.Seen.Where(Kept)], [.. batch.Trial.Where(Kept)])
+            with { Window = batch.Window, ClearJobTrials = [.. batch.ClearJobTrials.Where(Kept)] };
     }
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        StoreBatchRules.Validate(batch, ownedSets: true);
+        StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear);
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
@@ -190,6 +192,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             var epochs = fences.ToDictionary(f => f.Partition, f => f.Epoch);
             // MUTATION SeenAtNodeEpoch: the set's highest epoch, as one epoch for the whole node would be.
             long MarkEpoch(MessageRow row) => Has(Flaw.SeenAtNodeEpoch) && fences.Count > 0 ? fences.Max(f => f.Epoch) : epochs.GetValueOrDefault(row.Message.Target.Partition, batch.Epoch);
+
+            foreach (var id in batch.ClearJobTrials)
+                if (Messages.GetValueOrDefault(id) is not { Done: false, Trial: > 0, Message.Kind: Kinds.Job } pending ||
+                    pending.Message.InboxScope <= 0 ||
+                    !epochs.TryGetValue(pending.Message.Target.Partition, out var fenceEpoch) || fenceEpoch != pending.Trial)
+                    Diverged($"job ticket {id} has no pending trial at the fenced epoch");
 
             Dictionary<InboxKey, ReferenceBinding>? childBindings = null;
             Dictionary<string, ReferenceBinding>? inlineRoots = null;
@@ -319,6 +327,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = MarkEpoch(seen);
             foreach (var id in batch.Trial)
                 if (Messages.GetValueOrDefault(id) is { } tried) (tried.Seen, tried.Trial) = (MarkEpoch(tried), MarkEpoch(tried));
+            foreach (var id in batch.ClearJobTrials) Messages[id].Trial = 0;
             foreach (var id in batch.Turns.SelectMany(s => s.Held ?? []))
                 if (Messages.GetValueOrDefault(id) is { } held)
                 {

@@ -284,6 +284,7 @@ internal static class ContractWorkload
         private readonly InMemoryStore _store;
         private readonly IKernelStore _wire;
         private readonly WorkerOptions _options;
+        private readonly bool _mixedTypes;
         private sealed record Owner(DurableHost Host, List<IScopeActivation> Scopes);
 
         private readonly List<Owner> _owners = [];
@@ -294,17 +295,24 @@ internal static class ContractWorkload
 
         internal InMemoryDriver(int partitions, Flaw flaws, Contract.IActorType type,
             int maxAttempts = 10, Func<Contract.BoundScope, string, bool>? authorizeOperator = null,
-            Func<InstanceRow, bool>? refuses = null)
+            Func<InstanceRow, bool>? refuses = null, Action<CommitBatch, bool>? observeCommit = null, int trialGroup = 1,
+            bool mixedTypes = false)
         {
             ArgumentOutOfRangeException.ThrowIfLessThan(partitions, 2);
             _type = type;
+            _mixedTypes = mixedTypes;
             _store = new(partitions, () => Now, flaws) { Refuses = refuses };
-            _wire = new CountingStore(_store, () => { }, ObserveCommit);
+            _wire = new CountingStore(_store, () => { }, (batch, landed) =>
+            {
+                observeCommit?.Invoke(batch, landed);
+                ObserveCommit(batch, landed);
+            });
             Ingress = new InMemoryIngress(_store, new Requests(Model), Model, authorizeOperator);
             Reads = new ActorList(_store, 7);
             _options = new()
             {
                 Partitions = partitions, Lease = TimeSpan.FromMilliseconds(Lease), MaxAttempts = maxAttempts,
+                TrialGroup = trialGroup,
                 Monotonic = () => Now - Initial, WallClock = () => Now + 30, Flaws = flaws
             };
         }
@@ -402,8 +410,9 @@ internal static class ContractWorkload
         {
             while (_owners.Count <= node)
             {
-                var host = DurableHost.ForNode($"contract-node-{++_node}", _wire,
-                    new ActorAdapter(_store, _type), _options.Partitions, _options);
+                IActorType adapter = new ActorAdapter(_store, _type);
+                if (_mixedTypes) adapter = new ActorTypeRouter(new WorkflowInstance([]), new Dictionary<string, IActorType> { [_type.Type] = adapter });
+                var host = DurableHost.ForNode($"contract-node-{++_node}", _wire, adapter, _options.Partitions, _options);
                 _owners.Add(new(host, []));
             }
 
