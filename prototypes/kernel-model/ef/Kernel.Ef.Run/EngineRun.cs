@@ -44,9 +44,13 @@ static class EngineRun
                     Console.Error.WriteLine($"nodelease: unknown {key}={value}; one of {string.Join(", ", allowed.Select(a => a == "" ? "(empty)" : a))}");
                     return 2;
                 }
-            options["nodelease"] = "1";
+            if (options.GetValueOrDefault("mutation", "") != "" && options.GetValueOrDefault("expect") == "none")
+            {
+                Console.Error.WriteLine("nodelease: a negative must deadlock");
+                return 2;
+            }
         }
-        if (args[0] == "locktimeout") (options["nodelease"], options["pool"]) = ("1", "1");     // one pooled session: LockTimeout.cs
+        if (args[0] == "locktimeout") options["pool"] = "1";     // one pooled session: LockTimeout.cs
         var target = new Target(args[1], args[2], options);
         return args[0] switch
         {
@@ -916,7 +920,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
         {
             "postgres" => "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
             "sqlserver" => "SELECT COUNT(*) FROM sys.dm_exec_requests WHERE blocking_session_id <> 0 AND database_id = DB_ID()",
-            "mysql" => "SELECT COUNT(*) FROM performance_schema.data_lock_waits",
+            "mysql" => "SELECT COUNT(DISTINCT w.REQUESTING_THREAD_ID) FROM performance_schema.data_lock_waits w JOIN performance_schema.data_locks l ON l.ENGINE = w.ENGINE AND l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID WHERE l.OBJECT_SCHEMA = DATABASE()",
             _ => null,
         };
         if (sql is null) { await Task.Delay(500); return false; }

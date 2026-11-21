@@ -742,6 +742,7 @@ jobs:
       - shuffled-unit-tests
       - kernel-prototype-nightly
       - kernel-prototype-nightly-4096
+      - nightly-nl9
       # Only so a stale-filter failure, which reaches alert through Build & test, can be told apart and file nothing.
       - generated-maps
     # A cancelled run (superseded by a newer push) is not a failure and files nothing. The nightly schedule
@@ -774,6 +775,7 @@ jobs:
           SHUFFLED: ${{ needs.shuffled-unit-tests.result }}
           KERNEL_NIGHTLY: ${{ needs.kernel-prototype-nightly.result }}
           KERNEL_4096: ${{ needs.kernel-prototype-nightly-4096.result }}
+          KERNEL_NL9: ${{ needs.nightly-nl9.result }}
           MAPS: ${{ needs.generated-maps.result }}
         run: |
           set -euo pipefail
@@ -783,7 +785,8 @@ jobs:
               "Studio .NET build & test:$STUDIO_DOTNET" "Backend source:$BACKEND_SOURCE" \
               "Weaver independent package witness:$WEAVER" "Published image pair:$PUBLISHED_IMAGES" \
               "Workflows unit tests (three shuffled orders):$SHUFFLED" "Kernel prototype nightly:$KERNEL_NIGHTLY" \
-              "Kernel prototype nightly, 4,096 virtual partitions:$KERNEL_4096"; do
+              "Kernel prototype nightly, 4,096 virtual partitions:$KERNEL_4096" \
+              "Kernel prototype nightly, NL-9 node lease deadlock runs:$KERNEL_NL9"; do
             if [[ "${pair##*:}" == failure ]]; then failed+=("CI nightly, ${pair%:*}"); fi
           done
           if [ ${#failed[@]} -eq 0 ]; then
@@ -793,7 +796,7 @@ jobs:
               echo "::notice::Only Generated maps failed: stale solution filters are a refresh request, not a red main. No issue filed."
               exit 0
             fi
-            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096"
+            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096 kernel-nl9=$KERNEL_NL9"
             failed=("CI")
           fi
 
@@ -1955,3 +1958,107 @@ jobs:
 
       - name: Runtime conformance at 4,096, built-in runtime
         run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096
+
+  nightly-nl9:
+    name: Kernel prototype nightly, NL-9 node lease deadlock runs
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      BIN: bin/Release/net10.0
+      # Throwaway values for the three job-scoped database services.
+      PG_PASSWORD: kernel
+      MSSQL_PASSWORD: Kernel_Model1
+      MYSQL_PASSWORD: kernel
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    # Throwaway containers on tmpfs, with a free host port chosen for each service.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ${{ env.PG_PASSWORD }}
+        ports: ['5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: ${{ env.MSSQL_PASSWORD }}
+        ports: ['1433']
+        options: >-
+          --user root --tmpfs /var/opt/mssql
+          --health-cmd "SQLCMDPASSWORD=$MSSQL_SA_PASSWORD /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval 5s --health-timeout 5s --health-retries 30 --health-start-period 10s
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ env.MYSQL_PASSWORD }}
+        ports: ['3306']
+        options: >-
+          --tmpfs /var/lib/mysql
+          --health-cmd "MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysqladmin ping -h 127.0.0.1 -uroot --silent" --health-interval 2s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      - name: Build
+        run: |
+          dotnet restore ef/Kernel.Ef.Run --locked-mode
+          dotnet build ef/Kernel.Ef.Run -c Release --no-restore
+
+      # Every run goes ahead; the step fails at the end if any run's exit code was not 0.
+      - name: NL-9 node lease deadlock runs
+        env:
+          PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          MSSQL_PORT: ${{ job.services.mssql.ports[1433] }}
+          MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
+        run: |
+          NL=(dotnet "ef/Kernel.Ef.Run/$BIN/Kernel.Ef.Run.dll" x nodelease)
+          PG="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=nl9"
+          MS="Server=localhost,$MSSQL_PORT;User Id=sa;Password=$MSSQL_PASSWORD;TrustServerCertificate=True;Database=nl9"
+          MY="server=127.0.0.1;port=$MYSQL_PORT;database=nl9;SslMode=Required"
+          failed=()
+          run() {
+            local engine=$1 connection=$2
+            shift 2
+            local label="$engine $*"
+            echo "::group::$label"
+            if ! "${NL[@]}" "$engine" "$connection" "$@"; then
+              echo "::error::NL-9 run failed: $label"
+              failed+=("$label")
+            fi
+            echo "::endgroup::"
+          }
+          # The store as built: no deadlock, every case, every engine.
+          for c in heartbeat mutual heartbeats; do
+            run postgres "$PG" case=$c expect=none
+            run sqlserver "$MS" case=$c expect=none
+            run sqlserver "$MS" case=$c rcsi=0 expect=none
+            run mysql "$MY" case=$c expect=none
+          done
+          # The negatives that deadlock on SQL Server (experiments/K1b.NodeLease/README.md, Results).
+          run sqlserver "$MS" case=heartbeat rcsi=0 mutation=subquery expect=deadlock
+          run sqlserver "$MS" case=mutual rcsi=0 mutation=subquery expect=deadlock
+          run sqlserver "$MS" case=mutual mutation=rr expect=deadlock
+          run sqlserver "$MS" case=mutual rcsi=0 mutation=rr expect=deadlock
+          run sqlserver "$MS" case=heartbeats rcsi=0 mutation=membership expect=deadlock
+          if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
