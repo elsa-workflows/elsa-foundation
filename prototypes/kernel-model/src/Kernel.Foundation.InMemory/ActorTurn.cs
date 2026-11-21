@@ -83,6 +83,7 @@ internal sealed partial class ActorAdapter
 
         public Contract.ActorRef Start(Contract.StartSpec spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)
         {
+            HeaderLimits.ValidateStart(spec.Type, spec.TypeData);
             var destination = placement == Contract.Placement.Spread
                 ? InstanceRef.Spread(FormattableString.Invariant($"{Header.Ref.Id}/{_turn.Revision}/{_turn.Ordinal}"), _input.Services.Partitions)
                 : _turn.Actor.Partition;
@@ -97,6 +98,8 @@ internal sealed partial class ActorAdapter
 
         public void StartJob(string key, string? arguments = null, TimeSpan? timeout = null)
         {
+            if (Encoding.UTF8.GetByteCount(key) > 1_024)
+                throw new ArgumentException("A job key may occupy at most 1,024 UTF-8 bytes.", nameof(key));
             ArgumentOutOfRangeException.ThrowIfLessThan(timeout ?? TimeSpan.Zero, TimeSpan.Zero, nameof(timeout));
             long? deadline = timeout is { } period ? checked(Now + (long)period.TotalMilliseconds) : null;
             _turn.StartJobWithPayload(key, arguments, deadline);
@@ -123,7 +126,9 @@ internal sealed partial class ActorAdapter
 
         public void SetHeader(string typeData, IReadOnlyDictionary<string, string> labels)
         {
-            if (labels.Count > 4 || labels.Any(pair => Encoding.UTF8.GetByteCount(pair.Key) > 1024 || Encoding.UTF8.GetByteCount(pair.Value) > 1024))
+            HeaderLimits.ValidateTypeData(typeData);
+            if (labels.Count > HeaderLimits.MaxLabels || labels.Any(pair =>
+                Encoding.UTF8.GetByteCount(pair.Key) > HeaderLimits.MaxLabelBytes || Encoding.UTF8.GetByteCount(pair.Value) > HeaderLimits.MaxLabelBytes))
                 throw new ArgumentException("An actor may project four labels of at most 1,024 bytes per key and value.", nameof(labels));
             _header = new(typeData, labels.ToFrozenDictionary(StringComparer.Ordinal));
         }
