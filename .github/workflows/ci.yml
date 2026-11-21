@@ -1778,6 +1778,26 @@ jobs:
           dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
           dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
 
+      - name: Public contract workloads
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --contract --seeds 100
+          $SIM --contract-native --seeds 100
+          expect_contract_failure() {
+            local expected="$1"
+            shift
+            local code=0 output
+            output=$($SIM "$@" 2>&1) || code=$?
+            if [ "$code" -ne 1 ] || ! grep -Fq "$expected" <<<"$output"; then
+              printf 'Unexpected contract control result (exit %s): %s\n' "$code" "$output"
+              return 1
+            fi
+          }
+          expect_contract_failure "future input must still be pending before its due time" --contract --seed 1 --flaw WallClockTimers
+          expect_contract_failure "public inbox" --contract --seed 1 --flaw KeepConsumedMessages
+          expect_contract_failure "effect key did not match its public actor and activation" --contract-native --seed 1 --native-flaw UnstableEffectKey
+          expect_contract_failure "final join did not consume the live yes arrival and the dead no arrival" --contract-native --seed 1 --native-flaw NoDeadPaths
+
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
       # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 3208 (6946 before K1 slice 7's set worlds), a seed
       # that has drifted before, so a smaller size would sit too close to it. The native check runs 12,000 seeds:
@@ -1861,6 +1881,8 @@ jobs:
           $SIM --seeds 20000 --actions 1000
           $SIM --native --seeds 200000
           $SIM --native --seeds 20000 --actions 1000
+          $SIM --contract --seeds 1000
+          $SIM --contract-native --seeds 1000
           $SIM --lease-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
@@ -1955,6 +1977,8 @@ jobs:
           SIM="dotnet sim/$BIN/Kernel.Sim.dll"
           $SIM --seeds 20000 --count 4096
           $SIM --native --seeds 20000 --count 4096
+          $SIM --contract --seeds 1000 --count 4096
+          $SIM --contract-native --seeds 1000 --count 4096
 
       - name: Runtime conformance at 4,096, built-in runtime
         run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096
