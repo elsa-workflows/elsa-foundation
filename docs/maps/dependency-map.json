@@ -61,6 +61,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Hosting",
+          "path": "essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Locking.Core",
           "path": "essentials/src/Locking/Core/Elsa.Locking.Core.csproj"
         },
@@ -106,11 +111,6 @@
         },
         {
           "type": "external",
-          "id": "CShells.Nuplane",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"
         },
@@ -131,22 +131,7 @@
         },
         {
           "type": "external",
-          "id": "Nuplane",
-          "version": "0.0.13"
-        },
-        {
-          "type": "external",
           "id": "Nuplane.Admin",
-          "version": "0.0.13"
-        },
-        {
-          "type": "external",
-          "id": "Nuplane.Loading",
-          "version": "0.0.13"
-        },
-        {
-          "type": "external",
-          "id": "Nuplane.Sources.Directory",
           "version": "0.0.13"
         }
       ]
@@ -402,6 +387,11 @@
           "type": "internal",
           "id": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
           "path": "essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Hosting",
+          "path": "essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj"
         },
         {
           "type": "internal",
@@ -5463,6 +5453,80 @@
           "type": "pinned-transitive",
           "id": "Nuplane.Loading.Abstractions",
           "version": "0.0.13"
+        }
+      ]
+    },
+    {
+      "path": "essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj",
+      "name": "Elsa.Foundation.Hosting",
+      "kind": "source",
+      "domain": "Elsa.Foundation",
+      "sub_domain": "Hosting",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Foundation.Hosting",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Persistence.Schema",
+          "path": "essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Nuplane",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Nuplane",
+          "version": "0.0.13"
+        },
+        {
+          "type": "external",
+          "id": "Nuplane.Loading",
+          "version": "0.0.13"
+        },
+        {
+          "type": "external",
+          "id": "Nuplane.Sources.Directory",
+          "version": "0.0.13"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Newtonsoft.Json",
+          "version": "13.0.4"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Nuplane.Loading.Abstractions",
+          "version": "0.0.13"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
         }
       ]
     },
@@ -15161,6 +15225,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Hosting",
+          "path": "essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Identity.Api",
           "path": "essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj"
         },
@@ -18451,6 +18520,65 @@
           "type": "external",
           "id": "Xunit.SkippableFact",
           "version": "1.5.23"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/Foundation/Hosting/Tests/Elsa.Foundation.Hosting.Tests.csproj",
+      "name": "Elsa.Foundation.Hosting.Tests",
+      "kind": "test",
+      "domain": "Elsa.Foundation",
+      "sub_domain": "Hosting.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Host",
+          "path": "apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Hosting",
+          "path": "essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Modularity.Api",
+          "path": "essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.TestHost",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
         },
         {
           "type": "external",
