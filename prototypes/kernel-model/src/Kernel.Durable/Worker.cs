@@ -2489,8 +2489,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         foreach (var ticket in tickets)
         {
-            if (!unit.Cancelled.Contains(ticket.Message.InboxKey)) unit.Cancelled.Add(ticket.Message.InboxKey);
-            Cancelling(ticket.Message.InboxKey);
+            Cancel(ticket.Message.InboxKey);
+            if (row.FoundationInlineBirth is not null && (ticket.Original ?? ticket.Message).Read<JobTicket>().Timer is { } timer)
+            {
+                var deadline = InboxKey.Issued(timer);
+                if (InMemoryOnly(deadline)) Cancel(deadline);
+            }
+        }
+
+        void Cancel(InboxKey key)
+        {
+            if (!unit.Cancelled.Contains(key)) unit.Cancelled.Add(key);
+            Cancelling(key);
         }
     }
 

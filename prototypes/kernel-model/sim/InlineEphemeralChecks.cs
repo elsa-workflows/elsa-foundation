@@ -9,7 +9,7 @@ internal static class InlineEphemeralChecks
     {
         string[] shapes = flaws.HasFlag(Flaw.ForgetShortWaits) ? ["promote"]
             : flaws.HasFlag(Flaw.IgnoreLeaseDeadline) ? ["stale"]
-            : ["finish", "timer", "job", "timed", "timed-fast", "promote", "handover", "overlong", "child", "hold", "refused", "refused-later", "refused-both", "lost-before", "lost-after", "fallback", "stale"];
+            : ["finish", "timer", "job", "timed", "timed-fast", "promote", "handover", "overlong", "child", "hold", "refused", "refused-later", "refused-both", "lost-before", "lost-after", "fallback", "stale", "park-cutoff"];
         foreach (var shape in shapes)
             await new Schedule(shape, check, flaws).Run();
     }
@@ -110,6 +110,13 @@ internal static class InlineEphemeralChecks
                 return;
             }
 
+            if (shape == "park-cutoff")
+            {
+                check(actor.JobsEntered == 1 && store.Messages.Count == 0, "the armed timed job is still local before Park");
+                _now += 10;
+                await Pass(owner);
+            }
+
             if (shape == "stale")
             {
                 check(actor.FirstTurnWaiting && store.Messages.Count == 0,
@@ -164,6 +171,13 @@ internal static class InlineEphemeralChecks
                     store.Instances.Values.Single().State == "checkpoint" &&
                     entries.SequenceEqual(["start", "waiting", expected, "end"]),
                     $"a short timed job promotes its header, state and journal and leaves no deadline ({shape})");
+            }
+            else if (shape == "park-cutoff")
+            {
+                check(answer is { Status: Contract.ActorStatus.Faulted } &&
+                    await reads.GetAsync(_scope, reference) is { Header.Status: Contract.ActorStatus.Faulted } &&
+                    store.Instances.Values.Single().Jobs is null && store.Messages.Count == 0,
+                    "Park of an unwritten actor retires both its timed job and the volatile deadline");
             }
             else if (shape == "overlong")
             {
@@ -290,6 +304,10 @@ internal static class InlineEphemeralChecks
                         case "overlong":
                             turn.Send(turn.Header.Ref, "slow-timer", dueAt: turn.Now + 20);
                             break;
+                        case "park-cutoff":
+                            turn.StartJob("timed", timeout: TimeSpan.FromMilliseconds(30));
+                            turn.Send(turn.Header.Ref, "throw-timer", dueAt: turn.Now + 10);
+                            break;
                         case "refused-later":
                             turn.Send(turn.Header.Ref, "refused-timer", dueAt: turn.Now + 20);
                             Remember("accepted");
@@ -312,6 +330,7 @@ internal static class InlineEphemeralChecks
                 }
 
                 if (message.Kind == "resume") continue;
+                if (message.Kind == "throw-timer") throw new InvalidOperationException("short-wait Park control");
                 if (message.Kind == "refused-timer")
                 {
                     turn.State = "discard this state";
