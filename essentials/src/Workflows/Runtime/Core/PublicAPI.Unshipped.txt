@@ -12707,3 +12707,23 @@ Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.HasPendingHistor
 Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.DischargeUnrecordedCompletionAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! completion, int limit = 256, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.NoRecordCompletion.get -> Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion?
 Elsa.Workflows.Runtime.Core.Models.DurableTimerHistoryResponsibility.NoRecordCompletion.init -> void
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.DurableTimerNoRecordCompletion(string! checkpointId, System.DateTimeOffset completedAt) -> void
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.CompletedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.CheckpointId.get -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryNoRecordCompletion.Validate(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! completion) -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryNoRecordCompletion
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.operator !=(Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion? left, Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.operator ==(Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion? left, Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion? right) -> bool
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.Equals(Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.DurableTimerNoRecordCompletion!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryTimerSupport
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryTimerSupport.CanCapture.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.CanInspectHistorySources(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! history) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.CanDischargeUnrecordedCompletion(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore! checkpointStore) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.ListDuePageAsync(System.DateTimeOffset asOf, Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.DurableTimer!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerScheduler.CanRecordHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.RequiresUnrecordedTimerDischargeAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
