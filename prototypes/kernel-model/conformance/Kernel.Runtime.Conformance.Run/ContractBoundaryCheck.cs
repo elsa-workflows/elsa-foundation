@@ -8,7 +8,7 @@ using Kernel.WorkflowActor;
 internal static class ContractBoundaryCheck
 {
     private static readonly string[] ImplementationWords =
-        ["Partition", "Epoch", "Fence", "Lease", "Position", "NodeRecord", "KernelStore", "Sql", "SQL"];
+        ["Partition", "Epoch", "Fence", "Lease", "Position", "NodeRecord", "KernelStore", "TenantColumn", "Sql", "SQL"];
 
     public static int Run()
     {
@@ -20,6 +20,7 @@ internal static class ContractBoundaryCheck
         Check(typeof(WorkflowActor).Assembly, faults, foundation, model);
         CheckScope(typeof(IIngress), faults);
         CheckScope(typeof(IActorReads), faults);
+        CheckModelTenant(faults);
         if (typeof(BoundScope).GetConstructors().Length != 0 || typeof(BoundScope).GetProperty(nameof(BoundScope.Tenant))?.CanWrite != false)
             faults.Add("BoundScope must have no public constructor or tenant setter");
         var issuers = foundation.GetCustomAttributes<InternalsVisibleToAttribute>().Select(a => a.AssemblyName).ToHashSet(StringComparer.Ordinal);
@@ -41,6 +42,24 @@ internal static class ContractBoundaryCheck
             if (parameters.Length == 0 || parameters[0].ParameterType != typeof(BoundScope)
                 || parameters.Any(p => p.ParameterType == typeof(string) && string.Equals(p.Name, "tenant", StringComparison.OrdinalIgnoreCase)))
                 faults.Add($"{contract.Name}.{method.Name} must use a bound scope as its only tenant source");
+        }
+    }
+
+    private static void CheckModelTenant(List<string> faults)
+    {
+        if (typeof(ITurn).GetProperty(nameof(ITurn.Instance))?.CanWrite != false ||
+            typeof(InstanceInfo).GetProperty(nameof(InstanceInfo.Tenant))?.CanWrite != false)
+            faults.Add("A model must see the tenant through a read-only instance");
+
+        foreach (var contract in new[] { typeof(IActorTurn), typeof(ITurn) })
+        {
+            foreach (var method in contract.GetMethods().Where(method => method.Name == nameof(ITurn.Send)))
+            {
+                var parameters = method.GetParameters();
+                if (parameters is not [{ ParameterType: var target }, ..] || target != typeof(ActorRef) ||
+                    parameters.Any(parameter => string.Equals(parameter.Name, "tenant", StringComparison.OrdinalIgnoreCase)))
+                    faults.Add($"{contract.Name}.{method.Name} must address an exact ref without an explicit tenant");
+            }
         }
     }
 
@@ -83,7 +102,7 @@ internal static class ContractBoundaryCheck
 
     private static void CheckName(string name, string location, List<string> faults)
     {
-        if (ImplementationWords.Any(word => name.Contains(word, StringComparison.Ordinal)))
+        if (name == "Q" || ImplementationWords.Any(word => name.Contains(word, StringComparison.Ordinal)))
             faults.Add($"{location} exposes implementation vocabulary ({name})");
     }
 }
