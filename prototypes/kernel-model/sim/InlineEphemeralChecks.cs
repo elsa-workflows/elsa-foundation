@@ -8,7 +8,8 @@ internal static class InlineEphemeralChecks
     public static async Task Run(Action<bool, string> check, Flaw flaws)
     {
         string[] shapes = flaws.HasFlag(Flaw.ForgetShortWaits) ? ["promote"]
-            : ["finish", "timer", "job", "timed", "timed-fast", "promote", "handover", "overlong", "child", "hold", "refused", "refused-later", "refused-both", "lost-before", "lost-after", "fallback"];
+            : flaws.HasFlag(Flaw.IgnoreLeaseDeadline) ? ["stale"]
+            : ["finish", "timer", "job", "timed", "timed-fast", "promote", "handover", "overlong", "child", "hold", "refused", "refused-later", "refused-both", "lost-before", "lost-after", "fallback", "stale"];
         foreach (var shape in shapes)
             await new Schedule(shape, check, flaws).Run();
     }
@@ -57,6 +58,7 @@ internal static class InlineEphemeralChecks
                 shape == "refused-both" ? "refused-later" : shape;
             var target = new Contract.Target.Start(new Contract.StartSpec(shape == "fallback" ? "unregistered" : actor.Type, recipe, null, Ephemeral: true));
             var deadline = _now + (shape == "promote" ? 60 : 400);
+            if (shape == "stale") deadline += (long)options.Lease.TotalMilliseconds;
             var reply = ingress.RequestAsync(_scope, target, shape, Contract.Kinds.Start, null, null,
                 new("caller", deadline, Inline: true)).AsTask();
             var duplicate = await ingress.SendAsync(_scope, target, shape, Contract.Kinds.Start);
@@ -105,6 +107,20 @@ internal static class InlineEphemeralChecks
                 else await Pass(owner);
                 check(await reads.GetAsync(_scope, reference) is { Header.Status: Contract.ActorStatus.Finished },
                     $"the {shape} timer continues the same actor");
+                return;
+            }
+
+            if (shape == "stale")
+            {
+                check(actor.FirstTurnWaiting && store.Messages.Count == 0,
+                    "the original owner has an active write-free start before takeover");
+                _now += (long)options.Lease.TotalMilliseconds + 1;
+                await using var successor = (await new DurableHost([MakeOwner("successor")]).ActivateAsync(0))!;
+                await Pass(successor);
+                actor.Resume();
+                var stale = await reply.WaitAsync(TimeSpan.FromSeconds(2));
+                check(stale is { Error: "lost", Item: null } && store.Instances.Count == 0 && store.Journal.Count == 0,
+                    "an expired inline owner cannot return a successful write-free response after takeover");
                 return;
             }
 
@@ -223,6 +239,7 @@ internal static class InlineEphemeralChecks
         public Contract.ActorRef? Reference { get; private set; }
         public int JobsEntered { get; private set; }
         public int TimerCalls { get; private set; }
+        public bool FirstTurnWaiting { get; private set; }
         private readonly TaskCompletionSource _release = new();
 
         internal void Resume() => _release.SetResult();
@@ -244,6 +261,15 @@ internal static class InlineEphemeralChecks
             var recovered = turn.Inbox.Any(message => message.Kind == "resume");
             foreach (var message in turn.Inbox)
             {
+                if (message.Kind == Contract.Kinds.Start && turn.Header.TypeData == "stale")
+                {
+                    FirstTurnWaiting = true;
+                    await _release.Task;
+                    turn.Emit("response", "stale");
+                    turn.End(Contract.ActorStatus.Finished);
+                    continue;
+                }
+
                 if (message.Kind == Contract.Kinds.Start && turn.Header.TypeData != "finish" && !recovered)
                 {
                     switch (turn.Header.TypeData)

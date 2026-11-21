@@ -1853,6 +1853,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         var generation = _generation;
         var fence = input.Slot.TurnFence;
+        var inline = input.Spec?.FoundationInlineTenant is not null || input.Row?.FoundationInlineBirth is not null;
         TurnOutcome unit;
         try { unit = await _type.TurnAsync(input); }
         catch (Exception e)
@@ -1861,7 +1862,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             {
                 if (generation != _generation) return;
                 ResumeAfterDetachedTurn(input.Slot);
-                if (fence != input.Slot.TurnFence) return;
+                if (fence != input.Slot.TurnFence || inline && !LeaseUsable()) return;
                 input.Slot.Driving = false;
                 input.Slot.RollbackTurn?.Invoke();
                 unit = _type.Park(input.Row, input.Actor, input.Taken, input.Spec, e.Message, input.Unwritten ? input.Pending : null);
@@ -1875,11 +1876,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             if (generation != _generation) return;
             ResumeAfterDetachedTurn(input.Slot);
-            if (fence == input.Slot.TurnFence)
-            {
-                input.Slot.Driving = false;
-                Enqueue(Bound(unit, input.Slot), cancellationToken);
-            }
+            if (fence != input.Slot.TurnFence || inline && !LeaseUsable()) return;
+            input.Slot.Driving = false;
+            Enqueue(Bound(unit, input.Slot), cancellationToken);
         }
     }
 
