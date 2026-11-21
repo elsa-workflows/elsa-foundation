@@ -127,11 +127,11 @@ public sealed class TurnInput
     private readonly Worker _worker;
     private readonly ITurnServices _services;
 
-    internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec)
+    internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec, long admittedAt)
     {
         _worker = worker;
         ChildIds = worker.ChildIdsFor(actor);
-        _services = worker.ServicesFor(slot);
+        _services = worker.ServicesFor(slot, admittedAt);
         Slot = slot;
         Actor = actor;
         Taken = taken;
@@ -173,8 +173,11 @@ public sealed class TurnInput
     public string Model => Row?.Model ?? Spec!.Model;
     public ITurnServices Services => _services;
 
+    /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
+    public long CheckpointTime => _worker.Now;
+
     /// <summary>Say that the actor's code is about to run, with what it is given (for tests).</summary>
-    public void Started(IReadOnlyList<Message> inbox) => _worker.Started(Actor, inbox);
+    public void Started(IReadOnlyList<Message> inbox) => _worker.Started(Actor, inbox, Services.Now);
 }
 
 /// <summary>What a turn did, for the committer: the row, what it consumed and held, sent, subscribed, cancelled.</summary>
@@ -443,9 +446,14 @@ public sealed class DurableTurn
     /// only what is in memory too. And it took no message that is a row: consuming one needs a commit, and a start that is
     /// a row (an outside start, say) must not be lost with the memory.
     /// </summary>
-    public bool CanWaitInMemory(long until) =>
-        until > Services.Now && _window is null && _replied.Count == 0 && _subscribed.Count == 0 && (_cancelled.Count == 0 || _input.Unwritten) && !_input.Taken.Any(i => i.Durable)
-        && _sent.TrueForAll(m => m.Target == Actor && m.Kind is not (Kinds.Publish or Kinds.Meet) && (m.Kind == Kinds.Job || (m.Due ?? Services.Now) <= until));
+    public bool CanWaitInMemory(long until)
+    {
+        var now = _input.CheckpointTime;
+        return until > now && _window is null && _replied.Count == 0 && _subscribed.Count == 0 &&
+            (_cancelled.Count == 0 || _input.Unwritten) && !_input.Taken.Any(i => i.Durable) &&
+            _sent.TrueForAll(m => m.Target == Actor && m.Kind is not (Kinds.Publish or Kinds.Meet) &&
+                (m.Kind == Kinds.Job || (m.Due ?? now) <= until));
+    }
 
     /// <summary>Everything this turn sends stays in memory: none of it is a row.</summary>
     public void WaitInMemory() => _volatile.UnionWith(_sent.Select(m => m.InboxKey));

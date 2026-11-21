@@ -110,6 +110,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private enum Outcome { Landed, Refused, Lost }
 
     private readonly IKernelStore _store;
+    private readonly Func<long>? _foundationClock;
     private readonly IActorType _type;
     private readonly WorkerOptions _options;
     private readonly Dictionary<string, Slot> _slots = new(StringComparer.Ordinal);
@@ -186,6 +187,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (Assigned.Count == 0 && !nodeSet) throw new ArgumentException("A worker serves at least one partition.", nameof(partitions));
         Partition = nodeSet ? -1 : Assigned[0];
         _store = store;
+        _foundationClock = store.FoundationClock;
         _lifecycle = options?.Lifecycle ?? (store as InMemoryStore)?.Lifecycle;
         _type = type;
         _options = options ?? new WorkerOptions();
@@ -241,8 +243,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     public bool CreationIdentityAvailable => _store.CreationIdentityAvailable;
     public bool CommitClockAvailable => _store.CommitClockAvailable;
-    /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
-    public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
+    /// <summary>The shared foundation reading when available, or the worker's elapsed-time estimate for a remote store.</summary>
+    public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _foundationClock?.Invoke() ?? _anchor + _options.Monotonic();
 
     public bool Taking => _taking;
     public bool Polling => _polling;
@@ -266,7 +268,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private IEnumerable<string> ReadyForTurns(CancellationToken cancellationToken)
     {
         ReceiveJobPublications(cancellationToken);
-        return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && Deliverable(s.Key, s.Value).Count > 0).Select(s => s.Key)
+        var now = Now;
+        return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && Deliverable(s.Key, s.Value, now).Count > 0).Select(s => s.Key)
             .Where(id => !Blocked && (TrialItems.Count == 0 || OnTrial(id) || Spared(id)));    // while a trial runs, nothing else in the process does
     }
 
@@ -309,18 +312,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
     void ITurnServices.Cancelling(InboxKey ticket) => Cancelling(ticket);
 
-    internal ITurnServices ServicesFor(Slot slot)
+    internal ITurnServices ServicesFor(Slot slot, long admittedAt)
     {
-        var services = new TurnServices(this, slot, _generation, slot.TurnFence);
+        var services = new TurnServices(this, slot, _generation, slot.TurnFence, _foundationClock is not null ? admittedAt : null);
         slot.UndoTurn = () => services.Invalidate(restartJobs: true);
         slot.RollbackTurn = () => services.Invalidate(restartJobs: false);
         return services;
     }
 
-    private sealed class TurnServices(Worker worker, Slot slot, long generation, long fence) : ITurnServices
+    private sealed class TurnServices(Worker worker, Slot slot, long generation, long fence, long? admittedAt) : ITurnServices
     {
         private readonly HashSet<InboxKey> _reservations = [];
-        public long Now => worker.Now;
+        public long Now => admittedAt ?? worker.Now;
         public bool CreationIdentityAvailable => worker.CreationIdentityAvailable;
         public bool CommitClockAvailable => worker.CommitClockAvailable;
         public int Partitions => worker.Partitions;
@@ -1538,9 +1541,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         return local is not null && local.ObservedOrder < durable.ObservedOrder ? local : durable;
     }
 
-    private List<Delivery> Deliverable(string instance, Slot slot)
+    private List<Delivery> Deliverable(string instance, Slot slot, long now)
     {
-        var now = Now;
         var due = new List<Delivery>();
         var suspended = Withheld(slot);
         var onTrial = OnTrial(instance);
@@ -1743,7 +1745,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         instance = Canonical(instance);
         if (_releasing || !LeaseUsable() || !_slots.TryGetValue(instance, out var slot) || !Loaded(slot) || slot.Busy) return;
         if (Blocked || (TrialItems.Count > 0 && !OnTrial(instance) && !Spared(instance))) return;
-        var due = Deliverable(instance, slot);
+        var now = Now;
+        var due = Deliverable(instance, slot, now);
         if (due.Count == 0) return;
         var supplied = due.FindAll(i => i.DiscardedAt(slot));
         if (supplied.Count > 0)
@@ -1754,7 +1757,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Enqueue(new TurnOutcome(instance) { Consumed = supplied }, cancellationToken);
             return;
         }
-        if (slot.Unwritten && (Now >= slot.Until || due.Exists(i => i.Durable || Kinds.IsControl(i.Message.Kind))) && !Has(Flaw.NoWriteFirst))
+        if (slot.Unwritten && (now >= slot.Until || due.Exists(i => i.Durable || Kinds.IsControl(i.Message.Kind))) && !Has(Flaw.NoWriteFirst))
         {
             // Decision 4: a message from outside, or a command, finds an instance kept in memory written first; then it
             // is an ordinary instance, with a row, for whatever the message does.
@@ -1776,7 +1779,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var spec = creator < 0 ? null : due[creator].Message.Start;
         slot.Starting = creator < 0 ? null : due[creator].Message;
         if (creator >= 0) slot.Ambient = due[creator].StarterAmbient;
-        var input = new TurnInput(this, slot, instance, due, Math.Max(creator, 0), spec);
+        var input = new TurnInput(this, slot, instance, due, Math.Max(creator, 0), spec, now);
         if (_type.Command(input) is { } command)
             Enqueue(Bound(command, slot), cancellationToken);
         else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.JobFinished) is { } poison)
@@ -1865,7 +1868,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     /// <summary>The turn has started: for tests (<see cref="WorkerOptions.OnTurn"/>).</summary>
-    internal void Started(string instance, IReadOnlyList<Message> inbox) => _options.OnTurn?.Invoke(new InstanceRef(instance), inbox, Now);
+    internal void Started(string instance, IReadOnlyList<Message> inbox, long now) => _options.OnTurn?.Invoke(new InstanceRef(instance), inbox, now);
 
     // ---- background jobs -------------------------------------------------------------------------------------------
 

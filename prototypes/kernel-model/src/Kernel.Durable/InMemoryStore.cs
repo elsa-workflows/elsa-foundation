@@ -10,6 +10,8 @@ namespace Kernel.Durable;
 /// </summary>
 public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
 {
+    public Func<long> FoundationClock => clock;
+
     public bool CommitClockAvailable { get; set; } = true;
     public bool PhysicalRetirementAvailable => true;
     public bool CreationIdentityAvailable { get; set; } = true;

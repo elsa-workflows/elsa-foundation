@@ -5,6 +5,8 @@ internal static class ParkR14AliasChecks
 {
     private sealed class AliasStore(IKernelStore inner) : IKernelStore
     {
+        public Func<long>? FoundationClock => inner.FoundationClock;
+
         public bool SupportsCommitWindow => inner.SupportsCommitWindow;
         public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
         public bool CommitClockAvailable => inner.CommitClockAvailable;

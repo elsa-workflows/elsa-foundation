@@ -30,6 +30,8 @@ public sealed record MongoStoreOptions
 /// </summary>
 public sealed partial class MongoStore : IKernelStore
 {
+    public Func<long>? FoundationClock => null;
+
     private static readonly TransactionOptions Transaction = new(ReadConcern.Snapshot, ReadPreference.Primary, WriteConcern.WMajority);
     private static readonly BsonDocument NowMs = new("$toLong", "$$NOW");
     private static readonly BsonDocument NowUs = new("$multiply", new BsonArray { NowMs, 1000L });

@@ -267,6 +267,8 @@ internal static partial class ShortWaitRaces
 
     private sealed class CutFaultStore(IKernelStore inner) : IKernelStore
     {
+        public Func<long>? FoundationClock => inner.FoundationClock;
+
         private string? _mode; private int _remaining;
         public int Failures, AfterFailureAttempts;
         public bool SupportsCommitWindow => inner.SupportsCommitWindow;
