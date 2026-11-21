@@ -20,8 +20,9 @@ internal static class JobResultSizeChecks
         var chunk = new string('x', PayloadLimit / 4);
         await Schedule(new[] { chunk, chunk, chunk, chunk, chunk }, false, true, flaws,
             (ok, name) => check(ok, $"oversized compound value: {name}"));
-        await Schedule(new string('x', 166_666_667), false, true, flaws,
-            (ok, name) => check(ok, $"value beyond the serializer's single-token limit: {name}"));
+        var huge = new string('x', 166_666_667);
+        await Schedule(huge, false, true, flaws, (ok, name) => check(ok, $"value beyond the serializer's single-token limit: {name}"));
+        await Schedule(new[] { huge }, false, true, flaws, (ok, name) => check(ok, $"nested value beyond the serializer's single-token limit: {name}"));
 
         async Task Run(string shape, string value, bool tooLarge)
         {
