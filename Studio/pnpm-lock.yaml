@@ -77,13 +77,13 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       '@elsa-workflows/studio-workflows':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Workflows/Client
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -114,10 +114,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -145,10 +145,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -179,10 +179,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       '@microsoft/signalr':
         specifier: ^8.0.7
         version: 8.0.29
@@ -213,10 +213,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -247,10 +247,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -278,10 +278,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -309,10 +309,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lossless-json:
         specifier: 4.3.2
         version: 4.3.2
@@ -346,10 +346,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-code-editor':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.CodeEditor/Client
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@lezer/javascript':
         specifier: 1.5.4
         version: 1.5.4
@@ -377,10 +377,10 @@ importers:
         version: 6.3.2
       '@elsa-workflows/studio-code-editor':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.CodeEditor/Client
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -402,13 +402,13 @@ importers:
     dependencies:
       '@elsa-workflows/studio-code-editor':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.CodeEditor/Client
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -439,10 +439,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -473,10 +473,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -507,10 +507,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -532,10 +532,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -575,13 +575,13 @@ importers:
         version: 3.2.2(react@19.2.7)
       '@elsa-workflows/studio-code-editor':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.CodeEditor/Client
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -612,10 +612,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-workflows':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Workflows/Client
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -637,10 +637,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
