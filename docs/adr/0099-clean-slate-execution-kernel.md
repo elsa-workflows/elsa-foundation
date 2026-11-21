@@ -109,7 +109,8 @@ and returns: its inbox, state, sends, timers, jobs, events, subscriptions, child
 all landing in one atomic outcome), **ingress** (an outside add, request, publish or start subscription under a bound
 scope, addressed to a ref, a caller key, an event key, which makes it the outside publish, or a start spec) and **read models** (every non-owner query, with
 opaque handles, selections and page tokens). A foundation implements all of it as one unit and supplies the guarantees
-itself: single-writer turns, the atomic outcome, at-least-once delivery deduplicated per sender, target and id in one
+itself: serialized turns per actor within each owner, fenced commits across owners, the atomic outcome,
+at-least-once delivery deduplicated per sender, target and id in one
 sender's order, durable timers as messages, jobs that run at least once with a result applied once, events matched to
 committed subscriptions, children with their notices and a terminate cascade, commands delivered alone, Park and
 recovery from the actor type's restore plan, tenancy and exact refs (cases FC-1 to FC-18). A send is recorded
@@ -136,7 +137,8 @@ row and a journal per virtual partition, and a commit over several of them fence
 ascending id. Rebalance moves the fewest partitions, so a node's partitions may be scattered (owner, 17 November:
 PARTITIONS.md decisions 5 and 4). One owner node writes a partition; its commit lands only while the
 row still has the owner's epoch and expected position, checked in the same transaction, so a stale owner never lands a
-commit. Leases decide who should write; the fence decides who can. A lease is held by the process, in one node record
+commit. A former owner's already-running code can overlap its successor's execution. Leases decide who should write.
+The fence decides who can. A lease is held by the process, in one node record
 its heartbeat renews, and covers every partition it owns; a partition row carries none (owner, 19 November; the
 [node lease amendment](../architecture/decisions.md#the-node-lease-amendment-19-november), approved with conditions
 by the independent review on 19 November ([verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7006654424))). The kernel writes its own commit SQL on PostgreSQL,

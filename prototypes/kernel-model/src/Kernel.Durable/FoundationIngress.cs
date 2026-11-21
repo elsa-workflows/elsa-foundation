@@ -8,6 +8,7 @@ public sealed partial class InMemoryStore
     internal sealed record FoundationStartReceipt(string Reference, bool Duplicate);
     private sealed record CreatedRoot(string Reference, long DeduplicateUntil);
     private readonly Dictionary<(string Tenant, string Operation), CreatedRoot> _foundationStarts = [];
+    private readonly Dictionary<string, long> _foundationSendReceipts = new(StringComparer.Ordinal);
 
     internal FoundationStartReceipt AdmitGeneratedFoundationStart(string tenant, string id, StartSpec spec,
         long? due, TimeSpan? keepFor, string? replyTo = null)
@@ -44,10 +45,12 @@ public sealed partial class InMemoryStore
         return window;
     }
 
-    private int SweepFoundationStarts(long now)
+    private int SweepFoundationIngressReceipts(long now)
     {
         var expired = _foundationStarts.Where(pair => pair.Value.DeduplicateUntil < now).Select(pair => pair.Key).ToArray();
         foreach (var key in expired) _foundationStarts.Remove(key);
-        return expired.Length;
+        var sends = _foundationSendReceipts.Where(pair => pair.Value < now).Select(pair => pair.Key).ToArray();
+        foreach (var key in sends) _foundationSendReceipts.Remove(key);
+        return expired.Length + sends.Length;
     }
 }

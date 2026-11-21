@@ -65,6 +65,39 @@ internal static class OrdinaryIngressChecks
             Read(scope, later).SequenceEqual(["configured"]),
             "a new generated start after the receipt expires has its own exact ref and leaves the old life intact");
 
+        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("ordinary-successor"), "ordinary-successor");
+        var due = now + 200;
+        var delayed = new Contract.AddOptions(DueAt: due, KeepFor: TimeSpan.FromMilliseconds(7));
+        var delayedFirst = await ingress.SendAsync(scope, exact, "scheduled", "ordinary", "first occurrence", delayed);
+        var occurrence = store.Messages.Keys.Single(key => store.Messages[key].Message.Id == "scheduled");
+        var legacy = new Message(occurrence.Id, new InstanceRef("0/legacy"), "ordinary", Due: due + 100);
+        check(await store.AddAsync(legacy) && store.Messages.ContainsKey(occurrence) && store.Messages.ContainsKey(legacy.InboxKey),
+            "the private occurrence and the same legitimate legacy wire id coexist in separate scopes");
+        now += 7;
+        var delayedDuplicate = await ingress.SendAsync(scope, exact, "scheduled", "ordinary", "ignore", delayed);
+        now++;
+        var delayedSecond = await ingress.SendAsync(scope, exact, "scheduled", "ordinary", "second occurrence", delayed);
+        var immediateRetry = await ingress.SendAsync(scope, exact, "scheduled", "ordinary", "ignore again", delayed);
+        await store.SweepAsync();
+        var pending = await read.InboxAsync(scope, first);
+        check(delayedFirst.Outcome == Contract.AdmissionOutcome.Accepted && delayedDuplicate.Outcome == Contract.AdmissionOutcome.Duplicate &&
+            delayedSecond.Outcome == Contract.AdmissionOutcome.Accepted && immediateRetry.Outcome == Contract.AdmissionOutcome.Duplicate &&
+            pending.Items is [{ Id: "scheduled", Due: var firstDue, Handle: var firstHandle, State: Contract.DeliveryState.Pending },
+                { Id: "scheduled", Due: var secondDue, Handle: var secondHandle, State: Contract.DeliveryState.Pending }] &&
+            firstDue == due && secondDue == due && firstHandle != secondHandle,
+            "an expired pending send admits a second occurrence while preserving the first and deduplicating the second");
+        now = due - 1;
+        await Pump(next);
+        check(Read(scope, first).SequenceEqual(["configured", "once"]),
+            "the two pending occurrences remain ineligible before their shared due time");
+        now++;
+        await Pump(next);
+        var committed = await read.TailAsync(scope, first);
+        var effects = committed.Items.Where(entry => entry.Entry == Json.Write("first occurrence") || entry.Entry == Json.Write("second occurrence"));
+        check(effects.Select(entry => entry.Entry).SequenceEqual([Json.Write("first occurrence"), Json.Write("second occurrence")]) &&
+            (await read.InboxAsync(scope, first)).Items.Count == 0,
+            "the public journal shows both occurrences applied exactly once in insertion order");
+
         List<string> Read(Contract.BoundScope tenant, Contract.ActorRef reference) =>
             Json.Read<List<string>>(store.ReadFoundationActor(tenant.Tenant, reference.Id).Actor!.Row.State);
     }
@@ -87,7 +120,11 @@ internal static class OrdinaryIngressChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             var state = turn.State is null ? [] : Json.Read<List<string>>(turn.State);
-            state.AddRange(turn.Inbox.Select(message => message.Payload).OfType<string>());
+            foreach (var input in turn.Inbox.Select(message => message.Payload).OfType<string>())
+            {
+                state.Add(input);
+                turn.Record(input);
+            }
             turn.State = Json.Write(state);
             return default;
         }

@@ -292,17 +292,19 @@ internal static class ContractWorkload
         private int _node;
         private bool? _loseAt;
 
-        internal InMemoryDriver(int partitions, Flaw flaws, Contract.IActorType type)
+        internal InMemoryDriver(int partitions, Flaw flaws, Contract.IActorType type,
+            int maxAttempts = 10, Func<Contract.BoundScope, string, bool>? authorizeOperator = null,
+            Func<InstanceRow, bool>? refuses = null)
         {
             ArgumentOutOfRangeException.ThrowIfLessThan(partitions, 2);
             _type = type;
-            _store = new(partitions, () => Now, flaws);
+            _store = new(partitions, () => Now, flaws) { Refuses = refuses };
             _wire = new CountingStore(_store, () => { }, ObserveCommit);
-            Ingress = new InMemoryIngress(_store, new Requests(Model), Model);
+            Ingress = new InMemoryIngress(_store, new Requests(Model), Model, authorizeOperator);
             Reads = new ActorList(_store, 7);
             _options = new()
             {
-                Partitions = partitions, Lease = TimeSpan.FromMilliseconds(Lease), MaxAttempts = 10,
+                Partitions = partitions, Lease = TimeSpan.FromMilliseconds(Lease), MaxAttempts = maxAttempts,
                 Monotonic = () => Now - Initial, WallClock = () => Now + 30, Flaws = flaws
             };
         }
@@ -318,6 +320,16 @@ internal static class ContractWorkload
             foreach (var partition in Placements(actors))
                 if (_placementOwners.TryAdd(partition, 0)) await Take(partition, 0);
             Require(_placementOwners.Count > 1, "the fault driver must exercise multiple virtual partitions");
+        }
+
+        // Event admission cannot return a ref before the event-created actor starts. Only the host
+        // uses these pending scopes to schedule the pass. The workload sees births through public reads.
+        internal async Task StartPendingEventCreators()
+        {
+            var pending = _store.Messages.Values.Where(row => !row.Done && row.Message.InboxScope == InboxKey.EventCreatorScope)
+                .Select(row => row.Message.Target.Partition).Distinct().Order().ToArray();
+            foreach (var partition in pending)
+                if (_placementOwners.TryAdd(partition, 0)) await Take(partition, 0);
         }
 
         // Exercise independent parent and child owners. Co-located children stay where their parent already runs.

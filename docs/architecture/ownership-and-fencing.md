@@ -13,7 +13,9 @@
 
 A runtime places each partition on a node. A lease, held by the node, helps it decide who should work there. The database fence decides whose changes can become durable. One partition holds many instances, so one fence can protect a batch of their turns.
 
-The runtime may briefly activate the same partition twice. Correctness must survive that overlap, including an old owner that resumes after its replacement has started.
+The runtime may briefly activate the same partition twice. Each owner serializes an actor's turns within its process.
+At takeover an already-running turn may finish after the replacement has started. The fence accepts only the current
+owner's commit. [Foundation contract, FC-1](foundation-contract.md#what-a-foundation-adapter-must-supply)
 
 ## Why a lease is not enough
 
