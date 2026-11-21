@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
 
@@ -44,25 +45,25 @@ internal sealed partial class Burst
     private bool AdmitPrefix()
     {
         // A held composite signal may stay at the head while authored work waits. It cannot gate metadata admission.
-        var first = AdmissionHas(AdmissionFlaw.BlockedSignal) ? turn.Inbox.FirstOrDefault()
-            : turn.Inbox.FirstOrDefault(m => m.Kind != CompositeSignal.Kind);
-        if (first is null || !model.HandlesMetadata(first)) return false;
+        var first = AdmissionHas(AdmissionFlaw.BlockedSignal) ? _inbox.Items.FirstOrDefault()
+            : _inbox.Items.FirstOrDefault(m => m.Kind != CompositeSignal.Kind);
+        if (first is null || !NativeModel.HandlesMetadata(first.Kind)) return false;
         var prefix = true;
-        foreach (var message in turn.Inbox)
+        foreach (var message in _inbox.Items)
         {
-            if (message.Kind == CompositeSignal.Kind) { turn.Hold(message); continue; }
-            prefix &= model.HandlesMetadata(message);
-            if (!prefix) { turn.Hold(message); continue; }
+            if (message.Kind == CompositeSignal.Kind) { _inbox.Hold(message); continue; }
+            prefix &= NativeModel.HandlesMetadata(message.Kind);
+            if (!prefix) { _inbox.Hold(message); continue; }
             Admission result;
             try { result = Reduce(message); }
             catch (Exception error) when (error is JsonException or EncoderFallbackException)
             { result = new("", "", "Invalid", Actor: turn.Instance.Ref.Id); }
             if (AdmissionHas(AdmissionFlaw.EarlyReply)) turn.Emit(Request.Response, result);
-            else turn.Reply(message, Request.Response, result);
+            else _inbox.Reply(message, result);
             turn.Record($"admission:{result.Frame}:{result.Id}:{result.Result}:{result.Order}");
         }
         // The held suffix alone sleeps; one persisted wake also lets existing authored agenda work progress.
-        if (turn.Inbox.Any(m => m.Kind != ReceiptQuery.Kind)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+        if (_inbox.Items.Any(m => m.Kind != ReceiptQuery.Kind)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
         return true;
     }
 
@@ -74,19 +75,19 @@ internal sealed partial class Burst
         if (ended is { } status && turn.Clock.Resolve(WorkflowCommitClock.Terminal) is not null)
             InvocationLifetime.Terminate(_s, WorkflowCommitClock.Terminal, status switch
             { InstanceStatus.Finished => "completed", InstanceStatus.Cancelled => "cancelled", _ => "faulted" }, AdmissionHas(AdmissionFlaw.KeepPayload), AdmissionHas(AdmissionFlaw.RestampCompleted));
-        foreach (var message in turn.Inbox.Where(model.HandlesMetadata))
+        foreach (var message in _inbox.Items.Where(message => NativeModel.HandlesMetadata(message.Kind)))
         {
             Admission result;
             try { result = Reduce(message); }
             catch (Exception error) when (error is JsonException or EncoderFallbackException)
             { result = new("", "", "Invalid", Actor: turn.Instance.Ref.Id); }
-            turn.Reply(message, Request.Response, result);
+            _inbox.Reply(message, result);
         }
         return ValueTask.CompletedTask;
     }
 
-    private Admission Reduce(Message message) => message.Payload is null ? new("", "", "Invalid", Actor: turn.Instance.Ref.Id)
-        : message.Kind == ReceiptQuery.Kind ? Query(message.Read<ReceiptQuery>()) : Admit(message.Read<InvocationInput>());
+    private Admission Reduce(Contract.Message message) => message.Payload is null ? new("", "", "Invalid", Actor: turn.Instance.Ref.Id)
+        : message.Kind == ReceiptQuery.Kind ? Query(Read<ReceiptQuery>(message)) : Admit(Read<InvocationInput>(message));
 
     private Admission Query(ReceiptQuery? query)
     {
