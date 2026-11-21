@@ -114,6 +114,52 @@ test("top-facing outcome labels remain clear of selected-node tools at different
   }
 });
 
+async function placeTargetUnderToolbar(page: Page, selectedId: string, targetId: string) {
+  await node(page, selectedId).click();
+  const toolbar = page.locator(".wf-node-context-toolbar");
+  await expect(toolbar).toBeVisible();
+  const toolbarBox = (await toolbar.boundingBox())!;
+  const targetBox = (await target(page, targetId).boundingBox())!;
+  await drag(page, node(page, targetId).locator(".wf-node-content"),
+    toolbarBox.x + toolbarBox.width / 2 - (targetBox.x + targetBox.width / 2),
+    toolbarBox.y + toolbarBox.height / 2 - (targetBox.y + targetBox.height / 2));
+  await node(page, selectedId).click();
+  await expect(toolbar).toBeVisible();
+}
+
+test("connection drag next to a node action toolbar reaches the covered handle", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 950 });
+  await page.goto("/?mode=activity-duplicate-editor&adaptive-ports=vertical&theme=classic");
+  await side(source(page), "bottom");
+  await placeTargetUnderToolbar(page, "write-two", "write-three");
+  const toolbar = page.locator(".wf-node-context-toolbar");
+  const host = page.locator(".wf-node-context-toolbar-host");
+  const covered = target(page, "write-three");
+  await expect(toolbar).toHaveCSS("pointer-events", "none");
+  await expect(host).toHaveCSS("pointer-events", "none");
+  await expect(toolbar.getByRole("button").first()).toHaveCSS("pointer-events", "auto");
+
+  const start = (await source(page).boundingBox())!;
+  const coveredBox = (await covered.boundingBox())!;
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(coveredBox.x + coveredBox.width / 2, coveredBox.y + coveredBox.height / 2, { steps: 16 });
+  await expect(host).toHaveClass(/is-connecting/);
+  await expect(toolbar.getByRole("button").first()).toHaveCSS("pointer-events", "none");
+  expect(await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    return { toolbar: Boolean(el?.closest(".wf-node-context-toolbar, .wf-node-context-action")), handle: Boolean(el?.closest(".react-flow__handle")) };
+  }, { x: coveredBox.x + coveredBox.width / 2, y: coveredBox.y + coveredBox.height / 2 })).toEqual({ toolbar: false, handle: true });
+  await page.mouse.up();
+  await expect(page.locator(".react-flow__edge")).toHaveCount(2);
+
+  await node(page, "write-two").click();
+  await expect(toolbar.getByRole("button").first()).toHaveCSS("pointer-events", "auto");
+  const nodeCount = await page.locator(".react-flow__node").count();
+  await toolbar.getByRole("button", { name: /Duplicate Write Line/ }).click();
+  await expect(page.locator(".react-flow__node")).toHaveCount(nodeCount + 1);
+});
+
 test("draws a new connection from an adaptive handle and retains its logical outcome", async ({ page }) => {
   await page.setViewportSize({ width: 1500, height: 950 });
   await page.goto("/?mode=activity-duplicate-editor&adaptive-ports=vertical&theme=classic");
