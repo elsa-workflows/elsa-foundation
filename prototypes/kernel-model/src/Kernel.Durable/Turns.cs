@@ -341,6 +341,15 @@ public sealed class DurableTurn
         return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
     }
 
+    internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
+    {
+        Kinds.RequireApplicationSend(kind);
+        var id = store.MessageHandle(FormattableString.Invariant($"send:{Origin}#{Revision}.{_ordinal++:D4}"));
+        _sent.Add(new Message(id, target, kind, payload, Id, Due: dueAt, TargetCreation: targetCreation, SenderCreation: _input.Creation)
+            { ActorAuthored = true, StorageId = Origin + "#" + id }.AsIssued());
+        return id;
+    }
+
     private string Send(InboxKey id, InstanceRef target, string kind, object? payload, SendOptions? options = null, string? receivedAt = null,
         bool actorAuthored = false)
     {
@@ -405,7 +414,7 @@ public sealed class DurableTurn
     {
         if (!message.StartsWith(Origin + "#", StringComparison.Ordinal)) throw new InvalidOperationException($"Message '{message}' was not sent by {Id}.");
         // Removing this turn's own staged message cannot delete a stored row, whatever its scope.
-        if (_sent.RemoveAll(m => m.Id == message) > 0) return;
+        if (_sent.RemoveAll(m => m.InboxKey.Id == message) > 0) return;
         var custom = _custom.Contains(message);
         if (!custom && !OwnsHandle(message)) throw new InvalidOperationException($"Message '{message}' was not sent by {Id}.");
         var key = custom && OwnsHandle(message) ? new InboxKey(message, InboxKey.ChildCreatorScope)
@@ -415,16 +424,28 @@ public sealed class DurableTurn
         Services.Cancelling(key);
     }
 
+    internal void RecallFromActor(InMemoryStore store, string id)
+    {
+        var storageId = Origin + "#" + id;
+        var key = InboxKey.Issued(storageId);
+        if (_sent.Any(message => message.InboxKey == key && message.Target == Actor) ||
+            store.HasFoundationTimer(key, Id, _input.Creation))
+            Recall(storageId);
+    }
+
     private bool OwnsHandle(string handle) => handle.LastIndexOf('#') == Origin.Length && handle.StartsWith(Origin + "#", StringComparison.Ordinal);
 
-    public void StartJob(string key, object? arguments = null)
+    public void StartJob(string key, object? arguments = null) =>
+        StartJobWithPayload(key, arguments is null ? null : Json.Write(arguments));
+
+    internal void StartJobWithPayload(string key, string? arguments)
     {
         if (_jobs.Contains(key)) throw new InvalidOperationException($"Job '{key}' is in flight already.");
         _jobs.Add(key);
         _started.Add(key);
         // Finding F4: the intent is also a message to self, a ticket, so after a crash the inbox alone says what to do next.
         // Its id is derived from instance and key, so a later turn can delete it without holding it.
-        Send(InboxKey.Ticket(Id, key, _input.Creation), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments is null ? null : Json.Write(arguments)));
+        Send(InboxKey.Ticket(Id, key, _input.Creation), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments));
         if (Services.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].InboxKey);
     }
 
@@ -444,17 +465,22 @@ public sealed class DurableTurn
         _held.Add(message.InboxKey);
     }
 
-    public void Subscribe(string key, string wait, bool keep = false)
+    public void Subscribe(string key, string wait, bool keep = false) => Subscribe(key, wait, keep, null);
+
+    internal void Subscribe(string key, string wait, bool keep, string? foundationTenant)
     {
-        _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation));
+        _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation) { FoundationTenant = foundationTenant });
         if (keep) _kept.Add(_subscribed[^1]);
     }
     public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation));
 
     // NATIVE N1: the publish is a ticket to self, so "the inbox alone says what is owed" holds for it too.
-    public string Publish(string key, string? payload, TimeSpan keep)
+    public string Publish(string key, string? payload, TimeSpan keep) => Publish(key, payload, keep, null);
+
+    internal string Publish(string key, string? payload, TimeSpan keep, InMemoryStore? store)
     {
-        var id = $"{Origin}#{Revision}.{_ordinal:D4}";
+        var wire = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal:D4}");
+        var id = store?.MessageHandle("event:" + wire) ?? wire;
         SendNext(Actor, Kinds.Publish, new EventRow(key, id, payload, Services.Now + (long)keep.TotalMilliseconds));
         return id;
     }
