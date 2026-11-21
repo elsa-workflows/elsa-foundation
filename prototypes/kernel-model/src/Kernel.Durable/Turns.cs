@@ -33,6 +33,9 @@ public interface IActorType
     /// <summary>The actor cannot be given its messages now; commands still pass. Suspended, say.</summary>
     bool Withholds(InstanceRow row, ITurnServices services);
 
+    /// <summary>Whether the foundation can settle this input without offering it to the actor.</summary>
+    internal bool SettlesWhileWithheld(InstanceRow row, Delivery delivery) => false;
+
     /// <summary>
     /// A turn the actor type handles alone, without any of the actor's own code: a command (<see cref="Kinds.IsControl"/>),
     /// or messages to an actor that has ended. Null when the turn is not one of those.
@@ -110,11 +113,13 @@ public sealed class Delivery(Message message, long seq)
     internal bool Held;               // a turn handed it back: it waits for something new to come with
     internal Message? Original;       // a job's ticket as it was before its result replaced it (decision 4: what is written)
     internal int Attempts;
-    internal bool SuppliedCompletion => Message.Kind == Kinds.JobFinished && !CompletedJob;
-    internal bool SuppliedTicket => Message.InboxScope == 0 && Message.Kind is Kinds.Meet or Kinds.Publish or Kinds.Job;
+    internal bool SuppliedCompletion => Message.Kind == Kinds.JobFinished && !CompletedJob && !Message.FoundationJobResult;
+    internal bool SuppliedTicket => Message.InboxScope == 0 && Message.Kind is Kinds.Meet or Kinds.Publish or Kinds.Job or Kinds.JobDeadline;
     internal bool DiscardedInput => SuppliedCompletion || SuppliedTicket;
     internal bool DiscardedAt(Slot slot) => DiscardedInput || Message.SuppliedCreator && slot.CurrentRow is null;
     internal bool JobEntered;         // physical model entry, distinct from a scheduled driver
+    internal long? JobDeadline;
+    internal bool JobDeadlineClosed;
     internal int JobEntries;         // physical starts seen by this delivery, a lower bound after a takeover
     internal bool DeferredJobTrial;   // durable fence retained while runtime trial isolation is yielded before entry
     internal long DeferredTrialObserved; // preserve the original cohort horizon when isolation is reacquired
@@ -177,6 +182,7 @@ public sealed class TurnInput
 
     public string Model => Row?.Model ?? Spec!.Model;
     public ITurnServices Services => _services;
+    internal int MaxAttempts => _worker.MaxAttempts;
 
     /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
     public long CheckpointTime => _worker.Now;
@@ -247,7 +253,7 @@ public sealed class DurableTurn
     private readonly TurnInput _input;
     private readonly List<Message> _sent = [];
     private readonly HashSet<InboxKey> _fresh = [], _volatile = [], _held = [];
-    private readonly HashSet<string> _started = [];
+    private readonly Dictionary<string, string?> _started = [];
     private readonly List<SubscriptionRow> _subscribed = [], _unsubscribed = [];
     private readonly List<(string, object?)> _emitted = [];
     private readonly List<RequestReply> _replied = [];
@@ -444,24 +450,43 @@ public sealed class DurableTurn
     public void StartJob(string key, object? arguments = null) =>
         StartJobWithPayload(key, arguments is null ? null : Json.Write(arguments));
 
-    internal void StartJobWithPayload(string key, string? arguments)
+    internal void StartJobWithPayload(string key, string? arguments, long? deadline = null)
     {
         if (_jobs.Contains(key)) throw new InvalidOperationException($"Job '{key}' is in flight already.");
         _jobs.Add(key);
-        _started.Add(key);
+        var timer = deadline is { } at
+            ? SendNext(Actor, Kinds.JobDeadline, new JobDeadline(key), new SendOptions(DueAt: at))
+            : null;
+        _started.Add(key, timer);
         // Finding F4: the intent is also a message to self, a ticket, so after a crash the inbox alone says what to do next.
         // Its id is derived from instance and key, so a later turn can delete it without holding it.
-        Send(InboxKey.Ticket(Id, key, _input.Creation), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments));
+        Send(InboxKey.Ticket(Id, key, _input.Creation), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments, deadline, timer));
         if (Services.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].InboxKey);
     }
 
-    public void CancelJob(string key)
+    public void CancelJob(string key) => CancelJob(key, null, resultReady: false);
+
+    internal void CancelJob(string key, string? deadline, bool resultReady)
     {
         if (!_jobs.Remove(key)) return;     // not in flight: never started, done, or its result is in this turn's inbox
         var ticket = InboxKey.Ticket(Id, key, _input.Creation);
-        if (_started.Remove(key)) _sent.RemoveAll(m => m.InboxKey == ticket);
-        else _cancelled.Add(ticket);
+        if (_started.Remove(key, out var timer))
+        {
+            _sent.RemoveAll(m => m.InboxKey == ticket);
+            if (timer is not null) Recall(timer);
+            return;
+        }
+
+        if (resultReady) ticket = InboxKey.JobResult(Id, key, _input.Creation);
+        _cancelled.Add(ticket);
+        if (deadline is not null) Recall(deadline);
         Services.Cancelling(ticket);     // from here on its result is nobody's
+    }
+
+    internal void ReportFoundationJobResult(JobFinished result)
+    {
+        Send(InboxKey.JobResult(Id, result.Key, _input.Creation), Actor, Kinds.JobFinished, result);
+        _sent[^1] = _sent[^1] with { FoundationJobResult = true };
     }
 
     public void Hold(Message message)
@@ -527,9 +552,12 @@ public sealed class DurableTurn
     private bool CompletedTicket(Delivery delivery, out string key)
     {
         key = "";
-        if (!delivery.IsWorkerJobCompletion) return false;
-        key = delivery.Message.Read<JobFinished>().Key;
-        return delivery.Message.Target == Actor && delivery.Message.InboxKey == InboxKey.Ticket(Id, key, _input.Creation);
+        var message = delivery.Message;
+        if (!delivery.IsWorkerJobCompletion && !message.FoundationJobResult) return false;
+        key = message.Read<JobFinished>().Key;
+        var expected = message.FoundationJobResult
+            ? InboxKey.JobResult(Id, key, _input.Creation) : InboxKey.Ticket(Id, key, _input.Creation);
+        return message.Target == Actor && message.InboxKey == expected;
     }
 
     /// <summary>What the turn consumed, held, cancelled and emitted. The row comes with <see cref="Seal"/>.</summary>

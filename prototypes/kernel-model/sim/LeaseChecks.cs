@@ -21,6 +21,7 @@ public static class LeaseChecks
         await OrdinaryIngressChecks.Run(Check);
         await FoundationKeyIngressChecks.Run(Check);
         await IngressContractChecks.Run(Check);
+        await FoundationJobDeadlineChecks.Run(Check);
         await OperatorIngressChecks.Run(Check);
         await OperatorIngressChecks.Fallback(Check);
         await ContractStatechartChecks.Run(Check);

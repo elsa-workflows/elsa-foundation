@@ -18,14 +18,25 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         return checkpoint.Park is not null || actor.Withholds(Header(checkpoint));
     }
 
-    public bool SingleMessage(Durable.Message message) => message.Kind == Contract.Kinds.ChildFinished;
+    bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
+        (delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null) &&
+        store.FoundationTurnHeader(row).Park is null;
+
+    public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline;
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
-        !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null);
+        !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
+            delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null);
 
     public Durable.TurnOutcome? Command(Durable.TurnInput input)
     {
-        var message = input.Taken[input.From].Message;
+        var delivery = input.Taken[input.From];
+        var message = delivery.Message;
+        if (message.Kind == Durable.Kinds.JobDeadline)
+            return TimeoutJob(input, message);
+        if (delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null && input.Row is { } completedRow &&
+            delivery.Original?.Read<Durable.JobTicket>() is { } ticket)
+            return SettleJob(input, completedRow, message.Read<Durable.JobFinished>(), ticket.Timer, cancel: false);
         if (message.Operator is { Selection: { } selection } && input.Row is { } selected)
         {
             var identity = store.FoundationIdentity(selected.Id, selected.Creation);
@@ -66,6 +77,32 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (!IsChildNotice(input.Row, message))
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "InvalidChildCompletion");
         return null;
+    }
+
+    private Durable.TurnOutcome TimeoutJob(Durable.TurnInput input, Durable.Message message)
+    {
+        var row = input.Row;
+        if (!message.InboxKey.HasIssuedOrigin || row is null ||
+            message.Sender != row.Id || message.SenderCreation != row.Creation)
+            return new(input.Actor) { Consumed = [.. input.Taken], Status = row?.Status };
+        var key = message.Read<Durable.JobDeadline>().Key;
+        var (ticket, attempts) = store.FoundationJob(row.Id, row.Creation, key);
+        if (ticket is null || ticket.Timer != message.Id || ticket.Deadline != message.Due || attempts >= input.MaxAttempts)
+            return new(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };
+
+        return SettleJob(input, row, new Durable.JobFinished(key, null, "timeout"), null, cancel: true);
+    }
+
+    private Durable.TurnOutcome SettleJob(Durable.TurnInput input, Durable.InstanceRow row, Durable.JobFinished result,
+        string? timer, bool cancel)
+    {
+        var turn = new Durable.DurableTurn(input);
+        if (cancel) turn.CancelJob(result.Key);
+        else if (timer is not null && store.HasStoredJobDeadline(row.Id, row.Creation, timer)) turn.Recall(timer);
+        turn.ReportFoundationJobResult(result);
+        // The logical job remains pending until the actor applies or cancels this recorded result.
+        var checkpoint = row with { Revision = turn.Revision };
+        return turn.Seal(turn.Outcome(row.Status), checkpoint, input.State, journal: null);
     }
 
     private static bool IsChildNotice(Durable.InstanceRow? parent, Durable.Message message) =>
@@ -169,6 +206,6 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         public string? Arguments => job.Arguments;
         public string AttemptId => job.AttemptId ?? throw new InvalidOperationException("A job execution needs an attempt.");
         public int AttemptNumber => job.AttemptNumber;
-        public long? Deadline => null;
+        public long? Deadline => job.Deadline;
     }
 }
