@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Kernel.Runtime.Conformance/Kernel.Runtime.Conformance.csproj" />
+    <ProjectReference Include="../../src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
   </ItemGroup>
 </Project>

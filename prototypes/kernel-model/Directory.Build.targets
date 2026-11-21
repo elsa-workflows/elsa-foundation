@@ -1,3 +1,9 @@
 <Project>
   <!-- Standalone prototype: nothing is inherited from the repository. -->
+  <Target Name="CheckKernelContractReferences" BeforeTargets="ResolveReferences" Condition="'$(KernelContractOnly)' == 'true'">
+    <ItemGroup>
+      <_UnexpectedKernelProject Include="@(ProjectReference)" Condition="'%(ProjectReference.Filename)' != 'Kernel.Foundation.Contracts' And '%(ProjectReference.Filename)' != 'Kernel.Model.Contracts'" />
+    </ItemGroup>
+    <Error Condition="'@(_UnexpectedKernelProject)' != ''" Text="Layer 3 may reference only the kernel contract projects. Unexpected project: @(_UnexpectedKernelProject)" />
+  </Target>
 </Project>
