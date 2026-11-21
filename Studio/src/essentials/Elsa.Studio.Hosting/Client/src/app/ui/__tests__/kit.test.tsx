@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StudioButton } from "../forms/Button";
 import { StudioDialogFooter } from "../layout/DialogFooter";
+import { StudioCollectionFooter } from "../layout/Page";
 import { StudioSearchInput } from "../forms/SearchInput";
 import { StudioActionNotice } from "../feedback/ActionNotice";
 import { StatusChip } from "../feedback/StatusChip";
@@ -70,6 +71,79 @@ describe("StudioButton", () => {
     expect(onDelete).not.toHaveBeenCalled();
     enabled.click();
     expect(onDelete).toHaveBeenCalledOnce();
+  });
+});
+
+describe("StudioCollectionFooter", () => {
+  it("keeps caller content and native footer props without opting into any controls", () => {
+    const host = mount(<StudioCollectionFooter className="custom-footer" aria-label="Results">
+      12 loaded workflows <a href="/workflows">Browse workflows</a>
+    </StudioCollectionFooter>);
+    const footer = host.querySelector('footer[aria-label="Results"]')!;
+
+    expect(footer.classList.contains("custom-footer")).toBe(true);
+    expect(footer.firstChild?.textContent).toBe("12 loaded workflows ");
+    expect(footer.querySelector(":scope > a")?.textContent).toBe("Browse workflows");
+    expect(footer.querySelector("select, button")).toBeNull();
+  });
+
+  it("labels the controlled page-size select and reports a numeric selection", () => {
+    const onChange = vi.fn();
+    function Collection() {
+      const [value, setValue] = useState(25);
+      return <StudioCollectionFooter summary={<span aria-live="polite">Showing {value} workflows</span>}
+        pageSize={{ label: "Rows per page", value, sizes: [10, 25, 50], onChange: size => { onChange(size); setValue(size); } }}>
+        <button type="button">Next</button>
+      </StudioCollectionFooter>;
+    }
+    const host = mount(<Collection />);
+    const select = host.querySelector("select")!;
+    const summary = host.querySelector('footer > [aria-live="polite"]');
+
+    expect(summary?.textContent).toBe("Showing 25 workflows");
+    expect(select.labels?.[0]?.textContent).toBe("Rows per page");
+    expect(select.closest(".studio-form-field")).not.toBeNull();
+    expect(Array.from(select.options, option => option.value)).toEqual(["10", "25", "50"]);
+    expect(select.value).toBe("25");
+    expect(Array.from(host.querySelectorAll("footer :is(select, button)"))).toEqual([select, host.querySelector("button")]);
+
+    flushSync(() => {
+      select.value = "50";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onChange.mock.calls).toEqual([[50]]);
+    expect(select.value).toBe("50");
+    expect(summary?.textContent).toBe("Showing 50 workflows");
+  });
+
+  it("loads only when ready, then disables the action while busy or exhausted", () => {
+    const load = vi.fn();
+    function Collection() {
+      const [busy, setBusy] = useState(false);
+      const [hasMore, setHasMore] = useState(true);
+      return <form>
+        <StudioCollectionFooter loadMore={{ hasMore, busy, onLoadMore: () => { load(); setBusy(true); } }} />
+        <button type="button" onClick={() => { setBusy(false); setHasMore(false); }}>Finish loading</button>
+      </form>;
+    }
+    const host = mount(<Collection />);
+    const button = host.querySelector<HTMLButtonElement>("footer button")!;
+
+    expect(button.type).toBe("button");
+    expect(button.textContent).toBe("Load more");
+    expect(button.disabled).toBe(false);
+    flushSync(() => button.click());
+    expect(button.textContent).toBe("Loading…");
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.disabled).toBe(true);
+    button.click();
+
+    flushSync(() => host.querySelector<HTMLButtonElement>("form > button")!.click());
+    expect(button.textContent).toBe("Load more");
+    expect(button.getAttribute("aria-busy")).toBeNull();
+    expect(button.disabled).toBe(true);
+    button.click();
+    expect(load).toHaveBeenCalledOnce();
   });
 });
 

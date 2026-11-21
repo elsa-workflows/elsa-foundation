@@ -84,6 +84,8 @@ Use `StudioPage`, `StudioPageHeader`, `StudioCollectionToolbar`, `StudioSearchIn
 `StudioResultState`, and `StudioCollectionFooter` for page structure. The host owns
 outer gutters and the main landmark; modules own data, authorization, counts and
 cursor semantics. These primitives have no SDK, routing, query, or dialog provider dependency.
+`StudioCollectionFooter` accepts an optional `summary`, a controlled `pageSize` field and a
+`loadMore` action. Existing summary content and custom controls can still be supplied as children.
 
 The [module UI guide](../../../../../../../docs/module-ui.md) contains the public
 imports, a complete collection example, state/accessibility requirements, and the
