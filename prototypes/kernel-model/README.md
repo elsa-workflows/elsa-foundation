@@ -69,6 +69,9 @@ $SIM --contract --seed 1 --flaw KeepConsumedMessages  # replay the committed inb
 $SIM --contract-native --seeds 100                   # run the original Native mix through the public actor turn
 $SIM --contract-native --seed 1 --native-flaw UnstableEffectKey
 $SIM --contract-native --seed 1 --native-flaw JoinWithoutGuard
+$SIM --contract-actors --seeds 100 --actions 100      # public counter and parent-child workloads
+$SIM --contract-actors --seed 1 --flaw CancelKnownChildren
+$SIM --contract-actors --seed 1 --flaw KeepConsumedMessages
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
 $SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
@@ -95,10 +98,17 @@ mode of the other workflows. Public journal and read observations check the back
 detached children, threshold joins, graph arrivals and completion. The observed HTTP and email effects
 check that a replay keeps its key and that different activations keep distinct keys.
 
-The seeded contract workloads cover scoped delivery and Native workflows. The focused
-[held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live response after
-takeover and an input that stays durable across local reset. The remaining legacy transport and actor
-mixes still use their separate simulation and case suites.
+The public actor workload uses the legacy Counter and parent-child inputs through the public workflow
+turn. The counter's journal checks each sender's sequence through holds, forwards, a definition rebind,
+retries, and loss before and after a write. Two live owners run the family workloads. A lost creation
+answer leaves one child per start, a pending timer crosses takeover, and each parent receives one final
+notice from the exact child. In the cancellation case the other owner takes its child scopes after the
+parent sends the cancel.
+
+The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
+response after takeover and an input that stays durable across local reset. The seeded actor workload
+uses already-started counter receivers and one state version. The other legacy actor and transport
+mixes continue to use their separate simulation and case suites.
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
 `Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 22 lists the first failing seed of every round-3 flaw (the seeds of earlier flaws, in sections 2 and 3, have since moved), section 24 the two flaws round 4 renamed.

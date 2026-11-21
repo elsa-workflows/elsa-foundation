@@ -284,10 +284,11 @@ internal static class ContractWorkload
         private readonly InMemoryStore _store;
         private readonly IKernelStore _wire;
         private readonly WorkerOptions _options;
-        private readonly List<IScopeActivation> _owners = [];
+        private sealed record Owner(DurableHost Host, List<IScopeActivation> Scopes);
+
+        private readonly List<Owner> _owners = [];
         private readonly Contract.IActorType _type;
-        private readonly SortedSet<int> _placements = [];
-        private DurableHost? _host;
+        private readonly SortedDictionary<int, int> _placementOwners = [];
         private int _node;
         private bool? _loseAt;
 
@@ -314,23 +315,32 @@ internal static class ContractWorkload
 
         public async Task Start(IReadOnlyList<(Contract.BoundScope Scope, Contract.ActorRef Ref)> actors)
         {
-            // Placement is private to the fault driver. The schedule only has the opaque refs given by ingress.
-            var placements = actors.Select(actor =>
-                new InstanceRef(_store.FoundationTarget(actor.Scope.Tenant, actor.Ref.Id)!.Id).Partition)
-                .Distinct().Order().ToArray();
-            _host ??= NewHost();
-            foreach (var partition in placements)
-                if (_placements.Add(partition)) await Take(partition);
-            Require(_placements.Count > 1, "the fault driver must exercise multiple virtual partitions");
+            foreach (var partition in Placements(actors))
+                if (_placementOwners.TryAdd(partition, 0)) await Take(partition, 0);
+            Require(_placementOwners.Count > 1, "the fault driver must exercise multiple virtual partitions");
         }
+
+        // Exercise independent parent and child owners. Co-located children stay where their parent already runs.
+        internal async Task<int> StartElsewhere(IReadOnlyList<(Contract.BoundScope Scope, Contract.ActorRef Ref)> actors)
+        {
+            var placements = Placements(actors);
+            foreach (var partition in placements)
+                if (_placementOwners.TryAdd(partition, 1)) await Take(partition, 1);
+            return placements.Count(partition => _placementOwners[partition] == 1);
+        }
+
+        private int[] Placements(IReadOnlyList<(Contract.BoundScope Scope, Contract.ActorRef Ref)> actors) =>
+            actors.Select(actor => _store.FoundationTarget(actor.Scope.Tenant, actor.Ref.Id) ??
+                    throw new InvalidOperationException("the issued ref has no committed scope binding"))
+                .Select(address => new InstanceRef(address.Id).Partition)
+                .Distinct().Order().ToArray();
 
         public async Task TakeOver()
         {
-            var old = _owners.ToArray();
+            var old = _owners.SelectMany(owner => owner.Scopes).ToArray();
             _owners.Clear();
             Advance(Lease + 1);
-            _host = NewHost();
-            foreach (var partition in _placements) await Take(partition);
+            foreach (var (partition, owner) in _placementOwners) await Take(partition, owner);
             foreach (var owner in old)
             {
                 await owner.WokenAsync(null);
@@ -339,37 +349,50 @@ internal static class ContractWorkload
             }
         }
 
-        public async Task LoseTurnCommit(bool landed)
+        public Task LoseTurnCommit(bool landed) => LoseTurnCommit(landed, stopAfterLoss: false);
+
+        internal async Task LoseTurnCommit(bool landed, bool stopAfterLoss)
         {
             _loseAt = landed;
-            await Pass(6);
+            if (!stopAfterLoss) await Pass(6);
+            else
+            {
+                for (var pass = 0; pass < 6 && _loseAt is not null; pass++) await Pass(1);
+            }
             Require(_loseAt is null, "the scheduled commit loss was not reached");
         }
 
         public async Task Pass(int count)
         {
             // Renewal is a separate node heartbeat. A quiet scope can own a future timer without writing a turn.
-            await _host!.HeartbeatAsync(TimeSpan.FromMilliseconds(2 * Lease));
+            foreach (var owner in _owners)
+                await owner.Host.HeartbeatAsync(TimeSpan.FromMilliseconds(2 * Lease));
             for (var pass = 0; pass < count; pass++)
+            foreach (var owner in _owners.Where(owner => owner.Scopes.Count > 0))
             {
-                await _owners[0].WokenAsync(null);
-                await _owners[0].RunAsync();
+                await owner.Scopes[0].WokenAsync(null);
+                await owner.Scopes[0].RunAsync();
             }
         }
 
         public async ValueTask DisposeAsync()
         {
-            foreach (var owner in _owners) await owner.DisposeAsync();
+            foreach (var owner in _owners.SelectMany(owner => owner.Scopes)) await owner.DisposeAsync();
         }
 
-        private DurableHost NewHost() => DurableHost.ForNode($"contract-node-{++_node}", _wire,
-            new ActorAdapter(_store, _type), _options.Partitions, _options);
-
-        private async Task Take(int partition)
+        private async Task Take(int partition, int node)
         {
-            var activation = await _host!.ActivateAsync(partition);
+            while (_owners.Count <= node)
+            {
+                var host = DurableHost.ForNode($"contract-node-{++_node}", _wire,
+                    new ActorAdapter(_store, _type), _options.Partitions, _options);
+                _owners.Add(new(host, []));
+            }
+
+            var owner = _owners[node];
+            var activation = await owner.Host.ActivateAsync(partition);
             Require(activation is not null, "the driver could not acquire the scope");
-            _owners.Add(activation!);
+            owner.Scopes.Add(activation!);
         }
 
         private void ObserveCommit(CommitBatch batch, bool landed)
