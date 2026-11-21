@@ -74,6 +74,15 @@ $SIM --contract-evolution --seeds 100                 # rolling state upgrade an
 $SIM --contract-evolution --seed 1 --flaw SkipUpgrade
 $SIM --contract-actors --seed 1 --flaw CancelKnownChildren
 $SIM --contract-actors --seed 1 --flaw KeepConsumedMessages
+$SIM --contract-events --seeds 100                   # sequences, waiters, correlation actors and event starts
+$SIM --contract-events --seed 1 --flaw CorrelationForgets
+$SIM --contract-events --seed 1 --flaw KeepConsumedMessages
+$SIM --contract-http --seeds 100                      # immediate, early, timer, job, and resumed requests
+$SIM --contract-http --seed 1 --flaw EmitBeforeCommit
+$SIM --contract-jobs --seeds 100                     # public Runner, Fragile and nested Tree workloads
+$SIM --contract-jobs --seed 1 --flaw VolatileJobTicket
+$SIM --contract-jobs --seed 1 --flaw JobPoisonAsError
+$SIM --contract-jobs --seed 1 --tree-stall           # reproduce the unbounded trial liveness failure (exit 1)
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
 $SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
@@ -107,6 +116,13 @@ answer leaves one child per start, a pending timer crosses takeover, and each pa
 notice from the exact child. In the cancellation case the other owner takes its child scopes after the
 parent sends the cancel.
 
+The sequence and event workload runs Balanced and Durable sequences, live and keeping waiters,
+actor-managed correlation and event-created actors through the public turn. It checks each sequence's
+journal order and commit boundaries across a lost write and a lost answer. It also checks retained
+events versus live delivery, event expiry, duplicate publication and registration, and route removal.
+The sequence cases use durable ingress. The legacy suite covers unwritten Ephemeral starts.
+Actor-managed start-on-match stays outside this replay.
+
 The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
 response after takeover and an input that stays durable across local reset. The seeded actor workload
 uses already-started counter receivers and one state version. The other legacy actor and transport
@@ -120,6 +136,20 @@ forwards and survives a lost commit answer.
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
 `Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 22 lists the first failing seed of every round-3 flaw (the seeds of earlier flaws, in sections 2 and 3, have since moved), section 24 the two flaws round 4 renamed.
+
+The public job and tree workload uses the Runner, Fragile and Tree inputs. It observes physical job
+callbacks through the model contract, and Park, pending attempts and applied effects through public
+reads. Runner cancels one job, then loses the owner of another and completes the old attempt on either
+side of its successor. Fragile throws or has its row refused by the store, then exhausts the turn and
+job allowances in separate schedules with actual expired leases. The tree loses the answer to its
+root's terminate with descendant commands still pending. Finite job bodies let the successor owners
+finish the trials and cancel the descendants. Public events verify the leaves' live waits and their
+removal. The proposed paged cascade and Park recovery transitions belong to K3.
+
+`--tree-stall` keeps deadline-free successor bodies pending. A leaf trial can then block the ancestor
+whose turn would send its terminate. The public witness prints the pending child commands and active
+leaf attempts. The legacy simulation's settling loop explicitly completes active jobs, so its
+successful tree result assumes those job bodies can finish.
 
 ## Databases
 
