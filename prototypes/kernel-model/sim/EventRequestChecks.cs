@@ -1,0 +1,110 @@
+namespace Kernel.Sim;
+
+/// <summary>The in-memory admission witness for FC-C2.</summary>
+internal static class EventRequestChecks
+{
+    public static async Task Run(Action<bool, string> check)
+    {
+        const long now = 1_700_000_000_000;
+        const string key = "acme_signal";
+        var store = new InMemoryStore(2, () => now);
+        var request = new EventRow(key, "request", "original", now + 60_000);
+        var spec = new StartSpec("event-probe", "event");
+        var requests = new Requests("event-requests");
+        var transport = new Replies(requests);
+        var host = new DurableHost([Owner(0), Owner(1)]);
+        Worker Owner(int partition) => new("event-owner-" + partition, partition, store,
+            new WorkflowInstance([new EventProbe()]), new WorkerOptions { Monotonic = () => 0, Transport = transport, Partitions = 2 });
+        await using var firstOwner = (await host.ActivateAsync(0))!;
+        await using var secondOwner = (await host.ActivateAsync(1))!;
+
+        async Task Pump()
+        {
+            for (var step = 0; step < 20; step++)
+            {
+                await firstOwner.WokenAsync(null);
+                await secondOwner.WokenAsync(null);
+                await firstOwner.RunAsync();
+                await secondOwner.RunAsync();
+                await Task.Yield();
+            }
+        }
+        var otherTenant = new SubscriptionRow("other_signal", "", "foreign", spec);
+        await Events.SubscribeAsync(store, otherTenant, 2);
+
+        var missed = store.PublishRequest(request, "first");
+        check(missed is null && store.EventRows.Count == 0 && store.Messages.Count == 0,
+            "an event request without a matching wait writes neither event nor delivery");
+
+        var starter = new SubscriptionRow(key, "", "start", spec);
+        await Events.SubscribeAsync(store, starter, 2);
+        check(store.Messages.Count == 0, "a later keeping start cannot catch up a refused event request");
+
+        var started = store.PublishRequest(request, "retry");
+        var first = started?.SingleOrDefault();
+        check(first is { Added: true } && first.Target.EventStartAddress && store.Messages.Values.Single().Message.ReplyTo == "retry",
+            "a start subscription alone counts as a waiter for the same event id on retry");
+
+        var active = InstanceRef.In(1, "acme_waiter");
+        await store.AddAsync(new Message("arm", active, "arm", Json.Write(key),
+            Start: spec with { Creation = new(1, 0, "event-waiter") }, TargetCreation: 1));
+        await Pump();
+        check(store.Subscriptions.Any(wait => wait.Instance == active.Id && wait.Creation == 1),
+            "a workflow commits the qualified active wait");
+
+        var fanout = request with { Id = "fanout" };
+        var caller = requests.Open("fanout", now + 60_000);
+        var address = caller.ReplyAddress("caller");
+        var published = store.PublishRequest(fanout, address);
+        var rows = store.Messages.Values.Where(row => row.Message.ReplyTo == address).ToArray();
+        check(published is { Count: 2 } && rows is { Length: 2 } &&
+              rows.Any(row => row.Message.Target == active && row.Message.TargetCreation == 1) &&
+              rows.Any(row => row.Message.Target.EventStartAddress && row.Message.Start == spec),
+            "an admitted request attaches its reply route to every matched start and qualified active wait");
+
+        var duplicate = store.PublishRequest(fanout with { Payload = "changed" }, "duplicate");
+        check(duplicate is { Count: 2 } && duplicate.All(receipt => !receipt.Added) && store.Messages.Count == 3 &&
+              store.EventRows[(key, "fanout")].Payload == "original",
+            "repeating an accepted event id preserves its payload and inserts no second matched delivery");
+
+        var kept = request with { Key = "acme_keep", Id = "publication" };
+        await Events.PublishAsync(store, kept, 2);
+        await Events.SubscribeAsync(store, starter with { Key = kept.Key, Wait = "late" }, 2);
+        check(store.Messages.Count == 4 && store.EventRows.ContainsKey((kept.Key, kept.Id)),
+            "an ordinary kept publication still reaches a later registration without a request");
+
+        await Pump();
+        check(rows.All(delivery => store.Instances.TryGetValue(delivery.Message.Target.Id, out var row) &&
+                Json.Read<List<string>>(row.State).SequenceEqual(["original"])),
+            "both the active actor and the new actor commit the event through the real owners");
+        check(caller is { Responses: 1, Answer: "original" } && transport.Sent == 2,
+            "the first committed answer wins the request even though both actors answer");
+    }
+
+    private sealed class EventProbe : Model<List<string>>
+    {
+        public override string Key => "event-probe";
+
+        protected override void Turn(ITurn turn, List<string> state)
+        {
+            foreach (var message in turn.Inbox)
+            {
+                if (message.Kind == "arm") turn.Subscribe(message.Read<string>(), "active");
+                if (message.Kind != Kinds.Event || message.Payload is not { } payload) continue;
+                state.Add(payload);
+                turn.Reply(message, Request.Response, payload);
+            }
+        }
+    }
+
+    private sealed class Replies(Requests requests) : IReplyTransport
+    {
+        public int Sent { get; private set; }
+
+        public void Send(string node, Reply reply)
+        {
+            Sent++;
+            requests.Receive(reply);
+        }
+    }
+}

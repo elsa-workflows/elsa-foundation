@@ -384,13 +384,40 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default)
     {
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(delivery.Message);
+        lock (_gate) return new(InsertEventDelivery(delivery));
+    }
+
+    private EventAcceptance InsertEventDelivery(EventDelivery delivery)
+    {
+        if (Messages.TryGetValue(delivery.Message.InboxKey, out var existing))
+            return new(false, existing.Message.Target);
+        var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++_eventSerial));
+        Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
+        return new(true, message.Target);
+    }
+
+    /// <summary>
+    /// Accept an event request and route it to its matching waits in one in-memory transaction.
+    /// A null receipt publishes nothing for a later registration to catch up.
+    /// </summary>
+    internal IReadOnlyList<EventAcceptance>? PublishRequest(EventRow request, string replyTo, CancellationToken cancellationToken = default)
+    {
         lock (_gate)
         {
-            if (Messages.TryGetValue(delivery.Message.InboxKey, out var existing))
-                return ValueTask.FromResult(new EventAcceptance(false, existing.Message.Target));
-            var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++_eventSerial));
-            Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
-            return ValueTask.FromResult(new EventAcceptance(true, message.Target));
+            cancellationToken.ThrowIfCancellationRequested();
+            var key = (request.Key, request.Id);
+            var published = EventRows.GetValueOrDefault(key) ?? request;
+            var deliveries = Subscriptions.Where(wait => wait.Key == published.Key)
+                .OrderBy(wait => wait.Instance, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal)
+                .Select(wait => Events.Route(published, wait, partitions, replyTo)).ToArray();
+            if (deliveries.Length == 0) return null;
+
+            if (!CreationIdentityAvailable)
+                foreach (var delivery in deliveries) CreationProtocol.RejectUnsupported(delivery.Message);
+            var starts = deliveries.Count(delivery => delivery.Message.Start is not null && !Messages.ContainsKey(delivery.Message.InboxKey));
+            _ = checked(_eventSerial + starts);
+            EventRows.TryAdd(key, published);
+            return Array.ConvertAll(deliveries, InsertEventDelivery);
         }
     }
 
