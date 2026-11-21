@@ -331,8 +331,12 @@ public sealed class DurableTurn
 
     private string Send(InboxKey id, InstanceRef target, string kind, object? payload, SendOptions? options = null, string? receivedAt = null)
     {
+        if (options is { Delay: not null, DueAt: not null })
+            throw new ArgumentException("Supply either an absolute due time or a delay.", nameof(options));
+        var due = options?.DueAt;
+        if (options?.Delay is { } delay) due = Services.Now + (long)delay.TotalMilliseconds;
         _sent.Add(new Message(id.Id, target, kind, payload is null ? null : Json.Write(payload), receivedAt ?? Id, options?.Start,
-            options?.Delay is { } delay ? Services.Now + (long)delay.TotalMilliseconds : null, TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null), SenderCreation: _input.Creation).WithInboxScope(id.Scope));
+            due, TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null), SenderCreation: _input.Creation).WithInboxScope(id.Scope));
         return id.Id;
     }
 
