@@ -27,7 +27,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         public Message Message = message;
         public long Seq = seq, Seen = seen, Trial;
         public int Attempts;
-        public bool Done;
+        public bool Done, Held;
     }
 
     private readonly Lock _gate = new();
@@ -312,7 +312,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             foreach (var id in batch.Trial)
                 if (Messages.GetValueOrDefault(id) is { } tried) (tried.Seen, tried.Trial) = (MarkEpoch(tried), MarkEpoch(tried));
             foreach (var id in batch.Turns.SelectMany(s => s.Held ?? []))
-                if (!Has(Flaw.HoldKeepsTrial) && Messages.GetValueOrDefault(id) is { } held) held.Trial = 0;
+                if (Messages.GetValueOrDefault(id) is { } held)
+                {
+                    held.Held = true;
+                    if (!Has(Flaw.HoldKeepsTrial)) held.Trial = 0;
+                }
             if (changes is not null) Lifecycle!.Publish(changes);
             if (deletes is not null)
                 foreach (var (address, checkpoint, receiptPosition) in deletes)

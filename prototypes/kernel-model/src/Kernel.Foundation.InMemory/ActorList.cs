@@ -6,7 +6,7 @@ using Durable = Kernel.Durable;
 namespace Kernel.Foundation.InMemory;
 
 /// <summary>The point and list read routes over committed in-memory actor checkpoints.</summary>
-internal sealed class ActorList
+internal sealed class ActorList : IActorReads
 {
     private readonly Durable.InMemoryStore _store;
     private readonly int _pageSize;
@@ -106,6 +106,38 @@ internal sealed class ActorList
         BinaryPrimitives.WriteInt64LittleEndian(cursor, last.Position);
         BinaryPrimitives.WriteInt32LittleEndian(cursor[sizeof(long)..], last.Ordinal);
         return new(new Page<JournalEntry>(added, new PageToken(_store.SealReadCursor(context, cursor)), snapshot.AsOf));
+    }
+
+    public ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        var context = JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-inbox", scope.Tenant, Actor = actor.Id });
+        Span<byte> cursor = stackalloc byte[sizeof(long)];
+        if (from is { } token && !_store.TryOpenReadCursor(context, token.Value, cursor))
+            throw new ArgumentException("The continuation does not match this actor inbox.", nameof(from));
+        var after = from is null ? 0 : BinaryPrimitives.ReadInt64LittleEndian(cursor);
+        var snapshot = _store.ReadFoundationInbox(scope.Tenant, actor.Id, after, _pageSize + 1);
+        var page = snapshot.Rows.Take(_pageSize).Select(row => Delivery(actor, row)).ToArray();
+        PageToken? next = null;
+        if (snapshot.Rows.Count > _pageSize)
+        {
+            BinaryPrimitives.WriteInt64LittleEndian(cursor, snapshot.Rows[_pageSize - 1].Seq);
+            next = new(_store.SealReadCursor(context, cursor));
+        }
+        return new(new Page<DeliveryView>(page, next, snapshot.AsOf));
+    }
+
+    private DeliveryView Delivery(ActorRef actor, Durable.InMemoryStore.ActorDelivery row)
+    {
+        var message = row.Message;
+        var handle = _store.DeliveryHandle(actor.Id, row.Seq, message.InboxKey);
+        var id = message.Start is null && message.EventMatch is { } match ? Durable.EventMatch.Decode(match).Event :
+            (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null ? _store.MessageHandle("inbox:" + message.Id) : message.Id;
+        return new(handle, id, message.Start is null ? message.Kind : Kinds.Start,
+            row.Sender is { } sender ? new ActorRef(sender) : null, message.Due,
+            row.Held ? DeliveryState.Held : DeliveryState.Pending, row.Attempts, JsonSerializer.SerializeToUtf8Bytes(message).LongLength);
     }
 
     private ActorView View(string tenant, Durable.InMemoryStore.ActorCheckpoint checkpoint, long asOf)

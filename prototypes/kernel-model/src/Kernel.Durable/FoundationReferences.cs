@@ -153,6 +153,38 @@ public sealed partial class InMemoryStore
         }
     }
 
+    internal sealed record ActorDelivery(long Seq, Message Message, bool Held, int Attempts, string? Sender);
+    internal sealed record ActorInboxRead(long AsOf, IReadOnlyList<ActorDelivery> Rows);
+
+    internal ActorInboxRead ReadFoundationInbox(string tenant, string? reference, long after, int take)
+    {
+        lock (_gate)
+        {
+            var now = clock();
+            if (BoundActor(tenant, reference) is not { } found) return new(now, []);
+            var address = found.Binding.Address;
+            var rows = Messages.Values.Where(row => !row.Done && row.Seq > after && row.Message.Target.Id == address.Id &&
+                    row.Message.TargetCreation == address.Creation)
+                .OrderBy(row => row.Seq).Take(take).Select(row => new ActorDelivery(row.Seq, row.Message, row.Held, row.Attempts,
+                    row.Message.Sender is { } sender && _referenceBirths.TryGetValue(new(sender, row.Message.SenderCreation), out var senderBinding)
+                        && senderBinding.Tenant == tenant ? senderBinding.Reference : null)).ToArray();
+            return new(now, rows);
+        }
+    }
+
+    internal string MessageHandle(string id) =>
+        "~" + Convert.ToHexString(HMACSHA256.HashData(_referenceKey.Value, DurableKeyJson.CodeUnits(id)));
+
+    internal string DeliveryHandle(string reference, long seq, InboxKey key) =>
+        MessageHandle("delivery:" + Json.Write(new
+        {
+            Ref = reference,
+            Seq = seq,
+            Id = Convert.ToBase64String(DurableKeyJson.CodeUnits(key.Id)),
+            key.Scope,
+            key.Match
+        }));
+
     private (ReferenceBinding Binding, InstanceRow Row)? BoundActor(string tenant, string? reference)
     {
         if (reference is null || !_referenceBindings.TryGetValue(reference, out var binding) || binding.Tenant != tenant ||
