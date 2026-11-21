@@ -1287,7 +1287,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// A message that another owner had marked, or that is on trial already, may be what killed that owner. What this
     /// same process marked in an epoch it held earlier is not: the process is alive.
     /// </summary>
-    private bool Suspect(Stored row, long now) => row.Message.Kind is not (Kinds.Meet or Kinds.Publish) && !Kinds.IsControl(row.Message.Kind) && row.Attempts < _options.MaxAttempts
+    private bool Suspect(Stored row, long now) => row.Message.Kind is not (Kinds.Meet or Kinds.Publish) && !row.Message.IsControl && row.Attempts < _options.MaxAttempts
         && (row.Trial > 0 || (row.Seen > 0 && !Mine(row.Message.Target.Partition, row.Seen) && (row.Message.Due is not { } due || due <= now)));
 
     private bool Mine(int partition, long epoch)
@@ -1429,7 +1429,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private bool PoisonInput(Delivery item, Slot slot) => !item.Taken && !item.DiscardedAt(slot) &&
         item.UncheckedReference is null && item.Attempts >= _options.MaxAttempts &&
-        item.Message.Kind != Kinds.JobFinished && !Kinds.IsControl(item.Message.Kind) && CreationError(slot, item.Message) is null;
+        item.Message.Kind != Kinds.JobFinished && !item.Message.IsControl && CreationError(slot, item.Message) is null;
 
     private void RefreshPoisonBoundary(Slot slot) => Volatile.Write(ref slot.PoisonAt,
         slot.Inbox.Where(i => PoisonInput(i, slot)).Select(i => i.Message.Due ?? long.MinValue)
@@ -1441,7 +1441,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         .All(i => suspect.InboxOrder < i.InboxOrder);
 
     private static bool BeforeRecoveryControl(Delivery item, Delivery? control) =>
-        control is null || !Kinds.IsControl(item.Message.Kind) && BeforeCut(item, control);
+        control is null || !item.Message.IsControl && BeforeCut(item, control);
 
     /// <summary>
     /// An instance that cannot be given its messages now, as its actor type says (<see cref="IActorType.Withholds"/>).
@@ -1525,7 +1525,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!recovering && !slot.Inbox.Exists(i => i.RecoveryOrdering || i.Suspect)) return null;
         foreach (var item in slot.Inbox)
         {
-            if (item.Taken || !Kinds.IsControl(item.Message.Kind) || item.Message.Kind == Kinds.Suspend && Has(Flaw.SuspendDuringTrial)) continue;
+            if (item.Taken || !item.Message.IsControl || item.Message.Kind == Kinds.Suspend && Has(Flaw.SuspendDuringTrial)) continue;
             var at = item.Message.Due ?? item.ObservedAt;
             if (at > now) continue;
             item.RecoveryOrdering = true;
@@ -1552,7 +1552,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var onTrial = OnTrial(instance);
         var control = RecoveryBoundary(slot, now, onTrial);
         bool Eligible(Delivery item) => !item.Ticket && !item.Taken && !(item.Message.Due > now)
-            && (!suspended || item.DiscardedAt(slot) || Kinds.IsControl(item.Message.Kind) || CreationError(slot, item.Message) is not null);
+            && (!suspended || item.DiscardedAt(slot) || item.Message.IsControl || CreationError(slot, item.Message) is not null);
         bool InFront(Delivery item) => TrialItems.Contains(item) || BeforeRecoveryControl(item, control);
 
         // Finish marking ordinary cohort members together. Unselected suspects obtain their own fenced
@@ -1577,7 +1577,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 continue;
             }
             if (item.UncheckedReference is not null || Awaits(item)) break;
-            var command = Kinds.IsControl(item.Message.Kind);
+            var command = item.Message.IsControl;
             var identityReply = CreationError(slot, item.Message) is not null;
             var continuingStart = !identityReply && slot.Row?.PendingStart == item.Message.InboxKey;
             // Keep lifecycle changes/refusals separate. Compatible messages of this creation retain normal batching.
@@ -1599,7 +1599,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             due.Add(item);
         }
-        if (due is [var held] && held.Held && Kinds.IsControl(held.Message.Kind) && HeldCommandStimulus(slot, held, now) > 0)
+        if (due is [var held] && held.Held && held.Message.IsControl && HeldCommandStimulus(slot, held, now) > 0)
             return due;
         return due.TrueForAll(i => i.Held) ? [] : due;    // held messages wait for something new to come with
     }
@@ -1768,7 +1768,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Enqueue(new TurnOutcome(instance) { Consumed = supplied }, cancellationToken);
             return;
         }
-        if (slot.Unwritten && (now >= slot.Until || due.Exists(i => i.Durable || Kinds.IsControl(i.Message.Kind))) && !Has(Flaw.NoWriteFirst))
+        if (slot.Unwritten && (now >= slot.Until || due.Exists(i => i.Durable || i.Message.IsControl)) && !Has(Flaw.NoWriteFirst))
         {
             // Decision 4: a message from outside, or a command, finds an instance kept in memory written first; then it
             // is an ordinary instance, with a row, for whatever the message does.
@@ -1776,7 +1776,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Enqueue(Bound(_type.Write(slot.Row!, slot.State, slot.Pending), slot), cancellationToken);
             return;
         }
-        if (due is [var commandStimulus] && Kinds.IsControl(commandStimulus.Message.Kind))
+        if (due is [var commandStimulus] && commandStimulus.Message.IsControl)
             commandStimulus.HeldThrough = commandStimulus.Held
                 ? HeldCommandStimulus(slot, commandStimulus, now) : commandStimulus.ObservedOrder;
         slot.Inbox.RemoveAll(due.Contains);
@@ -1794,7 +1794,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
         slot.Starting = creator < 0 ? null : due[creator].Message;
         if (creator >= 0) slot.Ambient = due[creator].StarterAmbient;
         var input = new TurnInput(this, slot, instance, due, Math.Max(creator, 0), spec, now);
-        if (_type.Command(input) is { } command)
+        if (request.Operator is not null && !_type.SupportsFoundationOperator(input.Row))
+            Enqueue(Bound(CreationProtocol.Refuse(instance, input.Row, due, "OperatorUnavailable"), slot), cancellationToken);
+        else if (_type.Command(input) is { } command)
             Enqueue(Bound(command, slot), cancellationToken);
         else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.JobFinished) is { } poison)
         {

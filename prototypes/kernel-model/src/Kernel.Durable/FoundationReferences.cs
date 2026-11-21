@@ -274,7 +274,7 @@ public sealed partial class InMemoryStore
     /// <summary>Resolve an outside exact send and insert its delivery and deduplication marker in one operation.</summary>
     /// <returns>Null for an unavailable reference, false for a duplicate, true for a new delivery.</returns>
     internal bool? AddFoundationMessage(string tenant, string? reference, string id, string kind, string? payload = null,
-        long? dueAt = null, TimeSpan? keepFor = null, bool keyed = false, string? replyTo = null)
+        long? dueAt = null, TimeSpan? keepFor = null, bool keyed = false, string? replyTo = null, FoundationOperatorCommand? @operator = null)
     {
         Kinds.RequireApplicationSend(kind);
         if (!keyed && !IsOutsideMessageId(id))
@@ -298,7 +298,7 @@ public sealed partial class InMemoryStore
             var now = clock();
             var message = new Message(id, new InstanceRef(address.Id), kind, payload, Due: dueAt,
                 KeepUntil: checked(now + (long)window.TotalMilliseconds), ReplyTo: replyTo, TargetCreation: address.Creation)
-                { StorageId = storageId };
+                { StorageId = storageId, Operator = @operator };
             if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
             if (Messages.TryGetValue(message.InboxKey, out var previousSend) &&
                 (!previousSend.Done || previousSend.Message.KeepUntil >= now)) return false;

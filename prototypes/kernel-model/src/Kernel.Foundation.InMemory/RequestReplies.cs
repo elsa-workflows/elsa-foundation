@@ -23,8 +23,15 @@ internal static class RequestReplies
         }
 
         var reply = await completion.WaitAsync(cancellationToken);
-        if (reply.Item is Durable.CreationResult)
-            return new(null, null, Error: "missing");
+        if (reply.Item is Durable.CreationResult refusal)
+            return new(null, null, Error: refusal.Result switch
+            {
+                "StaleSelection" => "stale selection",
+                "Protected" => "protected",
+                "ProtectionUnavailable" => "protection unavailable",
+                "OperatorUnavailable" => "operator unavailable",
+                _ => "missing"
+            });
         var status = (ActorStatus?)reply.Status;
         if (reply.Error == "timeout" && actor is { } reference)
             status = (ActorStatus?)store.ReadFoundationActor(scope.Tenant, reference.Id).Actor?.Row.Status;
