@@ -15,6 +15,8 @@ public interface IActorType
     /// <summary>Whether this implementation enforces the public operator protocol for this row.</summary>
     bool SupportsFoundationOperator(InstanceRow? row) => false;
 
+    internal bool SupportsFoundationInlineStart(string type) => false;
+
     /// <summary>An owner command that needs a single-message boundary but still obeys normal withholding.</summary>
     bool SingleMessage(Message message) => false;
 
@@ -136,12 +138,15 @@ public sealed class TurnInput
 {
     private readonly Worker _worker;
     private readonly ITurnServices _services;
+    private readonly Dictionary<InboxKey, Message>? _volatile;
 
     internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec, long admittedAt)
     {
         _worker = worker;
         ChildIds = worker.ChildIdsFor(actor);
         _services = worker.ServicesFor(slot, admittedAt);
+        if (slot.Unwritten && slot.CurrentRow?.FoundationInlineBirth is not null)
+            _volatile = worker.CaptureVolatile(actor);
         Slot = slot;
         Actor = actor;
         Taken = taken;
@@ -184,8 +189,7 @@ public sealed class TurnInput
     public ITurnServices Services => _services;
     internal int MaxAttempts => _worker.MaxAttempts;
 
-    internal Message? VolatileMessage(InboxKey id) => _worker.VolatileDelivery(id) is { } held
-        ? held.Original ?? held.Message : null;
+    internal Message? VolatileMessage(InboxKey id) => _volatile?.GetValueOrDefault(id);
 
     /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
     public long CheckpointTime => _worker.Now;

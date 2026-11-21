@@ -17,6 +17,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     private const int MaxFaultTextBytes = 4_096;
 
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => row?.Model == actor.Type;
+    bool Durable.IActorType.SupportsFoundationInlineStart(string type) => type == actor.Type;
 
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
@@ -108,11 +109,14 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     {
         var turn = new Durable.DurableTurn(input);
         if (cancel) turn.CancelJob(result.Key);
-        else if (timer is not null && store.HasStoredJobDeadline(row.Id, row.Creation, timer)) turn.Recall(timer);
+        else if (timer is not null && (store.HasStoredJobDeadline(row.Id, row.Creation, timer) ||
+            input.VolatileMessage(Durable.InboxKey.Issued(timer)) is { Kind: Durable.Kinds.JobDeadline })) turn.Recall(timer);
         turn.ReportFoundationJobResult(result);
         // The logical job remains pending until the actor applies or cancels this recorded result.
         var checkpoint = row with { Revision = turn.Revision };
-        return turn.Seal(turn.Outcome(row.Status), checkpoint, input.State, journal: null);
+        var outcome = turn.Outcome(row.Status);
+        outcome.FoundationHeader = row.FoundationInlineHeader;
+        return turn.Seal(outcome, checkpoint, input.State, PendingJournal(input.Pending));
     }
 
     private static bool IsChildNotice(Durable.InstanceRow? parent, Durable.Message message) =>
@@ -218,8 +222,11 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     {
         Row = row, State = state ?? (row.FoundationNullState ? null : row.State), Status = row.Status, Revision = row.Revision,
         FoundationHeader = row.FoundationInlineHeader ?? InitialHeader(row.Definition),
-        Journal = pending is List<object> entries ? Durable.Json.Write(entries) : null
+        Journal = PendingJournal(pending)
     };
+
+    private static string? PendingJournal(object? pending) =>
+        pending is List<object> entries ? Durable.Json.Write(entries) : null;
 
     private static string BoundFaultText(string error)
     {

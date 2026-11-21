@@ -8,7 +8,7 @@ internal static class InlineEphemeralChecks
     public static async Task Run(Action<bool, string> check, Flaw flaws)
     {
         string[] shapes = flaws.HasFlag(Flaw.ForgetShortWaits) ? ["promote"]
-            : ["finish", "timer", "job", "timed", "promote", "handover", "child", "hold", "refused", "lost-before", "lost-after"];
+            : ["finish", "timer", "job", "timed", "timed-fast", "promote", "handover", "overlong", "child", "hold", "refused", "refused-later", "lost-before", "lost-after", "fallback"];
         foreach (var shape in shapes)
             await new Schedule(shape, check, flaws).Run();
     }
@@ -38,25 +38,41 @@ internal static class InlineEphemeralChecks
                 lost = true;
                 throw new IOException("the first durable inline answer was lost");
             });
-            if (shape == "refused") store.Refuses = row => row.Status == InstanceStatus.Running;
-            Worker MakeOwner(string node) => new(node, 0, wire, new ActorAdapter(store, actor, (requests, node)), options);
+            if (shape is "refused" or "refused-later") store.Refuses = row => row.State == "discard this state";
+            Worker MakeOwner(string node)
+            {
+                var adapter = new ActorAdapter(store, actor, (requests, node));
+                IActorType router = new ActorTypeRouter(new Kernel.Workflows.WorkflowInstance([]),
+                    new Dictionary<string, IActorType> { [actor.Type] = adapter });
+                return new(node, 0, wire, router, options);
+            }
             var worker = MakeOwner("inline-owner");
             await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
             Contract.IIngress ingress = new InMemoryIngress(store, requests, "inline-owner", inlineOwner: worker);
             Contract.IActorReads reads = new ActorList(store, 5);
 
             var recipe = shape is "lost-before" or "lost-after" ? "child" : shape == "handover" ? "promote" : shape;
-            var target = new Contract.Target.Start(new Contract.StartSpec(actor.Type, recipe, null, Ephemeral: true));
+            var target = new Contract.Target.Start(new Contract.StartSpec(shape == "fallback" ? "unregistered" : actor.Type, recipe, null, Ephemeral: true));
             var deadline = _now + (shape == "promote" ? 60 : 400);
             var reply = ingress.RequestAsync(_scope, target, shape, Contract.Kinds.Start, null, null,
                 new("caller", deadline, Inline: true)).AsTask();
             var duplicate = await ingress.SendAsync(_scope, target, shape, Contract.Kinds.Start);
+            if (shape == "fallback")
+            {
+                check(store.Messages.Count == 1 && duplicate is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: not null },
+                    "an unregistered type falls back to the durable creator at the same receipt");
+                await Pass(owner);
+                check((await reply.WaitAsync(TimeSpan.FromSeconds(2))).Status == Contract.ActorStatus.Faulted &&
+                    await reads.GetAsync(_scope, duplicate.Actor!.Value) is { Header.Status: Contract.ActorStatus.Faulted },
+                    "the mixed router fallback parks a life visible through its issued public reference");
+                return;
+            }
             check(store.Messages.Count == 0 && duplicate.Outcome == Contract.AdmissionOutcome.Duplicate,
                 $"inline {shape} shared its provisional receipt and omitted the creator write");
             await Pass(owner);
             check(actor.Reference is not null && duplicate.Actor == actor.Reference, $"inline {shape} ran the same provisional life on the local owner");
             var reference = actor.Reference.GetValueOrDefault();
-            if (shape is "timer" or "timed" or "promote" or "handover")
+            if (shape is "timer" or "timed" or "promote" or "handover" or "refused-later")
             {
                 check(await reads.GetAsync(_scope, reference) is null && store.Messages.Count == 0 && store.Journal.Count == 0,
                     $"inline {shape} waits without a durable birth");
@@ -65,7 +81,7 @@ internal static class InlineEphemeralChecks
                 if (shape == "handover") await owner.DisposeAsync();
                 else
                 {
-                    _now += shape is "timer" or "timed" ? 20 : 60;
+                    _now += shape is "timer" or "timed" or "refused-later" ? 20 : 60;
                     if (shape == "promote") await worker.FlushAsync();
                     else await Pass(owner);
                 }
@@ -89,6 +105,20 @@ internal static class InlineEphemeralChecks
                 return;
             }
 
+            if (shape == "overlong")
+            {
+                _now += 20;
+                await Pass(owner);
+                check(actor.TimerCalls == 1 && await reads.GetAsync(_scope, reference) is null,
+                    "the inline timer entered one physically active turn");
+                _now += 80;
+                await Pass(owner);
+                check(actor.TimerCalls == 1 && await reads.GetAsync(_scope, reference) is { Header.Status: Contract.ActorStatus.Running },
+                    "short-wait expiry writes the prior checkpoint without overlapping authored turns on one owner");
+                actor.Resume();
+                await Pass(owner);
+            }
+
             if (shape == "hold")
             {
                 check(await reads.GetAsync(_scope, reference) is { Header.Status: Contract.ActorStatus.Running } &&
@@ -104,10 +134,24 @@ internal static class InlineEphemeralChecks
                     await reads.GetAsync(_scope, reference) is null && store.Messages.Count == 0 && store.Instances.Count == 0 &&
                     store.Journal.Count == 0, $"inline {shape} answered and ended without writes");
             }
-            else if (shape == "timed")
+            else if (shape is "timed" or "timed-fast")
             {
-                check(answer is { Channel: "response", Item: "timeout" } && store.Messages.Count == 0,
-                    "the short timed job times out once and settles its volatile ticket");
+                var view = await reads.GetAsync(_scope, reference);
+                var history = await reads.TailAsync(_scope, reference);
+                var entries = history.Items.Select(item => Json.Read<string>(item.Entry));
+                var expected = shape == "timed" ? "timeout" : "timed-fast";
+                check(answer is { Channel: "response", Item: string value } && value == expected && store.Messages.Count == 0 &&
+                    view is { Header.TypeData: "timed-updated", Header.Labels.Count: 1 } &&
+                    store.Instances.Values.Single().State == "checkpoint" &&
+                    entries.SequenceEqual(["start", "waiting", expected, "end"]),
+                    $"a short timed job promotes its header, state and journal and leaves no deadline ({shape})");
+            }
+            else if (shape == "overlong")
+            {
+                var history = await reads.TailAsync(_scope, reference);
+                check(answer is { Channel: "response", Item: "slow-timer" } && actor.TimerCalls == 2 &&
+                    history.Items.Select(item => Json.Read<string>(item.Entry)).SequenceEqual(["start", "slow-timer", "end"]),
+                    "only the retried timer outcome lands after the prior callback returns");
             }
             else if (shape == "refused")
             {
@@ -120,6 +164,16 @@ internal static class InlineEphemeralChecks
                     store.Messages.Count == 0 && store.Subscriptions.Count == 0 &&
                     store.FoundationEvents.Count == 0 && actor.JobsEntered == 0,
                     "refusal rolls back the staged state, header, journal, response, sends, timer, job, subscription, publish and child");
+            }
+            else if (shape == "refused-later")
+            {
+                var view = await reads.GetAsync(_scope, reference);
+                var history = await reads.TailAsync(_scope, reference);
+                check(answer is { Status: Contract.ActorStatus.Faulted, Item: null } &&
+                    view is { Header.Status: Contract.ActorStatus.Faulted, Header.TypeData: "accepted", Header.Labels.Count: 1 } &&
+                    store.Instances.Values.Single().State == "checkpoint" && store.Subscriptions.Count == 0 &&
+                    history.Items.Select(item => Json.Read<string>(item.Entry)).SequenceEqual(["start", "waiting", "parked"]),
+                    "a refused later promotion retains the last accepted in-memory checkpoint and journal");
             }
             else if (loss)
             {
@@ -163,6 +217,10 @@ internal static class InlineEphemeralChecks
         public string Type => "inline-probe";
         public Contract.ActorRef? Reference { get; private set; }
         public int JobsEntered { get; private set; }
+        public int TimerCalls { get; private set; }
+        private readonly TaskCompletionSource _release = new();
+
+        internal void Resume() => _release.SetResult();
         public bool Withholds(Contract.ActorHeader header) => false;
         public bool ProtectsDeletion(Contract.ActorHeader header, string? state, long now) => false;
         public long TerminalGrowth(Contract.ActorHeader header, string? state) => 0;
@@ -172,10 +230,10 @@ internal static class InlineEphemeralChecks
             JobsEntered++;
             return job.Key == "timed"
                 ? new(new TaskCompletionSource<object?>().Task.WaitAsync(cancellationToken))
-                : ValueTask.FromResult<object?>(job.Actor == Reference ? "job" : "wrong actor");
+                : ValueTask.FromResult<object?>(job.Actor == Reference ? job.Key : "wrong actor");
         }
 
-        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        public async ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             Reference ??= turn.Header.Ref;
             var recovered = turn.Inbox.Any(message => message.Kind == "resume");
@@ -193,7 +251,18 @@ internal static class InlineEphemeralChecks
                             turn.Record("waiting");
                             break;
                         case "job": turn.StartJob("job"); break;
-                        case "timed": turn.StartJob("timed", timeout: TimeSpan.FromMilliseconds(20)); break;
+                        case "timed":
+                        case "timed-fast":
+                            turn.StartJob(turn.Header.TypeData, timeout: TimeSpan.FromMilliseconds(20));
+                            Remember("timed-updated");
+                            break;
+                        case "overlong":
+                            turn.Send(turn.Header.Ref, "slow-timer", dueAt: turn.Now + 20);
+                            break;
+                        case "refused-later":
+                            turn.Send(turn.Header.Ref, "refused-timer", dueAt: turn.Now + 20);
+                            Remember("accepted");
+                            break;
                         case "child": turn.Emit("response", turn.Start(new(Type, "finish", null), detached: true)); break;
                         case "hold": turn.Hold(message); break;
                         case "refused":
@@ -212,6 +281,17 @@ internal static class InlineEphemeralChecks
                 }
 
                 if (message.Kind == "resume") continue;
+                if (message.Kind == "refused-timer")
+                {
+                    turn.State = "discard this state";
+                    turn.Subscribe("refused", "wait");
+                    continue;
+                }
+                if (message.Kind == "slow-timer")
+                {
+                    if (++TimerCalls == 1) await _release.Task;
+                    turn.Record(message.Kind);
+                }
                 var observation = message.Kind switch
                 {
                     Contract.Kinds.Start when recovered => "hold",
@@ -219,10 +299,18 @@ internal static class InlineEphemeralChecks
                     Contract.Kinds.JobFinished => JobAnswer(message),
                     _ => message.Kind
                 };
+                if (message.Kind == Contract.Kinds.JobFinished && turn.Header.TypeData == "timed-updated")
+                    turn.Record(observation!);
                 turn.Emit("response", observation);
                 turn.End(Contract.ActorStatus.Finished);
             }
-            return default;
+
+            void Remember(string typeData)
+            {
+                turn.State = "checkpoint";
+                turn.SetHeader(typeData, new Dictionary<string, string> { ["phase"] = "waiting" });
+                turn.Record("waiting");
+            }
 
             static string? JobAnswer(Contract.Message message)
             {

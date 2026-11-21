@@ -272,7 +272,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private IEnumerable<string> ReadyForTurns(CancellationToken cancellationToken)
     {
         var now = ReceiveJobPublications(cancellationToken);
-        return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && Deliverable(s.Key, s.Value, now).Count > 0).Select(s => s.Key)
+        return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && !s.Value.DetachedAuthoredTurn && Deliverable(s.Key, s.Value, now).Count > 0).Select(s => s.Key)
             .Where(id => !Blocked && (TrialItems.Count == 0 || OnTrial(id) || Spared(id)));    // while a trial runs, nothing else in the process does
     }
 
@@ -1263,7 +1263,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal bool TryQueueInlineStart(Message creator)
     {
         var generation = Volatile.Read(ref _generation);
-        if (_releasing || !CanStartGeneration(generation)) return false;
+        if (_releasing || !CanStartGeneration(generation) ||
+            creator.Start is not { } start || !_type.SupportsFoundationInlineStart(start.Model)) return false;
         _inlineStarts.Enqueue((generation, creator));
         return true;
     }
@@ -1782,7 +1783,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (cancellationToken.IsCancellationRequested) return;
         var now = ReceiveJobPublications(cancellationToken);
         instance = Canonical(instance);
-        if (_releasing || !LeaseUsable() || !_slots.TryGetValue(instance, out var slot) || !Loaded(slot) || slot.Busy) return;
+        if (_releasing || !LeaseUsable() || !_slots.TryGetValue(instance, out var slot) || !Loaded(slot) || slot.Busy || slot.DetachedAuthoredTurn) return;
         if (Blocked || (TrialItems.Count > 0 && !OnTrial(instance) && !Spared(instance))) return;
         var due = Deliverable(instance, slot, now);
         if (due.Count == 0) return;
@@ -1858,7 +1859,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             lock (_turnSync)
             {
-                if (generation != _generation || fence != input.Slot.TurnFence) return;
+                if (generation != _generation) return;
+                ResumeAfterDetachedTurn(input.Slot);
+                if (fence != input.Slot.TurnFence) return;
                 input.Slot.Driving = false;
                 input.Slot.RollbackTurn?.Invoke();
                 unit = _type.Park(input.Row, input.Actor, input.Taken, input.Spec, e.Message, input.Unwritten ? input.Pending : null);
@@ -1870,12 +1873,21 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         lock (_turnSync)
         {
-            if (generation == _generation && fence == input.Slot.TurnFence)
+            if (generation != _generation) return;
+            ResumeAfterDetachedTurn(input.Slot);
+            if (fence == input.Slot.TurnFence)
             {
                 input.Slot.Driving = false;
                 Enqueue(Bound(unit, input.Slot), cancellationToken);
             }
         }
+    }
+
+    private void ResumeAfterDetachedTurn(Slot slot)
+    {
+        if (!slot.DetachedAuthoredTurn) return;
+        slot.DetachedAuthoredTurn = false;
+        _woken = true;
     }
 
     private TurnOutcome Bound(TurnOutcome unit, Slot slot)
@@ -2216,7 +2228,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var (id, slot) in Outgrown().ToList())
             {
                 var running = slot.Driving;
-                if (running) { slot.TurnFence++; slot.UndoTurn?.Invoke(); slot.Driving = false; }
+                if (running)
+                {
+                    slot.TurnFence++;
+                    slot.UndoTurn?.Invoke();
+                    slot.Driving = false;
+                    // The checkpoint can promote while the rejected continuation exits. No second public turn enters meanwhile.
+                    slot.DetachedAuthoredTurn = slot.Row?.FoundationInlineBirth is not null;
+                }
                 slot.Busy = true;
                 var unit = Bound(_type.Write(slot.Row!, running ? null : slot.State, slot.Pending), slot);
                 Promote(unit);
@@ -2249,21 +2268,36 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
                 if (outcome == Outcome.Refused && unit.Slot is { } slot)
                 {
-                    // An instance kept in memory has no accepted row: it is parked without the state the store refused.
                     slot.RollbackTurn?.Invoke();
-                    var park = Bound(slot.Unwritten ? _type.Park(slot.Row! with { State = "null" }, unit.Instance, unit.Consumed, unit.Spec, _refusal, slot.Pending)
-                        : _type.Park(slot.CurrentRow, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, _refusal), slot);
-                    MarkPark(park, slot.CurrentRow);
-                    if (slot.Unwritten) RetireVolatileJobs(park);
-                    Promote(park);
+                    var preserve = slot.Unwritten && slot.Row?.FoundationInlineBirth is not null;
+                    var park = ParkRefusedTurn(unit, slot, preserve);
                     ReleaseJobRestriction(unit); // the replacement park already owns its restriction
                     outcome = await CommitAsync([park], marks, trial, generation, cancellationToken);
+                    if (outcome == Outcome.Refused && preserve)
+                    {
+                        // The last accepted in-memory checkpoint itself could not be written.
+                        var fallback = ParkRefusedTurn(unit, slot, preserve: false);
+                        ReleaseJobRestriction(park);
+                        outcome = await CommitAsync([fallback], marks, trial, generation, cancellationToken);
+                    }
                 }
                 if (outcome == Outcome.Landed) (marks, trial) = ([], []);
             }
             if (outcome == Outcome.Refused && generation == _generation) Reset();   // nothing left to set apart
         }
         if (generation == _generation) _flushing = false;
+    }
+
+    private TurnOutcome ParkRefusedTurn(TurnOutcome unit, Slot slot, bool preserve)
+    {
+        var park = slot.Unwritten
+            ? _type.Park(preserve ? slot.Row! : slot.Row! with { State = "null" }, unit.Instance,
+                unit.Consumed, unit.Spec, _refusal, slot.Pending)
+            : _type.Park(slot.CurrentRow, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, _refusal);
+        Bound(MarkPark(park, slot.CurrentRow), slot);
+        if (slot.Unwritten) RetireVolatileJobs(park);
+        Promote(park);
+        return park;
     }
 
     private static TurnOutcome MarkPark(TurnOutcome unit, InstanceRow? previous)
@@ -2426,9 +2460,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     /// <summary>A message held in memory and never written: one that needs no delete when it is cancelled.</summary>
-    internal Delivery? VolatileDelivery(InboxKey id) => _items.GetValueOrDefault(id) is { Durable: false } delivery ? delivery : null;
+    internal Dictionary<InboxKey, Message> CaptureVolatile(string actor)
+    {
+        lock (_turnSync)
+            return _items.Values.Where(item => !item.Durable && item.Message.Target.Id == actor)
+                .ToDictionary(item => item.Message.InboxKey, item => item.Original ?? item.Message);
+    }
 
-    private bool InMemoryOnly(InboxKey id) => VolatileDelivery(id) is not null;
+    private bool InMemoryOnly(InboxKey id) => _items.TryGetValue(id, out var held) && !held.Durable;
 
     // A never-written parked instance has no durable jobs to resume. Retire its volatile tickets atomically with
     // the faulted row so a new owner does not launch fresh work for a run that was already parked.
@@ -2619,7 +2658,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// Evictable: its committed row is all there is to it. Not while a turn or commit is in flight (a load would read
     /// the row before that commit), not while messages wait for it, not while a caller waits for its output.
     /// </summary>
-    private bool Evictable(Slot slot) => slot.Loaded && (!slot.Busy || Has(Flaw.EvictBusy)) && slot.Inbox.Count == 0 && slot.Replies.Count == 0 && !slot.Unwritten;
+    private bool Evictable(Slot slot) => slot.Loaded && (!slot.Busy || Has(Flaw.EvictBusy)) && slot.Inbox.Count == 0 && slot.Replies.Count == 0 && !slot.Unwritten && !slot.DetachedAuthoredTurn;
 
     /// <summary>
     /// Decision 6: a caller's reply address expires at its deadline (the route's timeout). The owner then forgets it, so
@@ -2801,7 +2840,7 @@ internal sealed class Slot
     public InstanceRow? CurrentRow => Row is { Retired: false } row ? row : null;
     public Message? Starting;     // semantic creation envelope, including a failed initial turn; excludes transport retry identity
     public object? State;           // the live state between turns, equal to Row.State
-    public bool Loaded, Busy, DeferredFresh;
+    public bool Loaded, Busy, DeferredFresh, DetachedAuthoredTurn;
     public long WrittenDuringAliasRead; // current lookup whose snapshot this slot's commit can invalidate
     public long AbsentAt; // date of an alias-aware absence, whether observed or locally minted
     public long Comparison; // latest accepted provider lookup that included this canonical slot
