@@ -793,6 +793,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Signature:** `ScheduleAsync(DurableTimer timer, ...)`; optional `CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)` defaults to `false`.
 - **Default implementation:** `DurableTimerScheduler`, composed by `AddRuntimeDurableTimerScheduler`. Explicit scheduler and timer-store registrations are retained.
 - **Usage:** reads the actual original native/coalescing admission before scheduling. An uncaptured admission stays uncaptured when current capture is enabled; a captured timer choice is retained when current configuration is disabled. Only a complete qualified native/writer/reader/timer chain can create a captured source. Unneeded history and activity factories remain lazy, so an uncaptured timer does not activate them. Activity-owned timers require the exact concrete execution scope.
+- **Qualification failures:** the boolean predicate refuses recognized unavailable or malformed collaborator probes. Scheduling preserves the real run identity and underlying cause as typed availability/integrity failures before creating a source.
 - **Override implications:** decorators must deliberately forward qualification against the selected collaborators. Legacy implementations remain usable for uncaptured timers and cannot advertise captured registration by interface presence alone.
 
 ### `IDurableTimerHistoryStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
