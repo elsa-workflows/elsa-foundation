@@ -8,6 +8,7 @@ public static class LeaseChecks
         int failures = 0;
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
         await WorkerSetChecks.Run(Check);
+        await AbsoluteTimerChecks.Run(Check);
         await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
