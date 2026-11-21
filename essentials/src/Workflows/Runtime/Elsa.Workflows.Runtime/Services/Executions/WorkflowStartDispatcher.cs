@@ -4,15 +4,29 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
-    // The optional composition qualifies the selected capture/writer/reader chain at actual admission.
-    // No resolver is installed until that complete production path is available.
+    // Lazy composition qualifies selected capture/providers at admission; these resolvers do not enable history themselves.
     internal Func<string, (RuntimeHistoryCapturePolicy? Policy, bool? Enabled)>? HistoryAdmission { get; init; }
+    internal Func<(IRuntimeHistoryObservationWriter? Writer, IRuntimeHistoryStore? Reader)>? HistoryProvidersResolver { get; init; }
+
+    bool IWorkflowStartDispatcher.CanPreserveHistoryCausation(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentKind); ArgumentNullException.ThrowIfNull(writer); ArgumentNullException.ThrowIfNull(reader);
+        try
+        {
+            return HistoryAdmission is not null && _stimulusRequests.Owns(intentKind) && HistoryProvidersResolver?.Invoke() is { } selected &&
+                ReferenceEquals(writer, selected.Writer) && ReferenceEquals(reader, selected.Reader) && writer.CanRecordHistory(reader);
+        }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (Exception failure)
+        { throw new RuntimePostCommitSourceBoundaryException(null, intentKind, failure, RuntimeHistoryReadFailures.IsUnavailable(failure)); }
+    }
 
     bool IWorkflowStartDispatcher.CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
         IWorkflowExecutionStateStore executions) => _stimulusRequests.IsConfigured && ReferenceEquals(sources, _stimulusDeliveryStore) &&
@@ -230,7 +244,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             _persistenceModeResolver?.Resolve(executable),
             saved?.Origin,
             dispatchOptions,
-            cancellationToken);
+            cancellationToken,
+            saved?.HistoryCausation);
     }
 
     private async ValueTask<WorkflowExecutionStartDispatchResult?> FindKeyedStartAsync(
@@ -318,10 +333,10 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             throw AuthorityRejected("stimulus-delivery-context-mismatch", "The saved start cannot override its ordinary root scope or authority.");
         var origin = NativeIngressCheckpointAuthority.HasBoundScope(publisher, source.Scope.Value)
             ? new RuntimeStimulusDeliveryOrigin(1, source.Scope, source.SourceOutboxItemId, source.IntentFingerprint, authority.TriggerBindingId) : null;
-        return new(recipient, origin);
+        return new(recipient, origin, source.Intent.HistoryCausation);
     }
 
-    private sealed record SavedStimulusStart(StimulusStartRecipient Recipient, RuntimeStimulusDeliveryOrigin? Origin);
+    private sealed record SavedStimulusStart(StimulusStartRecipient Recipient, RuntimeStimulusDeliveryOrigin? Origin, RuntimeHistoryCausation? HistoryCausation);
 
     private static bool SameStimulusInput(JsonElement? supplied, JsonElement? canonical) =>
         supplied.HasValue == canonical.HasValue && (!supplied.HasValue ||
@@ -518,7 +533,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         PersistenceMode? persistenceMode,
         RuntimeStimulusDeliveryOrigin? savedOrigin,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RuntimeHistoryCausation? historyCausation = null)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var requestedAt = _timeProvider.GetUtcNow();
@@ -550,12 +566,13 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             testScope: request.TestScope,
             triggerMetadata: request.TriggerMetadata)
         {
+            HistoryCausation = historyCausation,
             HistoryCapturePolicy = history.Item1,
             HistoryCaptureEnabledAtAdmission = history.Item2,
             StimulusDeliveryOrigin = savedOrigin
         });
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
-            ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload, savedOrigin);
+            ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload, savedOrigin, historyCausation);
 
         // A retained dispatch and a keyed start both name their command and envelope deterministically, so a repeated
         // delivery enqueues the same start work item and the queue keeps the first.
@@ -607,14 +624,14 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     }
 
     private static void ValidateSavedCommandRoundTrip(WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutableIdentity identity, WorkflowExecutableSourceProvenance? source, WorkflowExecutionPartition partition, JsonElement payload, RuntimeStimulusDeliveryOrigin? savedOrigin)
+        WorkflowExecutableIdentity identity, WorkflowExecutableSourceProvenance? source, WorkflowExecutionPartition partition, JsonElement payload, RuntimeStimulusDeliveryOrigin? savedOrigin, RuntimeHistoryCausation? historyCausation)
     {
         // Ordinary command wire is unchanged. Invalid UTF-16 in an internal capture must not silently
         // become a different binding/provenance when System.Text.Json replaces an unpaired surrogate.
         var restored = payload.Deserialize<WorkflowExecutionStartCommandPayload>()!;
         var expected = request.StartAuthority!.StimulusDelivery!;
         var actual = restored.StartAuthority?.StimulusDelivery;
-        if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(restored.PinnedExecutable, identity) ||
+        if (restored.HistoryCausation != historyCausation || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(restored.PinnedExecutable, identity) ||
             restored.PinnedSource != source || restored.TriggerNodeId != request.TriggerNodeId ||
             !WorkflowExecutionAuthoritySnapshot.MetadataEquals(restored.TriggerMetadata, request.TriggerMetadata) ||
             restored.TenantId != request.TenantId || restored.Partition != partition ||
