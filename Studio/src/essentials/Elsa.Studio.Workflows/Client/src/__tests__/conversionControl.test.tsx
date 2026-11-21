@@ -15,6 +15,7 @@ afterEach(() => {
 
 const profiles = [
   { id: "elsa.json", version: "1" },
+  { id: "elsa.json-string", version: "1" },
   { id: "elsa.xml", version: "1" }
 ];
 
@@ -39,6 +40,8 @@ describe("ConversionControl", () => {
     expect(trigger.textContent).toBe("Auto");
     expect(host.querySelector(".wf-conversion-caption")?.textContent).toBe("Text → String");
     expect(host.querySelector(".wf-conversion-profile")).toBeNull();
+    flushSync(() => trigger.click());
+    expect([...document.body.querySelectorAll("[role='option']")].some(option => option.textContent?.startsWith("Serialize to JSON"))).toBe(false);
   });
 
   it("selecting JSON writes an authored request and updates the caption to formatted content", async () => {
@@ -52,6 +55,28 @@ describe("ConversionControl", () => {
 
     expect(changes.at(-1)?.conversion).toEqual({ mode: "json" });
     expect(host.querySelector(".wf-conversion-caption")?.textContent).toBe("JSON content → String");
+  });
+
+  it("offers JSON serialization only when the server says the binding is eligible", async () => {
+    stubResizeObserver();
+    const changes: WrappedActivityInputValue[] = [];
+    const eligibility = { canSerializeJsonString: true };
+    const host = mount(
+      <ConversionControl
+        inputLabel="Text"
+        targetTypeName="System.String"
+        wrapped={wrappedValue({ expression: { type: "ActivityResult", value: { producerNodeId: "create-user-task" } } })}
+        profiles={profiles}
+        disabled={false}
+        onChange={next => changes.push(next)}
+        {...eligibility}
+      />
+    );
+
+    await selectMode(host, "Serialize to JSON");
+
+    expect(changes.at(-1)?.conversion).toEqual({ mode: "jsonString" });
+    expect(changes.at(-1)?.expression).toEqual({ type: "ActivityResult", value: { producerNodeId: "create-user-task" } });
   });
 
   it("selecting Auto on a plain request clears the authored conversion entirely", async () => {
@@ -82,7 +107,7 @@ describe("ConversionControl", () => {
     expect(host.querySelector(".wf-syntax-picker-trigger")?.textContent).toBe("XML");
   });
 
-  it("Profile mode exposes id/version entry with known-profile suggestions and version prefill", async () => {
+  it("Profile mode hides JSON serialization suggestions when the binding is ineligible", async () => {
     stubResizeObserver();
     const changes: WrappedActivityInputValue[] = [];
     const host = mount(
@@ -103,10 +128,26 @@ describe("ConversionControl", () => {
     setInputValue(versionInput, "2");
     expect(changes.at(-1)?.conversion).toEqual({ mode: "profile", profile: { id: "elsa.json", version: "2" } });
   });
+
+  it("Profile mode offers JSON serialization suggestions when the binding is eligible", async () => {
+    stubResizeObserver();
+    const host = mount(
+      <Harness initial={wrappedValue()} onChange={() => {}} canSerializeJsonString />
+    );
+
+    await selectMode(host, "Profile");
+
+    expect([...host.querySelectorAll("datalist option")].map(option => option.getAttribute("value")))
+      .toEqual(["elsa.json", "elsa.json-string", "elsa.xml"]);
+  });
 });
 
 // Re-renders with the latest wrapped value so multi-step interactions observe their own writes.
-function Harness({ initial, onChange }: { initial: WrappedActivityInputValue; onChange(next: WrappedActivityInputValue): void }) {
+function Harness({ initial, onChange, canSerializeJsonString = false }: {
+  initial: WrappedActivityInputValue;
+  onChange(next: WrappedActivityInputValue): void;
+  canSerializeJsonString?: boolean;
+}) {
   const [wrapped, setWrapped] = React.useState(initial);
   return (
     <ConversionControl
@@ -114,6 +155,7 @@ function Harness({ initial, onChange }: { initial: WrappedActivityInputValue; on
       targetTypeName="System.String"
       wrapped={wrapped}
       profiles={profiles}
+      canSerializeJsonString={canSerializeJsonString}
       disabled={false}
       onChange={next => {
         setWrapped(next);

@@ -102,7 +102,7 @@ describe("workflow folder deletion", () => {
     expect(checkbox?.checked).toBe(false);
     if (deleteWorkflows) {
       await click(checkbox);
-      expect(container.textContent).toContain("can be restored from the Deleted view");
+      expect(container.textContent).toContain("can be restored from the Recycle bin");
     }
     await click(button(container, deleteWorkflows ? "Delete folder and 2 workflows" : "Delete folder"));
     await waitForCondition(() => expect(commits).toHaveLength(1));

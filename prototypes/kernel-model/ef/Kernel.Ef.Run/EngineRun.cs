@@ -12,8 +12,8 @@ using Npgsql;
 
 /// <summary>
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
-///   x stress|cost|probe|block|definite|deadlock postgres|sqlserver|mysql|sqlite "connection" [key=value ...]
-/// Options: fence=checked|batch (default: the engine's, so batch but checked on SQL Server, E9)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  seconds=40  messages=5000  partitions=2  nodes=3
+///   x stress|cost|probe|block|definite|deadlock|fence|lockorder|nodelease|locktimeout|setcost|setidle postgres|sqlserver|mysql|sqlite "connection" [key=value ...]   (setcost, setidle: SetCost.cs)
+/// Options: fence=checked|batch (default: the engine's, batch on every engine since 16 November for the owned commit; checked is SQL Server's 13 November fallback and its default with commit=ef, E9)  commit=ef|owned (default: the engine's; COMMIT-SQL.md)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  fencecount=0 (the owned fence ignores its matched count)  unordered=1 (lockorder: the k fence rows locked in the batch's order, the negative)  case=heartbeat|mutual|heartbeats mutation=subquery|rr|membership|rr-subquery|share expect=none|deadlock (nodelease: NL-9, NodeLeaseRun.cs)  stalelease=1 (the Worker commits past its local lease deadline: stale owners reach the fence; a pin's harness)  seconds=40  messages=5000  partitions=2  nodes=3
 ///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc takerr=1 (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
 ///          savepoints=1 (leave Entity Framework's savepoint on, SQL Server and MySQL)   batchsize=n (statements per command, SQL Server and MySQL; default 1000)
@@ -35,6 +35,28 @@ static class EngineRun
             catch (ArgumentException error) { Console.Error.WriteLine(error.Message); return 2; }
         }
         // Validate every size before constructing Target (which can start a proxy), opening a database or resetting it.
+        if (args[0] == "nodelease")
+        {
+            // An unknown value would run the store as built under another name: refused before anything is opened.
+            foreach (var (key, allowed) in new[] { ("case", new[] { "heartbeat", "mutual", "heartbeats" }), ("mutation", ["", "subquery", "rr", "membership", "rr-subquery", "share"]), ("expect", ["none", "deadlock"]) })
+                if (options.TryGetValue(key, out var value) && !allowed.Contains(value))
+                {
+                    Console.Error.WriteLine($"nodelease: unknown {key}={value}; one of {string.Join(", ", allowed.Select(a => a == "" ? "(empty)" : a))}");
+                    return 2;
+                }
+            var mutation = options.GetValueOrDefault("mutation", "");
+            if ((mutation == "share" && args[1] != "postgres") || (mutation == "rr-subquery" && args[1] != "mysql"))
+            {
+                Console.Error.WriteLine("nodelease: share requires PostgreSQL, and rr-subquery requires MySQL");
+                return 2;
+            }
+            if (mutation != "" && options.GetValueOrDefault("expect") == "none")
+            {
+                Console.Error.WriteLine("nodelease: a negative must deadlock");
+                return 2;
+            }
+        }
+        if (args[0] == "locktimeout") options["pool"] = "1";     // one pooled session: LockTimeout.cs
         var target = new Target(args[1], args[2], options);
         return args[0] switch
         {
@@ -44,6 +66,12 @@ static class EngineRun
             "block" => await Block(target),
             "definite" => await Definite(target),
             "deadlock" => await Deadlock(target),
+            "fence" => await Fence(target),
+            "lockorder" => await LockOrder(target),
+            "nodelease" => await NodeLeaseRun.RunAsync(target),
+            "locktimeout" => await LockTimeout.RunAsync(target),
+            "setcost" => await SetCost.RunAsync(target),
+            "setidle" => await SetCost.IdleAsync(target),
             _ => 2,
         };
     }
@@ -75,35 +103,49 @@ static class EngineRun
         var ef = target.Store(create);
         var tally = new Tally(ef);
         IKernelStore store = tally;
-        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; fence {(target.Has("unfenced") ? "BROKEN ON PURPOSE" : target.FenceInBatch ? "in the batch" : "checked")}; {nodes} nodes, {partitions} partitions{(workersOnly ? "; workers only, as " + name : "")}");
+        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; fence {(target.Has("unfenced") ? "BROKEN ON PURPOSE" : target.FenceInBatch ? "in the batch" : "checked")}; commit {target.CommitWriter}{(target.Has("stalelease") ? "; lease check OFF (stale owners commit)" : "")}; {nodes} nodes, {partitions} partitions{(workersOnly ? "; workers only, as " + name : "")}");
 
         var (calm, stopped) = (false, false);
         bool Calm() => calm || (signal != "" && File.Exists(signal + ".calm"));
         bool Stopped() => stopped || (signal != "" && File.Exists(signal + ".stop"));
         long turns = 0, kills = 0, stalls = 0;
+        // Partitions: since #4532 a child start checks its destination against the worker's partition count, so a parent in
+        // partition 1 of a two-partition run faulted at its first turn with the option left at its default of 1.
         var options = new WorkerOptions
         {
-            Lease = TimeSpan.FromMilliseconds(target.Int("lease", 150)), Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000,
+            Lease = TimeSpan.FromMilliseconds(target.Int("lease", 150)), Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000, Partitions = partitions,
             OnTurn = (_, _, _) => Interlocked.Increment(ref turns),
+            // stalelease=1: the Worker's local lease check is off (Flaw.IgnoreLeaseDeadline, the simulation's mutation), so an owner
+            // that stalled past its lease still commits and the fence is what refuses it. With the check on, a stale owner on a
+            // fast engine resets before it commits and the fence is never asked (FINDINGS 29 F-B2); the broken-fence and
+            // fence-count stress pins need the fence asked.
+            Flaws = target.Has("stalelease") ? Flaw.IgnoreLeaseDeadline : Flaw.None,
         };
 
         var loops = Enumerable.Range(0, nodes).SelectMany(node => Enumerable.Range(0, partitions).Select(partition => Task.Run(async () =>
         {
-            var (random, worker) = (new Random(node * 31 + partition + name.GetHashCode()), new Worker(name + node, partition, store, target.Actors(Models()), options));
+            var (random, worker) = (new Random(node * 31 + partition + name.GetHashCode()), new Worker($"{name}{node}.p{partition}", partition, store, target.Actors(Models()), options));
+            var heartbeat = new NodeHeartbeat(worker.Node, store, [worker], options.Lease, options.Lease);
+            long nextHeartbeat = 0;
             while (!Stopped())
             {
-                if (!worker.Owns)
+                if (!worker.Owns && worker.Pending.Count == 0)
                 {
                     await new DurableHost([worker]).ActivateAsync(worker.Partition);
-                    if (!worker.Owns) await Task.Delay(20);
-                    continue;
+                    if (!worker.Owns)
+                    {
+                        await Task.Delay(20);
+                        continue;
+                    }
                 }
-                await worker.PollAsync();
-                await worker.LoadAsync();
-                await worker.MeetAsync();
-                foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
-                if (worker.NeedsFlush) await worker.FlushAsync();
-                else await worker.BeatAsync();
+                // A Worker with only pending partitions still needs a pass to judge its next heartbeat.
+                await worker.WokenAsync(null);
+                await worker.RunAsync();
+                if (Environment.TickCount64 >= nextHeartbeat)
+                {
+                    nextHeartbeat = Environment.TickCount64 + (long)(options.Lease.TotalMilliseconds / 3);
+                    await heartbeat.BeatAsync();
+                }
                 if (!Calm() && random.Next(25) == 0)
                 {
                     Interlocked.Increment(ref stalls);
@@ -299,7 +341,7 @@ static class EngineRun
         tally.Print();
         if (target.FenceInBatch) Console.WriteLine($"E1: {ef.KeyViolationsAsFence} key violations were the fence (counted in 'commit fenced')");
         Console.WriteLine($"deadlocks: the engine counted {await target.DeadlocksAsync(admin) - deadlocksBefore}, the store saw {tally.Sum(target.DeadlockCode)} (commit {tally.Sum("commit", target.DeadlockCode)}, poll {tally.Sum("poll", target.DeadlockCode)}, other {tally.Sum(target.DeadlockCode) - tally.Sum("commit", target.DeadlockCode) - tally.Sum("poll", target.DeadlockCode)})");
-        Console.WriteLine($"SUMMARY | {target.Engine} | {await target.DescribeAsync()} | {(target.Has("unfenced") ? "broken" : target.FenceInBatch ? "batch" : "checked")} | {seconds} s, {messages} | kills {kills} | stalls {stalls} | takeovers {string.Join(", ", takeovers)} | turns {turns} | commits {journal.Count} | deadlocks {tally.Sum(target.DeadlockCode)} | retries {tally.Sum("commit", "Transient")} | resets {tally.Sum("commit", "fenced") + tally.Sum("commit", "Unknown")} (fenced {tally.Sum("commit", "fenced")}, unknown {tally.Sum("commit", "Unknown")}) | definite {tally.Sum("commit", "Definite")} | {(wrong.Count == 0 ? "holds" : wrong.Count + " violations")}");
+        Console.WriteLine($"SUMMARY | {target.Engine} | {await target.DescribeAsync()} | {(target.Has("unfenced") ? "broken" : target.FenceInBatch ? "batch" : "checked")} | {target.CommitWriter}{(target.Has("stalelease") ? " | lease check off" : "")} | {seconds} s, {messages} | kills {kills} | stalls {stalls} | takeovers {string.Join(", ", takeovers)} | turns {turns} | commits {journal.Count} | deadlocks {tally.Sum(target.DeadlockCode)} | retries {tally.Sum("commit", "Transient")} | resets {tally.Sum("commit", "fenced") + tally.Sum("commit", "Unknown")} (fenced {tally.Sum("commit", "fenced")}, unknown {tally.Sum("commit", "Unknown")}) | definite {tally.Sum("commit", "Definite")} | {(wrong.Count == 0 ? "holds" : wrong.Count + " violations")}");
         Console.WriteLine(wrong.Count == 0 ? "end state: all properties hold" : $"end state: {wrong.Count} violations\n  " + string.Join("\n  ", wrong.Take(20)));
         if (writes is not null)
         {
@@ -343,14 +385,14 @@ static class EngineRun
         var tally = new Tally(target.Store(create));     // also proves each size trial landed ten commits; no round trip
         IKernelStore store = tally;
         // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
-        var owner = new Worker("owner", 0, store, target.Actors(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000, Lease = TimeSpan.FromHours(1) });
+        var owner = new Worker("owner", 0, store, target.Actors(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000, Lease = TimeSpan.FromHours(1), Partitions = 2 });
         await new DurableHost([owner]).ActivateAsync(owner.Partition);
         await owner.PollAsync();
         var n = 0;
         var keep = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 3_600_000;
         Message Start(string mode, int count = 10) => new($"m{++n}", InstanceRef.In(0, $"{mode}{n}"), Kinds.Start, Start: Sequence.Spec(count, mode));
 
-        Console.WriteLine($"\n{target.Engine}: {await target.DescribeAsync()}; fence {(target.FenceInBatch ? "in the batch" : "checked")}");
+        Console.WriteLine($"\n{target.Engine}: {await target.DescribeAsync()}; fence {(target.FenceInBatch ? "in the batch" : "checked")}; commit {target.CommitWriter}");
         if (target.Writes is { } described) Console.WriteLine("writes: " + await described.DescribeAsync() + $"; history {target.Get("history", "as the models say")}, pad {target.Int("pad", 0)} bytes");
         Console.WriteLine("counted: commands, COMMITs and (but for PostgreSQL) BEGINs, as FINDINGS.md section 5 counts; sent: what the driver sends, one per request (see ENGINES.md)");
         Console.WriteLine($"{"run",-58} {"commands",8} {"begin",6} {"commit",6} {"opens",6} {"saves",6} {"counted",8} {"sent",6} {"server",8} {"tcp",6}");
@@ -596,6 +638,95 @@ static class EngineRun
         Console.WriteLine(await target.DeadlockReportAsync());
         return 0;
     }
+
+    // ---- round 5 B: the multi-row fence --------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The owned fence for k rows at once (PARTITIONS.md, the owner's condition on variant (i)): eight partitions taken by
+    /// one node, fenced 1, 3 and 8 at a time, then 8 again with one row stale: refused whole, no position moved.
+    /// </summary>
+    private static async Task<int> Fence(Target target)
+    {
+        const int partitions = 8;
+        await target.ResetAsync(partitions);
+        var store = target.Store(target.Workers());
+        if (!store.OwnedCommit) { Console.WriteLine($"{target.Engine}: no owned commit dialect; the multi-row fence is the owned commit's"); return 2; }
+        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; the owned fence over {partitions} partitions");
+        var wrong = 0;
+        var leases = new Lease[partitions];
+        for (var p = 0; p < partitions; p++) leases[p] = (await store.TakeAsync(p, "fence-probe", TimeSpan.FromMinutes(1)))!;
+        async Task<string> Positions() => string.Join(" ", await Task.WhenAll(Enumerable.Range(0, partitions).Select(async p => (await store.ProjectedAsync(p)).Written)));
+        foreach (var k in new[] { 1, 3, partitions })
+        {
+            var rows = Enumerable.Range(0, k).Select(p => new FenceRow(p, leases[p].Epoch, leases[p].Position, leases[p].Position + 1)).ToArray();
+            var now = await store.FenceAsync(rows);
+            if (now is null) wrong++;
+            for (var p = 0; p < k; p++) leases[p] = leases[p] with { Position = leases[p].Position + 1 };
+            Console.WriteLine($"fence of {k} row(s): {(now is null ? "REFUSED (wrong)" : "landed, database time " + now)}; positions {await Positions()}");
+        }
+        // One row stale: partition 5 released and taken by another node, so its epoch moved on.
+        await store.ReleaseAsync(5, leases[5].Epoch);
+        _ = await store.TakeAsync(5, "other-node", TimeSpan.FromMinutes(1));
+        var before = await Positions();
+        var stale = Enumerable.Range(0, partitions).Select(p => new FenceRow(p, leases[p].Epoch, leases[p].Position, leases[p].Position + 1)).ToArray();
+        var refused = await store.FenceAsync(stale) is null;
+        var after = await Positions();
+        if (!refused || before != after) wrong++;
+        Console.WriteLine($"fence of {partitions} rows with row 5 stale: {(refused ? "refused" : "LANDED (wrong)")}; positions before {before}, after {after}{(before == after ? "" : " (MOVED: wrong)")}");
+        // The same rows again: a retry from the same picture is refused too (the stale row stays stale), and the other node's commit on 5 lands.
+        var again = await store.FenceAsync(stale) is null;
+        if (!again) wrong++;
+        Console.WriteLine($"the same fence again: {(again ? "refused" : "LANDED (wrong)")}");
+        Console.WriteLine(wrong == 0 ? "fence probe: all as expected" : $"fence probe: {wrong} wrong");
+        return wrong == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// K1's lock-order case: two overlapping range commits at once. One owner holds partitions 1, 2 and 3; commit X lists
+    /// its fences 1, 2, 3 and commit Y lists them 3, 2, 1, both at the same picture. An outside transaction holds row 2, X
+    /// is sent and waits on it, then Y is sent and waits, then the hold is released. Locked in ascending partition id, Y
+    /// queues behind X on row 1: X lands, Y is refused by its stale fence, and the engine counts no deadlock. With
+    /// unordered=1 (the UnorderedFenceLocks mutation) Y holds row 3 while X holds 1 and 2: the engine must break a deadlock.
+    /// </summary>
+    private static async Task<int> LockOrder(Target target)
+    {
+        await target.ResetAsync(8);
+        var (admin, ef) = (target.Admins(), target.Store(target.Workers()));
+        var unordered = target.Has("unordered");
+        Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; fence {(target.FenceInBatch ? "in the batch" : "checked")}; fence rows locked {(unordered ? "IN BATCH ORDER (the negative)" : "in ascending partition id")}");
+        var held = (await ef.TakeAsync([1, 2, 3], "lock-probe", TimeSpan.FromMinutes(5))).Taken;
+        if (held.Count != 3) { Console.WriteLine("the probe could not take partitions 1, 2 and 3"); return 2; }
+        CommitBatch Flush(IEnumerable<PartitionFence> order, string name) =>
+            CommitBatch.Owned([.. order], TimeSpan.FromMinutes(5), false,
+                [.. order.Select(f => new TurnCommit($"{f.Partition}/{name}", new InstanceRow($"{f.Partition}/{name}", "m", "d", InstanceStatus.Running, "{}", 1, null), null, [], [], [], [], [], "[]"))], [], []);
+        var deadlocks = await target.DeadlocksAsync(admin);
+        var masked = ef.KeyViolationsAsFence;
+        var clock = Stopwatch.StartNew();
+        await using var hold = await target.HoldAsync(2);
+        async Task<string> Run(CommitBatch batch)
+        {
+            try { return (await ef.CommitAsync(batch)).Landed ? "landed" : "not landed"; }
+            catch (Exception e) { return "failed: " + Tally.Code(e); }
+        }
+        var x = Task.Run(() => Run(Flush(held, "x")));
+        var waited = await target.WaitForWaitersAsync(1);
+        var y = Task.Run(() => Run(Flush(held.Reverse(), "y")));
+        waited &= await target.WaitForWaitersAsync(2);
+        await hold.DisposeAsync();
+        var done = await Task.WhenAny(Task.WhenAll(x, y), Task.Delay(TimeSpan.FromSeconds(60))) is Task<string[]>;
+        var (ax, ay) = (x.IsCompleted ? x.Result : "HUNG", y.IsCompleted ? y.Result : "HUNG");
+        var counted = await target.DeadlocksAsync(admin) - deadlocks;
+        var positions = string.Join(" ", await Task.WhenAll(new[] { 1, 2, 3 }.Select(async p => (await ef.ProjectedAsync(p)).Written)));
+        var rows = (await ef.LoadAsync(["1/x", "2/x", "3/x", "1/y", "2/y", "3/y"])).Select(r => r.Id).Order();
+        Console.WriteLine($"both waiting before the release: {(waited ? "yes" : "NO (timing not forced)")}; X (1, 2, 3): {ax}; Y (3, 2, 1): {ay}; {clock.ElapsedMilliseconds} ms");
+        Console.WriteLine($"engine deadlocks counted: {counted}; deadlock or key errors answered as a stale fence (E1): {ef.KeyViolationsAsFence - masked}; positions of 1 2 3: {positions}; rows: {string.Join(" ", rows)}");
+        var landed = new[] { ax, ay }.Count(a => a == "landed");
+        var clean = done && waited && counted == 0 && landed == 1 && new[] { ax, ay }.All(a => a is "landed" or "not landed") && ef.KeyViolationsAsFence == masked && positions == "1 1 1";
+        Console.WriteLine(unordered
+            ? $"lockorder negative: {(counted > 0 ? "DEADLOCKED, broken by the engine" : clean ? "serialized, no deadlock" : "other")}"
+            : $"lockorder: {(clean ? "both completed, one landed, no deadlock" : "WRONG")}");
+        return unordered || clean ? 0 : 1;
+    }
 }
 
 /// <summary>One engine in one configuration: connections, session settings, how to kill a session, what its errors are called.</summary>
@@ -605,7 +736,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     public string Get(string key, string fallback) => options.GetValueOrDefault(key, fallback);
     public int Int(string key, int fallback) => int.Parse(Get(key, fallback.ToString()));
     public bool Has(string key) => Get(key, "0") != "0";
-    public bool FenceInBatch => Get("fence", "") switch { "batch" => true, "checked" => false, _ => Dialect()?.FenceInBatchByDefault ?? true };
+    public bool FenceInBatch => Get("fence", "") switch { "batch" => true, "checked" => false, _ => Dialect()?.FenceInBatchByDefault(Get("commit", "") != "ef") ?? true };
 
     /// <summary>The engine's code for a deadlock victim (for SQLite: BUSY), as <see cref="Tally.Code"/> writes it.</summary>
     public string DeadlockCode => engine switch { "postgres" => "pg 40P01", "sqlserver" => "mssql 1205", "mysql" => "mysql 1213", _ => "sqlite 5" };
@@ -637,8 +768,8 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     private string Worker => engine switch
     {
         "postgres" => (Proxy?.Rewrite(connection) ?? connection) + ";Application Name=kernel-worker;Maximum Pool Size=40",
-        "sqlserver" => (Proxy?.Rewrite(connection) ?? connection) + ";Application Name=kernel-worker;Max Pool Size=40",
-        "mysql" => (Proxy?.Rewrite(connection) ?? connection) + ";uid=kernel_worker;pwd=kernel;maximumpoolsize=40",
+        "sqlserver" => (Proxy?.Rewrite(connection) ?? connection) + ";Application Name=kernel-worker;Max Pool Size=" + Get("pool", "40"),
+        "mysql" => (Proxy?.Rewrite(connection) ?? connection) + ";uid=kernel_worker;pwd=kernel;maximumpoolsize=" + Get("pool", "40"),
         _ => connection + (options.TryGetValue("timeout", out var timeout) ? ";Default Timeout=" + timeout : ""),
     };
 
@@ -678,14 +809,21 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
 
     public EfStore Store(Func<KernelDb> create) => new(create, postgres: engine != "sqlite", FenceInBatch)
     {
-        Unfenced = Has("unfenced"), DefiniteBeatsFence = Has("m5"),
+        Unfenced = Has("unfenced"), DefiniteBeatsFence = Has("m5"), FenceIgnoresCount = Get("fencecount", "1") == "0", UnorderedFenceLocks = Has("unordered"),
+        NodeReadInUpdate = Get("mutation", "") is "subquery" or "rr-subquery",
+        RepeatableReadTake = Get("mutation", "") is "rr" or "rr-subquery",
+        LockNodeRead = Get("mutation", "") == "share", MembershipInHeartbeat = Get("mutation", "") == "membership",
+        CommitSql = Get("commit", "") switch { "ef" => CommitSql.EntityFramework, "owned" => CommitSql.Owned, _ => null },
         Engine = Dialect(),
     };
+
+    /// <summary>Who writes the commit, for the run's heading.</summary>
+    public string CommitWriter => Store(Admins()).OwnedCommit ? "owned SQL" : "EF SaveChanges";
 
     private Engine? Dialect() => engine switch
     {
         "sqlserver" => new SqlServerEngine { ReadPast = Has("readpast"), Savepoints = Has("savepoints"), ReadCommittedSnapshot = Get("rcsi", "1") == "1" },
-        "mysql" => new MySqlEngine { Isolation = Get("isolation", "") == "rc" ? System.Data.IsolationLevel.ReadCommitted : null, Savepoints = Has("savepoints"), TakeIsolation = Has("takerr") ? null : System.Data.IsolationLevel.ReadCommitted },
+        "mysql" => new MySqlEngine { Isolation = Get("isolation", "") == "rc" ? System.Data.IsolationLevel.ReadCommitted : null, Savepoints = Has("savepoints") },
         _ => null,
     };
 
@@ -722,7 +860,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
         };
     }
 
-    private static async Task<string> Text(KernelDb db, string sql)
+    public static async Task<string> Text(KernelDb db, string sql)
     {
         var connection = db.Database.GetDbConnection();
         if (connection.State != System.Data.ConnectionState.Open) await db.Database.OpenConnectionAsync();
@@ -755,6 +893,49 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
             default:
                 return 0;
         }
+    }
+
+    /// <summary>Another transaction holds partition row <paramref name="partition"/> until disposed (as the conformance suite's hold).</summary>
+    public async Task<IAsyncDisposable> HoldAsync(int partition)
+    {
+        var db = Admins()();
+        var transaction = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync(engine switch
+        {
+            "sqlserver" => $"""SELECT 1 FROM "Partitions" WITH (UPDLOCK, ROWLOCK) WHERE "Id" = {partition}""",
+            "sqlite" => $"""UPDATE "Partitions" SET "Owner" = "Owner" WHERE "Id" = {partition}""",
+            _ => Quote($"""SELECT 1 FROM "Partitions" WHERE "Id" = {partition} FOR UPDATE"""),
+        });
+        return new Held(db, transaction);
+    }
+
+    private sealed class Held(KernelDb db, Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction) : IAsyncDisposable
+    {
+        private bool _done;
+        public async ValueTask DisposeAsync()
+        {
+            if (_done) return;
+            _done = true;
+            await transaction.RollbackAsync();
+            await db.DisposeAsync();
+        }
+    }
+
+    /// <summary>Waits until at least <paramref name="count"/> sessions wait for a row lock in this database; false after 10 s.</summary>
+    public async Task<bool> WaitForWaitersAsync(int count)
+    {
+        var sql = engine switch
+        {
+            "postgres" => "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+            "sqlserver" => "SELECT COUNT(*) FROM sys.dm_exec_requests WHERE blocking_session_id <> 0 AND database_id = DB_ID()",
+            "mysql" => "SELECT COUNT(DISTINCT w.REQUESTING_THREAD_ID) FROM performance_schema.data_lock_waits w JOIN performance_schema.data_locks l ON l.ENGINE = w.ENGINE AND l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID WHERE l.OBJECT_SCHEMA = DATABASE()",
+            _ => null,
+        };
+        if (sql is null) { await Task.Delay(500); return false; }
+        await using var db = Admins()();
+        for (var clock = Stopwatch.StartNew(); clock.Elapsed < TimeSpan.FromSeconds(10); await Task.Delay(20))
+            if (long.TryParse(await Text(db, sql), out var waiting) && waiting >= count) return true;
+        return false;
     }
 
     /// <summary>The engine's own count of deadlocks so far.</summary>
@@ -879,10 +1060,17 @@ sealed class Locks(Target target) : DbTransactionInterceptor
 /// <summary>Counts what every store call came to: landed, fenced, or failed and with which of the engine's errors.</summary>
 sealed class Tally(IKernelStore inner) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
+
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken ct = default) =>
+        Call("heartbeat", () => inner.NodeHeartbeatAsync(node, lease, window, ct));
+
     private readonly ConcurrentDictionary<string, int> _counts = new();
     private readonly ConcurrentDictionary<string, string> _samples = new();
     private readonly ConcurrentDictionary<string, ConcurrentBag<double>> _times = new();

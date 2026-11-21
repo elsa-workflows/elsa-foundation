@@ -3,7 +3,7 @@ using System.Text;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Host.Shells;
+using Elsa.Foundation.Hosting;
 using Nuplane.Abstractions;
 using Nuplane.Admin;
 using Nuplane.Reconciliation;

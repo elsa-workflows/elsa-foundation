@@ -1,11 +1,23 @@
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, ChevronDown, Plus, Server } from "lucide-react";
-import { studioNavigationRequestedEvent, useStudioRouteLocation, type StudioApiCapabilityDocument, type StudioNavigationRequest, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
-import { AnchoredPopover, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField } from "@elsa-workflows/studio-ui";
+import { ChevronDown, Plus, Server } from "lucide-react";
+import { qualifyStudioBackendPath, requestStudioNavigation, studioNavigationRequestedEvent, useStudioRouteLocation, type StudioApiCapabilityDocument, type StudioNavigationRequest, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
+import { studioRowInteraction, AnchoredPopover, StudioBreadcrumbs, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField, StudioTableContainer, type StudioBreadcrumbLink } from "@elsa-workflows/studio-ui";
 import { BackendConnections, backendConnectionNonce, canonicalBackendUrl, connectionError } from "./connections";
 import "./backends.css";
 
 export const backendNavigation = {id:"backends",label:"Backends",path:"/settings/backends",activePathPrefix:"/settings/backends",placement:"settings" as const,order:20};
+
+function BackendBreadcrumbs({items,current,navigate}:{items:StudioBreadcrumbLink[];current:React.ReactNode;navigate:(path:string)=>void}) {
+  return <StudioBreadcrumbs items={items} current={current} renderLink={item => {
+    const href = qualifyStudioBackendPath(item.href);
+    return <a href={href} onClick={event => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      const from = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (requestStudioNavigation(from,href)) navigate(href);
+    }}>{item.label}</a>;
+  }} />;
+}
 
 export function BackendSwitcher({connections,onNavigate}:{connections:BackendConnections;onNavigate:(path:string)=>void}) {
   const snapshot = useSyncExternalStore(connections.subscribe,connections.getSnapshot);
@@ -18,13 +30,22 @@ export function BackendSwitcher({connections,onNavigate}:{connections:BackendCon
       <Server size={17} aria-hidden="true" /><span><strong>{active?.profile.name ?? "Choose backend"}</strong><small>{active?.profile.environment === "Production" ? "Production · " : ""}{active ? new URL(active.profile.baseUrl).host : "Not connected"}</small></span><ChevronDown size={14} aria-hidden="true" />
     </StudioButton>
     <AnchoredPopover open={open} anchorRef={button} className="backend-switcher-popover" minWidth={260} maxHeight={420} onDismiss={() => setOpen(false)}>
-      <div aria-label="Backend connections">
-      <strong>Connect to backend</strong>
-      {snapshot.profiles.map(profile => <StudioButton type="button" key={profile.id} disabled={snapshot.busy || profile.id === active?.profile.id && !active?.disposed && !active?.discoveryError} onClick={() => { setOpen(false); void connections.connect(profile.id); }}>
-        <span><strong>{profile.name}</strong><small>{profile.environment} · {new URL(profile.baseUrl).host}</small></span><span>{profile.id === active?.profile.id ? "Active" : "Connect"}</span>
-      </StudioButton>)}
-      <StudioButton type="button" onClick={() => {setOpen(false);onNavigate("/settings/backends");}}>Manage backends</StudioButton>
-    </div></AnchoredPopover>
+      <div aria-label="Backend connections" className="backend-switcher-popover-content">
+        <div className="backend-switcher-popover-header">Connect to backend</div>
+        <div className="backend-switcher-popover-profiles">
+          {snapshot.profiles.map(profile => <StudioButton type="button" key={profile.id} className="backend-switcher-popover-profile" disabled={snapshot.busy || profile.id === active?.profile.id && !active?.disposed && !active?.discoveryError} onClick={() => { setOpen(false); void connections.connect(profile.id); }}>
+            <div className="backend-switcher-popover-profile-info">
+              <strong>{profile.name}</strong>
+              <small>{profile.environment} · {new URL(profile.baseUrl).host}</small>
+            </div>
+            <span className="backend-switcher-popover-profile-status">{profile.id === active?.profile.id ? "Active" : "Connect"}</span>
+          </StudioButton>)}
+        </div>
+        <div className="backend-switcher-popover-footer">
+          <StudioButton type="button" className="backend-switcher-popover-manage" onClick={() => {setOpen(false);onNavigate("/settings/backends");}}>Manage backends</StudioButton>
+        </div>
+      </div>
+    </AnchoredPopover>
   </div>;
 }
 
@@ -51,14 +72,17 @@ export function BackendsPage({connections,navigate,path:explicitPath,featureMana
   const edit = !!profile && segment[1] === "edit";
   const detailPath = profile ? `/settings/backends/${encodeURIComponent(profile.id)}` : "/settings/backends";
   if (create || edit) return <BackendForm key={create ? "new" : profile!.id} connections={connections} profile={edit ? profile : undefined} navigate={navigate} />;
-  if (segment.length && !profile) return <div className="backends-page"><StudioButton type="button" onClick={() => navigate("/settings/backends")}>Back to backends</StudioButton><StudioAlert tone="warning">This backend profile is no longer available.</StudioAlert></div>;
+  if (segment.length && !profile) return <div className="backends-page"><div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+    <BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current="Unavailable profile" navigate={navigate} />
+    <StudioAlert tone="warning">This backend profile is no longer available.</StudioAlert>
+  </div></div>;
   if (profile) return <BackendDetails key={profile.id} connections={connections} profile={profile} navigate={navigate} detailPath={detailPath} featureManagementAvailable={featureManagementAvailable} />;
   return <section className="backends-page" aria-label="Backends">
     <div className="backends-heading"><div><h2>Backends</h2><p>Choose where you design and run workflows.</p></div>{connections.allowPersonal ? <StudioButton variant="primary" type="button" onClick={() => navigate("/settings/backends/new")}><Plus size={16} aria-hidden="true" />Add backend</StudioButton> : null}</div>
     {snapshot.profileError ? <StudioAlert tone="warning">{snapshot.profileError}</StudioAlert> : null}
-    <table className="backends-list"><thead><tr><th scope="col">Backend</th><th scope="col">Environment</th><th scope="col">Managed by</th><th scope="col">Connection</th></tr></thead><tbody>
-      {snapshot.profiles.map(item => <tr key={item.id}><td><StudioButton type="button" className="backend-name-link" onClick={() => navigate(`/settings/backends/${encodeURIComponent(item.id)}`)}><strong>{item.name}</strong><small>{new URL(item.baseUrl).host}</small></StudioButton></td><td><span className={item.environment === "Production" ? "backend-production" : "backend-environment"}>{item.environment}</span></td><td>{item.source === "configuration" ? "Configuration" : "You"}</td><td>{snapshot.active?.profile.id === item.id ? "Active" : "Inactive"}</td></tr>)}
-    </tbody></table>
+    <StudioTableContainer role="region" aria-label="Backends table" tabIndex={0}><table className="studio-table backends-list"><thead><tr><th scope="col">Backend</th><th scope="col">Environment</th><th scope="col">Managed by</th><th scope="col">Connection</th></tr></thead><tbody>
+      {snapshot.profiles.map(item => <tr key={item.id} {...studioRowInteraction<HTMLTableRowElement>(() => navigate(`/settings/backends/${encodeURIComponent(item.id)}`))}><td><button type="button" className="backend-name-link studio-row-link" onClick={() => navigate(`/settings/backends/${encodeURIComponent(item.id)}`)}><strong>{item.name}</strong><small>{new URL(item.baseUrl).host}</small></button></td><td><span className={item.environment === "Production" ? "backend-production" : "backend-environment"}>{item.environment}</span></td><td>{item.source === "configuration" ? "Configuration" : "You"}</td><td>{snapshot.active?.profile.id === item.id ? "Active" : "Inactive"}</td></tr>)}
+    </tbody></table></StudioTableContainer>
     {snapshot.loading ? <p role="status">Loading connections…</p> : null}
   </section>;
 }
@@ -81,8 +105,8 @@ function BackendDetails({connections,profile,navigate,detailPath,featureManageme
     finally {if (mounted.current) setChecking(false);}
   }
   return <section className="backends-page" aria-label={`${profile.name} backend`}>
-    <StudioButton className="backend-back" type="button" onClick={() => navigate("/settings/backends")}><ArrowLeft size={15} aria-hidden="true" />Backends</StudioButton>
-    <div className="backends-heading"><div><h2>{profile.name}</h2><p className="backend-url">{profile.baseUrl}</p></div><div className="backend-actions">
+    <div className="backends-heading"><div><BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current={profile.name} navigate={navigate} />
+      <h2>{profile.name}</h2><p className="backend-url">{profile.baseUrl}</p></div><div className="backend-actions">
       <StudioButton variant="primary" type="button" disabled={snapshot.busy || active && !snapshot.active?.disposed && !snapshot.active?.discoveryError} onClick={() => {void connections.connect(profile.id);}}>{active && !snapshot.active?.disposed && !snapshot.active?.discoveryError ? "Connected" : "Connect"}</StudioButton>
       <StudioButton type="button" disabled={checking || snapshot.busy} onClick={() => {void inspect();}}>{checking ? "Checking…" : "Test connection"}</StudioButton>
       {profile.source === "personal" && connections.allowPersonal ? <StudioButton type="button" onClick={() => navigate(`${detailPath}/edit`)}>Edit</StudioButton> : null}
@@ -127,8 +151,11 @@ function BackendForm({connections,profile,navigate}:{connections:BackendConnecti
   if (!connections.allowPersonal || profile?.source === "configuration") return <StudioAlert tone="warning">This profile is managed by your Studio host.</StudioAlert>;
   const cancel = () => navigate(profile ? `/settings/backends/${encodeURIComponent(profile.id)}` : "/settings/backends");
   return <section className="backends-page" aria-label={profile ? "Edit backend" : "Add backend"}>
-    <StudioButton className="backend-back" type="button" onClick={cancel}><ArrowLeft size={15} aria-hidden="true" />{profile?.name ?? "Backends"}</StudioButton>
-    <div className="backends-heading"><div><h2>{profile ? "Edit backend" : "Add backend"}</h2><p>Save a personal connection profile. Your active backend stays unchanged.</p></div></div>
+    <div className="backends-heading"><div><BackendBreadcrumbs items={profile
+      ? [{href:"/settings/backends",label:"Backends"},{href:`/settings/backends/${encodeURIComponent(profile.id)}`,label:profile.name}]
+      : [{href:"/settings/backends",label:"Backends"}]}
+      current={profile ? "Edit" : "Add backend"} navigate={navigate} />
+      <h2>{profile ? "Edit backend" : "Add backend"}</h2><p>Save a personal connection profile. Your active backend stays unchanged.</p></div></div>
     <form className="backend-form" onSubmit={event => {
       event.preventDefault();setError(null);setSaving(true);
       let url:string;

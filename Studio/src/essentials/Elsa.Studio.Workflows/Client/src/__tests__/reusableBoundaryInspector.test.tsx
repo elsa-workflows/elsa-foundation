@@ -61,6 +61,42 @@ describe("ReusableBoundaryInspector", () => {
     else expect(container.querySelector(".wf-boundary-layout-list-row")?.getAttribute("title")).toBe("Published context");
   });
 
+  it("separates historical activity identity from status and preserves exact selection", () => {
+    const saved = layout("outer", [
+      { templateNodeId: "charge", authoredActivityId: "charge", executableNodeId: "charge-node", x: 0, y: 0, activityType: "Example.ChargeCard", hasPinnedGeometry: false },
+      { templateNodeId: "capture", authoredActivityId: "capture", executableNodeId: "capture-node", x: 0, y: 0, activityType: "Example.CapturePayment", hasPinnedGeometry: false }
+    ]);
+    saved.activityPresentation = [
+      { executableNodeId: "charge-node", displayName: "Charge card" },
+      { executableNodeId: "capture-node", displayName: "Capture payment" }
+    ];
+    const onSelectNode = vi.fn();
+    const container = render(<HistoricalBoundaryLayout
+      layout={saved}
+      onSelectNode={onSelectNode}
+      selectedExecutableNodeId="charge-node"
+      statusByNode={new Map([["charge-node", "Completed"], ["capture-node", "Faulted"]])}
+    />);
+
+    const selectedRow = container.querySelector<HTMLElement>(".wf-boundary-layout-list-row[data-selected='true']");
+    expect(selectedRow?.querySelector(".wf-boundary-layout-list-identity")?.textContent).toBe("Charge card");
+    expect(selectedRow?.querySelector(".wf-boundary-layout-list-status")?.textContent).toBe("Completed");
+    const selectedButton = selectedRow?.querySelector<HTMLButtonElement>("button");
+    expect(selectedButton?.getAttribute("aria-pressed")).toBe("true");
+    click(selectedButton!);
+    expect(onSelectNode).toHaveBeenCalledWith("charge-node");
+    expect([...container.querySelectorAll(".wf-boundary-layout-list-status")].map(status => status.textContent))
+      .toEqual(["Completed", "Faulted"]);
+  });
+
+  it("supports a compact presentation for historical structure inside the inspector", () => {
+    const saved = layout("outer", [{ templateNodeId: "child", authoredActivityId: "child", executableNodeId: "placed-child", x: 0, y: 0, activityType: "Example.WriteLine", hasPinnedGeometry: false }]);
+
+    const container = render(<HistoricalBoundaryLayout layout={saved} compact />);
+
+    expect(container.querySelector(".wf-boundary-layout-list-compact")).not.toBeNull();
+  });
+
   it("names historical intrinsic steps without needing the live catalog", async () => {
     vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
     vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(2, [

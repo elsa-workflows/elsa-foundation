@@ -22,6 +22,7 @@ import { registerBuiltInSettingEditors,
   StudioTabPanel,
   StudioToolbar,
   StudioToolbarGroup, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { buildCapabilityGroups, getCapabilityDefinition } from "./capabilities";
 import "./styles.css";
 
 interface FeatureCatalogResponse {
@@ -133,12 +134,43 @@ interface FeatureHostState {
   checkedFeatureIds: Set<string>;
   selectedCategory: string;
   filterText: string;
+  browseView: "overview" | "all" | "group";
+  selectedCapability: string;
+  featureStateFilter: "all" | "enabled" | "disabled" | "pending";
+  includeAdvanced: boolean;
+  navigationHistory: FeatureBrowseLocation[];
   loading: boolean;
   applying: boolean;
   status: string | null;
   error: string | null;
   enabledRoots: FeatureToggleRoot[];
   stateCauses: Map<string, FeatureStateCause>;
+}
+
+interface FeatureBrowseLocation {
+  browseView: FeatureHostState["browseView"];
+  selectedCapability: string;
+  selectedCategory: string;
+  filterText: string;
+  featureStateFilter: FeatureHostState["featureStateFilter"];
+  includeAdvanced: boolean;
+  selectedId: string;
+}
+
+interface FeatureRelationshipLink {
+  id: string;
+  feature: DraftFeature | null;
+  optional: boolean;
+}
+
+interface FeatureRelationshipGroup {
+  direct: FeatureRelationshipLink[];
+  indirect: FeatureRelationshipLink[];
+}
+
+interface FeatureRelationships {
+  requires: FeatureRelationshipGroup;
+  usedBy: FeatureRelationshipGroup;
 }
 
 interface FeatureReviewSnapshot {
@@ -264,6 +296,10 @@ export function isDirty(current: FeatureCatalogResponse | null, draft: DraftFeat
   return current ? canonicalize(current.features) !== canonicalize(draft) : false;
 }
 
+function isFeaturePending(baseline: DraftFeature | undefined, desired: DraftFeature) {
+  return !!baseline && stableStringify(projectEffectiveFeature(baseline)) !== stableStringify(projectEffectiveFeature(desired));
+}
+
 function featureIndexById(features: DraftFeature[]) {
   return new Map(features.map(feature => [normalizeType(feature.id), feature]));
 }
@@ -290,6 +326,55 @@ export function buildDependentsIndex(features: DraftFeature[]): Map<string, stri
   }
 
   return index;
+}
+
+function getFeatureRelationships(feature: DraftFeature, features: DraftFeature[]): FeatureRelationships {
+  const byId = featureIndexById(features);
+  const dependencies = (current: DraftFeature) => current.dependencies.map(dependency => ({
+    id: dependency.id,
+    feature: byId.get(normalizeType(dependency.id)) ?? null,
+    optional: dependency.optional
+  }));
+  const reverse = new Map<string, FeatureRelationshipLink[]>();
+  for (const candidate of features) {
+    for (const dependency of candidate.dependencies) {
+      const key = normalizeType(dependency.id);
+      const links = reverse.get(key) ?? [];
+      links.push({ id: candidate.id, feature: candidate, optional: dependency.optional });
+      reverse.set(key, links);
+    }
+  }
+
+  function collectIndirect(initial: FeatureRelationshipLink[], next: (current: DraftFeature) => FeatureRelationshipLink[]) {
+    const rootId = normalizeType(feature.id);
+    const directIds = new Set(initial.map(link => normalizeType(link.id)));
+    const visited = new Set([rootId, ...directIds]);
+    const indirect: FeatureRelationshipLink[] = [];
+    const pending = initial.flatMap(link => link.feature ? [link.feature] : []);
+    for (let cursor = 0; cursor < pending.length; cursor++) {
+      for (const link of next(pending[cursor])) {
+        const key = normalizeType(link.id);
+        if (visited.has(key) || !link.feature) continue;
+        visited.add(key);
+        indirect.push(link);
+        pending.push(link.feature);
+      }
+    }
+    return indirect;
+  }
+
+  const directRequires = dependencies(feature);
+  const directUsedBy = reverse.get(normalizeType(feature.id)) ?? [];
+  return {
+    requires: {
+      direct: directRequires,
+      indirect: collectIndirect(directRequires, dependencies)
+    },
+    usedBy: {
+      direct: directUsedBy,
+      indirect: collectIndirect(directUsedBy, current => reverse.get(normalizeType(current.id)) ?? [])
+    }
+  };
 }
 
 // Walks the dependency graph from `root`, adding every reachable feature id to
@@ -406,6 +491,11 @@ function createInitialHostState(): FeatureHostState {
     checkedFeatureIds: new Set(),
     selectedCategory: AllCategoriesId,
     filterText: "",
+    browseView: "overview",
+    selectedCapability: "",
+    featureStateFilter: "all",
+    includeAdvanced: true,
+    navigationHistory: [],
     loading: true,
     applying: false,
     status: null,
@@ -494,6 +584,8 @@ export function FeatureManagementPage() {
   const hostState = hostStates[activeHost.id];
   const { catalog, draft, selectedId, checkedFeatureIds, selectedCategory, filterText, loading, applying, status, error, enabledRoots, stateCauses } = hostState;
   const completionMessage = featureCompletion?.hostId === activeHost.id && featureCompletion.targetKey === activeHost.key ? featureCompletion.message : status;
+  const refreshHostRef = useRef(refreshHost);
+  refreshHostRef.current = refreshHost;
 
   // Load once. A background workspace tab mounts its effects again when it returns, and a refresh
   // would replace an unapplied feature draft with the server catalog.
@@ -502,9 +594,9 @@ export function FeatureManagementPage() {
     if (initialRefreshRef.current) return;
     initialRefreshRef.current = true;
     for (const host of hosts) {
-      void refreshHost(host.id, false);
+      void refreshHostRef.current(host.id, false);
     }
-  }, []);
+  }, [hosts]);
 
   useLayoutEffect(() => {
     if (completionMessage) {
@@ -512,23 +604,54 @@ export function FeatureManagementPage() {
     }
   }, [activeHost.id, completionMessage]);
 
-  const textFilteredDraft = useMemo(() => filterFeaturesByText(draft, filterText), [draft, filterText]);
-  const categories = useMemo(() => getCategoryFilters(textFilteredDraft), [textFilteredDraft]);
+  const baselineById = useMemo(
+    () => featureIndexById(catalog?.features.map(toDraftFeature) ?? []),
+    [catalog]
+  );
+  const capabilityFeatures = useMemo(() => draft.map(feature => {
+    const baseline = baselineById.get(normalizeType(feature.id));
+    return {
+      ...feature,
+      pending: isFeaturePending(baseline, feature),
+      problem: !!feature.readError || (feature.enabled && (feature.runtimeAvailable === false || feature.availability?.status === "dormant"))
+    };
+  }), [draft, baselineById]);
+  const capabilityGroups = useMemo(() => buildCapabilityGroups(capabilityFeatures), [capabilityFeatures]);
+  const selectedCapability = capabilityGroups.find(group => group.id === hostState.selectedCapability);
+  const scopedDraft = useMemo(
+    () => hostState.browseView === "group" && !filterText.trim() ? selectedCapability?.features ?? [] : draft,
+    [hostState.browseView, filterText, selectedCapability, draft]
+  );
+  const textFilteredDraft = useMemo(() => filterFeaturesByText(scopedDraft, filterText), [scopedDraft, filterText]);
+  const stateFilteredDraft = useMemo(() => textFilteredDraft.filter(feature => {
+    const pending = isFeaturePending(baselineById.get(normalizeType(feature.id)), feature);
+    if (hostState.featureStateFilter === "enabled" && !feature.enabled) return false;
+    if (hostState.featureStateFilter === "disabled" && feature.enabled) return false;
+    if (hostState.featureStateFilter === "pending" && !pending) return false;
+    return hostState.includeAdvanced || !feature.advanced;
+  }), [textFilteredDraft, baselineById, hostState.featureStateFilter, hostState.includeAdvanced]);
+  const categories = useMemo(() => getCategoryFilters(stateFilteredDraft), [stateFilteredDraft]);
   const filteredDraft = useMemo(
-    () => filterFeaturesByCategory(textFilteredDraft, selectedCategory),
-    [textFilteredDraft, selectedCategory]);
+    () => filterFeaturesByCategory(stateFilteredDraft, selectedCategory),
+    [stateFilteredDraft, selectedCategory]);
   const selectedFeature = filteredDraft.find(feature => feature.id === selectedId)
     ?? filteredDraft.find(feature => feature.enabled)
     ?? filteredDraft[0]
     ?? null;
-  const dependentsIndex = useMemo(() => buildDependentsIndex(draft), [draft]);
-  const selectedDependents = selectedFeature ? dependentsIndex.get(normalizeType(selectedFeature.id)) ?? [] : [];
+  const selectedRelationships = selectedFeature ? getFeatureRelationships(selectedFeature, draft) : null;
+  const selectedFeaturePending = selectedFeature
+    ? isFeaturePending(baselineById.get(normalizeType(selectedFeature.id)), selectedFeature)
+    : false;
   const dirty = isDirty(catalog, draft);
   const impactEntries = useMemo(
     () => getFeatureImpactEntries(catalog, draft, enabledRoots, stateCauses),
     [catalog, draft, enabledRoots, stateCauses]);
   const enabledCount = draft.filter(feature => feature.enabled).length;
   const selectedCategoryLabel = categories.find(category => category.id === selectedCategory)?.label ?? "All categories";
+  const isOverview = hostState.browseView === "overview" && !filterText.trim();
+  const listHeading = hostState.browseView === "group" && selectedCapability
+    ? selectedCapability.label
+    : filterText.trim() ? "Search results" : "All features";
   const visibleFeatureIds = useMemo(() => new Set(filteredDraft.map(feature => feature.id)), [filteredDraft]);
   const checkedVisibleCount = filteredDraft.filter(feature => checkedFeatureIds.has(feature.id)).length;
   const allVisibleChecked = filteredDraft.length > 0 && checkedVisibleCount === filteredDraft.length;
@@ -580,6 +703,76 @@ export function FeatureManagementPage() {
       ...current,
       [hostId]: update(current[hostId])
     }));
+  }
+
+  function browseLocation(state: FeatureHostState, featureId = state.selectedId): FeatureBrowseLocation {
+    return {
+      browseView: state.browseView,
+      selectedCapability: state.selectedCapability,
+      selectedCategory: state.selectedCategory,
+      filterText: state.filterText,
+      featureStateFilter: state.featureStateFilter,
+      includeAdvanced: state.includeAdvanced,
+      selectedId: featureId
+    };
+  }
+
+  function openAllFeatures() {
+    updateHostState(activeHost.id, state => ({
+      ...state,
+      browseView: "all",
+      selectedCategory: AllCategoriesId,
+      selectedId: selectedId || state.selectedId
+    }));
+  }
+
+  function openOverview() {
+    updateHostState(activeHost.id, state => ({
+      ...state,
+      browseView: "overview",
+      selectedCategory: AllCategoriesId,
+      filterText: ""
+    }));
+  }
+
+  function openCapability(id: string) {
+    updateHostState(activeHost.id, state => ({
+      ...state,
+      browseView: "group",
+      selectedCapability: id,
+      selectedCategory: AllCategoriesId,
+      featureStateFilter: "all",
+      includeAdvanced: true
+    }));
+  }
+
+  function openRelatedFeature(id: string) {
+    const target = draft.find(feature => normalizeType(feature.id) === normalizeType(id));
+    if (!target) return;
+    const capability = getCapabilityDefinition(target.categories);
+    updateHostState(activeHost.id, state => ({
+      ...state,
+      navigationHistory: [...state.navigationHistory, browseLocation(state, selectedFeature?.id ?? state.selectedId)],
+      browseView: "group",
+      selectedCapability: capability.id,
+      selectedCategory: AllCategoriesId,
+      filterText: "",
+      featureStateFilter: "all",
+      includeAdvanced: true,
+      selectedId: target.id
+    }));
+  }
+
+  function backToPreviousFeature() {
+    updateHostState(activeHost.id, state => {
+      const previous = state.navigationHistory[state.navigationHistory.length - 1];
+      if (!previous) return state;
+      return {
+        ...state,
+        ...previous,
+        navigationHistory: state.navigationHistory.slice(0, -1)
+      };
+    });
   }
 
   function clearReview() {
@@ -848,70 +1041,149 @@ export function FeatureManagementPage() {
           <StudioAlert tone="success">{completionMessage}</StudioAlert>
         </div>
       ) : null}
-      <div className="feature-management-layout">
+      <div className={`feature-management-layout${isOverview ? " overview" : ""}`}>
         <div className="feature-management-list-column">
+          <nav className="feature-management-browse-nav" aria-label="Feature views">
+            {hostState.navigationHistory.length > 0 ? (
+              <button type="button" onClick={backToPreviousFeature} aria-label="Back to previous feature">Back</button>
+            ) : null}
+            <button type="button" aria-pressed={isOverview} onClick={openOverview}>Capabilities</button>
+            <button type="button" aria-pressed={!isOverview && hostState.browseView !== "group"} onClick={openAllFeatures}>All features</button>
+            {hostState.browseView === "group" && selectedCapability ? (
+              <button type="button" aria-pressed="true" onClick={() => openCapability(selectedCapability.id)}>{selectedCapability.label}</button>
+            ) : null}
+          </nav>
           <div className="feature-management-list-toolbar">
             <input
               type="search"
               aria-label="Filter features"
               placeholder="Filter by name, package, setting..."
               value={filterText}
-              onChange={event => updateHostState(activeHost.id, state => ({ ...state, filterText: event.target.value }))}
+              onChange={event => updateHostState(activeHost.id, state => ({
+                ...state,
+                filterText: event.target.value,
+                browseView: event.target.value.trim() ? "all" : state.browseView
+              }))}
             />
-            <CategorySelect
-              categories={categories}
-              selectedCategory={selectedCategory}
-              onSelect={category => updateHostState(activeHost.id, state => ({ ...state, selectedCategory: category }))}
-            />
-          </div>
-
-          <div className="feature-management-list-heading">
-            <div>
-              <strong>{selectedCategoryLabel}</strong>
-              <span>{filteredDraft.length} feature{filteredDraft.length === 1 ? "" : "s"}</span>
-            </div>
-            <span>{filteredDraft.filter(feature => feature.enabled).length} enabled</span>
-          </div>
-
-          <BulkFeatureActions
-            disabled={editingDisabled || filteredDraft.length === 0}
-            selectedCount={checkedFeatureIds.size}
-            visibleCount={filteredDraft.length}
-            visibleSelectedCount={checkedVisibleCount}
-            selectedEnabledCount={checkedFeatures.filter(feature => feature.enabled).length}
-            allVisibleChecked={allVisibleChecked}
-            onToggleVisible={toggleVisibleFeatureSelection}
-            onClearSelection={() => updateHostState(activeHost.id, state => ({ ...state, checkedFeatureIds: new Set() }))}
-            onEnableSelected={() => setCheckedFeaturesEnabled(true)}
-            onDisableSelected={() => setCheckedFeaturesEnabled(false)}
-          />
-
-          <div className="feature-management-list" aria-busy={loading}>
-            {loading && draft.length === 0 ? <SkeletonRows rows={6} label="Loading features" /> : null}
-            {!loading && draft.length === 0 ? <p className="feature-management-muted">No features are available.</p> : null}
-            {!loading && draft.length > 0 && filteredDraft.length === 0 ? <p className="feature-management-muted">{filterText.trim() ? "No features match this filter." : "No features match this category."}</p> : null}
-            {filteredDraft.map(feature => (
-              <FeatureCard
-                key={feature.id}
-                feature={feature}
-                selected={feature.id === selectedFeature?.id}
-                checked={checkedFeatureIds.has(feature.id)}
-                disabled={editingDisabled}
-                onSelect={() => updateHostState(activeHost.id, state => ({ ...state, selectedId: feature.id }))}
-                onToggle={() => toggleFeature(feature)}
-                onCheckedChange={checked => toggleCheckedFeature(feature.id, checked)}
+            {!isOverview ? (
+              <CategorySelect
+                categories={categories}
+                selectedCategory={selectedCategory}
+                onSelect={category => updateHostState(activeHost.id, state => ({ ...state, selectedCategory: category }))}
               />
-            ))}
+            ) : null}
           </div>
+
+          {isOverview ? (
+            <div className="feature-management-overview" aria-label="Feature capabilities">
+              {loading && draft.length === 0 ? <SkeletonRows rows={6} label="Loading capabilities" /> : null}
+              {!loading && capabilityGroups.length === 0 ? <p className="feature-management-muted">No features are available.</p> : null}
+              {capabilityGroups.map(group => (
+                <button
+                  key={group.id}
+                  type="button"
+                  className="feature-management-capability-card"
+                  aria-label={`View ${group.label} features`}
+                  onClick={() => openCapability(group.id)}
+                >
+                  <span className="feature-management-capability-card-heading">
+                    <strong>{group.label}</strong>
+                    <span>{group.features.length} feature{group.features.length === 1 ? "" : "s"}</span>
+                  </span>
+                  <span className="feature-management-capability-description">{group.description}</span>
+                  <span className="feature-management-capability-summary">{group.enabledCount} of {group.features.length} enabled</span>
+                  {group.pendingCount > 0 || group.problemCount > 0 ? (
+                    <span className="feature-management-capability-alerts">
+                      {group.pendingCount > 0 ? `${group.pendingCount} pending change${group.pendingCount === 1 ? "" : "s"}` : null}
+                      {group.pendingCount > 0 && group.problemCount > 0 ? " · " : null}
+                      {group.problemCount > 0 ? `${group.problemCount} configuration issue${group.problemCount === 1 ? "" : "s"}` : null}
+                    </span>
+                  ) : null}
+                  <span className="feature-management-capability-action">View features</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="feature-management-list-filters">
+                <label>
+                  <span>Feature state</span>
+                  <select
+                    className="feature-management-state-filter"
+                    aria-label="Filter by feature state"
+                    value={hostState.featureStateFilter}
+                    onChange={event => updateHostState(activeHost.id, state => ({ ...state, featureStateFilter: event.target.value as FeatureHostState["featureStateFilter"] }))}
+                  >
+                    <option value="all">All states</option>
+                    <option value="enabled">Enabled</option>
+                    <option value="disabled">Disabled</option>
+                    <option value="pending">Pending changes</option>
+                  </select>
+                </label>
+                <label className="feature-management-advanced-filter">
+                  <input
+                    type="checkbox"
+                    checked={hostState.includeAdvanced}
+                    onChange={event => updateHostState(activeHost.id, state => ({ ...state, includeAdvanced: event.target.checked }))}
+                  />
+                  <span>Include advanced</span>
+                </label>
+              </div>
+
+              <div className="feature-management-list-heading">
+                <div>
+                  <strong>{listHeading}{selectedCategory !== AllCategoriesId ? ` · ${selectedCategoryLabel}` : ""}</strong>
+                  <span>{filteredDraft.length} feature{filteredDraft.length === 1 ? "" : "s"}</span>
+                </div>
+                <span>{filteredDraft.filter(feature => feature.enabled).length} enabled</span>
+              </div>
+
+              <BulkFeatureActions
+                disabled={editingDisabled || filteredDraft.length === 0}
+                selectedCount={checkedFeatureIds.size}
+                visibleCount={filteredDraft.length}
+                visibleSelectedCount={checkedVisibleCount}
+                selectedEnabledCount={checkedFeatures.filter(feature => feature.enabled).length}
+                allVisibleChecked={allVisibleChecked}
+                onToggleVisible={toggleVisibleFeatureSelection}
+                onClearSelection={() => updateHostState(activeHost.id, state => ({ ...state, checkedFeatureIds: new Set() }))}
+                onEnableSelected={() => setCheckedFeaturesEnabled(true)}
+                onDisableSelected={() => setCheckedFeaturesEnabled(false)}
+              />
+
+              <div className="feature-management-list" aria-busy={loading}>
+                {loading && draft.length === 0 ? <SkeletonRows rows={6} label="Loading features" /> : null}
+                {!loading && draft.length === 0 ? <p className="feature-management-muted">No features are available.</p> : null}
+                {!loading && draft.length > 0 && filteredDraft.length === 0 ? <p className="feature-management-muted">{filterText.trim() ? "No features match this filter." : "No features match the selected filters."}</p> : null}
+                {filteredDraft.map(feature => (
+                  <FeatureCard
+                    key={feature.id}
+                    feature={feature}
+                    pending={isFeaturePending(baselineById.get(normalizeType(feature.id)), feature)}
+                    selected={feature.id === selectedFeature?.id}
+                    checked={checkedFeatureIds.has(feature.id)}
+                    disabled={editingDisabled}
+                    onSelect={() => updateHostState(activeHost.id, state => ({ ...state, selectedId: feature.id }))}
+                    onToggle={() => toggleFeature(feature)}
+                    onCheckedChange={checked => toggleCheckedFeature(feature.id, checked)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
-        <FeatureInspector
-          feature={selectedFeature}
-          dependents={selectedDependents}
-          disabled={editingDisabled}
-          onToggle={toggleFeature}
-          onSettingChange={updateSetting}
-        />
+        {!isOverview ? (
+          <FeatureInspector
+            feature={selectedFeature}
+            relationships={selectedRelationships}
+            pending={selectedFeaturePending}
+            disabled={editingDisabled}
+            onNavigate={openRelatedFeature}
+            onToggle={toggleFeature}
+            onSettingChange={updateSetting}
+          />
+        ) : null}
       </div>
 
       </StudioTabPanel>
@@ -986,8 +1258,8 @@ function FeatureImpactReviewDialog({
             </div>
           ) : null}
           <p className="feature-management-impact-intro">
-            This review includes every changed feature for {hostLabel}, including features hidden by the current filters.
-            Apply submits the complete desired feature state.
+            This draft preview includes every changed feature for {hostLabel}, including features hidden by the current filters.
+            It is not a validation result; the server validates the complete desired state when you apply it.
           </p>
           {entries.length > 0 ? (
             <div className="feature-management-impact-list">
@@ -1415,6 +1687,7 @@ function CategorySelect({
 
 function FeatureCard({
   feature,
+  pending,
   selected,
   checked,
   disabled,
@@ -1423,6 +1696,7 @@ function FeatureCard({
   onCheckedChange
 }: {
   feature: DraftFeature;
+  pending: boolean;
   selected: boolean;
   checked: boolean;
   disabled: boolean;
@@ -1431,7 +1705,6 @@ function FeatureCard({
   onCheckedChange(checked: boolean): void;
 }) {
   const displayName = feature.displayName || feature.id;
-  const showTechnicalName = !sameText(displayName, feature.id);
 
   return (
     <article className={selected ? "feature-management-card selected" : "feature-management-card"}>
@@ -1457,8 +1730,8 @@ function FeatureCard({
           <strong>{displayName}</strong>
           {feature.experimental ? <FeatureBadge tone="experimental"><FlaskConical size={11} />Experimental</FeatureBadge> : null}
           {feature.advanced ? <FeatureBadge tone="advanced"><ShieldAlert size={11} />Advanced</FeatureBadge> : null}
+          {pending ? <FeatureBadge tone="info">Pending changes</FeatureBadge> : null}
         </span>
-        {showTechnicalName ? <code>{feature.id}</code> : null}
         {feature.description ? <small>{feature.description}</small> : null}
         <span className="feature-management-card-meta">
           <SourceBadge sourceKind={feature.sourceKind} />
@@ -1475,14 +1748,18 @@ function FeatureCard({
 
 function FeatureInspector({
   feature,
-  dependents,
+  relationships,
+  pending,
   disabled,
+  onNavigate,
   onToggle,
   onSettingChange
 }: {
   feature: DraftFeature | null;
-  dependents: string[];
+  relationships: FeatureRelationships | null;
+  pending: boolean;
   disabled: boolean;
+  onNavigate(featureId: string): void;
   onToggle(feature: DraftFeature): void;
   onSettingChange(feature: DraftFeature, setting: StudioSettingDescriptor, value: unknown): void;
 }) {
@@ -1503,6 +1780,7 @@ function FeatureInspector({
           <span className="feature-management-inspector-badges">
             <SourceBadge sourceKind={feature.sourceKind} />
             <FeatureBadge tone={feature.enabled ? "enabled" : "neutral"}>{feature.enabled ? "Enabled" : "Disabled"}</FeatureBadge>
+            {pending ? <FeatureBadge tone="info">Pending changes</FeatureBadge> : null}
             {feature.experimental ? <FeatureBadge tone="experimental"><FlaskConical size={11} />Experimental</FeatureBadge> : null}
             {feature.advanced ? <FeatureBadge tone="advanced"><ShieldAlert size={11} />Advanced</FeatureBadge> : null}
           </span>
@@ -1518,14 +1796,16 @@ function FeatureInspector({
       {feature.enabled && feature.runtimeAvailable === false ? <div className="feature-management-warning">Enabled in configuration; no runtime descriptor is available.</div> : null}
       {feature.enabled && feature.availability?.status === "dormant" ? <div className="feature-management-warning">Dormant: {feature.availability.reasons.map(reason => reason.reason).join(" ")}</div> : null}
 
-      <section className="feature-management-inspector-section" aria-label="Feature metadata">
-        <FeatureMetadata feature={feature} dependents={dependents} />
+      {relationships ? <FeatureRelationshipsPanel relationships={relationships} onNavigate={onNavigate} /> : null}
+
+      <section className="feature-management-inspector-section feature-management-technical-section" aria-label="Feature technical details">
+        <FeatureMetadata feature={feature} />
       </section>
 
-      <section className="feature-management-inspector-section feature-management-settings-panel" aria-label="Feature settings">
-        <div className="feature-management-section-heading">
-          <h4>Settings</h4>
-          {feature.settings.length > 0 ? (
+      {feature.settings.length > 0 ? (
+        <section className="feature-management-inspector-section feature-management-settings-panel" aria-label="Feature settings">
+          <div className="feature-management-section-heading">
+            <h4>Settings</h4>
             <button
               type="button"
               onClick={() => setSettingsDialogFeatureId(feature.id)}
@@ -1534,14 +1814,10 @@ function FeatureInspector({
             >
               Edit settings
             </button>
-          ) : null}
-        </div>
-        {feature.settings.length === 0 ? (
-          <p className="feature-management-muted">No configurable settings.</p>
-        ) : (
+          </div>
           <FeatureSettingsSummary feature={feature} />
-        )}
-      </section>
+        </section>
+      ) : null}
 
       {settingsDialogOpen ? (
         <FeatureSettingsDialog
@@ -1560,15 +1836,14 @@ function FeatureInspector({
  * advanced/experimental flags render once as badges above the title, and the display name
  * and description live in the heading, so this list intentionally does not repeat them.
  */
-function FeatureMetadata({ feature, dependents }: { feature: DraftFeature; dependents: string[] }) {
-  const dependencies = feature.dependencies.map(dependency => dependency.id);
+function FeatureMetadata({ feature }: { feature: DraftFeature }) {
   const packageName = feature.packageId
     ? [feature.packageId, feature.packageVersion].filter(Boolean).join(" ")
     : "Not package-backed";
 
   return (
-    <section className="feature-management-metadata" aria-label="Feature metadata">
-      <h4>Metadata</h4>
+    <details className="feature-management-metadata" aria-label="Feature metadata">
+      <summary>Technical details</summary>
       <dl className="feature-management-detail-list">
         <div><dt>Technical name</dt><dd><code>{feature.id}</code></dd></div>
         <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
@@ -1576,12 +1851,69 @@ function FeatureMetadata({ feature, dependents }: { feature: DraftFeature; depen
         <div><dt>Operational availability</dt><dd>{!feature.enabled ? "Disabled" : feature.availability?.status ?? "Not reported"}</dd></div>
         <div className="feature-management-detail-wide"><dt>Categories</dt><dd><CategoryChips categories={feature.categories} /></dd></div>
         <div className="feature-management-detail-wide"><dt>Package</dt><dd>{feature.packageId ? <FeatureBadge tone="violet"><Package size={11} />{packageName}</FeatureBadge> : <span className="feature-management-muted">{packageName}</span>}</dd></div>
-        {dependencies.length > 0 ? <div className="feature-management-detail-wide"><dt>Depends on</dt><dd><FeatureLinkChips ids={dependencies} /></dd></div> : null}
-        {dependents.length > 0 ? <div className="feature-management-detail-wide"><dt>Required by</dt><dd><FeatureLinkChips ids={dependents} /></dd></div> : null}
         {feature.manifestHash ? <div className="feature-management-detail-wide"><dt>Manifest hash</dt><dd><code>{feature.manifestHash}</code></dd></div> : null}
         {feature.manifestPath ? <div className="feature-management-detail-wide"><dt>Manifest path</dt><dd><code>{feature.manifestPath}</code></dd></div> : null}
       </dl>
+    </details>
+  );
+}
+
+function FeatureRelationshipsPanel({ relationships, onNavigate }: { relationships: FeatureRelationships; onNavigate(featureId: string): void }) {
+  if (relationships.requires.direct.length === 0 && relationships.requires.indirect.length === 0
+    && relationships.usedBy.direct.length === 0 && relationships.usedBy.indirect.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="feature-management-inspector-section feature-management-relationships" aria-label="Feature relationships">
+      <h4>Dependencies and impact</h4>
+      <FeatureRelationshipSection title="Requires" group={relationships.requires} onNavigate={onNavigate} />
+      <FeatureRelationshipSection title="Used by" group={relationships.usedBy} onNavigate={onNavigate} />
     </section>
+  );
+}
+
+function FeatureRelationshipSection({ title, group, onNavigate }: { title: string; group: FeatureRelationshipGroup; onNavigate(featureId: string): void }) {
+  if (group.direct.length === 0 && group.indirect.length === 0) return null;
+
+  return (
+    <div className="feature-management-relationship-group">
+      <h5>{title}</h5>
+      {group.direct.length > 0 ? (
+        <>
+          <span className="feature-management-relationship-label">Direct</span>
+          <ul>{group.direct.map(link => <FeatureRelationshipItem key={link.id} link={link} onNavigate={onNavigate} />)}</ul>
+        </>
+      ) : null}
+      {group.indirect.length > 0 ? (
+        <details>
+          <summary>Indirect ({group.indirect.length})</summary>
+          <ul>{group.indirect.map(link => <FeatureRelationshipItem key={link.id} link={link} onNavigate={onNavigate} />)}</ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function FeatureRelationshipItem({ link, onNavigate }: { link: FeatureRelationshipLink; onNavigate(featureId: string): void }) {
+  const label = link.feature?.displayName || link.id;
+
+  return (
+    <li>
+      {link.feature ? (
+        <button type="button" className="feature-management-relationship-link" onClick={() => onNavigate(link.id)} aria-label={`Open ${label}`}>
+          <span>{label}</span>
+          <FeatureBadge tone={link.feature.enabled ? "enabled" : "neutral"}>{link.feature.enabled ? "Enabled" : "Disabled"}</FeatureBadge>
+          {link.optional ? <FeatureBadge>Optional</FeatureBadge> : null}
+        </button>
+      ) : (
+        <span className="feature-management-relationship-missing">
+          <code>{link.id}</code>
+          <FeatureBadge tone="danger">Missing from catalog</FeatureBadge>
+          {link.optional ? <FeatureBadge>Optional</FeatureBadge> : null}
+        </span>
+      )}
+    </li>
   );
 }
 
@@ -1606,14 +1938,6 @@ function CategoryChips({ categories, max }: { categories: string[]; max?: number
     <span className="feature-management-chips">
       {shown.map(category => <span key={category} className="feature-management-chip">{category}</span>)}
       {overflow > 0 ? <span className="feature-management-chip feature-management-chip-overflow" title={categories.slice(shown.length).join(", ")}>+{overflow}</span> : null}
-    </span>
-  );
-}
-
-function FeatureLinkChips({ ids }: { ids: string[] }) {
-  return (
-    <span className="feature-management-chips">
-      {ids.map(id => <span key={id} className="feature-management-chip"><code>{id}</code></span>)}
     </span>
   );
 }
@@ -1678,11 +2002,14 @@ function FeatureSettingsDialog({
   onClose(): void;
 }) {
   const [values, setValues] = useState<Record<string, unknown>>(() => getFeatureSettingValues(feature));
+  const featureIdRef = useRef(feature.id);
   const settingGroups = getSettingGroups(feature.settings);
 
   useEffect(() => {
+    if (featureIdRef.current === feature.id) return;
+    featureIdRef.current = feature.id;
     setValues(getFeatureSettingValues(feature));
-  }, [feature.id]);
+  }, [feature]);
 
   function updateSettingValue(setting: StudioSettingDescriptor, value: unknown) {
     setValues(current => ({
@@ -1763,7 +2090,7 @@ function FeatureSettingsDialog({
 }
 
 function SettingField({ setting, children, presentsField }: { setting: StudioSettingDescriptor; children: React.ReactNode; presentsField?: boolean }) {
-  if (presentsField) return <div className="feature-management-setting outlined">{children}<code>{setting.name}</code></div>;
+  if (presentsField) return <div className="feature-management-setting outlined">{children}</div>;
   const booleanSetting = isBooleanSetting(setting);
 
   return (
@@ -1787,7 +2114,6 @@ function SettingField({ setting, children, presentsField }: { setting: StudioSet
         </span>
       ) : null}
       {setting.description ? <small>{setting.description}</small> : null}
-      <code>{setting.name}</code>
     </label>
   );
 }
@@ -1949,10 +2275,6 @@ function getSettingGroups(settings: StudioSettingDescriptor[]): SettingGroupItem
 
 function normalizeType(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
-}
-
-function sameText(left?: string | null, right?: string | null) {
-  return (left ?? "").trim().toLowerCase() === (right ?? "").trim().toLowerCase();
 }
 
 function canonicalize(features: FeatureCatalogItem[] | DraftFeature[]) {

@@ -168,12 +168,14 @@
 .otel-traces-layout {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(420px, 0.9fr) minmax(520px, 1.1fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 45fr) 10px minmax(0, 55fr);
 }
 
-.otel-panel .otel-traces-layout {
-  gap: 0;
+.otel-traces-layout.is-stacked {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(14rem, 0.8fr) minmax(18rem, 1fr);
+  align-content: start;
+  overflow: auto;
 }
 
 .otel-trace-list,
@@ -282,7 +284,17 @@
 
 .otel-trace-detail {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) minmax(0, 0.8fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.otel-trace-detail-body {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.otel-trace-detail-body.has-span-details {
+  grid-template-rows: minmax(0, 56fr) 10px minmax(0, 44fr);
 }
 
 .otel-trace-detail-header {
@@ -302,7 +314,6 @@
 .otel-waterfall {
   min-height: 0;
   overflow: auto;
-  border-bottom: 1px solid var(--otel-border);
   padding: 8px 10px 12px;
 }
 

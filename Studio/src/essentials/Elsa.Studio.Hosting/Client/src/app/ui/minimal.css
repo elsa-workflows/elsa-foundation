@@ -42,7 +42,7 @@
 :root[data-workspace-style="minimal"] .studio-button:hover:not(:disabled):not(.danger):not([data-variant="danger"]) { border-color: var(--studio-text-muted); }
 :root[data-workspace-style="minimal"] .studio-data-grid-header { min-height: var(--studio-table-header-height); }
 :root[data-workspace-style="minimal"] :is(.studio-table, .studio-collection-table) :is(strong, .studio-list-row-title) { font-weight: 600; }
-:root[data-workspace-style="minimal"] .studio-tabs button:is(.active, [aria-selected="true"]) { border-bottom-color: var(--studio-selection-mark); }
+:root[data-workspace-style="minimal"] .studio-tabs button:is(.active, [aria-selected="true"]) { box-shadow: inset 0 -2px var(--studio-selection-mark); }
 :root[data-workspace-style="minimal"] .studio-empty-state { border-style: dotted; }
 :root[data-workspace-style="minimal"] .studio-inspector { padding: 20px; }
 :root[data-workspace-style="minimal"] .studio-status-chip {

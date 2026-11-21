@@ -82,6 +82,7 @@
 		<ProjectReference Include="../../essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj" />
 		<!-- Data Protection and its opt-in EF key store, composed from host configuration on the host container (#2191). -->
 		<ProjectReference Include="../../essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="../../essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj" />
 		<ProjectReference Include="../../extensions/Weaver/src/Elsa.Weaver/Elsa.Weaver.csproj" />
 		<ProjectReference Include="../../extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj" />
 		<ProjectReference Include="../../extensions/Weaver/src/Api/Elsa.Weaver.Api.csproj" />

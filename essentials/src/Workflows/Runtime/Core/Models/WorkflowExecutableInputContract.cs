@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -54,7 +56,21 @@ public sealed class WorkflowDeclaredInput
         string name,
         TypeReference type,
         bool isRequired,
-        JsonElement? defaultValue = null)
+        JsonElement? defaultValue = null,
+        bool isNullable = false)
+        : this(name, type, isRequired, defaultValue, isNullable,
+            hasExplicitNullDefault: defaultValue is { ValueKind: JsonValueKind.Null })
+    {
+    }
+
+    [JsonConstructor]
+    public WorkflowDeclaredInput(
+        string name,
+        TypeReference type,
+        bool isRequired,
+        JsonElement? defaultValue,
+        bool isNullable,
+        bool hasExplicitNullDefault)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(type);
@@ -67,7 +83,10 @@ public sealed class WorkflowDeclaredInput
         Name = name;
         Type = type;
         IsRequired = isRequired;
-        DefaultValue = defaultValue?.Clone();
+        DefaultValue = defaultValue is { ValueKind: JsonValueKind.Null } && !hasExplicitNullDefault
+            ? null
+            : defaultValue?.Clone();
+        IsNullable = isNullable;
     }
 
     /// <summary>The case-sensitive workflow-input name.</summary>
@@ -80,5 +99,16 @@ public sealed class WorkflowDeclaredInput
     public bool IsRequired { get; }
 
     /// <summary>An optional, detached JSON literal default.</summary>
+    [JsonConverter(typeof(NullableJsonElementConverter))]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? DefaultValue { get; }
+
+    /// <summary>Distinguishes an explicit JSON-null default from a legacy absent-default null placeholder.</summary>
+    [JsonPropertyName("hasDefaultValue")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool HasExplicitNullDefault => DefaultValue is { ValueKind: JsonValueKind.Null };
+
+    /// <summary>Whether an explicitly supplied or defaulted JSON null is valid.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsNullable { get; }
 }

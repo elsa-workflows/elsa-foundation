@@ -1,3 +1,4 @@
+import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { AlertTriangle, Flag, Repeat2, Send } from "lucide-react";
 import { CopyableIdentifier, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
@@ -82,6 +83,7 @@ interface InspectorPanelProps {
   choicesForSlot?(owner: ActivityNode, slot: ChildSlot): ActivityCatalogItem[];
   placementNotice?: string;
   bpmnRoutingPanel?: ReactNode;
+  bpmnDetailsPanel?: ReactNode;
   catalogByVersion?: Map<string, ActivityCatalogItem>;
   selectedSupportsScopedVariables: boolean;
   variablesPanel?: ReactNode;
@@ -97,7 +99,7 @@ interface InspectorPanelProps {
   activityDataSelection?: ActivityDataSelectionHost | null;
   activeTabId?: ActivityInspectorTabId;
   onActiveTabChange?(tabId: ActivityInspectorTabId): void;
-  onSelectedActivityChange(activity: ActivityNode): void;
+  onSelectedActivityChange(activity: ActivityNode, edit?: StudioExpressionEditorEdit): void;
   /** Discrete collection operations end the previous property-edit history group. */
   onSelectedStructureChange?(activity: ActivityNode): void;
   onSelectedPresentationChange?(presentation: Pick<ActivityPresentationRecord, "displayName" | "description">): void;
@@ -141,6 +143,7 @@ export function InspectorPanel({
   choicesForSlot,
   placementNotice,
   bpmnRoutingPanel,
+  bpmnDetailsPanel,
   catalogByVersion,
   selectedSupportsScopedVariables,
   variablesPanel,
@@ -436,6 +439,7 @@ export function InspectorPanel({
           </StudioTabPanel>
         ) : null}
         <StudioTabPanel {...tabPanelProps("details")}>
+          {bpmnDetailsPanel}
           <ActivityPresentationFields key={selectedNode.nodeId} presentation={selectedPresentation}
             label={selectedNodeLabel} onChange={onSelectedPresentationChange} />
           <CopyableIdentifier label="Activity type" value={selectedActivityType} />

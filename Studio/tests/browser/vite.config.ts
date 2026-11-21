@@ -39,6 +39,7 @@ export default defineConfig({
     alias: {
       "@elsa-workflows/studio-sdk": resolve(__dirname, "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts"),
       "@elsa-workflows/studio-ui": resolve(__dirname, "../../src/essentials/Elsa.Studio.Hosting/StudioUi/src/index.ts"),
+      "@elsa-workflows/studio-code-editor": resolve(__dirname, "../../src/essentials/Elsa.Studio.CodeEditor/Client/src/index.ts"),
       "@microsoft/signalr": resolve(__dirname, "../../../extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client/node_modules/@microsoft/signalr"),
       "@xyflow/react": resolve(__dirname, "../../src/essentials/Elsa.Studio.Workflows/Client/node_modules/@xyflow/react")
     }
@@ -48,7 +49,7 @@ export default defineConfig({
       allow: [searchForWorkspaceRoot(__dirname), resolve(__dirname, "../../../extensions")]
     },
     host: "127.0.0.1",
-    port: 4179,
+    port: Number(process.env.STUDIO_BROWSER_PORT ?? 4179),
     strictPort: true
   }
 });

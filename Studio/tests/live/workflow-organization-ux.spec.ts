@@ -32,7 +32,7 @@ test("separate folder and chip-tag flows persist without changing authored workf
   const created = await createdResponse;
   expect(created.ok()).toBe(true);
   const creation = await created.json() as { definition: { id: string } };
-  await page.getByRole("button", { name: "Definitions", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Definitions", exact: true }).click();
   const readAuthoring = async () => {
     const response = await page.request.get(`${created.url()}/${creation.definition.id}`, { headers: { Authorization: bearer } });
     expect(response.ok()).toBe(true);

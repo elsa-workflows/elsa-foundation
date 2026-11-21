@@ -32,6 +32,59 @@ for (const palette of ["atelier", "classic"]) for (const theme of ["light", "dar
   });
 }
 
+for (const theme of ["light", "dark"] as const) for (const width of [390, 1440]) {
+  test(`workflow modified timestamps are easy to scan (${theme}, ${width}px)`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?mode=workflow-library&theme=${theme}`);
+    await expect(page.getByRole("button", { name: width === 390 ? "Folders" : "Manage folders", exact: true })).toBeVisible();
+    await expect(page.getByText("Loading library organization…", { exact: true })).toHaveCount(0);
+    const row = page.getByRole("row", { name: "Open workflow definition Collect overdue payment", exact: true });
+    const modified = row.locator(".wf-definition-modified");
+    const timestamp = modified.locator("time");
+    await expect(timestamp).toHaveAttribute("datetime", "2026-10-31T12:00:00Z");
+
+    const expected = await page.evaluate(() => {
+      const date = new Date("2026-10-31T12:00:00Z");
+      return [
+        new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date),
+        new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(date),
+        new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "long" }).format(date)
+      ];
+    });
+    await expect(timestamp.locator(".wf-definition-modified-date")).toHaveText(expected[0]);
+    await expect(timestamp.locator(".wf-definition-modified-time")).toHaveText(expected[1]);
+    await expect(timestamp).toHaveAttribute("title", expected[2]);
+    const geometry = await timestamp.evaluate(element => {
+      const date = element.querySelector<HTMLElement>(".wf-definition-modified-date")!;
+      const time = element.querySelector<HTMLElement>(".wf-definition-modified-time")!;
+      const dateBounds = date.getBoundingClientRect();
+      const timeBounds = time.getBoundingClientRect();
+      return {
+        dateBottom: dateBounds.bottom,
+        dateWidth: dateBounds.width,
+        timeTop: timeBounds.top,
+        timeWidth: timeBounds.width,
+        cellWidth: element.parentElement!.getBoundingClientRect().width,
+        whiteSpace: getComputedStyle(date).whiteSpace
+      };
+    });
+    expect(geometry.dateBottom).toBeLessThanOrEqual(geometry.timeTop + 1);
+    expect(geometry.dateWidth).toBeLessThanOrEqual(geometry.cellWidth + 1);
+    expect(geometry.timeWidth).toBeLessThanOrEqual(geometry.cellWidth + 1);
+    expect(geometry.whiteSpace).toBe("nowrap");
+
+    if (width === 390) {
+      const table = page.getByRole("region", { name: "Workflow definitions table" });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      expect(await table.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+      await table.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+      await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+    }
+
+    await page.screenshot({ path: testInfo.outputPath(`workflow-modified-${theme}-${width}.png`), fullPage: true });
+  });
+}
+
 test("a workflow keeps its identity while tags, saved views and favorites organize it", async ({ page }) => {
   await page.goto("/?mode=workflow-library&theme=light");
   const payment = page.getByRole("row", { name: "Open workflow definition Collect overdue payment" });
@@ -66,6 +119,106 @@ test("a workflow keeps its identity while tags, saved views and favorites organi
   expect(observations.some(request => /draft|version|publish/.test(request.url))).toBe(false);
 });
 
+test("Saved views identify Definitions as their parent", async ({ page }) => {
+  await page.goto("/?mode=workflow-library&theme=light");
+  await page.getByRole("link", { name: "Manage views", exact: true }).click();
+
+  const breadcrumbs = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
+  const definitions = breadcrumbs.getByRole("link", { name: "Definitions", exact: true });
+  await expect(definitions).toHaveAttribute("href", /workflows\/definitions/);
+  await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("Saved views");
+  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back to workflows", exact: true })).toHaveCount(0);
+
+  await definitions.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Workflow definitions", exact: true })).toBeVisible();
+});
+
+for (const theme of ["light", "dark"] as const) for (const width of [320, 390, 1440]) {
+  test(`fits workflow views and management controls (${theme}, ${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?mode=workflow-library&theme=${theme}`);
+    const organization = page.getByRole("region", { name: "Workflow library organization", exact: true });
+    const controls = organization.getByRole("group", { name: "Workflow views, folders, and tags", exact: true });
+    await expect(controls).toBeVisible();
+    const view = controls.getByLabel("Saved workflow view", { exact: true });
+    const manageViews = controls.getByRole("link", { name: "Manage views", exact: true });
+    const manageFolders = controls.getByRole("button", { name: "Manage folders", exact: true });
+    const manageTags = controls.getByRole("link", { name: "Manage tags", exact: true });
+    const favorites = organization.getByRole("button", { name: "Favorites", exact: true });
+    const filters = organization.getByRole("button", { name: "Filters", exact: true });
+    const saveView = controls.getByRole("button", { name: "Save view", exact: true });
+    await expect(view).toBeVisible();
+    await expect(manageViews).toBeVisible();
+    await expect(manageFolders).toBeVisible();
+    await expect(manageTags).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+    const compactControls = [favorites, filters, saveView, manageViews, manageFolders, manageTags];
+    for (const control of compactControls) {
+      await expect(control).toHaveAttribute("data-variant", "ghost");
+      await expect(control).toHaveAttribute("data-size", "sm");
+      const box = (await control.boundingBox())!;
+      expect(box.height).toBeGreaterThanOrEqual(24);
+      expect(box.height).toBeLessThanOrEqual(32);
+      expect(box.width).toBeGreaterThanOrEqual(24);
+    }
+    const favoriteBox = (await favorites.boundingBox())!;
+    expect(Math.abs(favoriteBox.width - favoriteBox.height)).toBeLessThan(1);
+
+    const centerY = async (control: Locator) => {
+      const box = (await control.boundingBox())!;
+      return box.y + box.height / 2;
+    };
+    if (width === 1440) {
+      const search = page.getByRole("searchbox", { name: "Search all workflows", exact: true });
+      const sort = organization.getByLabel("Sort workflows", { exact: true });
+      const searchCenter = await centerY(search);
+      for (const control of [sort, view, manageViews, manageFolders, manageTags]) {
+        expect(Math.abs((await centerY(control)) - searchCenter)).toBeLessThan(2);
+      }
+    }
+
+    if (width === 390) {
+      const foldersCenter = await centerY(manageFolders);
+      for (const control of [manageViews, manageTags]) {
+        expect(Math.abs((await centerY(control)) - foldersCenter)).toBeLessThan(2);
+      }
+    }
+
+    await page.evaluate(() => { document.documentElement.dataset.workspaceStyle = "minimal"; });
+    await manageTags.hover();
+    expect(await manageTags.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+    await favorites.click();
+    await expect(favorites).toHaveAttribute("aria-pressed", "true");
+    expect(await favorites.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+    await filters.click();
+    await expect(filters).toHaveAttribute("aria-expanded", "true");
+    expect(await filters.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+
+    if (width === 390) {
+      await manageFolders.focus();
+      await page.keyboard.press("Enter");
+      const drawer = page.getByRole("dialog", { name: "Manage workflow folders", exact: true });
+      await expect(drawer).toBeVisible();
+      await drawer.locator('[data-folder-id="finance"]').click();
+      await expect(drawer.getByRole("button", { name: "Rename", exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(drawer).toBeHidden();
+      await expect(manageFolders).toBeFocused();
+      const searchAll = page.getByRole("button", { name: "Search all workflows", exact: true });
+      await expect(searchAll).toHaveAttribute("data-variant", "ghost");
+      await expect(searchAll).toHaveAttribute("data-size", "sm");
+      const searchBox = (await searchAll.boundingBox())!;
+      expect(searchBox.height).toBeGreaterThanOrEqual(24);
+      expect(searchBox.height).toBeLessThanOrEqual(32);
+      await searchAll.hover();
+      expect(await searchAll.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+    }
+  });
+}
+
 test("bulk edits preview explicit identities and keep mixed outcomes visible", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 780 });
   await page.goto("/?mode=workflow-library&bulk=partial&theme=dark");
@@ -84,7 +237,7 @@ test("bulk edits preview explicit identities and keep mixed outcomes visible", a
   expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   expect(box!.y).toBeGreaterThanOrEqual(0); expect(box!.y + box!.height).toBeLessThanOrEqual(780);
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Refresh workflow definitions" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Refresh workflow definitions", exact: true })).toBeFocused();
 });
 
 test("a stale organization write retains the intended change until an explicit reload", async ({ page }) => {
@@ -304,6 +457,47 @@ test("Enter in tag search searches without saving pending organization changes",
   await expect(dialog).toBeHidden();
 });
 
+test("the tag filter uses the shared outlined field style", async ({ page }) => {
+  await page.goto("/?mode=workflow-library");
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  const tag = page.getByRole("textbox", { name: "Find tags for filters", exact: true });
+  const publication = page.getByRole("combobox", { name: "Publication filter", exact: true });
+  const classes = await Promise.all([tag, publication].map(field => field.evaluate(element => element.closest(".studio-field")?.className ?? "")));
+  expect(classes[0]).not.toBe("");
+  expect(classes[0]).toBe(classes[1]);
+});
+
+test("Enter submits the tag filter search", async ({ page }) => {
+  await page.goto("/?mode=workflow-library");
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  const field = page.getByRole("textbox", { name: "Find tags for filters", exact: true });
+  await field.fill("Critical");
+  await field.press("Enter");
+  await expect.poll(() => page.evaluate(() => (window as unknown as Window & {
+    workflowLibraryRequests: { method: string; url: string }[];
+  }).workflowLibraryRequests.some(request => request.method === "GET" && new URL(request.url, location.origin).searchParams.get("search") === "Critical"))).toBe(true);
+});
+
+test("a tag search with no matches explains the result and recovers with a new search", async ({ page }) => {
+  await page.goto("/?mode=workflow-library");
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  const panel = page.locator(".wf-library-filter-panel");
+  const field = panel.getByRole("textbox", { name: "Find tags for filters", exact: true });
+  const find = panel.getByRole("button", { name: "Find tags", exact: true });
+  const add = panel.getByRole("button", { name: "Add tag filter", exact: true });
+  await field.fill("no-matching-tag-261120");
+  await find.click();
+  await expect(panel.getByRole("status")).toContainText("No workflow tags match");
+  await expect(add).toBeDisabled();
+
+  await field.fill("Critical");
+  await find.click();
+  await expect(panel.getByRole("status")).toHaveCount(0);
+  await expect(add).toBeEnabled();
+  await add.click();
+  await expect(panel.getByRole("combobox", { name: "Tag filter 1", exact: true })).toHaveValue("critical");
+});
+
 async function chooseTag(dialog: Locator, label: string) {
   const input = dialog.getByRole("combobox", { name: "Tags", exact: true });
   await input.fill(label.split(": ")[0]);
@@ -392,6 +586,9 @@ for (const theme of ["light", "dark"]) for (const width of [320, 1440]) {
     await page.getByRole("link", { name: "Manage tags", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Workflow tags", exact: true })).toBeVisible();
     await expect(page.getByRole("table", { name: "Workflow tags", exact: true })).toBeVisible();
+    const listBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
+    await expect(listBreadcrumbs.getByRole("link", { name: "Definitions", exact: true })).toHaveAttribute("href", /workflows\/definitions/);
+    await expect(listBreadcrumbs.locator('[aria-current="page"]')).toHaveText("Workflow tags");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`tags-list-${theme}-${width}.png`), fullPage: true });
@@ -402,11 +599,20 @@ for (const theme of ["light", "dark"]) for (const width of [320, 1440]) {
     await expect(page.getByRole("textbox", { name: "Tag name", exact: true })).toHaveValue("Owning team");
     await expect(page.getByRole("combobox", { name: "Tag to manage", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save tag", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+    const editBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
+    await expect(editBreadcrumbs.getByRole("link", { name: "Definitions", exact: true })).toBeVisible();
+    await expect(editBreadcrumbs.getByRole("link", { name: "Workflow tags", exact: true })).toBeVisible();
+    await expect(editBreadcrumbs.locator('[aria-current="page"]')).toHaveText("Owning team");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`tags-edit-${theme}-${width}.png`), fullPage: true });
-    await page.getByRole("button", { name: "Back to tags", exact: true }).click();
+    const tagsLink = editBreadcrumbs.getByRole("link", { name: "Workflow tags", exact: true });
+    await tagsLink.focus();
+    await page.keyboard.press("Enter");
     await expect(page.getByRole("link", { name: "Owning team", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Back to workflows", exact: true }).click();
+    const definitionsLink = page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Definitions", exact: true });
+    await definitionsLink.focus();
+    await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { name: "Workflow definitions", exact: true })).toBeVisible();
   });
 }

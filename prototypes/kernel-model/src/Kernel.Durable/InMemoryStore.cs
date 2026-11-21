@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -9,6 +10,8 @@ namespace Kernel.Durable;
 /// </summary>
 public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
 {
+    public Func<long> FoundationClock => clock;
+
     public bool CommitClockAvailable { get; set; } = true;
     public bool PhysicalRetirementAvailable => true;
     public bool CreationIdentityAvailable { get; set; } = true;
@@ -16,7 +19,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public sealed class PartitionRow
     {
         public string? Owner;
-        public long Epoch, LeaseUntil, Position;
+        public long Epoch, Position;
     }
 
     public sealed class MessageRow(Message message, long seq, long seen)
@@ -24,7 +27,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         public Message Message = message;
         public long Seq = seq, Seen = seen, Trial;
         public int Attempts;
-        public bool Done;
+        public bool Done, Held;
     }
 
     private readonly Lock _gate = new();
@@ -37,9 +40,27 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         (a, b) => a is null || b is null ? a == b : (a.Key, a.Instance, a.Wait) == (b.Key, b.Instance, b.Wait),
         row => HashCode.Combine(row.Key, row.Instance, row.Wait)));
     public Dictionary<(string Key, string Id), EventRow> EventRows { get; } = [];
+    internal Dictionary<(string Key, string Id), EventRow> FoundationEvents { get; } = [];
+
+    private Dictionary<(string Key, string Id), EventRow> EventsFor(EventRow @event) =>
+        @event.FoundationTenant is null ? EventRows : FoundationEvents;
+
     public Dictionary<(int Partition, long Position), JournalRow> Journal { get; } = [];
     public List<string> Ghost { get; } = [];
-    public Dictionary<string, long> Nodes { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, NodeRow> Nodes { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>A node record: membership's <c>SeenAt</c> and, under the node lease, <c>LeaseUntil</c>; both database time.</summary>
+    public sealed class NodeRow
+    {
+        public long SeenAt, LeaseUntil;
+    }
+
+
+    /// <summary>
+    /// For tests: called with the taker's name once a node-lease take has made its plain read of the owners' node
+    /// records, before it writes its own record and locks partition rows. A store call made here lands between the two.
+    /// </summary>
+    public Action<string>? TakeRead { get; set; }
     public long[] Projection { get; } = new long[partitions];
     public long[] Deleted { get; } = new long[partitions];     // journal rows removed by deletes, per partition: for the tests
     public Dictionary<string, ViewRow> Views { get; } = new(StringComparer.Ordinal);
@@ -47,43 +68,136 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     /// <summary>A row the database refuses, every time: a value too long.</summary>
     public Func<InstanceRow, bool>? Refuses { get; set; }
 
+    public sealed record DeletedCheckpoint(InstanceRow Row, ImmutableArray<JournalRow> Journal)
+    {
+        public JournalRow? Receipt { get; init; }
+    }
+    private Dictionary<CreationAddress, TaskCompletionSource<DeletedCheckpoint>>? _watchedDeletes;
+
+    /// <summary>For tests: preserve the actual checkpoint and journal at the next fenced deletion of this occurrence.</summary>
+    public Task<DeletedCheckpoint> WatchDeletion(CreationAddress address)
+    {
+        lock (_gate)
+        {
+            var watches = _watchedDeletes ??= [];
+            if (!watches.TryGetValue(address, out var watch)) watches[address] = watch = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            return watch.Task;
+        }
+    }
+
     private bool Has(Flaw flaw) => (flaws & flaw) != 0;
 
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
+        lock (_gate) return new(Take([partition], node, lease, clock()).Select(t => t.Lease).SingleOrDefault());
+    }
+
+    /// <summary>A take of a set: one transaction, the rows in ascending id, each decided as the one-partition take decides.</summary>
+    public ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
         lock (_gate)
         {
-            var (p, now) = (Partitions[partition], clock());
-            var died = p.Owner is not null && p.Owner != node;      // taken from another: only possible once its lease has expired
-            if (died && p.LeaseUntil >= now) return new((Lease?)null);
-            if (died || (Has(Flaw.EveryTakeCounts) && p.Owner is not null))
-                foreach (var row in Messages.Values)
-                    if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition) row.Attempts++;
-            (p.Owner, p.Epoch, p.LeaseUntil) = (node, p.Epoch + 1, now + (long)lease.TotalMilliseconds);
-            return new(new Lease(p.Epoch, p.Position, now));
+            var now = clock();
+            var taken = Take(partitions, node, lease, now);
+            return new(new OwnedLease([.. taken.Select(t => t.Lease.For(t.Partition))], taken.Count > 0 ? now : 0));   // 0 when nothing was taken, as on EF and MongoDB
         }
     }
 
+    // One take's transaction. Under the node lease it reads the owners' node records first, a plain read holding nothing,
+    // then writes the taker's own record, then decides the partition rows in ascending id by that read.
+    private List<(int Partition, Lease Lease)> Take(IEnumerable<int> partitions, string node, TimeSpan lease, long now)
+    {
+        var ids = partitions.Distinct().Order().ToList();
+        // MUTATION TakeIgnoresNodeLease: every owner reads as expired.
+        var expired = ids.Select(p => Partitions[p].Owner).OfType<string>().Where(o => o != node && (Has(Flaw.TakeIgnoresNodeLease) || NodeExpired(o, now))).ToHashSet(StringComparer.Ordinal);
+        TakeRead?.Invoke(node);
+        Renew(node, lease, now);
+        var taken = new List<(int, Lease)>();
+        foreach (var partition in ids)
+        {
+            var p = Partitions[partition];
+            var died = p.Owner is not null && p.Owner != node;      // taken from another: only possible once its lease has expired
+            if (died && !expired.Contains(p.Owner!)) continue;
+            if (died || (Has(Flaw.EveryTakeCounts) && p.Owner is not null))
+                foreach (var row in Messages.Values)
+                    if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition) row.Attempts++;
+            (p.Owner, p.Epoch) = (node, p.Epoch + 1);
+            taken.Add((partition, new Lease(p.Epoch, p.Position, now)));
+        }
+        return taken;
+    }
+
+    // The node lease: the owner's node record is missing, or its lease is before database time.
+    private bool NodeExpired(string owner, long now) => !Nodes.TryGetValue(owner, out var n) || n.LeaseUntil < now;
+
+    private bool Free(PartitionRow p, long now) => p.Owner is null || NodeExpired(p.Owner, now);
+
+    // The node record's write, by a heartbeat and by every take under the node lease.
+    private void Renew(string node, TimeSpan lease, long now)
+    {
+        if (!Nodes.TryGetValue(node, out var row)) Nodes[node] = row = new NodeRow();
+        (row.SeenAt, row.LeaseUntil) = (now, now + (long)lease.TotalMilliseconds);
+    }
+
+    public bool OwnedSetsAvailable => true;
+
+    public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => new(Partitions.Length);
+
+    /// <summary>For tests: called with each fence row's partition as a commit locks it, in the order it locks them.</summary>
+    public Action<int>? Locking { get; set; }
+
     public bool SupportsCommitWindow => true;
+
+    // FenceSubset: the batch cut to the partitions whose fence matches, or null when none does or every one does.
+    private CommitBatch? Subset(CommitBatch batch, int stale)
+    {
+        var current = batch.Fenced.Where(f => Partitions[f.Partition].Epoch == f.Epoch && Partitions[f.Partition].Position == f.Position).ToList();
+        if (current.Count == 0 || stale == 0) return null;
+        var kept = current.Select(f => f.Partition).ToHashSet();
+        bool Kept(InboxKey id) => Messages.GetValueOrDefault(id) is { } row && kept.Contains(row.Message.Target.Partition);
+        var turns = batch.Turns.Where(t => batch.PartitionOf(t) is var p && kept.Contains(p)).ToList();
+        return CommitBatch.Owned(current, batch.Lease, batch.HandOver, turns, [.. batch.Seen.Where(Kept)], [.. batch.Trial.Where(Kept)]) with { Window = batch.Window };
+    }
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        StoreBatchRules.Validate(batch);
+        StoreBatchRules.Validate(batch, ownedSets: true);
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
         {
-            var (p, now) = (Partitions[batch.Partition], clock());
-            bool epoch = p.Epoch == batch.Epoch, position = p.Position == batch.Position;
-            var fenced = (epoch || Has(Flaw.FenceWithoutEpoch)) && (position || Has(Flaw.FenceWithoutPosition));
+            // The k-row fence: every fence row the batch touches, locked in ascending partition id, all or nothing.
+            var (fences, now) = (batch.Fenced, clock());
+            var (epoch, position, fenced, stale) = (true, true, true, new List<string>());
+            // MUTATION PlainReadEmptyFence: a batch with no journal rows reads its fence rows without locking them, so a
+            // take may land on them after the check.
+            var plain = Has(Flaw.PlainReadEmptyFence) && batch.Positions == 0;
+            foreach (var fence in fences)
+            {
+                if (!plain) Locking?.Invoke(fence.Partition);
+                var row = Partitions[fence.Partition];
+                bool e = row.Epoch == fence.Epoch, q = row.Position == fence.Position;
+                (epoch, position) = (epoch && e, position && q);
+                fenced &= (e || Has(Flaw.FenceWithoutEpoch)) && (q || Has(Flaw.FenceWithoutPosition));
+                if (!e) stale.Add($"I1 a commit prepared under epoch {fence.Epoch} landed in partition {fence.Partition} at epoch {row.Epoch}");
+                else if (!q) stale.Add($"I1 a commit prepared at position {fence.Position} landed in partition {fence.Partition} at position {row.Position}");
+            }
+            if (plain) foreach (var fence in fences) Locking?.Invoke(fence.Partition);
+            if (!fenced && Has(Flaw.FenceSubset) && batch.Fences is not null && Subset(batch, stale.Count) is { } part)
+                return CommitAsync(part, cancellationToken);    // MUTATION: the part whose fences still match lands
             if (!fenced && !Has(Flaw.CommitDespiteFence)) return new(new Committed(false, now, []));
-            if (!epoch) Ghost.Add($"I1 a commit prepared under epoch {batch.Epoch} landed in partition {batch.Partition} at epoch {p.Epoch}");
-            else if (!position) Ghost.Add($"I1 a commit prepared at position {batch.Position} landed in partition {batch.Partition} at position {p.Position}");
+            Ghost.AddRange(stale);
+            var epochs = fences.ToDictionary(f => f.Partition, f => f.Epoch);
+            // MUTATION SeenAtNodeEpoch: the set's highest epoch, as one epoch for the whole node would be.
+            long MarkEpoch(MessageRow row) => Has(Flaw.SeenAtNodeEpoch) && fences.Count > 0 ? fences.Max(f => f.Epoch) : epochs.GetValueOrDefault(row.Message.Target.Partition, batch.Epoch);
 
+            Dictionary<InboxKey, ReferenceBinding>? childBindings = null;
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
-                var at = batch.Position;
+                var at = fences.ToDictionary(f => f.Partition, f => f.Position);
+                HashSet<CreationAddress>? childAddresses = null;
+                HashSet<string>? childReferences = null;
                 foreach (var turn in batch.Turns)
                 {
                     if (turn.Delete && Instances.GetValueOrDefault(turn.Instance)?.Revision != turn.Expected) Diverged($"instance {turn.Instance} to delete is not at revision {turn.Expected}");
@@ -94,33 +208,73 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         if (revision != turn.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {turn.Expected?.ToString() ?? "none"}");
                         if (!row.Retired) CommitClockFacts.Validate(row, Instances.GetValueOrDefault(row.Id));
                     }
-                    CreationProtocol.Validate(turn, Instances.GetValueOrDefault(turn.Instance));
+                    var previous = Instances.GetValueOrDefault(turn.Instance);
+                    CreationProtocol.Validate(turn, previous);
+                    foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription);
+                    StoreBatchRules.ValidateActorSends(turn, previous);
+                    ValidateFoundationHeader(turn);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
+                    {
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
-                    if (turn.Journal is not null && Journal.ContainsKey((batch.Partition, ++at))) Diverged($"journal position {at} is written already");
+                        if (!message.BindFoundationChild) continue;
+                        var binding = BindChild(turn, previous, message);
+                        childBindings ??= [];
+                        childAddresses ??= [];
+                        childReferences ??= new(StringComparer.Ordinal);
+                        if (_referenceBindings.ContainsKey(binding.Reference) || _referenceBirths.ContainsKey(binding.Address) ||
+                            !childAddresses.Add(binding.Address) || !childReferences.Add(binding.Reference) ||
+                            !childBindings.TryAdd(message.InboxKey, binding))
+                            Diverged($"child {message.Target.Id} already has a creator");
+                    }
+                    if (turn.Journal is not null && batch.PartitionOf(turn) is var journal && Journal.ContainsKey((journal, ++at[journal])))
+                        Diverged($"journal position {at[journal]} of partition {journal} is written already");
                 }
+                // A mark records its message's own partition's epoch, so a mark outside the fenced set would be unbound, and a
+                // delete outside it would be a write no fence covers.
+                if (batch.Fences is not null)
+                    foreach (var id in batch.Seen.Concat(batch.Trial).Concat(batch.Turns.SelectMany(t => t.Consumed.Concat(t.Done))))
+                        if (Messages.GetValueOrDefault(id) is { } marked && !epochs.ContainsKey(marked.Message.Target.Partition))
+                            throw new StoreException(Failure.Definite, $"message {id} is outside the batch's fenced partitions");
                 if (batch.Window is { } window)
                 {
                     var atCommit = clock();
                     if (atCommit < now || atCommit < window.FromInclusive || atCommit >= window.UntilExclusive)
                         throw new StoreException(Failure.WindowExpired, "The database clock left the decision's authority window.");
                 }
-                (p.Position, p.LeaseUntil) = (batch.Position + batch.Positions, now + (long)batch.Lease.TotalMilliseconds);
+                foreach (var fence in fences)
+                {
+                    Partitions[fence.Partition].Position = fence.Position + batch.PositionsIn(fence.Partition);
+                }
             }
 
-            var (next, seqs) = (batch.Position, new List<long>());
+            List<LifecycleObservation.Change>? changes = null;
+            var (next, seqs) = (fences.ToDictionary(f => f.Partition, f => f.Position), new List<long>());
+            List<(CreationAddress Address, DeletedCheckpoint Checkpoint, (int, long)? Position)>? deletes = null;
             foreach (var turn in batch.Turns)
             {
-                if (turn.Row is not null) Instances[turn.Row.Id] = CommitClockFacts.Stamp(turn.Row, now);
+                var journal = batch.PartitionOf(turn);
+                var opening = epoch && position ? Lifecycle?.BeforeTurn(turn, this) : null;
+                if (epoch && position && turn.Delete && _watchedDeletes is { Count: > 0 } watches &&
+                    Instances.GetValueOrDefault(turn.Instance) is { Retired: false } prior && watches.ContainsKey(new(prior.Id, prior.Creation)))
+                {
+                    var entries = prior.History == History.Full ? Journal.Values.Where(j => j.Instance == prior.Id).ToImmutableArray() : [];
+                    (deletes ??= []).Add((new(prior.Id, prior.Creation), new(prior, entries), turn.Journal is null ? null : (journal, next[journal] + 1)));
+                }
+                if (turn.Row is { } stored)
+                {
+                    Instances[stored.Id] = CommitClockFacts.Stamp(stored, now);
+                    RecordFoundationMetadata(turn, stored, now);
+                }
                 if (turn.Delete)
                 {
-                    if (turn.Row is not { Retired: true }) Instances.Remove(turn.Instance);
+                    if (turn.Row is not { Retired: true } && Instances.Remove(turn.Instance, out var removed) && _referenceBirths.Count > 0)
+                        RemoveFoundationMetadata(new(removed.Id, removed.Creation));
                     foreach (var key in Journal.Where(j => j.Value.Instance == turn.Instance && j.Value.Revision > 0 && !Has(Flaw.DeleteLeavesJournal)).Select(j => j.Key).ToList())
                     {
                         Journal.Remove(key);
-                        Deleted[batch.Partition]++;
+                        Deleted[key.Partition]++;
                     }
                 }
                 foreach (var id in turn.Consumed) Messages.Remove(id);
@@ -133,20 +287,41 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var message in turn.Sent)
                 {
                     // Messages the owner hands over in memory to its own partition are written as seen already.
-                    Messages[message.InboxKey] = new MessageRow(message, ++_seq, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0);
+                    Messages[message.InboxKey] = new MessageRow(message, ++_seq, batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0);
                     seqs.Add(_seq);
+                    if (childBindings?.GetValueOrDefault(message.InboxKey) is { } binding) InsertReference(binding);
                 }
                 foreach (var subscription in turn.Subscribed) Subscriptions.Add(subscription);
                 foreach (var subscription in turn.Unsubscribed) Subscriptions.Remove(subscription);
                 if (turn.Unsubscribe) Subscriptions.RemoveWhere(s => s.Instance == turn.Instance);
-                if (turn.Journal is not null) Journal[(batch.Partition, ++next)] = new JournalRow(batch.Partition, next, turn.Instance, turn.Delete ? -1 : turn.Row?.Revision ?? 0, turn.Journal);
+                if (turn.Journal is not null)
+                {
+                    var creation = turn.Row?.Creation ?? Instances.GetValueOrDefault(turn.Instance)?.Creation ?? 0;
+                    Journal[(journal, ++next[journal])] = new JournalRow(journal, next[journal], turn.Instance,
+                        turn.Delete ? -1 : turn.Row?.Revision ?? 0, turn.Journal)
+                    {
+                        FoundationCreation = _referenceBirths.ContainsKey(new(turn.Instance, creation)) ? creation : 0
+                    };
+                }
+                if (opening is not null)
+                    (changes ??= []).Add(opening with { After = Instances.GetValueOrDefault(turn.Instance),
+                        Receipt = turn.Delete && turn.Journal is not null ? Journal[(journal, next[journal])] : null });
             }
             foreach (var id in batch.Seen)
-                if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = batch.Epoch;
+                if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = MarkEpoch(seen);
             foreach (var id in batch.Trial)
-                if (Messages.GetValueOrDefault(id) is { } tried) (tried.Seen, tried.Trial) = (batch.Epoch, batch.Epoch);
+                if (Messages.GetValueOrDefault(id) is { } tried) (tried.Seen, tried.Trial) = (MarkEpoch(tried), MarkEpoch(tried));
             foreach (var id in batch.Turns.SelectMany(s => s.Held ?? []))
-                if (!Has(Flaw.HoldKeepsTrial) && Messages.GetValueOrDefault(id) is { } held) held.Trial = 0;
+                if (Messages.GetValueOrDefault(id) is { } held)
+                {
+                    held.Held = true;
+                    if (!Has(Flaw.HoldKeepsTrial)) held.Trial = 0;
+                }
+            if (changes is not null) Lifecycle!.Publish(changes);
+            if (deletes is not null)
+                foreach (var (address, checkpoint, receiptPosition) in deletes)
+                    if (_watchedDeletes!.Remove(address, out var watch))
+                        watch.SetResult(checkpoint with { Receipt = receiptPosition is { } slot ? Journal.GetValueOrDefault(slot) : null });
             return new(new Committed(fenced, now, seqs));
 
             // A count that does not match: memory and rows have parted. At the current epoch and position that is a kernel bug.
@@ -162,27 +337,77 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     {
         lock (_gate)
         {
-            var now = Nodes[node] = clock();
-            var free = Enumerable.Range(0, Partitions.Length).Where(p => Partitions[p].Owner is null || Partitions[p].LeaseUntil < now).ToList();
-            return new(new Cluster(Nodes.Values.Count(seen => seen >= now - (long)window.TotalMilliseconds), free, now));
+            var now = clock();
+            if (!Nodes.TryGetValue(node, out var row)) Nodes[node] = row = new NodeRow();
+            row.SeenAt = now;
+            return new(Membership(node, window, now));
         }
     }
 
-    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
+    private Cluster Membership(string node, TimeSpan window, long now)
     {
-        lock (_gate)
-            if (Partitions[partition].Epoch == epoch) Partitions[partition].Owner = null;
-        return default;
+        var free = Enumerable.Range(0, Partitions.Length).Where(p => Free(Partitions[p], now)).ToList();
+        var heard = Nodes.Where(n => n.Value.SeenAt >= now - (long)window.TotalMilliseconds).Select(n => n.Key).Order(StringComparer.Ordinal).ToList();
+        return new Cluster(heard.Count, free, now, heard.IndexOf(node));
     }
 
-    public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
+    /// <summary>The node heartbeat: the node record's write first, then the read of this node's partitions and membership.</summary>
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
             var now = clock();
+            Renew(node, lease, now);
+            var owned = Enumerable.Range(0, Partitions.Length).Where(p => Partitions[p].Owner == node).Select(p => new OwnedEpoch(p, Partitions[p].Epoch)).ToList();
+            return new(new NodeBeat(owned, now, Membership(node, window, now)));
+        }
+    }
+
+    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => ReleaseAsync([new PartitionFence(partition, epoch, 0)], cancellationToken);
+
+    /// <summary>A release of a set, in one transaction: each row still at its epoch is freed; kept rows are not written.</summary>
+    public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+            foreach (var fence in owned.OrderBy(f => f.Partition))
+                if (Partitions[fence.Partition].Epoch == fence.Epoch) Partitions[fence.Partition].Owner = null;
+        return default;
+    }
+
+    /// <summary>The retake after a reset: only a row this node still holds at that epoch; one more epoch, no death.</summary>
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) =>
+        RetakeAsync(partition, node, epoch, lease, countDeaths: false, cancellationToken);
+
+    /// <summary>The retake, counting a death on the previous epoch's unfinished trial messages when asked (a pending partition).</summary>
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var (row, now) = (Partitions[partition], clock());
+            Renew(node, lease, now);    // a retake is a take: it writes the taker's node record first
+            if (row.Owner != node || row.Epoch != epoch) return new((Lease?)null);
+            if (countDeaths)
+                foreach (var message in Messages.Values)
+                    if (message.Trial == row.Epoch && !message.Done && message.Message.Target.Partition == partition) message.Attempts++;
+            row.Epoch++;
+            return new(new Lease(row.Epoch, row.Position, now));
+        }
+    }
+
+    public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) =>
+        PollAsync([new PartitionFence(partition, epoch, 0)], horizon, limit, cancellationToken);
+
+    /// <summary>One query over an owned set: each row is compared with the epoch of its own partition.</summary>
+    public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
+    {
+        StoreBatchRules.RequireDistinct(owned);
+        lock (_gate)
+        {
+            var now = clock();
             var until = now + (long)horizon.TotalMilliseconds;
+            var epochs = owned.ToDictionary(f => f.Partition, f => f.Epoch);
             var rows = Messages.Values
-                .Where(m => m.Message.Target.Partition == partition && m.Seen < epoch && !m.Done && (m.Message.Due ?? 0) <= until)
+                .Where(m => epochs.TryGetValue(m.Message.Target.Partition, out var epoch) && m.Seen < epoch && !m.Done && (m.Message.Due ?? 0) <= until)
                 .OrderBy(m => m.Seq).Take(limit)
                 .Select(m => new Stored(m.Message, m.Seq, m.Seen, m.Attempts, m.Trial)).ToList();
             return new(new Polled(rows, now));
@@ -199,14 +424,139 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     private long _eventSerial;
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default)
     {
-        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(delivery.Message);
+        lock (_gate) return new(InsertEventDelivery(delivery));
+    }
+
+    private EventAcceptance InsertEventDelivery(EventDelivery delivery)
+    {
+        ValidateEventIdentity(delivery);
+        if (Messages.TryGetValue(delivery.Message.InboxKey, out var existing))
+            return new(false, existing.Message.Target);
+        var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++_eventSerial));
+        if (delivery.FoundationTenant is { } tenant && message.Start is { } start)
+        {
+            var address = new CreationAddress(message.Target.Id, 1);
+            start = start with { Creation = new CreationStart(1, 0, address.Id) };
+            // The subscription creates an actor from its spec. The event is a separate delivery to that same life.
+            // Both rows and the exact reference become visible together, in start-then-event delivery order.
+            var creator = (message with
+            {
+                Id = "event-start:" + address.Id,
+                Kind = Kinds.Start,
+                Payload = start.Input,
+                Start = start,
+                TargetCreation = 1,
+                KeepUntil = null
+            }).WithInboxScope(InboxKey.EventCreatorScope, message.EventMatch);
+            message = message with { Start = null, TargetCreation = 1 };
+            var reference = ReferenceFor(tenant, address);
+            var binding = new ReferenceBinding(tenant, reference, address, creator.InboxKey,
+                CreationProtocol.Fingerprint(start, creator.Kind, creator.Payload)!);
+            Messages.Add(creator.InboxKey, new MessageRow(creator, ++_seq, 0));
+            InsertReference(binding);
+        }
+
+        Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
+        return new(true, message.Target);
+    }
+
+    /// <summary>
+    /// Accept an event request and route it to its matching waits in one in-memory transaction.
+    /// A null receipt publishes nothing for a later registration to catch up.
+    /// </summary>
+    internal IReadOnlyList<EventAcceptance>? PublishRequest(EventRow request, string replyTo, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+            return PublishOutside(request, replyTo, requiresWait: true, reuseUntil: null, clock(), cancellationToken)?.Deliveries;
+    }
+
+    private sealed record OutsideEventReceipt(bool Duplicate, IReadOnlyList<EventAcceptance> Deliveries);
+    private readonly Dictionary<(string Key, string Id), long> _foundationEventReceipts = [];
+    private long _foundationEventOccurrence;
+
+    internal bool? PublishFoundationEvent(string tenant, string correlation, string id, string? payload, TimeSpan? keepFor,
+        string? replyTo, CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(keepFor ?? TimeSpan.Zero, TimeSpan.Zero, nameof(keepFor));
         lock (_gate)
         {
-            if (Messages.TryGetValue(delivery.Message.InboxKey, out var existing))
-                return ValueTask.FromResult(new EventAcceptance(false, existing.Message.Target));
-            var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++_eventSerial));
-            Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
-            return ValueTask.FromResult(new EventAcceptance(true, message.Target));
+            var now = clock();
+            var until = keepFor is { Ticks: > 0 } keep ? checked(now + (long)keep.TotalMilliseconds) : now - 1;
+            var reuseUntil = checked(now + (long)(keepFor ?? IngressDeduplicationWindow).TotalMilliseconds);
+            var publication = new EventRow(tenant + "_" + correlation, id, payload, until) { FoundationTenant = tenant };
+            var receipt = PublishOutside(publication, replyTo, replyTo is not null, reuseUntil, now, cancellationToken);
+            return receipt is null ? null : !receipt.Duplicate;
+        }
+    }
+
+    private OutsideEventReceipt? PublishOutside(EventRow request, string? replyTo, bool requiresWait, long? reuseUntil, long now,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = (request.Key, request.Id);
+        var events = EventsFor(request);
+        if (reuseUntil is null ? events.ContainsKey(key) :
+            _foundationEventReceipts.TryGetValue(key, out var prior) && now <= prior)
+            return new(true, []);
+
+        if (reuseUntil is not null)
+            request = request with { FoundationOccurrence = checked(_foundationEventOccurrence + 1) };
+        var deliveries = Subscriptions.Where(wait => wait.Key == request.Key && wait.FoundationTenant == request.FoundationTenant)
+            .OrderBy(wait => wait.Instance, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal)
+            .Select(wait => Events.Route(request, wait, partitions, replyTo)).ToArray();
+        if (deliveries.Length == 0 && requiresWait) return null;
+
+        foreach (var delivery in deliveries) ValidateEventIdentity(delivery);
+        var starts = deliveries.Count(delivery => delivery.Message.Start is not null && !Messages.ContainsKey(delivery.Message.InboxKey));
+        _ = checked(_eventSerial + starts);
+        if (reuseUntil is { } expires)
+        {
+            _foundationEventOccurrence = request.FoundationOccurrence;
+            _foundationEventReceipts[key] = expires;
+        }
+        events[key] = request;
+        return new(false, Array.ConvertAll(deliveries, InsertEventDelivery));
+    }
+
+    private void ValidateEventIdentity(EventDelivery delivery)
+    {
+        var message = delivery.Message;
+        if (!CreationIdentityAvailable)
+        {
+            if (delivery.FoundationTenant is not null)
+                throw new StoreException(Failure.Definite, "A bound event delivery requires qualified creation identity.");
+            CreationProtocol.RejectUnsupported(message);
+        }
+        if (message.Start is null)
+        {
+            var tenant = message.TargetCreation is > 0
+                ? _referenceBirths.GetValueOrDefault(new(message.Target.Id, message.TargetCreation.Value))?.Tenant : null;
+            if (tenant != delivery.FoundationTenant)
+                throw new StoreException(Failure.Definite, "The event's scope does not own the target creation.");
+        }
+    }
+
+    internal void SetFoundationEventStart(string tenant, string correlationKey, string wait, StartSpec? start)
+    {
+        if (start is not null && (start.Parent is not null || start.ParentCreation != 0 || start.Creation is not null))
+            throw new ArgumentException("A start subscription supplies no creator identity or parent.", nameof(start));
+        var key = tenant + "_" + correlationKey;
+        lock (_gate)
+        {
+            if (start is not null && !CreationIdentityAvailable)
+                throw new StoreException(Failure.Definite, "A bound event starter requires qualified creation identity.");
+
+            var row = new SubscriptionRow(key, "", wait, start) { FoundationTenant = tenant };
+            if (start is not null) RequireSameSubscriptionScope(row);
+            if (Subscriptions.TryGetValue(row, out var previous) && previous.FoundationTenant == tenant)
+                Subscriptions.Remove(previous);
+            if (start is null) return;
+
+            Subscriptions.Add(row);
+
+            var now = clock();
+            foreach (var @event in FoundationEvents.Values.Where(@event => @event.FoundationTenant == tenant && @event.Key == key && @event.KeepUntil >= now).OrderBy(@event => @event.Id, StringComparer.Ordinal))
+                InsertEventDelivery(Events.Route(@event, row, partitions));
         }
     }
 
@@ -227,26 +577,40 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
     {
-        lock (_gate) EventRows.TryAdd((@event.Key, @event.Id), @event);
+        lock (_gate) EventsFor(@event).TryAdd((@event.Key, @event.Id), @event);
         return default;
     }
 
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
     {
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(subscription);
-        lock (_gate) Subscriptions.Add(subscription);
+        lock (_gate)
+        {
+            RequireSameSubscriptionScope(subscription);
+            Subscriptions.Add(subscription);
+        }
         return default;
+    }
+
+    private void RequireSameSubscriptionScope(SubscriptionRow subscription)
+    {
+        var targetTenant = subscription.Creation is > 0
+            ? _referenceBirths.GetValueOrDefault(new(subscription.Instance, subscription.Creation))?.Tenant : null;
+        if (subscription.Start is null && targetTenant != subscription.FoundationTenant)
+            throw new StoreException(Failure.Definite, "The subscription's scope does not own the target creation.");
+        if (Subscriptions.TryGetValue(subscription, out var previous) && previous.FoundationTenant != subscription.FoundationTenant)
+            throw new StoreException(Failure.Definite, "The subscription key is already registered in another scope.");
     }
 
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default)
     {
-        lock (_gate) return new(Subscriptions.Where(s => s.Key == key).OrderBy(s => s.Instance, StringComparer.Ordinal).ToList());
+        lock (_gate) return new(Subscriptions.Where(s => s.Key == key && s.FoundationTenant is null).OrderBy(s => s.Instance, StringComparer.Ordinal).ToList());
     }
 
     public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default)
     {
-        lock (_gate) return new(EventRows.TryGetValue((published.Key, published.Id), out var stored)
-            ? Subscriptions.Where(s => s.Key == stored.Key).OrderBy(s => s.Instance, StringComparer.Ordinal).Select(s => new EventRoute(stored, s)).ToList() : []);
+        lock (_gate) return new(EventsFor(published).TryGetValue((published.Key, published.Id), out var stored)
+            ? Subscriptions.Where(s => s.Key == stored.Key && s.FoundationTenant == stored.FoundationTenant).OrderBy(s => s.Instance, StringComparer.Ordinal).Select(s => new EventRoute(stored, s)).ToList() : []);
     }
 
     public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default)
@@ -254,10 +618,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         lock (_gate)
         {
             var now = clock();
-            var selected = waits.Select(w => (w.Key, w.Instance, w.Wait, w.Creation)).ToHashSet();
-            return new((from e in EventRows.Values orderby e.Id
-                join s in Subscriptions on e.Key equals s.Key
-                where e.KeepUntil >= now && selected.Contains((s.Key, s.Instance, s.Wait, s.Creation))
+            var selected = waits.Select(w => (w.Key, w.Instance, w.Wait, w.Creation, w.FoundationTenant)).ToHashSet();
+            return new((from e in EventRows.Values.Concat(FoundationEvents.Values) orderby e.Id
+                join s in Subscriptions on (e.Key, e.FoundationTenant) equals (s.Key, s.FoundationTenant)
+                where e.KeepUntil >= now && selected.Contains((s.Key, s.Instance, s.Wait, s.Creation, s.FoundationTenant))
                 select new EventRoute(e, s)).ToList());
         }
     }
@@ -319,7 +683,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             var events = EventRows.Values.Where(e => e.KeepUntil < now).Select(e => (e.Key, e.Id)).ToList();
             messages.ForEach(id => Messages.Remove(id));
             events.ForEach(key => EventRows.Remove(key));
-            return new(messages.Count + events.Count);
+            var foundationEvents = FoundationEvents.Where(pair => pair.Value.KeepUntil < now).Select(pair => pair.Key).ToList();
+            foundationEvents.ForEach(key => FoundationEvents.Remove(key));
+            var eventReceipts = _foundationEventReceipts.Where(pair => pair.Value < now).Select(pair => pair.Key).ToList();
+            eventReceipts.ForEach(key => _foundationEventReceipts.Remove(key));
+            return new(messages.Count + events.Count + foundationEvents.Count + eventReceipts.Count + SweepFoundationStarts(now));
         }
     }
 }

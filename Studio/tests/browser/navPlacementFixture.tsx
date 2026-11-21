@@ -12,7 +12,7 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const moduleNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Home", path: "/dashboard", order: 10, placement: "main" },
-  { id: "workflows", label: "Workflows", path: "/workflows/definitions", order: 20, placement: "build", childDisplay: "views" },
+  { id: "workflows", label: "Workflows", path: "/workflows/definitions", order: 20, placement: "build", childDisplay: "links" },
   { id: "definitions", label: "Definitions", path: "/workflows/definitions", order: 10, parentId: "workflows" },
   { id: "workflows-executables", label: "Executables", path: "/workflows/executables", order: 20, parentId: "workflows" },
   { id: "agents", label: "Agents", path: "/agents", order: 25, placement: "build" },

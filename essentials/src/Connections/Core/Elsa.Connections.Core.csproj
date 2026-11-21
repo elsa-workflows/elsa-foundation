@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
 </Project>

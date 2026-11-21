@@ -544,6 +544,41 @@
     },
     {
       "authoringModel": "Minimal API",
+      "contentTypes": [],
+      "displayName": "HTTP: DELETE /design/activities/definitions/{definitionId}",
+      "methods": [
+        "DELETE"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 204
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsArchive"
+    },
+    {
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "*/*",
         "application/json"
@@ -3091,6 +3126,279 @@
         "value": "Elsa.Permission:v1:s:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsCreateUserTaskForm"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/user-task-forms/definitions",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinitionPage",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-forms/definitions"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ.VVNFUi1UQVNLLUZPUk1TOlJFQUQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListUserTaskFormDefinitions"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/user-task-forms/{id}/definition",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinition",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-forms/{param}/definition"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ.VVNFUi1UQVNLLUZPUk1TOlJFQUQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetUserTaskFormDefinition"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/user-task-forms/{id}/delete",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinition",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-forms/{param}/delete"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsDeleteUserTaskForm"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/user-task-forms/{id}/discard",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinition",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-forms/{param}/discard"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsDiscardUserTaskFormDraft"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/user-task-forms/{id}/draft",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinition",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-forms/{param}/draft"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsSaveUserTaskFormDraft"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/user-task-forms/{id}/publish",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-forms/{param}/publish"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsPublishUserTaskForm"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/user-task-forms/{id}/versions",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/user-task-forms/{param}/versions"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:VVNFUi1UQVNLLUZPUk1TOk1BTkFHRQ.VVNFUi1UQVNLLUZPUk1TOlJFQUQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListUserTaskFormVersions"
     },
     {
       "authoringModel": "Minimal API",

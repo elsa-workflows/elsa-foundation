@@ -1,10 +1,10 @@
 import React, { Children, cloneElement, createContext, forwardRef, isValidElement, useContext, useId } from "react";
 
-const FieldAdornments = createContext<React.ReactNode>(null);
+const FieldAdornments = createContext<{ trailing?: React.ReactNode; caption?: React.ReactNode } | null>(null);
 
 /** Supplies host actions to the single shared field owned by an opaque scalar editor. */
-export function StudioFieldAdornmentProvider({ trailing, children }: { trailing: React.ReactNode; children: React.ReactNode }) {
-  return <FieldAdornments.Provider value={trailing}>{children}</FieldAdornments.Provider>;
+export function StudioFieldAdornmentProvider({ trailing, caption, children }: { trailing?: React.ReactNode; caption?: React.ReactNode; children: React.ReactNode }) {
+  return <FieldAdornments.Provider value={{ trailing, caption }}>{children}</FieldAdornments.Provider>;
 }
 
 type ControlAttributes = {
@@ -35,7 +35,8 @@ export const StudioFormField = forwardRef<HTMLDivElement, FieldProps & {
   children(attributes: ControlAttributes): React.ReactNode;
 }>(function StudioFormField({ label, hint, error, errorRole, meta, controlId, labelId, disabled, leading, trailing, after, className, children, ...rest }, ref) {
   const generatedId = useId();
-  const hostTrailing = useContext(FieldAdornments);
+  const hostAdornments = useContext(FieldAdornments);
+  const hostTrailing = hostAdornments?.trailing;
   const fieldTrailing = trailing || hostTrailing ? <>{trailing}{hostTrailing}</> : null;
   const id = controlId ?? generatedId;
   const descriptionId = hint || error ? `${id}-help` : undefined;
@@ -44,6 +45,7 @@ export const StudioFormField = forwardRef<HTMLDivElement, FieldProps & {
       <legend className="studio-form-legend">
         <label id={labelId} htmlFor={id} className="studio-field-label">{label}</label>
         {meta ? <>{" "}<span className="studio-field-meta">{meta}</span></> : null}
+        {hostAdornments?.caption ? <span className="studio-field-caption-actions">{hostAdornments.caption}</span> : null}
       </legend>
       <div className="studio-form-body" data-leading={Boolean(leading)} data-trailing={Boolean(fieldTrailing)}>
         {leading ? <div className="studio-form-adornment">{leading}</div> : null}
@@ -94,7 +96,8 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
   children: React.ReactNode;
 }>(function StudioField({ label, description, meta, children, controlId, labelId, disabled, error, errorRole, className, leading, trailing, after, ...rest }, ref) {
   const generatedId = useId();
-  const hostTrailing = useContext(FieldAdornments);
+  const hostAdornments = useContext(FieldAdornments);
+  const hostTrailing = hostAdornments?.trailing;
   const fieldTrailing = trailing || hostTrailing ? <>{trailing}{hostTrailing}</> : null;
   const controls: NativeControl[] = [];
   collectControls(children, controls);
@@ -107,6 +110,7 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
       <div className="studio-choice-control">
         {Children.map(children, child => containsControl(child, choice) ? decorateControl(child, choice, attributes) : null)}
         <label id={labelId} htmlFor={id}>{label}</label>{meta}
+        {hostAdornments?.caption ? <span className="studio-field-caption-actions">{hostAdornments.caption}</span> : null}
         {fieldTrailing ? <div className="studio-form-adornment">{fieldTrailing}</div> : null}
       </div>
       {Children.map(children, child => containsControl(child, choice) ? null : child)}
@@ -142,7 +146,7 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
   const descriptionId = description || error ? `${generatedId}-help` : undefined;
   return <FieldAdornments.Provider value={null}><div {...rest} ref={ref} className={`studio-field studio-field-group${className ? ` ${className}` : ""}`}>
     <fieldset className="studio-form-control" aria-describedby={descriptionId}>
-      <legend id={labelId} className="studio-form-legend"><span className="studio-field-label">{label}</span>{meta}</legend>
+      <legend id={labelId} className="studio-form-legend"><span className="studio-field-label">{label}</span>{meta}{hostAdornments?.caption ? <span className="studio-field-caption-actions">{hostAdornments.caption}</span> : null}</legend>
       <div className="studio-form-body">
         <div className="studio-form-value"><div className="studio-form-group-content">{children}</div></div>
         {fieldTrailing ? <div className="studio-form-adornment">{fieldTrailing}</div> : null}

@@ -226,7 +226,9 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     const harness = renderReview({ postJson: async () => ({ ...preflight, hasBaseline: true, isPublishable: false }) });
     click(buttonByText(harness.container, "Review & publish"));
     await waitFor(() => expect(harness.container.querySelector(".ad-publication-impact")).not.toBeNull());
-    expect(harness.container.querySelector(".ad-publication-impact")?.closest("details")).toBeNull();
+    const changesDisclosure = harness.container.querySelector(".ad-publication-impact")?.closest("details");
+    expect(changesDisclosure?.querySelector("summary")?.textContent).toBe("Changes");
+    expect(changesDisclosure?.open).toBe(false);
     expect(harness.container.querySelector(".ad-publication-readiness")?.closest("details")).toBeNull();
     expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
   });
@@ -263,9 +265,9 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
 
     await waitFor(() => expect(publishRequest).not.toBeNull());
     resolvePublish(publicationReceipt(publishRequest));
-    await waitFor(() => expect(harness.container.textContent).toContain("Published immutable version 1.0.0"));
-    expect(harness.container.textContent).toContain("First version published. Existing workflows are unaffected.");
-    expect(harness.container.textContent).not.toContain("Publish the first version for use in workflows.");
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
+    expect(harness.container.textContent).toContain("View publication");
+    expect(publicationPending.mock.calls.map(call => call[0])).toEqual([true, false]);
     await harness.unmount();
   });
 

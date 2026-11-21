@@ -23,6 +23,17 @@ public static class HttpAuthSchemes
     public const string OAuth2 = "oauth2";
 }
 
+public static class HttpOAuth2SettingKeys
+{
+    public const string GrantType = "grantType";
+}
+
+public static class HttpOAuth2GrantTypes
+{
+    public const string AuthorizationCode = "authorization_code";
+    public const string ClientCredentials = "client_credentials";
+}
+
 public static class ConnectionOwners
 {
     /// <summary>The only owner valid in v1 (D5). User-delegated owners are reserved.</summary>

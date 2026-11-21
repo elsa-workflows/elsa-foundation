@@ -38,9 +38,16 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  flex-shrink: 0;
   gap: 4px 24px;
-  margin-bottom: 24px;
+  margin-inline: calc(var(--studio-space-4) - var(--studio-content-padding-inline, 0px));
+  margin-bottom: var(--studio-space-3);
+  padding-top: var(--studio-space-2);
   border-bottom: 1px solid var(--studio-border-subtle, var(--studio-border));
+}
+
+.studio-view-navigation:first-child {
+  margin-top: calc(0px - var(--studio-content-padding-block, 0px));
 }
 
 .studio-view-navigation a {

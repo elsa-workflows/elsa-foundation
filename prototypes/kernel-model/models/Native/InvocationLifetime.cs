@@ -5,20 +5,20 @@ namespace Kernel.Native;
 internal static class InvocationLifetime
 {
     // A failed initial turn can legitimately leave no model state (Park's persisted JSON null).
-    internal static ValueTask Missing(ITurn turn)
+    internal static ValueTask Missing(INativeTurn turn)
     {
-        foreach (var message in turn.Inbox.Where(m => m.Kind is InvocationInput.Kind or ReceiptQuery.Kind))
+        foreach (var message in turn.Items.Where(m => m.Kind is InvocationInput.Kind or ReceiptQuery.Kind))
         {
             Admission result;
             try
             {
                 var address = message.Payload is null ? null : message.Kind == ReceiptQuery.Kind
-                    ? message.Read<ReceiptQuery>() : message.Read<InvocationInput>() is { } input ? new ReceiptQuery(input.Frame, input.Id) : null;
-                result = address is null ? new("", "", "Invalid", Actor: turn.Instance.Ref.Id)
-                    : new(address.Frame, address.Id, "UnknownInvocation", Actor: turn.Instance.Ref.Id);
+                    ? JsonSerializer.Deserialize<ReceiptQuery>(message.Payload) : JsonSerializer.Deserialize<InvocationInput>(message.Payload) is { } input ? new ReceiptQuery(input.Frame, input.Id) : null;
+                result = address is null ? new("", "", "Invalid", Actor: turn.Actor.Id)
+                    : new(address.Frame, address.Id, "UnknownInvocation", Actor: turn.Actor.Id);
             }
-            catch (JsonException) { result = new("", "", "Invalid", Actor: turn.Instance.Ref.Id); }
-            turn.Reply(message, Request.Response, result);
+            catch (JsonException) { result = new("", "", "Invalid", Actor: turn.Actor.Id); }
+            turn.Reply(message, result);
         }
         return ValueTask.CompletedTask;
     }
@@ -44,7 +44,7 @@ internal static class InvocationLifetime
         foreach (var frame in state.Inboxes?.Keys.ToArray() ?? []) Close(state, frame, reason, reference, keepPayload, restampCompleted);
     }
 
-    internal static long? Deadline(InputReceipt receipt, ICommitClock clock)
+    internal static long? Deadline(InputReceipt receipt, IReceiptClock clock)
     {
         if (receipt.Clock is not { } reference || receipt.Retention is not { } duration || clock.Resolve(reference) is not { } time)
             return null;
@@ -52,10 +52,10 @@ internal static class InvocationLifetime
         catch (OverflowException) { return null; } // unavailable time cannot authorize expiry
     }
 
-    internal static bool Protected(NativeState state, long now, ICommitClock clock) => state.Inboxes?.Values.Any(inbox =>
+    internal static bool Protected(NativeState state, long now, IReceiptClock clock) => state.Inboxes?.Values.Any(inbox =>
         inbox.Receipts.Values.Any(r => Deadline(r, clock) is not { } until || now < until)) == true;
 
-    internal static void Clean(NativeState state, InvocationInbox inbox, long now, ICommitClock clock, bool releaseEarly = false)
+    internal static void Clean(NativeState state, InvocationInbox inbox, long now, IReceiptClock clock, bool releaseEarly = false)
     {
         var removed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (id, receipt) in inbox.Receipts.ToArray())
@@ -66,6 +66,6 @@ internal static class InvocationLifetime
             }
         var retained = state.Inboxes!.Values.SelectMany(x => x.Receipts.Values).Select(r => r.Clock).ToHashSet(StringComparer.Ordinal);
         foreach (var reference in removed)
-            if (reference.StartsWith(CommitClockFacts.ModelPrefix, StringComparison.Ordinal) && (releaseEarly || !retained.Contains(reference))) clock.Release(reference);
+            if (clock.IsModelReference(reference) && (releaseEarly || !retained.Contains(reference))) clock.Release(reference);
     }
 }

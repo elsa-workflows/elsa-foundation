@@ -1,5 +1,6 @@
 /* Shared page and collection recipes. No host or module-private selectors. */
 @import "./DialogFooter.css";
+@import "./RefreshControl.css";
 
 .studio-page {
   display: flex;
@@ -116,7 +117,7 @@
 }
 .studio-collection-table > [role="row"] { padding: 0 var(--studio-space-3); }
 .studio-collection-table :where([role="columnheader"], [role="cell"]) { padding: var(--studio-space-2) 0; text-align: left; }
-.studio-table th, .studio-collection-table [role="columnheader"] {
+.studio-table thead th, .studio-collection-table [role="columnheader"] {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   font-weight: 600;
@@ -125,11 +126,18 @@
   letter-spacing: normal;
   background: var(--studio-surface);
 }
+.studio-table tbody th[scope="row"] { color: var(--studio-text); font-size: inherit; background: transparent; }
 .studio-table tr, .studio-collection-table > [role="row"] { min-height: var(--studio-row-height); border-bottom: 1px solid var(--studio-border); }
 .studio-table tbody tr:last-child, .studio-collection-table > [role="row"]:last-child { border-bottom: 0; }
 .studio-table tbody tr, .studio-collection-table > [role="row"]:not(:first-child) { border-bottom-style: var(--studio-row-boundary-style); }
-.studio-table th, .studio-collection-table > [role="row"]:first-child { height: var(--studio-table-header-height); min-height: var(--studio-table-header-height); }
-.studio-table tbody tr:hover, .studio-collection-table > [role="row"]:not(:first-child):hover { background: var(--studio-row-hover); }
+.studio-table thead th, .studio-collection-table > [role="row"]:first-child { height: var(--studio-table-header-height); min-height: var(--studio-table-header-height); }
+.studio-table tbody tr:not([data-studio-row-interactive]):hover, .studio-collection-table > [role="row"]:not(:first-child, [data-studio-row-interactive]):hover { background: var(--studio-row-hover); }
+[data-studio-row-interactive] { cursor: pointer; }
+[data-studio-row-interactive]:where(:not([aria-selected="true"])):is(:hover, :focus-visible) { background: var(--studio-row-hover); }
+[data-studio-row-interactive]:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: -2px; }
+:is(a, button).studio-row-link { display: inline-block; width: fit-content; min-width: 0; max-width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+:is(a, button).studio-row-link:hover:not(:disabled) { background: transparent; color: var(--studio-accent); text-decoration: underline; text-underline-offset: 2px; }
+.studio-row-link:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; border-radius: var(--studio-radius-sm); }
 .studio-table .studio-result-state { min-width: 16rem; }
 .studio-result-state {
   display: flex;
@@ -148,6 +156,8 @@
 .studio-result-state-icon { display: inline-flex; }
 .studio-result-state[data-tone="danger"] > .studio-result-state-icon { color: var(--studio-danger-fg); }
 .studio-result-state > .studio-page-actions { justify-content: center; margin-top: var(--studio-space-2); }
+.studio-collection-empty,
+.studio-page[data-studio-collection] .studio-result-state:not([data-tone="danger"]) { width: 100%; min-width: 0; min-height: 8.75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); }
 
 @media (max-width: 640px) {
   .studio-page-header-copy { flex-basis: 100%; }

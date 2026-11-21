@@ -132,7 +132,7 @@ internal sealed class DefaultConnectionManager(
             },
             State = new ConnectionState
             {
-                Status = ConnectionStatuses.Ready,
+                Status = InitialStatus(scheme.Descriptor, request.Settings),
                 CreatedAt = now
             }
         };
@@ -935,6 +935,24 @@ internal sealed class DefaultConnectionManager(
     {
         if (!string.Equals(owner, ConnectionOwners.Tenant, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException($"Only owner '{ConnectionOwners.Tenant}' is valid in v1.", nameof(owner));
+    }
+
+    /// <summary>
+    /// Interactive schemes start in <see cref="ConnectionStatuses.NeedsAuthorization"/> until a grant
+    /// exists. Client-credentials OAuth2 is the exception: it can acquire a grant without a user, so
+    /// it is created <see cref="ConnectionStatuses.Ready"/> even though the oauth2 scheme descriptor
+    /// reports <see cref="AuthSchemeDescriptor.HasInteractiveAuthorization"/>.
+    /// </summary>
+    private static string InitialStatus(AuthSchemeDescriptor scheme, IDictionary<string, string> settings)
+    {
+        if (!scheme.HasInteractiveAuthorization)
+            return ConnectionStatuses.Ready;
+
+        if (settings.TryGetValue(HttpOAuth2SettingKeys.GrantType, out var grantType) &&
+            string.Equals(grantType, HttpOAuth2GrantTypes.ClientCredentials, StringComparison.OrdinalIgnoreCase))
+            return ConnectionStatuses.Ready;
+
+        return ConnectionStatuses.NeedsAuthorization;
     }
 
     private async ValueTask SaveDocumentAsync(ConnectionDocument document, CancellationToken cancellationToken)

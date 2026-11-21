@@ -37,6 +37,7 @@ describe("ActivityDefinitionTestRunDialog", () => {
           draft={draft()}
           definitionLabel="Greeting"
           inputEditors={[]}
+          expressionEditors={[]}
           prepareExactRevision={prepareExactRevision}
           onFocusDiagnostic={vi.fn()}
           onClose={vi.fn()}

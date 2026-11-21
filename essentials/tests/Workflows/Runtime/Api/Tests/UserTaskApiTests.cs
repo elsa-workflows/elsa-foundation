@@ -100,6 +100,91 @@ public sealed class UserTaskApiTests
     }
 
     [Fact]
+    public async Task Form_definition_endpoints_save_publish_discard_and_keep_drafts_out_of_published_versions()
+    {
+        await using var host = await Host.Start(); host.SignIn("alice");
+        var draft = new UserTaskForm("purchase", "1", "", UserTaskProtocol.BasicForms,
+        [
+            new UserTaskField("accepted", "Accept terms", "boolean", Required: true) { Presentation = new("radio", TrueLabel: "I agree", FalseLabel: "I decline", UnansweredLabel: "No response"), MustBeTrue = true },
+            new UserTaskField("channel", "Channel", "choice", Choices: ["Email", "Phone"]) { Presentation = new("radio") }
+        ]);
+        var saved = await host.Client.PostAsJsonAsync("/runtime/user-task-forms/purchase/draft", new { revision = 0, form = draft });
+        var savedBody = await saved.Content.ReadAsStringAsync();
+        Assert.True(saved.StatusCode == HttpStatusCode.OK, $"{saved.StatusCode}: {savedBody}");
+        var definition = (await saved.Content.ReadFromJsonAsync<UserTaskFormDefinition>())!;
+        Assert.Equal(1, definition.Revision); Assert.NotNull(definition.Draft); Assert.Null(definition.LatestPublished);
+        Assert.Equal(new UserTaskFieldPresentation("radio", "I agree", "I decline", "No response"), definition.Draft.Form!.Fields[0].Presentation);
+        Assert.True(definition.Draft.Form.Fields[0].MustBeTrue);
+        Assert.Empty((await host.Client.GetFromJsonAsync<UserTaskFormPage>("/runtime/user-task-forms?limit=10"))!.Items);
+
+        var publishedForm = draft with { Name = "Purchase request" };
+        var publish = await host.Client.PostAsJsonAsync("/runtime/user-task-forms/purchase/publish", new { revision = 1, form = publishedForm });
+        Assert.Equal(HttpStatusCode.OK, publish.StatusCode);
+        var publishedVersion = (await publish.Content.ReadFromJsonAsync<UserTaskFormVersion>())!;
+        Assert.Equal("1", publishedVersion.Form.Version);
+        Assert.Equal(new UserTaskFieldPresentation("radio", "I agree", "I decline", "No response"), publishedVersion.Form.Fields[0].Presentation);
+        Assert.True(publishedVersion.Form.Fields[0].MustBeTrue);
+        var afterPublish = await host.Client.GetFromJsonAsync<UserTaskFormDefinition>("/runtime/user-task-forms/purchase/definition");
+        Assert.Equal(2, afterPublish!.Revision); Assert.Null(afterPublish.Draft);
+
+        var secondDraft = await host.Client.PostAsJsonAsync("/runtime/user-task-forms/purchase/draft", new { revision = 2, form = publishedForm with { Name = "Unpublished edit" } });
+        Assert.Equal(HttpStatusCode.OK, secondDraft.StatusCode);
+        var history = await host.Client.GetFromJsonAsync<UserTaskFormPage>("/runtime/user-task-forms/purchase/versions?limit=1");
+        Assert.Equal("Purchase request", Assert.Single(history!.Items).Form.Name);
+        Assert.Empty((await host.Client.GetFromJsonAsync<UserTaskFormPage>("/runtime/user-task-forms?limit=10"))!.Items.Where(x => x.Form.Name == "Unpublished edit"));
+
+        var discarded = await host.Client.PostAsJsonAsync("/runtime/user-task-forms/purchase/discard", new { revision = 3 });
+        Assert.Equal(HttpStatusCode.OK, discarded.StatusCode);
+        var result = (await discarded.Content.ReadFromJsonAsync<UserTaskFormDefinition>())!;
+        Assert.Equal(4, result.Revision); Assert.Null(result.Draft); Assert.Equal("Purchase request", result.LatestPublished!.Form.Name);
+        Assert.Equal(HttpStatusCode.Conflict, (await host.Client.PostAsJsonAsync("/runtime/user-task-forms/purchase/draft", new { revision = 3, form = draft })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Draft_API_preserves_custom_control_metadata_but_publication_requires_a_server_validator()
+    {
+        await using var host = await Host.Start(); host.SignIn("alice");
+        var form = new UserTaskForm("custom", "1", "Custom", UserTaskProtocol.BasicForms,
+            [new UserTaskField("rating", "Rating", "number")
+            {
+                ControlId = "example.rating/1",
+                Configuration = JsonSerializer.SerializeToElement(new { maximum = 5 })
+            }]);
+
+        var saved = await host.Client.PostAsJsonAsync("/runtime/user-task-forms/custom/draft", new { revision = 0, form });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var definition = await host.Client.GetFromJsonAsync<UserTaskFormDefinition>("/runtime/user-task-forms/custom/definition");
+        var field = Assert.Single(definition!.Draft!.Form!.Fields);
+        Assert.Equal("example.rating/1", field.ControlId);
+        Assert.Equal(5, field.Configuration?.GetProperty("maximum").GetInt32());
+
+        var publish = await host.Client.PostAsJsonAsync("/runtime/user-task-forms/custom/publish", new { revision = 1, form });
+        Assert.Equal(HttpStatusCode.BadRequest, publish.StatusCode);
+    }
+
+    [Fact]
+    public async Task Form_delete_endpoint_requires_current_manage_permission_and_keeps_published_versions_resolvable()
+    {
+        await using var host = await Host.Start(); host.SignIn("alice");
+        var form = new UserTaskForm("purchase", "1", "Purchase", UserTaskProtocol.BasicForms, []);
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.PostAsJsonAsync("/runtime/user-task-forms", form)).StatusCode);
+
+        host.Identity.Granted = new HashSet<string> { "user-task-forms:read" };
+        Assert.Equal(HttpStatusCode.Forbidden, (await host.Client.PostAsJsonAsync("/runtime/user-task-forms/purchase/delete", new { revision = 0 })).StatusCode);
+
+        host.Identity.Granted = null;
+        var deleted = await host.Client.PostAsJsonAsync("/runtime/user-task-forms/purchase/delete", new { revision = 0 });
+        Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
+        Assert.True((await deleted.Content.ReadFromJsonAsync<UserTaskFormDefinition>())!.Deleted);
+        Assert.Equal(HttpStatusCode.Conflict, (await host.Client.PostAsJsonAsync("/runtime/user-task-forms/purchase/draft", new { revision = 1, form })).StatusCode);
+        Assert.Empty((await host.Client.GetFromJsonAsync<UserTaskFormDefinitionPage>("/runtime/user-task-forms/definitions"))!.Items);
+        Assert.Empty((await host.Client.GetFromJsonAsync<UserTaskFormPage>("/runtime/user-task-forms?limit=10"))!.Items);
+        Assert.Empty((await host.Client.GetFromJsonAsync<UserTaskFormPage>("/runtime/user-task-forms/purchase/versions?limit=10"))!.Items);
+        Assert.Equal(HttpStatusCode.NotFound, (await host.Client.GetAsync("/runtime/user-task-forms/purchase/definition")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.GetAsync("/runtime/user-task-forms/purchase/versions/1")).StatusCode);
+    }
+
+    [Fact]
     public async Task Task_responses_name_people_and_groups_for_a_reader_who_cannot_read_the_target_directory()
     {
         await using var host = await Host.Start(); host.SignIn("alice");

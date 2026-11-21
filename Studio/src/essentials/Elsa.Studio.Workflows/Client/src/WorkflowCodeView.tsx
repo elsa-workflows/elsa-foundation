@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check } from "lucide-react";
-import { StudioCodeEditor, type StudioCodeDiagnostic, type StudioCodeLanguageAdapter } from "@elsa-workflows/studio-code-editor";
+import { jsonLanguageAdapter, StudioCodeEditor, type StudioCodeDiagnostic } from "@elsa-workflows/studio-code-editor";
 import { serializeDraftToJson } from "./workflowSerialization";
 import type { WorkflowDraft } from "./workflowTypes";
-
-const jsonLanguageAdapter: StudioCodeLanguageAdapter = { language: "json", displayName: "JSON" };
 
 export function WorkflowCodeView({ draft, onApply, inspectionSnapshot }: {
   draft: WorkflowDraft;
@@ -46,7 +44,7 @@ export function WorkflowCodeView({ draft, onApply, inspectionSnapshot }: {
           readOnly={readOnly}
           languageAdapter={jsonLanguageAdapter}
           diagnostics={diagnostics}
-          minHeight="100%"
+          minHeight="0"
           theme="studio"
           onChange={next => { if (readOnly) return; setText(next.value); if (error) setError(null); }}
         />

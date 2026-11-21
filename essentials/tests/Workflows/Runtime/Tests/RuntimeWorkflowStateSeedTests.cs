@@ -56,6 +56,23 @@ public sealed class RuntimeWorkflowStateSeedTests
     }
 
     [Fact]
+    public void A_cleared_identity_projection_stores_an_explicit_json_null_inline_value()
+    {
+        var written = Assert.Single(RuntimeWorkflowStateSeed.BuildIdentityChanges(
+            "wfexec-1",
+            correlationIdAssignmentRequested: true,
+            correlationId: null,
+            instanceNameAssignmentRequested: false,
+            instanceName: null,
+            capturedAt: _now));
+        Assert.Equal(DurableValueStorage.Inline, written.State!.Storage);
+        Assert.Equal(JsonValueKind.Null, written.State.InlineValue!.Value.ValueKind);
+        Assert.Equal(
+            RuntimeWorkflowStateSeed.IdentityCorrelationIdName,
+            written.State.Metadata[RuntimeMetadataKeys.IdentityName]);
+    }
+
+    [Fact]
     public void A_later_correlate_replaces_the_seeded_correlation_id()
     {
         var seeded = RuntimeWorkflowStateSeed.BuildSeedChanges("wfexec-1", inputs: null, capturedAt: _now, correlationId: "order-42");

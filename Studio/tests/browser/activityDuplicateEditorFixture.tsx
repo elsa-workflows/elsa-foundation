@@ -1,7 +1,7 @@
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
-import React, { useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type {
   StudioActivityDefinitionImplementationEditorProps,
@@ -14,7 +14,6 @@ import { setNotifications } from "../../src/essentials/Elsa.Studio.Workflows/Cli
 import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
 import { activityGraphDiagnosticFocusEvent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDiagnosticFocus";
 import { ActivityGraphImplementationEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
-import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
 import { WorkflowInstanceDetailsWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import { WorkflowExecutableInspectorWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowExecutableInspector";
 import {
@@ -40,6 +39,7 @@ import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting
 import { activityGraphLayoutFromDesign } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+const WorkflowEditor = lazy(() => import("../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const bpmnDecisionFixture = new URLSearchParams(window.location.search).get("bpmn-decision");
 const adaptivePorts = new URLSearchParams(window.location.search).get("adaptive-ports");
 const collectionSlotsFixture = new URLSearchParams(window.location.search).get("collection-slots");
@@ -95,6 +95,7 @@ const denseOutcomeCatalog: ActivityCatalogItem = {
 };
 
 const runLayoutFixture = new URLSearchParams(window.location.search).has("run-layout");
+const executableIdentityFieldsFixture = new URLSearchParams(window.location.search).has("identity-fields");
 
 const workflowStartFixture = new URLSearchParams(window.location.search).has("workflow-start");
 const httpEndpointCatalog: ActivityCatalogItem = {
@@ -287,19 +288,27 @@ function ActivityDuplicateEditorFixtureContent() {
   const context = useMemo(() => createEditorContext(instanceHost || motionFixture ? live.current : undefined), [instanceHost, motionFixture]);
   const activityHost = new URLSearchParams(window.location.search).get("host") === "activity";
   const ai = useMemo(() => ({
-    promptActions: { list: () => new URLSearchParams(window.location.search).has("toolbar-explain") ? [{ id: "weaver.workflows.explain-instance", label: "Explain run", createPrompt: () => ({ message: "Explain this run", mode: "enqueue", attachments: [] }) }] : [] },
+    promptActions: { list: () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("host") === "executable" && params.has("toolbar-explain")) return [{
+        id: "weaver.workflows.explain-executable",
+        label: "Explain executable",
+        createPrompt: context => ({ message: "Explain this executable", mode: "enqueue", attachments: [], context })
+      }];
+      return params.has("toolbar-explain") ? [{ id: "weaver.workflows.explain-instance", label: "Explain run", createPrompt: () => ({ message: "Explain this run", mode: "enqueue", attachments: [] }) }] : [];
+    } },
     providerAvailability: { get: () => false, subscribe: () => () => undefined },
     dispatchPrompt: () => undefined
   } as unknown as StudioAiContributionApi), []);
 
   return (
-    <div className={`activity-duplicate-editor${instanceHost || executableHost ? " wf-page wf-page--run-workbench" : ""}`} data-testid="activity-duplicate-editor">
+    <div className={`activity-duplicate-editor${instanceHost || executableHost ? " wf-page wf-page--run-workbench" : ""}${executableHost ? " wf-page--executable-inspector" : ""}`} data-testid="activity-duplicate-editor">
       {instanceHost || motionFixture ? <div aria-label="Fixture runtime controls"><button onClick={() => { live.current.status = "Completed"; }}>Complete fixture execution</button>
         <button onClick={() => { live.current.disconnected = true; }}>Disconnect fixture reads</button><button onClick={() => { live.current.disconnected = false; }}>Reconnect fixture reads</button></div> : null}
       <QueryClientProvider client={queryClient}>
         {executableHost ? <WorkflowExecutableInspectorWorkbench context={context} ai={ai} artifactId="editor-artifact" sourceReferenceId={null} onSelectReference={() => undefined} runInputEditors={[]} /> : instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
           ? <ControlledActivityGraphFixture context={context} />
-          : <WorkflowEditor
+          : <Suspense fallback={<p role="status">Loading workflow designer…</p>}><WorkflowEditor
               context={context}
               definitionId="definition-1"
               ai={ai}
@@ -309,7 +318,7 @@ function ActivityDuplicateEditorFixtureContent() {
               workflowDesignerPanels={[]}
               autosaveEnabledByDefault={Boolean(staleValidationsFixture)}
               onBack={() => undefined}
-            />}
+            /></Suspense>}
       </QueryClientProvider>
       <ToastHost controller={notifications} navigate={path => window.history.pushState({}, "", path)} />
     </div>
@@ -404,7 +413,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     http: {
       getJson: async (url: string) => {
         if (hostPersistenceMode && url === "/runtime/workflows/persistence-mode") return { persistenceMode: hostPersistenceMode };
-        if (live?.disconnected && url.startsWith("/runtime/")) throw new Error("Fixture connection dropped");
+        if (live?.disconnected && url.startsWith("/runtime/")) { (window as Window & { droppedFixtureReads?: number }).droppedFixtureReads = ((window as Window & { droppedFixtureReads?: number }).droppedFixtureReads ?? 0) + 1; throw new Error("Fixture connection dropped"); }
         if (url === "/capabilities") {
           return {
             capabilities: [
@@ -494,10 +503,22 @@ export function createEditorContext(live?: { status: string; disconnected: boole
           incidents: runCanvas === "incident" ? [incident] : [], persistenceMode: "Balanced", inspectionGranularity: "boundary-level"
         };
         if (runCanvas && url === "/runtime/workflows/executables/editor-artifact") return {
-          artifactId: "editor-artifact", artifactHash: "fixture-artifact-hash", createdAt: "2026-10-27T10:00:00Z",
+          artifactId: "editor-artifact", artifactHash: executableIdentityFieldsFixture ? `sha256:${"abcdef0123456789".repeat(4)}` : "fixture-artifact-hash", createdAt: "2026-10-27T10:00:00Z",
           rootActivityType: draft.state.rootActivity!.activityVersionId, rootActivityVersion: "1.0.0",
           nodeCount: runtimeNodes.length, resumeTargetCount: 0, references: [], rootActivity: compiled(draft.state.rootActivity!),
-          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", selection: "requested", ...((adaptivePorts || runLayoutFixture) ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
+          ...(executableIdentityFieldsFixture ? {
+            chosenReference: { sourceReferenceId: "fixture-reference", selection: "requested", layout: draft.layout },
+            references: [{
+              sourceReferenceId: "fixture-reference",
+              artifactId: "editor-artifact",
+              sourceKind: "definition",
+              definitionId: "definition-reference-0123456789abcdef0123456789abcdef",
+              definitionVersionId: "definition-version-reference-0123456789abcdef0123456789abcdef",
+              artifactVersion: "1.0.0",
+              createdAt: "2026-10-27T10:00:00Z",
+              scope: "Published"
+            }]
+          } : live ? { chosenReference: { sourceReferenceId: "fixture-reference", selection: "requested", ...((adaptivePorts || runLayoutFixture) ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
         };
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activity-executions?")) {
           if (new URLSearchParams(window.location.search).has("evidence-latency")) await new Promise(resolve => setTimeout(resolve, 400));

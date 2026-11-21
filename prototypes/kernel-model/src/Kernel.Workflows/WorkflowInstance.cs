@@ -30,19 +30,33 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 
     public TurnOutcome? Command(TurnInput input)
     {
-        var (row, first) = (input.Row, input.Taken[0]);
+        var (row, first) = (input.Row, input.Taken[input.From]);
         // The persisted protocol remains authoritative when a cold model drops either metadata interface.
         // Refuse before controls or the ordinary terminal drain can consume a protected query/Delete.
         if (row is { IdentityMetadataRequired:true } && _models[row.Model] is not IStateFreeTerminalMetadata)
             return IdentityMetadataTurn.Unavailable(input);
-        if (row is { Creation: > 0 } && first.Message.Kind == WorkflowKinds.ChildFinished)
+        if (input.Creation > 0 && first.Message.Kind == WorkflowKinds.ChildFinished)
         {
             try
             {
-                if (first.Message.Payload is null || first.Message.Read<ChildFinished>() is not { } finished)
+                if (row is not { Creation: > 0 } || first.Message.Payload is null || first.Message.Read<ChildFinished>() is not { } finished
+                    || !CreationProtocol.HasTerminalNoticeId(first.Message, finished.Child, finished.Creation) || first.Message.Target.Id != input.Actor
+                    || first.Message.TargetCreation != row.Creation || first.Message.SenderCreation != finished.Creation
+                    || finished.Child != first.Message.Sender || finished.Creation <= 0
+                    || finished.Status is not (InstanceStatus.Finished or InstanceStatus.Cancelled or InstanceStatus.Faulted))
                     return CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidChildCompletion");
-                if (!ChildRegistry.Read(row.Children).Contains(new(finished.Child, finished.Creation)))
+                var children = ChildRegistry.Read(row.Children);
+                if (!children.Remove(new(finished.Child, finished.Creation)))
                     return CreationProtocol.Refuse(input.Actor, row, input.Taken, "UnknownChildCreation");
+                if (row.Status != InstanceStatus.Running)
+                {
+                    // Exhaustion is a host failure: retain the genuine pending input and registry, with no model/Park entry.
+                    if (row.Revision == long.MaxValue) throw new OverflowException($"Revision exhausted for child completion at {row.Id}.");
+                    // A terminal parent still owns its registry. A late result closes that entry without re-entering the model.
+                    var next = row with { Revision = row.Revision + 1, Children = ChildRegistry.Write(children) };
+                    return new(input.Actor) { Row = next, Expected = row.Revision, Revision = next.Revision, Status = row.Status,
+                        Consumed = [first], Journal = Journal(row.History, [WorkflowKinds.ChildFinished]) };
+                }
             }
             catch (System.Text.Json.JsonException) { return CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidChildCompletion"); }
         }
@@ -194,7 +208,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 
     /// <summary>The parent's notice that a child ended.</summary>
     internal static Message Finished(InstanceRow row, string? output) =>
-        new Message($"{Origin(row)}#{row.Revision}.end", new InstanceRef(row.Parent!), WorkflowKinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output, row.Creation)), row.Id,
+        new Message(CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision), new InstanceRef(row.Parent!), WorkflowKinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output, row.Creation)), row.Id,
             TargetCreation: row.ParentCreation > 0 ? row.ParentCreation : null, SenderCreation: row.Creation).AsIssued();
 
     private static string Origin(InstanceRow row) => CreationProtocol.Origin(row.Id, row.Creation);

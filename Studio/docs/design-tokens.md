@@ -116,6 +116,12 @@ solid dividers. Focus indicators remain solid in every mode. Modules consume rol
 checking palette IDs. The standalone public `styles.css` includes the treatment; a custom host
 can set `data-workspace-style="minimal"` on `<html>` with its own complete palette.
 
+Ordinary module page frames may use `--studio-workspace-frame-bg` for their redundant outer fill.
+It defaults to `--studio-bg`; the shell may make the frame transparent while a workspace backdrop
+is active. Keep cards, tables, controls and full-bleed workbenches on their own surface roles, and
+give specialized active route roots `data-studio-workspace-backdrop="none"` when they must remain
+undecorated. Hidden retained tabs do not opt out the active view.
+
 ### Collection and action roles
 
 | Token | Purpose |
@@ -152,6 +158,7 @@ version bump and a migration note.
 | `--studio-edge-control` | interactive field/control boundary; default aliases the border |
 | `--studio-canvas` | authoring canvas surface; default aliases the page background |
 | `--studio-panel` | tool/property panel surface; default aliases the raised surface |
+| `--studio-workspace-frame-bg` | redundant module page-frame fill; defaults to `--studio-bg`, and may be transparent over a shell-owned backdrop |
 
 ### Accent & focus
 

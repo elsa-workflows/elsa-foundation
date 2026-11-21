@@ -245,6 +245,30 @@ public sealed class RoleOwnedInputBindingContractTests
         Assert.Equal(binding.EffectivePolicy, binding.Literal!.Policy);
     }
 
+    [Theory]
+    [InlineData("JavaScript", CollectionKind.Single)]
+    [InlineData("JavaScript", CollectionKind.Array)]
+    [InlineData("Liquid", CollectionKind.Single)]
+    [InlineData("Liquid", CollectionKind.Array)]
+    public void Promoting_raw_source_preserves_existing_pure_compiler_defaults(string language, CollectionKind collectionKind)
+    {
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var type = new TypeReference("String", collectionKind);
+        var input = new InputDefinition("message", "Text", type, null, "Text", null, false);
+        var portable = new ExpressionDefinition(language, "42", type, new Dictionary<string, ExpressionParameterBinding>(),
+            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+        var raw = compiler.Compile("node", input, new ArgumentValue("42", language));
+        var promoted = compiler.Compile("node", input, new ArgumentValue(JsonSerializer.SerializeToElement(portable), language));
+        Assert.Equal(raw.Source, promoted.Source); Assert.Equal(raw.TargetType, promoted.TargetType);
+        Assert.Equal(raw.Expression!.Language, promoted.Expression!.Language);
+        Assert.Equal(raw.Expression.Expression, promoted.Expression.Expression);
+        Assert.Equal(raw.Expression.ResultType, promoted.Expression.ResultType);
+        Assert.Equal(raw.Expression.CapabilityProfile, promoted.Expression.CapabilityProfile);
+        Assert.Equal(raw.Expression.Options.GetRawText(), promoted.Expression.Options.GetRawText());
+        Assert.Empty(raw.Expression.Parameters); Assert.Empty(promoted.Expression.Parameters);
+        Assert.Empty(raw.Expression.Metadata); Assert.Empty(promoted.Expression.Metadata);
+    }
+
     [Fact]
     public void Compiler_PreservesPortableExpressionDefinitionWithoutAmbientCompatibility()
     {

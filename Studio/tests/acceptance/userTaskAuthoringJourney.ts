@@ -102,7 +102,23 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const taskNode = page.locator(".react-flow__node").filter({ hasText: "Create User Task" });
   const taskNodeId = await taskNode.getAttribute("data-id");
   await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
-  await page.getByLabel("Task assignee", { exact: true }).selectOption(who.userId);
+  const assignee = page.getByLabel("Task assignee", { exact: true });
+  const taskGroup = page.getByLabel("Task group", { exact: true });
+  const assignment = page.getByRole("group", { name: "Assignment", exact: true });
+  await expect(assignment).toBeVisible();
+  await expect(assignment.locator(".wf-property-row")).toHaveCount(2);
+  await expect(assignment).toContainText("Assign this task to one person or one group.");
+  await expect(assignment).toContainText("Choose an assignee or a group—not both.");
+  await assignee.selectOption(who.userId);
+  const availableTargets = await get("/runtime/user-task-targets?skip=0&take=100");
+  const availableGroup = availableTargets.groups?.[0];
+  if (availableGroup) {
+    await taskGroup.selectOption(availableGroup.id);
+    await expect(assignee).toHaveValue("");
+    await assignee.selectOption(who.userId);
+    await expect(taskGroup).toHaveValue("");
+  }
+  await captureInspector("task-assignment", assignee);
   await page.getByLabel("Task form", { exact: true }).selectOption(formId);
   await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
   for (const label of ["Task form", "Task form version"]) {

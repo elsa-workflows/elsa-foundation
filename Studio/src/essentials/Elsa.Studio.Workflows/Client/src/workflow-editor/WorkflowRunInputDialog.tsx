@@ -89,6 +89,18 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onS
                     return next;
                   });
                 }}
+                onOmit={Object.prototype.hasOwnProperty.call(drafts, input.referenceKey) ? () => {
+                  setDrafts(current => {
+                    const next = { ...current };
+                    delete next[input.referenceKey];
+                    return next;
+                  });
+                  setErrors(current => {
+                    const next = { ...current };
+                    delete next[input.referenceKey];
+                    return next;
+                  });
+                } : undefined}
               />
             ))}
           </div>
@@ -110,7 +122,7 @@ function describeEditorFallback(inputs: WorkflowInput[], inputKey: string, error
   return `${error} ${guidance}`;
 }
 
-export function WorkflowRunInputField({ input, editors, value, error, disabled, onEditorFailure, onChange }: {
+export function WorkflowRunInputField({ input, editors, value, error, disabled, onEditorFailure, onChange, onOmit }: {
   input: WorkflowInput;
   editors: StudioWorkflowRunInputEditorContribution[];
   value: string;
@@ -118,19 +130,26 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   disabled: boolean;
   onEditorFailure(): void;
   onChange(value: string): void;
+  onOmit?(): void;
 }) {
   const fieldId = useId();
   const descriptionId = `${fieldId}-description`;
   const errorId = `${fieldId}-error`;
   const label = input.displayName || input.name;
   const describedBy = [input.description ? descriptionId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined;
+  const hasDefault = Object.prototype.hasOwnProperty.call(input, "defaultValue") && input.defaultValue !== undefined;
+  const defaultSatisfiesRequired = hasDefault
+    && (!input.defaultSyntax || input.defaultSyntax === "Literal")
+    && (input.defaultValue !== null || (!input.isRequired && input.isNullable));
+  const requiredWithoutDefault = Boolean(input.isRequired && !defaultSatisfiesRequired);
+  const canUseEmptyString = input.type.collectionKind === "Single" && ["string", "timespan", "uri"].includes(input.type.alias.trim().split(".").pop()?.toLowerCase() ?? "");
   const controlProps = {
     id: fieldId,
     "aria-label": label,
     "data-studio-field-control": "",
     "aria-describedby": describedBy,
     "aria-invalid": Boolean(error),
-    "aria-required": Boolean(input.isRequired)
+    "aria-required": requiredWithoutDefault
   };
   const common = {
     ...controlProps,
@@ -142,7 +161,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   const fallback = renderInputControl(input, common, onChange);
 
   return (
-    <StudioField className="wf-form-field" controlId={fieldId} label={<>{label}{input.isRequired ? " *" : ""}</>} meta={<small className="wf-run-input-type">{formatArgumentType(input.type)}</small>}>
+    <StudioField className="wf-form-field" controlId={fieldId} label={<>{label}{requiredWithoutDefault ? " *" : ""}</>} meta={<small className="wf-run-input-type">{formatArgumentType(input.type)}</small>}>
       {EditorComponent ? (
         <WorkflowRunInputEditorBoundary
           editorId={editor.id}
@@ -160,6 +179,13 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
         </WorkflowRunInputEditorBoundary>
       ) : fallback}
       {input.description ? <small id={descriptionId}>{input.description}</small> : null}
+      {hasDefault ? <small>Uses default if omitted.</small> : null}
+      {hasDefault && canUseEmptyString ? (
+        <button type="button" onClick={() => onChange("")} disabled={disabled}>Use empty string</button>
+      ) : null}
+      {defaultSatisfiesRequired && onOmit ? (
+        <button type="button" aria-label={`Use default for ${label}`} onClick={onOmit} disabled={disabled}>Use default</button>
+      ) : null}
       {error ? <small id={errorId} role="alert">{error}</small> : null}
     </StudioField>
   );

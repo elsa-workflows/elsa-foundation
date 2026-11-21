@@ -5,7 +5,8 @@ namespace Elsa.Decisions.Persistence.Core;
 
 /// <summary>A tenant-scoped editable business policy. Source bytes remain authoritative.</summary>
 public sealed record DecisionAsset(string Id, string Name, string? Description, string Revision,
-    string Xml, string SourceHash, bool IsSensitive, string? PublishedVersionId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    string Xml, string SourceHash, bool IsSensitive, string? PublishedVersionId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
+    DateTimeOffset? DeletedAt = null);
 
 /// <summary>An immutable policy version and its exact executable semantics.</summary>
 public sealed record DecisionVersion(string Id, string AssetId, int Number, string Name, string Xml,
@@ -37,6 +38,7 @@ public sealed record DecisionWriteConfirmation(string Id, string Revision, bool 
 /// <summary>Idempotency is scoped to a trusted tenant and actor.</summary>
 public sealed record DecisionOperation(string TenantId, string ActorId, string OperationId);
 public sealed record DecisionOperationReceipt(string Kind, string Fingerprint, DecisionWriteConfirmation Confirmation);
+public sealed record DecisionAssetLifecycle(string AssetId, string ExpectedRevision);
 public sealed record SaveDecision(string? Id, string? ExpectedRevision, string Name, string? Description,
     string Xml, string SourceHash, bool IsSensitive);
 public sealed record PublishDecision(string AssetId, string ExpectedRevision, DecisionArtifact Artifact);
@@ -63,6 +65,10 @@ public interface IDecisionWriter
 {
     ValueTask<DecisionWriteConfirmation> SaveAssetAsync(DecisionOperation operation, SaveDecision command, CancellationToken cancellationToken = default);
     ValueTask<DecisionWriteConfirmation> PublishAsync(DecisionOperation operation, PublishDecision command, CancellationToken cancellationToken = default);
+    ValueTask<DecisionWriteConfirmation> UnpublishAsync(DecisionOperation operation, DecisionAssetLifecycle command, CancellationToken cancellationToken = default);
+    ValueTask<DecisionWriteConfirmation> RecycleAsync(DecisionOperation operation, DecisionAssetLifecycle command, CancellationToken cancellationToken = default);
+    ValueTask<DecisionWriteConfirmation> RestoreAsync(DecisionOperation operation, DecisionAssetLifecycle command, CancellationToken cancellationToken = default);
+    ValueTask<DecisionWriteConfirmation> PurgeAsync(DecisionOperation operation, DecisionAssetLifecycle command, CancellationToken cancellationToken = default);
     ValueTask<DecisionWriteConfirmation> SaveCaseAsync(DecisionOperation operation, SaveDecisionCase command, CancellationToken cancellationToken = default);
     ValueTask<DecisionWriteConfirmation> DeleteCaseAsync(DecisionOperation operation, string assetId, string caseId, string expectedRevision, CancellationToken cancellationToken = default);
     ValueTask<DecisionWriteConfirmation> SaveCompletedRunAsync(DecisionOperation operation, DecisionTestReceipt receipt, CancellationToken cancellationToken = default);
@@ -72,6 +78,8 @@ public interface IDecisionWriter
 /// <summary>Safe fault crossing persistence and API boundaries.</summary>
 public sealed class DecisionDesignException : Exception
 {
-    public DecisionDesignException(string code, string message, Exception? innerException = null) : base(message, innerException) => Code = code;
+    public DecisionDesignException(string code, string message, Exception? innerException = null, IReadOnlyList<DecisionDiagnostic>? diagnostics = null) : base(message, innerException)
+    { Code = code; Diagnostics = diagnostics; }
     public string Code { get; }
+    public IReadOnlyList<DecisionDiagnostic>? Diagnostics { get; }
 }

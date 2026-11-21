@@ -239,12 +239,35 @@ describe("agent editor", () => {
     expect(postJson).toHaveBeenLastCalledWith("/connections/picker", { typeName: "agent-azure-openai" }, expect.anything());
   });
 
+  it("consolidates an unavailable saved connection warning and retries without changing the saved model", async () => {
+    const fixture: Fixture = { capabilities: "unusable", connections: {} };
+    const { context, postJson } = fakeContext(fixture);
+    const saved = configured();
+    const { container, latest } = await render(context, saved, { readOnly: true });
+
+    const alerts = [...container.querySelectorAll<HTMLElement>(".agent-model > .studio-alert")];
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].dataset.tone).toBe("warning");
+    expect(alerts[0].textContent).toContain('The saved connection “writer” is unavailable.');
+    expect(alerts[0].textContent).toContain("It’s still saved.");
+    expect(alerts[0].textContent).toContain("Connections");
+    expect(alerts[0].textContent).toContain("Retry");
+    expect(latest().model).toEqual(saved.model);
+
+    fixture.capabilities = undefined;
+    button(container, "Retry")!.click();
+    await settle();
+
+    expect(postJson.mock.calls.filter(call => call[0] === "/agent/model-capabilities").length).toBeGreaterThan(1);
+    expect(latest().model).toEqual(saved.model);
+  });
+
   it("offers the connection's current model when the saved one is stale", async () => {
     const { context } = fakeContext({ capabilities: "unusable" });
     const { container, latest } = await render(context, { ...configured(), model: { providerKey: "anthropic", connectionName: "writer", modelId: "old-model" } });
 
     expect(container.textContent).toContain("This connection now uses claude-fable-5-1, but the agent still names old-model.");
-    expect(container.textContent).toContain("cannot be used by agents right now");
+    expect(container.textContent).toContain("isn't available for agents right now");
     button(container, "Use claude-fable-5-1")!.click();
     await settle();
 
@@ -257,7 +280,7 @@ describe("agent editor", () => {
 
     expect(container.textContent).toContain("You can see the saved model, but choosing a model needs permission to author agents.");
     expect(container.textContent).toContain("Reading what this model supports needs permission to author agents.");
-    expect(container.textContent).not.toContain("cannot be used by agents");
+    expect(container.textContent).not.toContain("isn't available for agents");
     expect(container.querySelector("[data-testid='agent-model']")?.textContent).toContain("claude-fable-5-1");
     expect(changes).toHaveLength(0);
   });

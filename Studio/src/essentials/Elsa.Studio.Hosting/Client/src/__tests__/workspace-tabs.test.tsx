@@ -112,11 +112,15 @@ afterEach(async () => {
 describe("workspace tabs", () => {
   it("reuses the active tab for ordinary navigation", async () => {
     await mount("/list");
-    await act(async () => controller.navigate("/list?page=2"));
+    await vi.waitFor(() => expect(container.querySelector(".list")).not.toBeNull());
+    const tabId = controller.state.activeId;
+
+    controller.navigate("/list?page=2");
+    await vi.waitFor(() => expect(controller.activeTab.location).toBe("/list?page=2"));
     expect(controller.state.tabs).toHaveLength(1);
-    expect(controller.activeTab.location).toBe("/list?page=2");
+    expect(controller.state.activeId).toBe(tabId);
     expect(currentLocation()).toBe("/list?page=2");
-    expect(readHistoryTabId(window.history.state)).toBe(controller.state.activeId);
+    expect(readHistoryTabId(window.history.state)).toBe(tabId);
   });
 
   it("keeps a background editor's unsaved edits while tearing down its effects", async () => {

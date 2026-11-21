@@ -48,7 +48,7 @@ describe("JavaScript expression editor module", () => {
         isSensitive: false,
         surface: "compact"
       }
-    }) as React.ReactElement;
+    }) as React.ReactElement<{ children: React.ReactNode }>;
 
     expect(rendered.type).toBe("code");
     expect(rendered.props.children).toBe("variables.customer.email");
@@ -210,6 +210,7 @@ interface StudioCodeEditorElementProps {
     uri: string;
     language: string;
     value: string;
+    version?: number;
   };
   readOnly?: boolean;
   theme?: string;
@@ -224,9 +225,9 @@ function findStudioCodeEditor(node: React.ReactNode): React.ReactElement<StudioC
   if (typeof node.type === "function") {
     return findStudioCodeEditor((node.type as (props: unknown) => React.ReactNode)(node.props));
   }
-  if (typeof node.type === "object" && node.type && "type" in node.type &&
-      typeof node.type.type === "function") {
-    return findStudioCodeEditor((node.type.type as (props: unknown) => React.ReactNode)(node.props));
+  const memo = node.type as unknown as { type?: unknown };
+  if (typeof memo === "object" && memo && typeof memo.type === "function") {
+    return findStudioCodeEditor((memo.type as (props: unknown) => React.ReactNode)(node.props));
   }
   for (const child of React.Children.toArray((node.props as { children?: React.ReactNode }).children)) {
     try {
@@ -244,7 +245,7 @@ function testApi(): ElsaStudioModuleApi {
   } as ElsaStudioModuleApi;
 }
 
-function registry<T>(): StudioContributionRegistry<T> {
+function registry<T>(): Pick<StudioContributionRegistry<T>, "add" | "list"> {
   const contributions: T[] = [];
   return {
     add: contribution => contributions.push(contribution),

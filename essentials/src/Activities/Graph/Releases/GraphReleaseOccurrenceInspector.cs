@@ -14,7 +14,7 @@ namespace Elsa.Activities.Graph.Releases;
 internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader reader) : IReleaseOccurrenceInspector
 {
     private const string ProviderKey = "elsa.activity-graph";
-    private static bool SupportsCompiler(string fingerprint) => fingerprint is "elsa.activity-graph/compiler/4.0.0" or "elsa.activity-graph/compiler/5.0.0";
+    private static bool SupportsCompiler(string fingerprint) => fingerprint is "elsa.activity-graph/compiler/4.0.0" or "elsa.activity-graph/compiler/5.0.0" or "elsa.activity-graph/compiler/5.1.0";
     private static readonly string[] PlanFields = ["planSchemaVersion", "entryOccurrenceId", "occurrences", "variables", "outputMappings", "inputs", "outputs",
         "inputReferenceKeys", "outputReferenceKeys", "requiredInputReferenceKeys", "requiredOutputReferenceKeys", "scopeModel", "outcomeMappings", "completeOutcomes"];
     private static readonly string[] PlacedFields = ["definitionId", "definitionVersionId", "version", "templateHash", "sourceReferenceId", "entryNodeId"];

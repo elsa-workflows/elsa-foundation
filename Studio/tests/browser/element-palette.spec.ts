@@ -22,6 +22,40 @@ for (const host of ["workflow", "activity"]) {
 }
 
 for (const host of ["workflow", "activity"]) {
+  test(`${host} inline BPMN picker searches and inserts structural elements`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`/?mode=activity-duplicate-editor&host=${host}&composition=bpmn&palette-context&theme=dark`);
+    await page.getByRole("button", { name: "Add activity", exact: true }).click();
+
+    const search = page.getByRole("searchbox", { name: "Search activities and elements" });
+    await expect(search).toBeVisible();
+    await search.fill("xor");
+    await expect(page.getByRole("option", { name: /Exclusive gateway/ })).toBeVisible();
+    await search.fill("no matching result");
+    await expect(page.getByText("No matching activities or elements.")).toBeVisible();
+
+    await search.fill("start");
+    await expect(page.getByRole("option", { name: /Start event/ })).toBeVisible();
+    await search.press("ArrowDown");
+    await search.press("Enter");
+    await expect(page.locator(".wf-bpmn-node[data-element-type='startEvent']")).toHaveCount(1);
+  });
+
+  test(`${host} inline BPMN picker still inserts activities`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`/?mode=activity-duplicate-editor&host=${host}&composition=bpmn&palette-context&theme=dark`);
+    await page.getByRole("button", { name: "Add activity", exact: true }).click();
+
+    const search = page.getByRole("searchbox", { name: "Search activities and elements" });
+    await search.fill("Write Line");
+    const activity = page.getByRole("option", { name: /Write Line/ });
+    await expect(activity).toBeVisible();
+    await activity.click();
+    await expect(page.locator(".wf-bpmn-node[data-element-type='task']")).toHaveCount(1);
+  });
+}
+
+for (const host of ["workflow", "activity"]) {
   test(`${host} elements share search, keyboard insertion and native drag placement`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`/?mode=activity-duplicate-editor&host=${host}&composition=bpmn&palette-context&theme=dark`);

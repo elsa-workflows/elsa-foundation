@@ -60,19 +60,23 @@ public sealed class ValueConversionProfilesEndpointTests
     }
 
     [Fact]
-    public async Task Default_host_surfaces_the_built_in_json_and_xml_profiles()
+    public async Task Default_host_surfaces_the_built_in_json_profiles()
     {
         var handler = new ProfilesEndpoint(BuiltInValueConversionProfileRegistry.Instance);
 
         var response = await handler.HandleAsync(new Requests.ListValueConversionProfiles(), CancellationToken.None);
 
         Assert.Equal(
-            [("elsa.json", "1"), ("elsa.xml", "1")],
+            [("elsa.json", "1"), ("elsa.json-string", "1"), ("elsa.xml", "1")],
             response.Items.Select(item => (item.Profile.Id, item.Profile.Version)));
         var json = response.Items.Single(item => item.Profile.Id == "elsa.json");
         Assert.Contains(ValueRepresentation.FormattedContent, json.SupportedSourceRepresentations);
         Assert.Contains(ValueRepresentation.StructuredValue, json.SupportedSourceRepresentations);
         Assert.Equal(["*"], json.SupportedTargetAliases);
+        var jsonString = response.Items.Single(item => item.Profile.Id == "elsa.json-string");
+        Assert.Contains(ValueRepresentation.TypedValue, jsonString.SupportedSourceRepresentations);
+        Assert.Contains(ValueRepresentation.StructuredValue, jsonString.SupportedSourceRepresentations);
+        Assert.Equal(["String", "System.String"], jsonString.SupportedTargetAliases);
     }
 
     [Fact]

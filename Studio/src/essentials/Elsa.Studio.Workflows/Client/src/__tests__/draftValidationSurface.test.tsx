@@ -221,6 +221,48 @@ describe("ValidationPanel", () => {
     expect(selected).toEqual(["orphan"]);
   });
 
+  it("identifies non-blocking warnings and keeps their node navigation available", () => {
+    const selected: string[] = [];
+    flushSync(() => root.render(
+      <ValidationPanel
+        draft={draft}
+        errors={[{
+          type: "CompensationScope/ReplaySafeStep",
+          message: "Demo logging needs no action; use an External activity for real operations.",
+          path: "scope/steps/0",
+          severity: " Warning "
+        }]}
+        onRepair={() => {}}
+        onSelectNode={id => selected.push(id)}
+      />
+    ));
+
+    expect(container.querySelector(".wf-validation-summary")?.textContent).toContain("1 warning · publishing is not blocked");
+    expect(container.querySelector(".wf-validation-message")?.textContent).toContain("Demo logging needs no action");
+    const goTo = container.querySelector<HTMLButtonElement>(".wf-validation-node-action")!;
+    expect(goTo.textContent).toContain("Go to");
+    flushSync(() => goTo.click());
+    expect(selected).toEqual(["scope"]);
+  });
+
+  it("counts missing-severity validations as errors and does not reassure when errors and warnings coexist", () => {
+    flushSync(() => root.render(
+      <ValidationPanel
+        draft={draft}
+        errors={[
+          { type: "CompensationScope/ReplaySafeStep", message: "A non-blocking warning.", path: "scope/steps/0", severity: "Warning" },
+          { type: "InputOutput/MissingRequired", message: "A blocking issue.", path: "write-line/inputs/text" }
+        ]}
+        onRepair={() => {}}
+        onSelectNode={() => {}}
+      />
+    ));
+
+    const summary = container.querySelector(".wf-validation-summary")?.textContent ?? "";
+    expect(summary).toContain("1 error · 1 warning");
+    expect(summary).not.toContain("publishing is not blocked");
+  });
+
   it("offers a one-click start-node fix for both start faults", () => {
     const madeStart: string[] = [];
     flushSync(() => root.render(

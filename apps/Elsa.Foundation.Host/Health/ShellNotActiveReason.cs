@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 using CShells.Lifecycle;
-using Elsa.Foundation.Host.Shells;
+using Elsa.Foundation.Hosting;
 
 namespace Elsa.Foundation.Host.Health;
 

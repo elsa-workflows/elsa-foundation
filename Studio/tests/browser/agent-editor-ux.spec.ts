@@ -42,6 +42,33 @@ for (const width of [390, 1440, 2552]) for (const theme of ["light", "dark"]) {
   });
 }
 
+for (const width of [390, 1440]) {
+  test(`consolidates an unavailable saved connection warning at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1100 });
+    await page.goto("/?mode=activity-authoring&provider=agent&unavailable-connection");
+    const editor = page.getByTestId("agent-editor");
+    const model = editor.getByRole("combobox", { name: /^Model connection/ });
+    await expect(model).toHaveValue("azure-openai|openai");
+    await expect(model.locator("option:checked")).toHaveText("openai (saved)");
+
+    const alerts = editor.locator(".agent-model > .studio-alert");
+    await expect(alerts).toHaveCount(1);
+    const warning = alerts.first();
+    await expect(warning).toHaveAttribute("data-tone", "warning");
+    await expect(warning).toContainText('The saved connection “openai” is unavailable.');
+    await expect(warning).toContainText("It’s still saved.");
+    await expect(warning).toContainText("Review it in Connections or set up a replacement.");
+    await expect(warning.getByRole("button", { name: "Retry", exact: true })).toBeEnabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("unavailable-connection.png"), fullPage: true });
+
+    await warning.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(model).toHaveValue("azure-openai|openai");
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+    await expect(alerts).toHaveCount(1);
+  });
+}
+
 test("rejected informational validation stays truthful and compact", async ({ page }) => {
   await page.goto("/?mode=activity-authoring&provider=agent&invalid");
   const panel = page.locator(".ad-diagnostics-panel");

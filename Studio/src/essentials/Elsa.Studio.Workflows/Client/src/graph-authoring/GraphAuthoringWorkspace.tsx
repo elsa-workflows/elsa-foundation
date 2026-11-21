@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode, RefCallback } from "react";
 import type { StudioGraphAuthoringResourceKind } from "@elsa-workflows/studio-sdk";
 
 export interface GraphAuthoringWorkspaceProps {
-  resourceKind: StudioGraphAuthoringResourceKind;
+  resourceKind?: StudioGraphAuthoringResourceKind;
   className?: string;
   style?: CSSProperties;
   containerRef?: RefCallback<HTMLDivElement>;

@@ -5,9 +5,9 @@ import { vi } from "vitest";
 import type { ElsaStudioModuleApi, StudioNotificationInput } from "@elsa-workflows/studio-sdk";
 import { newDecisionXml } from "../decisionXml";
 import type { DecisionAsset } from "../decisionsApi";
-export const asset: DecisionAsset = { id: "approval", name: "Approval", description: "Purchase approval", revision: "r1", sourceHash: "hash1", xml: newDecisionXml(), isSensitive: false, createdAt: "2026-11-05T10:00:00Z", updatedAt: "2026-11-05T10:00:00Z" };
+export const asset: DecisionAsset = { id: "approval", name: "Approval", description: "Purchase approval", revision: "r1", sourceHash: "hash1", xml: newDecisionXml(), isSensitive: false, publishedVersionId: "v1", createdAt: "2026-11-05T10:00:00Z", updatedAt: "2026-11-05T10:00:00Z" };
 export function stubApi(grants = ["read", "manage", "publish", "evaluate", "test", "history", "source", "sensitive-values"]) {
-  const getJson = vi.fn(async (path: string): Promise<unknown> => path.endsWith("/versions") || path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : path.endsWith("/decisions") ? { items: [asset] } : asset);
+  const getJson = vi.fn(async (path: string): Promise<unknown> => path.endsWith("/versions") || path.endsWith("/cases") || path.endsWith("/runs") || path.endsWith("/recycle-bin") ? { items: [] } : path.endsWith("/decisions") ? { items: [asset] } : asset);
   const registry = () => { const values: unknown[] = []; return { add: (value: unknown) => values.push(value), list: () => values }; };
   const api = {
     backend: { baseUrl: "https://server.example/tenant", http: { getJson, postJson: vi.fn(), putJson: vi.fn(), deleteJson: vi.fn(), requestJson: vi.fn(), requestResponse: vi.fn() } },

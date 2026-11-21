@@ -25,7 +25,14 @@ for (const theme of ["light", "dark"] as const) {
         const link = links[index];
         await expect(link).toBeVisible();
         await expect(link).toHaveAttribute("href", path);
+        await expect(link.locator(".diagnostics-task-preview")).toBeVisible();
+        await expect(link.locator(".diagnostics-task-preview")).toHaveAttribute("aria-hidden", "true");
       }
+
+      const cardRows = await Promise.all(links.map(async link => Math.round((await link.boundingBox())!.y)));
+      const rowCount = new Set(cardRows).size;
+      if (width === 320) expect(rowCount).toBe(destinations.length);
+      if (width >= 1024) expect(rowCount).toBeLessThan(destinations.length);
 
       await page.screenshot({ path: testInfo.outputPath(`diagnostics-index-${theme}-${width}.png`), fullPage: true });
 

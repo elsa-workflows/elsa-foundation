@@ -20,6 +20,7 @@ import { registerWorkflowWeaver } from "./workflowWeaver";
 import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
 
 const WorkflowTagsRoute = lazy(() => import("./workflow-editor/WorkflowTagsPage").then(module => ({ default: module.WorkflowTagsRoute })));
+const WorkflowViewsRoute = lazy(() => import("./workflow-editor/WorkflowViewsPage").then(module => ({ default: module.WorkflowViewsRoute })));
 const BpmnWorkflowsPage = lazy(() => import("./bpmn/BpmnWorkflowsPage").then(module => ({ default: module.BpmnWorkflowsPage })));
 const WorkflowTemplatesPage = lazy(() => import("./workflow-editor/WorkflowTemplatesPage").then(module => ({ default: module.WorkflowTemplatesRoute })));
 const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowManagementPage })));
@@ -102,6 +103,7 @@ export function register(api: ElsaStudioModuleApi) {
   }
   const runInputEditors = () => api.workflowRunInputEditors?.list() ?? [];
   const runRelatedLinks = () => api.workflowRunRelatedLinks?.list() ?? [];
+  const incidentRootCauseProviders = () => api.incidentRootCauseProviders?.list() ?? [];
   const deferred = (label: string, content: ReactNode) =>
     <WorkflowLazyBoundary label={label}>{content}</WorkflowLazyBoundary>;
   api.featureAreas.add({
@@ -118,7 +120,7 @@ export function register(api: ElsaStudioModuleApi) {
       path: "/workflows/definitions",
       iconColor: "#0ea5e9",
       placement: "build",
-      childDisplay: "views",
+      childDisplay: "links",
       order: 20,
       items: [
         { id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}], title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9", placement: "build", parentId: "workflows", order: 10 },
@@ -141,6 +143,13 @@ export function register(api: ElsaStudioModuleApi) {
         path, label,
         component: ({ navigate }: { navigate(path: string): void }) => deferred("workflow tags", <WorkflowTagsRoute key={view} context={api.backend} view={view} navigate={navigate} />)
       })),
+      {
+        id: "workflows-views",
+        requiresBackend: [{ id: "elsa.api.workflow-design", contractVersion: "1", relations: ["workflow-views", "workflow-view"] }],
+        path: "/workflows/views",
+        label: "Saved views",
+        component: ({ navigate }: { navigate(path: string): void }) => deferred("saved views", <WorkflowViewsRoute context={api.backend} view="list" navigate={navigate} />)
+      },
       ...(api.backendSession ? [
         { id: "workflows-bpmn-processes", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-publications"]}], path: "/workflows/bpmn", label: "BPMN processes",
           component: ({ navigate }: { navigate(path: string): void }) => deferred("BPMN processes", <BpmnWorkflowsPage session={api.backendSession!} view="processes" navigate={navigate} />) },
@@ -183,7 +192,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/executables",
         label: "Workflow executables",
-        component: () => deferred("workflow executables", <WorkflowExecutablesPage canBrowseDefinitions={evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.workflow-design",contractVersion:"1"}]).state === "available"} context={api.backend} ai={api.weaver} runInputEditors={runInputEditors()} />)
+        component: () => deferred("workflow executables", <WorkflowExecutablesPage canBrowseDefinitions={evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.workflow-design",contractVersion:"1"}]).state === "available"} canManagePublications={operationAvailability().publishing.state === "available"} context={api.backend} ai={api.weaver} runInputEditors={runInputEditors()} />)
       },
       {
         id: "workflows-executable-inspector", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],
@@ -201,7 +210,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-instance-detail", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/instances/:workflowExecutionId",
         label: "Workflow run",
-        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} backendSession={api.backendSession} runRelatedLinks={runRelatedLinks()} ai={api.weaver} weaver={weaver} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
+        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} backendSession={api.backendSession} runRelatedLinks={runRelatedLinks()} incidentRootCauseProviders={incidentRootCauseProviders()} ai={api.weaver} weaver={weaver} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
       },
       {
         id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],

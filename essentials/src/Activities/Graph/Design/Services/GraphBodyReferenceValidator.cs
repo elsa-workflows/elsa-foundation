@@ -16,7 +16,7 @@ namespace Elsa.Activities.Graph.Design.Services;
 /// the graph's variables and a request read names one of its inputs.
 /// </summary>
 /// <remarks>
-/// Ambient JavaScript reads (<c>variables.x</c>, <c>getVariable('x')</c>) are not checked, as for workflows: they
+/// Ambient reads within expression source are not checked, as for workflows: they
 /// resolve at run time only. Potentially concurrent captures into one variable are not detected here; no concurrency
 /// analysis exists for captures yet, for workflows either.
 /// </remarks>

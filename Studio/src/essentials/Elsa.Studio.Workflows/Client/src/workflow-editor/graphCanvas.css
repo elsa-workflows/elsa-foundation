@@ -360,6 +360,17 @@ button.wf-node-slot-badge:focus-visible {
   outline-offset: 1px;
 }
 
+.react-flow__edge-textbg {
+  fill: var(--wf-canvas, var(--studio-bg));
+  stroke: none;
+  rx: var(--studio-radius-sm);
+  ry: var(--studio-radius-sm);
+}
+
+.react-flow__edge-text {
+  fill: var(--studio-text-muted);
+}
+
 .react-flow__edge:focus-visible .react-flow__edge-path {
   stroke: var(--studio-focus);
   stroke-width: 2.5;

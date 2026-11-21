@@ -77,6 +77,73 @@ internal static class ReplyRegistrationChecks
                 $"disconnect cancellation follows the addressed occurrence, target={addressed?.ToString() ?? "from Start"}");
         }
 
+        foreach (var same in new[] { false, true })
+        foreach (var foreign in new[] { false, true })
+        {
+            var world = new World(new Config(2, 2, Flaw.None)) { Auto = true };
+            await world.Runtimes[0].ActivateAsync(0); await world.Runtimes[1].ActivateAsync(1);
+            string? firstCheck = null;
+            for (var i = 0; i < 2; i++)
+            {
+                var actor = world.Of(i, i);
+                var name = i == 0 || same ? "q1" : "q2";
+                var target = InstanceRef.In(i, "caller" + i);
+                world.Apply(new("request", actor.Id, S: Http.Respond, M: new("start" + i, target, Kinds.Start,
+                    Start: Http.Spec(Http.Respond), ReplyTo: "|" + name)));
+                var opened = world.Asked.Last().Request;
+                if (foreign && i == 1) world.Processes[actor.Worker.Node].Receive(new(opened.Registration, "foreign", Request.Response, "unwritten-answer"));
+                await Pump(actor.Worker);
+                if (i == 0) firstCheck = world.Check();
+            }
+            var caller = world.Asked.Last().Request;
+            var expected = foreign ? $"I15 request {caller.Id} was answered unwritten-answer, which no commit of 1/caller1 wrote" : null;
+            var sampled = world.Check(); var again = world.Check(); var final = world.Settle();
+            check(firstCheck is null && caller.Responses == 1 && caller.Answer is string answer && (answer == "unwritten-answer") == foreign &&
+                sampled == expected && again == expected && final == expected,
+                $"each registration proves its own answer across repeated public checks, same local ID={same}, substituted={foreign}");
+        }
+
+        foreach (var sampleEarly in new[] { true, false })
+        foreach (var flaw in new[] { Flaw.None, Flaw.EmitBeforeCommit })
+        foreach (var profile in new[] { "ordinary", "qualified-ephemeral", "legacy-ephemeral" })
+        {
+            var world = new World(new Config(1, 1, flaw)) { Auto = true };
+            await world.Runtimes[0].ActivateAsync(0); var actor = world.Of(0, 0); await actor.Worker.PollAsync();
+            var id = InstanceRef.In(0, "release"); var qualified = profile != "legacy-ephemeral";
+            var spec = Http.Spec(Http.Respond, profile != "ordinary") with { Creation = qualified ? new(1, 0, "g1") : null };
+            world.Apply(new("request", actor.Id, S: Http.Respond, M: new("start", id, Kinds.Start, Start: spec, TargetCreation: qualified ? 1 : null, ReplyTo: "|q1")));
+            if (actor.Worker.NeedsLoad) await actor.Worker.LoadAsync();
+            world.Auto = false; world.Apply(new("turn", actor.Id, S: id.Id)); world.Apply(new("flush", actor.Id));
+            var commitIndex = actor.Calls.FindIndex(c => !c.Executed && c.Kind == "commit");
+            var received = world.Asked.Single().Request.Responses; var empty = world.Store.Instances.Count == 0 && world.Store.Journal.Count == 0;
+            var early = sampleEarly ? world.Check() : null;
+            if (commitIndex >= 0) { world.Apply(new("exec", actor.Id, commitIndex)); world.Apply(new("answer", actor.Id, commitIndex)); }
+            world.Auto = true; await Pump(actor.Worker);
+            var bad = qualified && flaw == Flaw.EmitBeforeCommit;
+            var expected = bad ? "I15 answer 0/release:1@0 for request q1 was released before the emitting turn of 0/release committed" : null;
+            check(empty && (commitIndex >= 0) == qualified && received == (!qualified || bad ? 1 : 0) && early == (sampleEarly ? expected : null) &&
+                world.Store.Instances.ContainsKey(id.Id) == qualified && world.Check() == expected && world.Settle() == expected,
+                $"the actual release retains its commit requirement, {profile}, {flaw}, sampled before commit={sampleEarly}");
+        }
+
+        foreach (var history in new[] { History.Full, History.State, History.Minimal })
+        foreach (var sample in history == History.Full ? new[] { "before", "after", "lost-entry" } : new[] { "before", "after" })
+        {
+            var world = new World(new Config(1, 1, Flaw.None)) { Auto = true };
+            await world.Runtimes[0].ActivateAsync(0); var actor = world.Of(0, 0); var id = InstanceRef.In(0, "retired");
+            var spec = Http.Spec(Http.Respond) with { Creation = new(1, 0, "g1"), History = history };
+            world.Apply(new("request", actor.Id, S: Http.Respond, M: new("start", id, Kinds.Start, Start: spec, TargetCreation: 1, ReplyTo: "|q1")));
+            await Pump(actor.Worker); var caller = world.Asked.Single().Request;
+            var early = sample == "before" ? world.Check() : null;
+            if (sample == "lost-entry") foreach (var (key, row) in world.Store.Journal.ToArray()) world.Store.Journal[key] = row with { Entries = "[]" };
+            world.Apply(new("add", M: new("delete", id, Kinds.Delete, TargetCreation: 1))); await Pump(actor.Worker);
+            var expected = sample == "lost-entry" ? "I15 request q1 was answered 0/retired:1@0, which no commit of 0/retired wrote" : null;
+            check(caller.Answer as string == "0/retired:1@0" && caller.Responses == 1 && early is null && world.Store.Instances[id.Id].Retired &&
+                world.Check() == expected && world.Settle() == expected, $"qualified Delete preserves the available answer proof, {history}, first sample {sample}");
+        }
+
+        await ReplyCarrierChecks.Run(check);
+
         static async Task Pump(Worker worker)
         {
             for (var i = 0; i < 12; i++) { await worker.PollAsync(); await worker.RunAsync(); }

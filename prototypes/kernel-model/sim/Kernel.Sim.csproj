@@ -6,7 +6,10 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../src/Kernel.Workflows/Kernel.Workflows.csproj" />
-    <ProjectReference Include="../models/Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
+    <ProjectReference Include="../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+    <ProjectReference Include="../models/Statecharts/Kernel.Statecharts.csproj" />
+    <ProjectReference Include="../src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

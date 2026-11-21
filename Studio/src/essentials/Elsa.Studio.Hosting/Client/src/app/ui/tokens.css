@@ -41,6 +41,7 @@
   --studio-panel: var(--studio-surface);
   /* Background-only recipes: neutral for independently hosted modules. */
   --studio-workspace-page-background: var(--studio-bg);
+  --studio-workspace-frame-bg: var(--studio-bg);
   --studio-workspace-panel-background: var(--studio-panel);
   --studio-accent: var(--primary);
   --studio-accent-text: var(--primary-foreground);
@@ -100,7 +101,7 @@
   --studio-field-padding: 10px 11px;
   --studio-field-surface: var(--studio-surface);
   --studio-outlined-field-width: 1px;
-  --studio-outlined-field-gap: 5px;
+  --studio-outlined-field-gap: 3px;
 
   /* Disclosure motion. Caps enter/expand animation at 150ms; reduced-motion zeroes both. */
   --studio-disclosure-duration: 150ms;

@@ -51,7 +51,8 @@ public sealed class DefaultWritableSecretStoreTests
             TenantId = OAuth2TestSupport.TenantId,
             Name = OAuth2TestSupport.ConnectionName,
             RequiredType = ConnectionTypeNames.Http,
-            Owner = ConnectionOwners.Tenant
+            Owner = ConnectionOwners.Tenant,
+            AllowNeedsAuthorization = true
         });
 
         var started = await tokens.BeginAuthorizationCodeAsync(connection);

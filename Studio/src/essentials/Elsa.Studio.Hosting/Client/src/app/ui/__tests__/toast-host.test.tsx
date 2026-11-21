@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNotificationController, type StudioNotificationController } from "../../../sdk";
+import type { ToastDurationPreference } from "../../toastDurationPreference";
 import { ToastHost } from "../feedback/ToastHost";
 
 let cleanup: (() => void) | null = null;
@@ -14,11 +15,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mount(controller: StudioNotificationController, navigate: (path: string) => void = () => {}): HTMLElement {
+function mount(controller: StudioNotificationController, navigate: (path: string) => void = () => {}, durationPreference: ToastDurationPreference = "default"): HTMLElement {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
-  flushSync(() => root.render(<ToastHost controller={controller} navigate={navigate} />));
+  flushSync(() => root.render(<ToastHost controller={controller} navigate={navigate} durationPreference={durationPreference} />));
   cleanup = () => {
     flushSync(() => root.unmount());
     host.remove();
@@ -65,6 +66,37 @@ describe("ToastHost", () => {
     expect(controller.getEntries()).toHaveLength(1);
   });
 
+  it("uses the custom duration for the countdown and pauses both while hovered", () => {
+    vi.useFakeTimers();
+    const controller = createNotificationController();
+    const host = mount(controller, () => {}, 3);
+    run(() => { controller.api.notify({ level: "success", title: "Saved" }); });
+    const toast = toasts(host)[0];
+    expect(host.querySelector<HTMLElement>(".studio-toast-progress")!.style.animationDuration).toBe("3000ms");
+
+    run(() => vi.advanceTimersByTime(1_000));
+    run(() => toast.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+    run(() => vi.advanceTimersByTime(5_000));
+    expect(toasts(host)).toHaveLength(1);
+
+    run(() => toast.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body })));
+    run(() => vi.advanceTimersByTime(1_999));
+    expect(toasts(host)).toHaveLength(1);
+    run(() => vi.advanceTimersByTime(1));
+    expect(toasts(host)).toHaveLength(0);
+  });
+
+  it("allows timed levels to stay until manually dismissed", () => {
+    vi.useFakeTimers();
+    const controller = createNotificationController();
+    const host = mount(controller, () => {}, "manual");
+    run(() => { controller.api.notify({ level: "success", title: "Saved" }); });
+
+    expect(host.querySelector(".studio-toast-progress")).toBeNull();
+    run(() => vi.advanceTimersByTime(60_000));
+    expect(toasts(host)).toHaveLength(1);
+  });
+
   it("error toast is sticky", () => {
     vi.useFakeTimers();
     const controller = createNotificationController();
@@ -72,6 +104,7 @@ describe("ToastHost", () => {
     run(() => { controller.api.notify({ level: "error", title: "Broke" }); });
     run(() => vi.advanceTimersByTime(60_000));
     expect(toasts(host)).toHaveLength(1);
+    expect(host.querySelector(".studio-toast-progress")).toBeNull();
   });
 
   it("dismiss button hides the toast but keeps the entry", () => {
@@ -87,11 +120,14 @@ describe("ToastHost", () => {
   it("progress toast updates in place", () => {
     vi.useFakeTimers();
     const controller = createNotificationController();
-    const host = mount(controller);
+    const host = mount(controller, () => {}, 3);
     let handle!: ReturnType<typeof controller.api.notify>;
     run(() => { handle = controller.api.notify({ level: "progress", title: "Working" }); });
     expect(toasts(host)).toHaveLength(1);
     expect(toasts(host)[0].dataset.level).toBe("progress");
+    expect(host.querySelector(".studio-toast-progress")).toBeNull();
+    const toast = toasts(host)[0];
+    run(() => toast.focus());
 
     run(() => vi.advanceTimersByTime(30_000));
     expect(toasts(host)).toHaveLength(1);
@@ -100,8 +136,12 @@ describe("ToastHost", () => {
     expect(toasts(host)).toHaveLength(1);
     expect(toasts(host)[0].dataset.level).toBe("success");
     expect(toasts(host)[0].textContent).toContain("Done");
+    expect(host.querySelector<HTMLElement>(".studio-toast-progress")!.style.animationDuration).toBe("3000ms");
 
-    run(() => vi.advanceTimersByTime(7999));
+    run(() => vi.advanceTimersByTime(5_000));
+    expect(toasts(host)).toHaveLength(1);
+    run(() => toast.blur());
+    run(() => vi.advanceTimersByTime(2999));
     expect(toasts(host)).toHaveLength(1);
     run(() => vi.advanceTimersByTime(1));
     expect(toasts(host)).toHaveLength(0);

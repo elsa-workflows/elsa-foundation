@@ -14,6 +14,10 @@ using Microsoft.EntityFrameworkCore;
 WriteLine.Out = null;
 if (args is ["deadlines"]) return await Deadlines.RunAsync();
 if (args is ["smoke"]) return await Smoke.RunAsync();
+if (args is ["variants", var variantMode]) return await VariantChecks.RunAsync(variantMode);
+if (args is ["replay-variants"]) return await ReplayVariantChecks.RunAsync();
+if (args is ["join-variants", var joinMode]) return await JoinVariantChecks.RunAsync(joinMode);
+if (args is ["join-replay-variants"]) return await JoinReplayVariantChecks.RunAsync();
 if (args is ["park"]) return await ParkChecks.RunAsync();
 if (args is ["expr", var text, .. var vars])
 {
@@ -36,7 +40,7 @@ if (args is ["cost", "postgres", var connection])
     return failures;
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
-Console.Error.WriteLine("smoke | cost sqlite | cost postgres <connection> | memory [runs]");
+Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | memory [runs]");
 return 2;
 
 static class Cost
@@ -69,10 +73,10 @@ static class Cost
         Console.WriteLine("|---|---|---:|---:|---:|---:|---|");
         async Task Row(string name, string mode, Func<Task<bool>> body)
         {
-            // Both leases fresh before counting starts: an idle pass beats a third of a lease after the last renewal,
-            // and a row's count should not depend on how long the rows before it took.
-            await owner.Worker.BeatAsync();
-            await other.Worker.BeatAsync();
+            // Renew the leases outside the cost measurement.
+            var lease = TimeSpan.FromHours(1);
+            await new NodeHeartbeat(owner.Worker.Node, ef, [owner.Worker], lease, lease).BeatAsync();
+            await new NodeHeartbeat(other.Worker.Node, ef, [other.Worker], lease, lease).BeatAsync();
             counter.Reset();
             store.Reset();
             var trace = Environment.GetEnvironmentVariable("NATIVE_TRACE") is { Length: > 0 } t && $"{name}, {mode}".StartsWith(t, StringComparison.Ordinal);

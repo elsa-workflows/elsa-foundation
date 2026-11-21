@@ -20,6 +20,8 @@ export function AssignmentEditor({ api, group, value, disabled, onChange, contex
   const canValidate = assignment && Object.hasOwn(assignment, "AssigneeId") && Object.hasOwn(assignment, "GroupId");
   const hasUser = typeof assignment?.AssigneeId === "string" && Boolean(assignment.AssigneeId.trim());
   const hasGroup = typeof assignment?.GroupId === "string" && Boolean(assignment.GroupId.trim());
+  const inputKey = group ? "GroupId" : "AssigneeId";
+  const siblingKey = group ? "AssigneeId" : "GroupId";
   const invalid = Boolean(canValidate && hasUser === hasGroup);
   useEffect(() => { onValidationChange?.(invalid); return () => onValidationChange?.(false); }, [invalid, onValidationChange]);
   const [items, setItems] = useState<{ id: string; name: string }[]>([]); const [error, setError] = useState("");
@@ -39,8 +41,18 @@ export function AssignmentEditor({ api, group, value, disabled, onChange, contex
     ++generation.current; busy.current = false; setItems([]); setMore(false); setSkip(0); void load(0, false);
     return () => { ++generation.current; busy.current = false; };
   }, [load]);
-  return <div className="user-task-property-editor"><StudioField label={group ? "Task group" : "Task assignee"}><select className="studio-input" aria-invalid={invalid} disabled={disabled} aria-label={group ? "Task group" : "Task assignee"} value={typeof value === "string" ? value : ""} onChange={event => onChange(event.target.value || null)}>
+  return <div className="user-task-property-editor user-task-assignment">
+    {group ? <div className="user-task-assignment-or"><span>or</span></div> : null}
+    <StudioField label={group ? "Task group" : "Task assignee"}><select className="studio-input" aria-invalid={invalid} disabled={disabled} aria-label={group ? "Task group" : "Task assignee"} value={typeof value === "string" ? value : ""} onChange={event => {
+      const selected = event.target.value || null;
+      if (selected && context.setLiteralInputs && assignment && Object.hasOwn(assignment, siblingKey)) {
+        context.setLiteralInputs({ [inputKey]: selected, [siblingKey]: null });
+        return;
+      }
+      onChange(selected);
+    }}>
     <option value="">None</option>{value && !items.some(item => item.id === value) ? <option value={String(value)}>{String(value)}</option> : null}{items.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></StudioField>
+    {!group && !context.setLiteralInputs ? <p role="status">If both assignment choices are set, clear one before continuing.</p> : null}
     {invalid && !group && <p role="alert">{hasUser ? "Choose either an assignee or a group; clear the other assignment." : "Select an assignee or a group for this task."}</p>}
     {more ? <StudioButton disabled={disabled || loading} onClick={() => void load(skip, true)}>More choices</StudioButton> : null}{error ? <p role="alert">{error}</p> : null}</div>;
 }

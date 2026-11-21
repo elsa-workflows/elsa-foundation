@@ -170,7 +170,7 @@ export function testApi(): ElsaStudioModuleApi {
 function copyPlacementMetadata(nav: {
   placement?: string;
   parentId?: string;
-  childDisplay?: "views";
+  childDisplay?: "links" | "views";
   viewLabel?: string;
   requiresFeature?: string;
   requiresRole?: string;
@@ -209,7 +209,7 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
         ...copyPlacementMetadata(featureArea.nav)
       });
       for (const [index, item] of (featureArea.nav.items ?? []).entries()) {
-        if (item.path === featureArea.nav.path && featureArea.nav.childDisplay !== "views") {
+        if (item.path === featureArea.nav.path && featureArea.nav.childDisplay !== "views" && featureArea.nav.childDisplay !== "links") {
           continue;
         }
         navigation.add({

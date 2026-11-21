@@ -10,7 +10,7 @@ const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
 function mount(content: React.ReactNode) { const result = render(content); disposals.push(result.dispose); return result; }
 
-const created = { ...asset, id: "created", name: "Picker-created policy", revision: "r9" };
+const created = { ...asset, id: "created", name: "Picker-created policy", revision: "r9", publishedVersionId: null };
 const other = { ...asset, id: "other", name: "Other policy" };
 
 /** Captures workspace-tab requests the way the host does, so the picker believes a tab opened. */
@@ -43,7 +43,7 @@ const picker = (host: HTMLElement) => host.querySelector<HTMLSelectElement>('[da
 const decisionTab = (host: HTMLElement) => host.querySelector<HTMLElement>('[data-tab="decision"]')!;
 
 async function saveNewDecision(host: HTMLElement) {
-  await vi.waitFor(() => expect(decisionTab(host)?.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+  await vi.waitFor(() => expect(decisionTab(host)?.querySelector('[role="grid"]')).not.toBeNull());
   const name = Array.from(decisionTab(host).querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
   type(name, created.name); click(button(decisionTab(host), "Save decision"));
 }
