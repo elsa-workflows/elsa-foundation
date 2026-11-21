@@ -620,7 +620,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             var events = EventRows.Values.Where(e => e.KeepUntil < now).Select(e => (e.Key, e.Id)).ToList();
             messages.ForEach(id => Messages.Remove(id));
             events.ForEach(key => EventRows.Remove(key));
-            return new(messages.Count + events.Count);
+            return new(messages.Count + events.Count + SweepFoundationStarts(now));
         }
     }
 }

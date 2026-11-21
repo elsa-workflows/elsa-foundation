@@ -221,8 +221,7 @@ public sealed partial class InMemoryStore
         long? dueAt = null, TimeSpan? keepFor = null)
     {
         Kinds.RequireApplicationSend(kind);
-        var window = keepFor is { } requested && requested < IngressDeduplicationWindow ? requested : IngressDeduplicationWindow;
-        ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero, nameof(keepFor));
+        var window = FoundationIngressWindow(keepFor);
         lock (_gate)
         {
             if (reference is null || !_referenceBindings.TryGetValue(reference, out var binding) || binding.Tenant != tenant)
