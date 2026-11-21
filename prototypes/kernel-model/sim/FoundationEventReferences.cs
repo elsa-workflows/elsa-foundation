@@ -54,6 +54,16 @@ internal static class FoundationEventReferences
         await ingress.SetStartAsync(scope, "live", "start", null);
         check(store.PublishRequest(new EventRow("acme_live", "after-unpublish", null, now), "unused") is null,
             "removing the start subscription leaves no event-request waiter");
+
+        await store.SubscribeAsync(new SubscriptionRow("acme_mixed-legacy", "", "start", new StartSpec("event-refs", "legacy")));
+        await ingress.SetStartAsync(scope, "mixed-bound", "start", spec);
+        var boundRejected = false;
+        var legacyRejected = false;
+        try { await ingress.SetStartAsync(scope, "mixed-legacy", "start", spec); }
+        catch (StoreException exception) when (exception.Failure == Failure.Definite) { boundRejected = true; }
+        try { await store.SubscribeAsync(new SubscriptionRow("acme_mixed-bound", "", "start", new StartSpec("event-refs", "legacy"))); }
+        catch (StoreException exception) when (exception.Failure == Failure.Definite) { legacyRejected = true; }
+        check(boundRejected && legacyRejected, "legacy and bound subscriptions cannot silently collide on a physical key");
     }
 
     private static async Task Pump(IScopeActivation activation)

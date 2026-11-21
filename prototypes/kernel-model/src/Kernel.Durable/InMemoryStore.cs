@@ -205,6 +205,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
+                    foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
@@ -472,12 +473,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             if (start is not null && !CreationIdentityAvailable)
                 throw new StoreException(Failure.Definite, "A bound event starter requires qualified creation identity.");
 
-            Subscriptions.RemoveWhere(subscription => subscription.Key == key && subscription.Instance == "" &&
-                subscription.Wait == wait && subscription.FoundationTenant == tenant);
+            var row = new SubscriptionRow(key, "", wait, start) { FoundationTenant = tenant };
+            if (start is not null) RequireSameSubscriptionScope(row);
+            if (Subscriptions.TryGetValue(row, out var previous) && previous.FoundationTenant == tenant)
+                Subscriptions.Remove(previous);
             if (start is null) return;
 
-            var row = new SubscriptionRow(key, "", wait, start) { FoundationTenant = tenant };
-            if (!Subscriptions.Add(row)) return;
+            Subscriptions.Add(row);
 
             var now = clock();
             foreach (var @event in EventRows.Values.Where(@event => @event.Key == key && @event.KeepUntil >= now).OrderBy(@event => @event.Id, StringComparer.Ordinal))
@@ -509,8 +511,18 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
     {
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(subscription);
-        lock (_gate) Subscriptions.Add(subscription);
+        lock (_gate)
+        {
+            RequireSameSubscriptionScope(subscription);
+            Subscriptions.Add(subscription);
+        }
         return default;
+    }
+
+    private void RequireSameSubscriptionScope(SubscriptionRow subscription)
+    {
+        if (Subscriptions.TryGetValue(subscription, out var previous) && previous.FoundationTenant != subscription.FoundationTenant)
+            throw new StoreException(Failure.Definite, "The subscription key is already registered in another scope.");
     }
 
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default)
