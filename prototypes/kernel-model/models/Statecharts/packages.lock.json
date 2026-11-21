@@ -1,6 +1,16 @@
 {
   "version": 1,
   "dependencies": {
-    "net10.0": {}
+    "net10.0": {
+      "kernel.foundation.contracts": {
+        "type": "Project"
+      },
+      "kernel.model.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )"
+        }
+      }
+    }
   }
 }

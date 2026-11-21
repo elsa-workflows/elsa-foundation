@@ -37,6 +37,19 @@
       "kernel.runtime": {
         "type": "Project"
       },
+      "kernel.statecharts": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Model.Contracts": "[1.0.0, )"
+        }
+      },
+      "kernel.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Kernel.Model.Contracts": "[1.0.0, )"
+        }
+      },
       "kernel.workflows": {
         "type": "Project",
         "dependencies": {

@@ -31,7 +31,10 @@
         "type": "Project"
       },
       "kernel.statecharts": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Model.Contracts": "[1.0.0, )"
+        }
       },
       "kernel.workflows": {
         "type": "Project",
