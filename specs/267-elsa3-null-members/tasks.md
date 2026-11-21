@@ -111,3 +111,28 @@ and WriteLine `text: null`.
 
 MVP is US1: it fixes #3200's publish error. US2 and US3 are mostly the table (T006) plus tests, so all three land in
 this PR.
+
+## #3281 follow-up — planned, 6 November 2026
+
+The completed T001–T022 delivery above remains intact. This follow-up implements FR-011–FR-015/SC-008–SC-011.
+No production source or native qualification is complete at this planning checkpoint.
+
+- [ ] T023 Review the bounded follow-up requirements, source-shape matrix, Constitution Check and plan, then obtain
+  initiative #3052 final-text human agreement before production code.
+- [ ] T024 Record the 3.6.3/3.5.3 source audit and exact revisions, including declared-input versus literal-null
+  evaluation, blank string conversion, ContentType's writer fallback, Cron differences and Elsa 4's relevant defaults.
+- [ ] T025 Add real converter/catalog controls for the changed absent/blank/literal-null rows; retain all bare-null,
+  explicit-empty-list, supported-value, duplicate-binding, original-path and caller-JSON guarantees.
+- [ ] T026 Add the three nullable init properties to the existing member-map data without changing its constructor;
+  record only the audited built-in corrections and apply them before the normalizer erases source-shape distinctions.
+- [ ] T027 Add truthful per-use refusal guidance using existing diagnostic families; retain one refusal per node and
+  the existing mapper/compiler path. Update owning descriptions and canonical member-map rows in the same unit.
+- [ ] T028 Add actual import/publish/run and no-write refusal controls in the existing import integration project,
+  using owned hosts/stores and a local HTTP receiver; no external service or shared producer.
+- [ ] T029 Freeze exact source/tree, commands, case inventory and complete export/cleanup packet. Obtain three
+  independent source lenses; keep all native, runtime, whole and unavailable corpus evidence visibly NOT RUN.
+- [ ] T030 After actual owned remote admission, execute meaningful causal red/green controls, both whole touched
+  projects, discovery/execution reconciliation, architecture Release/Debug graphs, whole Architecture/maps and runtime
+  oracles. Preserve every failed/not-run receipt; never replace a historical corpus count with an invented retake.
+- [ ] T031 Recheck sole issue/claim/PR ownership before committing, open one draft PR in the same session as its push,
+  attach it and post gate evidence. Ready/review/merge requires actual acceptance and exact-head required CI.

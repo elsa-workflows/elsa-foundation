@@ -122,3 +122,63 @@ Import integration test projects.
 ## Complexity Tracking
 
 None.
+
+## #3281 follow-up plan — planned, 6 November 2026
+
+This bounded S-0 follow-up implements FR-011–FR-015 without reopening the original delivered JSON-null scope.
+Work branch: `agent/codex/3281-elsa3-default-parity`. Source investigation and reviewed proposal are recorded in
+[research R-12](research.md#r-12-3281-source-audit-and-shape-boundary) and the issue's claim6676510016.
+The final-text agreement rule in [initiative governance](../../docs/contributing/initiatives.md#how-work-flows)
+applies because the follow-up changes spec requirements. This draft contains documentation only; production work
+waits for that human agreement. Technical plan review does not substitute for it.
+
+### Implementation route
+
+1. Add nullable init properties `OnAbsent`, `OnBlank` and `OnLiteralNull` to the existing `Elsa3MemberRule` body,
+   using the existing `Elsa3NullConversion` actions. Keep the constructor signature unchanged. Existing/custom maps
+   default to no correction. No service, strategy, feature, dependency or new policy record is introduced.
+2. Record only the specified built-in member corrections in the activity map. Preserve existing `OnNull` values,
+   except that new literal-null overrides are checked before the original normalization erases the distinction.
+   Absent ExpectedStatusCodes emits `[200]`; an explicit empty list is never a missing binding. ContentType's literal
+   blank-string behavior remains distinct from its absent/no-body refusal.
+3. In the normalizer, inspect the original source shape before literal-null normalization. Apply optional corrections
+   using the same duplicate-binding, original-path and emitted-value machinery. Missing-member handling uses the
+   case-insensitive source inventory. Blank handling is limited to audited literal/empty-wrapper shapes, never a
+   general `!IsBound` rule or evaluation of arbitrary expressions. Retain prior handling for unconfigured rules.
+4. Keep real null refusals in their existing diagnostic family. Missing/blank refusals use the existing no-counterpart
+   or contract family with truthful source-shape wording and corrective guidance. Refused nodes skip the later
+   required-input diagnostic. Keep supported values on the existing mapper/compiler path.
+5. Update the existing mapping README, extension description and canonical spec236 member-map rows to describe the
+   corrected data semantics. Keep the historical spec267 table and acceptance receipts intact, marking this separate
+   follow-up's status accurately. No source or documentation assertion tests are added.
+
+### Constitution and boundary check
+
+- Elsa §E2.7/§E2.2: production remains inside `Extensions/Elsa3`, with no Runtime-to-Design or new project edge.
+- Framework §2.6.2/§2.17: reuse `IElsa3ActivityMap` data and the existing normalizer; no replacement/contributor seam
+  or dependency is added. Optional rule properties belong to the existing public map contract; implementation helpers
+  remain private/internal. The public constructor and old call sites stay intact.
+- ADR0080 D1/framework §2.23: test observable conversion and real import/runtime behavior at the cheapest useful
+  boundaries. Causal policy removal must reach intended assertions; a failed build is not a behavioral counterexample.
+- Framework §2.22: update the owning extension description and existing canonical member map, not a new concept guide.
+- No reliance on provisional §2.24, Model X, Elsa §E2.9 or the pending S-2/S-3/S-8 proposals. Elsa 4 defaults and
+  scheduling/HTTP/outcome semantics are not changed to accommodate legacy values.
+
+### Validation and execution limits
+
+Tests live in the existing Mapping and import integration projects. The Mapping matrix covers both HTTP variants,
+case-insensitive keys, absent/JSONnull/Literalnull/blank/empty-list distinctions, supported expressions, duplicate
+bindings, unchanged caller JSON and one refusal with the original source path. Split the old Delay deliberate-null
+assertion into this follow-up's zero-duration expectation while preserving its unrelated typed-null assertion and all
+bare JSON-null tests.
+
+Use owned import hosts, private stores and a local HTTP receiver for actual For/Delay/GET/status-list oracles and
+no-write refusal proof. Pin both historical source tags and record their differences; source reads are not an executed
+historical witness. Use a targeted actual historical witness only where a disputed effective value needs one, rather
+than inventing a blanket old-host gate. Record unavailable corpus evidence honestly.
+
+Before acceptance, run both whole touched test projects with discovery/method/case reconciliation, required Release
+and Debug architecture restores, whole Architecture/maps, causal controls, three independent exact-source lenses and
+required hosted CI. Current machine instruction holds new local heavy work. Native phases need their own frozen
+source/commands/caps/full-artifact/cleanup packet and sequential remote admission; no existing issue's source, unit or
+receipts are borrowed. Keep every native/runtime/whole/corpus row NOT RUN until it actually executes.
