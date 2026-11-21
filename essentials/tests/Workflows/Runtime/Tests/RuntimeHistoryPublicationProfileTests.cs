@@ -76,7 +76,7 @@ public sealed class RuntimeHistoryPublicationProfileTests
 
     [Theory]
     [InlineData("input")] [InlineData("handler")] [InlineData("router")]
-    [InlineData("start")] [InlineData("resume")] [InlineData("adapter")] [InlineData("native-source")]
+    [InlineData("start")] [InlineData("resume")] [InlineData("adapter")] [InlineData("native-source")] [InlineData("processor")]
     public async Task Declaration_alone_cannot_advertise_a_replaced_or_missing_actual_source_component(string missing)
     {
         using var f = new Fixture(change: services =>
@@ -93,6 +93,7 @@ public sealed class RuntimeHistoryPublicationProfileTests
                 case "resume": services.AddScoped<IBookmarkResumeDispatcher>(sp => new LegacySavedResume(BookmarkResumeDispatcher.Create(sp))); break;
                 case "adapter": services.RemoveAll<IStimulusDeliveryIntentAdapter>(); break;
                 case "native-source": services.AddSingleton<IStimulusDeliveryStore, LegacySource>(); break;
+                case "processor": services.AddSingleton<IRuntimePostCommitOutboxProcessor, LegacyProcessor>(); break;
             }
         });
         var newPolicy = RuntimeHistoryRegistration.ResolvePolicy(f.Services, "new-publisher")!;
@@ -357,6 +358,11 @@ public sealed class RuntimeHistoryPublicationProfileTests
                 new RuntimeStateChange<RuntimePostCommitOutboxItem>(item.OutboxItemId, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>()))).ToArray();
             return ValueTask.FromResult(commit with { PostCommitIntents = [], StateChanges = commit.StateChanges.WithPostCommitOutbox(changes) });
         }
+    }
+    private sealed class LegacyProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default) => throw new InvalidOperationException("A capability probe must not process work.");
     }
     private sealed class LegacyStart : IWorkflowStartDispatcher
     {
