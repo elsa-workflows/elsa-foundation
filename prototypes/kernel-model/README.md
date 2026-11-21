@@ -70,6 +70,8 @@ $SIM --contract-native --seeds 100                   # run the original Native m
 $SIM --contract-native --seed 1 --native-flaw UnstableEffectKey
 $SIM --contract-native --seed 1 --native-flaw JoinWithoutGuard
 $SIM --contract-actors --seeds 100 --actions 100      # public counter and parent-child workloads
+$SIM --contract-evolution --seeds 100                 # rolling state upgrade and atomic start followed by send
+$SIM --contract-evolution --seed 1 --flaw SkipUpgrade
 $SIM --contract-actors --seed 1 --flaw CancelKnownChildren
 $SIM --contract-actors --seed 1 --flaw KeepConsumedMessages
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
@@ -109,6 +111,12 @@ The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-c
 response after takeover and an input that stays durable across local reset. The seeded actor workload
 uses already-started counter receivers and one state version. The other legacy actor and transport
 mixes continue to use their separate simulation and case suites.
+
+The Counter evolution workload moves a version-one checkpoint through upgrade, a rollback to an older
+owner and another compatible takeover. It portably expresses legacy start-on-forward as a detached
+`Start` and a `Send` staged in the same turn, keeping the receiver ref in the sender's checkpoint. An
+aborted creator's provisional ref never routes. Once the creator commits, the exact ref receives later
+forwards and survives a lost commit answer.
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
 `Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 22 lists the first failing seed of every round-3 flaw (the seeds of earlier flaws, in sections 2 and 3, have since moved), section 24 the two flaws round 4 renamed.
