@@ -55,6 +55,65 @@ internal static class FoundationEventSendChecks
             "an event id can be admitted after expiry before sweep and its old match cannot suppress the new delivery");
     }
 
+    public static async Task SubscriptionLifecycle(Action<bool, string> check)
+    {
+        const long now = 1_701_500_000_000;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("acme");
+        Contract.IIngress edge = new InMemoryIngress(store, new Requests("subscription-check"), "subscription-check");
+        var actor = new Probe();
+        var worker = new Worker("subscription-check", 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var scenarios = new[] { ("remove", InstanceStatus.Running), ("park", InstanceStatus.Faulted),
+            ("end", InstanceStatus.Finished) };
+        var subjects = new Dictionary<string, Contract.ActorRef>();
+        foreach (var (action, _) in scenarios)
+        {
+            await edge.SendAsync(scope, new Contract.Target.Event(action), "earlier", "ignored", "earlier",
+                new(KeepFor: TimeSpan.FromMinutes(1)));
+            var spec = new Contract.StartSpec(actor.Type, action, "twice");
+            subjects.Add(action, (await edge.SendAsync(scope, new Contract.Target.Start(spec), action, Contract.Kinds.Start)).Actor!.Value);
+        }
+        await Pump(owner);
+        check(store.Subscriptions.Count == 3 && subjects.Values.All(subject => Results(subject).Count == 0),
+            "same-wait registration is idempotent and ordinary waits skip events kept before registration");
+
+        foreach (var (action, _) in scenarios)
+            await edge.SendAsync(scope, new Contract.Target.Event(action), "before", "ignored", "before");
+        await Pump(owner);
+        check(subjects.Values.All(subject => Results(subject).SequenceEqual(["before"])),
+            "an event committed after registration reaches each live wait once");
+
+        foreach (var (action, _) in scenarios)
+            await edge.SendAsync(scope, new Contract.Target.Ref(subjects[action]), action, "wait-" + action);
+        await Pump(owner);
+        foreach (var (action, status) in scenarios)
+        {
+            var subject = subjects[action];
+            var row = Row(subject);
+            await edge.SendAsync(scope, new Contract.Target.Event(action), "after", "ignored", "after");
+            check(row.Status == status && Results(subject).SequenceEqual(["before"]) &&
+                store.Subscriptions.All(wait => wait.Instance != row.Id) &&
+                store.Messages.Values.All(item => item.Message.Target.Id != row.Id || item.Message.Payload != "after"),
+                $"wait-{action} removes the subscription at commit and later publication cannot queue a delivery");
+        }
+
+        var topic = new Contract.Target.Event("start");
+        var start = new Contract.StartSpec(actor.Type, "started-by-event");
+        await edge.SetStartAsync(scope, topic.CorrelationKey, "only", start);
+        await edge.SendAsync(scope, topic, "on", "ignored", "on");
+        await Pump(owner);
+        await edge.SetStartAsync(scope, topic.CorrelationKey, "only", null);
+        await edge.SendAsync(scope, topic, "off", "ignored", "off");
+        await Pump(owner);
+        var spawned = store.ReadFoundationActors(scope.Tenant).Actors.Where(item => item.Header.TypeData == "started-by-event").ToArray();
+        check(spawned is [var only] && Json.Read<List<string>>(only.Row.State).SequenceEqual(["on"]),
+            "only the event published while the start subscription exists starts an actor");
+
+        InstanceRow Row(Contract.ActorRef subject) => store.ReadFoundationActor(scope.Tenant, subject.Id).Actor!.Row;
+        List<string> Results(Contract.ActorRef subject) => Json.Read<List<string>>(Row(subject).State);
+    }
+
     private static async Task Pump(IScopeActivation activation)
     {
         for (var step = 0; step < 20; step++)
@@ -75,8 +134,28 @@ internal static class FoundationEventSendChecks
             var state = turn.State is null ? [] : Json.Read<List<string>>(turn.State);
             foreach (var message in turn.Inbox)
             {
-                if (message is { Kind: Contract.Kinds.Start, Payload: "arm" }) turn.Subscribe("live", "active");
-                if (message.Kind == Contract.Kinds.Event && message.Payload is { } input) state.Add(input);
+                switch (message)
+                {
+                    case { Kind: Contract.Kinds.Start, Payload: "arm" }:
+                        turn.Subscribe("live", "active");
+                        break;
+                    case { Kind: Contract.Kinds.Start, Payload: "twice" }:
+                        turn.Subscribe(turn.Header.TypeData, "single");
+                        turn.Subscribe(turn.Header.TypeData, "single");
+                        break;
+                    case { Kind: Contract.Kinds.Event, Payload: { } input }:
+                        state.Add(input);
+                        break;
+                    case { Kind: "wait-remove" }:
+                        turn.Unsubscribe(turn.Header.TypeData, "single");
+                        break;
+                    case { Kind: "wait-end" }:
+                        turn.End(Contract.ActorStatus.Finished);
+                        break;
+                    case { Kind: "wait-park" }:
+                        turn.Subscribe("must-not-commit", "single");
+                        throw new InvalidOperationException("subscription Park witness");
+                }
             }
             turn.State = Json.Write(state);
             return default;
