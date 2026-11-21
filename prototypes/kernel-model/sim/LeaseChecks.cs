@@ -15,6 +15,7 @@ public static class LeaseChecks
         await ActorListChecks.Run(Check);
         await ActorJournalChecks.Run(Check);
         await ActorInboxChecks.Run(Check);
+        await ActorInboxChecks.PublicHold(Check);
         await ActorAdapterChecks.Run(Check);
         await FoundationEnvelopeChecks.Run(Check);
         await ActorAdapterChecks.EventAmbient(Check);
