@@ -142,10 +142,10 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   `api.dialogs.confirm/prompt/alert`. Extract a declarative `StudioDialog` from it (title, optional
   description, X close, focus trap, footer slot taking `StudioDialogFooter`) and export it from
   `@elsa-workflows/studio-ui`. Migrate one dialog as the reference (suggest Create workflow).
-- [ ] **K2. Destructive button variant.** (#4993) [verified] `KIT/forms/Button.tsx` has
+- [x] **K2. Destructive button variant.** (#4993) [verified] `KIT/forms/Button.tsx` has
   `StudioButtonVariant = "primary" | "default" | "ghost"`. Add `danger`, styled in `Button.css` with
   tokens. Workarounds to replace afterwards: `wf-delete-action`, `studio-button danger`,
-  `backend-remove`, `connections-danger`, `external-auth-danger-action`, `data-tone`.
+  `backend-remove`, `connections-danger`, `external-auth-danger-action`, `data-tone`. (PR #5268)
 - [ ] **K3. Icon-only button.** (#4994) [source] Add a kit icon button that requires `aria-label`.
   Workarounds: `.wf-icon-button`, `.studio-icon-button`, `.ad-icon-button`, `.connections-icon-button`.
 - [ ] **K4. Pressed (toggle) button.** (#4995) [seen] Console and Structured logs use

@@ -53,6 +53,24 @@ describe("StudioButton", () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(clicks).toBe(1);
   });
+
+  it("renders danger without a workaround class and respects native disabled behavior", () => {
+    const onDelete = vi.fn();
+    const host = mount(<>
+      <StudioButton variant="danger" onClick={onDelete}>Delete draft</StudioButton>
+      <StudioButton variant="danger" onClick={onDelete} disabled>Delete published version</StudioButton>
+    </>);
+    const [enabled, disabled] = host.querySelectorAll("button");
+
+    expect(enabled.dataset.variant).toBe("danger");
+    expect(enabled.className).toBe("studio-button");
+    expect(disabled.dataset.variant).toBe("danger");
+    expect(disabled.disabled).toBe(true);
+    disabled.click();
+    expect(onDelete).not.toHaveBeenCalled();
+    enabled.click();
+    expect(onDelete).toHaveBeenCalledOnce();
+  });
 });
 
 describe("CopyableIdentifier", () => {

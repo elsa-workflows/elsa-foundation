@@ -231,6 +231,7 @@ destination can keep their existing controls.
 - Use `StudioButton`, `StudioField`, `CopyableIdentifier`, status chips and the
   disclosure kit. Use the injected `api.dialogs` for host confirmation and focus management.
   A shared visual primitive does not grant permissions or implement a mutation.
+- Use `StudioButton` with `variant="danger"` for destructive actions: “Delete” destroys a record; “Remove” detaches an item from a list or parent.
 - Keep embedded editors, diagnostic streams, dashboards and graph workspaces shaped
   for their task. Use the same typography, controls, semantic colors and feedback.
   A compact page header is available through `studio-page-header--compact` for docked panels.
