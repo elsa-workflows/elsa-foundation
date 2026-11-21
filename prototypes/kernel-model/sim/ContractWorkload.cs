@@ -277,7 +277,7 @@ internal static class ContractWorkload
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
 
-    private sealed class InMemoryDriver : IDriver
+    internal sealed class InMemoryDriver : IDriver
     {
         private const long Initial = 1_702_000_000_000;
         private const long Lease = 50;
@@ -286,7 +286,8 @@ internal static class ContractWorkload
         private readonly WorkerOptions _options;
         private readonly List<IScopeActivation> _owners = [];
         private readonly Contract.IActorType _type;
-        private int[] _placements = [];
+        private readonly SortedSet<int> _placements = [];
+        private DurableHost? _host;
         private int _node;
         private bool? _loseAt;
 
@@ -314,11 +315,13 @@ internal static class ContractWorkload
         public async Task Start(IReadOnlyList<(Contract.BoundScope Scope, Contract.ActorRef Ref)> actors)
         {
             // Placement is private to the fault driver. The schedule only has the opaque refs given by ingress.
-            _placements = actors.Select(actor =>
+            var placements = actors.Select(actor =>
                 new InstanceRef(_store.FoundationTarget(actor.Scope.Tenant, actor.Ref.Id)!.Id).Partition)
                 .Distinct().Order().ToArray();
-            Require(_placements.Length > 1, "the fault driver must exercise multiple virtual partitions");
-            await Take();
+            _host ??= NewHost();
+            foreach (var partition in placements)
+                if (_placements.Add(partition)) await Take(partition);
+            Require(_placements.Count > 1, "the fault driver must exercise multiple virtual partitions");
         }
 
         public async Task TakeOver()
@@ -326,7 +329,8 @@ internal static class ContractWorkload
             var old = _owners.ToArray();
             _owners.Clear();
             Advance(Lease + 1);
-            await Take();
+            _host = NewHost();
+            foreach (var partition in _placements) await Take(partition);
             foreach (var owner in old)
             {
                 await owner.WokenAsync(null);
@@ -344,6 +348,8 @@ internal static class ContractWorkload
 
         public async Task Pass(int count)
         {
+            // Renewal is a separate node heartbeat. A quiet scope can own a future timer without writing a turn.
+            await _host!.HeartbeatAsync(TimeSpan.FromMilliseconds(2 * Lease));
             for (var pass = 0; pass < count; pass++)
             {
                 await _owners[0].WokenAsync(null);
@@ -356,15 +362,14 @@ internal static class ContractWorkload
             foreach (var owner in _owners) await owner.DisposeAsync();
         }
 
-        private async Task Take()
+        private DurableHost NewHost() => DurableHost.ForNode($"contract-node-{++_node}", _wire,
+            new ActorAdapter(_store, _type), _options.Partitions, _options);
+
+        private async Task Take(int partition)
         {
-            var host = DurableHost.ForNode($"contract-node-{++_node}", _wire, new ActorAdapter(_store, _type), _options.Partitions, _options);
-            foreach (var partition in _placements)
-            {
-                var activation = await host.ActivateAsync(partition);
-                Require(activation is not null, "successor could not acquire the expired scope");
-                _owners.Add(activation!);
-            }
+            var activation = await _host!.ActivateAsync(partition);
+            Require(activation is not null, "the driver could not acquire the scope");
+            _owners.Add(activation!);
         }
 
         private void ObserveCommit(CommitBatch batch, bool landed)
