@@ -13,6 +13,7 @@ public sealed partial class InMemoryStore
     internal sealed record ActorCheckpoint(string Reference, InstanceRow Row, long? EndedAt, FoundationHeaderChange Header, FoundationParkMark? Park);
     internal sealed record ActorRead(long AsOf, ActorCheckpoint? Actor);
     internal sealed record ActorReadSet(long AsOf, IReadOnlyList<ActorCheckpoint> Actors);
+    internal sealed record ActorJournalRead(long AsOf, IReadOnlyList<JournalRow> Rows);
 
     private readonly Lazy<byte[]> _referenceKey = new(() => RandomNumberGenerator.GetBytes(32));
     private readonly Dictionary<string, ReferenceBinding> _referenceBindings = new(StringComparer.Ordinal);
@@ -89,12 +90,32 @@ public sealed partial class InMemoryStore
         lock (_gate)
         {
             var now = clock();
-            if (reference is null || !_referenceBindings.TryGetValue(reference, out var binding) || binding.Tenant != tenant ||
-                Instances.GetValueOrDefault(binding.Address.Id) is not { Retired: false } row || row.Creation != binding.Address.Creation)
-                return new(now, null);
-
-            return new(now, Checkpoint(row, binding));
+            return BoundActor(tenant, reference) is { } found
+                ? new(now, Checkpoint(found.Row, found.Binding))
+                : new(now, null);
         }
+    }
+
+    // The same commit cannot retire the life or replace any of its rows between resolution and the read.
+    internal ActorJournalRead ReadFoundationJournal(string tenant, string? reference, long atOrAfter, int takeRows)
+    {
+        lock (_gate)
+        {
+            var now = clock();
+            if (BoundActor(tenant, reference) is not { } found) return new(now, []);
+            var address = found.Binding.Address;
+            return new(now, Journal.Values.Where(row => row.Instance == address.Id &&
+                    row.FoundationCreation == address.Creation && row.Position >= atOrAfter)
+                .OrderBy(row => row.Position).Take(takeRows).ToArray());
+        }
+    }
+
+    private (ReferenceBinding Binding, InstanceRow Row)? BoundActor(string tenant, string? reference)
+    {
+        if (reference is null || !_referenceBindings.TryGetValue(reference, out var binding) || binding.Tenant != tenant ||
+            Instances.GetValueOrDefault(binding.Address.Id) is not { Retired: false } row || row.Creation != binding.Address.Creation)
+            return null;
+        return (binding, row);
     }
 
     internal ActorReadSet ReadFoundationActors(string tenant)

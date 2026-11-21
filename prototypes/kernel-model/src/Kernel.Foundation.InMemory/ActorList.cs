@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text.Json;
 using Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
@@ -13,7 +14,7 @@ internal sealed class ActorList
     public ActorList(Durable.InMemoryStore store, int pageSize)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
-        ArgumentOutOfRangeException.ThrowIfEqual(pageSize, int.MaxValue);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, int.MaxValue - 1);
         (_store, _pageSize) = (store, pageSize);
     }
 
@@ -63,6 +64,48 @@ internal sealed class ActorList
             next = new(_store.SealActorListCursor(context, page[^1].Header.Ref.Id));
         }
         return new(new Page<ActorView>(page, next, snapshot.AsOf));
+    }
+
+    public ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        var context = JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-tail", scope.Tenant, Actor = actor.Id });
+        Span<byte> cursor = stackalloc byte[sizeof(long) + sizeof(int)];
+        (long Position, int Ordinal) after = default;
+        if (from is { } token)
+        {
+            if (!_store.TryOpenReadCursor(context, token.Value, cursor))
+                throw new ArgumentException("The continuation does not match this actor journal.", nameof(from));
+            after = (BinaryPrimitives.ReadInt64LittleEndian(cursor), BinaryPrimitives.ReadInt32LittleEndian(cursor[sizeof(long)..]));
+        }
+
+        // A commit can write several entries. Resume within that commit when a page ends partway through it.
+        var snapshot = _store.ReadFoundationJournal(scope.Tenant, actor.Id, after.Position, _pageSize + 1);
+        var added = new List<JournalEntry>();
+        var last = after;
+        foreach (var row in snapshot.Rows)
+        {
+            using var document = JsonDocument.Parse(row.Entries);
+            var entries = document.RootElement;
+            var split = entries.ValueKind == JsonValueKind.Array && entries.GetArrayLength() > 0;
+            var count = split ? entries.GetArrayLength() : 1;
+            var ordinal = row.Position == after.Position ? after.Ordinal + 1 : 0;
+            for (; ordinal < count; ordinal++)
+            {
+                added.Add(new(row.Revision, split ? entries[ordinal].GetRawText() : row.Entries));
+                last = (row.Position, ordinal);
+                if (added.Count == _pageSize) break;
+            }
+            if (added.Count == _pageSize) break;
+        }
+
+        // The final nonempty page also carries a bookmark so a caller can follow the tail after catching up.
+        if (added.Count == 0) return new(new Page<JournalEntry>(added, null, snapshot.AsOf));
+        BinaryPrimitives.WriteInt64LittleEndian(cursor, last.Position);
+        BinaryPrimitives.WriteInt32LittleEndian(cursor[sizeof(long)..], last.Ordinal);
+        return new(new Page<JournalEntry>(added, new PageToken(_store.SealReadCursor(context, cursor)), snapshot.AsOf));
     }
 
     private ActorView View(string tenant, Durable.InMemoryStore.ActorCheckpoint checkpoint, long asOf)

@@ -37,6 +37,7 @@ public interface IActorReads
     ValueTask<Page<ActorView>> ListAsync(BoundScope scope, ActorQuery query, PageToken? from = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>A nonempty page returns a bookmark after its last entry, including when the reader catches up.</summary>
     ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
         CancellationToken cancellationToken = default);
 

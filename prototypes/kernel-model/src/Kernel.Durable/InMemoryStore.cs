@@ -289,7 +289,15 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var subscription in turn.Subscribed) Subscriptions.Add(subscription);
                 foreach (var subscription in turn.Unsubscribed) Subscriptions.Remove(subscription);
                 if (turn.Unsubscribe) Subscriptions.RemoveWhere(s => s.Instance == turn.Instance);
-                if (turn.Journal is not null) Journal[(journal, ++next[journal])] = new JournalRow(journal, next[journal], turn.Instance, turn.Delete ? -1 : turn.Row?.Revision ?? 0, turn.Journal);
+                if (turn.Journal is not null)
+                {
+                    var creation = turn.Row?.Creation ?? Instances.GetValueOrDefault(turn.Instance)?.Creation ?? 0;
+                    Journal[(journal, ++next[journal])] = new JournalRow(journal, next[journal], turn.Instance,
+                        turn.Delete ? -1 : turn.Row?.Revision ?? 0, turn.Journal)
+                    {
+                        FoundationCreation = _referenceBirths.ContainsKey(new(turn.Instance, creation)) ? creation : 0
+                    };
+                }
                 if (opening is not null)
                     (changes ??= []).Add(opening with { After = Instances.GetValueOrDefault(turn.Instance),
                         Receipt = turn.Delete && turn.Journal is not null ? Journal[(journal, next[journal])] : null });
