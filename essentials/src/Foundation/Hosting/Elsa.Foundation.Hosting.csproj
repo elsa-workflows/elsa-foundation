@@ -14,7 +14,7 @@
     <PackageReference Include="Nuplane.Loading" />
     <PackageReference Include="Nuplane.Sources.Directory" />
     <ProjectReference Include="../../Persistence/Schema/Elsa.Persistence.Schema.csproj" />
-    <InternalsVisibleTo Include="Elsa.Modularity.Tests" />
+    <InternalsVisibleTo Include="Elsa.Foundation.Hosting.Tests" />
   </ItemGroup>
 
 </Project>

@@ -11,6 +11,7 @@ using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.Shells;
 using Elsa.Foundation.Hosting;
 using Elsa.Modularity.Api.Authorization;
+using Elsa.Modularity.Tests;
 using Elsa.Persistence.Schema;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -21,7 +22,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
-namespace Elsa.Modularity.Tests;
+namespace Elsa.Foundation.Hosting.Tests;
 
 /// <summary>
 /// <c>Elsa.Foundation.Host</c>'s eager shell activation when an attempt fails: a database that is not up yet, a seeder that

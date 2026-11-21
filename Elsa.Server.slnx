@@ -998,4 +998,7 @@
   <Folder Name="/extensions/Examples/tests/">
     <Project Path="extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj" />
   </Folder>
+  <Folder Name="/essentials/tests/Foundation/Hosting/">
+    <Project Path="essentials/tests/Foundation/Hosting/Tests/Elsa.Foundation.Hosting.Tests.csproj" />
+  </Folder>
 </Solution>

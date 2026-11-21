@@ -87,7 +87,7 @@ public sealed class GetWorkflowDefinitionSubmitSchemaHandlerTests
             .Select(value => value.GetString()!)
             .ToArray();
 
-        Assert.Equal(["auto", "none", "json", "xml", "profile"], modes);
+        Assert.Equal(["auto", "none", "json", "xml", "profile", "jsonString"], modes);
 
         var intrinsicKinds = rootActivity
             .GetProperty("properties").GetProperty("intrinsic")

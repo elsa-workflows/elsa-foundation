@@ -19,10 +19,12 @@ namespace Elsa.Modularity.Tests;
 
 internal static class NuplaneHostTestComposition
 {
+    private const string ReloadOnPackageChangeKey = "Elsa:Shells:ReloadOnPackageChange";
+
     public static ConfigurationRoot CreateConfiguration(string? reload) => (ConfigurationRoot)new ConfigurationBuilder()
         .AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [FoundationHost.NuplaneIntegrationOptionsSetup.ReloadOnPackageChangeKey] = reload
+            [ReloadOnPackageChangeKey] = reload
         })
         .Build();
 
@@ -109,7 +111,7 @@ internal static class NuplaneHostTestComposition
 
         public void SetReloadOnPackageChange(bool? value)
         {
-            Configuration[FoundationHost.NuplaneIntegrationOptionsSetup.ReloadOnPackageChangeKey] = value?.ToString();
+            Configuration[ReloadOnPackageChangeKey] = value?.ToString();
             Configuration.Reload();
         }
 
