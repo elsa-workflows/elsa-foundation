@@ -42,7 +42,7 @@ process owns:
 | `lease_until` | Database time until which no other process may take this process's partitions. |
 
 A take conditionally updates the partition row. It accepts an unowned partition, a partition whose owner's node record
-is missing or has `lease_until` before database time, read in the take's transaction, or a retake by the recorded
+is missing or has `lease_until` before database time when the take reads the lease, or a retake by the recorded
 owner. It increments the epoch and returns the resulting position. The successful update and the reading of that
 position must be one atomic operation or transaction. The same transaction renews the taker's own node record, so a
 process never holds a partition it took under an expired lease of its own.
@@ -52,6 +52,10 @@ lease is too late for the partitions that take changed, and it keeps every parti
 also counts a death on the partitions it moved, by its read; a race between a renewal and a take can therefore cost
 one death count, and the fence, not the count, protects correctness. Safety does
 not rest on that read: the epoch the take increments fences the previous owner out, as before.
+
+The relational stores read leases at READ COMMITTED in the take transaction. MongoDB reads the owners’ leases from the
+primary outside the transaction snapshot, before any writes. A renewal between the snapshot’s partition read and this
+lease read then counts as live. A concurrent change to a partition document still conflicts with the take’s write.
 
 **A take that changes zero rows returns nothing.** It has acquired no authority and must not return a separately read position as though it had succeeded. A take that succeeds learns the true position, including any commit that finished before it.
 
@@ -138,7 +142,7 @@ again at a new epoch.
 **Lock order.** A take first reads the node records of the owners it may take from, with a plain read that holds
 nothing afterwards (never a locking read or a subquery inside the update, which MySQL makes locking at REPEATABLE READ); then it writes
 its own node record; then it locks the partition rows in ascending id. A heartbeat writes its own node record, then
-reads partition rows. A commit locks only partition rows, in ascending id. The take's transaction runs at read committed on every engine, whatever
+reads partition rows. A commit locks only partition rows, in ascending id. The take's transaction runs at read committed on every relational engine, whatever
 the store's configured isolation, so the read's shared locks, where the engine takes them, end with the statement (MySQL
 already sets this as the take's own level). With this order no cycle forms, including
 under SQL Server without RCSI, where a plain read takes shared locks: a take reads while it holds no lock; a take or

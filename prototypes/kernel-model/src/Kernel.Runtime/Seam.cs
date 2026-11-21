@@ -130,7 +130,6 @@ public interface IMembership
     /// <summary>
     /// Say that this node is alive (the <c>node</c> row) and look at the cluster: the nodes heard from within
     /// <paramref name="window"/>, and the partitions that have no owner or whose lease has expired. Liveness only.
-    /// </summary>
-    /// <summary>Refresh membership and read placement inputs. Lease renewal runs through the node heartbeat.</summary>
+    /// Lease renewal runs through the node heartbeat. </summary>
     ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default);
 }

@@ -226,8 +226,8 @@ public interface IKernelStore : IMembership
     /// K1b, the node lease ("The partition record" and "The node's heartbeat" in ownership-and-fencing.md). The lease is
     /// the node record, <c>Nodes (Id, SeenAt, LeaseUntil)</c> in database time, and covers every partition its process
     /// owns. A take accepts a free partition, one whose owner's node record is missing or has <c>LeaseUntil</c> before
-    /// database time, or a retake by the recorded owner. Its transaction reads the owners' node records with a plain read
-    /// that holds nothing, then writes the taker's own record (<c>SeenAt</c> and <c>LeaseUntil</c>, whatever it takes),
+    /// database time, or a retake by the recorded owner. The take reads the owners' node records with a plain read that
+    /// holds nothing, then its transaction writes the taker's own record (<c>SeenAt</c> and <c>LeaseUntil</c>, whatever it takes),
     /// then locks the partition rows in ascending id, each decided by that read; deaths count as before, a missing record
     /// as expired. A retake writes the taker's record the same way, also when it is refused. A caller does not bound its
     /// node lease by a take's or retake's database time (an empty take returns none). A Worker whose guard expired keeps

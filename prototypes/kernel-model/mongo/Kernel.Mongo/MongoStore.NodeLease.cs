@@ -74,7 +74,10 @@ public sealed partial class MongoStore
                     .Project(new BsonDocument("owner", 1)).ToListAsync(deadline.Token)).Select(d => d["owner"].AsString).Distinct(StringComparer.Ordinal).ToList();
                 if (owners.Count > 0)
                 {
-                    var live = (await _nodes.Find(session, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(owners)) }, { "$expr", new BsonDocument("$gte", new BsonArray { "$leaseUntil", NowMs }) } }, bounded)
+                    // Read the primary's current leases. The transaction snapshot was opened by the partition read;
+                    // comparing a lease from that older snapshot to a later clock could evict a continuously live owner.
+                    // The partition update still conflicts with a change of owner after the snapshot.
+                    var live = (await _nodes.WithReadConcern(ReadConcern.Local).Find(new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(owners)) }, { "$expr", new BsonDocument("$gte", new BsonArray { "$leaseUntil", NowMs }) } }, bounded)
                         .Project(new BsonDocument("_id", 1)).ToListAsync(deadline.Token)).Select(d => d["_id"].AsString).ToHashSet(StringComparer.Ordinal);
                     foreach (var owner in owners.Where(o => !live.Contains(o))) expired.Add(owner);
                 }

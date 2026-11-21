@@ -70,7 +70,7 @@ static class SetCost
             var upper = a.OrderDescending().Take(a.Count / 2).ToHashSet();     // the half a balancer gives up first: the highest
             Console.WriteLine($"\n{target.Engine}: {await target.DescribeAsync()}; fence {(target.FenceInBatch ? "in the batch" : "checked")}; commit {target.CommitWriter}; {Count} virtual partitions, {NodeCount} nodes");
             Console.WriteLine($"shape {shape}: the four sets are {string.Join(", ", four.Select(s => $"{s.Count} in {Ranges(s)} ranges"))}; node A holds {a.Count} in {Ranges(a)} ranges ({Describe(a)})");
-            Console.WriteLine($"{"run",-92} {"commands",8} {"begin",5} {"commit",6} {"counted",7} {"tcp",5} {"exec",5} {"rows",5} {"ms",9}");
+            Console.WriteLine($"{"run",-92} {"commands",8} {"begin",5} {"commit",6} {"counted",7} {"tcp",5} {"exec",5} {"changed",7} {"ms",9}");
 
             async Task<DurableHost> GainAsync(IReadOnlyCollection<int> set, string node, List<IScopeActivation>? activations = null)
             {
@@ -377,7 +377,7 @@ static class SetCost
         return string.Join(", ", runs);
     }
 
-    /// <summary>Counts and prints one row: the counters around the body, the fence rows it wrote, the median time.</summary>
+    /// <summary>Counts and prints one row: the counters around the body, the fence rows whose values changed, the median time.</summary>
     private sealed class Meter(Target target, Counting counter, Classes classes, Func<KernelDb> admin)
     {
         private string? _note;
@@ -425,9 +425,9 @@ static class SetCost
             // The counts shown are the most common run's (the first run of a row may open connections: their handshakes count).
             var s = samples.GroupBy(x => x.Key).OrderByDescending(g => g.Count()).First().First();
             var median = samples.Select(x => x.Ms).Order().ElementAt(samples.Count / 2);
-            Console.WriteLine($"{name,-92} {s.Commands,8} {s.Begun,5} {s.Ended,6} {s.Counted,7} {s.Tcp,5} {s.Exec,5} {s.Rows,5} {median,9:F1}");
+            Console.WriteLine($"{name,-92} {s.Commands,8} {s.Begun,5} {s.Ended,6} {s.Counted,7} {s.Tcp,5} {s.Exec,5} {s.Rows,7} {median,9:F1}");
             var keys = samples.Select(x => x.Key).Distinct().ToList();
-            if (keys.Count > 1) Console.WriteLine("    the runs' counts differ (commands begin commit tcp exec rows): " + string.Join(" | ", samples.Select(x => x.Key)));
+            if (keys.Count > 1) Console.WriteLine("    the runs' counts differ (commands begin commit tcp exec changed rows): " + string.Join(" | ", samples.Select(x => x.Key)));
             Console.WriteLine($"    statements by kind: {s.Classes}; ms per run: {string.Join(" ", samples.Select(x => x.Ms.ToString("F1", CultureInfo.InvariantCulture)))}");
             if (note is not null) Console.WriteLine("    " + note);
             if (s.Wal is not null) Console.WriteLine(s.Wal);
