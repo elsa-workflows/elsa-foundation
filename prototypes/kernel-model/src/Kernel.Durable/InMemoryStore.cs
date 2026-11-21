@@ -205,6 +205,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
+                    foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription);
+                    StoreBatchRules.ValidateActorSends(turn, previous);
                     ValidateFoundationHeader(turn);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
@@ -405,7 +407,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     private long _eventSerial;
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default)
     {
-        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(delivery.Message);
+        ValidateEventIdentity(delivery);
         lock (_gate) return new(InsertEventDelivery(delivery));
     }
 
@@ -414,7 +416,19 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         if (Messages.TryGetValue(delivery.Message.InboxKey, out var existing))
             return new(false, existing.Message.Target);
         var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++_eventSerial));
+        ReferenceBinding? binding = null;
+        if (delivery.FoundationTenant is { } tenant && message.Start is { } start)
+        {
+            var address = new CreationAddress(message.Target.Id, 1);
+            start = start with { Creation = new CreationStart(1, 0, address.Id) };
+            message = message with { Start = start, TargetCreation = 1 };
+            var reference = ReferenceFor(tenant, address);
+            binding = new ReferenceBinding(tenant, reference, address, message.InboxKey,
+                CreationProtocol.Fingerprint(start, message.Kind, message.Payload)!);
+        }
+
         Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
+        if (binding is not null) InsertReference(binding);
         return new(true, message.Target);
     }
 
@@ -435,12 +449,43 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 .Select(wait => Events.Route(request, wait, partitions, replyTo)).ToArray();
             if (deliveries.Length == 0) return null;
 
-            if (!CreationIdentityAvailable)
-                foreach (var delivery in deliveries) CreationProtocol.RejectUnsupported(delivery.Message);
+            foreach (var delivery in deliveries) ValidateEventIdentity(delivery);
             var starts = deliveries.Count(delivery => delivery.Message.Start is not null && !Messages.ContainsKey(delivery.Message.InboxKey));
             _ = checked(_eventSerial + starts);
             EventRows.Add(key, request);
             return Array.ConvertAll(deliveries, InsertEventDelivery);
+        }
+    }
+
+    private void ValidateEventIdentity(EventDelivery delivery)
+    {
+        if (CreationIdentityAvailable) return;
+        if (delivery.FoundationTenant is not null)
+            throw new StoreException(Failure.Definite, "A bound event starter requires qualified creation identity.");
+        CreationProtocol.RejectUnsupported(delivery.Message);
+    }
+
+    internal void SetFoundationEventStart(string tenant, string correlationKey, string wait, StartSpec? start)
+    {
+        if (start is not null && (start.Parent is not null || start.ParentCreation != 0 || start.Creation is not null))
+            throw new ArgumentException("A start subscription supplies no creator identity or parent.", nameof(start));
+        var key = tenant + "_" + correlationKey;
+        lock (_gate)
+        {
+            if (start is not null && !CreationIdentityAvailable)
+                throw new StoreException(Failure.Definite, "A bound event starter requires qualified creation identity.");
+
+            var row = new SubscriptionRow(key, "", wait, start) { FoundationTenant = tenant };
+            if (start is not null) RequireSameSubscriptionScope(row);
+            if (Subscriptions.TryGetValue(row, out var previous) && previous.FoundationTenant == tenant)
+                Subscriptions.Remove(previous);
+            if (start is null) return;
+
+            Subscriptions.Add(row);
+
+            var now = clock();
+            foreach (var @event in EventRows.Values.Where(@event => @event.Key == key && @event.KeepUntil >= now).OrderBy(@event => @event.Id, StringComparer.Ordinal))
+                InsertEventDelivery(Events.Route(@event, row, partitions));
         }
     }
 
@@ -468,8 +513,18 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
     {
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(subscription);
-        lock (_gate) Subscriptions.Add(subscription);
+        lock (_gate)
+        {
+            RequireSameSubscriptionScope(subscription);
+            Subscriptions.Add(subscription);
+        }
         return default;
+    }
+
+    private void RequireSameSubscriptionScope(SubscriptionRow subscription)
+    {
+        if (Subscriptions.TryGetValue(subscription, out var previous) && previous.FoundationTenant != subscription.FoundationTenant)
+            throw new StoreException(Failure.Definite, "The subscription key is already registered in another scope.");
     }
 
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default)

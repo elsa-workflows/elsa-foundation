@@ -41,10 +41,13 @@ public sealed record Message(
     [System.Text.Json.Serialization.JsonIgnore]
     public long InboxScope { get; private init; }
     internal bool BindFoundationChild { get; init; }
+    internal bool ActorAuthored { get; init; }
+    internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]
     public string? EventMatch { get; private init; }
     [System.Text.Json.Serialization.JsonIgnore]
-    public InboxKey InboxKey => new(Id, InboxScope, EventMatch);
+    public InboxKey InboxKey => new(StorageId ?? Id, InboxScope, EventMatch);
+    internal string? StorageId { get; init; }
     public Message WithInboxScope(long scope, string? match = null) => this with { InboxScope = scope, EventMatch = match };
     public Message AsIssued() => WithInboxScope(InboxKey.Issued(Id).Scope);
     public Message AsOrdinary() => InboxScope == 0 && EventMatch is null ? this : WithInboxScope(0);

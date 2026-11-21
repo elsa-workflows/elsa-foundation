@@ -335,14 +335,24 @@ public sealed class DurableTurn
         return Send(InboxKey.Issued($"{Origin}#{Revision}.{_ordinal++:D4}"), target, kind, payload, options, receivedAt);
     }
 
-    private string Send(InboxKey id, InstanceRef target, string kind, object? payload, SendOptions? options = null, string? receivedAt = null)
+    internal string SendFromActor(InstanceRef target, long targetCreation, string kind, string? payload = null, long? dueAt = null)
+    {
+        var id = InboxKey.Issued($"{Origin}#{Revision}.{_ordinal++:D4}");
+        return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
+    }
+
+    private string Send(InboxKey id, InstanceRef target, string kind, object? payload, SendOptions? options = null, string? receivedAt = null,
+        bool actorAuthored = false)
     {
         if (options is { Delay: not null, DueAt: not null })
             throw new ArgumentException("Supply either an absolute due time or a delay.", nameof(options));
         var due = options?.DueAt;
         if (options?.Delay is { } delay) due = Services.Now + (long)delay.TotalMilliseconds;
-        _sent.Add(new Message(id.Id, target, kind, payload is null ? null : Json.Write(payload), receivedAt ?? Id, options?.Start,
-            due, TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null), SenderCreation: _input.Creation).WithInboxScope(id.Scope));
+        var body = actorAuthored ? (string?)payload : payload is null ? null : Json.Write(payload);
+        var message = new Message(id.Id, target, kind, body, receivedAt ?? Id, options?.Start,
+            due, TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null), SenderCreation: _input.Creation)
+            { ActorAuthored = actorAuthored };
+        _sent.Add(message.WithInboxScope(id.Scope));
         return id.Id;
     }
 
@@ -460,7 +470,7 @@ public sealed class DurableTurn
         var now = _input.CheckpointTime;
         return until > now && _window is null && _replied.Count == 0 && _subscribed.Count == 0 &&
             (_cancelled.Count == 0 || _input.Unwritten) && !_input.Taken.Any(i => i.Durable) &&
-            _sent.TrueForAll(m => m.Target == Actor && m.Kind is not (Kinds.Publish or Kinds.Meet) &&
+            _sent.TrueForAll(m => m.Target == Actor && !m.ActorControl && m.Kind is not (Kinds.Publish or Kinds.Meet) &&
                 (m.Kind == Kinds.Job || (m.Due ?? now) <= until));
     }
 
