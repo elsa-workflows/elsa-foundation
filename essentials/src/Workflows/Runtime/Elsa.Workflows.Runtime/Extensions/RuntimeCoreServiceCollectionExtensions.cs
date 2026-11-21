@@ -390,7 +390,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 { HistoryProvidersResolver = () => (serviceProvider.GetService<IRuntimeHistoryObservationWriter>(), serviceProvider.GetService<IRuntimeHistoryStore>()) });
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
-        services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
+        DurableTimerServiceCollectionExtensions.AddDefaultTimerStore(services);
         services.TryAddScoped<IWorkflowExecutionDeletionStore>(serviceProvider =>
             new InMemoryWorkflowExecutionDeletionStore(
                 serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(),

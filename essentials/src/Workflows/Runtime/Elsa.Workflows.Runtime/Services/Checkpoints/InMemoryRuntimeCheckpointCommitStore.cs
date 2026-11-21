@@ -76,6 +76,16 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
     internal InMemoryRuntimeCheckpointStoreState State => _state;
+    ValueTask<bool> IRuntimeCheckpointCommitStore.RequiresUnrecordedTimerDischargeAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId); cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(_state.TimerSources.HasHistoryOwner(workflowExecutionId));
+    }
+    internal bool OwnsUnrecordedTimerState(InMemoryRuntimeCheckpointStoreState state,
+        InMemoryWorkflowExecutionStateStore executions, InMemoryExecutionLivenessStateStore liveness,
+        IPersistenceAccessContextAccessor access, TimeProvider clock) => ReferenceEquals(_state, state) &&
+        ReferenceEquals(ExactResumeExecutions, executions) && ReferenceEquals(_operationalStateStore, liveness) &&
+        ReferenceEquals(_persistenceAccessContextAccessor, access) && ReferenceEquals(_timeProvider, clock);
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
     private readonly IActivityExecutionInspectionWriter? _activityExecutionInspectionWriter;

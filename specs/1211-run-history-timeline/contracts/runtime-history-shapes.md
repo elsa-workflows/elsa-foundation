@@ -100,3 +100,13 @@ History source agreement is separate from historical durable checkpoint replay i
 ### Saved-recipient start transport
 
 `WorkflowExecutionStartCommandPayload.HistoryCausation` and `RuntimeCheckpointCommandPayload.HistoryCausation` are optional null-omitted known causal inputs. Saved-source start dispatch derives them from the already verified immutable native source, not an additional field on the public start request. The actual start/checkpoint handlers retain this cause on the workflow-started boundary. Original absent wire remains unchanged and diagnostic origin creates no executable authority or capture policy. Saved command JSON roundtrip must preserve every exact original causal field; unrepresentable source data refuses before recipient effects. Eligible first-fault handling retains only readable bounded start diagnostics, without letting malformed optional origin replace the primary fault.
+
+### Timer source responsibility
+
+A timer owner retains its original capture policy and at most two deterministic observations: `TimerScheduled`, then `TimerDispatched` or `TimerRetired`. These are `DeliveryObservation` authority in the `SchedulerLifecycle` category, not a claim that an activity executed. The source retains each obligation until its exact durable semantic receipt is acknowledged; acknowledgement cannot invalidate a live timer claim. Retired captured sources remain excluded from operational due/claim pages and cannot reactivate on deterministic scheduling replay.
+
+Optional timer-owner capability defaults to false. Memory capture requires the same native checkpoint state, liveness owner, history reader and ordinary physical scope. It preserves the original captured/uncaptured choice when current configuration changes, and refuses an incomplete vocabulary or foreign ownership. Active timer history is never retrofitted onto a legacy timer. Scope- and query-bound due pages let the pump traverse beyond a held source.
+
+Successful fenced Ephemeral completion without a native record has a separate bounded source-discharge decision. It requires the exact native owner, current lease, no native/history/deletion row and no active captured timer. Only then may the queue advance. Retired payloads are cleared; a compact completion receipt remains for idempotency. A later native head reports the prior unrecorded boundary as a gap. Native deletion clears the indexed timer sources under the same ownership gates.
+
+These owner contracts do not qualify the recurring pump, durable providers, schema rollout or final Studio coverage; those are separate composed acceptance obligations.
