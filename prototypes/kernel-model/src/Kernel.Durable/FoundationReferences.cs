@@ -262,8 +262,7 @@ public sealed partial class InMemoryStore
     {
         Kinds.RequireApplicationSend(kind);
         if (id.StartsWith('~')) throw new ArgumentException("The foundation reserves the issued ID namespace.", nameof(id));
-        var window = keepFor is { } requested && requested < IngressDeduplicationWindow ? requested : IngressDeduplicationWindow;
-        ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero, nameof(keepFor));
+        var window = FoundationIngressWindow(keepFor);
         lock (_gate)
         {
             if (reference is null || !_referenceBindings.TryGetValue(reference, out var binding) || binding.Tenant != tenant)
