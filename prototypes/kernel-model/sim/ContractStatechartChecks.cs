@@ -4,6 +4,7 @@ using Kernel.Statecharts;
 using Contract = Kernel.Foundation.Contracts;
 using Models = Kernel.Model.Contracts;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
+using PublicRuntime = Kernel.WorkflowActor.WorkflowRuntime;
 
 namespace Kernel.Sim;
 
@@ -17,6 +18,9 @@ internal static class ContractStatechartChecks
         var scope = new Contract.BoundScope("acme");
         var ingress = new OrdinaryIngress(store);
         Contract.IActorReads reader = new ActorList(store, 32);
+        var edge = new InMemoryIngress(store, new Requests("chart-runtime"), "chart-runtime",
+            (bound, kind) => bound == scope && kind == Contract.Kinds.Terminate);
+        var runtime = new PublicRuntime(edge, new ActorList(store, 1));
         var definition = new Definition(new Region("draft",
             [new("draft", Entry: "mark", Exit: "mark"), new("review", Entry: "mark"), new("completed", Entry: "mark", Final: true)]),
             [new("draft", "submit", "review", "mark", When: "approved"), new("review", "complete", "completed")]);
@@ -37,8 +41,8 @@ internal static class ContractStatechartChecks
                 name?.StartsWith("System.", StringComparison.Ordinal) == true),
             "the compiled statechart model depends only on the public contracts and framework");
 
-        var start = PublicWorkflow.Start(new(NewModel().Key, "approval"));
-        var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(start), "chart-start");
+        var start = new Models.WorkflowStart(NewModel().Key, "approval");
+        var admitted = await runtime.StartAsync(scope, "chart-start", start);
         var reference = admitted.Actor!.Value;
         var exact = new Contract.Target.Ref(reference);
         var owner = await Owner("chart-owner");
@@ -72,6 +76,26 @@ internal static class ContractStatechartChecks
             steps.All(step => step.Ref == reference.Id),
             "the replacement owner resumes the chart and commits one ordered history of activity calls using only the exact ref");
 
+        var another = (await runtime.StartAsync(scope, "chart-list", start, callerKey: "review")).Actor!.Value;
+        await Pump(next);
+        var first = await runtime.ListAsync(scope, new());
+        var later = first.Next is { } bookmark ? await runtime.ListAsync(scope, new(), bookmark) : first;
+        check(first.Items.Count == 1 && later.Items.Count == 1 && later.Next is null &&
+            first.Items.Concat(later.Items).Select(item => item.Header.Ref).ToHashSet().SetEquals([reference, another]),
+            "the contract-only runtime pages through workflow refs using an opaque bookmark");
+
+        var selected = first.Items.Concat(later.Items).Single(view => view.Header.Ref == another);
+        var inbox = await runtime.InboxAsync(scope, selected.Header.Ref);
+        check(inbox.Items is [{ Kind: "operator-timer", Handle.Length: > 0, Due: var timerDue }] && timerDue > now,
+            "the runtime sees the opaque handle for a pending timer through the public inbox read");
+
+        var cross = await runtime.TerminateAsync(new Contract.BoundScope("other"), "foreign-terminate", selected);
+        var own = await runtime.TerminateAsync(scope, "terminate", selected);
+        await Pump(next);
+        check(cross.Outcome == Contract.AdmissionOutcome.Refused && own.Outcome == Contract.AdmissionOutcome.Accepted &&
+            await reader.GetAsync(scope, another) is { Header.Status: Contract.ActorStatus.Cancelled },
+            "the contract-only operator API sends the selected workflow's opaque ref and selection under the bound scope");
+
         string Active()
         {
             using var json = JsonDocument.Parse(store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row.State);
@@ -81,8 +105,12 @@ internal static class ContractStatechartChecks
 
     private sealed record ActivityEntry(string Kind, string Phase, string State, string Ref);
 
-    private static void Mark(Models.ITurn turn, Step step) =>
+    private static void Mark(Models.ITurn turn, Step step)
+    {
         turn.Record(new ActivityEntry("activity", step.Phase, step.State, turn.Instance.Ref.Id));
+        if (step is { Phase: "entry", State: "draft" })
+            turn.Send(turn.Instance.Ref, "operator-timer", dueAt: turn.Now + 10_000);
+    }
 
     private static async Task Pump(IScopeActivation activation)
     {
