@@ -1,3 +1,4 @@
+using System.Text;
 using Kernel.Runtime;
 using Contract = Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
@@ -9,6 +10,10 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     (Durable.Requests Requests, string Node)? local = null) : Durable.IActorType
 {
     private const int MaxTurnSends = 10_000;
+    private const int TerminalEnvelopeLimit = 16_457_728;
+    private const int TerminalHeaderReserve = 16_384;
+    private const int TerminalChildBytes = 384;
+    private const int TerminalJobBytes = 12_416;
 
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => row?.Model == actor.Type;
 
@@ -123,9 +128,34 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var outcome = turn.Seal();
         if (outcome.Sent.Count > MaxTurnSends)
             throw new InvalidOperationException($"A turn may send at most {MaxTurnSends:N0} messages.");
-        if (outcome.Row is { Status: Durable.InstanceStatus.Running } && outcome.FoundationHeader is { } next)
-            outcome.FoundationWithholds = actor.Withholds(header with { TypeData = next.TypeData, Labels = next.Labels });
+        if (outcome.Row is { } nextRow)
+        {
+            var nextHeader = header with
+            {
+                Status = (Contract.ActorStatus)nextRow.Status,
+                TypeData = outcome.FoundationHeader?.TypeData ?? header.TypeData,
+                Labels = outcome.FoundationHeader?.Labels ?? header.Labels
+            };
+            ValidateTerminalEnvelope(nextRow, nextHeader);
+            if (nextRow.Status == Durable.InstanceStatus.Running && outcome.FoundationHeader is not null)
+                outcome.FoundationWithholds = actor.Withholds(nextHeader);
+        }
         return outcome;
+    }
+
+    private void ValidateTerminalEnvelope(Durable.InstanceRow row, Contract.ActorHeader header)
+    {
+        var growth = row.Status == Durable.InstanceStatus.Running ? actor.TerminalGrowth(header, row.State) : 0;
+        // This is the built-in in-memory encoding. Keep enough space for the terminal registry even when the live row is smaller.
+        var children = row.Children is null ? 0 : Durable.ChildRegistry.Read(row.Children).Count;
+        var jobs = row.Jobs is null ? 0 : Durable.DurableKeyJson.ReadKeys(row.Jobs).Count;
+        var bytes = TerminalHeaderReserve + children * (long)TerminalChildBytes + jobs * (long)TerminalJobBytes
+            + Bytes(row.State) + Bytes(row.CustomHandles) + Bytes(row.CommitTimes) + Bytes(row.Model) + Bytes(row.Definition)
+            + Bytes(header.TypeData) + header.Labels.Sum(label => Bytes(label.Key) + Bytes(label.Value));
+        if (growth < 0 || growth > TerminalEnvelopeLimit - bytes)
+            throw new InvalidOperationException("The actor checkpoint and its terminal growth exceed the record envelope.");
+
+        static long Bytes(string? value) => value is null ? 0 : Encoding.UTF8.GetByteCount(value);
     }
 
     private static Durable.InboxKey AmbientDelivery(Durable.Message message) => message.EventMatch is { } match

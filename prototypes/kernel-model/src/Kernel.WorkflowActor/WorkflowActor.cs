@@ -93,7 +93,8 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
     public long TerminalGrowth(ActorHeader header, string state)
     {
         var workflow = ReadHeader(header);
-        var model = GetModel(workflow.Model);
+        // Termination preserves the stored state while this version cannot enter the model.
+        if (!_models.TryGetValue(workflow.Model, out var model) || workflow.Version > model.StateVersion) return 0;
         return model.TerminalGrowth(Instance(header, workflow), ReadState(model, workflow, state, []));
     }
 
