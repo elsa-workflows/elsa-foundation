@@ -253,7 +253,9 @@ describe("workflow definition route browse session", () => {
     );
 
     await waitForText(container, "First page workflow");
-    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+    const rows = container.querySelector<HTMLSelectElement>(".studio-collection-page-size select");
+    expect(rows?.labels?.[0]?.textContent).toBe("Rows");
+    await select(rows, "25");
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("pageSize")).toBe("25"));
     await waitForText(container, "Resized first page workflow");
     await click(button(container, "Next"));
@@ -318,7 +320,7 @@ describe("workflow definition route browse session", () => {
     await click(button(container, "Next"));
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(true));
     await waitForText(container, "new search page two");
-    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+    await select(container.querySelector<HTMLSelectElement>(".studio-collection-page-size select"), "25");
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("pageSize")).toBe("25"));
     expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(false);
     await waitForText(container, "new search page one");

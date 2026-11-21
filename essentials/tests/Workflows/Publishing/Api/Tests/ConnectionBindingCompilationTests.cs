@@ -42,70 +42,6 @@ public sealed class ConnectionBindingCompilationTests
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData(null)]
-    public void A_blank_connection_placeholder_compiles_like_an_omitted_optional_input(string? value)
-    {
-        var state = Bound(value, "Literal");
-        var omittedCatalog = Assert.Single(_compiler.CompileAll(NodeId, [CatalogInput()], [])).Value;
-        var omittedPinned = Assert.Single(_compiler.CompileAll(NodeId, [PinnedContract()], [])).Value;
-        var blankCatalog = Assert.Single(_compiler.CompileAll(NodeId, [CatalogInput()], [state])).Value;
-        var blankPinned = Assert.Single(_compiler.CompileAll(NodeId, [PinnedContract()], [state])).Value;
-
-        Assert.Equal(omittedCatalog.Source, blankCatalog.Source);
-        Assert.Equal(omittedCatalog.Literal!.InlineValue, blankCatalog.Literal!.InlineValue);
-        Assert.Equal(omittedPinned.Source, blankPinned.Source);
-        Assert.Equal(omittedPinned.Literal!.InlineValue, blankPinned.Literal!.InlineValue);
-    }
-
-    [Fact]
-    public void A_blank_required_connection_remains_required()
-    {
-        var state = Bound("", "Literal");
-        var catalog = Assert.Throws<ArgumentException>(() => _compiler.CompileAll(NodeId, [CatalogInput(isRequired: true)], [state]));
-        var pinned = Assert.Throws<ArgumentException>(() => _compiler.CompileAll(NodeId, [PinnedContract(isRequired: true)], [state]));
-
-        Assert.Contains("omits required input", catalog.Message, StringComparison.Ordinal);
-        Assert.Contains("omits required input", pinned.Message, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void A_legacy_null_connection_default_does_not_supply_a_value(bool savedBlank)
-    {
-        var input = CatalogInputWithSerializedDefault("Connection", null);
-        WorkflowArgumentState[] states = savedBlank ? [Bound("", "Literal")] : [];
-        var omitted = Assert.Single(_compiler.CompileAll(NodeId, [CatalogInput()], [])).Value;
-        var actual = Assert.Single(_compiler.CompileAll(NodeId, [input], states)).Value;
-
-        Assert.Equal(omitted.Source, actual.Source);
-        Assert.Equal(omitted.Literal!.InlineValue, actual.Literal!.InlineValue);
-        Assert.Equal("Connection", input.DefaultSyntax);
-
-        var required = Assert.Throws<ArgumentException>(() => _compiler.CompileAll(NodeId, [input with { IsRequired = true }], states));
-        Assert.Contains("omits required input", required.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_non_null_connection_default_is_still_refused()
-    {
-        var input = CatalogInputWithSerializedDefault("Connection", new { connection = "acme.api", type = "http" });
-        var error = Assert.Throws<ArgumentException>(() => _compiler.CompileAll(NodeId, [input], []));
-
-        Assert.Contains("Canonical activity defaults must be pinned literals", error.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_literal_null_connection_default_is_still_declared()
-    {
-        var input = CatalogInputWithSerializedDefault("Literal", null);
-
-        Assert.Equal(JsonValueKind.Null, input.DefaultValue?.ValueKind);
-        _compiler.CompileAll(NodeId, [input], [Bound(null, "Default")]);
-    }
-
-    [Theory]
     [InlineData("Literal")]
     [InlineData("Secret")]
     [InlineData("JavaScript")]
@@ -133,18 +69,7 @@ public sealed class ConnectionBindingCompilationTests
         Assert.Contains("smtp", pinned.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void A_malformed_connection_reference_is_refused()
-    {
-        var state = Bound(new { connection = "", type = "http" }, "Connection");
-        var catalog = Assert.Throws<ArgumentException>(() => _compiler.CompileAll(NodeId, [CatalogInput()], [state]));
-        var pinned = Assert.Throws<ArgumentException>(() => _compiler.CompileAll(NodeId, [PinnedContract()], [state]));
-
-        Assert.Contains("Connection reference", catalog.Message, StringComparison.Ordinal);
-        Assert.Contains("Connection reference", pinned.Message, StringComparison.Ordinal);
-    }
-
-    private static InputDefinition CatalogInput(bool isRequired = false) => new(
+    private static InputDefinition CatalogInput() => new(
         InputKey,
         InputKey,
         new TypeReference(ConnectionAlias),
@@ -152,27 +77,19 @@ public sealed class ConnectionBindingCompilationTests
         InputKey,
         null,
         IsNullable: true,
-        IsRequired: isRequired,
         ConnectionType: "http");
 
-    private static InputDefinition CatalogInputWithSerializedDefault(string syntax, object? value)
-    {
-        var json = JsonSerializer.SerializeToNode(CatalogInput() with { DefaultSyntax = syntax }, JsonSerializerOptions.Web)!.AsObject();
-        json["defaultValue"] = JsonSerializer.SerializeToNode(value, JsonSerializerOptions.Web);
-        return json.Deserialize<InputDefinition>(JsonSerializerOptions.Web)!;
-    }
-
-    private static RuntimeActivityInputContract PinnedContract(bool isRequired = false) => new(
+    private static RuntimeActivityInputContract PinnedContract() => new(
         InputKey,
         InputKey,
         new ValueTypeDescriptor(ConnectionAlias),
-        isRequired: isRequired,
+        isRequired: false,
         isNullable: true,
         hasDefault: false,
         defaultValue: null,
         ActivityValuePolicy.Default,
         connectionType: "http");
 
-    private static WorkflowArgumentState Bound(object? value, string expressionType) =>
+    private static WorkflowArgumentState Bound(object value, string expressionType) =>
         new(InputKey, new ArgumentValue(JsonSerializer.SerializeToElement(value), expressionType), null, null, null, null);
 }

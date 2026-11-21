@@ -31,8 +31,6 @@ Presentation metadata is stored with the versioned form definition and validated
 
 Modules add controls through the host-owned `userTaskFieldControls` Slot on `ElsaStudioModuleApi`. The contribution identity is stable and major-versioned (for example `acme.rating/1`); `valueKind` describes the response JSON type and a control's renderer is reused by the designer canvas, Preview, and task recipient form. `createField` supplies the default configuration, `propertiesEditor` edits control-specific settings, and `validateConfiguration` validates the JSON object stored under the field's `configuration` property. Forms owns the common key, label, help, required, and read-only properties.
 
-For contributed scalar renderers, put `data-studio-field-control=""` on the actual native input or textarea, and forward the supplied `id`, `disabled`, and `aria-invalid` properties. This lets the shared `StudioField` own the single outline and full-width control layout; see [Outlined form fields](module-ui.md#outlined-form-fields).
-
 ```tsx
 api.userTaskFieldControls?.add({
   id: "acme.rating/1",

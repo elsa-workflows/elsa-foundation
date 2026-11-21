@@ -110,7 +110,7 @@ describe("workflows module", () => {
 
     try {
       flushSync(() => root.render(<ValidationPanel draft={draft} onRepair={vi.fn()} />));
-      expect(container.textContent).toContain("No validation issues found");
+      expect(container.textContent).toContain("No validation errors");
     } finally {
       flushSync(() => root.unmount());
     }
@@ -982,7 +982,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("1 selected");
     expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
 
-    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+    await select(container.querySelector<HTMLSelectElement>(".studio-collection-page-size select"), "25");
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("pageSize=25"))).toBe(true));
     await waitForText(container, "1 selected");
     expect(container.textContent).toContain("1 selected");
@@ -2190,7 +2190,7 @@ describe("workflows module", () => {
     await click(buttonByText(dialog(container), "Create"));
 
     await waitForText(container, "Review & publish");
-    expect(container.textContent).toContain("Checking validation");
+    expect(container.textContent).toContain("No validation errors");
 
     await unmount();
   });

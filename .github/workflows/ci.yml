@@ -1784,6 +1784,7 @@ jobs:
           $SIM --contract --seeds 100
           $SIM --contract-native --seeds 100
           $SIM --contract-actors --seeds 100 --actions 100
+          $SIM --contract-actors --seed 105 --actions 288
           $SIM --contract-evolution --seeds 100
           $SIM --contract-events --seeds 100
           $SIM --contract-http --seeds 100
@@ -1901,6 +1902,7 @@ jobs:
           $SIM --contract --seeds 1000
           $SIM --contract-native --seeds 1000
           $SIM --contract-actors --seeds 1000 --actions 100
+          $SIM --contract-actors --seed 105 --actions 288
           $SIM --contract-evolution --seeds 1000
           $SIM --contract-events --seeds 1000
           $SIM --contract-http --seeds 1000
@@ -2006,6 +2008,7 @@ jobs:
           $SIM --contract --seeds 1000 --count 4096
           $SIM --contract-native --seeds 1000 --count 4096
           $SIM --contract-actors --seeds 1000 --actions 100 --count 4096
+          $SIM --contract-actors --seed 105 --actions 288 --count 4096
           $SIM --contract-evolution --seeds 1000 --count 4096
           $SIM --contract-events --seeds 1000 --count 4096
           $SIM --contract-http --seeds 1000 --count 4096

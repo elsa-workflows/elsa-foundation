@@ -271,15 +271,6 @@ public sealed class ActivityDraftTestRunService(
         {
             throw;
         }
-        catch (ActivityTemplateMissingRequiredInputException)
-        {
-            return await RejectValidationAsync(
-                receipt,
-                "activity.test-run.required-input",
-                "A required activity input has no value or default. Provide values for required inputs before running the Test Run.",
-                [],
-                cancellationToken);
-        }
         catch (Exception)
         {
             // Placement runs before any wrapper artifact or Runtime dispatch exists. Persist only a safe summary:

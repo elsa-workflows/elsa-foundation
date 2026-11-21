@@ -27,8 +27,7 @@ public sealed class PublishingApiContractCompatibilityTests
         // GetPublicationRecord, the request for the Publishing-owned read of one journal record, and #1659 added
         // PublicationSlotOwnerView, the nullable targetSlotOwner both workflow preflight views now carry.
         // #2862 adds module-neutral Test Drive discovery, selection, status, stop and wait delivery contracts.
-        // Reviewed publication-slot unpublish adds a path-bound command contract with a mandatory slot revision.
-        Assert.Equal(80, ContractTypes.Length);
+        Assert.Equal(79, ContractTypes.Length);
 
         var apiAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
 
@@ -69,8 +68,7 @@ public sealed class PublishingApiContractCompatibilityTests
                                                        type != typeof(ActivityPublishingProblemDetails) &&
                                                        type != typeof(ExpressionPublicationValidationDiagnosticView) &&
                                                        type != typeof(ExpressionPublicationValidationProblemDetails) &&
-                                                       type != typeof(RuntimePreflightProblemDetails) &&
-                                                       type != typeof(UnpublishPublicationSlotAtRevisionRequest)).ToArray();
+                                                       type != typeof(RuntimePreflightProblemDetails)).ToArray();
         var legacyHash = PublicShapeHash(legacyTypes);
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
@@ -78,7 +76,7 @@ public sealed class PublishingApiContractCompatibilityTests
             $"The Publishing API legacy public-shape hash changed to {legacyHash}; complete surface {actualHash}.");
         Assert.True(
             // #3922 adds only null-omitted AuthoredPath to the modern located diagnostic; legacy surface above is unchanged.
-            actualHash == "e728b1c6fca733f1f5413e0091938f93c028a2f5ca55510e83a2a627116f41d5",
+            actualHash == "637bc06baf5a03d0955b94a5746abc80267bf6cf4c1a3ca0784cbc353e91f117",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 

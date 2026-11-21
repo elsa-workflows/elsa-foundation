@@ -52,20 +52,6 @@ export interface AgentPage {
   continuation?: string | null;
 }
 
-export interface ActiveAgentDraftChoice {
-  draftId: string;
-  revision: number;
-  presentationLabel?: string | null;
-  updatedAt?: string;
-}
-
-export interface AgentVersionChoice {
-  versionId: string;
-  version: string;
-  lifecycle: string;
-  publishedAt: string;
-}
-
 /** One page of agent definitions. Provider filtering, search, counting and the cursor are all server-side. */
 export async function listAgents(context: StudioEndpointContext, request: { limit: number; cursor?: string | null; search?: string }, signal?: AbortSignal) {
   const parameters = new URLSearchParams({ limit: String(request.limit), sort: "identity-asc", providerKey: agentProviderKey });
@@ -170,31 +156,9 @@ export function readModelCapabilities(context: StudioEndpointContext, model: { p
   return context.http.postJson<ModelCapabilities>(modelCapabilitiesPath, model, { signal });
 }
 
-/** Active agent draft identifiers for callers that only need to distinguish none, one, or several. */
+/** Up to two active agent drafts of one definition: enough to tell a single draft from a choice among several. */
 export async function listActiveAgentDrafts(context: StudioEndpointContext, definitionId: string, signal?: AbortSignal) {
-  return (await listActiveAgentDraftChoices(context, definitionId, signal)).map(draft => draft.draftId);
-}
-
-/** Authorized metadata for every active draft, without exposing provider payloads. */
-export async function listActiveAgentDraftChoices(context: StudioEndpointContext, definitionId: string, signal?: AbortSignal): Promise<ActiveAgentDraftChoice[]> {
-  const choices: ActiveAgentDraftChoice[] = [];
-  let cursor: string | null = null;
-  let hasMore = true;
-  while (hasMore) {
-    const parameters = new URLSearchParams({ limit: "100", providerKey: agentProviderKey, status: "Active" });
-    if (cursor) parameters.set("cursor", cursor);
-    const page = await context.http.getJson<{ items?: Array<{ draft?: Partial<ActiveAgentDraftChoice> }>; hasMore?: boolean; continuation?: string | null }>(
-      `${definitionsPath}/${encodeURIComponent(definitionId)}/drafts?${parameters.toString()}`, { signal });
-    choices.push(...(Array.isArray(page?.items) ? page.items : []).flatMap(item => typeof item.draft?.draftId === "string" ? [{
-      draftId: item.draft.draftId,
-      revision: typeof item.draft.revision === "number" ? item.draft.revision : 0,
-      presentationLabel: item.draft.presentationLabel ?? null,
-      updatedAt: item.draft.updatedAt
-    }] : []));
-    hasMore = page?.hasMore === true;
-    if (!hasMore) break;
-    if (!page.continuation || page.continuation === cursor) throw new Error("The active Agent draft list could not be completed.");
-    cursor = page.continuation;
-  }
-  return choices;
+  const parameters = new URLSearchParams({ limit: "2", providerKey: agentProviderKey, status: "Active" });
+  const page = await context.http.getJson<{ items?: Array<{ draft: { draftId: string } }> }>(`${definitionsPath}/${encodeURIComponent(definitionId)}/drafts?${parameters.toString()}`, { signal });
+  return (Array.isArray(page?.items) ? page.items : []).map(item => item.draft.draftId);
 }

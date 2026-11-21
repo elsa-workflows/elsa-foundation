@@ -1,6 +1,6 @@
 import { Bot } from "lucide-react";
 import React from "react";
-import { evaluateBackendRequirements, type ElsaStudioModuleApi, type StudioActivityDefinitionImplementationEditorContribution, type StudioIncidentRootCauseProviderContribution, type StudioIncidentStateSummary } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioActivityDefinitionImplementationEditorContribution, StudioIncidentRootCauseProviderContribution, StudioIncidentStateSummary } from "@elsa-workflows/studio-sdk";
 import { AgentsPage } from "./AgentsPage";
 import { HumanReviewPage } from "./HumanReviewPage";
 import { AgentEditor } from "./AgentEditor";
@@ -9,8 +9,6 @@ import { AgentInvocationPage, invocationPath } from "./AgentInvocationPage";
 import { agentProviderKey } from "./agentsApi";
 import { continuitySchemaVersion, initialAgentManifest } from "./agentManifest";
 import "./styles.css";
-
-const AgentWorkspace = React.lazy(() => import("./AgentWorkspace").then(module => ({ default: module.AgentWorkspace })));
 
 const activityDesign = [{ id: "elsa.api.activity-design", contractVersion: "1" }];
 const agentAuthoring = [...activityDesign, { id: "elsa.api.agent", contractVersion: "1" }];
@@ -71,24 +69,6 @@ export function register(api: ElsaStudioModuleApi) {
       { id: "agents", path: "/agents", label: "Agents", requiresBackend: activityDesign,
         component: ({ navigate }) => <AgentsPage context={api.backend} navigate={navigate} /> }
     ]
-  });
-  for (const [view, path, label] of [
-    ["current", "/agents/workspace/:definitionId", "Agent workspace"],
-    ["draft", "/agents/workspace/:definitionId/drafts/:draftId", "Agent draft"],
-    ["version", "/agents/workspace/:definitionId/versions/:versionId", "Agent version"]
-  ] as const) api.routes.add({
-    id: `agent-workspace-${view}`,
-    requiresBackend: agentAuthoring,
-    path,
-    label,
-    component: ({ navigate }) => <React.Suspense fallback={<div role="status">Loading Agent workspace…</div>}><AgentWorkspace
-      context={api.backend}
-      navigate={navigate}
-      activityEditors={api.activityEditors.list()}
-      identity={api.runtime.identity}
-      recoverySettings={api.runtime.activityDefinitions?.localRecovery}
-      testRunAvailable={evaluateBackendRequirements(api.backendSession, playground).state === "available"}
-    /></React.Suspense>
   });
   for (const contribution of agentEditorContributions) api.activityEditors.add(contribution);
   api.routes.add({

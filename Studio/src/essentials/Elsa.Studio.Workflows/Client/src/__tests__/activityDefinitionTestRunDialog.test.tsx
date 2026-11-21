@@ -46,9 +46,7 @@ describe("ActivityDefinitionTestRunDialog", () => {
       </React.StrictMode>
     ));
 
-    await waitFor(() => expect(container.textContent).toContain("Inputs"));
-    expect(container.textContent).toContain("Run test");
-    expect(container.textContent).not.toContain("Revision 5 validated");
+    await waitFor(() => expect(container.textContent).toContain("Revision 5 validated"));
     expect(prepareExactRevision).toHaveBeenCalledTimes(1);
 
     flushSync(() => root.unmount());

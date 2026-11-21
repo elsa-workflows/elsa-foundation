@@ -226,14 +226,14 @@ describe("workflow library query boundaries", () => {
     const tagged = encodeURIComponent(JSON.stringify([{ tagId: "critical", operator: "exists" }]));
     const { container } = await renderWorkflowRoute(`/workflows/definitions?tagFilters=${tagged}`, fetchMock, libraryCapabilities());
     await waitForText(container, "Tagged page 1");
-    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+    await select(container.querySelector<HTMLSelectElement>(".studio-collection-page-size select"), "25");
     await waitForCondition(() => expect(requests.at(-1)?.searchParams.get("pageSize")).toBe("25"));
     await click(button(container, "Next")); await waitForText(container, "Tagged page 2");
     await click(button(container, "Next")); await waitForText(container, "Tagged page 3");
     await waitForCondition(() => expect(button(container, "Favorites")).not.toBeNull());
     await click(button(container, "Favorites")); await waitForText(container, "Favorite page 1");
     if (!invalidate) {
-      await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "50");
+      await select(container.querySelector<HTMLSelectElement>(".studio-collection-page-size select"), "50");
       await waitForCondition(() => expect(requests.at(-1)?.searchParams.get("pageSize")).toBe("50"));
     }
     if (invalidate) {
@@ -273,7 +273,7 @@ describe("workflow library query boundaries", () => {
     });
     const { container } = await renderWorkflowRoute("/workflows/definitions", fetchMock, pagedDefinitionCapabilities());
     await waitForText(container, "Cursor page 1 workflow 1");
-    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "50");
+    await select(container.querySelector<HTMLSelectElement>(".studio-collection-page-size select"), "50");
     await waitForCondition(() => expect(requests.at(-1)?.searchParams.get("pageSize")).toBe("50"));
     await click(button(container, "Next")); await waitForText(container, "Cursor page 2 workflow 1");
     const next = button(container, "Next") as HTMLButtonElement;
