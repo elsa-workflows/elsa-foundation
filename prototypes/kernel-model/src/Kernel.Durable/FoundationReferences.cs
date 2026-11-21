@@ -5,11 +5,15 @@ namespace Kernel.Durable;
 
 public sealed partial class InMemoryStore
 {
-    private sealed record ReferenceBinding(string Tenant, CreationAddress Address, InboxKey Creator, string Fingerprint);
+    private sealed record ReferenceBinding(string Tenant, string Reference, CreationAddress Address, InboxKey Creator, string Fingerprint);
+    internal sealed record ActorCheckpoint(string Reference, InstanceRow Row, long? EndedAt);
+    internal sealed record ActorRead(long AsOf, ActorCheckpoint? Actor);
+    internal sealed record ActorReadSet(long AsOf, IReadOnlyList<ActorCheckpoint> Actors);
 
     private readonly Lazy<byte[]> _referenceKey = new(() => RandomNumberGenerator.GetBytes(32));
     private readonly Dictionary<string, ReferenceBinding> _referenceBindings = new(StringComparer.Ordinal);
     private readonly Dictionary<CreationAddress, ReferenceBinding> _referenceBirths = [];
+    private readonly Dictionary<CreationAddress, long> _foundationEnds = [];
 
     // A turn may form the ref for a prospective child before commit. Until the creator is stored, it has no binding.
     internal string ReferenceFor(string tenant, CreationAddress address)
@@ -44,12 +48,51 @@ public sealed partial class InMemoryStore
                 Messages.ContainsKey(creator.InboxKey) || _referenceBindings.ContainsKey(reference))
                 return null;
 
-            var binding = new ReferenceBinding(tenant, address, creator.InboxKey, fingerprint);
+            var binding = new ReferenceBinding(tenant, reference, address, creator.InboxKey, fingerprint);
             Messages.Add(creator.InboxKey, new MessageRow(creator, ++_seq, 0));
             _referenceBindings.Add(reference, binding);
             _referenceBirths.Add(address, binding);
             return reference;
         }
+    }
+
+    internal ActorRead ReadFoundationActor(string tenant, string? reference)
+    {
+        lock (_gate)
+        {
+            var now = clock();
+            if (reference is null || !_referenceBindings.TryGetValue(reference, out var binding) || binding.Tenant != tenant ||
+                Instances.GetValueOrDefault(binding.Address.Id) is not { Retired: false } row || row.Creation != binding.Address.Creation)
+                return new(now, null);
+
+            return new(now, Checkpoint(row, binding));
+        }
+    }
+
+    internal ActorReadSet ReadFoundationActors(string tenant)
+    {
+        lock (_gate)
+        {
+            var asOf = clock();
+            var actors = new List<ActorCheckpoint>();
+            foreach (var row in Instances.Values)
+                if (!row.Retired && _referenceBirths.TryGetValue(new(row.Id, row.Creation), out var binding) && binding.Tenant == tenant)
+                    actors.Add(Checkpoint(row, binding));
+            return new(asOf, actors);
+        }
+    }
+
+    private ActorCheckpoint Checkpoint(InstanceRow row, ReferenceBinding binding) =>
+        new(binding.Reference, row, _foundationEnds.TryGetValue(binding.Address, out var endedAt) ? endedAt : null);
+
+    private void RecordFoundationEnd(InstanceRow row, long now)
+    {
+        if (_referenceBirths.Count == 0) return;
+        var address = new CreationAddress(row.Id, row.Creation);
+        if (row.Retired || row.Status == InstanceStatus.Running)
+            _foundationEnds.Remove(address);
+        else if (_referenceBirths.ContainsKey(address))
+            _foundationEnds.TryAdd(address, now);
     }
 
     /// <summary>Resolve an outside exact send and insert its delivery in one operation.

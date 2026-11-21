@@ -17,6 +17,8 @@ internal static class FoundationReferenceChecks
             "a prospective ref cannot route before the durable creator is admitted");
 
         var admitted = store.AdmitFoundationStart(tenant, first);
+        check(store.ReadFoundationActor(tenant, proposed).Actor is null && store.ReadFoundationActors(tenant).Actors.Count == 0,
+            "read models omit the accepted creator while no committed actor row exists");
         check(admitted == proposed && store.AdmitFoundationStart(tenant, first) == admitted && store.Messages.Count == 1,
             "the exact ref follows the durable creator and replays without a second creator");
         check(store.AdmitFoundationStart(tenant, first with { Payload = "changed" }) is null,
@@ -31,7 +33,7 @@ internal static class FoundationReferenceChecks
             "an exact send to a pending creator is pinned to its accepted life");
 
         Worker Owner(string node) => new(node, 0, store, new WorkflowInstance([new Probe()]),
-            new WorkerOptions { Monotonic = () => time });
+            new WorkerOptions { Monotonic = () => 0 });
 
         var originalOwner = (await new DurableHost([Owner("original-ref")]).ActivateAsync(0))!;
         await Pump(originalOwner);
@@ -48,11 +50,21 @@ internal static class FoundationReferenceChecks
         check(store.AddFoundationMessage(tenant, proposed, "finish", "finish") == true, "the exact ref can end its own life");
         await Pump(nextOwner);
         check(store.Instances.GetValueOrDefault(target.Id)?.Status == InstanceStatus.Finished, "the first life finishes");
+        var endedAt = time;
+        check(store.ReadFoundationActor(tenant, proposed) is { Actor.EndedAt: var ended } && ended == endedAt,
+            "the read snapshot reports the time of the landed end");
+        time--;
+        var page = store.ReadFoundationActors(tenant);
+        check(page.AsOf == time && page.Actors is [{ EndedAt: var recorded }] && recorded == endedAt &&
+              store.ReadFoundationActor("other", proposed).Actor is null,
+            "AsOf follows a clock step back while EndedAt and tenant isolation stay intact");
         check(store.AddFoundationMessage(tenant, proposed, "delete-first", Kinds.Delete) == true, "a qualified delete is addressed to the first life");
         await Pump(nextOwner);
         check(store.Instances.GetValueOrDefault(target.Id) is { Creation: 1, Retired: true } &&
               store.AddFoundationMessage(tenant, proposed, "after-delete", "signal") is null,
             "a retired ref refuses a new send");
+        check(store.ReadFoundationActor(tenant, proposed).Actor is null && store.ReadFoundationActors(tenant).Actors.Count == 0,
+            "retirement removes the actor from both bound read snapshots");
 
         var second = first with { Id = "creator-2", TargetCreation = 2, Start = first.Start! with { Creation = new(2, 1, "second") } };
         check(store.AdmitFoundationStart("other", second) is null,
