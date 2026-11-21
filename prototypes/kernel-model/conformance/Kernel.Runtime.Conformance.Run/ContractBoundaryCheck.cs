@@ -1,6 +1,8 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Kernel.Foundation.Contracts;
 using Kernel.Model.Contracts;
+using Kernel.Store.Conformance;
 
 internal static class ContractBoundaryCheck
 {
@@ -18,6 +20,10 @@ internal static class ContractBoundaryCheck
         CheckScope(typeof(IActorReads), faults);
         if (typeof(BoundScope).GetConstructors().Length != 0 || typeof(BoundScope).GetProperty(nameof(BoundScope.Tenant))?.CanWrite != false)
             faults.Add("BoundScope must have no public constructor or tenant setter");
+        var issuers = foundation.GetCustomAttributes<InternalsVisibleToAttribute>().Select(a => a.AssemblyName).ToHashSet(StringComparer.Ordinal);
+        if (!issuers.SetEquals(["Kernel.Runtime.Hosting", "Kernel.Store.Conformance", "Kernel.Sim"]))
+            faults.Add("The set of assemblies authorized to construct BoundScope changed");
+        BoundScopeChecks.Check(faults);
         foreach (var fault in faults)
             Console.Error.WriteLine(fault);
         if (faults.Count == 0)
@@ -27,7 +33,7 @@ internal static class ContractBoundaryCheck
 
     private static void CheckScope(Type contract, List<string> faults)
     {
-        foreach (var method in contract.GetMethods())
+        foreach (var method in contract.GetInterfaces().Prepend(contract).SelectMany(t => t.GetMethods()))
         {
             var parameters = method.GetParameters();
             if (parameters.Length == 0 || parameters[0].ParameterType != typeof(BoundScope)

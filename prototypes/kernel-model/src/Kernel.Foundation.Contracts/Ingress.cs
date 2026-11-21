@@ -27,18 +27,18 @@ public abstract class Target
 
     public sealed class Key(string callerKey, StartSpec? spec = null) : Target
     {
-        public string CallerKey { get; } = callerKey;
+        public string CallerKey { get; } = callerKey ?? throw new ArgumentNullException(nameof(callerKey));
         public StartSpec? Spec { get; } = spec;
     }
 
     public sealed class Event(string correlationKey) : Target
     {
-        public string CorrelationKey { get; } = correlationKey;
+        public string CorrelationKey { get; } = correlationKey ?? throw new ArgumentNullException(nameof(correlationKey));
     }
 
     public sealed class Start(StartSpec spec) : Target
     {
-        public StartSpec Spec { get; } = spec;
+        public StartSpec Spec { get; } = spec ?? throw new ArgumentNullException(nameof(spec));
     }
 }
 
