@@ -8,7 +8,7 @@ namespace Kernel.Sim;
 /// <summary>The legacy request modes through the public request API and its in-memory reply transport.</summary>
 internal static class ContractHttpWorkload
 {
-    private sealed record Answer(Contract.ActorRef Actor, string Mode, string? Ambient);
+    private sealed record Answer(Contract.ActorRef Actor, string Mode, string? Ambient, string? JobResult);
 
     internal static async Task<int> Run(int from, int seeds, int partitions, Flaw flaws)
     {
@@ -36,6 +36,7 @@ internal static class ContractHttpWorkload
         private readonly Contract.IActorReads _reads;
         private readonly ReplySink _transport;
         private readonly Workflow _workflows;
+        private readonly RequestModel _model;
         private readonly WorkerOptions _options;
         private readonly int _seed;
         private readonly int _delay;
@@ -49,7 +50,8 @@ internal static class ContractHttpWorkload
             _ingress = new InMemoryIngress(_store, _requests, ReceivingNode);
             _reads = new ActorList(_store, 8);
             _transport = new(_requests, _reads, _scope);
-            _workflows = new([new RequestModel(_delay)]);
+            _model = new RequestModel(_delay);
+            _workflows = new([_model]);
             _options = new() { Lease = TimeSpan.FromSeconds(1), Partitions = partitions, Flaws = flaws,
                 Monotonic = () => _now - 1_703_000_000_000, Transport = _transport };
         }
@@ -117,6 +119,9 @@ internal static class ContractHttpWorkload
             var answer = reply?.Item as Answer;
             Require(reply is { Channel: "response", Error: null } && answer is not null &&
                 answer.Mode == mode && answer.Ambient == ambient, $"{mode} returned the wrong public response or ambient");
+            if (mode == Http.Work)
+                Require(answer!.JobResult == "job:work" && _model.Jobs is [var job] && job == (answer.Actor, "work"),
+                    "work did not answer from exactly one real job attempt");
             var deliveries = _transport.Delivered.Skip(before).Where(item => item.Value.Actor == answer!.Actor).ToArray();
             Require(deliveries.Length == 1 && deliveries[0].Committed != early,
                 $"{mode} released its response on the wrong side of the commit");
@@ -167,7 +172,13 @@ internal static class ContractHttpWorkload
         public int StateVersion => 1;
         public object CreateState(Models.WorkflowStart start) => new HttpState { Mode = Json.Read<HttpInput>(start.Input!).Mode };
         public object UpgradeState(string state, int fromVersion) => throw new InvalidOperationException("No older request state exists.");
-        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => new("done");
+        internal List<(Contract.ActorRef Actor, string Key)> Jobs { get; } = [];
+
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            Jobs.Add((job.Actor, job.Key));
+            return new("job:" + job.Key);
+        }
         public Contract.RestorePlan RestoreWaits(Models.InstanceInfo instance, object state) => new([], [], []);
         public long TerminalGrowth(Models.InstanceInfo instance, object state) => 0;
 
@@ -189,7 +200,13 @@ internal static class ContractHttpWorkload
                     case "resume" when state.Mode == Http.Wait:
                         ScheduleTimer();
                         break;
-                    case "continue" or "timer" or Contract.Kinds.JobFinished:
+                    case Contract.Kinds.JobFinished when state.Mode == Http.Work:
+                        var result = Json.Read<Contract.JobFinished>(message.Payload!);
+                        Require(result is { Key: "work", Result: not null, Error: null }, "work received the wrong job result");
+                        AnswerOnce(Json.Read<string>(result.Result!));
+                        turn.SetStatus(Contract.ActorStatus.Finished);
+                        break;
+                    case "continue" or "timer":
                         if (state.Mode != Http.Early) AnswerOnce();
                         turn.SetStatus(Contract.ActorStatus.Finished);
                         break;
@@ -197,9 +214,9 @@ internal static class ContractHttpWorkload
             }
             return default;
 
-            void AnswerOnce()
+            void AnswerOnce(string? jobResult = null)
             {
-                var answer = new Answer(turn.Instance.Ref, state.Mode, turn.Ambient as string);
+                var answer = new Answer(turn.Instance.Ref, state.Mode, turn.Ambient as string, jobResult);
                 turn.Record(answer);
                 turn.Emit("response", answer);
             }
