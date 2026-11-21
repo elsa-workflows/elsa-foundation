@@ -52,10 +52,10 @@ internal sealed class ActorList : IActorReads
         var snapshot = _store.ReadFoundationActors(scope.Tenant);
         var page = snapshot.Actors
             .Where(actor => StringComparer.Ordinal.Compare(actor.Reference, after) > 0)
-            .Select(actor => View(scope.Tenant, actor, snapshot.AsOf))
             .Where(actor => Matches(actor, query, labels))
-            .OrderBy(actor => actor.Header.Ref.Id, StringComparer.Ordinal)
+            .OrderBy(actor => actor.Reference, StringComparer.Ordinal)
             .Take(_pageSize + 1)
+            .Select(actor => View(scope.Tenant, actor, snapshot.AsOf))
             .ToList();
         PageToken? next = null;
         if (page.Count > _pageSize)
@@ -149,16 +149,13 @@ internal sealed class ActorList : IActorReads
         var header = new ActorHeader(new(checkpoint.Reference), row.Model, tenant, (ActorStatus)row.Status,
             row.Fault, parent, checkpoint.EndedAt, checkpoint.Header.TypeData, checkpoint.Header.Labels);
         var park = checkpoint.Park is { } mark ? new ParkView(mark.At, null) : null;
-        return new(header, null, park, asOf);
+        return new(header, _store.SealFoundationSelection(tenant, checkpoint), park, asOf);
     }
 
-    private static bool Matches(ActorView view, ActorQuery query, KeyValuePair<string, string>[] labels)
-    {
-        var header = view.Header;
-        return (query.Type is null || query.Type == header.Type) &&
-            (query.Status is null || query.Status == header.Status) &&
-            (query.EndedBefore is null || header.EndedAt < query.EndedBefore) &&
-            (query.Parked is null || query.Parked == (view.Park is not null)) &&
-            labels.All(label => header.Labels.GetValueOrDefault(label.Key) == label.Value);
-    }
+    private static bool Matches(Durable.InMemoryStore.ActorCheckpoint actor, ActorQuery query, KeyValuePair<string, string>[] labels) =>
+        (query.Type is null || query.Type == actor.Row.Model) &&
+        (query.Status is null || query.Status == (ActorStatus)actor.Row.Status) &&
+        (query.EndedBefore is null || actor.EndedAt < query.EndedBefore) &&
+        (query.Parked is null || query.Parked == (actor.Park is not null)) &&
+        labels.All(label => actor.Header.Labels.GetValueOrDefault(label.Key) == label.Value);
 }
