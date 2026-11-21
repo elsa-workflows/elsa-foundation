@@ -29,15 +29,23 @@
       "kernel.native": {
         "type": "Project",
         "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
           "Kernel.Graph": "[1.0.0, )",
-          "Kernel.Native.Activities": "[1.0.0, )",
-          "Kernel.Workflows": "[1.0.0, )"
+          "Kernel.Model.Contracts": "[1.0.0, )",
+          "Kernel.Native.Activities": "[1.0.0, )"
         }
       },
       "kernel.native.activities": {
         "type": "Project",
         "dependencies": {
           "Kernel.Foundation.Contracts": "[1.0.0, )"
+        }
+      },
+      "kernel.native.legacy": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Native": "[1.0.0, )",
+          "Kernel.Workflows": "[1.0.0, )"
         }
       },
       "kernel.runtime": {

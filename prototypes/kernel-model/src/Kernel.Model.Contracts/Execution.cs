@@ -27,7 +27,7 @@ public interface IExecutionModel
 public interface IModelMetadata
 {
     bool HandlesMetadata(Message message);
-    ValueTask MetadataAsync(ITurn turn, ActorStatus status, CancellationToken cancellationToken);
+    ValueTask MetadataAsync(ITurn turn, ActorStatus status, long? endedAt, CancellationToken cancellationToken);
     void TerminateMetadata(object state);
     bool ProtectsDeletion(object state, long? endedAt, long now);
 }

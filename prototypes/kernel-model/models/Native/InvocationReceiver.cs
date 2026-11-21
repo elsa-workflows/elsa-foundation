@@ -30,7 +30,7 @@ internal sealed partial class Burst
             if (_checkpointRequested) return;
             // Selection may schedule ordinary work, or settle immediately with another queued input.
             // Persist one wake; never inline another business input in this turn.
-            _bridge.SendToSelf(NativeKinds.Continue);
+            turn.SendToSelf(NativeKinds.Continue);
         }
     }
 
