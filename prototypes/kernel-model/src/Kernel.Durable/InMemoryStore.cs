@@ -241,10 +241,15 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     var entries = prior.History == History.Full ? Journal.Values.Where(j => j.Instance == prior.Id).ToImmutableArray() : [];
                     (deletes ??= []).Add((new(prior.Id, prior.Creation), new(prior, entries), turn.Journal is null ? null : (journal, next[journal] + 1)));
                 }
-                if (turn.Row is not null) Instances[turn.Row.Id] = CommitClockFacts.Stamp(turn.Row, now);
+                if (turn.Row is { } stored)
+                {
+                    Instances[stored.Id] = CommitClockFacts.Stamp(stored, now);
+                    RecordFoundationEnd(stored, now);
+                }
                 if (turn.Delete)
                 {
-                    if (turn.Row is not { Retired: true }) Instances.Remove(turn.Instance);
+                    if (turn.Row is not { Retired: true } && Instances.Remove(turn.Instance, out var removed) && _foundationEnds.Count > 0)
+                        _foundationEnds.Remove(new(removed.Id, removed.Creation));
                     foreach (var key in Journal.Where(j => j.Value.Instance == turn.Instance && j.Value.Revision > 0 && !Has(Flaw.DeleteLeavesJournal)).Select(j => j.Key).ToList())
                     {
                         Journal.Remove(key);

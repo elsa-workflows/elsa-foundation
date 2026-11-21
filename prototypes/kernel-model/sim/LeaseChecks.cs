@@ -10,6 +10,7 @@ public static class LeaseChecks
         await WorkerSetChecks.Run(Check);
         await AbsoluteTimerChecks.Run(Check);
         await FoundationClockChecks.Run(Check);
+        await FoundationReferenceChecks.Run(Check);
         await CommandAuthorityChecks.Run(Check);
         await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
