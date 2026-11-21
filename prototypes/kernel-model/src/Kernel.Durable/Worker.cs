@@ -2341,6 +2341,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (writeFree) Apply(unit, null, true, cancellationToken, release);
         else
         {
+            StageHeldJobResults(unit);
             Promote(unit);
             _queue.Add(unit);
         }
@@ -2468,17 +2469,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var key in unit.Promoted)
                 if (_items.TryGetValue(key, out var ticket) && ticket.Key is not null)
                     ticket.AwaitingJobMark = !handOver && !Has(Flaw.RunBeforeMark);
-        var turns = units.Select(u => new TurnCommit(u.Instance, u.Row, u.Expected,
-                Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.InboxKey), .. Has(Flaw.VolatileJobTicket) ? [] : u.Cancelled.Where(id => !InMemoryOnly(id))],
-                Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.InboxKey).ToList(),
-                u.Sent.Where(m => !u.Volatile.Contains(m.InboxKey)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal, u.Unsubscribe,
-                u.Held.Where(i => i.Durable).Select(i => i.Message.InboxKey).ToList(), u.Delete)
-            {
-                FoundationHeader = u.FoundationHeader,
-                FoundationHeldPromotions = u.Row?.FoundationInlineBirth is not null && u.Held.Count != 0
-                    ? u.Held.Where(i => !i.Durable).Select(i => i.Message.InboxKey).ToHashSet() : null,
-                OpensPark = u.OpensPark
-            }).ToList();
+        var turns = units.Select(PrepareCommit).ToList();
         List<InboxKey> seen = [.. marks.Select(i => i.Message.InboxKey)], tried = [.. trial.Select(i => i.Message.InboxKey)];
         // A store without owned sets gets only today's positional batch, one partition per batch (a worker of several
         // partitions cannot take on it). With owned sets, one partition held is that same batch, and several are one
@@ -2604,6 +2595,30 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
+    private TurnCommit PrepareCommit(TurnOutcome unit)
+    {
+        var conversions = unit.HeldJobResults;
+        var consumed = unit.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.InboxKey);
+        var settled = conversions?.Keys.Where(i => i.Durable).Select(i => i.Message.InboxKey) ?? [];
+        var cancelled = Has(Flaw.VolatileJobTicket) ? [] : unit.Cancelled.Where(id => !InMemoryOnly(id));
+        var promotions = conversions?.Values.Select(result => result.InboxKey).ToHashSet();
+        if (unit.Row?.FoundationInlineBirth is not null && unit.Held.Count > 0)
+        {
+            promotions ??= [];
+            promotions.UnionWith(unit.Held.Where(i => !i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey));
+        }
+        return new TurnCommit(unit.Instance, unit.Row, unit.Expected,
+            Has(Flaw.KeepConsumedMessages) ? [] : [.. consumed, .. settled, .. cancelled],
+            Has(Flaw.KeepConsumedMessages) ? [] : unit.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.InboxKey).ToList(),
+            unit.Sent.Where(m => !unit.Volatile.Contains(m.InboxKey)).ToList(), unit.Subscribed, unit.Unsubscribed, unit.Journal, unit.Unsubscribe,
+            unit.Held.Where(i => i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey).ToList(), unit.Delete)
+        {
+            FoundationHeader = unit.FoundationHeader,
+            FoundationHeldPromotions = promotions,
+            OpensPark = unit.OpensPark
+        };
+    }
+
     /// <summary>
     /// The fences of an owned batch: the partitions of its turns, of what they consume, of its marks, and, when it hands
     /// over, of the held partitions it sends to (the store writes those rows seen at that partition's epoch). A beat, or
@@ -2669,6 +2684,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
         return _slots.Where(s => s.Value.Unwritten && (!s.Value.Busy || s.Value.Driving) && now >= s.Value.Until);
     }
 
+    private void StageHeldJobResults(TurnOutcome unit)
+    {
+        if (unit.Held.Count == 0 || !_type.SupportsFoundationOperator(unit.Row) || Has(Flaw.HoldRetainsJobTicket)) return;
+        foreach (var item in unit.Held)
+        {
+            if (!item.IsWorkerJobCompletion || item.Message.FoundationJobResult || unit.Cancelled.Contains(item.Message.InboxKey)) continue;
+            var message = item.Message with { Id = item.Message.Id + "/result", FoundationJobResult = true };
+            (unit.HeldJobResults ??= []).Add(item, message);
+            unit.Sent.Add(message);
+            unit.Promoted.Add(message.InboxKey);
+        }
+    }
+
     /// <summary>
     /// Decision 4: an outcome that writes an instance held in memory until now writes what it waits for in memory too:
     /// its timers and job tickets become rows in the same commit, so a crash after it loses none of them.
@@ -2680,10 +2708,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // inserted, not updated at its revision.
         if (unit.Row is not null) unit.Expected = null;
         if (Has(Flaw.ForgetShortWaits)) return;
-        // Held ones too: a held result is still in flight in the row's jobs. A finished job is written as its ticket, so a
-        // later owner runs it again and puts its result first (F7), instead of a result row ordered behind a cancel.
+        // Public results held by the turn already have their settled row staged above. Legacy jobs retain their F7 ticket.
         var prior = _items.Values.Where(i => !i.Durable && Canonical(i.Message.Target.Id) == unit.Instance && !unit.Consumed.Contains(i)
-                     && !unit.Cancelled.Contains(i.Message.InboxKey)).OrderBy(i => i.InboxOrder).ThenByDescending(i => i.CompletedOrder).ToList();
+                     && !unit.Cancelled.Contains(i.Message.InboxKey) && unit.HeldJobResults?.ContainsKey(i) != true)
+            .OrderBy(i => i.InboxOrder).ThenByDescending(i => i.CompletedOrder).ToList();
         foreach (var item in prior)
         {
             unit.Promoted.Add(item.Message.InboxKey);
@@ -2757,8 +2785,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
         foreach (var item in unit.Held)     // back in its place; its turn ran, so it is no suspect and no longer on trial
         {
             (item.Taken, item.Held, item.Suspect, item.Marked) = (false, true, false, true);
-            Insert(unit.Slot!, item);
             _gate.Finished(this, item);
+            if (unit.HeldJobResults?.GetValueOrDefault(item) is { } result)
+            {
+                var ticket = item.Message.InboxKey;
+                _items.Remove(ticket);
+                _behind.Remove(ticket);
+                if (item.Durable && _polling && !Has(Flaw.PollRace)) _consumed.Add(ticket);
+                item.Cancel?.Dispose();
+                (item.Message, item.Original, item.Key, item.Cancel) = (result, null, null, null);
+                _items.Add(result.InboxKey, item);
+            }
+            Insert(unit.Slot!, item);
         }
         foreach (var id in unit.Cancelled)      // a cancelled job's ticket goes whether or not this owner had taken it into memory yet
         {

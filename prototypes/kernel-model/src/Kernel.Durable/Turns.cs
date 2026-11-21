@@ -110,7 +110,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool Durable;            // it is a row
     /// <summary>A completion produced by this worker from its own issued ticket, including an unwritten job.</summary>
     public bool IsWorkerJobCompletion => CompletedJob && Message.Kind == Kinds.JobFinished;
-    public bool IsDurableJobTicket => Durable && Message.InboxScope > 0 && Message.Kind is Kinds.Job or Kinds.JobFinished;
+    public bool IsDurableJobTicket => Durable && !Message.FoundationJobResult && Message.InboxScope > 0 && Message.Kind is Kinds.Job or Kinds.JobFinished;
     internal bool AwaitPoll;          // promoted while catching up: poll must observe its row before marking it
     internal bool Marked;             // its row says seen at this epoch
     internal bool RecoveryOrdering;   // a previously marked row read on takeover, or a command that matured during recovery
@@ -248,6 +248,7 @@ public sealed class TurnOutcome(string instance)
     public long Until;
     public object? Pending;     // what the turns in memory left for the history, kept with the actor until it is written
     internal HashSet<InboxKey> Promoted = [];     // messages held in memory only, written with this outcome
+    internal Dictionary<Delivery, Message>? HeldJobResults;
 
     internal bool Durable => Window is not null || Replied.Exists(r => r.Rpc) || !InMemory && (Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.InboxKey)));
 }
@@ -561,8 +562,11 @@ public sealed class DurableTurn
     {
         var jobs = new List<string>(_jobs);
         foreach (var delivery in _input.Taken.Skip(_input.From))
-            if (_held.Contains(delivery.Message.InboxKey) && CompletedTicket(delivery, out var key) && !jobs.Contains(key))
-                jobs.Add(key);
+        {
+            if (!_held.Contains(delivery.Message.InboxKey) || !CompletedTicket(delivery, out var key)) continue;
+            if (_started.ContainsKey(key)) throw new InvalidOperationException($"A held result keeps job '{key}' in flight.");
+            if (!jobs.Contains(key)) jobs.Add(key);
+        }
         return jobs.Count == 0 ? null : DurableKeyJson.WriteKeys(jobs);
     }
 
