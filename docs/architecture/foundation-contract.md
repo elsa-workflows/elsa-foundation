@@ -53,8 +53,9 @@ within a skew bound the foundation states; a reading may step back; a timer is d
 reaches its `dueAt`; and FC-4 checks the bound. A timer with a past due time is already eligible.
 The built-in in-memory store shares one clock source across its owners. Readings of that source at the
 same instant have zero skew. Its worker samples that source at admission and keeps the reading for the
-whole turn. FC-C1 still requires the read and end adapters to use this source, with provider qualification
-at K4.
+whole turn. FC-C1 still requires the read and end adapters to use this source. Workers on remote stores
+continue to read their elapsed-time estimate during the turn. K4 qualifies one captured reading and the
+provider's skew bound for those stores.
 
 ### Words
 

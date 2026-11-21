@@ -109,7 +109,7 @@ internal sealed class Turn : ITurn
         var unwritten = created ? Instance.Creation == 0 && _input.Spec!.Ephemeral : _input.Unwritten;
         // The history of its turns in memory comes with the commit that writes it (decision 4).
         List<object> entries = _input.Unwritten && _input.Pending is List<object> pending ? [.. pending, .. _entries] : _entries;
-        if (unwritten && (created || _input.Services.Now < _input.Until) && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0 && unit.Replied.Count == 0)
+        if (unwritten && (created || _input.CheckpointTime < _input.Until) && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0 && unit.Replied.Count == 0)
         {
             if (!Id.StartsWith($"g{Instance.Ref.Partition}/key/", StringComparison.Ordinal)) return unit;
             // Metadata is a persistence obligation unless its model explicitly supplies a state-free terminal

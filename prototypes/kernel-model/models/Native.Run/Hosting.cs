@@ -97,6 +97,8 @@ public sealed class Counting : DbCommandInterceptor
 /// <summary>Passes everything through; counts commits and the bytes of instance state they write.</summary>
 public sealed class Sizing(IKernelStore inner) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
+
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;

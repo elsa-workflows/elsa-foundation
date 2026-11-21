@@ -1060,6 +1060,8 @@ sealed class Locks(Target target) : DbTransactionInterceptor
 /// <summary>Counts what every store call came to: landed, fenced, or failed and with which of the engine's errors.</summary>
 sealed class Tally(IKernelStore inner) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
+
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;

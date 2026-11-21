@@ -233,6 +233,8 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 /// </summary>
 public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
 {
+    public Func<long>? FoundationClock => null;
+
     /// <summary>
     /// Whether the fence rides in the batch. The default is in the batch on every engine (decided 12 November; SQL Server
     /// 16 November, for the owned commit: ENGINES.md E9; with <c>CommitSql.EntityFramework</c> SQL Server keeps the checked

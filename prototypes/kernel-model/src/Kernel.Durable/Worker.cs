@@ -268,7 +268,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private IEnumerable<string> ReadyForTurns(CancellationToken cancellationToken)
     {
         ReceiveJobPublications(cancellationToken);
-        return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && Deliverable(s.Key, s.Value, Now).Count > 0).Select(s => s.Key)
+        var now = Now;
+        return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && Deliverable(s.Key, s.Value, now).Count > 0).Select(s => s.Key)
             .Where(id => !Blocked && (TrialItems.Count == 0 || OnTrial(id) || Spared(id)));    // while a trial runs, nothing else in the process does
     }
 

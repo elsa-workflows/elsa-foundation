@@ -182,7 +182,7 @@ public sealed class StoreException(Failure failure, string message, Exception? i
 public interface IKernelStore : IMembership
 {
     /// <summary>The shared Unix-millisecond source, when the built-in foundation can read it locally.</summary>
-    Func<long>? FoundationClock => null;
+    Func<long>? FoundationClock { get; }
 
     /// <summary>A supported store validates a guarded transaction against its clock before making its writes visible.</summary>
     bool SupportsCommitWindow => false;
