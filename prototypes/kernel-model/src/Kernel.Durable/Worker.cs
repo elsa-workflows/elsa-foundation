@@ -1853,7 +1853,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         // The owner already knows its restricting decision, even if its durable acknowledgement is still in flight.
         // Count each such outcome separately: applying one unit must not release another unit's restriction.
-        if (unit.Delete || unit.Row is { } next && (next.Retired || next.Status != InstanceStatus.Running ||
+        if (unit.FoundationWithholds || unit.Delete || unit.Row is { } next && (next.Retired || next.Status != InstanceStatus.Running ||
             next.Creation != slot.ActiveCreation || _type.Withholds(next, this)) ||
             slot.Unwritten && unit.Row is null && unit.Status is not (null or InstanceStatus.Running))
         {
@@ -2093,6 +2093,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 ? ReplyRelease.EphemeralWriteFree : ReplyRelease.WriteFree;
         if (Has(Flaw.EmitBeforeCommit)) Release(unit, release);
         else Release(unit, release, early: true);    // callers whose route opted out of waiting
+        ReleaseExplicit(unit, early: true);
         if (writeFree) Apply(unit, null, true, cancellationToken, release);
         else
         {
@@ -2492,16 +2493,22 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (unit.Row is not null && unit.Consumed is [var completion] && _type.RevisitsHeld(unit.Row.Model, unit.Row, completion))
             foreach (var held in slot.Inbox.Where(i => i.Held && i.InboxOrder < completion.InboxOrder)) held.Held = false;
         if (!Has(Flaw.EmitBeforeCommit)) Release(unit, release);
-        for (var i = 0; i < unit.Replied.Count; i++)
-        {
-            var reply = unit.Replied[i];
-            try { Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item, refusedInput: reply.RefusedInput); }
-            catch (Exception) when (reply.Rpc) { /* A lost RPC answer is recovered by replaying the logical operation. */ }
-        }
+        ReleaseExplicit(unit, early: false);
         // A load, poll or gate release can encounter any of this actor's jobs while its checkpoint is busy.
         foreach (var ticket in slot.Inbox.Where(i => i.Key is not null).ToArray()) StartJob(ticket, cancellationToken);
         if (slot.Row is null && slot.Inbox.Count == 0) RemoveSlot(unit.Instance);
         Evict();
+    }
+
+    private void ReleaseExplicit(TurnOutcome unit, bool early)
+    {
+        for (var i = 0; i < unit.Replied.Count; i++)
+        {
+            var reply = unit.Replied[i];
+            if (reply.FoundationEarly != early) continue;
+            try { Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item, refusedInput: reply.RefusedInput); }
+            catch (Exception) when (reply.Rpc) { /* A lost RPC answer is recovered by replaying the logical operation. */ }
+        }
     }
 
     /// <summary>

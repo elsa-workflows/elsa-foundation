@@ -19,9 +19,9 @@ internal static class FoundationEventReferences
 
         await ingress.SetStartAsync(scope, "late", "start", spec);
         await ingress.SetStartAsync(scope, "late", "start", spec);
-        var late = store.Messages.Values.Single().Message;
+        var late = store.Messages.Values.Single(row => row.Message.Start is not null).Message;
         var lateRef = store.ReferenceFor(tenant, new(late.Target.Id, 1));
-        check(late is { TargetCreation: 1, Start.Creation.Generation: 1 } &&
+        check(store.Messages.Count == 2 && late is { TargetCreation: 1, Start.Creation.Generation: 1 } &&
               store.AddFoundationMessage("other", lateRef, "foreign", "signal") is null &&
               store.AddFoundationMessage(tenant, lateRef, "exact-before-start", "signal", "follows-kept") == true,
             "the kept event creates one tenant-bound exact life and accepts an exact send before birth");

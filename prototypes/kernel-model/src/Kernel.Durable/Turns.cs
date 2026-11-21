@@ -186,6 +186,7 @@ public sealed class TurnOutcome(string instance)
 {
     internal Slot? Slot;
     internal bool RestrictsJobEntry;
+    internal bool FoundationWithholds;
     internal FoundationHeaderChange? FoundationHeader;
     internal bool OpensPark;
     public string Instance => instance;
@@ -229,6 +230,7 @@ public sealed class TurnOutcome(string instance)
 public sealed record RequestReply(InboxKey Message, string To, string Channel, object? Item)
 {
     internal bool Rpc { get; init; }
+    internal bool FoundationEarly { get; init; }
     internal Message? RefusedInput { get; init; }
 }
 

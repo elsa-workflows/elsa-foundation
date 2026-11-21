@@ -31,6 +31,9 @@ internal static class ActorAdapterChecks
         var root = Admit("typed-root", "keep");
         var recalled = Admit("typed-recalled", "recall");
         var rejected = Admit("typed-rejected", "fail");
+        var parked = Admit("typed-parked", "recall");
+        var noState = Admit("typed-null", "unset");
+        var holdingParent = Admit("typed-hold-term", "hold-parent");
         store.Refuses = row => row.State.Contains("must-rollback", StringComparison.Ordinal);
         var first = await Owner("typed-owner");
         await Pump(first);
@@ -50,15 +53,34 @@ internal static class ActorAdapterChecks
             "public child creation, same-turn send and final notice expose only exact refs and opaque handles");
         check((await reader.GetAsync(scope, rejected)) is { Park: not null, Header.Status: Contract.ActorStatus.Faulted } &&
             store.Messages.Values.All(row => row.Message.Payload != "must-rollback") &&
-            !store.ReadFoundationActors("acme").Actors.Any(item => item.Row.State.Contains("must-rollback")),
+            !store.ReadFoundationActors("acme").Actors.Any(item => item.Row.State.Contains("must-rollback")) &&
+            actor.AttemptedChild is { } rolledBack &&
+            store.FoundationTarget("acme", rolledBack.Id) is null &&
+            store.AddFoundationMessage("acme", rolledBack.Id, "orphan", "inspect") is null,
             "a refused public actor turn parks without its staged checkpoint, child or message");
+
+        var parentCheckpoint = store.ReadFoundationActor("acme", holdingParent.Id).Actor!.Row;
+        var pendingChild = new Contract.ActorRef(Json.Read<ProbeState>(parentCheckpoint.State).Child!);
+        check(store.AddFoundationMessage("acme", holdingParent.Id, "hold-terminate", Kinds.Terminate, "hold") == true,
+            "the fixture submits a terminate to a parent with a live attached child");
+        await Pump(first);
+        check(store.Messages.Values.Any(row => row.Message.Id == "hold-terminate" && !row.Done) &&
+            (await reader.GetAsync(scope, pendingChild))?.Header.Status == Contract.ActorStatus.Running &&
+            store.ReadFoundationActor("acme", holdingParent.Id).Actor!.Row.Children == parentCheckpoint.Children,
+            "a held terminate stays pending and cannot cancel or discharge the live child");
 
         var outsideSameId = false;
         try { store.AddFoundationMessage("acme", root.Id, rootState.Handle!, "firing"); }
         catch (ArgumentException exception) when (exception.ParamName == "id") { outsideSameId = true; }
         check(outsideSameId && store.AddFoundationMessage("acme", recalled.Id, "recall", "recall") == true,
             "outside sends cannot use an issued timer id");
+        var noStateView = await reader.GetAsync(scope, noState);
+        check(noStateView is { Header: { TypeData: "seed", Labels.Count: 0 } },
+            "the initial typed header commits unchanged when the actor omits SetHeader");
+        var parkedBefore = store.ReadFoundationActor("acme", parked.Id).Actor!.Row.State;
+        store.AddFoundationMessage("acme", parked.Id, "reject-update", "reject-update");
         await Pump(first);
+        store.AddFoundationMessage("acme", parked.Id, "late-update", "late-update");
         await first.DisposeAsync();
 
         now = due - 1;
@@ -67,7 +89,13 @@ internal static class ActorAdapterChecks
         check(Json.Read<ProbeState>(store.ReadFoundationActor("acme", root.Id).Actor!.Row.State).Fires == 0,
             "the replacement owner withholds a public actor's timer before its absolute deadline");
         now = due;
+        store.AddFoundationMessage("acme", noState.Id, "verify-null", "verify-null");
         await Pump(next);
+        check((await reader.GetAsync(scope, noState))?.Header.TypeData == "still-null",
+            "an unset actor state survives a reload without becoming the literal text null");
+        check((await reader.GetAsync(scope, parked)) is { Park: not null, Header.Status: Contract.ActorStatus.Faulted } &&
+            store.ReadFoundationActor("acme", parked.Id).Actor!.Row.State == parkedBefore,
+            "an unresolved Park holds fresh input and an earlier due timer while preserving the previous state");
         rootState = Json.Read<ProbeState>(store.ReadFoundationActor("acme", root.Id).Actor!.Row.State);
         var recalledState = Json.Read<ProbeState>(store.ReadFoundationActor("acme", recalled.Id).Actor!.Row.State);
         check(rootState.Fires == 1 && rootState.FiredAt == due && recalledState.Fires == 0 &&
@@ -134,6 +162,47 @@ internal static class ActorAdapterChecks
             Read("other", foreign).Count == 0,
             "the turn's durable publish ticket preserves tenant scope and returns the same opaque event id as delivery");
 
+        var a = bound.RequestAsync(scope, new("signal"), "separate-a", "emit-first", null, new("first-object", now + 10_000)).AsTask();
+        var b = bound.RequestAsync(scope, new("signal"), "separate-b", "reply-first", null, new(null, now + 10_000)).AsTask();
+        await Pump(local);
+        transport.Deliver();
+        check(await a.WaitAsync(TimeSpan.FromSeconds(2)) is { Channel: "first-emit" } &&
+            await b.WaitAsync(TimeSpan.FromSeconds(2)) is { Channel: "first-reply" } &&
+            Read("acme", root).Observations.SequenceEqual(["separate-a:first-object:1", "separate-b:none:1"]),
+            "two local requests use separate ambient values and the first authored response wins in either order");
+
+        using var cancellation = new CancellationTokenSource();
+        var held = bound.RequestAsync(scope, new("signal"), "held-ambient", "hold", null,
+            new("held-object", now + 10_000), cancellation.Token).AsTask();
+        await Pump(local);
+        check(!held.IsCompleted && store.AddFoundationMessage("acme", root.Id, "drive-held", "drive-held") == true,
+            "holding the requested event leaves the live request unanswered");
+        await Pump(local);
+        transport.Deliver();
+        check(await held.WaitAsync(TimeSpan.FromSeconds(2)) is { Channel: "held-answered" } &&
+            Read("acme", root).Observations.TakeLast(2).SequenceEqual(["held-ambient:held-object:1", "held-ambient:none:2"]),
+            "a held event is handed back in order on ordinary input without reusing its first-turn Ambient");
+
+        await bound.SetStartAsync(scope, "spawn", "starts", new Contract.StartSpec(probe.Type, "from-subscription", "configured-input"));
+        var spawned = bound.RequestAsync(scope, new("spawn"), "birth-event", "trigger-payload", null,
+            new("initial-ambient", now + 10_000)).AsTask();
+        await Pump(local);
+        await Pump(elsewhere);
+        transport.Deliver();
+        var born = store.ReadFoundationActors("acme").Actors.Single(item => item.Header.TypeData == "from-subscription");
+        var bornState = Json.Read<ProbeState>(born.Row.State);
+        check(await spawned.WaitAsync(TimeSpan.FromSeconds(2)) is { Channel: "spawned", Item: "trigger-payload" } &&
+            bornState.Observations is ["start:configured-input:initial-ambient", "event:trigger-payload:none"],
+            "a scoped event start delivers the configured start input followed by the distinct event and replies once");
+
+        store.Refuses = row => row.State.Contains("refused-output", StringComparison.Ordinal);
+        var refused = bound.RequestAsync(scope, new("signal"), "refused-output", "refused", null,
+            new(null, now + 10_000)).AsTask();
+        await Pump(local);
+        transport.Deliver();
+        check(await refused.WaitAsync(TimeSpan.FromSeconds(2)) is { Channel: null, Status: Contract.ActorStatus.Faulted },
+            "a refused actor commit releases the Park status without releasing the authored reply");
+
         Contract.ActorRef Arm(int partition, string name, string tenant)
         {
             var spec = new StartSpec(probe.Type, name, "wait", Creation: new(1, 0, name));
@@ -180,26 +249,66 @@ internal static class ActorAdapterChecks
         public int WithAmbient { get; set; }
         public string? LastEvent { get; set; }
         public string? Published { get; set; }
+        public List<string> Observations { get; set; } = [];
+        public bool HeldOnce { get; set; }
         public long? FiredAt { get; set; }
     }
 
     private sealed class Probe : Contract.IActorType
     {
         public string Type => "typed-actor";
+        public Contract.ActorRef? AttemptedChild { get; private set; }
         public bool Withholds(Contract.ActorHeader header) => false;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             var state = turn.State is { } saved ? Json.Read<ProbeState>(saved) : new();
+            if (turn.Inbox is [{ Kind: Contract.Kinds.Start, Payload: "unset" }]) return default;
             foreach (var message in turn.Inbox)
             {
                 switch (message.Kind)
                 {
+                    case Contract.Kinds.Start when message.Payload == "configured-input":
+                        state.Observations.Add($"start:{message.Payload}:{turn.Ambient ?? "none"}");
+                        break;
+                    case Contract.Kinds.Event when message.Event is { Key: "spawn", Id: "birth-event", Wait: "starts" }:
+                        state.Observations.Add($"event:{message.Payload}:{turn.Ambient ?? "none"}");
+                        turn.Reply(message, "spawned", message.Payload);
+                        break;
+                    case Contract.Kinds.Start when message.Payload == "hold-parent":
+                        state.Child = turn.Start(new(Type, "child", "child")).Id;
+                        break;
+                    case Contract.Kinds.Terminate when message.Payload == "hold":
+                        turn.Hold(message);
+                        break;
                     case Contract.Kinds.Start when message.Payload == "wait":
                         turn.Subscribe("signal", "active");
                         break;
                     case "publish":
                         state.Published = turn.Publish("signal", message.Payload, TimeSpan.FromSeconds(10));
+                        break;
+                    case Contract.Kinds.Event when message.Event is { Key: "signal", Wait: "active" } delivered &&
+                        message.Payload is "emit-first" or "reply-first" or "hold" or "refused":
+                        state.Observations.Add($"{delivered.Id}:{turn.Ambient ?? "none"}:{turn.Inbox.Count}");
+                        if (message.Payload == "emit-first")
+                        {
+                            turn.Emit("first-emit", "first");
+                            turn.Reply(message, "second-reply", "second");
+                        }
+                        else if (message.Payload == "reply-first")
+                        {
+                            turn.Reply(message, "first-reply", "first");
+                            turn.Emit("second-emit", "second");
+                        }
+                        else if (message.Payload == "refused")
+                            turn.Reply(message, "must-not-release", "refused");
+                        else if (!state.HeldOnce)
+                        {
+                            turn.Hold(message);
+                            state.HeldOnce = true;
+                        }
+                        else
+                            turn.Emit("held-answered", "released");
                         break;
                     case Contract.Kinds.Event when message.Event is { Key: "signal", Wait: "active" } delivered:
                         state.Count++;
@@ -217,6 +326,7 @@ internal static class ActorAdapterChecks
                             var child = turn.Start(new(Type, "child", "child"));
                             state.Child = child.Id;
                             turn.Send(child, "signal", message.Payload == "fail" ? "must-rollback" : "from-parent");
+                            if (message.Payload == "fail") AttemptedChild = child;
                         }
                         if (message.Payload == "fail") state.Child = "must-rollback";
                         break;
@@ -227,6 +337,15 @@ internal static class ActorAdapterChecks
                         var notice = Json.Read<Contract.ChildFinished>(message.Payload!);
                         if (notice is { Final: true, Status: Contract.ActorStatus.Finished } && notice.Child.Id == state.Child)
                             state.ChildOutput = Json.Read<string>(notice.Output!);
+                        break;
+                    case "reject-update":
+                        state.Child = "must-rollback";
+                        break;
+                    case "late-update":
+                        state.Count++;
+                        break;
+                    case "verify-null":
+                        turn.SetHeader(turn.State is null ? "still-null" : "changed", turn.Header.Labels);
                         break;
                     case "recall":
                         turn.Recall(state.Handle!);

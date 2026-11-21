@@ -8,17 +8,22 @@ namespace Kernel.Foundation.InMemory;
 internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
     (Durable.Requests Requests, string Node)? local = null) : Durable.IActorType
 {
-    public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services) =>
-        actor.Withholds(Header(row));
+    public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
+    {
+        var checkpoint = store.FoundationTurnHeader(row);
+        return checkpoint.Park is not null || actor.Withholds(Header(checkpoint));
+    }
 
     public bool SingleMessage(Durable.Message message) => message.Kind == Contract.Kinds.ChildFinished;
 
-    public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) => SingleMessage(delivery.Message);
+    public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
+        !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null);
 
     public Durable.TurnOutcome? Command(Durable.TurnInput input)
     {
         var message = input.Taken[input.From].Message;
-        if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete)
+        if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete ||
+            message.Kind == Contract.Kinds.Terminate && input.Row is { } row && store.FoundationTurnHeader(row).Park is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "ResolutionUnavailable");
         if (message.Kind != Contract.Kinds.ChildFinished) return null;
 
@@ -34,17 +39,23 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
 
     public async ValueTask<Durable.TurnOutcome> TurnAsync(Durable.TurnInput input)
     {
-        var header = input.Row is { } row ? Header(row) : StartHeader(input);
-        var ambient = local is { } host
-            ? input.Taken.Skip(input.From).Select(delivery => delivery.Message.ReplyTo).OfType<string>()
-                .Select(address => host.Requests.LocalAmbient(address, host.Node, header.Tenant, input.Services.Now))
-                .FirstOrDefault(value => value is not null)
+        var header = input.Row is { } row ? Header(store.FoundationTurnHeader(row)) : StartHeader(input);
+        var delivery = input.Taken[input.From];
+        var ambient = local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
+            ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
         var turn = new ActorTurn(store, input, header, ambient);
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray());
         await actor.TurnAsync(turn, CancellationToken.None);
-        return turn.Seal();
+        var outcome = turn.Seal();
+        if (outcome.Row is { Status: Durable.InstanceStatus.Running } && outcome.FoundationHeader is { } next)
+            outcome.FoundationWithholds = actor.Withholds(header with { TypeData = next.TypeData, Labels = next.Labels });
+        return outcome;
     }
+
+    private static Durable.InboxKey AmbientDelivery(Durable.Message message) => message.EventMatch is { } match
+        ? new(message.Target.Id, Durable.InboxKey.EventDeliveryScope, match)
+        : message.InboxKey;
 
     public ValueTask<object?> ExecuteJobAsync(string type, Durable.IJob job, CancellationToken cancellationToken)
     {
@@ -74,13 +85,14 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         result.Revision = next.Revision;
         result.Unsubscribe = true;
         result.Journal = Durable.Json.Write(new[] { "parked" });
+        if (row is null) result.FoundationHeader = InitialHeader(next.Definition);
         if (running && next.Parent is not null) result.Sent.Add(Notice(next, null, final: false));
         return result;
     }
 
-    private Contract.ActorHeader Header(Durable.InstanceRow row)
+    private Contract.ActorHeader Header(Durable.InMemoryStore.ActorCheckpoint checkpoint)
     {
-        var checkpoint = store.FoundationTurnHeader(row);
+        var row = checkpoint.Row;
         var identity = store.FoundationIdentity(row.Id, row.Creation);
         return new(new(identity.Reference), row.Model, identity.Tenant, (Contract.ActorStatus)row.Status, row.Fault,
             Ref(identity.Tenant, row.Parent, row.ParentCreation), checkpoint.EndedAt, checkpoint.Header.TypeData, checkpoint.Header.Labels);
@@ -91,7 +103,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var spec = input.Spec!;
         var identity = store.FoundationIdentity(input.Actor, input.Creation);
         return new(new(identity.Reference), spec.Model, identity.Tenant, Contract.ActorStatus.Running, null,
-            Ref(identity.Tenant, spec.Parent, spec.ParentCreation), null, spec.Definition, System.Collections.Frozen.FrozenDictionary<string, string>.Empty);
+            Ref(identity.Tenant, spec.Parent, spec.ParentCreation), null, spec.Definition, InitialHeader(spec.Definition).Labels);
     }
 
     private Contract.ActorRef? Ref(string tenant, string? id, long creation) =>
@@ -100,7 +112,10 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     private static Durable.InstanceRow NewRow(string id, Durable.StartSpec spec, Durable.Message creator) =>
         new(id, spec.Model, spec.Definition, Durable.InstanceStatus.Running, "null", 0, spec.Parent, History: spec.History,
             Creation: spec.Creation?.Generation ?? 0, ParentCreation: spec.ParentCreation,
-            StartIntent: Durable.CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload));
+            StartIntent: Durable.CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload)) { FoundationNullState = true };
+
+    private static Durable.FoundationHeaderChange InitialHeader(string typeData) =>
+        new(typeData, System.Collections.Frozen.FrozenDictionary<string, string>.Empty);
 
     private sealed record Completion(string Child, Durable.InstanceStatus Status, string? Output, long Creation, bool Final);
 

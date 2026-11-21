@@ -17,10 +17,12 @@ internal sealed partial class ActorAdapter
         private readonly Dictionary<Contract.ActorRef, Durable.CreationAddress> _stagedChildren = [];
         private readonly Dictionary<Contract.Message, Durable.Message> _messages = new(ReferenceEqualityComparer.Instance);
         private readonly List<object> _entries = [];
+        private readonly HashSet<Durable.InboxKey> _repliedAfterEmit = [];
         private readonly Durable.InstanceRow _row;
         private Durable.FoundationHeaderChange? _header;
         private Contract.ActorStatus _status;
         private object? _output;
+        private bool _emitted;
 
         public ActorTurn(Durable.InMemoryStore store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient)
         {
@@ -30,7 +32,7 @@ internal sealed partial class ActorAdapter
             Header = header;
             Ambient = ambient;
             _row = input.Row ?? NewRow(input.Actor, input.Spec!, input.Taken[input.From].Message);
-            State = input.Row is null ? null : input.Row.State;
+            State = _row.FoundationNullState ? null : _row.State;
             _status = header.Status;
             _children = Durable.ChildRegistry.Read(_row.Children);
             var inbox = new List<Contract.Message>();
@@ -49,8 +51,18 @@ internal sealed partial class ActorAdapter
         public string? State { get; set; }
         public object? Ambient { get; }
 
-        public void Emit(string channel, object? item) => _turn.Emit(channel, item);
-        public void Reply(Contract.Message message, string channel, object? item) => _turn.Reply(Received(message), channel, item);
+        public void Emit(string channel, object? item)
+        {
+            _emitted = true;
+            _turn.Emit(channel, item);
+        }
+
+        public void Reply(Contract.Message message, string channel, object? item)
+        {
+            var request = Received(message);
+            _turn.Reply(request, channel, item);
+            if (_emitted) _repliedAfterEmit.Add(request.InboxKey);
+        }
         public void Hold(Contract.Message message) => _turn.Hold(Received(message));
 
         public string Send(Contract.ActorRef target, string kind, string? payload = null, long? dueAt = null)
@@ -117,9 +129,10 @@ internal sealed partial class ActorAdapter
         public Durable.TurnOutcome Seal()
         {
             var wasRunning = _row.Status == Durable.InstanceStatus.Running;
-            var cascades = Inbox is [{ Kind: Contract.Kinds.Terminate }] || wasRunning && _status == Contract.ActorStatus.Cancelled;
             var ended = wasRunning && _status != Contract.ActorStatus.Running;
-            if (ended || cascades) _turn.HoldNothing();
+            var outcome = _turn.Outcome((Durable.InstanceStatus)_status);
+            var cascades = outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Terminate) ||
+                ended && _status == Contract.ActorStatus.Cancelled;
             if (cascades)
             {
                 foreach (var child in _children) _turn.Send(new(child.Id), Contract.Kinds.Terminate, options: new(TargetCreation: child.Creation));
@@ -127,15 +140,18 @@ internal sealed partial class ActorAdapter
                     _turn.CancelJob(job);
             }
 
-            var outcome = _turn.Outcome((Durable.InstanceStatus)_status);
+            outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
+            for (var i = 0; i < outcome.Replied.Count; i++)
+                if (Durable.ReplyTo.Parse(outcome.Replied[i].To).BeforeCommit)
+                    outcome.Replied[i] = outcome.Replied[i] with { FoundationEarly = true };
             foreach (var notice in outcome.Consumed.Where(entry => entry.Message.Kind == Contract.Kinds.ChildFinished))
             {
                 var message = notice.Message;
                 if (message.Read<Completion>().Final) _children.Remove(new(message.Sender!, message.SenderCreation));
             }
 
-            var row = _row with { State = State ?? "null", Revision = _turn.Revision, Status = (Durable.InstanceStatus)_status,
-                Jobs = _turn.Jobs(), Children = Durable.ChildRegistry.Write(_children) };
+            var row = _row with { State = State ?? "null", FoundationNullState = State is null,
+                Revision = _turn.Revision, Status = (Durable.InstanceStatus)_status, Jobs = _turn.Jobs(), Children = Durable.ChildRegistry.Write(_children) };
             if (ended)
             {
                 if (row.Parent is not null) _turn.AddTerminalNotice(Notice(row, _output is null ? null : Durable.Json.Write(_output), final: true));
@@ -146,7 +162,7 @@ internal sealed partial class ActorAdapter
             if (Inbox is [{ Kind: Contract.Kinds.Migrate }]) _entries.Add("migrate");
             var journal = _entries.Count > 0 ? Durable.Json.Write(_entries) :
                 _row.History == Durable.History.State && State != _input.Row?.State ? "[]" : null;
-            outcome.FoundationHeader = _header;
+            outcome.FoundationHeader = _header ?? (_input.Row is null ? InitialHeader(Header.TypeData) : null);
             return _turn.Seal(outcome, row, State, journal);
         }
 
@@ -160,16 +176,16 @@ internal sealed partial class ActorAdapter
         {
             var sender = _store.FoundationReferenceOf(Header.Tenant, message.Sender, message.SenderCreation) is { } reference
                 ? new Contract.ActorRef(reference) : (Contract.ActorRef?)null;
-            var id = message.InboxKey.HasIssuedOrigin && message.StorageId is null
+            var id = (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
                 ? _store.MessageHandle("inbox:" + message.Id) : message.Id;
-            if (message.EventMatch is { } encoded)
+            if (message.Start is null && message.EventMatch is { } encoded)
             {
                 var match = Durable.EventMatch.Decode(encoded);
                 if (!match.Key.StartsWith(Qualify(""), StringComparison.Ordinal))
                     throw new InvalidOperationException("An event from another scope reached this turn.");
                 var key = match.Key[(Header.Tenant.Length + 1)..];
                 var delivery = new Contract.EventDelivered(key, match.Event, match.Wait);
-                return new(match.Event, message.Start is null ? Contract.Kinds.Event : Contract.Kinds.Start, message.Payload, Event: delivery);
+                return new(match.Event, Contract.Kinds.Event, message.Payload, Event: delivery);
             }
             if (message.Kind == Contract.Kinds.ChildFinished)
             {

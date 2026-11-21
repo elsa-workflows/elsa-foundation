@@ -67,6 +67,7 @@ public sealed class Request(string id, long deadline)
     internal bool AnyOutput { get; init; }
     internal string? Tenant { get; init; }
     internal object? Ambient { get; init; }
+    internal HashSet<InboxKey> AmbientGiven { get; } = [];
     private TaskCompletionSource<Reply>? _completion;
 
     internal Task<Reply> Completion() => Done
@@ -126,13 +127,13 @@ public sealed class Requests
         }
     }
 
-    internal object? LocalAmbient(string address, string node, string tenant, long now)
+    internal object? TakeLocalAmbient(string address, string node, string tenant, long now, InboxKey delivery)
     {
         var route = ReplyTo.Parse(address);
         if (route.Node != node || route.Deadline <= now) return null;
         lock (_gate)
-            return _open.GetValueOrDefault(route.Request) is { Done: false } request &&
-                request.Tenant == tenant && request.Deadline == route.Deadline ? request.Ambient : null;
+            return _open.GetValueOrDefault(route.Request) is { Done: false, Ambient: { } ambient } request &&
+                request.Tenant == tenant && request.Deadline == route.Deadline && request.AmbientGiven.Add(delivery) ? ambient : null;
     }
 
     internal Task<Reply> CompletionOf(Request request)
