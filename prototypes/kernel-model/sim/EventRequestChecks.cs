@@ -1,3 +1,6 @@
+using Kernel.Foundation.InMemory;
+using Contract = Kernel.Foundation.Contracts;
+
 namespace Kernel.Sim;
 
 /// <summary>The in-memory admission witness for FC-C2.</summary>
@@ -7,7 +10,8 @@ internal static class EventRequestChecks
     {
         const long now = 1_700_000_000_000;
         const string key = "acme_signal";
-        var store = new InMemoryStore(2, () => now);
+        var time = now;
+        var store = new InMemoryStore(2, () => time);
         var request = new EventRow(key, "request", "original", now + 60_000);
         var spec = new StartSpec("event-probe", "event");
         var requests = new Requests("event-requests");
@@ -79,6 +83,29 @@ internal static class EventRequestChecks
             "both the active actor and the new actor commit the event through the real owners");
         check(caller is { Responses: 1, Answer: "original" } && transport.Sent == 2,
             "the first committed answer wins the request even though both actors answer");
+
+        var bound = new EventRequests(store, requests, "caller");
+        var scope = new Contract.BoundScope("acme");
+        var eventTarget = new Contract.Target.Event("typed");
+        var keep = new Contract.AddOptions(KeepFor: TimeSpan.FromMinutes(1));
+        var options = new Contract.RequestOptions(null, now + 60_000);
+        await Events.SubscribeAsync(store, starter with { Key = "other_typed" }, 2);
+        var missedTyped = bound.RequestAsync(scope, eventTarget, "typed-request", "typed", keep, options);
+        check(missedTyped.IsCompletedSuccessfully &&
+              (await missedTyped) is { Error: "no waiter", Status: null } &&
+              !store.EventRows.ContainsKey(("acme_typed", "typed-request")) && requests.All.Count == 0,
+            "the bound request returns no waiter immediately, publishes nothing and releases the caller");
+
+        await Events.SubscribeAsync(store, starter with { Key = "acme_typed" }, 2);
+        var boundAnswer = bound.RequestAsync(scope, eventTarget, "typed-request", "typed", null, options).AsTask();
+        await Pump();
+        check((await boundAnswer.WaitAsync(TimeSpan.FromSeconds(2))) is { Channel: "event-output", Item: "typed" },
+            "the same bound request id can be retried and accept the actor's first output channel");
+
+        var timed = bound.RequestAsync(scope, eventTarget, "deadline", "typed", null, options with { Deadline = now + 10 }).AsTask();
+        time += 10;
+        check((await timed.WaitAsync(TimeSpan.FromSeconds(2))) is { Error: "timeout" } && requests.All.Count == 0,
+            "a bound event request releases its reply registration at the shared clock deadline");
     }
 
     private sealed class EventProbe : Model<List<string>>
@@ -92,7 +119,7 @@ internal static class EventRequestChecks
                 if (message.Kind == "arm") turn.Subscribe(message.Read<string>(), "active");
                 if (message.Kind != Kinds.Event || message.Payload is not { } payload) continue;
                 state.Add(payload);
-                turn.Reply(message, Request.Response, payload);
+                turn.Reply(message, payload == "typed" ? "event-output" : Request.Response, payload);
             }
         }
     }

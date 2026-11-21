@@ -64,17 +64,29 @@ public sealed class Request(string id, long deadline)
     public int Responses { get; private set; }      // accepted; for tests
     public int Ends { get; private set; }
 
+    internal bool AnyOutput { get; init; }
+    private TaskCompletionSource<Reply>? _completion;
+
+    internal Task<Reply> Completion() => Done
+        ? Task.FromResult(AcceptedResponse ?? new Reply(Registration, "", null, null, Status, Error))
+        : (_completion ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+
     internal void Receive(Reply reply, bool again)
     {
         if (Done && !again) return;
-        if (reply.Channel == Response) (AcceptedResponse, Responses, Done) = (reply, Responses + 1, true);
-        else if (reply.Channel is null) (Status, Error, Ends, Done) = (reply.Status, reply.Error, Ends + 1, true);
+        if (reply.Channel == Response || AnyOutput && reply.Channel is not null)
+            (AcceptedResponse, Responses, Done) = (reply, Responses + 1, true);
+        else if (reply.Channel is null)
+            (Status, Error, Ends, Done) = (reply.Status, reply.Error, Ends + 1, true);
+        else return;
+        _completion?.TrySetResult(reply);
     }
 
     internal void End(string error)
     {
         if (Done) return;
         (Error, Ends, Done) = (error, Ends + 1, true);
+        _completion?.TrySetResult(new Reply(Registration, "", null, null, Error: error));
     }
 }
 
@@ -94,14 +106,27 @@ public sealed class Requests
 
     public IReadOnlyCollection<Request> All { get { lock (_gate) return _open.Values.ToArray(); } }
 
-    public Request Open(string id, long deadline)
+    public Request Open(string id, long deadline) => Open(id, deadline, false);
+
+    internal Request OpenEvent(string id, long deadline) => Open(id, deadline, true);
+
+    private Request Open(string id, long deadline, bool anyOutput)
     {
         lock (_gate)
         {
-            var request = new Request(id, deadline) { Registration = $"r{_incarnation}:{checked(++_next)}" };
+            var request = new Request(id, deadline)
+            {
+                Registration = $"r{_incarnation}:{checked(++_next)}",
+                AnyOutput = anyOutput
+            };
             _open.Add(request.Registration, request);
             return request;
         }
+    }
+
+    internal Task<Reply> CompletionOf(Request request)
+    {
+        lock (_gate) return request.Completion();
     }
 
     public bool IsOpen(Request request)
