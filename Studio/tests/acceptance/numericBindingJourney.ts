@@ -42,6 +42,13 @@ export async function numericBindingJourney(page: Page, info: TestInfo, capture:
   await s.open(caller);
   await s.trigger().press("Enter");
   await s.chooser().getByRole("option").filter({ has: page.locator(".wf-data-chooser-option-label", { hasText: /(?:^| › )Sum$/ }) }).press("Enter");
+  // With member browsing enabled, selecting Sum opens its details before committing the whole value.
+  const whole = s.chooser().getByRole("button", { name: "Use whole value", exact: true });
+  await expect(whole.or(s.replace())).toBeVisible();
+  if (await whole.isVisible()) {
+    await expect(whole).toBeEnabled();
+    await whole.press("Enter");
+  }
   await expect.poll(() => s.stored(caller)).toEqual(binding);
   const reference = page.locator(".wf-data-reference");
   const automatic = reference.getByText(/Double\s*→\s*String\s*·\s*automatic/i);

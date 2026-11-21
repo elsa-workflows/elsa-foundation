@@ -409,7 +409,7 @@ public sealed partial class ExternalAuthenticationHttpTests
         await using var native = host.Scope();
         var inner = native.ServiceProvider.GetRequiredService<IConnectionCatalogStore>();
         var catalog = await inner.ReadAsync();
-        var barrier = new RecoveryReadBarrier();
+        var barrier = new RecoverySaveBarrier();
         await using var nodeA = host.RuntimeNode(catalog: new RecoverySynchronizedCatalog(inner, barrier));
         await using var nodeB = host.RuntimeNode(catalog: new RecoverySynchronizedCatalog(inner, barrier));
         await using var a = nodeA.CreateAsyncScope(); await using var b = nodeB.CreateAsyncScope();
@@ -421,8 +421,8 @@ public sealed partial class ExternalAuthenticationHttpTests
             a.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, one), principal).AsTask(),
             b.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, two), principal).AsTask());
         Assert.Single(outcomes, outcome => outcome.Saved);
-        Assert.Contains(Assert.Single(outcomes, outcome => !outcome.Saved).Failure, new[] { "revision-conflict", "identity-authority-changed" });
-        Assert.Equal(2, barrier.Reads);
+        Assert.Equal("revision-conflict", Assert.Single(outcomes, outcome => !outcome.Saved).Failure);
+        Assert.Equal(2, barrier.Saves);
         var latest = await a.ServiceProvider.GetRequiredService<IConnectionCatalogStore>().ReadAsync();
         var remaining = Assert.Single(latest.Records, record => record.Enabled);
         var denied = await a.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, latest.Revision, remaining), principal);
@@ -455,27 +455,28 @@ public sealed partial class ExternalAuthenticationHttpTests
             payloads.Add((await store.FindGlobalAsync(document.Provider))!.Settings["protectedProofs"]);
         return payloads.ToArray();
     }
-    private sealed class RecoveryReadBarrier
+    // Let both writers validate the still-enabled paths before either commits its catalog revision.
+    private sealed class RecoverySaveBarrier
     {
-        public int Reads;
+        public int Saves;
         private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public async Task Arrive(CancellationToken token)
         {
-            var read = Interlocked.Increment(ref Reads);
-            if (read > 2) return;
-            if (read == 2) ready.TrySetResult();
-            await ready.Task.WaitAsync(token);
+            if (Interlocked.Increment(ref Saves) == 2) ready.TrySetResult();
+            await ready.Task.WaitAsync(TimeSpan.FromSeconds(30), token);
         }
     }
-    private sealed class RecoverySynchronizedCatalog(IConnectionCatalogStore inner, RecoveryReadBarrier barrier) : IConnectionCatalogStore
+
+    private sealed class RecoverySynchronizedCatalog(IConnectionCatalogStore inner, RecoverySaveBarrier barrier) : IConnectionCatalogStore
     {
         public bool SupportsIdentityRevisionGuards => inner.SupportsIdentityRevisionGuards;
-        public async ValueTask<ConnectionCatalog> ReadAsync(CancellationToken cancellationToken = default)
+        public ValueTask<ConnectionCatalog> ReadAsync(CancellationToken cancellationToken = default) => inner.ReadAsync(cancellationToken);
+
+        public async ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default)
         {
-            var snapshot = await inner.ReadAsync(cancellationToken);
             await barrier.Arrive(cancellationToken);
-            return snapshot;
+            return await inner.SaveAsync(catalog, cancellationToken);
         }
-        public ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default) => inner.SaveAsync(catalog, cancellationToken);
     }
 }

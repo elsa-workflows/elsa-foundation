@@ -668,9 +668,17 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
           const conflicts = draft.contract.outputs.filter(output => mappings?.some(mapping => mapping.outputReferenceKey === output.referenceKey) && setters.some(setter => setter.outputName === output.name));
           if (conflicts.length === 1) key = conflicts[0].referenceKey;
         }
-        if (key) contractEditorHandle.current?.revealMember("output", key);
-        await waitForAuthoringView();
-        const target = key ? [...(contractEditorRef.current?.querySelectorAll<HTMLElement>(".ad-output-value-source") ?? [])].find(element => element.dataset.outputReferenceKey === key) : contractEditorRef.current;
+        const editor = await waitForSettingTarget(() => contractEditorRef.current, () => request === diagnosticFocusRequestRef.current);
+        if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
+        let target = editor;
+        if (editor && key) {
+          contractEditorHandle.current?.revealMember("output", key);
+          target = await waitForSettingTarget(
+            () => [...editor.querySelectorAll<HTMLElement>(".ad-output-value-source")].find(element => element.dataset.outputReferenceKey === key) ?? null,
+            () => request === diagnosticFocusRequestRef.current
+          );
+        }
+        if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
         if (target) { target.tabIndex = -1; target.focus(); target.scrollIntoView?.({ block: "center" }); result = { kind: "focused", announcement: key ? "Focused the output value source." : "Focused Outputs. Select an output to review its value source; this diagnostic does not identify a single output." }; }
         else result = unsupportedDiagnosticFocus();
       } else {
