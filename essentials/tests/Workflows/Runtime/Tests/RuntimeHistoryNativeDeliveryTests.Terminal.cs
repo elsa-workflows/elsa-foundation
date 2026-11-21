@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -211,6 +212,59 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         public bool IsEnabled(LogLevel logLevel) => true;
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         { if (exception is not null) Exceptions.Add(exception); }
+    }
+
+    [Theory]
+    [InlineData("bound")]
+    [InlineData("unbound")]
+    [InlineData("foreign-partition")]
+    public async Task Terminal_sweep_preserves_retained_logical_tenant_and_physical_scope(string mode)
+    {
+        using var f = await Fixture.CreateAsync("complete", publication: true);
+        await QueueTerminalResumeAsync(f);
+        var sp = f.Services;
+        var workflows = sp.GetRequiredService<IWorkflowExecutionStateStore>();
+        var original = (await workflows.FindAsync(Run))!;
+        var physical = sp.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope();
+        var retained = original with { TenantId = "logical-tenant", Partition = new(mode == "foreign-partition" ? "foreign" : physical.Value),
+            RunKind = WorkflowRunKind.PublishedRun, Authority = new("fixture", "fixture"),
+            StimulusDeliveryOrigin = mode == "unbound" ? null : new(1, physical, "prior:source", new string('a', 64), "binding") };
+        // Seed a retained native origin; this component control does not claim new initial admission proof.
+        var native = sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+        await native.State.ExecuteWriteGateAsync(async token =>
+        {
+            using var grant = native.State.AuthorizeIngressCheckpointWrite(retained);
+            return await workflows.SaveAsync(retained, token);
+        }, default);
+        var work = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
+        var payload = work.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var expected = payload.ExpectedBookmarkResume!; var capture = expected.RegistrationCapture!;
+        var updatedCapture = new StimulusResumeCapture(capture.Generation, capture.Executable,
+            new(physical, retained.TenantId, retained.Partition, retained.RunKind, retained.TestScope),
+            capture.PinnedSource, capture.Metadata, capture.PayloadFingerprint);
+        var updatedExpected = new StimulusResumeRecipient(expected.WorkflowExecutionId, expected.BookmarkId, expected.ActivityExecutionId,
+            expected.ExecutableNodeId, expected.ResumeTargetId, expected.StimulusType, expected.StimulusHash,
+            expected.CreatedAt, expected.ExpiresAt, updatedCapture);
+        var updatedPayload = new RuntimeResumeBookmarkCommandPayload(payload.PinnedExecutable, payload.BookmarkId, payload.ActivityExecutionId,
+            payload.ExecutableNodeId, payload.ResumeTargetId, payload.StimulusType, payload.StimulusHash, payload.Input, payload.Reason,
+            payload.TriggerDelivery, payload.TestRunDelivery) { ExpectedBookmarkResume = updatedExpected, HistoryCausation = payload.HistoryCausation };
+        Assert.True(await f.Queue.DeleteAsync(Run, work.WorkItemId));
+        await f.Queue.EnqueueAsync(new(work.WorkItemId, work.WorkflowExecutionId, work.CommandId, work.CommandKind, work.EnvelopeId,
+            work.IdempotencyKey, work.EnqueuedAt, work.RecordedAt, work.Sequence, JsonSerializer.SerializeToElement(updatedPayload),
+            work.CommandMetadata, work.EnvelopeMetadata, work.ExecutionScopeId, work.Attempt));
+        var result = await f.SweepTerminalAsync();
+        if (mode == "bound")
+        {
+            Assert.Equal(1, result.TerminalExecutionsPurged);
+            Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
+            Assert.Single((await f.History.ReadPageAsync(new(Run))).Items, IsTerminalResumeDecision);
+        }
+        else
+        {
+            AssertTerminalFailure(result);
+            Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
+        }
+        Assert.Equal(0, f.Activator.Calls);
     }
 
     private static bool IsTerminalResumeDecision(RuntimeHistoryEvent item) => item.Name == "DeliveryUnmatched" &&
