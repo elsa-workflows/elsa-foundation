@@ -50,6 +50,17 @@ internal sealed class EventRequests(Durable.InMemoryStore store, Durable.Request
         }
     }
 
+    public ValueTask SetStartAsync(BoundScope scope, string correlationKey, string wait, StartSpec? spec,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        var start = spec is null ? null : new Durable.StartSpec(spec.Type, spec.TypeData, spec.Input,
+            Ephemeral: spec.Ephemeral, History: (Durable.History)spec.History);
+        store.SetFoundationEventStart(scope.Tenant, correlationKey, wait, start);
+        return default;
+    }
+
     private static Reply Error(string error) => new(null, null, Error: error);
 
     private static Reply ToContract(Durable.Reply reply) =>
