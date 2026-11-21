@@ -287,7 +287,7 @@ internal static class ContractWorkload
         private sealed record Owner(DurableHost Host, List<IScopeActivation> Scopes);
 
         private readonly List<Owner> _owners = [];
-        private readonly Contract.IActorType _type;
+        private Contract.IActorType _type;
         private readonly SortedDictionary<int, int> _placementOwners = [];
         private int _node;
         private bool? _loseAt;
@@ -334,6 +334,12 @@ internal static class ContractWorkload
                     throw new InvalidOperationException("the issued ref has no committed scope binding"))
                 .Select(address => new InstanceRef(address.Id).Partition)
                 .Distinct().Order().ToArray();
+
+        internal Task TakeOver(Contract.IActorType type)
+        {
+            _type = type;
+            return TakeOver();
+        }
 
         public async Task TakeOver()
         {

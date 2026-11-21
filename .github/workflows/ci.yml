@@ -1784,6 +1784,7 @@ jobs:
           $SIM --contract --seeds 100
           $SIM --contract-native --seeds 100
           $SIM --contract-actors --seeds 100 --actions 100
+          $SIM --contract-evolution --seeds 100
           expect_contract_failure() {
             local expected="$1"
             shift
@@ -1799,6 +1800,7 @@ jobs:
           expect_contract_failure "effect key did not match its public actor and activation" --contract-native --seed 1 --native-flaw UnstableEffectKey
           expect_contract_failure "final join did not consume the live yes arrival and the dead no arrival" --contract-native --seed 1 --native-flaw NoDeadPaths
           expect_contract_failure "the cancel failed to reach a child whose start was still pending on the other owner" --contract-actors --seed 1 --actions 100 --flaw CancelKnownChildren
+          expect_contract_failure "version two did not inherit the old token count exactly once" --contract-evolution --seed 1 --flaw SkipUpgrade
 
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
       # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 3208 (6946 before K1 slice 7's set worlds), a seed
@@ -1886,6 +1888,7 @@ jobs:
           $SIM --contract --seeds 1000
           $SIM --contract-native --seeds 1000
           $SIM --contract-actors --seeds 1000 --actions 100
+          $SIM --contract-evolution --seeds 1000
           $SIM --lease-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
@@ -1983,6 +1986,7 @@ jobs:
           $SIM --contract --seeds 1000 --count 4096
           $SIM --contract-native --seeds 1000 --count 4096
           $SIM --contract-actors --seeds 1000 --actions 100 --count 4096
+          $SIM --contract-evolution --seeds 1000 --count 4096
 
       - name: Runtime conformance at 4,096, built-in runtime
         run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096

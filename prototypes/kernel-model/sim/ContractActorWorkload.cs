@@ -7,7 +7,7 @@ using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
 namespace Kernel.Sim;
 
 /// <summary>The legacy counter and family workloads expressed through the public model and actor turns.</summary>
-internal static class ContractActorWorkload
+internal static partial class ContractActorWorkload
 {
     private const int ChildrenPerParent = 8;
     private const string LaterDefinition = "counter-rebound";
@@ -230,7 +230,7 @@ internal static class ContractActorWorkload
         public Type StateType => typeof(T);
         public int StateVersion => version;
         public virtual object CreateState(Models.WorkflowStart start) => new T();
-        public object UpgradeState(string state, int fromVersion) => Json.Read<T>(state);
+        public virtual object UpgradeState(string state, int fromVersion) => Json.Read<T>(state);
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => new((object?)null);
         public virtual Contract.RestorePlan RestoreWaits(Models.InstanceInfo instance, object state) => new([], [], []);
         public long TerminalGrowth(Models.InstanceInfo instance, object state) => 0;
@@ -242,8 +242,17 @@ internal static class ContractActorWorkload
         protected abstract void Run(Models.ITurn turn, T state);
     }
 
-    private sealed class CounterModel() : Fixture<CounterState>("counter", 2)
+    private sealed class CounterModel(
+        int version = 2, bool skipUpgrade = false, Action<Contract.ActorRef>? observeForward = null)
+        : Fixture<CounterState>("counter", version)
     {
+        public override object UpgradeState(string state, int fromVersion)
+        {
+            var checkpoint = Json.Read<CounterState>(state);
+            if (!skipUpgrade) checkpoint.Count = checkpoint.Tokens.Count;
+            return checkpoint;
+        }
+
         protected override void Run(Models.ITurn turn, CounterState state)
         {
             var holding = false;
@@ -253,6 +262,20 @@ internal static class ContractActorWorkload
                 {
                     state.Bound = Json.Read<string>(message.Payload!);
                     turn.Rebind(state.Bound);
+                }
+                if (message.Kind == "start-forward")
+                {
+                    var input = Json.Read<Forward>(message.Payload!);
+                    var destination = state.Forwarded.Find(entry => entry.Token == input.Target);
+                    if (destination is null)
+                    {
+                        var receiver = turn.Start(new Models.WorkflowStart("counter", "c"), Contract.Placement.Spread, detached: true);
+                        destination = new(receiver.Id, input.Target);
+                        state.Forwarded.Add(destination);
+                        observeForward?.Invoke(receiver);
+                    }
+                    turn.Send(new(destination.Target), "add", new Add(input.Token));
+                    turn.Record(new FirstForward(input.Token, destination.Target));
                 }
                 if (message.Kind != "add") continue;
                 var add = Json.Read<Add>(message.Payload!);
@@ -269,7 +292,9 @@ internal static class ContractActorWorkload
                 }
                 state.Ids.Add(message.Id);
                 state.Tokens.Add(add.Token);
-                turn.Record(new CounterEntry(add.Token, message.Id, message.Sender?.Id, ++state.Count, turn.Instance.Definition));
+                if (StateVersion >= 2) state.Count++;
+                var ordinal = StateVersion >= 2 ? state.Count : state.Tokens.Count;
+                turn.Record(new CounterEntry(add.Token, message.Id, message.Sender?.Id, ordinal, turn.Instance.Definition));
                 if (add.ForwardTo is not { } target) continue;
                 var next = new Forward(target, add.Token + ">");
                 state.Forwarded.Add(next);
