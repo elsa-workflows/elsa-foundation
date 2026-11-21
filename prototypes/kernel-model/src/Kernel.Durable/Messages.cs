@@ -31,6 +31,11 @@ public readonly record struct InboxKey(string Id, long Scope = 0, string? Match 
     public static InboxKey Issued(string id) => new(id, -1);
     public static InboxKey Custom(string actor, string id) => new(id, (long)int.MaxValue + 2 + actor.Length);
     public static InboxKey Ticket(string actor, string key, long creation = 0) => new(Worker.TicketId(actor, key, creation), (long)CreationProtocol.Origin(actor, creation).Length + 1);
+    internal static InboxKey JobResult(string actor, string key, long creation)
+    {
+        var ticket = Ticket(actor, key, creation);
+        return ticket with { Id = ticket.Id + "/result" };
+    }
     public static implicit operator InboxKey(string ordinaryId) => new(ordinaryId);
     public override string ToString() => Id;
 }

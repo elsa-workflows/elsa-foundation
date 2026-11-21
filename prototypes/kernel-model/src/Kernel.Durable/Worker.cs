@@ -11,6 +11,7 @@ public sealed record WorkerOptions
     /// <summary>The owner's default of 12 November: 10 s. A takeover waits for it to run out, so failover takes about one lease.</summary>
     public TimeSpan Lease { get; init; } = Defaults.Lease;
     public TimeSpan Horizon { get; init; } = TimeSpan.FromSeconds(10);
+    internal Action? BeforeTimedJobCutoff { get; init; }
     public int PollLimit { get; init; } = 500;
     public int MaxBatch { get; init; } = 500;
 
@@ -298,6 +299,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
     public int Partitions => _options.Partitions;
     public TimeSpan ShortWait => _options.ShortWait;
+    internal int MaxAttempts => _options.MaxAttempts;
 
     /// <summary>A turn cancelled a job. Its ticket may be in memory, or still on its way in with a poll.</summary>
     internal void Cancelling(InboxKey ticket)
@@ -1997,7 +1999,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             lock (publications)
             {
                 var at = Now;
-                if (job.Deadline is { } deadline && at >= deadline) return;
+                if (ticket.JobDeadlineClosed || job.Deadline is { } deadline && at >= deadline) return;
                 publications.Enqueue(new(ticket, slot, completed, at, Interlocked.Increment(ref _observed)));
             }
         }
@@ -2031,49 +2033,70 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _jobsWaitingForTrial = false;
             foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToList()) StartJob(ticket, cancellationToken);
         }
-        while (_jobPublications.TryDequeue(out var observation))
+        do
         {
-            var (ticket, slot, result, at, order, schedulerRejected) = observation;
-            if (ticket.Cancel?.IsCancellationRequested != false ||
-                _items.GetValueOrDefault(ticket.Message.InboxKey) != ticket ||
-                slot.ActiveCreation != (ticket.Message.TargetCreation ?? 0)) continue;
-            if (result is null)
+            while (_jobPublications.TryDequeue(out var observation))
             {
-                ticket.Cancel = null;
-                if (schedulerRejected) _schedulerRetries.Add(ticket);
-                else StartJob(ticket, cancellationToken); // a staged restriction may have cleared since the driver checked
-                continue;
+                var (ticket, slot, result, at, order, schedulerRejected) = observation;
+                if (ticket.Cancel?.IsCancellationRequested != false ||
+                    _items.GetValueOrDefault(ticket.Message.InboxKey) != ticket ||
+                    slot.ActiveCreation != (ticket.Message.TargetCreation ?? 0)) continue;
+                if (result is null)
+                {
+                    ticket.Cancel = null;
+                    if (schedulerRejected) _schedulerRetries.Add(ticket);
+                    else StartJob(ticket, cancellationToken); // a staged restriction may have cleared since the driver checked
+                    continue;
+                }
+                lock (slot)
+                {
+                    ticket.CompletedJob = true;
+                    ticket.Original ??= ticket.Message;
+                    ticket.Message = result;
+                    ticket.Ticket = false;
+                    ticket.CompletedAt = at;
+                    ticket.CompletedOrder = order;
+                    _lastReceivedJob = order;
+                    if (slot.Inbox.Remove(ticket)) slot.Inbox.Insert(0, ticket);
+                    RefreshPoisonBoundary(slot);
+                }
             }
-            lock (slot)
-            {
-                ticket.CompletedJob = true;
-                ticket.Original ??= ticket.Message;
-                ticket.Message = result;
-                ticket.Ticket = false;
-                ticket.CompletedAt = at;
-                ticket.CompletedOrder = order;
-                _lastReceivedJob = order;
-                if (slot.Inbox.Remove(ticket)) slot.Inbox.Insert(0, ticket);
-                RefreshPoisonBoundary(slot);
-            }
-        }
-        ExpireTimedJobs();
+        } while (ExpireTimedJobs());
     }
 
-    private void ExpireTimedJobs()
+    private bool ExpireTimedJobs()
     {
-        if (_timedJobs.Count == 0) return;
-        var now = Now;
-        foreach (var timed in _timedJobs.Where(item => item.JobDeadline <= now).ToArray())
+        if (_timedJobs.Count == 0) return false;
+        _options.BeforeTimedJobCutoff?.Invoke();
+        var expired = new List<Delivery>();
+        var foundTimelyResult = false;
+        var publications = _jobPublications;
+        lock (publications)
         {
-            _timedJobs.Remove(timed);
-            if (timed.CompletedJob || timed.Taken) continue;
+            var now = Now;
+            foreach (var timed in _timedJobs.Where(item => item.JobDeadline <= now).ToArray())
+            {
+                _timedJobs.Remove(timed);
+                if (timed.CompletedJob || timed.Taken) continue;
+                if (publications.Any(publication => publication.Ticket == timed && publication.Result is not null))
+                {
+                    foundTimelyResult = true;
+                    continue;
+                }
+                timed.JobDeadlineClosed = true;
+                expired.Add(timed);
+            }
+        }
+
+        foreach (var timed in expired)
+        {
             try { timed.Cancel?.Cancel(); }
             catch (AggregateException) { } // A driver's cancellation handler cannot hold up the fenced timeout.
             timed.Suspect = false;
             timed.DeferredJobTrial = false;
             _gate.Finished(this, timed);
         }
+        return foundTimelyResult;
     }
 
     // ---- events --------------------------------------------------------------------------------------------------

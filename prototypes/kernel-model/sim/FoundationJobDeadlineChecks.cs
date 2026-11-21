@@ -11,15 +11,17 @@ internal static class FoundationJobDeadlineChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var scope = new Contract.BoundScope("acme");
-        Contract.IIngress edge = new InMemoryIngress(store, new Requests("timed-jobs"), "jobs");
+        var requests = new Requests("timed-jobs");
+        Contract.IIngress edge = new InMemoryIngress(store, requests, "jobs", (selected, _) => selected == scope);
         var model = new Probe();
+        Action? atCutoff = null;
 
         async Task<Contract.ActorRef> Start(string name) =>
             (await edge.SendAsync(scope, new Contract.Target.Start(new("timed-job", "ready", name)), name, Contract.Kinds.Start)).Actor!.Value;
 
         async Task<IScopeActivation> Owner(string node)
         {
-            var worker = new Worker(node, 0, store, new ActorAdapter(store, model), new WorkerOptions { Monotonic = () => now - initial });
+            var worker = new Worker(node, 0, store, new ActorAdapter(store, model), new WorkerOptions { Monotonic = () => now - initial, BeforeTimedJobCutoff = () => atCutoff?.Invoke() });
             return (await new DurableHost([worker]).ActivateAsync(0))!;
         }
 
@@ -28,6 +30,10 @@ internal static class FoundationJobDeadlineChecks
         var moves = await Start("moves");
         var cancelled = await Start("cancelled");
         var queued = await Start("queued-result");
+        var held = await Start("held-success");
+        var ended = await Start("ended");
+        var replaces = await Start("replace-after-timeout");
+        var poison = await Start("poison");
         var owner = await Owner("job-first");
         await Pump(owner);
         check(model.Attempts["fast"].Job is { Actor: var actor, Key: "job", Deadline: initial + 100, AttemptId.Length: > 0 } &&
@@ -55,14 +61,36 @@ internal static class FoundationJobDeadlineChecks
         await Pump(owner);
         check(!model.Attempts["expires"].Cancelled && Results(expires).Count == 0,
             "the owner leaves its timed job active before the deadline");
-        var queuedRow = store.ReadFoundationActor(scope.Tenant, queued.Id).Actor!.Row;
+        model.Attempts["held-success"].Finish("held-success");
+        await ((Worker)owner).JobCompletion(Row(held).Id, "job", Row(held).Creation)!.WaitAsync(TimeSpan.FromSeconds(2));
+        await edge.SendAsync(scope, new Contract.Target.Ref(ended), "end", "end");
+        await edge.SendAsync(scope, new Contract.Target.Ref(replaces), "replacement", Contract.Kinds.Migrate,
+            options: new Contract.AddOptions(DueAt: initial + 100));
+        await Pump(owner);
+        check(Results(held).Count == 0 && Timers(held) == 0 && store.HasFoundationJobResult(Row(held).Id, Row(held).Creation, "job"),
+            "holding a timely success preserves its durable result and recalls its deadline");
+        check(Row(ended).Status == InstanceStatus.Finished && Row(ended).Jobs is not null,
+            "a natural end leaves an active timed job to settle under the same actor life");
+
+        var queuedRow = Row(queued);
         var driver = ((Worker)owner).JobCompletion(queuedRow.Id, "job", queuedRow.Creation)!;
-        model.Attempts["queued-result"].Finish("in time");
-        await driver.WaitAsync(TimeSpan.FromSeconds(2));
-        now++;
+        atCutoff = () =>
+        {
+            atCutoff = null;
+            model.Attempts["queued-result"].Finish("in time");
+            driver.WaitAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
+            now = initial + 100;
+        };
         await Pump(owner);
         check(Results(queued).SequenceEqual(["in time"]) && !model.Attempts["queued-result"].Cancelled && Timers(queued) == 0,
-            "a result published before the deadline wins even when the owner drains it at the deadline");
+            "a result enqueued before cutoff after the owner drained its queue still wins");
+        check(Row(ended).Status == InstanceStatus.Finished && Row(ended).Jobs is null && Timers(ended) == 0 &&
+            Results(ended).SequenceEqual(["timeout"]),
+            "expiry settles an ended actor's exact job without changing the terminal status");
+        model.Attempts["replacement"].Finish("replacement result");
+        await Pump(owner);
+        check(Results(replaces).SequenceEqual(["restarted", "replacement result"]),
+            "a genuine restart cancels the prior durable timeout before the replacement result applies");
         check(model.Attempts["expires"].Cancelled && Results(expires).Count == 0,
             "the deadline cancels a physical driver even while its actor withholds ordinary results");
         model.Attempts["expires"].Finish("too late");
@@ -73,15 +101,25 @@ internal static class FoundationJobDeadlineChecks
 
         check(Results(moves).Count == 0 && Timers(moves) == 1, "the displaced owner leaves a pending job and deadline in the store");
         await owner.DisposeAsync();
+        var exhausted = Row(poison);
+        store.Messages[InboxKey.Ticket(exhausted.Id, "job", exhausted.Creation)].Attempts = 3;
         now = initial + 200;
+        var entries = model.Entries;
         await using var successor = await Owner("job-successor");
+        await edge.SendAsync(scope, new Contract.Target.Ref(held), "release", "release");
         await Pump(successor);
         model.Attempts["moves"].Finish("late from former owner");
-        check(Results(moves).SequenceEqual(["timeout"]) && Timers(moves) == 0 && model.Attempts.Count == 6,
+        check(Results(moves).SequenceEqual(["timeout"]) && Timers(moves) == 0 && model.Entries == entries,
             "the successor has no extra physical entry for a ticket it finds past its deadline");
+        check(Results(held).SequenceEqual(["held-success"]),
+            "the successor hands the held timely success back without a substituted timeout");
+        check(store.ReadFoundationActor(scope.Tenant, poison.Id).Actor is { Park: not null, Row.Status: InstanceStatus.Faulted } &&
+            Results(poison).Count == 0, "an exhausted timed ticket parks across takeover even when its deadline has arrived");
 
-        List<string> Results(Contract.ActorRef reference) =>
-            Json.Read<List<string>>(store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row.State);
+        InstanceRow Row(Contract.ActorRef reference) =>
+            store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row;
+
+        List<string> Results(Contract.ActorRef reference) => Json.Read<List<string>>(Row(reference).State);
 
         int Timers(Contract.ActorRef reference)
         {
@@ -115,6 +153,7 @@ internal static class FoundationJobDeadlineChecks
     {
         public string Type => "timed-job";
         public Dictionary<string, Attempt> Attempts { get; } = new(StringComparer.Ordinal);
+        public int Entries { get; private set; }
         public bool Withholds(Contract.ActorHeader header) => header.TypeData == "suspended";
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
@@ -124,7 +163,15 @@ internal static class FoundationJobDeadlineChecks
                 switch (message.Kind)
                 {
                     case Contract.Kinds.Start or "restart-job":
-                        turn.StartJob("job", message.Payload, TimeSpan.FromMilliseconds(message.Payload == "moves" ? 200 : 100));
+                        turn.StartJob("job", message.Payload, TimeSpan.FromMilliseconds(message.Payload is "moves" or "poison" ? 200 : 100));
+                        break;
+                    case "end":
+                        turn.End(Contract.ActorStatus.Finished);
+                        break;
+                    case Contract.Kinds.Migrate:
+                        turn.CancelJob("job");
+                        turn.StartJob("job", "replacement", TimeSpan.FromMilliseconds(100));
+                        results.Add("restarted");
                         break;
                     case "cancel-job":
                         turn.CancelJob("job");
@@ -134,7 +181,10 @@ internal static class FoundationJobDeadlineChecks
                         break;
                     case Contract.Kinds.JobFinished:
                         var result = Json.Read<Contract.JobFinished>(message.Payload!);
-                        results.Add(result.Error ?? Json.Read<string>(result.Result!));
+                        var value = result.Error ?? Json.Read<string>(result.Result!);
+                        if (value == "held-success" && !turn.Inbox.Any(input => input.Kind == "release"))
+                            turn.Hold(message);
+                        else results.Add(value);
                         break;
                 }
             turn.State = Json.Write(results);
@@ -143,8 +193,9 @@ internal static class FoundationJobDeadlineChecks
 
         public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token)
         {
+            Entries++;
             var attempt = new Attempt(job);
-            Attempts.Add(job.Arguments!, attempt);
+            Attempts[job.Arguments!] = attempt;
             if (job.Arguments == "fast") return "fast-result";
             using var registration = token.Register(attempt.Cancel);
             return await attempt.Output;

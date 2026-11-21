@@ -102,7 +102,8 @@ internal sealed partial class ActorAdapter
             _turn.StartJobWithPayload(key, arguments, deadline);
         }
 
-        public void CancelJob(string key) => _turn.CancelJob(key, _store.FoundationJob(_row.Id, _row.Creation, key)?.Timer);
+        public void CancelJob(string key) => _turn.CancelJob(key, _store.FoundationJob(_row.Id, _row.Creation, key).Ticket?.Timer,
+            _store.HasFoundationJobResult(_row.Id, _row.Creation, key));
 
         public void Subscribe(string key, string wait, bool keep = false) => _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
         public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait);
@@ -144,10 +145,6 @@ internal sealed partial class ActorAdapter
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
             for (var i = 0; i < outcome.Replied.Count; i++)
                 outcome.Replied[i] = outcome.Replied[i] with { FromFoundation = true };
-            foreach (var completion in outcome.Consumed.Where(delivery => delivery.IsWorkerJobCompletion))
-                if (completion.Original?.Read<Durable.JobTicket>().Timer is { } timer &&
-                    _store.HasStoredJobDeadline(_row.Id, _row.Creation, timer))
-                    _turn.Recall(timer);
             foreach (var notice in outcome.Consumed.Where(entry => entry.Message.Kind == Contract.Kinds.ChildFinished))
             {
                 var message = notice.Message;

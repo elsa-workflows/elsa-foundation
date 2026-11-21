@@ -116,6 +116,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool DiscardedAt(Slot slot) => DiscardedInput || Message.SuppliedCreator && slot.CurrentRow is null;
     internal bool JobEntered;         // physical model entry, distinct from a scheduled driver
     internal long? JobDeadline;
+    internal bool JobDeadlineClosed;
     internal int JobEntries;         // physical starts seen by this delivery, a lower bound after a takeover
     internal bool DeferredJobTrial;   // durable fence retained while runtime trial isolation is yielded before entry
     internal long DeferredTrialObserved; // preserve the original cohort horizon when isolation is reacquired
@@ -178,6 +179,7 @@ public sealed class TurnInput
 
     public string Model => Row?.Model ?? Spec!.Model;
     public ITurnServices Services => _services;
+    internal int MaxAttempts => _worker.MaxAttempts;
 
     /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
     public long CheckpointTime => _worker.Now;
@@ -459,12 +461,12 @@ public sealed class DurableTurn
         if (Services.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].InboxKey);
     }
 
-    public void CancelJob(string key) => CancelJob(key, null);
+    public void CancelJob(string key) => CancelJob(key, null, resultReady: false);
 
-    internal void CancelJob(string key, string? deadline)
+    internal void CancelJob(string key, string? deadline, bool resultReady)
     {
         if (!_jobs.Remove(key)) return;     // not in flight: never started, done, or its result is in this turn's inbox
-        var ticket = InboxKey.Ticket(Id, key, _input.Creation);
+        var ticket = resultReady ? InboxKey.JobResult(Id, key, _input.Creation) : InboxKey.Ticket(Id, key, _input.Creation);
         if (_started.Remove(key, out var timer))
         {
             _sent.RemoveAll(m => m.InboxKey == ticket);
@@ -475,9 +477,9 @@ public sealed class DurableTurn
         Services.Cancelling(ticket);     // from here on its result is nobody's
     }
 
-    internal void ReportJobTimeout(string key)
+    internal void ReportFoundationJobResult(JobFinished result)
     {
-        SendNext(Actor, Kinds.JobFinished, new JobFinished(key, null, "timeout"));
+        Send(InboxKey.JobResult(Id, result.Key, _input.Creation), Actor, Kinds.JobFinished, result);
         _sent[^1] = _sent[^1] with { FoundationJobResult = true };
     }
 
@@ -544,9 +546,12 @@ public sealed class DurableTurn
     private bool CompletedTicket(Delivery delivery, out string key)
     {
         key = "";
-        if (!delivery.IsWorkerJobCompletion) return false;
-        key = delivery.Message.Read<JobFinished>().Key;
-        return delivery.Message.Target == Actor && delivery.Message.InboxKey == InboxKey.Ticket(Id, key, _input.Creation);
+        var message = delivery.Message;
+        if (!delivery.IsWorkerJobCompletion && !message.FoundationJobResult) return false;
+        key = message.Read<JobFinished>().Key;
+        var expected = message.FoundationJobResult
+            ? InboxKey.JobResult(Id, key, _input.Creation) : InboxKey.Ticket(Id, key, _input.Creation);
+        return message.Target == Actor && message.InboxKey == expected;
     }
 
     /// <summary>What the turn consumed, held, cancelled and emitted. The row comes with <see cref="Seal"/>.</summary>

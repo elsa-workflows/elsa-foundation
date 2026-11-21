@@ -46,11 +46,18 @@ public sealed partial class InMemoryStore
                 timer.Target.Id == actor && timer.TargetCreation == creation;
     }
 
-    internal JobTicket? FoundationJob(string actor, long creation, string key)
+    internal bool HasFoundationJobResult(string actor, long creation, string key)
     {
         lock (_gate)
-            return Messages.GetValueOrDefault(InboxKey.Ticket(actor, key, creation)) is { Done: false, Message: { Kind: Kinds.Job } ticket }
-                ? ticket.Read<JobTicket>() : null;
+            return Messages.GetValueOrDefault(InboxKey.JobResult(actor, key, creation)) is
+                { Done: false, Message: { Kind: Kinds.JobFinished, FoundationJobResult: true } };
+    }
+
+    internal (JobTicket? Ticket, int Attempts) FoundationJob(string actor, long creation, string key)
+    {
+        lock (_gate)
+            return Messages.GetValueOrDefault(InboxKey.Ticket(actor, key, creation)) is { Done: false, Message: { Kind: Kinds.Job } ticket } stored
+                ? (ticket.Read<JobTicket>(), stored.Attempts) : default;
     }
 
     internal ActorCheckpoint FoundationTurnHeader(InstanceRow row)
