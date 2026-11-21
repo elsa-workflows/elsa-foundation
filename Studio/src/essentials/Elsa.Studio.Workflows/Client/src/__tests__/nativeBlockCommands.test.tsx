@@ -46,7 +46,10 @@ function name(value: string) {
 async function settle() { await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {}); }
 
 it("allows published block proposals without a separate Start editing action", async () => {
-  const authority = { sourceKey: "published:1", canEdit: true, canApply: () => true, validate };
+  const authority: NonNullable<React.ComponentProps<typeof NativeBlockAuthorityProvider>["value"]> = {
+    sourceKey: "published:1", canEdit: true, canApply: () => true,
+    validate: async () => ({ state: "validated", messages: [] })
+  };
   const before = structuredClone(context.document);
   render(authority);
   expect(container.textContent).not.toContain("Start editing");

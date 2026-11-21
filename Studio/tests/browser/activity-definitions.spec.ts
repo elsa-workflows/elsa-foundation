@@ -4526,6 +4526,7 @@ function authoringDraft(draftId: string, revision: number, payload: unknown) {
     },
     provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: `sha256:${revision}`, payload },
     layout: [] as unknown[],
+    activityPresentation: [] as unknown[],
     validation: null,
     createdAt: "2026-07-17T10:00:00Z",
     updatedAt: "2026-07-17T10:00:00Z",
