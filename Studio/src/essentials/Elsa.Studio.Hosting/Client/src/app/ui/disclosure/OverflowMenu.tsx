@@ -127,19 +127,26 @@ export function OverflowMenu({
             if (!isAction(item)) {
               return <div key={`separator-${index}`} className="studio-overflow-menu-separator" role="separator" />;
             }
+            const checkable = item.checked !== undefined;
             return (
               <button
                 key={item.id}
                 id={`${menuId}-item-${index}`}
                 type="button"
-                role="menuitem"
+                role={checkable ? "menuitemcheckbox" : "menuitem"}
+                aria-checked={checkable ? item.checked : undefined}
                 className="studio-overflow-menu-item"
+                data-checkable={checkable || undefined}
                 data-destructive={item.destructive ? "true" : undefined}
                 disabled={item.disabled}
                 tabIndex={index === activeIndex ? 0 : -1}
                 onClick={() => activate(item)}
               >
-                {item.label}
+                {checkable ? <>
+                  <span className="studio-overflow-menu-check" aria-hidden="true">{item.checked ? "✓" : ""}</span>
+                  <span>{item.label}</span>
+                  {item.value !== undefined ? <span className="studio-overflow-menu-value">{item.value}</span> : null}
+                </> : item.label}
               </button>
             );
           })}

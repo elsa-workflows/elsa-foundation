@@ -37,5 +37,7 @@ export type OverflowMenuItem =
       onSelect(): void;
       disabled?: boolean;
       destructive?: boolean;
+      checked?: boolean;
+      value?: ReactNode;
     }
   | { type: "separator" };

@@ -15,6 +15,7 @@ public static class ActivityDesignApiCapabilities
             new("activity-authoring-capabilities", "design/activities/authoring-capabilities"),
             new("activity-definitions", "design/activities/definitions"),
             new("activity-definition", "design/activities/definitions/{definitionId}", true),
+            new("activity-definition-restore", "design/activities/definitions/{definitionId}/restore", true),
             new("activity-definition-drafts", "design/activities/definitions/{definitionId}/drafts", true),
             new("activity-definition-draft", "design/activities/drafts/{draftId}", true),
             new("activity-draft-candidate-validation", "design/activities/drafts/{draftId}/candidate-validation", true),

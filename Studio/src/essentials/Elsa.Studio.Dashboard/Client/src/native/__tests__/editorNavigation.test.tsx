@@ -14,10 +14,22 @@ const result = (): QueryResult => ({ outcome: "succeeded", interpretation: "Curr
 const disposers: (() => void)[] = [];
 
 function button(container: HTMLElement, text: string) {
-  const target = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text);
+  const action = text === "Preview question" || text === "Refresh results" ? "Preview" : text;
+  let target = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === action);
+  if (!target && container.querySelector('[aria-label="More question actions"]')) {
+    flushSync(() => container.querySelector<HTMLButtonElement>('[aria-label="More question actions"]')!.click());
+    target = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === action);
+  }
   expect(target).toBeDefined(); flushSync(() => target!.click());
 }
 function value(container: HTMLElement, label: string) {
+  if ((label === "Name" || label === "Description") && ![...container.querySelectorAll("label")].some(item => item.textContent === label)) button(container, "Properties");
+  if (label === "Maximum result rows/groups") {
+    const build = container.querySelector<HTMLButtonElement>('.named-question-view-toolbar [data-tab-id="build"]');
+    if (build?.getAttribute("aria-selected") !== "true") flushSync(() => build?.click());
+    const sort = [...container.querySelectorAll<HTMLAnchorElement>(".named-query-section-nav a")].find(item => item.textContent?.startsWith("Sort"));
+    if (sort?.getAttribute("aria-current") !== "page") flushSync(() => sort?.click());
+  }
   return [...container.querySelectorAll("label")].find(item => item.textContent === label)!.querySelector("input")!;
 }
 function edit(input: HTMLInputElement | HTMLTextAreaElement, text: string) {
@@ -175,13 +187,14 @@ describe("native editor host navigation guards", () => {
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const { container, navigate } = mount(api, controller, "create");
     await waitUntil(() => Boolean(container.querySelector(".named-query-controls option[value='acme']")));
-    expect(container.querySelector(".named-preview")).toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('[data-tab-id="preview"]')?.disabled).toBe(true);
     expect(container.textContent).not.toContain("Query form");
-    expect([...container.querySelectorAll("summary")].find(item => item.textContent?.includes("Description"))?.parentElement?.hasAttribute("open")).toBe(false);
+    expect([...container.querySelectorAll("label")].some(item => item.textContent === "Description")).toBe(false);
     edit(value(container, "Name"), "An independent native question");
     const datasetSelect = container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
     flushSync(() => { datasetSelect.value = "acme"; datasetSelect.dispatchEvent(new Event("change", { bubbles: true })); });
-    expect(container.querySelector(".named-preview")).not.toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('[data-tab-id="preview"]')?.disabled).toBe(false);
+    expect(post.mock.calls.some(call => call[0].endsWith("/preview"))).toBe(false);
     button(container, "Save question"); await waitUntil(() => typeof fail === "function");
     for (const intent of ["navigate", "close", "probe"] as const) expect(navigation(intent, "/questions/new")).toBe(false);
     expect(unloadAllowed()).toBe(false); expect(confirm).not.toHaveBeenCalled();
@@ -438,7 +451,7 @@ describe("current native disclosure and reuse review", () => {
     expect(editor.container.textContent).toContain("Recently linked dashboard");
     expect(editor.container.textContent).toContain("Save draft as new question");
     expect(value(editor.container, "Maximum result rows/groups").value).toBe("7"); expect(put).not.toHaveBeenCalled();
-    expect(editor.container.textContent).toContain("Revision r1");
+    expect(editor.container.textContent).toContain("Unsaved changes");
     confirm.mockResolvedValue(true); button(editor.container, "Save question");
     await waitUntil(() => put.mock.calls.length === 1);
     expect(put.mock.calls[0][2]).toMatchObject({ headers: { "If-Match": '"r1"' } });
@@ -498,7 +511,7 @@ describe("current native disclosure and reuse review", () => {
     const editor = mount(api, controller); await waitUntil(() => controller.snapshots.size === 1);
     edit(value(editor.container, "Maximum result rows/groups"), "7"); changed = true; button(editor.container, "Save question");
     await waitUntil(() => editor.container.textContent?.includes("original revision remain here") === true);
-    expect(value(editor.container, "Maximum result rows/groups").value).toBe("7"); expect(editor.container.textContent).toContain("Revision r1"); expect(put).not.toHaveBeenCalled();
+    expect(value(editor.container, "Maximum result rows/groups").value).toBe("7"); expect(editor.container.textContent).toContain("Unsaved changes"); expect(put).not.toHaveBeenCalled();
   });
 
   it("ignores an aborted usage-review reply after a real Activity hide and reveal", async () => {

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { QueryControls } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/QueryControls";
+import { QuestionWorkspace } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/QuestionWorkspace";
 import { NativeDialog, QuestionPickerDialog, ShareDialog, TileOptionsDialog } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResourceDialogs";
 import { ResultView } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResultView";
 import type { DashboardApi } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/api";
@@ -25,18 +26,19 @@ const parameters = [
 ];
 function Fixture() {
   const emptyQuestion = new URLSearchParams(window.location.search).has("emptyQuestion");
+  const readOnly = new URLSearchParams(window.location.search).has("readOnly");
   const [definition, setDefinition] = useState(() => ({ ...initialDefinition(emptyQuestion ? undefined : dataset), query: { ...initialDefinition(emptyQuestion ? undefined : dataset).query, parameters } }));
+  const [previewRuns, setPreviewRuns] = useState(0);
   const [showTile, setShowTile] = useState(false);
   const [tile, setTile] = useState<DashboardTile>({ id: "tile", questionId: "question", size: "medium", referenceState: "available" });
   const question: DashboardResource = { id: "question", kind: "question", revision: "1", name: "Runs", description: "", ownerId: "viewer", definition,
     capabilities: { canRead: true, canEdit: true, canCopy: true, canDelete: true, canShare: true }, createdAt: "", updatedAt: "" };
   const api = { get: async () => question } as unknown as DashboardApi;
   return <main className="named-workspace" style={{ padding: 24 }}>
-    <div className="named-authoring" data-dataset-selected={definition.query.dataset.id ? "true" : "false"}>
-      <QueryControls definition={definition} datasets={[dataset]} disabled={false} onChange={setDefinition} />
-      {definition.query.dataset.id ? <section className="named-preview" aria-label="Preview"><h3>Preview</h3><p>Results use your current access.</p></section> : null}
-    </div>
-    <output aria-label="Selected grouping fields">{definition.query.groupBy.join(", ")}</output>
+    <QuestionWorkspace title="Runs" status="Personal draft · Not saved" previewDisabled={!definition.query.dataset.id} previewBusy={false} onPreview={() => setPreviewRuns(value => value + 1)}
+      build={<><QueryControls definition={definition} datasets={[dataset]} disabled={readOnly} onChange={setDefinition} /><output aria-label="Selected grouping fields">{definition.query.groupBy.join(", ")}</output></>}
+      preview={<section className="named-preview" aria-label="Preview results"><h3>Results</h3><p>Explicit preview runs: <output aria-label="Preview runs">{previewRuns}</output></p><p>Results use your current access.</p></section>}
+      properties={<><label>Name<input value="Runs" readOnly /></label><label>Description<textarea value="" readOnly /></label><fieldset><legend>Result presentation</legend><label>Visualization<select defaultValue="table"><option>table</option><option>bar</option></select></label></fieldset></>} />
     <button type="button" onClick={() => setShowTile(true)}>Open tile settings</button>
     <output aria-label="Tile parameter overrides">{JSON.stringify(tile.parameters ?? {})}</output>
     {showTile ? <TileOptionsDialog api={api} tile={tile} onClose={() => setShowTile(false)} onApply={value => { setTile(value); setShowTile(false); }} /> : null}

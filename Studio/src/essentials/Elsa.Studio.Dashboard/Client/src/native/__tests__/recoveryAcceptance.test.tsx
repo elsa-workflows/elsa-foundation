@@ -18,7 +18,13 @@ function mount(children: React.ReactNode) {
   flushSync(() => root.render(children)); cleanups.push(() => { flushSync(() => root.unmount()); view.remove(); }); return view;
 }
 function click(view: HTMLElement, name: string) {
-  const button = [...view.querySelectorAll("button")].find(item => item.textContent?.trim() === name || item.getAttribute("aria-label") === name);
+  const action = name === "Refresh results" || name === "Preview question" ? "Preview" : name;
+  const findButton = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === action || item.getAttribute("aria-label") === action);
+  let button = findButton();
+  if (!button && view.querySelector('[aria-label="More question actions"]')) {
+    flushSync(() => view.querySelector<HTMLButtonElement>('[aria-label="More question actions"]')!.click());
+    button = findButton();
+  }
   expect(button, `Action ${name}`).toBeDefined(); flushSync(() => button!.click());
 }
 function edit(input: HTMLInputElement, value: string) {
@@ -116,7 +122,7 @@ describe("native product recovery", () => {
     expect(dialogs.confirm.mock.calls[1][0]).toMatchObject({ message: expect.stringContaining("blank") });
     const source = view.querySelector<HTMLSelectElement>('[data-query-path="query.dataset"] select')!;
     flushSync(() => { source.value = dataset.id; source.dispatchEvent(new Event("change", { bubbles: true })); });
-    click(view, "Save question"); await waitUntil(() => view.textContent?.includes("Revision repaired-r2") === true);
+    click(view, "Save question"); await waitUntil(() => put.mock.calls.length === 1);
     expect(view.querySelector(".named-query-controls")).not.toBeNull(); expect(view.textContent).not.toContain("Parts of this definition are withheld");
     expect(put.mock.calls[0][1]).toMatchObject({ definition: { query: { dataset: { id: "acme" } } } });
     expect(put.mock.calls[0][1]).not.toHaveProperty("preserveDefinition");
@@ -143,6 +149,7 @@ describe("native product recovery", () => {
     expect(time.getAttribute("aria-invalid")).toBe("true"); expect(time.textContent).toContain("Supply an ISO UTC start instant.");
     const input = view.querySelector<HTMLInputElement>('[data-query-path="query.time.from"]')!;
     await waitUntil(() => document.activeElement === input); expect(input.value).toBe("invalid");
+    click(view, "Properties");
     expect(view.querySelector('[data-query-path="visualization"]')?.getAttribute("aria-invalid")).toBe("true");
     expect(post.mock.calls.at(-1)![0]).toMatch(/dashboard-queries\/validate$/);
   });
@@ -151,9 +158,11 @@ describe("native product recovery", () => {
     const saved = { ...resource(), uses: [{ id: "visible-dashboard", name: "Operations", tileCount: 2 }] };
     const { api, dialogs, view } = editor(saved);
     const put = vi.spyOn(api.backend.http, "putJson").mockResolvedValue({ ...saved, revision: "r2" });
-    await waitUntil(() => view.querySelector('input[type="number"]') !== null);
+    await waitUntil(() => view.querySelector(".named-query-section-nav") !== null);
+    const sort = [...view.querySelectorAll<HTMLAnchorElement>(".named-query-section-nav a")].find(button => button.textContent?.startsWith("Sort"))!;
+    flushSync(() => sort.click());
     edit(view.querySelector<HTMLInputElement>('input[type="number"]')!, "7");
-    expect(view.textContent).toContain("Dashboards you can access using this question"); expect(view.textContent).toContain("Operations");
+    expect(view.textContent).toContain("Dashboards using this question"); expect(view.textContent).toContain("Operations");
     expect(view.textContent).not.toContain("No other dashboards");
     dialogs.confirm.mockResolvedValueOnce(false); click(view, "Save question");
     await waitUntil(() => dialogs.confirm.mock.calls.length === 1); expect(put).not.toHaveBeenCalled();

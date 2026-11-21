@@ -308,6 +308,19 @@
   overflow-wrap: anywhere;
 }
 
+.wf-publication-validation-jump {
+  display: block;
+  margin-top: 4px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--wf-accent);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+}
+
 /* Spec 261 FR-515: warnings are listed, in the warning tone, and never block publishing. */
 .wf-publication-warnings {
   border: 1px solid color-mix(in srgb, var(--wf-warning) 40%, var(--wf-border));

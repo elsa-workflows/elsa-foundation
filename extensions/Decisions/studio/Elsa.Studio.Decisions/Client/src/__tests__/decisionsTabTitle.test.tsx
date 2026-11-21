@@ -28,7 +28,7 @@ describe("Decisions workspace tab titles", () => {
     expect(setTitle).toHaveBeenLastCalledWith({ title: "New decision", detail: undefined });
     const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
     type(name, "Purchase approval"); expect(setTitle).toHaveBeenLastCalledWith({ title: "New decision", detail: undefined });
-    click(button(host, "Save decision"));
+    click(button(host, "Save"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
     api.backend.http.getJson.mockImplementation(async (path: string) => path.endsWith("/versions") || path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : { ...asset, name: "Purchase approval" });
     update({ api, assetId: asset.id });

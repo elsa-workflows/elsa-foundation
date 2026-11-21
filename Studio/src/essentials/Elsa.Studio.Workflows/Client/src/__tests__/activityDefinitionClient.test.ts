@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getActivityDefinition, getActivityDefinitionDraftSummary, getActivityDefinitionVersionSummary, listActivityDefinitionDrafts, listActivityDefinitions, listActivityDefinitionVersions, listRecommendedActivityDefinitions } from "../api/activityDesign";
+import { getActivityDefinition, getActivityDefinitionDraftSummary, getActivityDefinitionVersionSummary, listActivityDefinitionDrafts, listActivityDefinitions, listActivityDefinitionVersions, listRecommendedActivityDefinitions, restoreActivityDefinition } from "../api/activityDesign";
 import { clearApiCapabilityCache } from "../api/capabilities";
 
 afterEach(clearApiCapabilityCache);
@@ -39,6 +39,21 @@ describe("Activity Definition management client", () => {
 
     await expect(listActivityDefinitions(context, { limit: 25 })).rejects.toMatchObject({ name: "ApiCapabilityUnavailableError", relation: "activity-definitions" });
     expect(getJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the archived-only query filter and advertised restore relation", async () => {
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      return page();
+    });
+    const postJson = vi.fn(async () => undefined);
+    const context = { baseUrl: "test://activity-definition-restore-client", http: { getJson, postJson } } as unknown as StudioEndpointContext;
+
+    await listActivityDefinitions(context, { limit: 25, authority: "Design", archivedOnly: true });
+    await restoreActivityDefinition(context, "definition/1");
+
+    expect(getJson.mock.calls[1][0]).toBe("/design/activities/definitions?limit=25&sort=identity-asc&authority=Design&archivedOnly=true");
+    expect(postJson).toHaveBeenCalledWith("/design/activities/definitions/definition%2F1/restore", undefined);
   });
 
   it("reads only the authoritative recommended version for each definition without sorting version strings", async () => {
@@ -80,6 +95,7 @@ function capabilities() {
   return { capabilities: [{ id: "elsa.api.activity-design", contractVersion: "1", links: [
     { rel: "activity-definitions", href: "design/activities/definitions" },
     { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
+    { rel: "activity-definition-restore", href: "design/activities/definitions/{definitionId}/restore", templated: true },
     { rel: "activity-definition-drafts", href: "design/activities/definitions/{definitionId}/drafts", templated: true },
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
     { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },

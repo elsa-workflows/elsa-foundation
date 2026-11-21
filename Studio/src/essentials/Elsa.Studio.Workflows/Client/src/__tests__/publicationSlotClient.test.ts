@@ -8,7 +8,8 @@ import {
   listPublicationSlots,
   publicationRecordReadsUnavailableReason,
   restorePublicationSlot,
-  unpublishSlot
+  unpublishSlot,
+  unpublishReviewedSlot
 } from "../api/publishing";
 import { activationSlot, importedActivationSlot, publicationRecord } from "./fixtures/publicationSlots";
 
@@ -21,6 +22,7 @@ const runtimeSlotLinks: ApiCapabilityLink[] = [
 const publicationRecordLink: ApiCapabilityLink = { rel: "publication-record", href: "publishing/publications/{publicationId}", templated: true };
 const lifecycleLinks: ApiCapabilityLink[] = [
   { rel: "publication-slot-unpublish", href: "publishing/workflows/{definitionId}/slots/{slotName}", templated: true },
+  { rel: "publication-slot-unpublish-reviewed", href: "publishing/workflows/{definitionId}/slots/{slotName}/unpublish/{expectedRevision}", templated: true },
   { rel: "publication-slot-restore", href: "publishing/workflows/{definitionId}/slots/{slotName}/restore", templated: true }
 ];
 const publishedDefault = activationSlot("default", { activeActivationId: "publication-default", sourceKind: "publishing" });
@@ -45,8 +47,9 @@ function client(document: ReturnType<typeof capabilities>, routes: Record<string
   });
   const deleteJson = vi.fn(async () => ({}));
   const postJson = vi.fn(async () => ({}));
-  const context = { baseUrl: `test://publication-slot-client-${Math.random()}`, http: { getJson, deleteJson, postJson } } as unknown as StudioEndpointContext;
-  return { context, getJson, deleteJson, postJson, requested: () => getJson.mock.calls.map(([url]) => url) };
+  const requestJson = vi.fn(async () => ({}));
+  const context = { baseUrl: `test://publication-slot-client-${Math.random()}`, http: { getJson, deleteJson, postJson, requestJson } } as unknown as StudioEndpointContext;
+  return { context, getJson, deleteJson, postJson, requestJson, requested: () => getJson.mock.calls.map(([url]) => url) };
 }
 
 describe("publication slot client", () => {
@@ -130,23 +133,27 @@ describe("publication slot client", () => {
   });
 
   it("refuses slot lifecycle commands the backend does not advertise instead of guessing their routes", async () => {
-    const { context, deleteJson, postJson } = client(capabilities());
+    const { context, deleteJson, postJson, requestJson } = client(capabilities());
 
-    await expect(getPublicationSlotLifecycleSupport(context)).resolves.toEqual({ unpublish: false, restore: false });
+    await expect(getPublicationSlotLifecycleSupport(context)).resolves.toEqual({ unpublish: false, unpublishReviewed: false, restore: false });
     await expect(unpublishSlot(context, "definition-1", "default")).rejects.toBeInstanceOf(ApiCapabilityUnavailableError);
+    await expect(unpublishReviewedSlot(context, "definition-1", "default", 3)).rejects.toBeInstanceOf(ApiCapabilityUnavailableError);
     await expect(restorePublicationSlot(context, "definition-1", "default")).rejects.toBeInstanceOf(ApiCapabilityUnavailableError);
     expect(deleteJson).not.toHaveBeenCalled();
     expect(postJson).not.toHaveBeenCalled();
+    expect(requestJson).not.toHaveBeenCalled();
   });
 
   it("sends slot lifecycle commands to their advertised relations", async () => {
-    const { context, deleteJson, postJson } = client(capabilities({ publishing: [publicationRecordLink, ...lifecycleLinks] }));
+    const { context, deleteJson, postJson, requestJson } = client(capabilities({ publishing: [publicationRecordLink, ...lifecycleLinks] }));
 
-    await expect(getPublicationSlotLifecycleSupport(context)).resolves.toEqual({ unpublish: true, restore: true });
+    await expect(getPublicationSlotLifecycleSupport(context)).resolves.toEqual({ unpublish: true, unpublishReviewed: true, restore: true });
     await unpublishSlot(context, "definition-1", "blue green");
+    await unpublishReviewedSlot(context, "workflow/opaque ?#", "blue green", 19);
     await restorePublicationSlot(context, "definition-1", "blue green");
 
     expect(deleteJson).toHaveBeenCalledWith("/publishing/workflows/definition-1/slots/blue%20green");
+    expect(requestJson).toHaveBeenCalledWith("/publishing/workflows/workflow%2Fopaque%20%3F%23/slots/blue%20green/unpublish/19", { method: "POST" });
     expect(postJson).toHaveBeenCalledWith("/publishing/workflows/definition-1/slots/blue%20green/restore", {});
   });
 });

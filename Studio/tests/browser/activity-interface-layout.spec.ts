@@ -33,7 +33,7 @@ for (const theme of ["light", "dark"]) {
       await connect.focus();
       await page.keyboard.press("Enter");
       await expect(paths.getByText("Done → Done", { exact: true })).toBeVisible();
-      await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+      await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
       await page.reload();
       await page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ }).click();
       await expect(paths.getByText("Done → Done", { exact: true })).toBeVisible();
