@@ -64,8 +64,10 @@ public sealed partial class InMemoryStore
     {
         lock (_gate)
         {
-            var binding = _referenceBirths[new(row.Id, row.Creation)];
-            return Checkpoint(row, binding);
+            if (row.FoundationInlineBirth is { } birth)
+                return new(ReferenceFor(birth.Tenant, new(row.Id, row.Creation)), row, null,
+                    row.FoundationInlineHeader ?? new(row.Definition, FrozenDictionary<string, string>.Empty), null);
+            return Checkpoint(row, _referenceBirths[new(row.Id, row.Creation)]);
         }
     }
 
@@ -130,10 +132,22 @@ public sealed partial class InMemoryStore
         _referenceBirths.Add(binding.Address, binding);
     }
 
-    private ReferenceBinding BindChild(TurnCommit turn, InstanceRow? previous, Message creator)
+    private ReferenceBinding BindInlineRoot(InstanceRow row)
+    {
+        var (tenant, creator) = row.FoundationInlineBirth!.Value;
+        var address = new CreationAddress(row.Id, row.Creation);
+        var reference = ReferenceFor(tenant, address);
+        if (row is not { Creation: 1, Parent: null, Retired: false, StartIntent: not null } ||
+            Instances.ContainsKey(row.Id) || _referenceBirths.ContainsKey(address) || _referenceBindings.ContainsKey(reference))
+            throw new StoreException(Failure.Definite, "An inline actor can publish its root binding once.");
+        return new(tenant, reference, address, creator, row.StartIntent);
+    }
+
+    private ReferenceBinding BindChild(TurnCommit turn, InstanceRow? previous, Message creator, ReferenceBinding? inlineRoot)
     {
         var parentCreation = turn.Row?.Creation ?? previous?.Creation;
-        if (parentCreation is not > 0 || !_referenceBirths.TryGetValue(new(turn.Instance, parentCreation.Value), out var parent) ||
+        var parent = inlineRoot ?? (parentCreation is > 0 ? _referenceBirths.GetValueOrDefault(new(turn.Instance, parentCreation.Value)) : null);
+        if (parentCreation is not > 0 || parent is null ||
             creator.Sender != turn.Instance || creator.SenderCreation != parentCreation ||
             creator.InboxScope != InboxKey.ChildCreatorScope || creator.Kind != Kinds.Start ||
             creator.Start is not { Creation: { Generation: 1, Previous: 0 } } start || creator.TargetCreation != 1 ||
@@ -300,16 +314,22 @@ public sealed partial class InMemoryStore
                 !creator.Done && creator.Message.Target.Id == address.Id && creator.Message.Start?.Creation?.Generation == address.Creation;
             if (!live && !starting) return null;
 
-            // Keep the caller's id in the envelope. The storage identity scopes it to the exact life.
-            var storageId = binding.Reference + "/" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
+            // The receipt expires independently of delivery. A delayed input can still be pending when the id is reused.
+            var receipt = binding.Reference + "/" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
             var now = clock();
+            if (_foundationSendReceipts.TryGetValue(receipt, out var previousUntil) && previousUntil >= now)
+                return false;
+
+            var occurrence = checked(_seq + 1);
+            var until = checked(now + (long)window.TotalMilliseconds);
             var message = new Message(id, new InstanceRef(address.Id), kind, payload, Due: dueAt,
-                KeepUntil: checked(now + (long)window.TotalMilliseconds), ReplyTo: replyTo, TargetCreation: address.Creation)
-                { StorageId = storageId, Operator = @operator };
+                KeepUntil: until, ReplyTo: replyTo, TargetCreation: address.Creation)
+                { StorageId = FormattableString.Invariant($"{receipt}/{occurrence}"), Operator = @operator }
+                .WithInboxScope(InboxKey.FoundationOccurrenceScope);
             if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
-            if (Messages.TryGetValue(message.InboxKey, out var previousSend) &&
-                (!previousSend.Done || previousSend.Message.KeepUntil >= now)) return false;
-            Messages[message.InboxKey] = new MessageRow(message, ++_seq, 0);
+            Messages.Add(message.InboxKey, new MessageRow(message, occurrence, 0));
+            _seq = occurrence;
+            _foundationSendReceipts[receipt] = until;
             return true;
         }
     }

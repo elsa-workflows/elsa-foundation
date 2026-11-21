@@ -96,6 +96,19 @@ public interface IArchiveActivityDefinitionCommand
         CancellationToken cancellationToken = default);
 }
 
+public sealed record RestoreActivityDefinitionRequest(
+    string DefinitionId,
+    string? DefinitionTenantId,
+    string? TenantId,
+    DateTimeOffset RestoredAt);
+
+public interface IRestoreActivityDefinitionCommand
+{
+    Task ExecuteAsync(
+        RestoreActivityDefinitionRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed record CreateActivityDraftRequest(
     ActivityDefinitionDraft Draft,
     ActivityDefinitionDraftLayout Layout,

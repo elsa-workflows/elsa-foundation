@@ -15,6 +15,14 @@ public interface IActorType
     /// <summary>Whether this implementation enforces the public operator protocol for this row.</summary>
     bool SupportsFoundationOperator(InstanceRow? row) => false;
 
+    internal bool SupportsFoundationInlineStart(string type) => false;
+
+    /// <summary>Whether this actor type can verify the operator or parent authority of a terminate.</summary>
+    internal bool SupportsTrialWithdrawal => false;
+
+    /// <summary>Checks whether the queued terminate has authority over the target's current life.</summary>
+    internal bool AuthorizesTrialWithdrawal(InstanceRow? row, Message message, Message? creator = null) => false;
+
     /// <summary>An owner command that needs a single-message boundary but still obeys normal withholding.</summary>
     bool SingleMessage(Message message) => false;
 
@@ -118,8 +126,11 @@ public sealed class Delivery(Message message, long seq)
     internal bool DiscardedInput => SuppliedCompletion || SuppliedTicket;
     internal bool DiscardedAt(Slot slot) => DiscardedInput || Message.SuppliedCreator && slot.CurrentRow is null;
     internal bool JobEntered;         // physical model entry, distinct from a scheduled driver
+    internal volatile bool WithdrawingJob; // set under the publication lock before signalling cancellation
     internal long? JobDeadline;
     internal bool JobDeadlineClosed;
+    internal bool RetainsTrialGate;   // a logical outcome can land while the physical driver exits
+    internal bool AbandonedTrial;     // a local reset keeps only this physical guard until the callback exits
     internal int JobEntries;         // physical starts seen by this delivery, a lower bound after a takeover
     internal bool DeferredJobTrial;   // durable fence retained while runtime trial isolation is yielded before entry
     internal long DeferredTrialObserved; // preserve the original cohort horizon when isolation is reacquired
@@ -136,12 +147,15 @@ public sealed class TurnInput
 {
     private readonly Worker _worker;
     private readonly ITurnServices _services;
+    private readonly Dictionary<InboxKey, Message>? _volatile;
 
     internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec, long admittedAt)
     {
         _worker = worker;
         ChildIds = worker.ChildIdsFor(actor);
         _services = worker.ServicesFor(slot, admittedAt);
+        if (slot.Unwritten && slot.CurrentRow?.FoundationInlineBirth is not null)
+            _volatile = worker.CaptureVolatile(actor);
         Slot = slot;
         Actor = actor;
         Taken = taken;
@@ -183,6 +197,8 @@ public sealed class TurnInput
     public string Model => Row?.Model ?? Spec!.Model;
     public ITurnServices Services => _services;
     internal int MaxAttempts => _worker.MaxAttempts;
+
+    internal Message? VolatileMessage(InboxKey id) => _volatile?.GetValueOrDefault(id);
 
     /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
     public long CheckpointTime => _worker.Now;
@@ -441,7 +457,8 @@ public sealed class DurableTurn
         var storageId = Origin + "#" + id;
         var key = InboxKey.Issued(storageId);
         if (_sent.Any(message => message.InboxKey == key && message.Target == Actor) ||
-            store.HasFoundationTimer(key, Id, _input.Creation))
+            store.HasFoundationTimer(key, Id, _input.Creation) ||
+            _input.VolatileMessage(key)?.Target == Actor)
             Recall(storageId);
     }
 

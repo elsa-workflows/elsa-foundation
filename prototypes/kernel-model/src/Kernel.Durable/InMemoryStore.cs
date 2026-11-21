@@ -147,6 +147,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public Action<int>? Locking { get; set; }
 
     public bool SupportsCommitWindow => true;
+    public bool SupportsJobTrialClear => true;
 
     // FenceSubset: the batch cut to the partitions whose fence matches, or null when none does or every one does.
     private CommitBatch? Subset(CommitBatch batch, int stale)
@@ -156,12 +157,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         var kept = current.Select(f => f.Partition).ToHashSet();
         bool Kept(InboxKey id) => Messages.GetValueOrDefault(id) is { } row && kept.Contains(row.Message.Target.Partition);
         var turns = batch.Turns.Where(t => batch.PartitionOf(t) is var p && kept.Contains(p)).ToList();
-        return CommitBatch.Owned(current, batch.Lease, batch.HandOver, turns, [.. batch.Seen.Where(Kept)], [.. batch.Trial.Where(Kept)]) with { Window = batch.Window };
+        return CommitBatch.Owned(current, batch.Lease, batch.HandOver, turns, [.. batch.Seen.Where(Kept)], [.. batch.Trial.Where(Kept)])
+            with { Window = batch.Window, ClearJobTrials = [.. batch.ClearJobTrials.Where(Kept)] };
     }
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        StoreBatchRules.Validate(batch, ownedSets: true);
+        StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear);
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
@@ -191,7 +193,14 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             // MUTATION SeenAtNodeEpoch: the set's highest epoch, as one epoch for the whole node would be.
             long MarkEpoch(MessageRow row) => Has(Flaw.SeenAtNodeEpoch) && fences.Count > 0 ? fences.Max(f => f.Epoch) : epochs.GetValueOrDefault(row.Message.Target.Partition, batch.Epoch);
 
+            foreach (var id in batch.ClearJobTrials)
+                if (Messages.GetValueOrDefault(id) is not { Done: false, Trial: > 0, Message.Kind: Kinds.Job } pending ||
+                    pending.Message.InboxScope <= 0 ||
+                    !epochs.TryGetValue(pending.Message.Target.Partition, out var fenceEpoch) || fenceEpoch != pending.Trial)
+                    Diverged($"job ticket {id} has no pending trial at the fenced epoch");
+
             Dictionary<InboxKey, ReferenceBinding>? childBindings = null;
+            Dictionary<string, ReferenceBinding>? inlineRoots = null;
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
@@ -210,16 +219,19 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
-                    foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription);
                     StoreBatchRules.ValidateActorSends(turn, previous);
                     ValidateFoundationHeader(turn);
+                    var inlineRoot = turn.Row is { FoundationInlineBirth: not null } local ? BindInlineRoot(local) : null;
+                    if (inlineRoot is not null && !(inlineRoots ??= new(StringComparer.Ordinal)).TryAdd(turn.Instance, inlineRoot))
+                        Diverged($"two inline births for {turn.Instance}");
+                    foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription, inlineRoot);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
                     {
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
                         if (!message.BindFoundationChild) continue;
-                        var binding = BindChild(turn, previous, message);
+                        var binding = BindChild(turn, previous, message, inlineRoot);
                         childBindings ??= [];
                         childAddresses ??= [];
                         childReferences ??= new(StringComparer.Ordinal);
@@ -264,7 +276,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 }
                 if (turn.Row is { } stored)
                 {
-                    Instances[stored.Id] = CommitClockFacts.Stamp(stored, now);
+                    if (inlineRoots?.GetValueOrDefault(stored.Id) is { } root) InsertReference(root);
+                    Instances[stored.Id] = CommitClockFacts.Stamp(stored.WithoutInlineBirth(), now);
                     RecordFoundationMetadata(turn, stored, now);
                 }
                 if (turn.Delete)
@@ -287,7 +300,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var message in turn.Sent)
                 {
                     // Messages the owner hands over in memory to its own partition are written as seen already.
-                    Messages[message.InboxKey] = new MessageRow(message, ++_seq, batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0);
+                    Messages[message.InboxKey] = new MessageRow(message, ++_seq, batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0)
+                    {
+                        Held = turn.FoundationHeldPromotions?.Contains(message.InboxKey) == true
+                    };
                     seqs.Add(_seq);
                     if (childBindings?.GetValueOrDefault(message.InboxKey) is { } binding) InsertReference(binding);
                 }
@@ -311,6 +327,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = MarkEpoch(seen);
             foreach (var id in batch.Trial)
                 if (Messages.GetValueOrDefault(id) is { } tried) (tried.Seen, tried.Trial) = (MarkEpoch(tried), MarkEpoch(tried));
+            foreach (var id in batch.ClearJobTrials) Messages[id].Trial = 0;
             foreach (var id in batch.Turns.SelectMany(s => s.Held ?? []))
                 if (Messages.GetValueOrDefault(id) is { } held)
                 {
@@ -592,10 +609,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         return default;
     }
 
-    private void RequireSameSubscriptionScope(SubscriptionRow subscription)
+    private void RequireSameSubscriptionScope(SubscriptionRow subscription, ReferenceBinding? inlineRoot = null)
     {
-        var targetTenant = subscription.Creation is > 0
-            ? _referenceBirths.GetValueOrDefault(new(subscription.Instance, subscription.Creation))?.Tenant : null;
+        var target = new CreationAddress(subscription.Instance, subscription.Creation);
+        var targetTenant = inlineRoot?.Address == target ? inlineRoot.Tenant
+            : subscription.Creation > 0 ? _referenceBirths.GetValueOrDefault(target)?.Tenant : null;
         if (subscription.Start is null && targetTenant != subscription.FoundationTenant)
             throw new StoreException(Failure.Definite, "The subscription's scope does not own the target creation.");
         if (Subscriptions.TryGetValue(subscription, out var previous) && previous.FoundationTenant != subscription.FoundationTenant)
@@ -687,7 +705,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             foundationEvents.ForEach(key => FoundationEvents.Remove(key));
             var eventReceipts = _foundationEventReceipts.Where(pair => pair.Value < now).Select(pair => pair.Key).ToList();
             eventReceipts.ForEach(key => _foundationEventReceipts.Remove(key));
-            return new(messages.Count + events.Count + foundationEvents.Count + eventReceipts.Count + SweepFoundationStarts(now));
+            return new(messages.Count + events.Count + foundationEvents.Count + eventReceipts.Count + SweepFoundationIngressReceipts(now));
         }
     }
 }

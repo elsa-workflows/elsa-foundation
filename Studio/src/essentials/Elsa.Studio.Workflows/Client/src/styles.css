@@ -4045,6 +4045,11 @@
   gap: 6px;
 }
 
+.wf-reusable-actions .wf-reusable-version-button {
+  width: 100%;
+  justify-content: flex-start;
+}
+
 .wf-reusable-actions a {
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
@@ -7031,18 +7036,59 @@ fieldset.wf-container-variables {
   color: var(--wf-danger);
 }
 
-.wf-validation:has(.wf-validation-list) {
+.wf-validation.expanded {
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
+  gap: 0;
+  min-height: 0;
+  max-height: min(34vh, 260px);
+  overflow: hidden;
+  padding: 0;
+}
+
+.wf-validation-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
   padding: 6px 12px;
-  max-height: 148px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.wf-validation-toggle:focus-visible {
+  outline: 2px solid var(--wf-accent);
+  outline-offset: -2px;
+}
+
+.wf-validation-toggle > svg {
+  flex: 0 0 auto;
+  transition: transform 120ms ease;
+}
+
+.wf-validation-toggle[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
+.wf-validation-details {
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 12px 8px;
 }
 
 .wf-validation-summary {
   display: flex;
+  min-width: 0;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   font-weight: 600;
 }
@@ -7062,38 +7108,72 @@ fieldset.wf-container-variables {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(max-content, 1fr) auto;
-  gap: 2px 8px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .wf-validation-item {
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / -1;
-  align-items: center;
-  padding: 2px 0;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  border-top: 1px solid var(--wf-border);
+  padding: 8px 0;
 }
 
 .wf-validation-item.repairable .wf-validation-message {
   color: var(--wf-warning-text);
 }
 
-.wf-validation-item.warning {
-  align-items: start;
+.wf-validation-item-heading {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
 }
 
-.wf-validation-item.warning .wf-validation-message {
+.wf-validation-severity {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wf-validation-severity[data-severity="warning"] {
+  color: var(--wf-warning-text);
+}
+
+.wf-validation-severity[data-severity="error"] {
+  color: var(--wf-danger);
+}
+
+.wf-validation-location {
   min-width: 0;
-  overflow: visible;
-  overflow-wrap: anywhere;
-  text-overflow: clip;
-  white-space: normal;
+  color: var(--wf-muted-text);
+  font-size: 11px;
 }
 
 .wf-validation-message {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.wf-validation-hint {
+  min-width: 0;
+  margin: 0;
+  color: var(--wf-muted-text);
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.wf-validation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .wf-validation-repair {
@@ -7109,10 +7189,6 @@ fieldset.wf-container-variables {
   color: inherit;
   cursor: pointer;
   font-size: 11px;
-}
-
-.wf-validation-node-action {
-  grid-column: 3;
 }
 
 .wf-validation-repair:hover {

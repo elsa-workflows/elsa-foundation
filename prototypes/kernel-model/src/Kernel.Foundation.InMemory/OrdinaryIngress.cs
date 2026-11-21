@@ -7,13 +7,13 @@ namespace Kernel.Foundation.InMemory;
 internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
 {
     public ValueTask<Admission> SendAsync(BoundScope scope, Target.Start target, string id, AddOptions? options = null,
-        CancellationToken cancellationToken = default, string? replyTo = null)
+        CancellationToken cancellationToken = default, string? replyTo = null, Durable.Worker? inlineOwner = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
         if (!Durable.InMemoryStore.IsOutsideMessageId(id) || !HeaderLimits.FitsStart(target.Spec.Type, target.Spec.TypeData)) return new(new Admission(AdmissionOutcome.Refused));
 
-        var receipt = store.AdmitGeneratedFoundationStart(scope.Tenant, id, Start(target.Spec), options?.DueAt, options?.KeepFor, replyTo);
+        var receipt = store.AdmitGeneratedFoundationStart(scope.Tenant, id, Start(target.Spec), options?.DueAt, options?.KeepFor, replyTo, inlineOwner);
         var outcome = receipt.Duplicate ? AdmissionOutcome.Duplicate : AdmissionOutcome.Accepted;
         return new(new Admission(outcome, new ActorRef(receipt.Reference)));
     }

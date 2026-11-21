@@ -111,7 +111,7 @@ describe("workflows module", () => {
 
     try {
       flushSync(() => root.render(<ValidationPanel draft={draft} onRepair={vi.fn()} />));
-      expect(container.textContent).toContain("No validation errors");
+      expect(container.textContent).toContain("No validation issues found");
     } finally {
       flushSync(() => root.unmount());
     }
@@ -2191,7 +2191,7 @@ describe("workflows module", () => {
     await click(buttonByText(dialog(container), "Create"));
 
     await waitForText(container, "Review & publish");
-    expect(container.textContent).toContain("No validation errors");
+    expect(container.textContent).toContain("Checking validation");
 
     await unmount();
   });

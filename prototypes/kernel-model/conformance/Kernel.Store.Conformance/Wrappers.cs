@@ -10,6 +10,7 @@ public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKe
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
@@ -81,6 +82,7 @@ public class RecordingStore(IKernelStore inner) : IKernelStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;

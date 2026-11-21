@@ -37,7 +37,8 @@ for (const width of [320, 1440]) {
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(emptyPickerResponse) });
       }
       if (requestCount === 2) return route.abort("failed");
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(populatedPickerResponse) });
+      const response = requestCount === 3 || requestCount === 4 ? populatedPickerResponse : emptyPickerResponse;
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) });
     });
 
     await page.goto("/?mode=secret-reference");
@@ -74,6 +75,17 @@ for (const width of [320, 1440]) {
     await expect(select).toHaveValue("api-token");
     await expect(metadata).toHaveText("API token · api-token · workflow · encrypted · text · Active");
     await expectPickerLayout(syntax, status, metadata);
+
+    await page.getByRole("button", { name: "Close inspector", exact: true }).click();
+    await page.getByRole("button", { name: "Open inspector", exact: true }).click();
+    await expect(select).toHaveValue("api-token");
+    await expect(metadata).toHaveText("API token · api-token · workflow · encrypted · text · Active");
+
+    await page.getByRole("button", { name: "Close inspector", exact: true }).click();
+    await page.getByRole("button", { name: "Open inspector", exact: true }).click();
+    await expect(select).toHaveValue("__current-reference");
+    await expect(select.locator('option[value="__current-reference"]')).toHaveText("api-token — Unavailable");
+    await expect(metadata).toHaveText("api-token · workflow · text · Unavailable");
   });
 }
 

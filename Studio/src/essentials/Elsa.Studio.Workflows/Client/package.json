@@ -6,6 +6,7 @@
   "types": "./src/module.tsx",
   "exports": {
     ".": "./src/module.tsx",
+    "./authoring": "./src/authoring.ts",
     "./style.css": "./src/styles.css"
   },
   "publishConfig": {

@@ -49,7 +49,7 @@ export function validateTaskFields(fields: readonly TaskField[], controls: TaskF
     if (resolved.status !== "available") errors.push(resolved.reason ?? "Choose an available field control.");
     else if (field.controlId && resolved.control) {
       errors.push(...validateTaskFieldControlConfiguration(resolved.control, field.configuration));
-      if (field.minimum !== undefined || field.maximum !== undefined || field.maxLength !== undefined || field.choices !== undefined || field.presentation !== undefined || field.mustBeTrue) {
+      if (field.minimum != null || field.maximum != null || field.maxLength != null || field.choices != null || field.presentation != null || field.mustBeTrue) {
         errors.push("Custom field settings must be stored in its configuration object.");
       }
     }
@@ -61,7 +61,7 @@ export function validateTaskFields(fields: readonly TaskField[], controls: TaskF
       if (new Set(normalized.filter(Boolean)).size !== normalized.filter(Boolean).length) errors.push("Choice values must be unique.");
     }
     if (!field.controlId && field.mustBeTrue && field.kind !== "boolean") errors.push("Must be checked is only supported for Boolean fields.");
-    if (!field.controlId && field.presentation) {
+    if (!field.controlId && field.presentation != null) {
       const { display, trueLabel, falseLabel, unansweredLabel } = field.presentation;
       const supported = field.kind === "boolean"
         ? ["checkbox", "dropdown", "radio"].includes(display)
@@ -71,7 +71,7 @@ export function validateTaskFields(fields: readonly TaskField[], controls: TaskF
         errors.push("Answer labels are only supported for Boolean fields.");
       }
       for (const [label, value] of [["Yes", trueLabel], ["No", falseLabel], ["Unanswered", unansweredLabel]] as const) {
-        if (value !== undefined && (!value.trim() || value.length > 256)) errors.push(`${label} label must contain 1–256 characters.`);
+        if (value != null && (typeof value !== "string" || !value.trim() || value.length > 256)) errors.push(`${label} label must contain 1–256 characters.`);
       }
     }
     if (!field.controlId && field.kind === "number") {
@@ -133,42 +133,47 @@ export function parseTaskFormSource(source: string, currentForm: TaskForm, contr
     if (typeof field.key !== "string" || typeof field.label !== "string") throw new Error(`Field ${index + 1} key and label must be strings.`);
     if (typeof field.kind !== "string" || !field.kind.trim() || field.kind.length > 64) throw new Error(`Field ${index + 1} has an unsupported type.`);
     if (typeof field.required !== "boolean" || typeof field.readOnly !== "boolean") throw new Error(`Field ${index + 1} required and readOnly values must be booleans.`);
-    if (field.mustBeTrue !== undefined && typeof field.mustBeTrue !== "boolean") throw new Error(`Field ${index + 1} mustBeTrue must be a boolean.`);
-    if (field.controlId !== undefined && (typeof field.controlId !== "string" || field.controlId.length > 128)) throw new Error(`Field ${index + 1} controlId must be a versioned string identity.`);
+    if (field.mustBeTrue != null && typeof field.mustBeTrue !== "boolean") throw new Error(`Field ${index + 1} mustBeTrue must be a boolean.`);
+    if (field.controlId != null && (typeof field.controlId !== "string" || field.controlId.length > 128)) throw new Error(`Field ${index + 1} controlId must be a versioned string identity.`);
 
     const parsed: TaskField = { key: field.key, label: field.label, kind: field.kind, required: field.required, readOnly: field.readOnly };
     if (typeof field.controlId === "string") parsed.controlId = field.controlId;
     if (field.mustBeTrue === true) parsed.mustBeTrue = true;
-    if (field.help !== undefined) {
+    if (field.help != null) {
       if (typeof field.help !== "string") throw new Error(`Field ${index + 1} help must be a string.`);
       parsed.help = field.help;
     }
     for (const key of ["minimum", "maximum", "maxLength"] as const) {
       const property = field[key];
-      if (property !== undefined) {
+      if (property != null) {
         if (typeof property !== "number" || !Number.isFinite(property)) throw new Error(`Field ${index + 1} ${key} must be a finite number.`);
         parsed[key] = property;
       }
     }
-    if (field.choices !== undefined) {
+    if (field.choices != null) {
       if (!Array.isArray(field.choices) || !field.choices.every(choice => typeof choice === "string")) throw new Error(`Field ${index + 1} choices must be an array of strings.`);
       parsed.choices = [...field.choices];
     }
-    if (field.configuration !== undefined) {
+    if (field.configuration != null) {
       if (!isRecord(field.configuration)) throw new Error(`Field ${index + 1} configuration must be a JSON object.`);
       const shapeErrors = validateTaskFieldConfigurationShape(field.configuration);
       if (shapeErrors.length) throw new Error(`Field ${index + 1}: ${shapeErrors.join(" ")}`);
       parsed.configuration = structuredClone(field.configuration);
     }
-    if (field.presentation !== undefined) {
+    if (field.presentation != null) {
       if (!isRecord(field.presentation)) throw new Error(`Field ${index + 1} presentation must be an object.`);
       rejectUnknownProperties(field.presentation, ["display", "trueLabel", "falseLabel", "unansweredLabel"], `field ${index + 1} presentation`);
       const { display, trueLabel, falseLabel, unansweredLabel } = field.presentation;
       if (typeof display !== "string" || !["checkbox", "dropdown", "radio"].includes(display)) throw new Error(`Field ${index + 1} has an unsupported presentation display.`);
       for (const [name, label] of [["trueLabel", trueLabel], ["falseLabel", falseLabel], ["unansweredLabel", unansweredLabel]] as const) {
-        if (label !== undefined && typeof label !== "string") throw new Error(`Field ${index + 1} ${name} must be a string.`);
+        if (label != null && typeof label !== "string") throw new Error(`Field ${index + 1} ${name} must be a string.`);
       }
-      parsed.presentation = { display: display as TaskFieldDisplay, trueLabel: trueLabel as string | undefined, falseLabel: falseLabel as string | undefined, unansweredLabel: unansweredLabel as string | undefined };
+      parsed.presentation = {
+        display: display as TaskFieldDisplay,
+        ...(typeof trueLabel === "string" ? { trueLabel } : {}),
+        ...(typeof falseLabel === "string" ? { falseLabel } : {}),
+        ...(typeof unansweredLabel === "string" ? { unansweredLabel } : {})
+      };
     }
     if (!parsed.controlId) {
       const fieldErrors = validateTaskFields([parsed], controls)[0];

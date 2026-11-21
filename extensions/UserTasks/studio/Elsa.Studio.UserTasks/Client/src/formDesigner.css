@@ -57,9 +57,9 @@
 .user-task-designer__validation-summary, .user-task-designer__property-errors { display: grid; gap: var(--studio-space-1); margin: 0; padding-inline-start: var(--studio-space-4); color: var(--studio-danger); }
 .user-task-designer__checkbox { display: flex; align-items: center; gap: var(--studio-space-2); }
 .user-task-designer__checkbox input { width: 1rem; height: 1rem; margin: 0; }
-.user-task-designer__advanced { display: grid; gap: var(--studio-space-3); }
-.user-task-designer__advanced summary { cursor: pointer; font-weight: 650; }
-.user-task-designer__advanced[open] { gap: var(--studio-space-3); }
+.user-task-designer__control-properties, .user-task-designer__boolean-properties, .user-task-designer__advanced-content { display: grid; min-width: 0; gap: var(--studio-space-3); }
+.user-task-designer__control-properties > *, .user-task-designer__boolean-properties > * { min-width: 0; }
+.user-task-designer__property-guidance { margin: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .user-task-designer__properties h4 { margin: 0; font-size: var(--studio-label-size); }
 .user-task-designer__form-settings-toggle { justify-self: start; border: 0; background: transparent; color: var(--studio-accent); cursor: pointer; font: inherit; font-weight: 600; padding: 0; text-align: left; }
 .user-task-designer__form-settings { display: grid; gap: var(--studio-space-3); }

@@ -7,14 +7,9 @@ import { decodeDecisionXml, newDecisionXml, parseTable } from "./decisionXml";
 import { TableEditor } from "./TableEditor";
 import { CasePanel } from "./CasePanel";
 import { EvaluationPanel } from "./EvaluationPanel";
+import { DecisionDiagnostics } from "./DecisionDiagnostics";
 import { completeNewDecisionHandoff } from "./newDecisionHandoff";
 export interface DecisionsPageProps { api: ElsaStudioModuleApi; navigate(path: string): void; assetId?: string | null; versionId?: string | null; isNew?: boolean; /** Set when an Evaluate Decision picker opened this editor and waits for the decision it creates. */ handoff?: string | null }
-function diagnosticLocation(item: Diagnostic, table: ReturnType<typeof parseTable> | null) {
-  const ruleIndex = item.ruleId && table ? table.rules.findIndex(rule => rule.id === item.ruleId) : -1;
-  const clause = item.clauseId && table ? [...table.inputs, ...table.outputs].find(entry => entry.id === item.clauseId) : undefined;
-  const locations = [item.ruleId ? ruleIndex >= 0 ? `Rule ${ruleIndex + 1}` : "Rule" : "", item.clauseId ? clause?.name ? `Column ${clause.name}` : "Column" : ""].filter(Boolean);
-  return locations.length ? ` · ${locations.join(" · ")}` : "";
-}
 export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false, handoff }: DecisionsPageProps) {
   const [assets, setAssets] = useState<DecisionAsset[]>([]), [asset, setAsset] = useState<DecisionAsset | null>(null), [published, setPublished] = useState<DecisionVersion | undefined>(), [availableVersions, setAvailableVersions] = useState<DecisionVersion[]>([]);
   const [name, setName] = useState(""), [description, setDescription] = useState(""), [xml, setXml] = useState(""), [sensitive, setSensitive] = useState(false);
@@ -172,7 +167,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
     if (ticket === generation.current) { setAssets(items); setNotice(`${item.name} was permanently deleted.`); }
   });
   const filtered = assets.filter(item => `${item.name} ${item.description ?? ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
-  return <StudioPage className="decisions-page" aria-labelledby={editor ? "decision-title" : "decisions-title"}>
+  return <StudioPage className={`decisions-page${editor ? " studio-authoring-workspace" : ""}`} aria-labelledby={editor ? "decision-title" : "decisions-title"}>
     {!editor ? <StudioPageHeader title="Decisions" titleId="decisions-title"
       description="Reusable business policies with versioned decision tables, saved cases and explanations."
       actions={<>
@@ -228,28 +223,29 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
           {shown ? <StudioField className="decision-version-picker" label="View"><select aria-label="Decision version" value={published?.id ?? "draft"} disabled={busy} onChange={event => void leave(path(shown.id, event.target.value === "draft" ? undefined : event.target.value))}><option value="draft">Current draft</option>{availableVersions.map(item => <option key={item.id} value={item.id}>Version {item.number}</option>)}</select></StudioField> : null}
         </div>
         {!routePending && (isNew || shown) ? <div className="decision-actions">
-          {!published ? <StudioButton variant="primary" disabled={busy || caseBusy || caseDirty || readOnly || !name.trim() || !xml || !dirty && !!asset} onClick={() => void save()}>{busy ? "Working…" : "Save decision"}</StudioButton>
+          {!published ? <>
+            <StudioButton variant="primary" disabled={busy || caseBusy || caseDirty || readOnly || !name.trim() || !xml || !dirty && !!asset} onClick={() => void save()}>{busy ? "Working…" : "Save"}</StudioButton>
+            <StudioButton disabled={busy || caseBusy || caseDirty || !asset || dirty || !can(api, "decisions:publish")} onClick={() => void publish()}>Publish</StudioButton>
+          </>
             : <StudioButton variant="primary" disabled={busy || caseBusy || caseDirty || !can(api, "decisions:manage") || !published.xml} onClick={() => void clonePublished()}>Clone to draft</StudioButton>}
           <OverflowMenu ariaLabel="More decision actions" items={[
             { id: "validate", label: "Validate", disabled: busy || !asset || dirty || !!published || !can(api, "decisions:manage"), onSelect: validate },
-            ...(!published ? [{ id: "publish", label: "Publish", disabled: busy || caseBusy || caseDirty || !asset || dirty || !can(api, "decisions:publish"), onSelect: publish }] : []),
             { id: "export", label: "Export DMN", disabled: busy || !asset || !can(api, "decisions:source"), onSelect: download }
           ]} />
         </div> : null}
       </header>
       {routePending ? <SkeletonRows label="Loading decision" /> : !isNew && !shown ? <StudioResultState title="Unable to open this decision" description="The resource could not be loaded. It may have been recycled or your account may not have access." /> : <>
         <StudioTabs tabs={[{ id: "rules", label: "Rules" }, { id: "tests", label: "Tests" }, { id: "settings", label: "Settings" }]} activeTab={editorView} onSelect={tabId => setEditorView(tabId as "rules" | "tests" | "settings")} baseId={editorTabsId} ariaLabel="Decision views" className="decision-editor-tabs" />
-        <StudioTabPanel baseId={editorTabsId} index={0} hidden={editorView !== "rules"}>
-          {diagnostics.length ? <section aria-labelledby="decision-diagnostics-title" className="decision-diagnostics"><h2 id="decision-diagnostics-title">Compatibility and validation</h2><ul>{diagnostics.map((item, index) => <li key={`${item.code}-${index}`}><button className="decision-link" onClick={() => { const target = item.ruleId && item.clauseId ? document.getElementById(`cell-${item.ruleId}-${item.clauseId}`) : null; target?.focus(); }}><strong>{item.code}</strong> · {item.message}{diagnosticLocation(item, diagnosticTable)}</button></li>)}</ul><p>Retaining or viewing a document does not make unsupported content executable.</p></section> : null}
+        <StudioTabPanel baseId={editorTabsId} index={0} hidden={editorView !== "rules"} className="decision-editor-panel decision-rules-panel">
+          {diagnostics.length ? <DecisionDiagnostics diagnostics={diagnostics} table={diagnosticTable} label="Compatibility and validation" onReview={item => { const target = item.ruleId && item.clauseId ? document.getElementById(`cell-${item.ruleId}-${item.clauseId}`) : null; target?.focus(); }} /> : null}
           {xml ? <TableEditor key={`${asset?.id ?? "new"}:${published?.id ?? "draft"}`} xml={xml} readOnly={readOnly || busy} diagnostics={diagnostics} onChange={value => { setXml(value); setError(""); setDiagnostics([]); }} onError={setError} /> : <StudioResultState title="Decision source is protected" description="Source access and any required sensitive-value grant are needed to inspect or edit this table." />}
         </StudioTabPanel>
-        <StudioTabPanel baseId={editorTabsId} index={1} hidden={editorView !== "tests"}>
-          {asset && published && xml && can(api, "decisions:evaluate") ? <EvaluationPanel key={published.id} api={api} id={asset.id} versionId={published.id} xml={xml} /> : null}
+        <StudioTabPanel baseId={editorTabsId} index={1} hidden={editorView !== "tests"} className="decision-editor-panel decision-tests-panel">
           {asset && can(api, "decisions:test") ? <CasePanel key={`${asset.id}:${published?.id ?? "draft"}`} api={api} asset={asset} candidate={published} xml={xml} dirty={dirty} onDraftStateChange={reportCaseState} onReviewRules={items => {
             setDiagnostics(items); reviewFocus.current = items.find(item => item.ruleId && item.clauseId) ?? null; setEditorView("rules");
-          }} /> : <p className="decision-muted">Testing is not available with your current permissions.</p>}
+          }} outputSupplement={asset && published && xml && can(api, "decisions:evaluate") ? <EvaluationPanel key={published.id} api={api} id={asset.id} versionId={published.id} xml={xml} /> : null} /> : <StudioResultState title="Testing is unavailable" description="Testing is not available with your current permissions." />}
         </StudioTabPanel>
-        <StudioTabPanel baseId={editorTabsId} index={2} hidden={editorView !== "settings"}>
+        <StudioTabPanel baseId={editorTabsId} index={2} hidden={editorView !== "settings"} className="decision-editor-panel decision-settings-panel">
           <fieldset disabled={readOnly || busy} className="decision-metadata"><legend className="decision-visually-hidden">Decision details</legend>
             <StudioField label="Name"><input ref={titleInput} value={name} maxLength={200} onChange={event => setName(event.target.value)} /></StudioField>
             <StudioField label="Description"><input value={description} maxLength={2048} onChange={event => setDescription(event.target.value)} /></StudioField>

@@ -33,6 +33,9 @@ var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntri
 
 NativeSwitch.On = args.Contains("--native");
 NativeSwitch.Flaws = (Arg("--native-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Native.NativeFlaw.None, (all, name) => all | Enum.Parse<Kernel.Native.NativeFlaw>(name, true));
+if (args.Contains("--contract-http"))
+    return await ContractHttpWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws);
 if (args.Contains("--contract-evolution"))
     return await ContractActorWorkload.RunEvolution(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
         Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws);
@@ -48,7 +51,25 @@ if (args.Contains("--contract-events"))
 if (args.Contains("--contract"))
     return await ContractWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
         Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), actions, count, flaws);
+if (args.Contains("--inline-ephemeral-check"))
+{
+    var failed = false;
+    await InlineEphemeralChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
+    return failed ? 1 : 0;
+}
+
+if (args.Contains("--contract-jobs"))
+    return await ContractActorWorkload.RunJobTree(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws, args.Contains("--tree-stall"));
+if (args.Contains("--public-owner-check"))
+{
+    var failed = false;
+    await PublicOwnerChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
+    return failed ? 1 : 0;
+}
+
 if (args.Contains("--lease-check")) return await LeaseChecks.Run(flaws);
+if (args.Contains("--job-trial-check")) return await ContractActorWorkload.RunJobTrialChecks(count, flaws);
 if (args.Contains("--landed-check")) return LandedChecks.Run();
 if (args.Contains("--placement-check")) return PlacementChecks.Run(flaws);
 if (args.Contains("--native-mutations")) return NativeMutations(int.Parse(Arg("--seeds") ?? "2000"));

@@ -65,7 +65,7 @@ internal static class RuntimeHistoryRegistration
                 throw Unavailable("The selected history providers cannot acknowledge one scoped native checkpoint.");
             var availability = provider.GetRequiredService<RuntimeHistoryCaptureCapabilities>();
             var kinds = provider.GetServices<RuntimeHistorySourceSupport>().Where(availability.SourceOwner)
-                .SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName);
+                .SelectMany(RuntimeHistoryCaptureCapabilities.Kinds);
             var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true,
                 RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(RuntimeHistoryDeliveryObservations.Kinds).Concat(kinds).ToArray());
             if (!provider.GetServices<IRuntimeCheckpointCommitEnricher>().OfType<IRuntimeHistoryCaptureSupport>().Any(capture => capture.CanCapture(policy)))

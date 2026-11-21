@@ -38,6 +38,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
             request.Authority,
             request.ProviderKey,
             null,
+            request.ArchivedOnly,
             request.Sort,
             cancellationToken);
         try
@@ -49,7 +50,8 @@ public sealed class ActivityDefinitionManagementProjectionService(
                 request.Limit,
                 Normalize(request.Search),
                 authority,
-                Normalize(request.ProviderKey)), cancellationToken);
+                Normalize(request.ProviderKey),
+                ArchivedOnly: request.ArchivedOnly), cancellationToken);
             return Page(page, binding.Scope, page.Items.Select(item => ToDefinitionView(item, authorization)).ToArray());
         }
         catch (ActivityManagementSnapshotExpiredException exception)
@@ -84,6 +86,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
             null,
             request.ProviderKey,
             request.Status,
+            false,
             request.Sort,
             cancellationToken);
         try
@@ -121,6 +124,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
             null,
             request.ProviderKey,
             request.Lifecycle,
+            false,
             request.Sort,
             cancellationToken);
         try
@@ -186,7 +190,8 @@ public sealed class ActivityDefinitionManagementProjectionService(
         AuthorizationSnapshot authorization)
     {
         var designOwned = definition.ContentAuthority.Kind == ActivityContentAuthorityKind.Design;
-        var mutable = definition.ArchivedAt is null;
+        var archived = definition.ArchivedAt is not null;
+        var mutable = !archived;
         var recommendation = definition.Recommendation;
         var hasActiveRecommendation = recommendation?.Lifecycle == ActivityDefinitionVersionLifecycle.Active;
         var forkTargets = hasActiveRecommendation
@@ -198,6 +203,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
             Action("create-draft", authorization.CanManage && designOwned && mutable, !authorization.CanManage ? ActivityErrorCodes.ActionForbidden : !designOwned ? "activity.definition.source-owned" : "activity.definition.archived"),
             Action("set-recommendation", authorization.CanManage && mutable, !authorization.CanManage ? ActivityErrorCodes.ActionForbidden : "activity.definition.archived"),
             Action("archive-definition", authorization.CanManage && designOwned && mutable, !authorization.CanManage ? ActivityErrorCodes.ActionForbidden : !designOwned ? "activity.definition.source-owned" : "activity.definition.archived"),
+            Action("restore-definition", authorization.CanManage && designOwned && archived, !authorization.CanManage ? ActivityErrorCodes.ActionForbidden : !designOwned ? "activity.definition.source-owned" : "activity.definition.not-archived"),
             Action("fork-definition", authorization.CanManage && !designOwned && hasActiveRecommendation && forkTargets.HasAuthorizedTarget,
                 ForkUnavailableCode(authorization, designOwned, forkTargets, hasActiveRecommendation))
         ];
@@ -336,6 +342,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
         string? authority,
         string? providerKey,
         string? lifecycle,
+        bool archivedOnly,
         string sort,
         CancellationToken cancellationToken)
     {
@@ -353,6 +360,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
             Normalize(authority),
             Normalize(providerKey),
             Normalize(lifecycle),
+            archivedOnly,
             sort);
         if (string.IsNullOrWhiteSpace(cursor))
         {

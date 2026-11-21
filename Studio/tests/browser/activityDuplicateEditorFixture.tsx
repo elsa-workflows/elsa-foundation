@@ -1,4 +1,5 @@
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearance.css";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import React, { lazy, Suspense, useMemo, useRef, useState } from "react";

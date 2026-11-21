@@ -16,7 +16,10 @@ public enum History { Full, State, Minimal }
 public sealed record CreationStart(long Generation, long Previous, string Intent);
 
 public sealed record StartSpec(string Model, string Definition, string? Input = null, string? Parent = null, bool Ephemeral = false, History History = History.Full,
-    CreationStart? Creation = null, long ParentCreation = 0, TimeSpan? ShortWait = null);
+    CreationStart? Creation = null, long ParentCreation = 0, TimeSpan? ShortWait = null)
+{
+    internal string? FoundationInlineTenant { get; init; }
+}
 
 public sealed record SendOptions(TimeSpan? Delay = null, StartSpec? Start = null, long? TargetCreation = null, long? DueAt = null);
 
@@ -27,6 +30,7 @@ public readonly record struct InboxKey(string Id, long Scope = 0, string? Match 
     internal const long ChildCreatorScope = long.MaxValue;
     internal const long EventDeliveryScope = -2;
     internal const long EventCreatorScope = -3;
+    internal const long FoundationOccurrenceScope = -4;
     public bool HasIssuedOrigin => Scope == -1 || Scope > 0;
     public static InboxKey Issued(string id) => new(id, -1);
     public static InboxKey Custom(string actor, string id) => new(id, (long)int.MaxValue + 2 + actor.Length);

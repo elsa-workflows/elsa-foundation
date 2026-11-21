@@ -24,6 +24,8 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
     ];
 
     internal static readonly string[] Version2Kinds = ["BookmarkSuperseded", "DurableStateRecorded", "DurableStateRemoved"];
+    private static readonly string[] PublicationKinds = RuntimeHistorySourceFacts.PublicationObservationKinds
+        .Prepend(nameof(RuntimeHistorySourceFactKind.StimulusPublicationCommitted)).ToArray();
 
     // Observe the completed semantic envelope after every native owner has contributed.
     public int Order => int.MaxValue;
@@ -32,6 +34,8 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
     {
         ArgumentNullException.ThrowIfNull(policy);
         if (!RuntimeHistorySourceFacts.IsFinalProfile(policy) || !sourceAvailability.SourceInputs()) return false;
+        if (policy.SupportedKinds.Intersect(PublicationKinds, StringComparer.Ordinal).Any() &&
+            !PublicationKinds.All(kind => policy.SupportedKinds.Contains(kind, StringComparer.Ordinal))) return false;
         if (policy.SupportedKinds.Contains("ValueCaptured", StringComparer.Ordinal) && !sourceAvailability.Values()) return false;
         if (policy.SupportedKinds.Any(kind => kind is "BookmarkRemoved" or "BookmarkSuperseded") && !sourceAvailability.CleanupInputs()) return false;
         var available = Kinds.Concat(Version2Kinds).ToHashSet(StringComparer.Ordinal);
@@ -40,8 +44,12 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             if (!policy.SupportedKinds.Contains("DeliveryReceived", StringComparer.Ordinal) || !sourceAvailability.DeliveryInputs()) return false;
             available.UnionWith(RuntimeHistoryDeliveryObservations.Kinds);
         }
-        // Post-commit and timer owners are qualified in their own source/writer slices.
-        available.UnionWith(sourceSupport.Where(sourceAvailability.SourceOwner).SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName));
+        foreach (var owner in sourceSupport)
+        {
+            var kinds = RuntimeHistoryCaptureCapabilities.Kinds(owner).ToArray();
+            if (policy.SupportedKinds.Intersect(kinds, StringComparer.Ordinal).Any() && sourceAvailability.SourceOwner(owner))
+                available.UnionWith(kinds);
+        }
         return policy.SupportedKinds.All(available.Contains);
     }
 

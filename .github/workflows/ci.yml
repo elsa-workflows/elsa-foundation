@@ -1786,6 +1786,10 @@ jobs:
           $SIM --contract-actors --seeds 100 --actions 100
           $SIM --contract-evolution --seeds 100
           $SIM --contract-events --seeds 100
+          $SIM --contract-http --seeds 100
+          $SIM --contract-jobs --seeds 100
+          $SIM --job-trial-check
+          $SIM --contract-jobs --seed 1 --tree-stall
           expect_contract_failure() {
             local expected="$1"
             shift
@@ -1803,6 +1807,13 @@ jobs:
           expect_contract_failure "the cancel failed to reach a child whose start was still pending on the other owner" --contract-actors --seed 1 --actions 100 --flaw CancelKnownChildren
           expect_contract_failure "version two did not inherit the old token count exactly once" --contract-evolution --seed 1 --flaw SkipUpgrade
           expect_contract_failure "the correlation actor forgot an event before its waiter arrived" --contract-events --seed 1 --flaw CorrelationForgets
+          expect_contract_failure "respond released its response on the wrong side of the commit" --contract-http --seed 1 --flaw EmitBeforeCommit
+          expect_contract_failure "inline promotion writes the same public life, state, header, journal and live timer together" --inline-ephemeral-check --flaw ForgetShortWaits
+          expect_contract_failure "an expired inline owner cannot return a successful write-free response" --inline-ephemeral-check --flaw IgnoreLeaseDeadline
+          expect_contract_failure "Runner's job did not survive takeover with a distinct successor attempt" --contract-jobs --seed 1 --flaw VolatileJobTicket
+          expect_contract_failure "Fragile failed to park with on trial when 3 owners were lost" --contract-jobs --seed 1 --flaw JobPoisonAsError
+          expect_contract_failure "the job did not retry with a fresh physical attempt" --job-trial-check --flaw NoResetAfterFailedCommit
+          expect_contract_failure "the stale actor turn cannot replace the successor" --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
 
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
       # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 3208 (6946 before K1 slice 7's set worlds), a seed
@@ -1892,6 +1903,12 @@ jobs:
           $SIM --contract-actors --seeds 1000 --actions 100
           $SIM --contract-evolution --seeds 1000
           $SIM --contract-events --seeds 1000
+          $SIM --contract-http --seeds 1000
+          $SIM --contract-jobs --seeds 1000
+          $SIM --job-trial-check
+          $SIM --contract-jobs --seed 1 --tree-stall
+          code=0; out=$($SIM --job-trial-check --flaw NoResetAfterFailedCommit 2>&1) || code=$?
+          if [ "$code" -ne 1 ] || ! grep -Fq "the job did not retry with a fresh physical attempt" <<<"$out"; then printf 'Unexpected job-trial control (exit %s): %s\n' "$code" "$out"; exit 1; fi
           $SIM --lease-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
@@ -1991,6 +2008,12 @@ jobs:
           $SIM --contract-actors --seeds 1000 --actions 100 --count 4096
           $SIM --contract-evolution --seeds 1000 --count 4096
           $SIM --contract-events --seeds 1000 --count 4096
+          $SIM --contract-http --seeds 1000 --count 4096
+          $SIM --contract-jobs --seeds 1000 --count 4096
+          $SIM --job-trial-check --count 4096
+          $SIM --contract-jobs --seed 1 --tree-stall --count 4096
+          code=0; out=$($SIM --job-trial-check --count 4096 --flaw NoResetAfterFailedCommit 2>&1) || code=$?
+          if [ "$code" -ne 1 ] || ! grep -Fq "the job did not retry with a fresh physical attempt" <<<"$out"; then printf 'Unexpected job-trial control (exit %s): %s\n' "$code" "$out"; exit 1; fi
 
       - name: Runtime conformance at 4,096, built-in runtime
         run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096

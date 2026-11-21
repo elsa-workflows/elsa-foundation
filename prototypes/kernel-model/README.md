@@ -77,7 +77,18 @@ $SIM --contract-actors --seed 1 --flaw KeepConsumedMessages
 $SIM --contract-events --seeds 100                   # sequences, waiters, correlation actors and event starts
 $SIM --contract-events --seed 1 --flaw CorrelationForgets
 $SIM --contract-events --seed 1 --flaw KeepConsumedMessages
+$SIM --contract-http --seeds 100                      # immediate, early, timer, job, and resumed requests
+$SIM --contract-http --seed 1 --flaw EmitBeforeCommit
+$SIM --inline-ephemeral-check                        # public write-free completion, short waits and atomic promotion
+$SIM --inline-ephemeral-check --flaw ForgetShortWaits
+$SIM --contract-jobs --seeds 100                     # public Runner, Fragile and nested Tree workloads
+$SIM --contract-jobs --seed 1 --flaw VolatileJobTicket
+$SIM --contract-jobs --seed 1 --flaw JobPoisonAsError
+$SIM --contract-jobs --seed 1 --tree-stall           # an uncooperative job keeps the trial gate held
+$SIM --job-trial-check                               # counted withdrawal, cancellation and lost-ack boundaries
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
+$SIM --public-owner-check                            # FC-1 per-owner serialization and fenced takeover
+$SIM --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
 $SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
 $SIM --native-mutations --seeds 20000                # break the native model on purpose
@@ -130,6 +141,24 @@ forwards and survives a lost commit answer.
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
 `Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 22 lists the first failing seed of every round-3 flaw (the seeds of earlier flaws, in sections 2 and 3, have since moved), section 24 the two flaws round 4 renamed.
+
+The public job and tree workload uses the Runner, Fragile and Tree inputs. It observes physical job
+callbacks through the model contract, and Park, pending attempts and applied effects through public
+reads. Runner cancels one job, then loses the owner of another and completes the old attempt on either
+side of its successor. Fragile throws or has its row refused by the store, then exhausts the turn and
+job allowances in separate schedules with actual expired leases. The tree loses the answer to its
+root's terminate with descendant commands still pending. Cooperative leaf jobs let successor owners
+clear the trials and finish the cascade. Public events verify the leaves' live waits and their
+removal. The proposed paged cascade and Park recovery transitions belong to K3.
+
+`--tree-stall` leaves physical leaf callbacks pending after signalling cancellation and checks that
+their trial still gates the root. `--job-trial-check` exercises the separate counted, fenced trial
+clear before and after a lost answer, late callback exit, command admission and Hold, an already
+published result, and real takes across the two store outcomes. The direct checks use a mixed
+actor-type router. A cold checkpoint defers its withholding callback while the trial runs, and
+a pending child creator or ordinary predecessor keeps its place ahead of a terminate. A timed
+job's own deadline settles without releasing physical isolation before its driver exits.
+The in-memory store supports the clear. Provider implementation and qualification belong to K4.
 
 ## Databases
 
