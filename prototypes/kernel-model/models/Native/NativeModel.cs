@@ -192,7 +192,7 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
         // The key was derived in the turn that wrote the ticket; a ticket without one is not this model's.
         var path = args.IterationPath ?? throw new InvalidOperationException("a background job ticket without an iteration path");
         var key = args.EffectKey ?? throw new InvalidOperationException("a background job ticket without an effect key");
-        var t = await activity.ExecuteAsync(new ActivityContext(job.Instance, args.Frame, node.Id, 0, cancellationToken, job.Creation, path, key));
+        var t = await activity.ExecuteAsync(new ActivityContext(new(job.Instance.Id), args.Frame, node.Id, 0, cancellationToken, path, key));
         return new BackgroundResult(t.Kind, t.Result, t.Outcome, t.Fault);
     }
 }
@@ -426,7 +426,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     private ActivityContext Context(Frame frame)
     {
         var path = IterationPath(frame);
-        return new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey, frame.RetrySource, path, EffectKeyOf(frame, path));
+        return new(new(turn.Instance.Ref.Id), frame.Id, frame.Node, frame.Attempt, cancellationToken, frame.OperationKey, frame.RetrySource, path, EffectKeyOf(frame, path));
     }
 
     // ---- the effect key (round 5 C) ----------------------------------------------------------------------------------
