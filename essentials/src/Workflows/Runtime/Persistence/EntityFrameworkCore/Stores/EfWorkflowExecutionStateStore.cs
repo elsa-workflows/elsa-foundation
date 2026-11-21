@@ -64,7 +64,7 @@ public sealed class EfWorkflowExecutionStateStore(
                 : null;
             await LockWorkflowExecutionForWriteAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
-            var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            var row = await context.WorkflowExecutionStates.AsTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
             if (state.StimulusDeliveryOrigin is not null || state.IngressOrigin is not null || state.ModelWorkOrigin?.IngressOrigin is not null)
             {
                 if (row is null) throw new NotSupportedException("Ingress workflows require initial admission through the conditional runtime checkpoint.");
@@ -89,7 +89,10 @@ public sealed class EfWorkflowExecutionStateStore(
             }
             else
             {
-                _ = ReadChecked(row, scope, state.WorkflowExecutionId);
+                var original = ReadChecked(row, scope, state.WorkflowExecutionId);
+                if (original.HistoryCaptureEnabledAtAdmission != state.HistoryCaptureEnabledAtAdmission ||
+                    !(original.HistoryCapturePolicy?.IsEquivalentTo(state.HistoryCapturePolicy) ?? state.HistoryCapturePolicy is null))
+                    throw new InvalidOperationException("A native execution's original history capture admission cannot change implicitly.");
                 CopyToEntityForWriteVersion(row, state, scope, id, checked(row.Revision + 1), writeVersion);
             }
 

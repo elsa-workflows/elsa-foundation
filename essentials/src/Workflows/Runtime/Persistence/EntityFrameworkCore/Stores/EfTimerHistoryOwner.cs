@@ -271,7 +271,7 @@ internal static class EfTimerHistoryOwner
     internal static void EnsureNativeScope(PersistenceAccessContext access, WorkflowExecutionState native)
     {
         var scope = access.RequireScope().Value;
-        if (!native.HasBoundIngressScope(access.RequireScope())) access.EnsureTenantScope(native.TenantId);
+        if (!native.HasRetainedSourceScope(access.RequireScope())) access.EnsureTenantScope(native.TenantId);
         if (native.Partition is { } partition && partition.Value != scope)
             throw new InvalidOperationException("The timer's native execution belongs to another physical partition.");
     }

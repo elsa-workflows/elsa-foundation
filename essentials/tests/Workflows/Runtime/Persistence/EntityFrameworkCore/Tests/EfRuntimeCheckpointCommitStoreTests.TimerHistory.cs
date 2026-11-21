@@ -69,7 +69,9 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     {
         await using var f = await TimerHistoryFixture.Create(mode: mode);
         var timer = mode == "no-capture" ? HistoryTimer() with { HistoryResponsibility = null } : HistoryTimer();
-        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => f.Store.SaveAsync(timer).AsTask());
+        if (mode == "expired") await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => f.Store.SaveAsync(timer).AsTask());
+        else if (mode == "partition") await Assert.ThrowsAnyAsync<InvalidOperationException>(() => f.Store.SaveAsync(timer).AsTask());
+        else await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => f.Store.SaveAsync(timer).AsTask());
         Assert.Empty(await f.Context.DurableTimers.ToArrayAsync());
         Assert.All(await f.Context.ExecutionLivenessStates.ToArrayAsync(), row => Assert.Null(row.TimerHistoryOwnerJson));
     }

@@ -77,11 +77,12 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     {
         private bool pending;
         public int Executions { get; private set; }
+        public bool Armed { get; set; } = true;
 
         public ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
             var fence = eventData.Context!.ChangeTracker.Entries<Entities.ExecutionLivenessStateEntity>().SingleOrDefault(entry => entry.State == EntityState.Modified);
-            if (Executions == 0 && fence is not null)
+            if (Armed && Executions == 0 && fence is not null)
             {
                 Executions++;
                 pending = true;

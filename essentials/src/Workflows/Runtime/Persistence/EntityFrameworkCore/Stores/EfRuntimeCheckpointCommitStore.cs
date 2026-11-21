@@ -637,7 +637,7 @@ public sealed partial class EfRuntimeCheckpointCommitStore(
                     context, commit.StateChanges.DurableValues, scope, writeCancellationToken);
 
                 await EfRuntimeCheckpointActivityScopeCleanupParticipantStaging.StageAsync(
-                    context, commit.StateChanges.ActivityScopeCleanups, scope, timeProvider.GetUtcNow(), writeCancellationToken);
+                    context, commit.StateChanges.ActivityScopeCleanups, scope, _timeProvider.GetUtcNow(), writeCancellationToken);
 
                 await EfRuntimeCheckpointParticipantStaging.StageOperationalAsync(
                     context, commit.StateChanges.Operational, scope, writeCancellationToken);

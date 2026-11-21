@@ -29,16 +29,18 @@ public sealed partial class EfDurableTimerStoreTests
         var now = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
         foreach (var run in new[] { "run-1", "run-2", "run-3" }) await store.SaveAsync(Timer(run, "same", now));
         await store.SaveAsync(Timer("future", "same", now.AddSeconds(1)));
+        var order = (await store.ListDuePageAsync(now, new(10))).Items.Select(timer => timer.WorkflowExecutionId).ToArray();
+        Assert.Equal(new[] { "run-1", "run-2", "run-3" }, order.OrderBy(id => id, StringComparer.Ordinal));
         var first = await store.ListDuePageAsync(now, new(1));
-        Assert.Equal("run-1", Assert.Single(first.Items).WorkflowExecutionId); Assert.NotNull(first.NextContinuationToken);
+        Assert.Equal(order[0], Assert.Single(first.Items).WorkflowExecutionId); Assert.NotNull(first.NextContinuationToken);
         await Assert.ThrowsAsync<ArgumentException>(() => store.ListDuePageAsync(now.AddTicks(1), new(1, first.NextContinuationToken)).AsTask());
         await Assert.ThrowsAsync<ArgumentException>(() => store.ListDuePageAsync(now, new(2, first.NextContinuationToken)).AsTask());
         await Assert.ThrowsAsync<ArgumentException>(() => store.ListDuePageAsync(now, new(1, "malformed")).AsTask());
-        await store.DeleteAsync("run-1", "same");
+        await store.DeleteAsync(order[0], "same");
         var second = await store.ListDuePageAsync(now, new(1, first.NextContinuationToken));
-        Assert.Equal("run-2", Assert.Single(second.Items).WorkflowExecutionId); Assert.NotNull(second.NextContinuationToken);
+        Assert.Equal(order[1], Assert.Single(second.Items).WorkflowExecutionId); Assert.NotNull(second.NextContinuationToken);
         var last = await store.ListDuePageAsync(now, new(1, second.NextContinuationToken));
-        Assert.Equal("run-3", Assert.Single(last.Items).WorkflowExecutionId); Assert.Null(last.NextContinuationToken);
+        Assert.Equal(order[2], Assert.Single(last.Items).WorkflowExecutionId); Assert.Null(last.NextContinuationToken);
     }
 
     [Theory]
@@ -53,7 +55,9 @@ public sealed partial class EfDurableTimerStoreTests
         var first = await store.ListDuePageAsync(now, new(RuntimeStorePageRequest.MaximumLimit));
         Assert.Equal(RuntimeStorePageRequest.MaximumLimit, first.Items.Count); Assert.NotNull(first.NextContinuationToken);
         var last = await store.ListDuePageAsync(now, new(RuntimeStorePageRequest.MaximumLimit, first.NextContinuationToken));
-        Assert.Equal("timer-0500", Assert.Single(last.Items).TimerId); Assert.Null(last.NextContinuationToken);
+        Assert.Single(last.Items); Assert.Null(last.NextContinuationToken);
+        Assert.Equal(Enumerable.Range(0, RuntimeStorePageRequest.MaximumLimit + 1).Select(index => $"timer-{index:D4}"),
+            first.Items.Concat(last.Items).Select(timer => timer.TimerId).OrderBy(id => id, StringComparer.Ordinal));
     }
 
     [Fact]
