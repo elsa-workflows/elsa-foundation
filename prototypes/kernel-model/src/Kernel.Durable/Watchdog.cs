@@ -113,13 +113,13 @@ public sealed class Watchdog
 /// </summary>
 public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool HasActorAliases => inner.HasActorAliases;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
-    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
 
     // The owner path, watched.
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>

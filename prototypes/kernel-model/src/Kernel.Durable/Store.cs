@@ -11,7 +11,15 @@ namespace Kernel.Durable;
 /// <c>PendingStart</c> is the durable owner's initial delivery ID only while its first authored work remains held.
 /// </summary>
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
-    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null, bool IdentityOnly = false, bool IdentityMetadataRequired = false);
+    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null, bool IdentityOnly = false, bool IdentityMetadataRequired = false)
+{
+    internal bool FoundationNullState { get; init; }
+    internal (string Tenant, InboxKey Creator)? FoundationInlineBirth { get; init; }
+    internal FoundationHeaderChange? FoundationInlineHeader { get; init; }
+
+    internal InstanceRow WithoutInlineBirth() => FoundationInlineBirth is null
+        ? this : this with { FoundationInlineBirth = null, FoundationInlineHeader = null };
+}
 
 /// <summary>A requested spelling, its stored actor identity (or first equivalent candidate if missing), and its snapshot.</summary>
 public sealed record ActorLookup(string Requested, string Canonical, InstanceRow? Row)
@@ -30,13 +38,27 @@ public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, 
 public sealed record SubscriptionRow(
     [property: JsonConverter(typeof(DurableKeyJson))] string Key,
     [property: JsonConverter(typeof(DurableKeyJson))] string Instance,
-    [property: JsonConverter(typeof(DurableKeyJson))] string Wait, StartSpec? Start = null, long Creation = 0);
+    [property: JsonConverter(typeof(DurableKeyJson))] string Wait, StartSpec? Start = null, long Creation = 0)
+{
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal string? FoundationTenant { get; init; }
+}
 
 public sealed record EventRow(
     [property: JsonConverter(typeof(DurableKeyJson))] string Key,
-    [property: JsonConverter(typeof(DurableKeyJson))] string Id, string? Payload, long KeepUntil);
+    [property: JsonConverter(typeof(DurableKeyJson))] string Id, string? Payload, long KeepUntil)
+{
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal string? FoundationTenant { get; init; }
 
-public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries);
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    internal long FoundationOccurrence { get; init; }
+}
+
+public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries)
+{
+    internal long FoundationCreation { get; init; }
+}
 
 /// <summary>
 /// A projector's position, and the partition's position read just before: every journal position up to <c>Written</c>
@@ -108,7 +130,14 @@ public sealed record NodeBeat(IReadOnlyList<OwnedEpoch> Owned, long Now, Cluster
 /// </summary>
 public sealed record TurnCommit(
     string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<InboxKey> Consumed, IReadOnlyList<InboxKey> Done, IReadOnlyList<Message> Sent,
-    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<InboxKey>? Held = null, bool Delete = false);
+    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<InboxKey>? Held = null, bool Delete = false)
+{
+    internal FoundationHeaderChange? FoundationHeader { get; init; }
+    internal HashSet<InboxKey>? FoundationHeldPromotions { get; init; }
+    internal bool OpensPark { get; init; }
+}
+
+internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);
 
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>
 public sealed record CommitBatch(
@@ -181,6 +210,9 @@ public sealed class StoreException(Failure failure, string message, Exception? i
 /// </summary>
 public interface IKernelStore : IMembership
 {
+    /// <summary>The shared Unix-millisecond source, when the built-in foundation can read it locally.</summary>
+    Func<long>? FoundationClock { get; }
+
     /// <summary>A supported store validates a guarded transaction against its clock before making its writes visible.</summary>
     bool SupportsCommitWindow => false;
     /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
@@ -200,7 +232,7 @@ public interface IKernelStore : IMembership
     /// owner can only succeed because that owner's lease expired: that is a death, and in the same transaction every
     /// message the dead owner had on trial gets one more attempt. <paramref name="node"/> must be unique per process
     /// start, or a restarted process would look like its predecessor taking again. Under the node lease, "expired" is
-    /// the owner's node record, and the take renews its taker (<see cref="NodeLeaseAvailable"/>).
+    /// the owner's node record, and the take renews its taker.
     /// </summary>
     ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default);
 
@@ -226,8 +258,8 @@ public interface IKernelStore : IMembership
     /// K1b, the node lease ("The partition record" and "The node's heartbeat" in ownership-and-fencing.md). The lease is
     /// the node record, <c>Nodes (Id, SeenAt, LeaseUntil)</c> in database time, and covers every partition its process
     /// owns. A take accepts a free partition, one whose owner's node record is missing or has <c>LeaseUntil</c> before
-    /// database time, or a retake by the recorded owner. Its transaction reads the owners' node records with a plain read
-    /// that holds nothing, then writes the taker's own record (<c>SeenAt</c> and <c>LeaseUntil</c>, whatever it takes),
+    /// database time, or a retake by the recorded owner. The take reads the owners' node records with a plain read that
+    /// holds nothing, then its transaction writes the taker's own record (<c>SeenAt</c> and <c>LeaseUntil</c>, whatever it takes),
     /// then locks the partition rows in ascending id, each decided by that read; deaths count as before, a missing record
     /// as expired. A retake writes the taker's record the same way, also when it is refused. A caller does not bound its
     /// node lease by a take's or retake's database time (an empty take returns none). A Worker whose guard expired keeps
@@ -235,15 +267,8 @@ public interface IKernelStore : IMembership
     /// fence renews no lease: <see cref="CommitBatch.Lease"/>
     /// renews nothing (slice 4 makes it the commit-step deadline), and the fence still checks and locks every fenced
     /// row, a batch with no journal rows included. Membership's free partitions are those unowned or whose owner's node
-    /// lease has expired. Under the node lease the host's membership call is <see cref="NodeHeartbeatAsync"/>: the
-    /// runtime's balancing round reads the cluster its last renewing heartbeat saw (K1b slice 5), and
-    /// <see cref="IMembership.HeartbeatAsync"/> stays for the per-partition lease only. Off by default: until K1b slice 6
-    /// deletes the switch, the per-partition lease stands.
-    /// </summary>
-    bool NodeLeaseAvailable => false;
-
-    /// <summary>
-    /// The node's heartbeat under <see cref="NodeLeaseAvailable"/>. One statement or transaction writes this node's
+    /// lease has expired. The runtime balances from the cluster last seen by a renewing heartbeat.
+    /// One statement or transaction writes this node's
     /// record, <c>SeenAt</c> at database time and <c>LeaseUntil</c> at database time plus <paramref name="lease"/>, then
     /// reads the partitions whose owner is <paramref name="node"/> with their epochs (a read that writes nothing). The
     /// membership reads (the live-node count for <paramref name="window"/> and the free list) run after it, outside any
@@ -259,13 +284,13 @@ public interface IKernelStore : IMembership
     /// <summary>
     /// Take a set of virtual partitions. Each is taken, or left out, exactly as the one-partition take decides for it,
     /// with its own epoch and its own death count; the set need not be contiguous. <c>Now</c> is the store's time when a row was taken; when nothing was, a caller must not read it (every store returns 0).
-    /// Under the node lease a caller does not bound its node lease by <c>Now</c> either (<see cref="NodeLeaseAvailable"/>).
+    /// The caller bounds the node lease by its monotonic send time.
     /// The default takes one at a time, k round trips: if one of them fails, the partitions before it are taken already,
     /// so a failure is an unknown outcome and the caller treats the whole set as it treats a failed take.
     /// </summary>
     async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
-        // The earliest take's time, so that a lease reckoned from it never outlasts any of the rows.
+        // Report the earliest database time among the landed takes.
         var (taken, now) = (new List<PartitionFence>(), long.MaxValue);
         foreach (var partition in partitions.Distinct().Order())
         {
@@ -376,15 +401,30 @@ public interface IKernelStore : IMembership
 /// <summary>A read-only event delivery. Only the event router constructs this envelope.</summary>
 public sealed class EventDelivery
 {
-    internal EventDelivery(Message message, EventMatch match) => Message = message.WithInboxScope(-2, match.Encode());
+    internal EventDelivery(Message message, EventMatch match, string? foundationTenant = null)
+    {
+        Message = message.WithInboxScope(InboxKey.EventDeliveryScope, match.Encode());
+        FoundationTenant = foundationTenant;
+    }
+
+    internal string? FoundationTenant { get; }
     public Message Message { get; }
     public Message At(long serial) => Message.Start is null ? Message : Message with { Target = InstanceRef.ForEvent(Message.Target.Partition, serial) };
 }
 
 public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
 {
-    public EventDelivery Delivery(int partitions = 1, string? replyTo = null) =>
-        new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, new(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation));
+    public EventDelivery Delivery(int partitions = 1, string? replyTo = null)
+    {
+        if (Event.FoundationTenant != Wait.FoundationTenant || Event.Key != Wait.Key)
+            throw new ArgumentException("The event and wait must share their key and tenant scope.");
+        var match = new EventMatch(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation)
+        {
+            FoundationTenant = Wait.FoundationTenant,
+            FoundationOccurrence = Event.FoundationOccurrence
+        };
+        return new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, match, Wait.FoundationTenant);
+    }
 }
 
 public sealed record EventAcceptance(bool Added, InstanceRef Target)
@@ -399,6 +439,12 @@ public sealed record EventMatch(
     [property: JsonConverter(typeof(DurableKeyJson))] string Wait,
     long Creation = 0)
 {
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal string? FoundationTenant { get; init; }
+
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    internal long FoundationOccurrence { get; init; }
+
     public string Encode() => Json.Write(this);
     public static EventMatch Decode(string text) => Json.Read<EventMatch>(text);
 }

@@ -1,8 +1,9 @@
 namespace Kernel.Sim;
 
 /// <summary>Passes everything through and counts the commits.</summary>
-public sealed class CountingStore(IKernelStore inner, Action committed) : IKernelStore
+public sealed class CountingStore(IKernelStore inner, Action committed, Action<CommitBatch, bool>? observeCommit = null) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
@@ -14,12 +15,20 @@ public sealed class CountingStore(IKernelStore inner, Action committed) : IKerne
     public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => inner.PollAsync(owned, horizon, limit, cancellationToken);
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, countDeaths, cancellationToken);
-    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
     public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) => inner.NodeHeartbeatAsync(node, lease, window, cancellationToken);
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         committed();
-        return inner.CommitAsync(batch, cancellationToken);
+        return observeCommit is null ? inner.CommitAsync(batch, cancellationToken) : ObserveAsync(batch, cancellationToken);
+    }
+
+    // False marks a request about to execute. True marks the store's landed result, before the caller sees it.
+    private async ValueTask<Committed> ObserveAsync(CommitBatch batch, CancellationToken cancellationToken)
+    {
+        observeCommit!(batch, false);
+        var result = await inner.CommitAsync(batch, cancellationToken);
+        if (result.Landed) observeCommit(batch, true);
+        return result;
     }
 
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) => inner.TakeAsync(partition, node, lease, cancellationToken);

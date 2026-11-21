@@ -5,6 +5,8 @@ internal static class ParkR15Checks
 {
     internal sealed class AliasStore(IKernelStore inner) : IKernelStore
     {
+        public Func<long>? FoundationClock => inner.FoundationClock;
+
         public int TrialWrites;
         public bool SupportsCommitWindow => inner.SupportsCommitWindow;
         public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;

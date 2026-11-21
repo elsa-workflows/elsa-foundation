@@ -10,8 +10,7 @@ on the prototype's PostgreSQL, SQL Server and MySQL paths. Under the node lease'
 
 Each mutation must deadlock where its engine's locks close the cycle. Provider qualification is K4.
 
-The probe is `x nodelease` in `ef/Kernel.Ef.Run/NodeLeaseRun.cs`. The store is `EfStore` with the owned commit, fence
-in the batch, and the switch `NodeLease` on.
+The probe is `x nodelease` in `ef/Kernel.Ef.Run/NodeLeaseRun.cs`. The probe uses `EfStore` with the owned commit and the fence in the batch.
 
 ## The cases
 
@@ -36,10 +35,15 @@ until the engine reports the sessions waiting, then releases the hold.
 - **`mutation=rr`** (`EfStore.RepeatableReadTake`): the take's transaction runs at REPEATABLE READ.
 - **`mutation=membership`** (`EfStore.MembershipInHeartbeat`): the heartbeat reads the node count and the free list
   inside its transaction, while it holds its own record.
+- **`mutation=rr-subquery`** on MySQL combines a take at REPEATABLE READ with the node-record lookup as a subquery
+  of the update.
+- **`mutation=share`** on PostgreSQL locks the other owners' node records with `FOR SHARE`, including expired
+  records. It checks expiry after acquiring the locks.
 
 **The exit code is the verdict.**
-- `expect=deadlock` exits 1 unless the run deadlocked. `expect=none`, the default, exits 1 if it did, or if any answer
-  failed or hung.
+- As built, `expect=none` is the default and exits 1 on a deadlock, failure or hang. A negative (any `mutation=`)
+  defaults to `expect=deadlock` and exits 1 unless it deadlocked. Explicit `expect=none` with a mutation exits 2
+  before opening a connection.
 - A mutual run, and every run on SQL Server without RCSI (where reads take locks), also exits 1 when its sessions were
   not waiting before the release.
 - On PostgreSQL the victim's error decides, because `pg_stat_database.deadlocks` lags by up to a second.
@@ -55,7 +59,7 @@ Recorded per run:
 
 ```
 dotnet build ef/Kernel.Ef.Run -c Release
-dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x nodelease postgres|sqlserver|mysql "<connection with Database=...>" case=heartbeat|mutual|heartbeats [mutation=subquery|rr|membership] [expect=none|deadlock] [rcsi=0]
+dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x nodelease postgres|sqlserver|mysql "<connection with Database=...>" case=heartbeat|mutual|heartbeats [mutation=subquery|rr|membership|rr-subquery|share] [expect=none|deadlock] [rcsi=0]
 ```
 
 ## Results (`nl9.txt`)
@@ -96,8 +100,9 @@ Server's deadlocks as the proof for each mutation. The amended
 [NL-C1](../../../../docs/program-goals/clean-slate-kernel.md#gate-2-conditions) asks every engine for a locking-read
 mutation that deadlocks while the ordered take does not: SQL Server with the take at REPEATABLE READ, with and without
 RCSI; MySQL at REPEATABLE READ with the node read as a subquery of the update; PostgreSQL with the node read taken
-`FOR SHARE`. Those per-engine runs come in K1b slice 6. The runs above show why the mutations they used deadlock only
-on SQL Server:
+`FOR SHARE`. The [K1b evidence](../../../../docs/reports/clean-slate-kernel/k1b-evidence-2026-11-21.md#nl-9-ordered-and-locking-takes)
+records the native runner and the added cases. The runs above predate those cases and show why the original mutations
+deadlocked only on SQL Server:
 
 **Where the negatives do not deadlock, the engine takes no lock for the read.**
 - PostgreSQL reads the node records from its snapshot, at any level.

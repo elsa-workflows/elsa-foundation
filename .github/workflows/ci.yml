@@ -742,6 +742,7 @@ jobs:
       - shuffled-unit-tests
       - kernel-prototype-nightly
       - kernel-prototype-nightly-4096
+      - nightly-nl9
       # Only so a stale-filter failure, which reaches alert through Build & test, can be told apart and file nothing.
       - generated-maps
     # A cancelled run (superseded by a newer push) is not a failure and files nothing. The nightly schedule
@@ -774,6 +775,7 @@ jobs:
           SHUFFLED: ${{ needs.shuffled-unit-tests.result }}
           KERNEL_NIGHTLY: ${{ needs.kernel-prototype-nightly.result }}
           KERNEL_4096: ${{ needs.kernel-prototype-nightly-4096.result }}
+          KERNEL_NL9: ${{ needs.nightly-nl9.result }}
           MAPS: ${{ needs.generated-maps.result }}
         run: |
           set -euo pipefail
@@ -783,7 +785,8 @@ jobs:
               "Studio .NET build & test:$STUDIO_DOTNET" "Backend source:$BACKEND_SOURCE" \
               "Weaver independent package witness:$WEAVER" "Published image pair:$PUBLISHED_IMAGES" \
               "Workflows unit tests (three shuffled orders):$SHUFFLED" "Kernel prototype nightly:$KERNEL_NIGHTLY" \
-              "Kernel prototype nightly, 4,096 virtual partitions:$KERNEL_4096"; do
+              "Kernel prototype nightly, 4,096 virtual partitions:$KERNEL_4096" \
+              "Kernel prototype nightly, NL-9 node lease deadlock runs:$KERNEL_NL9"; do
             if [[ "${pair##*:}" == failure ]]; then failed+=("CI nightly, ${pair%:*}"); fi
           done
           if [ ${#failed[@]} -eq 0 ]; then
@@ -793,7 +796,7 @@ jobs:
               echo "::notice::Only Generated maps failed: stale solution filters are a refresh request, not a red main. No issue filed."
               exit 0
             fi
-            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096"
+            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096 kernel-nl9=$KERNEL_NL9"
             failed=("CI")
           fi
 
@@ -1722,7 +1725,7 @@ jobs:
     needs: plan-scope
     if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft && needs.plan-scope.outputs.kernel == 'true' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-gate' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25      # K1b slice 5a: the node-lease seeds add about 4 minutes to a 13-minute gate
+    timeout-minutes: 25
     env:
       DOTNET_NOLOGO: 'true'
       DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
@@ -1764,9 +1767,6 @@ jobs:
           SIM="dotnet sim/$BIN/Kernel.Sim.dll"
           $SIM --seeds 10000
           $SIM --native --seeds 10000
-          # K1b: the same seeds under the node lease, beside the per-partition lease until slice 6 flips the default.
-          $SIM --seeds 10000 --node-lease
-          $SIM --native --seeds 10000 --node-lease
           $SIM --lease-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
@@ -1777,6 +1777,40 @@ jobs:
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
           dotnet models/Native.Recovery.Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
           dotnet models/Statecharts.Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+
+      - name: Public contract workloads
+        run: |
+          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          $SIM --contract --seeds 100
+          $SIM --contract-native --seeds 100
+          $SIM --contract-actors --seeds 100 --actions 100
+          $SIM --contract-evolution --seeds 100
+          $SIM --contract-events --seeds 100
+          $SIM --contract-http --seeds 100
+          $SIM --contract-jobs --seeds 100
+          expect_contract_failure() {
+            local expected="$1"
+            shift
+            local code=0 output
+            output=$($SIM "$@" 2>&1) || code=$?
+            if [ "$code" -ne 1 ] || ! grep -Fq "$expected" <<<"$output"; then
+              printf 'Unexpected contract control result (exit %s): %s\n' "$code" "$output"
+              return 1
+            fi
+          }
+          expect_contract_failure "future input must still be pending before its due time" --contract --seed 1 --flaw WallClockTimers
+          expect_contract_failure "public inbox" --contract --seed 1 --flaw KeepConsumedMessages
+          expect_contract_failure "effect key did not match its public actor and activation" --contract-native --seed 1 --native-flaw UnstableEffectKey
+          expect_contract_failure "final join did not consume the live yes arrival and the dead no arrival" --contract-native --seed 1 --native-flaw NoDeadPaths
+          expect_contract_failure "the cancel failed to reach a child whose start was still pending on the other owner" --contract-actors --seed 1 --actions 100 --flaw CancelKnownChildren
+          expect_contract_failure "version two did not inherit the old token count exactly once" --contract-evolution --seed 1 --flaw SkipUpgrade
+          expect_contract_failure "the correlation actor forgot an event before its waiter arrived" --contract-events --seed 1 --flaw CorrelationForgets
+          expect_contract_failure "respond released its response on the wrong side of the commit" --contract-http --seed 1 --flaw EmitBeforeCommit
+          expect_contract_failure "inline promotion writes the same public life, state, header, journal and live timer together" --inline-ephemeral-check --flaw ForgetShortWaits
+          expect_contract_failure "an expired inline owner cannot return a successful write-free response" --inline-ephemeral-check --flaw IgnoreLeaseDeadline
+          expect_contract_failure "Runner's job did not survive takeover with a distinct successor attempt" --contract-jobs --seed 1 --flaw VolatileJobTicket
+          expect_contract_failure "Fragile failed to park with on trial when 3 owners were lost" --contract-jobs --seed 1 --flaw JobPoisonAsError
+          expect_contract_failure "the stale actor turn cannot replace the successor" --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
 
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the
       # nightly's 20,000 seeds: NoWriteFirst is first caught at seed 3208 (6946 before K1 slice 7's set worlds), a seed
@@ -1820,7 +1854,7 @@ jobs:
     name: Kernel prototype nightly
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 180     # K1b slice 5a: the node-lease sizes add about an hour to a 60- to 75-minute nightly
+    timeout-minutes: 180
     env:
       DOTNET_NOLOGO: 'true'
       DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
@@ -1861,11 +1895,13 @@ jobs:
           $SIM --seeds 20000 --actions 1000
           $SIM --native --seeds 200000
           $SIM --native --seeds 20000 --actions 1000
-          # K1b: the same sizes under the node lease, beside the per-partition lease until slice 6 flips the default.
-          $SIM --seeds 200000 --node-lease
-          $SIM --seeds 20000 --actions 1000 --node-lease
-          $SIM --native --seeds 200000 --node-lease
-          $SIM --native --seeds 20000 --actions 1000 --node-lease
+          $SIM --contract --seeds 1000
+          $SIM --contract-native --seeds 1000
+          $SIM --contract-actors --seeds 1000 --actions 100
+          $SIM --contract-evolution --seeds 1000
+          $SIM --contract-events --seeds 1000
+          $SIM --contract-http --seeds 1000
+          $SIM --contract-jobs --seeds 1000
           $SIM --lease-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
@@ -1898,9 +1934,6 @@ jobs:
           $RTC semantic
           $RTC semantic --partitions 1024
           $RTC stress 20 2000
-          # K1b slice 5a: the nodes' heartbeat loops renew the node lease, the only renewal under it.
-          $RTC semantic --node-lease
-          $RTC stress 20 2000 --node-lease
 
       # The -broken forms break the store's fence on purpose; the runner decides whether the runtime failed as it must.
       - name: Fence broken on purpose
@@ -1963,6 +1996,120 @@ jobs:
           SIM="dotnet sim/$BIN/Kernel.Sim.dll"
           $SIM --seeds 20000 --count 4096
           $SIM --native --seeds 20000 --count 4096
+          $SIM --contract --seeds 1000 --count 4096
+          $SIM --contract-native --seeds 1000 --count 4096
+          $SIM --contract-actors --seeds 1000 --actions 100 --count 4096
+          $SIM --contract-evolution --seeds 1000 --count 4096
+          $SIM --contract-events --seeds 1000 --count 4096
+          $SIM --contract-http --seeds 1000 --count 4096
+          $SIM --contract-jobs --seeds 1000 --count 4096
 
       - name: Runtime conformance at 4,096, built-in runtime
         run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096
+
+  nightly-nl9:
+    name: Kernel prototype nightly, NL-9 node lease deadlock runs
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      BIN: bin/Release/net10.0
+      # Throwaway values for the three job-scoped database services.
+      PG_PASSWORD: kernel
+      MSSQL_PASSWORD: Kernel_Model1
+      MYSQL_PASSWORD: kernel
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    # Throwaway containers on tmpfs, with a free host port chosen for each service.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ${{ env.PG_PASSWORD }}
+        ports: ['5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: ${{ env.MSSQL_PASSWORD }}
+        ports: ['1433']
+        options: >-
+          --user root --tmpfs /var/opt/mssql
+          --health-cmd "SQLCMDPASSWORD=$MSSQL_SA_PASSWORD /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval 5s --health-timeout 5s --health-retries 30 --health-start-period 10s
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ env.MYSQL_PASSWORD }}
+        ports: ['3306']
+        options: >-
+          --tmpfs /var/lib/mysql
+          --health-cmd "MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysqladmin ping -h 127.0.0.1 -uroot --silent" --health-interval 2s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      - name: Build
+        run: |
+          dotnet restore ef/Kernel.Ef.Run --locked-mode
+          dotnet build ef/Kernel.Ef.Run -c Release --no-restore
+
+      # Every run goes ahead; the step fails at the end if any run's exit code was not 0.
+      - name: NL-9 node lease deadlock runs
+        env:
+          PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          MSSQL_PORT: ${{ job.services.mssql.ports[1433] }}
+          MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
+        run: |
+          NL=(dotnet "ef/Kernel.Ef.Run/$BIN/Kernel.Ef.Run.dll" x nodelease)
+          PG="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=nl9"
+          MS="Server=localhost,$MSSQL_PORT;User Id=sa;Password=$MSSQL_PASSWORD;TrustServerCertificate=True;Database=nl9"
+          MY="server=127.0.0.1;port=$MYSQL_PORT;database=nl9;SslMode=Required"
+          failed=()
+          run() {
+            local engine=$1 connection=$2
+            shift 2
+            local label="$engine $*"
+            echo "::group::$label"
+            if ! "${NL[@]}" "$engine" "$connection" "$@"; then
+              echo "::error::NL-9 run failed: $label"
+              failed+=("$label")
+            fi
+            echo "::endgroup::"
+          }
+          # The store as built: no deadlock, every case, every engine.
+          for c in heartbeat mutual heartbeats; do
+            run postgres "$PG" case=$c expect=none
+            run sqlserver "$MS" case=$c expect=none
+            run sqlserver "$MS" case=$c rcsi=0 expect=none
+            run mysql "$MY" case=$c expect=none
+          done
+          # The negatives that deadlock on SQL Server (experiments/K1b.NodeLease/README.md, Results).
+          run sqlserver "$MS" case=heartbeat rcsi=0 mutation=subquery expect=deadlock
+          run sqlserver "$MS" case=mutual rcsi=0 mutation=subquery expect=deadlock
+          run sqlserver "$MS" case=mutual mutation=rr expect=deadlock
+          run sqlserver "$MS" case=mutual rcsi=0 mutation=rr expect=deadlock
+          run sqlserver "$MS" case=heartbeats rcsi=0 mutation=membership expect=deadlock
+          # NL-C1 on the other engines: hold both owners' node records and force the mutual take.
+          run mysql "$MY" case=mutual mutation=rr-subquery expect=deadlock
+          run postgres "$PG" case=mutual mutation=share expect=deadlock
+          if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi

@@ -6,7 +6,7 @@ namespace Kernel.Sim;
 // K1 slice 7: Count is the store's virtual partitions, a fence row and a journal each (0: Partitions); the world places
 // and addresses the first Partitions of them. Set: each node runs one worker for its owned set (DurableHost.ForNode);
 // otherwise a worker per partition, as on a store without owned sets.
-public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None, AdmissionFlaw AdmissionFlaws = AdmissionFlaw.None, int Count = 0, bool Set = false, bool NodeLease = false)
+public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None, AdmissionFlaw AdmissionFlaws = AdmissionFlaw.None, int Count = 0, bool Set = false)
 {
     public int Rows => Count > 0 ? Count : Partitions;
 }
@@ -117,6 +117,7 @@ public sealed class Actor(int id, int node, int partition)
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
 public sealed class Wire(World world, Actor actor) : IKernelStore
 {
+    public Func<long>? FoundationClock => world.Store.FoundationClock;
     public bool SupportsCommitWindow => world.Store.SupportsCommitWindow;
     public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => world.Store.PhysicalRetirementAvailable;
@@ -170,7 +171,6 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         return Send("take", $"retake p{partition} e{epoch}, counting deaths", () => world.RetakeCounting(partition, node, epoch, lease));
     }
 
-    public bool NodeLeaseAvailable => world.Store.NodeLeaseAvailable;
     public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) =>
         Send("beat", $"heartbeat of {node}", () => world.Store.NodeHeartbeatAsync(node, lease, window));
 
@@ -410,7 +410,7 @@ public sealed partial class World
         Config = config;
         if (config.Partitions > config.Rows) throw new ArgumentOutOfRangeException(nameof(config), "A world places at most the store's partitions.");
         Native = new NativeOracle(config.Partitions);
-        Store = new InMemoryStore(config.Rows, () => Time, config.Flaws) { ObserveLifecycles = true, Refuses = row => row.State.Contains(Fragile.Sour), NodeLeaseAvailable = config.NodeLease };
+        Store = new InMemoryStore(config.Rows, () => Time, config.Flaws) { ObserveLifecycles = true, Refuses = row => row.State.Contains(Fragile.Sour) };
         Store.Lifecycle!.AppliedCancellation = (state, consumed) => state is HttpState { AppliedCancellations: { } applied }
             ? applied.Find(cancel => _httpCancelInputs?.TryGetValue(cancel, out _) == true && consumed.Any(d => ReferenceEquals(d.Message, cancel))) : null;
         Current = new int[config.Nodes, config.Partitions];
@@ -559,7 +559,7 @@ public sealed partial class World
     public async Task Adopting(Actor actor, Task pass)
     {
         await pass;
-        if (Config.NodeLease && !actor.Dead) await actor.Runtime.NodePassAsync();
+        if (!actor.Dead) await actor.Runtime.NodePassAsync();
     }
 
     // A set world's pass runs under its host's turn, queued as the host's own passes, gains and losses are: a contended
@@ -692,7 +692,7 @@ public sealed partial class World
             }
             case "heartbeat":
             {
-                if (Live(act.A) is not { } actor || !Config.NodeLease) return null;     // a dead incarnation sends no heartbeat
+                if (Live(act.A) is not { } actor) return null;     // a dead incarnation sends no heartbeat
                 var calls = Actors.Sum(a => a.Calls.Count);
                 var withheld = actor.NodeHost.Heartbeat?.Withheld ?? 0;
                 Watch(actor.Runtime.HeartbeatAsync().AsTask());       // through its runtime and host, as the node's heartbeat loop sends it
@@ -891,13 +891,11 @@ public sealed class Generator(int seed, World world)
                 return new Act("turn", pick.Id, S: pick.id);
             }
             // K1b: under the node lease the beat is the node's heartbeat, and whole passes feed its pass gate.
-            case < 40 when world.Config.NodeLease: return new Act("flush", actor.Id);
-            case < 44 when world.Config.NodeLease: return new Act("pass", actor.Id);
-            case < 46 when world.Config.NodeLease: return new Act("heartbeat", actor.Id);
-            case < 46: return new Act("flush", actor.Id);
+            case < 40: return new Act("flush", actor.Id);
+            case < 44: return new Act("pass", actor.Id);
+            case < 46: return new Act("heartbeat", actor.Id);
             case < 47: return actor.Set ? OnPartition("release", actor, world.Place(actor, r)) : new Act("release", actor.Id);
-            case < 48 when world.Config.NodeLease: return new Act("heartbeat", actor.Id);
-            case < 48: return new Act("beat", actor.Id);
+            case < 48: return new Act("heartbeat", actor.Id);
             case < 52: return new Act("meet", actor.Id);
             case < 82:
             {

@@ -12,6 +12,11 @@ public interface IActorType
     /// references from the wire kind before the stored model is loaded. This grants no sender authority.</summary>
     string? SelfReference(Delivery delivery) => null;
 
+    /// <summary>Whether this implementation enforces the public operator protocol for this row.</summary>
+    bool SupportsFoundationOperator(InstanceRow? row) => false;
+
+    internal bool SupportsFoundationInlineStart(string type) => false;
+
     /// <summary>An owner command that needs a single-message boundary but still obeys normal withholding.</summary>
     bool SingleMessage(Message message) => false;
 
@@ -29,6 +34,9 @@ public interface IActorType
 
     /// <summary>The actor cannot be given its messages now; commands still pass. Suspended, say.</summary>
     bool Withholds(InstanceRow row, ITurnServices services);
+
+    /// <summary>Whether the foundation can settle this input without offering it to the actor.</summary>
+    internal bool SettlesWhileWithheld(InstanceRow row, Delivery delivery) => false;
 
     /// <summary>
     /// A turn the actor type handles alone, without any of the actor's own code: a command (<see cref="Kinds.IsControl"/>),
@@ -103,14 +111,18 @@ public sealed class Delivery(Message message, long seq)
     internal bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     internal bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
     internal bool Again;              // its polled row already had a seen or trial marker (DurableTurn.Redelivered)
+    internal long HeldThrough;        // latest stimulus used to revisit a held command
     internal bool Held;               // a turn handed it back: it waits for something new to come with
     internal Message? Original;       // a job's ticket as it was before its result replaced it (decision 4: what is written)
     internal int Attempts;
-    internal bool SuppliedCompletion => Message.Kind == Kinds.JobFinished && !CompletedJob;
-    internal bool SuppliedTicket => Message.InboxScope == 0 && Message.Kind is Kinds.Meet or Kinds.Publish or Kinds.Job;
+    internal bool SuppliedCompletion => Message.Kind == Kinds.JobFinished && !CompletedJob && !Message.FoundationJobResult;
+    internal bool SuppliedTicket => Message.InboxScope == 0 && Message.Kind is Kinds.Meet or Kinds.Publish or Kinds.Job or Kinds.JobDeadline;
     internal bool DiscardedInput => SuppliedCompletion || SuppliedTicket;
     internal bool DiscardedAt(Slot slot) => DiscardedInput || Message.SuppliedCreator && slot.CurrentRow is null;
     internal bool JobEntered;         // physical model entry, distinct from a scheduled driver
+    internal long? JobDeadline;
+    internal bool JobDeadlineClosed;
+    internal int JobEntries;         // physical starts seen by this delivery, a lower bound after a takeover
     internal bool DeferredJobTrial;   // durable fence retained while runtime trial isolation is yielded before entry
     internal long DeferredTrialObserved; // preserve the original cohort horizon when isolation is reacquired
     internal bool CompletedJob;       // only the Worker can turn a ticket into a result
@@ -126,12 +138,15 @@ public sealed class TurnInput
 {
     private readonly Worker _worker;
     private readonly ITurnServices _services;
+    private readonly Dictionary<InboxKey, Message>? _volatile;
 
-    internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec)
+    internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec, long admittedAt)
     {
         _worker = worker;
         ChildIds = worker.ChildIdsFor(actor);
-        _services = worker.ServicesFor(slot);
+        _services = worker.ServicesFor(slot, admittedAt);
+        if (slot.Unwritten && slot.CurrentRow?.FoundationInlineBirth is not null)
+            _volatile = worker.CaptureVolatile(actor);
         Slot = slot;
         Actor = actor;
         Taken = taken;
@@ -172,9 +187,15 @@ public sealed class TurnInput
 
     public string Model => Row?.Model ?? Spec!.Model;
     public ITurnServices Services => _services;
+    internal int MaxAttempts => _worker.MaxAttempts;
+
+    internal Message? VolatileMessage(InboxKey id) => _volatile?.GetValueOrDefault(id);
+
+    /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
+    public long CheckpointTime => _worker.Now;
 
     /// <summary>Say that the actor's code is about to run, with what it is given (for tests).</summary>
-    public void Started(IReadOnlyList<Message> inbox) => _worker.Started(Actor, inbox);
+    public void Started(IReadOnlyList<Message> inbox) => _worker.Started(Actor, inbox, Services.Now);
 }
 
 /// <summary>What a turn did, for the committer: the row, what it consumed and held, sent, subscribed, cancelled.</summary>
@@ -182,6 +203,9 @@ public sealed class TurnOutcome(string instance)
 {
     internal Slot? Slot;
     internal bool RestrictsJobEntry;
+    internal bool FoundationWithholds;
+    internal FoundationHeaderChange? FoundationHeader;
+    internal bool OpensPark;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;
@@ -223,6 +247,7 @@ public sealed class TurnOutcome(string instance)
 public sealed record RequestReply(InboxKey Message, string To, string Channel, object? Item)
 {
     internal bool Rpc { get; init; }
+    internal bool FromFoundation { get; init; }
     internal Message? RefusedInput { get; init; }
 }
 
@@ -235,7 +260,7 @@ public sealed class DurableTurn
     private readonly TurnInput _input;
     private readonly List<Message> _sent = [];
     private readonly HashSet<InboxKey> _fresh = [], _volatile = [], _held = [];
-    private readonly HashSet<string> _started = [];
+    private readonly Dictionary<string, string?> _started = [];
     private readonly List<SubscriptionRow> _subscribed = [], _unsubscribed = [];
     private readonly List<(string, object?)> _emitted = [];
     private readonly List<RequestReply> _replied = [];
@@ -329,10 +354,33 @@ public sealed class DurableTurn
         return Send(InboxKey.Issued($"{Origin}#{Revision}.{_ordinal++:D4}"), target, kind, payload, options, receivedAt);
     }
 
-    private string Send(InboxKey id, InstanceRef target, string kind, object? payload, SendOptions? options = null, string? receivedAt = null)
+    internal string SendFromActor(InstanceRef target, long targetCreation, string kind, string? payload = null, long? dueAt = null)
     {
-        _sent.Add(new Message(id.Id, target, kind, payload is null ? null : Json.Write(payload), receivedAt ?? Id, options?.Start,
-            options?.Delay is { } delay ? Services.Now + (long)delay.TotalMilliseconds : null, TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null), SenderCreation: _input.Creation).WithInboxScope(id.Scope));
+        var id = InboxKey.Issued($"{Origin}#{Revision}.{_ordinal++:D4}");
+        return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
+    }
+
+    internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
+    {
+        Kinds.RequireApplicationSend(kind);
+        var id = store.MessageHandle(FormattableString.Invariant($"send:{Origin}#{Revision}.{_ordinal++:D4}"));
+        _sent.Add(new Message(id, target, kind, payload, Id, Due: dueAt, TargetCreation: targetCreation, SenderCreation: _input.Creation)
+            { ActorAuthored = true, StorageId = Origin + "#" + id }.AsIssued());
+        return id;
+    }
+
+    private string Send(InboxKey id, InstanceRef target, string kind, object? payload, SendOptions? options = null, string? receivedAt = null,
+        bool actorAuthored = false)
+    {
+        if (options is { Delay: not null, DueAt: not null })
+            throw new ArgumentException("Supply either an absolute due time or a delay.", nameof(options));
+        var due = options?.DueAt;
+        if (options?.Delay is { } delay) due = Services.Now + (long)delay.TotalMilliseconds;
+        var body = actorAuthored ? (string?)payload : payload is null ? null : Json.Write(payload);
+        var message = new Message(id.Id, target, kind, body, receivedAt ?? Id, options?.Start,
+            due, TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null), SenderCreation: _input.Creation)
+            { ActorAuthored = actorAuthored };
+        _sent.Add(message.WithInboxScope(id.Scope));
         return id.Id;
     }
 
@@ -361,14 +409,20 @@ public sealed class DurableTurn
     }
 
     /// <summary>Allocate the child and commit its identity and creator together with the parent's state.</summary>
-    public InstanceRef StartChild(StartSpec spec, int destination)
+    public InstanceRef StartChild(StartSpec spec, int destination) => StartChild(spec, destination, false);
+
+    internal InstanceRef StartFoundationChild(StartSpec spec, int destination) => StartChild(spec, destination, true);
+
+    private InstanceRef StartChild(StartSpec spec, int destination, bool bindReference)
     {
         if ((uint)destination >= (uint)Services.Partitions) throw new ArgumentOutOfRangeException(nameof(destination));
         var child = _input.ChildIds.Next(destination);
         if (_input.Creation > 0)
             spec = spec with { Creation = new CreationStart(1, 0, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(child.Id)))) };
         var handle = $"{Origin}#{Revision}.{_ordinal++:D4}";
-        _sent.Add(new Message(handle, child, Kinds.Start, Sender: Id, SenderCreation: _input.Creation, Start: spec, TargetCreation: spec.Creation?.Generation).WithInboxScope(InboxKey.ChildCreatorScope));
+        var creator = new Message(handle, child, Kinds.Start, Sender: Id, SenderCreation: _input.Creation,
+            Start: spec, TargetCreation: spec.Creation?.Generation) { BindFoundationChild = bindReference };
+        _sent.Add(creator.WithInboxScope(InboxKey.ChildCreatorScope));
         // An exact derived handle in this set denotes a child creator. Composed custom handles have an
         // additional '#' in the suffix, so both forms can share the existing optional checkpoint column.
         if (destination == Actor.Partition) _fresh.Add(_sent[^1].InboxKey);
@@ -379,7 +433,7 @@ public sealed class DurableTurn
     {
         if (!message.StartsWith(Origin + "#", StringComparison.Ordinal)) throw new InvalidOperationException($"Message '{message}' was not sent by {Id}.");
         // Removing this turn's own staged message cannot delete a stored row, whatever its scope.
-        if (_sent.RemoveAll(m => m.Id == message) > 0) return;
+        if (_sent.RemoveAll(m => m.InboxKey.Id == message) > 0) return;
         var custom = _custom.Contains(message);
         if (!custom && !OwnsHandle(message)) throw new InvalidOperationException($"Message '{message}' was not sent by {Id}.");
         var key = custom && OwnsHandle(message) ? new InboxKey(message, InboxKey.ChildCreatorScope)
@@ -389,26 +443,58 @@ public sealed class DurableTurn
         Services.Cancelling(key);
     }
 
+    internal void RecallFromActor(InMemoryStore store, string id)
+    {
+        var storageId = Origin + "#" + id;
+        var key = InboxKey.Issued(storageId);
+        if (_sent.Any(message => message.InboxKey == key && message.Target == Actor) ||
+            store.HasFoundationTimer(key, Id, _input.Creation) ||
+            _input.VolatileMessage(key)?.Target == Actor)
+            Recall(storageId);
+    }
+
     private bool OwnsHandle(string handle) => handle.LastIndexOf('#') == Origin.Length && handle.StartsWith(Origin + "#", StringComparison.Ordinal);
 
-    public void StartJob(string key, object? arguments = null)
+    public void StartJob(string key, object? arguments = null) =>
+        StartJobWithPayload(key, arguments is null ? null : Json.Write(arguments));
+
+    internal void StartJobWithPayload(string key, string? arguments, long? deadline = null)
     {
         if (_jobs.Contains(key)) throw new InvalidOperationException($"Job '{key}' is in flight already.");
         _jobs.Add(key);
-        _started.Add(key);
+        var timer = deadline is { } at
+            ? SendNext(Actor, Kinds.JobDeadline, new JobDeadline(key), new SendOptions(DueAt: at))
+            : null;
+        _started.Add(key, timer);
         // Finding F4: the intent is also a message to self, a ticket, so after a crash the inbox alone says what to do next.
         // Its id is derived from instance and key, so a later turn can delete it without holding it.
-        Send(InboxKey.Ticket(Id, key, _input.Creation), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments is null ? null : Json.Write(arguments)));
+        Send(InboxKey.Ticket(Id, key, _input.Creation), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments, deadline, timer));
         if (Services.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].InboxKey);
     }
 
-    public void CancelJob(string key)
+    public void CancelJob(string key) => CancelJob(key, null, resultReady: false);
+
+    internal void CancelJob(string key, string? deadline, bool resultReady)
     {
         if (!_jobs.Remove(key)) return;     // not in flight: never started, done, or its result is in this turn's inbox
         var ticket = InboxKey.Ticket(Id, key, _input.Creation);
-        if (_started.Remove(key)) _sent.RemoveAll(m => m.InboxKey == ticket);
-        else _cancelled.Add(ticket);
+        if (_started.Remove(key, out var timer))
+        {
+            _sent.RemoveAll(m => m.InboxKey == ticket);
+            if (timer is not null) Recall(timer);
+            return;
+        }
+
+        if (resultReady) ticket = InboxKey.JobResult(Id, key, _input.Creation);
+        _cancelled.Add(ticket);
+        if (deadline is not null) Recall(deadline);
         Services.Cancelling(ticket);     // from here on its result is nobody's
+    }
+
+    internal void ReportFoundationJobResult(JobFinished result)
+    {
+        Send(InboxKey.JobResult(Id, result.Key, _input.Creation), Actor, Kinds.JobFinished, result);
+        _sent[^1] = _sent[^1] with { FoundationJobResult = true };
     }
 
     public void Hold(Message message)
@@ -418,18 +504,23 @@ public sealed class DurableTurn
         _held.Add(message.InboxKey);
     }
 
-    public void Subscribe(string key, string wait, bool keep = false)
+    public void Subscribe(string key, string wait, bool keep = false) => Subscribe(key, wait, keep, null);
+
+    internal void Subscribe(string key, string wait, bool keep, string? foundationTenant)
     {
-        _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation));
+        _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation) { FoundationTenant = foundationTenant });
         if (keep) _kept.Add(_subscribed[^1]);
     }
     public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation));
 
     // NATIVE N1: the publish is a ticket to self, so "the inbox alone says what is owed" holds for it too.
-    public string Publish(string key, string? payload, TimeSpan keep)
+    public string Publish(string key, string? payload, TimeSpan keep) => Publish(key, payload, keep, null, null);
+
+    internal string Publish(string key, string? payload, TimeSpan keep, InMemoryStore? store, string? tenant)
     {
-        var id = $"{Origin}#{Revision}.{_ordinal:D4}";
-        SendNext(Actor, Kinds.Publish, new EventRow(key, id, payload, Services.Now + (long)keep.TotalMilliseconds));
+        var wire = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal:D4}");
+        var id = store?.MessageHandle("event:" + wire) ?? wire;
+        SendNext(Actor, Kinds.Publish, new EventRow(key, id, payload, checked(Services.Now + (long)keep.TotalMilliseconds)) { FoundationTenant = tenant });
         return id;
     }
 
@@ -439,9 +530,14 @@ public sealed class DurableTurn
     /// only what is in memory too. And it took no message that is a row: consuming one needs a commit, and a start that is
     /// a row (an outside start, say) must not be lost with the memory.
     /// </summary>
-    public bool CanWaitInMemory(long until) =>
-        until > Services.Now && _window is null && _replied.Count == 0 && _subscribed.Count == 0 && (_cancelled.Count == 0 || _input.Unwritten) && !_input.Taken.Any(i => i.Durable)
-        && _sent.TrueForAll(m => m.Target == Actor && m.Kind is not (Kinds.Publish or Kinds.Meet) && (m.Kind == Kinds.Job || (m.Due ?? Services.Now) <= until));
+    public bool CanWaitInMemory(long until)
+    {
+        var now = _input.CheckpointTime;
+        return until > now && _window is null && _replied.Count == 0 && _subscribed.Count == 0 &&
+            (_cancelled.Count == 0 || _input.Unwritten) && !_input.Taken.Any(i => i.Durable) &&
+            _sent.TrueForAll(m => m.Target == Actor && !m.ActorControl && m.Kind is not (Kinds.Publish or Kinds.Meet) &&
+                (m.Kind == Kinds.Job || (m.Due ?? now) <= until));
+    }
 
     /// <summary>Everything this turn sends stays in memory: none of it is a row.</summary>
     public void WaitInMemory() => _volatile.UnionWith(_sent.Select(m => m.InboxKey));
@@ -464,9 +560,12 @@ public sealed class DurableTurn
     private bool CompletedTicket(Delivery delivery, out string key)
     {
         key = "";
-        if (!delivery.IsWorkerJobCompletion) return false;
-        key = delivery.Message.Read<JobFinished>().Key;
-        return delivery.Message.Target == Actor && delivery.Message.InboxKey == InboxKey.Ticket(Id, key, _input.Creation);
+        var message = delivery.Message;
+        if (!delivery.IsWorkerJobCompletion && !message.FoundationJobResult) return false;
+        key = message.Read<JobFinished>().Key;
+        var expected = message.FoundationJobResult
+            ? InboxKey.JobResult(Id, key, _input.Creation) : InboxKey.Ticket(Id, key, _input.Creation);
+        return message.Target == Actor && message.InboxKey == expected;
     }
 
     /// <summary>What the turn consumed, held, cancelled and emitted. The row comes with <see cref="Seal"/>.</summary>

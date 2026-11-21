@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
 
@@ -39,61 +40,61 @@ public enum AdmissionFlaw { None = 0, Hydrate = 1, ForgetIds = 2, IgnoreCapacity
 
 internal sealed partial class Burst
 {
-    private bool AdmissionHas(AdmissionFlaw flaw) => (model.Options.AdmissionFlaws & flaw) != 0;
+    private bool AdmissionHas(AdmissionFlaw flaw) => (options.AdmissionFlaws & flaw) != 0;
 
     private bool AdmitPrefix()
     {
         // A held composite signal may stay at the head while authored work waits. It cannot gate metadata admission.
-        var first = AdmissionHas(AdmissionFlaw.BlockedSignal) ? turn.Inbox.FirstOrDefault()
-            : turn.Inbox.FirstOrDefault(m => m.Kind != CompositeSignal.Kind);
-        if (first is null || !model.HandlesMetadata(first)) return false;
+        var first = AdmissionHas(AdmissionFlaw.BlockedSignal) ? turn.Items.FirstOrDefault()
+            : turn.Items.FirstOrDefault(m => m.Kind != CompositeSignal.Kind);
+        if (first is null || !HandlesMetadata(first.Kind)) return false;
         var prefix = true;
-        foreach (var message in turn.Inbox)
+        foreach (var message in turn.Items)
         {
             if (message.Kind == CompositeSignal.Kind) { turn.Hold(message); continue; }
-            prefix &= model.HandlesMetadata(message);
+            prefix &= HandlesMetadata(message.Kind);
             if (!prefix) { turn.Hold(message); continue; }
             Admission result;
             try { result = Reduce(message); }
             catch (Exception error) when (error is JsonException or EncoderFallbackException)
-            { result = new("", "", "Invalid", Actor: turn.Instance.Ref.Id); }
-            if (AdmissionHas(AdmissionFlaw.EarlyReply)) turn.Emit(Request.Response, result);
-            else turn.Reply(message, Request.Response, result);
+            { result = new("", "", "Invalid", Actor: turn.Actor.Id); }
+            if (AdmissionHas(AdmissionFlaw.EarlyReply)) turn.Emit("response", result);
+            else turn.Reply(message, result);
             turn.Record($"admission:{result.Frame}:{result.Id}:{result.Result}:{result.Order}");
         }
         // The held suffix alone sleeps; one persisted wake also lets existing authored agenda work progress.
-        if (turn.Inbox.Any(m => m.Kind != ReceiptQuery.Kind)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+        if (turn.Items.Any(m => m.Kind != ReceiptQuery.Kind)) turn.SendToSelf(NativeKinds.Continue);
         return true;
     }
 
     internal ValueTask MetadataAsync()
     {
         LexicalScopes.Validate(_s);
-        NativeInterventions.Validate(_s, cancelled: ended == InstanceStatus.Cancelled);
+        NativeInterventions.Validate(_s, cancelled: ended == Contract.ActorStatus.Cancelled);
         if (AdmissionHas(AdmissionFlaw.DropMetadata)) return ValueTask.CompletedTask;
-        if (ended is { } status && turn.Clock.Resolve(WorkflowCommitClock.Terminal) is not null)
-            InvocationLifetime.Terminate(_s, WorkflowCommitClock.Terminal, status switch
-            { InstanceStatus.Finished => "completed", InstanceStatus.Cancelled => "cancelled", _ => "faulted" }, AdmissionHas(AdmissionFlaw.KeepPayload), AdmissionHas(AdmissionFlaw.RestampCompleted));
-        foreach (var message in turn.Inbox.Where(model.HandlesMetadata))
+        if (ended is { } status && turn.Clock.Resolve(turn.Clock.Terminal) is not null)
+            InvocationLifetime.Terminate(_s, turn.Clock.Terminal, status switch
+            { Contract.ActorStatus.Finished => "completed", Contract.ActorStatus.Cancelled => "cancelled", _ => "faulted" }, AdmissionHas(AdmissionFlaw.KeepPayload), AdmissionHas(AdmissionFlaw.RestampCompleted));
+        foreach (var message in turn.Items.Where(message => HandlesMetadata(message.Kind)))
         {
             Admission result;
             try { result = Reduce(message); }
             catch (Exception error) when (error is JsonException or EncoderFallbackException)
-            { result = new("", "", "Invalid", Actor: turn.Instance.Ref.Id); }
-            turn.Reply(message, Request.Response, result);
+            { result = new("", "", "Invalid", Actor: turn.Actor.Id); }
+            turn.Reply(message, result);
         }
         return ValueTask.CompletedTask;
     }
 
-    private Admission Reduce(Message message) => message.Payload is null ? new("", "", "Invalid", Actor: turn.Instance.Ref.Id)
-        : message.Kind == ReceiptQuery.Kind ? Query(message.Read<ReceiptQuery>()) : Admit(message.Read<InvocationInput>());
+    private Admission Reduce(Contract.Message message) => message.Payload is null ? new("", "", "Invalid", Actor: turn.Actor.Id)
+        : message.Kind == ReceiptQuery.Kind ? Query(Read<ReceiptQuery>(message)) : Admit(Read<InvocationInput>(message));
 
     private Admission Query(ReceiptQuery? query)
     {
         if (query is null || string.IsNullOrEmpty(query.Frame) || string.IsNullOrEmpty(query.Id) || query.Id.Length > 128)
-            return new("", "", "Invalid", Actor: turn.Instance.Ref.Id);
+            return new("", "", "Invalid", Actor: turn.Actor.Id);
         if (_s.Inboxes?.GetValueOrDefault(query.Frame) is not { } inbox)
-            return new(query.Frame, query.Id, "UnknownInvocation", Actor: turn.Instance.Ref.Id);
+            return new(query.Frame, query.Id, "UnknownInvocation", Actor: turn.Actor.Id);
         InvocationLifetime.Clean(_s, inbox, turn.Now, turn.Clock, AdmissionHas(AdmissionFlaw.ReleaseClockEarly));
         var receipt = inbox.Receipts.GetValueOrDefault(query.Id);
         return Receipt(query.Frame, query.Id, ended is not null && inbox.Closed is null ? "TerminalMetadataUnresolved"
@@ -106,13 +107,13 @@ internal sealed partial class Burst
         var until = receipt is null ? null : InvocationLifetime.Deadline(receipt, turn.Clock);
         if (AdmissionHas(AdmissionFlaw.Restamp) && finalized is not null && receipt?.Retention is { } duration)
             until = checked(turn.Now + duration);
-        return new(frame, id, result, receipt?.Order, receipt?.Outcome, turn.Instance.Ref.Id, receipt?.Status, until, finalized)
+        return new(frame, id, result, receipt?.Order, receipt?.Outcome, turn.Actor.Id, receipt?.Status, until, finalized)
         { EvaluationStarted = receipt?.EvaluationStarted == true };
     }
 
     private Admission Admit(InvocationInput? input)
     {
-        if (input is null) return new("", "", "Invalid", Actor: turn.Instance.Ref.Id);
+        if (input is null) return new("", "", "Invalid", Actor: turn.Actor.Id);
         Admission Result(string result, InputReceipt? receipt = null) =>
             Receipt(input.Frame, input.Id, result, receipt);
         if (string.IsNullOrEmpty(input.Frame) || string.IsNullOrEmpty(input.Id) || input.Id.Length > 128 ||
@@ -125,7 +126,7 @@ internal sealed partial class Burst
         var digest = Digest(input);
         if (!AdmissionHas(AdmissionFlaw.ForgetIds) && inbox.Receipts.TryGetValue(input.Id, out var existing))
             return Result(existing.Digest == digest ? "Duplicate" : "Conflict", existing);
-        if (turn.Instance.Creation <= 0) return Result("CreationIdentityUnavailable");
+        if (!turn.HasExactIdentity) return Result("CreationIdentityUnavailable");
         if (ended is not null && inbox.Closed is null) return Result("TerminalMetadataUnresolved");
         if (inbox.Closed is not null || ended is not null) return Result("Ended");
         if (!_s.Frames.ContainsKey(input.Frame)) return Result("UnknownInvocation");
@@ -161,7 +162,7 @@ internal sealed partial class Burst
 
     internal void RegisterInbox(Frame frame, int capacity, int receipts, TimeSpan? retention)
     {
-        if (turn.Instance.Creation <= 0) throw new NotSupportedException("invocation admission requires a qualified actor creation");
+        if (!turn.HasExactIdentity) throw new NotSupportedException("invocation admission requires a qualified actor creation");
         if (capacity < 1 || receipts < capacity) throw new ArgumentOutOfRangeException(nameof(capacity));
         var duration = retention is null ? (long?)null : checked((long)Math.Ceiling(retention.Value.TotalMilliseconds));
         if (duration is <= 0) throw new ArgumentOutOfRangeException(nameof(retention));

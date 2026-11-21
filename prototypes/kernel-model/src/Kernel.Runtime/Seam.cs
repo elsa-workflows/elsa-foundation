@@ -57,8 +57,7 @@ public interface IScopeActivation : IAsyncDisposable
     /// R1, the lease. Under the node lease (<see cref="INodeLeaseHost"/>) a pass renews nothing: the node's heartbeat
     /// renews one lease for every scope, and only while each pass completes within the lease (the pass gate). A runtime
     /// that calls again when asked, at least once per poll interval, keeps its node live; one whose passes stop completing
-    /// stops its renewal, and another node takes its scopes. Under the per-partition lease (until K1b slice 6 deletes it)
-    /// the pass renews an idle scope's lease itself, and the delay it returns includes that renewal.
+    /// stops its renewal, and another node takes its scopes.
     /// </para>
     /// </summary>
     ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default);
@@ -131,6 +130,6 @@ public interface IMembership
     /// <summary>
     /// Say that this node is alive (the <c>node</c> row) and look at the cluster: the nodes heard from within
     /// <paramref name="window"/>, and the partitions that have no owner or whose lease has expired. Liveness only.
-    /// </summary>
+    /// Lease renewal runs through the node heartbeat.</summary>
     ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default);
 }

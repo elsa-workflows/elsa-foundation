@@ -121,8 +121,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             catch (OperationCanceledException) when (exit.IsCancellationRequested) { break; }
             catch (Exception e)
             {
-                Interlocked.Increment(ref _errors);     // the host counts a failed heartbeat as missed; anything else is a bug
-                LastError = e;
+                RecordError(e);    // the host counts a failed heartbeat as missed; anything else is a bug
             }
             try { await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, (long)every.TotalMilliseconds - (Now - started))), exit); }
             catch (OperationCanceledException) { break; }
@@ -135,8 +134,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         catch (OperationCanceledException) when (_besideEnd.IsCancellationRequested) { }
         catch (Exception e)
         {
-            Interlocked.Increment(ref _errors);
-            LastError = e;
+            RecordError(e);
         }
     }
 
@@ -150,8 +148,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             catch (OperationCanceledException) when (kill.IsCancellationRequested) { break; }
             catch (Exception e)
             {
-                Interlocked.Increment(ref _errors);
-                LastError = e;
+                RecordError(e);
             }
             Signal();       // a scope taken gets its first pass at once
             var ms = Math.Max(0, (long)_options.BalanceEvery.TotalMilliseconds - (Now - started));
@@ -218,10 +215,18 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 
     private long Now => _clock.ElapsedMilliseconds;
     private long _errors;
+    private Exception? _lastError;
 
     /// <summary>What the loop caught that was not a cancellation: zero unless something is broken.</summary>
     public long Errors => Interlocked.Read(ref _errors);
-    public Exception? LastError { get; private set; }
+    public Exception? LastError => Volatile.Read(ref _lastError);
+
+    private void RecordError(Exception error)
+    {
+        // Readers may use the count to decide when there is an error to inspect.
+        Volatile.Write(ref _lastError, error);
+        Interlocked.Increment(ref _errors);
+    }
 
     /// <summary>Moves a due time earlier, never later: a hint that sets it to now survives a pass that asks for later.</summary>
     private static void Sooner(ref long due, long at)
@@ -245,7 +250,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         {
             try
             {
-                await _runtime.NodePassAsync(kill);     // K1b: the passes no active scope gives; nothing under the per-partition lease
+                await _runtime.NodePassAsync(kill);     // K1b: give pending scopes and heartbeat answers a pass
                 if (Now >= pollAt)
                 {
                     pollAt = Now + (long)_options.PollInterval.TotalMilliseconds;
@@ -280,8 +285,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             catch (Exception e)
             {
                 // The kernel catches what its store throws; anything else is a bug the loop must survive and count.
-                Interlocked.Increment(ref _errors);
-                LastError = e;
+                RecordError(e);
                 try { await Task.Delay(TimeSpan.FromMilliseconds(100), exit); }      // no spin on a bug that throws every time
                 catch (OperationCanceledException) { break; }
             }

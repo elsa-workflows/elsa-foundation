@@ -7,6 +7,8 @@ namespace Kernel.Etl.Run;
 /// <summary>Passes through, once losing the response after a selected root checkpoint has landed.</summary>
 public sealed class FaultStore(IKernelStore inner, bool inject) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
+
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;

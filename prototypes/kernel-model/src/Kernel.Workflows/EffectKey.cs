@@ -1,4 +1,5 @@
 using Kernel.Durable;
+using ContractEffectKey = Kernel.Model.Contracts.EffectKey;
 
 namespace Kernel.Workflows;
 
@@ -34,10 +35,10 @@ namespace Kernel.Workflows;
 public static class EffectKey
 {
     /// <summary>The iteration path of an activation that no repeating scope encloses.</summary>
-    public const string RootPath = "-";
+    public const string RootPath = ContractEffectKey.RootPath;
 
     public static string For(InstanceInfo instance, string node, string iterationPath, int attempt) => For(instance.Ref.Id, instance.Creation, node, iterationPath, attempt);
 
     public static string For(string instance, long creation, string node, string iterationPath, int attempt) =>
-        FormattableString.Invariant($"{CreationProtocol.Origin(instance, creation)}/{node}/{(iterationPath.Length == 0 ? RootPath : iterationPath)}/{attempt}");
+        ContractEffectKey.For(CreationProtocol.Origin(instance, creation), node, iterationPath, attempt);
 }

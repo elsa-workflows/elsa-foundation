@@ -32,8 +32,42 @@ Generator.Faults = double.Parse(Arg("--faults") ?? "1", System.Globalization.Cul
 var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Flaw.None, (all, name) => all | Enum.Parse<Flaw>(name, true));
 
 NativeSwitch.On = args.Contains("--native");
-var nodeLease = args.Contains("--node-lease");     // K1b: the store keeps the node lease; the node's heartbeat renews it
 NativeSwitch.Flaws = (Arg("--native-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Native.NativeFlaw.None, (all, name) => all | Enum.Parse<Kernel.Native.NativeFlaw>(name, true));
+if (args.Contains("--contract-http"))
+    return await ContractHttpWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws);
+if (args.Contains("--contract-evolution"))
+    return await ContractActorWorkload.RunEvolution(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws);
+if (args.Contains("--contract-actors"))
+    return await ContractActorWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), actions, count, flaws);
+if (args.Contains("--contract-native"))
+    return await ContractNativeWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws, NativeSwitch.Flaws);
+if (args.Contains("--contract-events"))
+    return await ContractEventWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws);
+if (args.Contains("--contract"))
+    return await ContractWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), actions, count, flaws);
+if (args.Contains("--inline-ephemeral-check"))
+{
+    var failed = false;
+    await InlineEphemeralChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
+    return failed ? 1 : 0;
+}
+
+if (args.Contains("--contract-jobs"))
+    return await ContractActorWorkload.RunJobTree(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
+        Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws, args.Contains("--tree-stall"));
+if (args.Contains("--public-owner-check"))
+{
+    var failed = false;
+    await PublicOwnerChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
+    return failed ? 1 : 0;
+}
+
 if (args.Contains("--lease-check")) return await LeaseChecks.Run(flaws);
 if (args.Contains("--landed-check")) return LandedChecks.Run();
 if (args.Contains("--placement-check")) return PlacementChecks.Run(flaws);
@@ -50,7 +84,7 @@ return Sweep(int.Parse(Arg("--from") ?? "1"), int.Parse(Arg("--seeds") ?? "10000
 // node runs one worker for its owned set, through DurableHost.ForNode; every seventh seed runs a worker per partition
 // instead, the host of a store without owned sets (commit=ef), so both shapes stay under the mutations.
 Config ConfigOf(int seed, Flaw flaws) => (flaws.HasFlag(Flaw.StableNodeName) ? new(1, Placed, flaws) : seed % 5 == 0 ? new(2 + seed % 2, Placed, flaws, Attempts: 5, Group: 4) : new Config(2 + seed % 2, Placed, flaws))
-    with { Upgrade = seed % 3 == 0, Native = NativeSwitch.On, NativeFlaws = NativeSwitch.Flaws, Count = count, Set = seed % 7 != 0, NodeLease = nodeLease };
+    with { Upgrade = seed % 3 == 0, Native = NativeSwitch.On, NativeFlaws = NativeSwitch.Flaws, Count = count, Set = seed % 7 != 0 };
 
 (string? Violation, List<Act> Acts) Run(int seed, Flaw flaws, int? length = null)
 {
@@ -185,6 +219,14 @@ int NativeMutations(int seeds)
         var clock = Stopwatch.StartNew();
         (int Seed, string Violation)? caught = null;
         long acts = 0;
+        // The old partition-lease schedule caught this at 3589. The node-lease nightly reaches 14396 unaided.
+        const int witness = 14396;
+        if (mutation == Kernel.Native.NativeFlaw.FreshTurnSwapsLoopKeys && seeds < witness)
+        {
+            var (violation, done) = Run(witness, Flaw.None);
+            acts += done.Count;
+            if (violation is not null) caught = (witness, violation);
+        }
         for (var from = 1; caught is null && from <= seeds; from += 64)
         {
             var found = new ConcurrentBag<(int Seed, string Violation)>();

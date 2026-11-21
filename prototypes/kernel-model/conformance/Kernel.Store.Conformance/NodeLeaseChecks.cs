@@ -2,8 +2,7 @@ namespace Kernel.Store.Conformance;
 
 /// <summary>
 /// K1b: the node lease (ownership-and-fencing.md, "The partition record", "The node's heartbeat" and the acceptance
-/// cases NL-1 to NL-10), the store-level parts. Each case asks for its store with the node lease on, and is skipped on a
-/// store without <see cref="IKernelStore.NodeLeaseAvailable"/>. Process p owns partitions; q and r are other processes.
+/// cases NL-1 to NL-10), the store-level parts. Process p owns partitions; q and r are other processes.
 /// A case whose acceptance names a store mutation fails under it (<c>semantic-flaw</c>); the others carry a negative control.
 /// </summary>
 internal static class NodeLeaseChecks
@@ -15,22 +14,17 @@ internal static class NodeLeaseChecks
 
     internal static IReadOnlyList<Case> Cases { get; } =
     [
-        new("node lease: the heartbeat renews the node record and lists its partitions with their epochs; membership frees an expired owner's partitions; the fence renews no lease", Level.Required, Heartbeat, 4, NodeLease: true),
-        new("node lease: a partition whose owner has no node record is taken, and the take counts one death", Level.Required, MissingRecord, 3, NodeLease: true),
-        new("node lease: a pending partition's retake counts one death per trial message of the previous epoch; a plain retake counts none", Level.Required, PendingRetake, 4, NodeLease: true),
-        new("node lease: a commit whose batch was sent more than its lease ago is rolled back, not committed (the commit-step deadline)", Level.Required, CommitStep, 2, NodeLease: true),
-        new("node lease NL-2: a paused owner's flush is refused whole, its heartbeat lists none of its partitions, one death per trial message; no take from a live process", Level.Required, PausedOwner, 4, NodeLease: true),
-        new("node lease NL-4: a renewal racing a take keeps only the partitions the take left alone", Level.Required, RenewalRacingTake, 7, NodeLease: true),
-        new("node lease NL-5: a flush of seen marks only is refused whole when a take lands while it is on the wire", Level.Required, MarksOnly, 5, NodeLease: true),
-        new("node lease NL-6: a restarted process under a new name takes nothing until its predecessor's node lease expires, then counts the deaths", Level.Required, Restart, 4, NodeLease: true),
-        new("node lease NL-7: a take renews its taker's node record, whatever it takes", Level.Required, TakeRenews, 5, NodeLease: true),
-        new("node lease NL-8: after a lost release or retake, the heartbeat lists the row at its epoch, and a release or retake at that epoch settles it", Level.Required, LostRelease, 6, NodeLease: true),
+        new("node lease: the heartbeat renews the node record and lists its partitions with their epochs; membership frees an expired owner's partitions; the fence renews no lease", Level.Required, Heartbeat, 4),
+        new("node lease: a partition whose owner has no node record is taken, and the take counts one death", Level.Required, MissingRecord, 3),
+        new("node lease: a pending partition's retake counts one death per trial message of the previous epoch; a plain retake counts none", Level.Required, PendingRetake, 4),
+        new("node lease: a commit whose batch was sent more than its lease ago is rolled back, not committed (the commit-step deadline)", Level.Required, CommitStep, 2),
+        new("node lease NL-2: a paused owner's flush is refused whole, its heartbeat lists none of its partitions, one death per trial message; no take from a live process", Level.Required, PausedOwner, 4),
+        new("node lease NL-4: a renewal racing a take keeps only the partitions the take left alone", Level.Required, RenewalRacingTake, 7),
+        new("node lease NL-5: a flush of seen marks only is refused whole when a take lands while it is on the wire", Level.Required, MarksOnly, 5),
+        new("node lease NL-6: a restarted process under a new name takes nothing until its predecessor's node lease expires, then counts the deaths", Level.Required, Restart, 4),
+        new("node lease NL-7: a take renews its taker's node record, whatever it takes", Level.Required, TakeRenews, 5),
+        new("node lease NL-8: after a lost release or retake, the heartbeat lists the row at its epoch, and a release or retake at that epoch settles it", Level.Required, LostRelease, 6),
     ];
-
-    private static void Require(Context c)
-    {
-        if (!c.S.NodeLeaseAvailable) throw new SkipException("the store keeps the per-partition lease");
-    }
 
     /// <summary>The EF reference path fences one partition per commit, so a flush over several skips there.</summary>
     private static void RequireOwnedSets(Context c)
@@ -63,7 +57,6 @@ internal static class NodeLeaseChecks
 
     private static async Task Heartbeat(Context c)
     {
-        Require(c);
         // Brief leases, as TakeRenews takes them: the first answer's check that every owner is live holds on a loaded
         // runner too (a 300 ms lease ran out there before it, review of #4870).
         var p = await c.S.TakeAsync([1, 3], "p", Brief);
@@ -86,7 +79,6 @@ internal static class NodeLeaseChecks
     /// <summary>A missing node record counts as expired. The negative control: with p's record in place, q takes nothing.</summary>
     private static async Task MissingRecord(Context c)
     {
-        Require(c);
         if (c.Provided.DeleteNodeRecord is not { } delete) throw new SkipException("the provider cannot delete a node record");
         await c.S.AddAsync(Make.M("t1", 1));
         var p = await c.S.TakeAsync([1], "p", Context.Long);
@@ -104,7 +96,6 @@ internal static class NodeLeaseChecks
     /// </summary>
     private static async Task PendingRetake(Context c)
     {
-        Require(c);
         foreach (var n in new[] { 1, 2 }) await c.S.AddAsync(Make.M($"m{n}", n));
         var at = (await TakeOnTrial(c, "p", [1, 2], Context.Long)).Taken.ToDictionary(f => f.Partition);
         var plain = await c.S.RetakeAsync(1, "p", at[1].Epoch, Context.Long);
@@ -123,7 +114,6 @@ internal static class NodeLeaseChecks
     /// </summary>
     private static async Task CommitStep(Context c)
     {
-        Require(c);
         if (c.S is InMemoryStore) throw new SkipException("the in-memory store commits in one step, with no time between the batch and COMMIT");
         var p = await c.S.TakeAsync([1], "p", Context.Long);
         Context.Equal("not landed", await c.Refused(() => c.S.CommitAsync(CommitBatch.Owned([.. p.Taken], TimeSpan.FromTicks(1), false, [Make.New("1/late")], [], [])).AsTask(), "a commit past its commit-step deadline"),
@@ -134,7 +124,6 @@ internal static class NodeLeaseChecks
 
     private static async Task PausedOwner(Context c)
     {
-        Require(c);
         RequireOwnedSets(c);
         int[] set = [1, 2, 3];
         foreach (var n in set)
@@ -176,7 +165,6 @@ internal static class NodeLeaseChecks
     /// </summary>
     private static async Task RenewalRacingTake(Context c)
     {
-        Require(c);
         await Run("p", "q", [1, 2, 3], null);
         if (c.S is InMemoryStore store) await Run("r", "s", [4, 5, 6], store);
 
@@ -222,7 +210,6 @@ internal static class NodeLeaseChecks
     /// </summary>
     private static async Task MarksOnly(Context c)
     {
-        Require(c);
         int[] set = [1, 2, 3, 4];
         foreach (var n in set)
         {
@@ -265,7 +252,6 @@ internal static class NodeLeaseChecks
     /// <summary>Mutation <see cref="Flaw.StableNodeName"/>: the restarted process keeps its predecessor's name, so it retakes at once with no death.</summary>
     private static async Task Restart(Context c)
     {
-        Require(c);
         var (before, after) = ("p.1", c.Flaws.HasFlag(Flaw.StableNodeName) ? "p.1" : "p.2");
         int[] set = [1, 2, 3];
         var p = await TakeOnTrial(c, before, set, Short);
@@ -282,7 +268,6 @@ internal static class NodeLeaseChecks
     /// </summary>
     private static async Task TakeRenews(Context c)
     {
-        Require(c);
         var q = await c.S.TakeAsync([1], "q", Brief);
         await c.S.TakeAsync([3], "p", Brief);
         await c.S.TakeAsync([4], "z", Brief);
@@ -306,7 +291,6 @@ internal static class NodeLeaseChecks
     /// </summary>
     private static async Task LostRelease(Context c)
     {
-        Require(c);
         var at = (await c.S.TakeAsync([1, 2, 3, 4, 5], "p", Context.Long)).Taken.ToDictionary(f => f.Partition);
         string Next(params int[] partitions) => At([.. partitions.Select(n => at[n] with { Epoch = at[n].Epoch + 1 })]);
 

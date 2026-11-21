@@ -17,6 +17,16 @@ public sealed class Watcher
     private readonly Dictionary<(string, int), int> _generations = [];  // a node's successful activations of a scope so far
     private readonly List<string> _violations = [];
     private readonly List<string> _fenced = [];
+    private (string Node, int Scope)? _countPassesFor;
+    private int _countedPasses;
+
+    public void CountPasses(int scope, string node)
+    {
+        lock (_lock) (_countPassesFor, _countedPasses) = ((node, scope), 0);
+    }
+
+    public int CountedPasses { get { lock (_lock) return _countedPasses; } }
+
 
     /// <summary>Activations asked for while another node held the scope: a second activation at once.</summary>
     public int Second { get; private set; }
@@ -171,12 +181,21 @@ public sealed class Watcher
             if (Disposed) lock (watcher._lock) watcher._violations.Add($"SEAM {node} ran a pass of scope {scope} after giving it up");
             watcher.Enter(node, scope, "ran a pass of");
             var held = inner.Active;
-            try { return await inner.RunAsync(cancellationToken); }
+            var completed = false;
+            try
+            {
+                var next = await inner.RunAsync(cancellationToken);
+                completed = true;
+                return next;
+            }
             finally
             {
                 watcher.Leave(node, scope, "ran a pass of");
                 lock (watcher._lock)
+                {
                     if (held && !inner.Active && !Disposed) watcher._fenced.Add(node);
+                    if (completed && watcher._countPassesFor == (node, Scope) && inner.Active) watcher._countedPasses++;
+                }
                 watcher.Overlap(scope);
             }
         }

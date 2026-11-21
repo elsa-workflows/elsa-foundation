@@ -9,7 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Kernel.Native brings Kernel.Workflows, Kernel.Durable, Kernel.Runtime and Kernel.Graph. -->
-    <ProjectReference Include="../../models/Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

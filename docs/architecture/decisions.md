@@ -342,6 +342,23 @@ contract's count of 38 types and 167 members.
 | 20 Nov | A start subscription on the key counts as a live waiter for `RequestAsync(Event(key))`: the actor it starts is reached like any other waiter, and the first live output of any waiter, the started one included, answers (FC-14). "No waiter" means no live wait and no start subscription matched, and then nothing was published. `SendAsync` and `RequestAsync` to `Event(key)` stay symmetric. | Coordinator design choice under the FC-C2 card; [the foundation contract](foundation-contract.md#ingress-iingress), FC-6 |
 | 20 Nov | Under the pending give-up card: a refused retake means another owner holds the partition, so the pending entry ends and nothing is released; a retake that fails, or whose answer is lost, leaves the partition pending and given up. The card's "the host keeps passing that Worker until its pending set is empty" holds while the process lives. A dispose does not wait for it, and if the process ends with a partition still pending, the node lease lapses and the next taker counts the deaths (NL-6). | Coordinator reading of the pending give-up card; [ownership and fencing](ownership-and-fencing.md#the-nodes-heartbeat) |
 
+## Owner decision on the terminal header (21 November)
+
+Every actor's opaque `TypeData` is limited to 16 KiB in UTF-8 at creation and when replaced. Every live
+checkpoint reserves room for the full permitted `TypeData` and label set beside the state-only
+`TerminalGrowth` declared by the actor type. The owner accepted this in the K2 terminal-envelope decision
+card. [Foundation contract, FC-17](foundation-contract.md#what-a-foundation-adapter-must-supply)
+states the rule. [#4971](https://github.com/elsa-workflows/elsa-foundation/pull/4971) carries the in-memory witness,
+with provider encoding qualified at K4.
+
+## Owner decisions for K2 acceptance (21 November)
+
+| Rule | Source |
+|---|---|
+| FC-1 serializes each actor's turns within an owner. An already-running stale turn can overlap its successor. All durable outcomes are fenced. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [foundation contract](foundation-contract.md#what-a-foundation-adapter-must-supply) |
+| K2 qualifies the in-memory clauses of FC-1 to FC-18 assigned to it in the plan. The existing milestones keep each remaining clause and its explicit acceptance evidence. The full adapter qualification still includes all clauses and the contract workloads. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [K2 evidence](../program-goals/clean-slate-kernel.md#k2-foundation-contract-evidence) |
+| Release 1 requires cooperative cancellation for bounded in-process progress. A recovered job must physically exit before it yields poison trial isolation to eligible termination. A yield leaves the job logically pending without recording a process death. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [job workers](job-workers.md#what-is-built) |
+
 ## Process
 
 | Date | Rule | Source |

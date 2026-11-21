@@ -22,9 +22,6 @@ public abstract class Engine
     /// <summary>The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.</summary>
     public abstract string Poll { get; }
 
-    /// <summary>The take's UPDATE, inside the store's transaction: epoch, position, database time and whether another owner's lease expired; null when not taken.</summary>
-    public abstract ValueTask<TakeRow?> TakeAsync(KernelDb db, int partition, string node, long lease, CancellationToken cancellationToken);
-
     /// <summary>The isolation level of the kernel's transactions; null is the server's default.</summary>
     public System.Data.IsolationLevel? Isolation { get; init; }
 
@@ -49,17 +46,14 @@ public abstract class Engine
         return Isolation is { } level ? db.Database.BeginTransactionAsync(level, cancellationToken) : db.Database.BeginTransactionAsync(cancellationToken);
     }
 
-    /// <summary>Begins the take's transaction: by default as the commit's.</summary>
-    public virtual Task<IDbContextTransaction> BeginTakeAsync(KernelDb db, CancellationToken cancellationToken) => BeginAsync(db, cancellationToken);
-
     /// <summary>Runs once, after the tables are created: database settings the engine needs.</summary>
     public virtual Task CreatedAsync(KernelDb db, CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <summary>
-    /// Statement 1 of the commit. Database time when it changed exactly one row, null when it matched nothing. Without
-    /// <paramref name="renew"/> (the node lease) it writes no lease: the unchanged update still locks and counts the row.
+    /// Statement 1 of the commit. Database time when it changed exactly one row, null when it matched nothing.
+    /// An unchanged update still locks and counts the row.
     /// </summary>
-    public abstract ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, bool renew, CancellationToken cancellationToken);
+    public abstract ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, CancellationToken cancellationToken);
 
     /// <summary>False when the id exists already.</summary>
     public abstract ValueTask<bool> AddAsync(KernelDb db, MessageEntity message, CancellationToken cancellationToken);
@@ -195,26 +189,14 @@ public sealed class SqlServerEngine : Engine
          ORDER BY m."Seq"
          """;
 
-    public override async ValueTask<TakeRow?> TakeAsync(KernelDb db, int partition, string node, long lease, CancellationToken cancellationToken)
-    {
-        // T-SQL has no boolean expressions: CASE. Every SET expression reads the row as it was before the UPDATE.
-        var rows = await db.Database.SqlQueryRaw<TakeRow>(
-            $"""
-             UPDATE "Partitions" SET "Died" = CASE WHEN "Owner" IS NOT NULL AND "Owner" <> {"{0}"} THEN 1 ELSE 0 END, "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"}
-             OUTPUT inserted."Epoch" AS "Epoch", inserted."Position" AS "Position", {Now} AS "Now", inserted."Died" AS "Died"
-             WHERE "Id" = {"{2}"} AND ("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"})
-             """, node, lease, partition).ToListAsync(cancellationToken);
-        return rows.Count == 1 ? rows[0] : null;
-    }
-
-    public override async ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, bool renew, CancellationToken cancellationToken)
+    public override async ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, CancellationToken cancellationToken)
     {
         var rows = await db.Database.SqlQueryRaw<long>(
             $"""
-             UPDATE "Partitions" SET "Position" = {"{0}"}{(renew ? $", \"LeaseUntil\" = {Now} + {"{4}"}" : "")}
+             UPDATE "Partitions" SET "Position" = {"{0}"}
              OUTPUT {Now} AS "Value"
              WHERE "Id" = {"{1}"} AND ("Epoch" = {"{2}"} AND "Position" = {"{3}"} OR {(unfenced ? "1 = 1" : "1 = 0")})
-             """, [batch.Position + batch.Positions, batch.Partition, batch.Epoch, batch.Position, .. renew ? [(long)batch.Lease.TotalMilliseconds] : Array.Empty<object>()]).ToListAsync(cancellationToken);
+             """, [batch.Position + batch.Positions, batch.Partition, batch.Epoch, batch.Position]).ToListAsync(cancellationToken);
         return rows.Count == 1 ? rows[0] : null;
     }
 
@@ -300,20 +282,7 @@ public sealed class SqlServerEngine : Engine
 /// <summary>MySQL 8 (InnoDB), on Oracle's provider and Connector/NET: no RETURNING, no ON CONFLICT, backticks around names.</summary>
 public sealed class MySqlEngine : Engine
 {
-    // Isolation has to be passed at BEGIN: Connector/NET sends SET TRANSACTION ISOLATION LEVEL before every BEGIN
-    // (REPEATABLE READ when none is given), so a level set on the session alone is overwritten.
-
     public override string Now => "CAST(UNIX_TIMESTAMP(SYSDATE(3)) * 1000 AS SIGNED)";
-
-    /// <summary>
-    /// ENGINES.md E8. The take runs at READ COMMITTED whatever <see cref="Engine.Isolation"/> says: under REPEATABLE READ
-    /// even the indexed "attempts + 1" takes next-key locks on the gap before the first row it changes, and a message
-    /// another partition inserts into that gap waits for the take. Null keeps the commit's level (the experiment).
-    /// </summary>
-    public System.Data.IsolationLevel? TakeIsolation { get; init; } = System.Data.IsolationLevel.ReadCommitted;
-
-    public override Task<IDbContextTransaction> BeginTakeAsync(KernelDb db, CancellationToken cancellationToken) =>
-        TakeIsolation is { } level ? db.Database.BeginTransactionAsync(level, cancellationToken) : BeginAsync(db, cancellationToken);
 
     public override string Sql(string sql) => sql.Replace('"', '`');
 
@@ -332,28 +301,15 @@ public sealed class MySqlEngine : Engine
         e.HasAlternateKey(m => m.Seq);
     });
 
-    public override async ValueTask<TakeRow?> TakeAsync(KernelDb db, int partition, string node, long lease, CancellationToken cancellationToken)
-    {
-        // There is no RETURNING. The take and the read of what it wrote are in the store's one transaction, so the row
-        // lock of the UPDATE is still held when the SELECT reads epoch and position: nobody else's take can be read by
-        // mistake. MySQL evaluates SET assignments left to right, so "Died" must come before "Owner" changes.
-        var taken = await db.Database.ExecuteSqlRawAsync(Sql(
-            $"""UPDATE "Partitions" SET "Died" = ("Owner" IS NOT NULL AND "Owner" <> {"{0}"}), "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"})"""),
-            [node, lease, partition], cancellationToken);
-        if (taken != 1) return null;
-        var row = await db.Database.SqlQueryRaw<TakeRow>(Sql($"""SELECT "Epoch", "Position", {Now} AS "Now", "Died" FROM "Partitions" WHERE "Id" = {"{0}"}"""), partition).ToListAsync(cancellationToken);
-        return row[0];
-    }
-
-    public override async ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, bool renew, CancellationToken cancellationToken)
+    public override async ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, CancellationToken cancellationToken)
     {
         // One command, two statements: the fence, then how many rows it matched and the time. The connection must
         // count matched rows, not changed ones (UseAffectedRows=false, Connector/NET's default).
         var rows = await db.Database.SqlQueryRaw<FenceRow>(Sql(
             $"""
-             UPDATE "Partitions" SET "Position" = {"{0}"}{(renew ? $", \"LeaseUntil\" = {Now} + {"{4}"}" : "")} WHERE "Id" = {"{1}"} AND ("Epoch" = {"{2}"} AND "Position" = {"{3}"} OR {(unfenced ? "1 = 1" : "1 = 0")});
+             UPDATE "Partitions" SET "Position" = {"{0}"} WHERE "Id" = {"{1}"} AND ("Epoch" = {"{2}"} AND "Position" = {"{3}"} OR {(unfenced ? "1 = 1" : "1 = 0")});
              SELECT ROW_COUNT() AS "Matched", {Now} AS "Now"
-             """), [batch.Position + batch.Positions, batch.Partition, batch.Epoch, batch.Position, .. renew ? [(long)batch.Lease.TotalMilliseconds] : Array.Empty<object>()]).ToListAsync(cancellationToken);
+             """), [batch.Position + batch.Positions, batch.Partition, batch.Epoch, batch.Position]).ToListAsync(cancellationToken);
         return rows.Count == 1 && rows[0].Matched == 1 ? rows[0].Now : null;
     }
 

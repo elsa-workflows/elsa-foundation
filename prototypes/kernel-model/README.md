@@ -63,7 +63,31 @@ $SIM --seeds 200000 --count 4096                     # K1: the store's virtual p
 $SIM --native --seeds 200000                         # the same with native instances in the mix (40 % of outside actions)
 $SIM --native --seeds 20000 --actions 1000
 $SIM --seed 22 --flaw TrialPerPartition              # replay one seed; prints a shrunk trace when it fails
+$SIM --contract --seeds 100 --actions 300              # K2 public-contract delivery workload
+$SIM --contract --seed 1 --flaw WallClockTimers        # replay the early timer negative control
+$SIM --contract --seed 1 --flaw KeepConsumedMessages  # replay the committed inbox negative control
+$SIM --contract-native --seeds 100                   # run the original Native mix through the public actor turn
+$SIM --contract-native --seed 1 --native-flaw UnstableEffectKey
+$SIM --contract-native --seed 1 --native-flaw JoinWithoutGuard
+$SIM --contract-actors --seeds 100 --actions 100      # public counter and parent-child workloads
+$SIM --contract-evolution --seeds 100                 # rolling state upgrade and atomic start followed by send
+$SIM --contract-evolution --seed 1 --flaw SkipUpgrade
+$SIM --contract-actors --seed 1 --flaw CancelKnownChildren
+$SIM --contract-actors --seed 1 --flaw KeepConsumedMessages
+$SIM --contract-events --seeds 100                   # sequences, waiters, correlation actors and event starts
+$SIM --contract-events --seed 1 --flaw CorrelationForgets
+$SIM --contract-events --seed 1 --flaw KeepConsumedMessages
+$SIM --contract-http --seeds 100                      # immediate, early, timer, job, and resumed requests
+$SIM --contract-http --seed 1 --flaw EmitBeforeCommit
+$SIM --inline-ephemeral-check                        # public write-free completion, short waits and atomic promotion
+$SIM --inline-ephemeral-check --flaw ForgetShortWaits
+$SIM --contract-jobs --seeds 100                     # public Runner, Fragile and nested Tree workloads
+$SIM --contract-jobs --seed 1 --flaw VolatileJobTicket
+$SIM --contract-jobs --seed 1 --flaw JobPoisonAsError
+$SIM --contract-jobs --seed 1 --tree-stall           # reproduce the unbounded trial liveness failure (exit 1)
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
+$SIM --public-owner-check                            # FC-1 per-owner serialization and fenced takeover
+$SIM --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
 $SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
 $SIM --native-mutations --seeds 20000                # break the native model on purpose
@@ -73,8 +97,63 @@ $SIM --seeds 5000 --actions 1000 --faults 2          # scale the faults
 $SIM --backlog 1000                                  # how long a backlog of suspects takes to recover
 ```
 
+The K2 contract workload drives `IIngress` and checks `IActorReads`. Each seed boots two caller keys in
+two tenants. It interleaves exact and keyed sends, retries, future inputs, and live event fan-out.
+The driver expires an owner and takes its scopes on a second node. It loses one turn commit before
+it executes and one answer after the batch lands. The oracle reads the paged journal and checks
+once-only effects, order of ordinary inputs, due time and tenant isolation. It also checks the
+committed receipt count and the empty inbox. An adapter can run the same schedule and oracle by
+providing its ingress, reads, and deterministic clock and fault controls.
+
+The Native workload uses the original nine `NativeWorkflows.Mix` definitions. It starts them through
+`WorkflowRuntime` and drives the same clock and owner controls. A pending Native timer crosses takeover,
+the Balanced outbound workflow replays a lost write, and the built-in publisher advances a live Flowchart
+after its commit answer is lost. The seeded schedule varies signals, due times, takeovers and the execution
+mode of the other workflows. Public journal and read observations check the background job, attached and
+detached children, threshold joins, graph arrivals and completion. The observed HTTP and email effects
+check that a replay keeps its key and that different activations keep distinct keys.
+
+The public actor workload uses the legacy Counter and parent-child inputs through the public workflow
+turn. The counter's journal checks each sender's sequence through holds, forwards, a definition rebind,
+retries, and loss before and after a write. Two live owners run the family workloads. A lost creation
+answer leaves one child per start, a pending timer crosses takeover, and each parent receives one final
+notice from the exact child. In the cancellation case the other owner takes its child scopes after the
+parent sends the cancel.
+
+The sequence and event workload runs Balanced and Durable sequences, live and keeping waiters,
+actor-managed correlation and event-created actors through the public turn. It checks each sequence's
+journal order and commit boundaries across a lost write and a lost answer. It also checks retained
+events versus live delivery, event expiry, duplicate publication and registration, and route removal.
+The sequence cases use durable ingress. The legacy suite covers unwritten Ephemeral starts.
+Actor-managed start-on-match stays outside this replay.
+
+The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
+response after takeover and an input that stays durable across local reset. The seeded actor workload
+uses already-started counter receivers and one state version. The other legacy actor and transport
+mixes continue to use their separate simulation and case suites.
+
+The Counter evolution workload moves a version-one checkpoint through upgrade, a rollback to an older
+owner and another compatible takeover. It portably expresses legacy start-on-forward as a detached
+`Start` and a `Send` staged in the same turn, keeping the receiver ref in the sender's checkpoint. An
+aborted creator's provisional ref never routes. Once the creator commits, the exact ref receives later
+forwards and survives a lost commit answer.
+
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
 `Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 22 lists the first failing seed of every round-3 flaw (the seeds of earlier flaws, in sections 2 and 3, have since moved), section 24 the two flaws round 4 renamed.
+
+The public job and tree workload uses the Runner, Fragile and Tree inputs. It observes physical job
+callbacks through the model contract, and Park, pending attempts and applied effects through public
+reads. Runner cancels one job, then loses the owner of another and completes the old attempt on either
+side of its successor. Fragile throws or has its row refused by the store, then exhausts the turn and
+job allowances in separate schedules with actual expired leases. The tree loses the answer to its
+root's terminate with descendant commands still pending. Finite job bodies let the successor owners
+finish the trials and cancel the descendants. Public events verify the leaves' live waits and their
+removal. The proposed paged cascade and Park recovery transitions belong to K3.
+
+`--tree-stall` keeps deadline-free successor bodies pending. A leaf trial can then block the ancestor
+whose turn would send its terminate. The public witness prints the pending child commands and active
+leaf attempts. The legacy simulation's settling loop explicitly completes active jobs, so its
+successful tree result assumes those job bodies can finish.
 
 ## Databases
 

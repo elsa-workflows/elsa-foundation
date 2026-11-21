@@ -236,7 +236,8 @@ public static class Smoke
             var lost = await owner.Http.SendAsync(Post("orders/44/approve", new { by = "lee" }), owner.Worker, Modes.Balanced, async () =>
             {
                 await owner.Worker.PollAsync();
-                await owner.Host.ActivateAsync(owner.Worker.Partition);     // the owner resets before the turn runs: what it held is lost
+                await owner.Worker.DisposeAsync();       // explicitly stand down before the turn runs
+                await owner.Host.ActivateAsync(owner.Worker.Partition);
                 await owner.PumpAsync(poll: true);
             });
             var finished = store.Instances.Values.Single().Status;

@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
 
@@ -95,15 +96,15 @@ internal static class NativeRetries
 internal sealed partial class Burst
 {
     private bool _retryAccepted;
-    private NativeRetryResult Retry(Message message)
+    private NativeRetryResult Retry(Contract.Message message)
     {
         NativeRetry? request;
-        try { request = message.Payload is null ? null : message.Read<NativeRetry>(); }
+        try { request = message.Payload is null ? null : Read<NativeRetry>(message); }
         catch (System.Text.Json.JsonException) { return new("", "Invalid"); }
         NativeRetryResult Result(string result, string? successor = null) => new(request?.Id ?? "", result, successor);
         if (request is null || string.IsNullOrEmpty(request.Id) || request.Id.Length > 128 || string.IsNullOrEmpty(request.Source) ||
             string.IsNullOrEmpty(request.Incident) || string.IsNullOrEmpty(request.Reason) || request.Reason.Length > 1024) return Result("Invalid");
-        if (message.TargetCreation != turn.Instance.Creation || turn.Instance.Creation <= 0) return Result("CreationMismatch");
+        if (!turn.TargetsCurrentLife(message)) return Result("CreationMismatch");
         if (_s.Retries?.GetValueOrDefault(request.Id) is { } previous)
             return previous.Request == request ? Result("Duplicate", previous.Successor) : Result("Conflict");
         if (!_s.InterventionEnabled || !_s.Frames.TryGetValue(request.Source, out var source) || source.Intervention is not { Outcome: "WaitForIntervention" } incident || incident.Id != request.Incident)
@@ -132,11 +133,11 @@ internal sealed partial class Burst
                 var scheduling = source.Scope?.ToDictionary(p => p.Key, p => p.Value?.DeepClone(), StringComparer.Ordinal);
                 var inbox = _s.Inboxes?.GetValueOrDefault(parent.Id);
                 prepared = ((IInterventionParent)Activator.CreateInstance(parentNode.Type)!).PrepareRetry(parentNode, parent.State?.DeepClone(), new(source.Id, successor, source.Node, source.Tag, scheduling, parent.Id, source.LexicalScope,
-                    inbox is null ? null : Json.Read<InvocationInbox>(Json.Write(inbox))));
+                    inbox is null ? null : System.Text.Json.JsonSerializer.Deserialize<InvocationInbox>(System.Text.Json.JsonSerializer.Serialize(inbox))!));
             }
         }
         catch (Exception error) when (error is InvalidOperationException or System.Text.Json.JsonException) { return Result("ParentObligationUnavailable"); }
-        var archived = Json.Read<Frame>(Json.Write(source));
+        var archived = System.Text.Json.JsonSerializer.Deserialize<Frame>(System.Text.Json.JsonSerializer.Serialize(source))!;
         var work = new Work { Frame = successor, Node = source.Node, Parent = source.Parent, Tag = source.Tag, LexicalScope = source.LexicalScope,
             Scope = source.Scope?.ToDictionary(p => p.Key, p => p.Value?.DeepClone(), StringComparer.Ordinal), RetrySource = source.Id,
             RecoveryInputs = (JsonObject)source.RecoveryInputs.DeepClone(), RecoveryMaterial = (JsonObject)source.RecoveryMaterial.DeepClone(), OperationKey = source.OperationKey };

@@ -386,7 +386,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                 serviceProvider.GetService<IPersistenceAccessContextAccessor>(),
                 serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>(),
-                serviceProvider.GetService<IRuntimeAdmissionLoadSignal>()));
+                serviceProvider.GetService<IRuntimeAdmissionLoadSignal>())
+                { HistoryProvidersResolver = () => (serviceProvider.GetService<IRuntimeHistoryObservationWriter>(), serviceProvider.GetService<IRuntimeHistoryStore>()) });
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
@@ -626,7 +627,10 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IStimulusDeliveryStore>(),
                 serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>())
-            { HistoryAdmission = workflowExecutionId => RuntimeHistoryRegistration.ResolveAdmission(serviceProvider, workflowExecutionId) };
+            {
+                HistoryAdmission = workflowExecutionId => RuntimeHistoryRegistration.ResolveAdmission(serviceProvider, workflowExecutionId),
+                HistoryProvidersResolver = () => (serviceProvider.GetService<IRuntimeHistoryObservationWriter>(), serviceProvider.GetService<IRuntimeHistoryStore>())
+            };
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();

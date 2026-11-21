@@ -64,17 +64,32 @@ public sealed class Request(string id, long deadline)
     public int Responses { get; private set; }      // accepted; for tests
     public int Ends { get; private set; }
 
+    internal bool AnyOutput { get; init; }
+    internal string? Tenant { get; init; }
+    internal object? Ambient { get; init; }
+    internal HashSet<InboxKey> AmbientGiven { get; } = [];
+    private TaskCompletionSource<Reply>? _completion;
+
+    internal Task<Reply> Completion() => Done
+        ? Task.FromResult(AcceptedResponse ?? new Reply(Registration, Key: "", Channel: null, Item: null, Status: Status, Error: Error))
+        : (_completion ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+
     internal void Receive(Reply reply, bool again)
     {
         if (Done && !again) return;
-        if (reply.Channel == Response) (AcceptedResponse, Responses, Done) = (reply, Responses + 1, true);
-        else if (reply.Channel is null) (Status, Error, Ends, Done) = (reply.Status, reply.Error, Ends + 1, true);
+        if (reply.Channel == Response || AnyOutput && reply.Channel is not null)
+            (AcceptedResponse, Responses, Done) = (reply, Responses + 1, true);
+        else if (reply.Channel is null)
+            (Status, Error, Ends, Done) = (reply.Status, reply.Error, Ends + 1, true);
+        else return;
+        _completion?.TrySetResult(reply);
     }
 
     internal void End(string error)
     {
         if (Done) return;
         (Error, Ends, Done) = (error, Ends + 1, true);
+        _completion?.TrySetResult(new Reply(Registration, "", null, null, Error: error));
     }
 }
 
@@ -94,14 +109,36 @@ public sealed class Requests
 
     public IReadOnlyCollection<Request> All { get { lock (_gate) return _open.Values.ToArray(); } }
 
-    public Request Open(string id, long deadline)
+    public Request Open(string id, long deadline) => Open(id, deadline, false);
+
+    internal Request OpenBound(string id, long deadline, string tenant, object? ambient) => Open(id, deadline, true, tenant, ambient);
+
+    private Request Open(string id, long deadline, bool anyOutput, string? tenant = null, object? ambient = null)
     {
         lock (_gate)
         {
-            var request = new Request(id, deadline) { Registration = $"r{_incarnation}:{checked(++_next)}" };
+            var request = new Request(id, deadline)
+            {
+                Registration = $"r{_incarnation}:{checked(++_next)}",
+                AnyOutput = anyOutput, Tenant = tenant, Ambient = ambient
+            };
             _open.Add(request.Registration, request);
             return request;
         }
+    }
+
+    internal object? TakeLocalAmbient(string address, string node, string tenant, long now, InboxKey delivery)
+    {
+        var route = ReplyTo.Parse(address);
+        if (route.Node != node || route.Deadline <= now) return null;
+        lock (_gate)
+            return _open.GetValueOrDefault(route.Request) is { Done: false, Ambient: { } ambient } request &&
+                request.Tenant == tenant && request.Deadline == route.Deadline && request.AmbientGiven.Add(delivery) ? ambient : null;
+    }
+
+    internal Task<Reply> CompletionOf(Request request)
+    {
+        lock (_gate) return request.Completion();
     }
 
     public bool IsOpen(Request request)

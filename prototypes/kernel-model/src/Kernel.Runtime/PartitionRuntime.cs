@@ -3,7 +3,7 @@ namespace Kernel.Runtime;
 /// <summary>The owner's defaults of 12 November. A test or the simulation may choose its own.</summary>
 public static class Defaults
 {
-    /// <summary>A node's lease (the node lease), and a partition's while the per-partition lease remains.</summary>
+    /// <summary>A node's lease.</summary>
     public static readonly TimeSpan Lease = TimeSpan.FromSeconds(10);
 
     /// <summary>
@@ -115,6 +115,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         }
         else
         {
+            // A host without a node lease can still refresh membership, as the conformance stubs do.
             _balancing = true;
             try { cluster = await membership.HeartbeatAsync(node, window, cancellationToken); }
             catch (Exception) { return; }
@@ -130,7 +131,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
     }
 
-    /// <summary>K1b: the node's lease, when the host keeps one (<see cref="INodeLeaseHost"/>); null under the per-partition lease.</summary>
+    /// <summary>K1b: the node's lease, when the host keeps one (<see cref="INodeLeaseHost"/>); null for a host with no node lease.</summary>
     public TimeSpan? NodeLease => (_host as INodeLeaseHost)?.NodeLease;
 
     /// <summary>

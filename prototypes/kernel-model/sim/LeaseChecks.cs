@@ -8,6 +8,36 @@ public static class LeaseChecks
         int failures = 0;
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
         await WorkerSetChecks.Run(Check);
+        await AbsoluteTimerChecks.Run(Check);
+        await FoundationClockChecks.Run(Check);
+        await FoundationReferenceChecks.Run(Check);
+        await FoundationChildReferences.Run(Check);
+        await ActorListChecks.Run(Check);
+        await ActorJournalChecks.Run(Check);
+        await ActorInboxChecks.Run(Check);
+        await ActorInboxChecks.PublicHold(Check);
+        await ActorAdapterChecks.Run(Check);
+        await FoundationEnvelopeChecks.Run(Check);
+        await FoundationEnvelopeChecks.TerminalReserve(Check);
+        await ActorAdapterChecks.EventAmbient(Check);
+        await OrdinaryIngressChecks.Run(Check);
+        await FoundationKeyIngressChecks.Run(Check);
+        await IngressContractChecks.Run(Check);
+        await InlineEphemeralChecks.Run(Check, Flaw.None);
+        await PublicOwnerChecks.Run(Check, Flaw.None);
+        await FoundationJobDeadlineChecks.Run(Check);
+        await OperatorIngressChecks.Run(Check);
+        await OperatorIngressChecks.Fallback(Check);
+        await ContractStatechartChecks.Run(Check);
+        await ContractNativeChecks.Run(Check);
+        await ContractHeldRequestChecks.Run(Check, flaw);
+        await FoundationEventSendChecks.Run(Check);
+        await FoundationEventSendChecks.SubscriptionLifecycle(Check);
+        await EventRequestChecks.Run(Check);
+        await EventRequestChecks.Provenance(Check);
+        await FoundationEventReferences.Run(Check);
+        await CommandAuthorityChecks.Run(Check);
+        await CommandAuthorityChecks.RunActor(Check);
         await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
@@ -35,6 +65,7 @@ public static class LeaseChecks
         var store = new InMemoryStore(1, () => time);
         var wire = new DelayedCommit(store);
         int oldTurns = 0, newTurns = 0, oldJobs = 0, newJobs = 0, oldEffects = 0;
+        IJob? oldContext = null, newContext = null;
         var effectFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var newWork = new TaskCompletionSource<object?>();
         var oldWork = new TaskCompletionSource<object?>();
@@ -46,9 +77,10 @@ public static class LeaseChecks
             effectFinished.TrySetResult();
             return result;
         }
-        Worker Owner(string node) => new(node, 0, wire, new WorkflowInstance([new Counter(), new HistoryProbe(), new Runner((_, _) =>
+        Worker Owner(string node) => new(node, 0, wire, new WorkflowInstance([new Counter(), new HistoryProbe(), new Runner((job, _) =>
         {
-            if (node == "old") return OldEffect();
+            if (node == "old") { oldContext = job; return OldEffect(); }
+            newContext = job;
             newJobs++; return new ValueTask<object?>(newWork.Task);
         })]), new WorkerOptions { Monotonic = () => time, Flaws = flaw, OnTurn = (_, _, _) => { if (node == "old") oldTurns++; else newTurns++; } });
         async Task Start(Worker owner) { await new DurableHost([owner]).ActivateAsync(0); await owner.PollAsync(); }
@@ -143,8 +175,16 @@ public static class LeaseChecks
             await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();
             Check(queued ? pausedScheduler.Count > 0 : attempts == 1, $"{(queued ? "queued" : "running")} job prepared before renewal");
             time += 5_000;
-            wire.DelayNext = true; var delayedBeat = old.BeatAsync();
-            await wire.Landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var landed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            wire.HeartbeatReply = async answer =>
+            {
+                landed.SetResult();
+                await wire.Reply.Task;
+                return answer;
+            };
+            var beat = new NodeHeartbeat(old.Node, wire, [old], Defaults.Lease, Defaults.Lease);
+            var delayedBeat = beat.BeatAsync();
+            await landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
             time += 6_000;
             if (queued) pausedScheduler.RunAll(); else running.SetResult("late");
             await expired.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -167,7 +207,7 @@ public static class LeaseChecks
         await store.AddAsync(new Message("renewed", new InstanceRef(id), "go", Json.Write("work"), Start: Runner.Spec));
         await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();
         Check(oldJobs == 1, "renewal witness started its job");
-        time += 5_000; await old.BeatAsync();
+        time += 5_000; await new NodeHeartbeat(old.Node, wire, [old], Defaults.Lease, Defaults.Lease).BeatAsync();
         time += 6_000; oldWork.SetResult("valid"); await effectFinished.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await Drain(old, () => Json.Read<RunnerState>(store.Instances[id].State).Log.Contains("result work"));
         Check(old.Owns && oldEffects == 1, "a timely renewal permits a result after the prior deadline");
@@ -237,6 +277,7 @@ public static class LeaseChecks
         oldJobs = newJobs = oldEffects = 0; oldWork = new TaskCompletionSource<object?>(); newWork = new TaskCompletionSource<object?>();
         effectFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         old = Owner("old"); await Start(old);
+        oldContext = newContext = null;
         await store.AddAsync(new Message("go2", new InstanceRef(id), "go", Json.Write("work"), Start: Runner.Spec));
         await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();
         Check(oldJobs == 1, "the first job began before expiry");
@@ -246,6 +287,12 @@ public static class LeaseChecks
         await effectFinished.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await Drain(replacement, () => Json.Read<RunnerState>(store.Instances[id].State).Log.Contains("result work"));
         Check(oldJobs == 1 && oldEffects == 1 && newJobs == 1, "an already-running external effect can finish after expiry and overlap recovery");
+        var earlierAttempt = oldContext?.AttemptId;
+        var recoveredAttempt = newContext?.AttemptId;
+        Check(earlierAttempt is { Length: > 0 } && recoveredAttempt is { Length: > 0 } && earlierAttempt != recoveredAttempt &&
+              oldContext is { AttemptNumber: 1 } && newContext is { AttemptNumber: 1 } &&
+              oldContext.AttemptId == earlierAttempt && newContext.AttemptId == recoveredAttempt,
+            "the real old and recovered executions have stable distinct attempt ids and safe execution lower bounds");
         return failures == 0 ? 0 : 1;
     }
 
@@ -742,6 +789,7 @@ public static class LeaseChecks
 // Delay a successful commit's response, after the inner store has actually committed.
 public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
@@ -755,6 +803,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public TaskCompletionSource RetakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public List<CommitBatch> Batches { get; } = [];
     public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
+    public Action<Polled>? BeforePollReply;
     public int PollCalls, LoadCalls, CommitCalls;
     public TaskCompletionSource Taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource TakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -789,7 +838,6 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
         if (DelayRetake) { DelayRetake = false; Retaken.TrySetResult(); await RetakeReply.Task; }      // K1b: a counting retake's reply waits too
         return result;
     }
-    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
     public Func<NodeBeat, Task<NodeBeat>>? HeartbeatReply;      // K1b: the answer as the wire delivers it (delayed or altered)
     public async ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken ct = default)
     {
@@ -808,7 +856,9 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     {
         PollCalls++;
         if (BeforePoll is not null) await BeforePoll(ct);
-        return await inner.PollAsync(partition, epoch, horizon, limit, ct);
+        var response = await inner.PollAsync(partition, epoch, horizon, limit, ct);
+        BeforePollReply?.Invoke(response);
+        return response;
     }
     public ValueTask<bool> AddAsync(Message message, CancellationToken ct = default) => inner.AddAsync(message, ct);
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken ct = default) => inner.AddEventAsync(delivery, ct);

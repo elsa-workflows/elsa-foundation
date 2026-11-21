@@ -1,5 +1,9 @@
 # Virtual partitions: per-virtual-partition fence against per-range fence (round 5 A, 16 November 2026)
 
+K1b keeps the per-virtual-partition fence and journal. Takes and node heartbeats renew one lease per process.
+A commit still writes every touched fence row, including a batch with no journal entries. The K1 costs below are the
+per-partition-lease baseline. K1b compares its idle PostgreSQL heartbeat with that baseline using `x setidle`.
+
 Status: **measured; decided by the owner on 16 November 2026** (see "The owner's decisions" at the end). The owner's experiment of 15 November (sketch draft 5, decision 4): 1,024 and 4,096
 fixed virtual partitions (4,096 provisional), stable placement, no rehash, a journal per virtual partition, nodes owning
 ranges, and the fence row either **(i) per virtual partition** or **(ii) per owned range**. This records what each
