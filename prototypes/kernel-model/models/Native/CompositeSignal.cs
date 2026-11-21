@@ -65,12 +65,12 @@ internal sealed partial class Burst
                 turn.Record($"signal-rejected:{message.Id}:{signal.Frame}");
                 continue;
             }
-            _inbox.Hold(message);
+            _bridge.Hold(message);
             turn.Record($"signal-deferred:{message.Id}:{signal.Frame}");
             ready |= target.Value.Receiver.CanAccept(target.Value.Context);
         }
         // A held inbox alone sleeps. If this turn finished an action or accepted an earlier signal,
         // wake the ready receiver in the next turn. A still-suspended action supplies its own wake.
-        if (ready) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+        if (ready) _bridge.SendToSelf(NativeKinds.Continue);
     }
 }
