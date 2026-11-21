@@ -473,13 +473,12 @@ public sealed class DurableTurn
         if (_started.Remove(key, out var timer))
         {
             _sent.RemoveAll(m => m.InboxKey == ticket);
-            deadline = timer;
+            if (timer is not null) Recall(timer);
+            return;
         }
-        else
-        {
-            if (resultReady) ticket = InboxKey.JobResult(Id, key, _input.Creation);
-            _cancelled.Add(ticket);
-        }
+
+        if (resultReady) ticket = InboxKey.JobResult(Id, key, _input.Creation);
+        _cancelled.Add(ticket);
         if (deadline is not null) Recall(deadline);
         Services.Cancelling(ticket);     // from here on its result is nobody's
     }

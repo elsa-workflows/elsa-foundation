@@ -79,6 +79,16 @@ internal static class FoundationJobDeadlineChecks
             !model.Attempts.ContainsKey("must-not-enter") &&
             !store.Messages.ContainsKey(InboxKey.Ticket(stagedRow.Id, "job", stagedRow.Creation)),
             "cancelling a staged same-key replacement retracts its ticket and timer in the predecessor's result turn");
+        await edge.SendAsync(scope, new Contract.Target.Ref(staged), "restart-after-staged", "restart-job", "reused after staged");
+        await Pump(owner);
+        if (model.Attempts.TryGetValue("reused after staged", out var reused))
+        {
+            reused.Finish("reused successfully");
+            await ((Worker)owner).JobCompletion(stagedRow.Id, "job", stagedRow.Creation)!.WaitAsync(TimeSpan.FromSeconds(2));
+            await Pump(owner);
+        }
+        check(Results(staged).SequenceEqual(["cancel staged", "reused successfully"]) && Timers(staged) == 0,
+            "the same owner can start and settle a fresh job after retracting the preceding staged replacement");
         var suspendedRow = Row(suspended);
         check(Results(suspended).Count == 0 && Timers(suspended) == 0 &&
             store.HasFoundationJobResult(suspendedRow.Id, suspendedRow.Creation, "job"),
