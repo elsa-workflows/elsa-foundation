@@ -127,11 +127,11 @@ public sealed class TurnInput
     private readonly Worker _worker;
     private readonly ITurnServices _services;
 
-    internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec)
+    internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec, long admittedAt)
     {
         _worker = worker;
         ChildIds = worker.ChildIdsFor(actor);
-        _services = worker.ServicesFor(slot);
+        _services = worker.ServicesFor(slot, admittedAt);
         Slot = slot;
         Actor = actor;
         Taken = taken;
@@ -174,7 +174,7 @@ public sealed class TurnInput
     public ITurnServices Services => _services;
 
     /// <summary>Say that the actor's code is about to run, with what it is given (for tests).</summary>
-    public void Started(IReadOnlyList<Message> inbox) => _worker.Started(Actor, inbox);
+    public void Started(IReadOnlyList<Message> inbox) => _worker.Started(Actor, inbox, Services.Now);
 }
 
 /// <summary>What a turn did, for the committer: the row, what it consumed and held, sent, subscribed, cancelled.</summary>

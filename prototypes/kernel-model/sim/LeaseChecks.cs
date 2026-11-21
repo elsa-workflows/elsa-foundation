@@ -9,6 +9,7 @@ public static class LeaseChecks
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
         await WorkerSetChecks.Run(Check);
         await AbsoluteTimerChecks.Run(Check);
+        await FoundationClockChecks.Run(Check);
         await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
@@ -751,6 +752,7 @@ public static class LeaseChecks
 // Delay a successful commit's response, after the inner store has actually committed.
 public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
@@ -764,6 +766,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public TaskCompletionSource RetakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public List<CommitBatch> Batches { get; } = [];
     public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
+    public Action<Polled>? BeforePollReply;
     public int PollCalls, LoadCalls, CommitCalls;
     public TaskCompletionSource Taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource TakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -816,7 +819,9 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     {
         PollCalls++;
         if (BeforePoll is not null) await BeforePoll(ct);
-        return await inner.PollAsync(partition, epoch, horizon, limit, ct);
+        var response = await inner.PollAsync(partition, epoch, horizon, limit, ct);
+        BeforePollReply?.Invoke(response);
+        return response;
     }
     public ValueTask<bool> AddAsync(Message message, CancellationToken ct = default) => inner.AddAsync(message, ct);
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken ct = default) => inner.AddEventAsync(delivery, ct);

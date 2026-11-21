@@ -117,6 +117,7 @@ public sealed class Actor(int id, int node, int partition)
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
 public sealed class Wire(World world, Actor actor) : IKernelStore
 {
+    public Func<long>? FoundationClock => world.Store.FoundationClock;
     public bool SupportsCommitWindow => world.Store.SupportsCommitWindow;
     public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => world.Store.PhysicalRetirementAvailable;
