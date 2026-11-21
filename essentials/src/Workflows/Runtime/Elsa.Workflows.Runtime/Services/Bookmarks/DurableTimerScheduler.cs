@@ -22,8 +22,12 @@ public sealed class DurableTimerScheduler : IDurableTimerScheduler
     internal Func<AdmissionContext?>? AdmissionProviders { get; init; }
     internal Func<HistoryContext?>? HistoryProviders { get; init; }
 
-    public bool CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
-        HistoryProviders?.Invoke() is { } owners && OwnsHistoryChain(owners, writer, reader);
+    public bool CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
+    {
+        try { return HistoryProviders?.Invoke() is { } owners && OwnsHistoryChain(owners, writer, reader); }
+        catch (Exception error) when (RuntimeHistoryReadFailures.IsMalformed(error) || RuntimeHistoryReadFailures.IsUnavailable(error))
+        { return false; }
+    }
 
     private bool OwnsHistoryChain(HistoryContext owners, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
         ReferenceEquals(owners.Writer, writer) && ReferenceEquals(owners.Reader, reader) &&
@@ -70,7 +74,8 @@ public sealed class DurableTimerScheduler : IDurableTimerScheduler
                 CheckAccess();
                 if (!DurableTimerHistoryFacts.Kinds.All(kind => policy.SupportedKinds.Contains(kind, StringComparer.Ordinal)) ||
                     owners is null || !ReferenceEquals(owners.Executions, admission.Executions) || !ReferenceEquals(owners.Access, admission.Access) ||
-                    owners.Writer is null || owners.Reader is null || !OwnsHistoryChain(owners, owners.Writer, owners.Reader))
+                    owners.Writer is null || owners.Reader is null || !await ReadHistoryAsync(timer.WorkflowExecutionId,
+                        () => ValueTask.FromResult(OwnsHistoryChain(owners, owners.Writer, owners.Reader)), cancellationToken))
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The original timer capture chain is unavailable.");
                 if (timer.ActivityExecutionId is { } activityId)
                 {

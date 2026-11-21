@@ -28,7 +28,9 @@ export function PublicationReviewDialog({
   onReview,
   onPublish,
   onCancel,
-  onOpenPublishedExecutable = () => undefined
+  onOpenPublishedExecutable = () => undefined,
+  canOpenValidationIssue,
+  onOpenValidationIssue
 }: {
   review: PublicationReviewState;
   busy: boolean;
@@ -40,6 +42,8 @@ export function PublicationReviewDialog({
   onPublish(intent: PublicationIntent, versionSelection?: PublicationVersionSelection): Promise<void>;
   onCancel(): void;
   onOpenPublishedExecutable?(): void;
+  canOpenValidationIssue?(message: string): boolean;
+  onOpenValidationIssue?(message: string): void;
 }) {
   const dialogRef = useRef<HTMLElement>(null);
   const channelNames = useMemo(
@@ -233,7 +237,14 @@ export function PublicationReviewDialog({
                 {review.validationErrors.length ? (
                   <div className="wf-publication-risks" role="alert">
                     <strong>Fix these issues before publishing</strong>
-                    <ul>{review.validationErrors.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}</ul>
+                    <ul>{review.validationErrors.map((message, index) => <li key={`${index}-${message}`}>
+                      <span>{message}</span>
+                      {onOpenValidationIssue && canOpenValidationIssue?.(message) ? (
+                        <button type="button" className="wf-publication-validation-jump" onClick={() => onOpenValidationIssue(message)}>
+                          Open in validation panel
+                        </button>
+                      ) : null}
+                    </li>)}</ul>
                   </div>
                 ) : null}
 

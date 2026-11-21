@@ -119,14 +119,12 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
   const isBlock = selectedKind === sequenceStructureKind || selectedKind === flowchartStructureKind || selectedKind === bpmnStructureKind;
   const supported = scope?.slot.cardinality === "many" && scope.slot.property === "activities" &&
     (scope.owner.structure?.kind === sequenceStructureKind || scope.owner.structure?.kind === flowchartStructureKind || bpmnScope);
-  const canStartEditing = !props.context.canEdit && Boolean(authority?.startEditing);
-  const startEditingGuidance = authority?.startingEditing ? "Preparing your draft…" : "Start editing to use block commands. Other edits create a draft automatically.";
-  const unavailable = !props.context.canEdit ? canStartEditing ? startEditingGuidance : "Block editing is unavailable in this view. Open an editable draft."
+  const unavailable = !props.context.canEdit ? "Block editing is unavailable in this view. Open an editable draft."
     : !supported ? "Open a Sequence, Flowchart or BPMN body to create or extract native blocks." : undefined;
   // Promotion acts on one named block, so its command appears beside "Open block" only then; an always-present
   // command wraps the toolbar and takes a row from the canvas.
   const promotion = isBlock && selected ? props.promotion : undefined;
-  const promotionUnavailable = !promotion ? undefined : !props.context.canEdit ? canStartEditing ? startEditingGuidance : "Open an editable draft to promote a block."
+  const promotionUnavailable = !promotion ? undefined : !props.context.canEdit ? "Open an editable draft to promote a block."
     : promotion.capabilitiesState === "loading" ? "Loading reusable activity authoring…"
     : promotion.capabilitiesState === "failed" ? "Reusable activity authoring is unavailable on this server." : undefined;
   const kind: NativeBlockKind | "bpmn" = bpmnScope ? "bpmn" : action === "flowchart" ? "flowchart" : action === "extract" && scope?.owner.structure?.kind === flowchartStructureKind ? "flowchart" : "sequence";
@@ -194,7 +192,6 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
   const label = selected && props.context.document.activityPresentation.find(item => item.nodeId === selected.nodeId)?.displayName;
   const childCount = selected ? getChildSlots(selected, props.context.catalog).reduce((sum, slot) => sum + slot.activities.length, 0) : 0;
   const commandGroup = <div className="wf-block-commands" role="group" aria-label="Named block commands">
-    {canStartEditing ? <button type="button" disabled={authority?.startingEditing} onClick={() => authority?.startEditing?.()}>{authority?.startingEditing ? "Starting…" : "Start editing"}</button> : null}
     <button ref={commandsTriggerRef} type="button" className="wf-block-menu-trigger" title="Named block commands"
       aria-haspopup="menu" aria-expanded={commandsOpen} aria-controls={commandsOpen ? commandsMenuId : undefined}
       onClick={() => { commandsOpenAtEndRef.current = false; if (commandsOpen) closeCommands(); else setCommandsOpen(true); }}
@@ -228,13 +225,12 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
             aria-describedby={promotionUnavailable ? promotionReasonId : undefined}
             onClick={() => { closeCommands(); setPromotionStatus(null); setPromoting(selected.nodeId); }}>Promote to reusable activity…</button> : null}
         </div> : null}
-        {(unavailable && !authority?.startingEditing) || promotionUnavailable ? <div className="wf-block-menu-notes">
-          {unavailable && !authority?.startingEditing ? <p className="wf-muted wf-block-menu-note">{unavailable}</p> : null}
+        {unavailable || promotionUnavailable ? <div className="wf-block-menu-notes">
+          {unavailable ? <p className="wf-muted wf-block-menu-note">{unavailable}</p> : null}
           {promotionUnavailable ? <p id={promotionReasonId} className="wf-muted wf-block-menu-note">{promotionUnavailable}</p> : null}
         </div> : null}
       </div>
     </AnchoredPopover>
-    {authority?.startingEditing ? <p className="wf-block-command-notice" role="status">{startEditingGuidance}</p> : null}
     {promotionStatus ? <p className="wf-block-command-notice" role="status">{promotionStatus.message}</p> : null}
     {promoting && props.promotion && props.endpoint ? <Suspense fallback={<span role="status">Loading reusable activity promotion…</span>}>
       <BlockPromotionDialog endpoint={props.endpoint} context={props.context} createPosition={props.createPosition} host={props.promotion} blockNodeId={promoting}

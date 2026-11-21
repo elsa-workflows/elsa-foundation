@@ -186,8 +186,8 @@ titles), `--studio-title-weight` (optional; a theme whose display face has a sin
 so titles don't render in faux bold — read it as `var(--studio-title-weight, 700)`);
 `--studio-page-title-size`, `--studio-section-title-size`, `--studio-body-size`,
 `--studio-label-size`;
-`--studio-radius-sm`, `--studio-radius`, `--studio-radius-md`, `--studio-radius-lg`,
-`--studio-shadow-sm`.
+`--studio-radius-sm`, `--studio-radius`, `--studio-radius-control` (compact interactive controls),
+`--studio-radius-md`, `--studio-radius-lg`, `--studio-shadow-sm`.
 
 ### Motion
 

@@ -105,6 +105,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // Each ownership generation has its own handoff. A callback that outlives reset can only post to its old queue.
     private ConcurrentQueue<JobPublication> _jobPublications = new();
     private readonly HashSet<Delivery> _schedulerRetries = [];
+    private readonly ConcurrentQueue<(long Generation, Message Creator)> _inlineStarts = new();
     private int _jobsDeferredByCancellation;
     private long _lastReceivedJob; // owner-side observation order of the latest result moved into an inbox
 
@@ -134,6 +135,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private string _refusal = "";
     private IReadOnlyList<Delivery> TrialItems => _gate.Selected(this);
     private bool _jobsWaitingForTrial;
+    private bool _jobsWaitingForTerminate;
+    private bool _deferredJobEligibility;
+    private bool CanWithdrawJobTrials => _store.SupportsJobTrialClear && _type.SupportsTrialWithdrawal;
     private long _trialObserved; // last first-observation ordinal when the trial mark was sent
     // The (partition, epoch) pairs this process has held: what it marked then did not kill it. Epochs count per partition,
     // so a row is compared only with its own partition's epochs (D4).
@@ -271,8 +275,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private IEnumerable<string> ReadyForTurns(CancellationToken cancellationToken)
     {
         var now = ReceiveJobPublications(cancellationToken);
-        return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && Deliverable(s.Key, s.Value, now).Count > 0).Select(s => s.Key)
-            .Where(id => !Blocked && (TrialItems.Count == 0 || OnTrial(id) || Spared(id)));    // while a trial runs, nothing else in the process does
+        return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && !s.Value.DetachedAuthoredTurn &&
+            !Blocked && (TrialItems.Count == 0 || OnTrial(s.Key) || Spared(s.Key)) &&
+            Deliverable(s.Key, s.Value, now).Count > 0).Select(s => s.Key);
     }
 
     // What is in memory, for tests of invariant 9.
@@ -417,6 +422,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (!LeaseUsable()) return null;
         if (cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
+        while (_inlineStarts.TryDequeue(out var inline))
+        {
+            if (inline.Generation != _generation || !Post(inline.Creator, fresh: true))
+                LoseInlineStart(inline.Creator);
+        }
         // Retry once per pass. A scheduler that keeps refusing cannot make the publication drain spin.
         if (_schedulerRetries.Count > 0)
             foreach (var ticket in _schedulerRetries.ToArray())
@@ -984,7 +994,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal long Monotonic => _options.Monotonic();
 
     /// <summary>A wake, a job result or a deferred job came since the last pass: the next call must run a pass.</summary>
-    internal bool PassWanted => _woken || AnswerWaiting || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
+    internal bool PassWanted => _woken || AnswerWaiting || !_inlineStarts.IsEmpty || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
 
     /// <summary>
     /// Add one partition to the set while running, between passes: take its fence row alone, at a new epoch, and keep
@@ -1181,6 +1191,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Interlocked.Increment(ref _generation);
             _jobPublications = new();
             _schedulerRetries.Clear();
+            while (_inlineStarts.TryDequeue(out var inline)) LoseInlineStart(inline.Creator);
             Volatile.Write(ref _jobsDeferredByCancellation, 0);
             _held.Clear();
             _polling = _loading = _flushing = _meeting = _releasing = _aliasesChangedDuringLoad = _retryAliases = false;
@@ -1199,7 +1210,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _cancelling.Clear();
             _caughtUp = false;
             _jobsWaitingForTrial = false;
-            _gate.Release(this);
+            _jobsWaitingForTerminate = false;
+            _deferredJobEligibility = false;
+            KeepPhysicalTrialGuards();
         }
     }
 
@@ -1252,6 +1265,21 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (polled.Messages.Count >= _options.PollLimit && read > 0) _woken = true;
     }
 
+    // Ingress can stage a local creator without mutating the owner's slots or taking its turn lock.
+    internal bool TryQueueInlineStart(Message creator)
+    {
+        var generation = Volatile.Read(ref _generation);
+        if (_releasing || !CanStartGeneration(generation) ||
+            creator.Start is not { } start || !_type.SupportsFoundationInlineStart(start.Model)) return false;
+        _inlineStarts.Enqueue((generation, creator));
+        return true;
+    }
+
+    private void LoseInlineStart(Message creator)
+    {
+        if (creator.ReplyTo is { } route) Send(route, "lost", null, null, error: "lost");
+    }
+
     /// <summary>
     /// A message handed to the owner in memory and never written: a start without a caller's key. <paramref name="fresh"/>
     /// says the target's id was just minted, so no read is needed to know that it does not exist.
@@ -1298,7 +1326,22 @@ public sealed class Worker : IScopeActivation, ITurnServices
         lock (_turnSync) return Has(Flaw.SuspectAcrossPartitions) ? _mine.Any(m => m.Epoch == epoch) : _mine.Contains((partition, epoch));
     }
 
-    private bool OnTrial(string instance) => TrialItems.Any(t => Canonical(t.Message.Target.Id) == instance);
+    private bool OnTrial(string instance) => TrialItems.Any(t => !t.AbandonedTrial && Canonical(t.Message.Target.Id) == instance);
+
+    private void KeepPhysicalTrialGuards()
+    {
+        foreach (var ticket in TrialItems)
+        {
+            // Reset can follow any mark or commit, even before a terminate has requested withdrawal.
+            if (CanWithdrawJobTrials && ticket.JobDriver is { IsCompleted: false } driver)
+            {
+                ticket.AbandonedTrial = true;
+                _ = driver.ContinueWith(_ => _gate.Finished(this, ticket), CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            }
+            else _gate.Finished(this, ticket);
+        }
+    }
 
     // MUTATION TrialSparesOtherPartitions: a trial holds back only its own partition, as if a death killed only that one.
     private bool Spared(string instance) => Has(Flaw.TrialSparesOtherPartitions) && StoreBatchRules.AddressPartition(instance) is { } p
@@ -1310,7 +1353,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         foreach (var ticket in TrialItems.ToArray())
         {
-            if (!ticket.Ticket || ticket.Key is null || ticket.Message.Kind != Kinds.Job ||
+            if (ticket.AbandonedTrial || ticket.RetainsTrialGate || !ticket.Ticket || ticket.Key is null || ticket.Message.Kind != Kinds.Job ||
                 !_slots.TryGetValue(Canonical(ticket.Message.Target.Id), out var slot)) continue;
             lock (slot)
             {
@@ -1449,7 +1492,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// An instance that cannot be given its messages now, as its actor type says (<see cref="IActorType.Withholds"/>).
     /// Kernel messages still pass.
     /// </summary>
-    private bool Withheld(Slot slot) => slot.Row is { Retired: false } row && _type.Withholds(row, this);
+    private bool Withheld(Slot slot) => slot.CurrentRow is { } row &&
+        (DeferWithholdingCheck(row) ? slot.WithheldAtCheckpoint != false : _type.Withholds(row, this));
+
+    private bool DeferWithholdingCheck(InstanceRow row) => CanWithdrawJobTrials && _type.SupportsFoundationOperator(row) &&
+        (Blocked || TrialItems.Count > 0 && !OnTrial(Canonical(row.Id)));
 
     private bool CanSettleWhileWithheld(Slot slot, Delivery delivery) =>
         slot.Row is { Retired: false } row && _type.SettlesWhileWithheld(row, delivery);
@@ -1464,6 +1511,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (TrialItems.Count > 0 || Blocked) return [];
         var suspects = _items.Values.Where(i => i.Durable && !i.Marked && !i.Taken && i.Suspect).OrderBy(i => i.Seq).ToList();
+        if (CanWithdrawJobTrials && suspects.Exists(i => i.Ticket && i.Key is not null) && TerminatePrecedesJobRetry(Now))
+            suspects.RemoveAll(i => i.Ticket && i.Key is not null);
         if (suspects.Count == 0 || Has(Flaw.BumpAllInherited)) return suspects;
         var (group, skipped) = (new List<Delivery>(), new HashSet<string>());
         int? attempts = null;
@@ -1616,6 +1665,27 @@ public sealed class Worker : IScopeActivation, ITurnServices
             item.ObservedOrder > held.HeldThrough && !Awaits(item) && !item.DiscardedAt(slot) && CreationError(slot, item.Message) is null)
         .Select(item => item.ObservedOrder).DefaultIfEmpty().Max();
 
+    // A qualified terminate also frees its ordinary predecessors to run. The dispatcher still selects them first.
+    private bool TerminatePrecedesJobRetry(long now, bool forWithdrawal = false)
+    {
+        foreach (var delivery in _items.Values)
+        {
+            if (!delivery.Durable || delivery.Message.Kind != Kinds.Terminate || delivery.Message.Due > now ||
+                delivery.UncheckedReference is not null) continue;
+            var instance = Canonical(delivery.Message.Target.Id);
+            if (!_slots.TryGetValue(instance, out var slot) || !Loaded(slot)) continue;
+            var row = slot.CurrentRow;
+            var creator = slot.Row is null ? slot.Inbox.Find(item => item.Durable && item.Message.BindFoundationChild &&
+                item.Message.TargetCreation == delivery.Message.TargetCreation && CreationError(slot, item.Message) is null)?.Message : null;
+            if (row is not null && CreationError(slot, delivery.Message) is not null ||
+                !_type.AuthorizesTrialWithdrawal(row, delivery.Message, creator)) continue;
+            if (delivery.Taken && !forWithdrawal) return true;
+            if (!delivery.Taken && (!forWithdrawal || !Awaits(delivery)) &&
+                (!delivery.Held || HeldCommandStimulus(slot, delivery, now) > 0)) return true;
+        }
+        return false;
+    }
+
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         if (_loading || !Owns || !NeedsLoad) return;
@@ -1761,7 +1831,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (cancellationToken.IsCancellationRequested) return;
         var now = ReceiveJobPublications(cancellationToken);
         instance = Canonical(instance);
-        if (_releasing || !LeaseUsable() || !_slots.TryGetValue(instance, out var slot) || !Loaded(slot) || slot.Busy) return;
+        if (_releasing || !LeaseUsable() || !_slots.TryGetValue(instance, out var slot) || !Loaded(slot) || slot.Busy || slot.DetachedAuthoredTurn) return;
         if (Blocked || (TrialItems.Count > 0 && !OnTrial(instance) && !Spared(instance))) return;
         var due = Deliverable(instance, slot, now);
         if (due.Count == 0) return;
@@ -1831,13 +1901,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         var generation = _generation;
         var fence = input.Slot.TurnFence;
+        var inline = input.Spec?.FoundationInlineTenant is not null || input.Row?.FoundationInlineBirth is not null;
         TurnOutcome unit;
         try { unit = await _type.TurnAsync(input); }
         catch (Exception e)
         {
             lock (_turnSync)
             {
-                if (generation != _generation || fence != input.Slot.TurnFence) return;
+                if (generation != _generation) return;
+                ResumeAfterDetachedTurn(input.Slot);
+                if (fence != input.Slot.TurnFence || inline && !LeaseUsable()) return;
                 input.Slot.Driving = false;
                 input.Slot.RollbackTurn?.Invoke();
                 unit = _type.Park(input.Row, input.Actor, input.Taken, input.Spec, e.Message, input.Unwritten ? input.Pending : null);
@@ -1849,12 +1922,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         lock (_turnSync)
         {
-            if (generation == _generation && fence == input.Slot.TurnFence)
-            {
-                input.Slot.Driving = false;
-                Enqueue(Bound(unit, input.Slot), cancellationToken);
-            }
+            if (generation != _generation) return;
+            ResumeAfterDetachedTurn(input.Slot);
+            if (fence != input.Slot.TurnFence || inline && !LeaseUsable()) return;
+            input.Slot.Driving = false;
+            Enqueue(Bound(unit, input.Slot), cancellationToken);
         }
+    }
+
+    private void ResumeAfterDetachedTurn(Slot slot)
+    {
+        if (!slot.DetachedAuthoredTurn) return;
+        slot.DetachedAuthoredTurn = false;
+        _woken = true;
     }
 
     private TurnOutcome Bound(TurnOutcome unit, Slot slot)
@@ -1902,10 +1982,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private void PublishJobEligibility(Slot slot)
     {
         var current = slot.CurrentRow;
-        var runnable = current is { Status: InstanceStatus.Running } && !Withheld(slot) ? current.Creation : -1;
+        var running = current is { Status: InstanceStatus.Running };
+        var deferred = current is not null && DeferWithholdingCheck(current);
+        // A new checkpoint may be loaded while another actor's trial is live. Defer its authored predicate.
+        var held = deferred ? (bool?)null : running && _type.Withholds(current!, this);
+        if (deferred) _deferredJobEligibility = true;
+        var runnable = running && held == false ? current!.Creation : -1;
         lock (slot)
         {
             RefreshPoisonBoundary(slot);
+            slot.WithheldAtCheckpoint = held;
             Volatile.Write(ref slot.ActiveCreation, current?.Creation ?? -1);
             Volatile.Write(ref slot.RunnableCreation, runnable);
         }
@@ -1927,6 +2013,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         // Callers finish their current collection operation before standing down, so a refused ticket is never stranded.
         if (_releasing || !CanStartWork || PoisonPending(loadedSlot) || Volatile.Read(ref loadedSlot.PendingJobRestrictions) != 0 || Withheld(loadedSlot) || ticket.Cancel is not null || ticket.Taken || ticket.AwaitingJobMark || Awaits(ticket) || _schedulerRetries.Contains(ticket)) return;
+        if (CanWithdrawJobTrials && ticket.Again && TerminatePrecedesJobRetry(Now))
+        {
+            _jobsWaitingForTerminate = true;
+            return;
+        }
         if (ticket.DeferredJobTrial)
         {
             lock (loadedSlot)
@@ -1948,8 +2039,32 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Volatile.Write(ref _jobsDeferredByCancellation, 1);
             return;
         }
-        ticket.Cancel = new CancellationTokenSource();
-        ticket.JobDriver = DriveJob(ticket, ticket.Message.Read<JobTicket>(), loadedSlot);
+        var generation = _generation;
+        var job = ticket.Message.Read<JobTicket>();
+        if (!HasPhysicalTrial(ticket))
+        {
+            ticket.Cancel = new CancellationTokenSource();
+            ticket.JobDriver = DriveJob(ticket, job, loadedSlot);
+            return;
+        }
+        // Publish the exit task before a callback can enter. Reset takes this same lock before it can reuse the gate.
+        var exit = new TaskCompletionSource();
+        lock (_turnSync)
+        {
+            if (generation != _generation || !CanStartWork || ticket.Cancel is not null ||
+                _items.GetValueOrDefault(ticket.Message.InboxKey) != ticket) return;
+            ticket.Cancel = new CancellationTokenSource();
+            ticket.JobDriver = exit.Task;
+        }
+        _ = TrackDriverExit(ticket, job, loadedSlot, exit);
+    }
+
+    private bool HasPhysicalTrial(Delivery ticket) => CanWithdrawJobTrials && TrialItems.Contains(ticket);
+
+    private async Task TrackDriverExit(Delivery ticket, JobTicket job, Slot slot, TaskCompletionSource exit)
+    {
+        try { await DriveJob(ticket, job, slot); }
+        finally { exit.SetResult(); }
     }
 
     private bool JobMayRun(long generation)
@@ -1972,19 +2087,23 @@ public sealed class Worker : IScopeActivation, ITurnServices
         ValueTask<object?> Enter()
         {
             int attemptNumber;
+            string? inlineTenant;
             lock (slot)
             {
                 if (!JobMayRun(generation) || _releasing || PoisonPending(slot) || slot.PendingJobRestrictions != 0 ||
                     Volatile.Read(ref slot.RunnableCreation) != creation || ticket.Taken || token.IsCancellationRequested ||
-                    ticket.AwaitingJobMark || ticket.DeferredJobTrial || job.Deadline is { } deadline && Now >= deadline || !_gate.Allows(this, ticket))
+                    ticket.AwaitingJobMark || ticket.DeferredJobTrial || ticket.WithdrawingJob ||
+                    job.Deadline is { } deadline && Now >= deadline || !_gate.Allows(this, ticket))
                     return ValueTask.FromResult<object?>(null);
                 // Admission happens on the executing thread. Once admitted, ordinary cancellation signals the body.
                 entered = true;
                 Volatile.Write(ref ticket.JobEntered, true);
                 if (ticket.JobEntries < int.MaxValue) ticket.JobEntries++;
                 attemptNumber = ticket.JobEntries;
+                inlineTenant = slot.CurrentRow?.FoundationInlineBirth?.Tenant;
             }
-            var context = new JobContext(original.Target, job.Key, job.Arguments, creation, attemptNumber, job.Deadline);
+            var context = new JobContext(original.Target, job.Key, job.Arguments, creation, attemptNumber, job.Deadline)
+                { FoundationInlineTenant = inlineTenant };
             return _type.ExecuteJobAsync(job.Model, context, token);
         }
         async Task ExecuteAndPublish(bool scheduled)
@@ -2003,7 +2122,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             lock (publications)
             {
                 var at = Now;
-                if (ticket.JobDeadlineClosed || job.Deadline is { } deadline && at >= deadline) return;
+                if (ticket.WithdrawingJob || ticket.JobDeadlineClosed || job.Deadline is { } deadline && at >= deadline) return;
                 publications.Enqueue(new(ticket, slot, completed, at, Interlocked.Increment(ref _observed)));
             }
         }
@@ -2031,7 +2150,24 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private long ReceiveJobPublications(CancellationToken cancellationToken = default)
     {
+        foreach (var ticket in TrialItems.Where(ticket => ticket.RetainsTrialGate).ToArray())
+            if (ticket.JobDriver?.IsCompleted != false && _items.GetValueOrDefault(ticket.Message.InboxKey) != ticket)
+                _gate.Finished(this, ticket);
         DeferPoisonBlockedJobTrials();
+        if (_deferredJobEligibility && _gate.Idle)
+        {
+            _deferredJobEligibility = false;
+            foreach (var slot in _slots.Values.Where(slot => slot.WithheldAtCheckpoint is null).ToArray())
+            {
+                PublishJobEligibility(slot);
+                foreach (var ticket in slot.Inbox.Where(ticket => ticket.Key is not null).ToArray()) StartJob(ticket, cancellationToken);
+            }
+        }
+        if (_jobsWaitingForTerminate && !TerminatePrecedesJobRetry(Now))
+        {
+            _jobsWaitingForTerminate = false;
+            foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToList()) StartJob(ticket, cancellationToken);
+        }
         if (_jobsWaitingForTrial && _gate.Idle)
         {
             _jobsWaitingForTrial = false;
@@ -2074,6 +2210,30 @@ public sealed class Worker : IScopeActivation, ITurnServices
         return cutoff;
     }
 
+    private List<Delivery> FinishedJobWithdrawals(long now)
+    {
+        if (!CanWithdrawJobTrials || TrialItems is not { Count: > 0 } selected) return [];
+        var jobs = selected.Where(ticket => !ticket.AbandonedTrial && ticket.IsDurableJobTicket && ticket.Ticket &&
+            ticket.Message.Kind == Kinds.Job && _items.GetValueOrDefault(ticket.Message.InboxKey) == ticket).ToArray();
+        var publications = _jobPublications;
+        if (jobs.Any(ticket => !ticket.WithdrawingJob && !ticket.JobDeadlineClosed) && TerminatePrecedesJobRetry(now, forWithdrawal: true))
+            foreach (var ticket in jobs)
+            {
+                lock (publications)
+                {
+                    if (ticket.WithdrawingJob || ticket.JobDeadlineClosed ||
+                        publications.Any(item => item.Ticket == ticket && item.Result is not null)) continue;
+                    ticket.WithdrawingJob = true;
+                }
+                try { ticket.Cancel?.Cancel(); }
+                catch (AggregateException) { } // Keep the trial until the actual callback exits.
+            }
+        // An unknown clear resets this worker. Its gate must still cover every physical callback until it has exited.
+        return jobs.Length == selected.Count && jobs.All(ticket =>
+            (ticket.WithdrawingJob || ticket.JobDeadlineClosed) && ticket.JobDriver?.IsCompleted != false)
+            ? [.. jobs] : [];
+    }
+
     private bool ExpireTimedJobs(out long cutoff)
     {
         if (_timedJobs.Count == 0)
@@ -2091,6 +2251,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             cutoff = now;
             foreach (var timed in _timedJobs.Where(item => item.JobDeadline <= now).ToArray())
             {
+                if (timed.WithdrawingJob) continue;
                 _timedJobs.Remove(timed);
                 if (timed.CompletedJob || timed.Taken) continue;
                 if (publications.Any(publication => publication.Ticket == timed && publication.Result is not null))
@@ -2105,11 +2266,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
         foreach (var timed in expired)
         {
+            // Deadline settlement is local to the trial actor. It may remove the ticket while the callback unwinds.
+            timed.RetainsTrialGate = HasPhysicalTrial(timed);
             try { timed.Cancel?.Cancel(); }
             catch (AggregateException) { } // A driver's cancellation handler cannot hold up the fenced timeout.
             timed.Suspect = false;
             timed.DeferredJobTrial = false;
-            _gate.Finished(this, timed);
+            if (!timed.RetainsTrialGate) _gate.Finished(this, timed);
         }
         return foundTimelyResult;
     }
@@ -2186,13 +2349,30 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private async Task FlushAsync(bool beat, CancellationToken cancellationToken)
     {
         if (_flushing || !Owns) return;
-        ReceiveJobPublications(cancellationToken);
+        var withdrawalGeneration = _generation;
+        var now = ReceiveJobPublications(cancellationToken);
+        if (FinishedJobWithdrawals(now) is { Count: > 0 } cancelled)
+        {
+            if (withdrawalGeneration != _generation) return;
+            _flushing = true;
+            var cleared = await CommitAsync([], [], [], withdrawalGeneration, cancellationToken, clearedJobs: cancelled);
+            if (cleared == Outcome.Refused && withdrawalGeneration == _generation) Reset();
+            if (withdrawalGeneration == _generation) _flushing = false;
+            return;
+        }
         lock (_turnSync)
         {
             foreach (var (id, slot) in Outgrown().ToList())
             {
                 var running = slot.Driving;
-                if (running) { slot.TurnFence++; slot.UndoTurn?.Invoke(); slot.Driving = false; }
+                if (running)
+                {
+                    slot.TurnFence++;
+                    slot.UndoTurn?.Invoke();
+                    slot.Driving = false;
+                    // The checkpoint can promote while the rejected continuation exits. No second public turn enters meanwhile.
+                    slot.DetachedAuthoredTurn = slot.Row?.FoundationInlineBirth is not null;
+                }
                 slot.Busy = true;
                 var unit = Bound(_type.Write(slot.Row!, running ? null : slot.State, slot.Pending), slot);
                 Promote(unit);
@@ -2225,15 +2405,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
                 if (outcome == Outcome.Refused && unit.Slot is { } slot)
                 {
-                    // An instance kept in memory has no accepted row: it is parked without the state the store refused.
                     slot.RollbackTurn?.Invoke();
-                    var park = Bound(slot.Unwritten ? _type.Park(slot.Row! with { State = "null" }, unit.Instance, unit.Consumed, unit.Spec, _refusal, slot.Pending)
-                        : _type.Park(slot.CurrentRow, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, _refusal), slot);
-                    MarkPark(park, slot.CurrentRow);
-                    if (slot.Unwritten) RetireVolatileJobs(park);
-                    Promote(park);
+                    var preserve = slot.Unwritten && slot.Row?.FoundationInlineBirth is not null;
+                    var park = ParkRefusedTurn(unit, slot, preserve);
                     ReleaseJobRestriction(unit); // the replacement park already owns its restriction
                     outcome = await CommitAsync([park], marks, trial, generation, cancellationToken);
+                    if (outcome == Outcome.Refused && preserve)
+                    {
+                        // The last accepted in-memory checkpoint itself could not be written.
+                        var fallback = ParkRefusedTurn(unit, slot, preserve: false);
+                        ReleaseJobRestriction(park);
+                        outcome = await CommitAsync([fallback], marks, trial, generation, cancellationToken);
+                    }
                 }
                 if (outcome == Outcome.Landed) (marks, trial) = ([], []);
             }
@@ -2242,17 +2425,37 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (generation == _generation) _flushing = false;
     }
 
+    private TurnOutcome ParkRefusedTurn(TurnOutcome unit, Slot slot, bool preserve)
+    {
+        var previous = slot.CurrentRow;
+        var unwritten = slot.Unwritten;
+        if (unwritten && !preserve && previous is not null)
+            previous = previous with
+            {
+                State = "null",
+                FoundationNullState = previous.FoundationInlineBirth is not null || previous.FoundationNullState
+            };
+        var park = unwritten
+            ? _type.Park(previous, unit.Instance, unit.Consumed, unit.Spec, _refusal, slot.Pending)
+            : _type.Park(previous, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, _refusal);
+        Bound(MarkPark(park, slot.CurrentRow), slot);
+        if (slot.Unwritten) RetireVolatileJobs(park);
+        Promote(park);
+        return park;
+    }
+
     private static TurnOutcome MarkPark(TurnOutcome unit, InstanceRow? previous)
     {
         unit.OpensPark = unit.Row is { Status: InstanceStatus.Faulted } && previous is null or { Status: InstanceStatus.Running };
         return unit;
     }
 
-    private async Task<Outcome> CommitAsync(List<TurnOutcome> units, List<Delivery> marks, List<Delivery> trial, long generation, CancellationToken cancellationToken, bool beat = false)
+    private async Task<Outcome> CommitAsync(List<TurnOutcome> units, List<Delivery> marks, List<Delivery> trial, long generation,
+        CancellationToken cancellationToken, bool beat = false, IReadOnlyList<Delivery>? clearedJobs = null)
     {
         // Finding F1: until the owner has caught up with the rows it inherited, what it sends to its own partition goes
         // through the table like everything else. Handing it over in memory would let it overtake older rows.
-        var handOver = _caughtUp || Has(Flaw.HandOverWhileBehind);
+        var handOver = clearedJobs is null && (_caughtUp || Has(Flaw.HandOverWhileBehind));
         // A behind-poll promotion can become durable and unmarked before its acknowledgement arrives.
         // Publish admission for exactly these tickets before this attempt can touch the store. A definite
         // refusal is retried by CommitAsync with its own handover decision, or its tickets are retired by Park.
@@ -2267,6 +2470,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 u.Held.Where(i => i.Durable).Select(i => i.Message.InboxKey).ToList(), u.Delete)
             {
                 FoundationHeader = u.FoundationHeader,
+                FoundationHeldPromotions = u.Row?.FoundationInlineBirth is not null && u.Held.Count != 0
+                    ? u.Held.Where(i => !i.Durable).Select(i => i.Message.InboxKey).ToHashSet() : null,
                 OpensPark = u.OpensPark
             }).ToList();
         List<InboxKey> seen = [.. marks.Select(i => i.Message.InboxKey)], tried = [.. trial.Select(i => i.Message.InboxKey)];
@@ -2283,7 +2488,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 var (only, held) = _held.First();
                 batch = new CommitBatch(only, held.Epoch, held.Position, _options.Lease, handOver, turns, seen, tried);
             }
-            else batch = CommitBatch.Owned(Touched(units, marks.Concat(trial), handOver, beat), _options.Lease, handOver, turns, seen, tried);
+            else batch = CommitBatch.Owned(Touched(units, marks.Concat(trial).Concat(clearedJobs ?? []), handOver, beat), _options.Lease, handOver, turns, seen, tried);
+            if (clearedJobs is not null) batch = batch with { ClearJobTrials = [.. clearedJobs.Select(ticket => ticket.Message.InboxKey)] };
         }
         foreach (var unit in units)
             if (unit.Window is { } window)
@@ -2311,7 +2517,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Committed result;
             try
             {
-                StoreBatchRules.Validate(batch, ownedSets: _store.OwnedSetsAvailable);
+                StoreBatchRules.Validate(batch, ownedSets: _store.OwnedSetsAvailable, supportsJobTrialClear: _store.SupportsJobTrialClear);
                 StoreBatchRules.RequirePhysicalCapability(batch,_store.PhysicalRetirementAvailable);
                 if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: _store.PhysicalRetirementAvailable);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
@@ -2358,6 +2564,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             if (journaled.Count > 0) _options.OnJournal?.Invoke(journaled);
             if (!LeaseUsable()) return Outcome.Lost; // a late acknowledgement cannot revive the old local deadline
+            if (clearedJobs is not null)
+            {
+                foreach (var ticket in clearedJobs)
+                {
+                    ticket.Suspect = ticket.Again = true;
+                    ticket.Marked = ticket.Shelved = ticket.JobEntered = ticket.WithdrawingJob = ticket.RetainsTrialGate = false;
+                    ticket.Cancel?.Dispose();
+                    ticket.Cancel = null;
+                    ticket.JobDriver = null;
+                    _gate.Finished(this, ticket);
+                }
+                _woken = true;
+            }
             foreach (var item in marks.Concat(trial))
                 if (item.Suspect && !trial.Contains(item)) item.Shelved = true;
                 else
@@ -2400,6 +2619,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     /// <summary>A message held in memory and never written: one that needs no delete when it is cancelled.</summary>
+    internal Dictionary<InboxKey, Message> CaptureVolatile(string actor)
+    {
+        lock (_turnSync)
+            return _items.Values.Where(item => !item.Durable && item.Message.Target.Id == actor)
+                .ToDictionary(item => item.Message.InboxKey, item => item.Original ?? item.Message);
+    }
+
     private bool InMemoryOnly(InboxKey id) => _items.TryGetValue(id, out var held) && !held.Durable;
 
     // A never-written parked instance has no durable jobs to resume. Retire its volatile tickets atomically with
@@ -2416,8 +2642,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         foreach (var ticket in tickets)
         {
-            if (!unit.Cancelled.Contains(ticket.Message.InboxKey)) unit.Cancelled.Add(ticket.Message.InboxKey);
-            Cancelling(ticket.Message.InboxKey);
+            Cancel(ticket.Message.InboxKey);
+            if (row.FoundationInlineBirth is not null && (ticket.Original ?? ticket.Message).Read<JobTicket>().Timer is { } timer)
+            {
+                var deadline = InboxKey.Issued(timer);
+                if (InMemoryOnly(deadline)) Cancel(deadline);
+            }
+        }
+
+        void Cancel(InboxKey key)
+        {
+            if (!unit.Cancelled.Contains(key)) unit.Cancelled.Add(key);
+            Cancelling(key);
         }
     }
 
@@ -2434,7 +2670,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     private void Promote(TurnOutcome unit)
     {
-        if (unit.Slot is not { Unwritten: true }) return;
+        if (unit.Slot is not { Unwritten: true } && unit.Row?.FoundationInlineBirth is null) return;
         // Whoever wrote the outcome (a turn, a command, a park) saw the row in memory: it is not in the table, so it is
         // inserted, not updated at its revision.
         if (unit.Row is not null) unit.Expected = null;
@@ -2534,7 +2770,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             InvalidateAliasMisses(unit);
             if (_loading && _store.HasActorAliases && (unit.Row is not null || unit.Delete || committed.Unwritten))
                 committed.WrittenDuringAliasRead = _aliasRead;
-            if (unit.Row is not null) (committed.Row, committed.AbsentAt) = (unit.Row, 0);
+            if (unit.Row is not null)
+                (committed.Row, committed.AbsentAt) = (unit.InMemory ? unit.Row : unit.Row.WithoutInlineBirth(), 0);
             if (unit.Delete && unit.Row is not { Retired: true } || committed.Unwritten && !unit.InMemory && unit.Row is null)
                 (committed.Row, committed.AbsentAt) = (null, _store.HasActorAliases ? _aliasBirths : 0);
             // An unpersisted minted start may leave more inputs in the slot after its own
@@ -2590,7 +2827,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// Evictable: its committed row is all there is to it. Not while a turn or commit is in flight (a load would read
     /// the row before that commit), not while messages wait for it, not while a caller waits for its output.
     /// </summary>
-    private bool Evictable(Slot slot) => slot.Loaded && (!slot.Busy || Has(Flaw.EvictBusy)) && slot.Inbox.Count == 0 && slot.Replies.Count == 0 && !slot.Unwritten;
+    private bool Evictable(Slot slot) => slot.Loaded && (!slot.Busy || Has(Flaw.EvictBusy)) && slot.Inbox.Count == 0 && slot.Replies.Count == 0 && !slot.Unwritten && !slot.DetachedAuthoredTurn;
 
     /// <summary>
     /// Decision 6: a caller's reply address expires at its deadline (the route's timeout). The owner then forgets it, so
@@ -2705,7 +2942,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _timedJobs.Remove(item);
         _schedulerRetries.Remove(item);
         _items.Remove(item.Message.InboxKey);
-        _gate.Finished(this, item);     // the trial is over: what waited for it may start
+        if (HasPhysicalTrial(item) && item.JobDriver?.IsCompleted == false) item.RetainsTrialGate = true;
+        else _gate.Finished(this, item);
         if (item.Durable && _polling && !Has(Flaw.PollRace)) _consumed.Add(item.Message.InboxKey);
         if (item.Key is not null) item.Cancel?.Cancel();
         if (_slots.TryGetValue(Canonical(item.Message.Target.Id), out var slot))
@@ -2747,16 +2985,14 @@ public sealed class TrialGate
 
     internal void Finished(Worker worker, Delivery ticket)
     {
-        if (Volatile.Read(ref _selection) is not { } active || active.Owner != worker || !active.Tickets.Contains(ticket)) return;
-        var remaining = active.Tickets.Where(t => t != ticket).ToArray();
-        Interlocked.CompareExchange(ref _selection, remaining.Length == 0 ? null : new(worker, remaining), active);
+        while (Volatile.Read(ref _selection) is { } active && active.Owner == worker && active.Tickets.Contains(ticket))
+        {
+            var remaining = active.Tickets.Where(t => t != ticket).ToArray();
+            if (Interlocked.CompareExchange(ref _selection, remaining.Length == 0 ? null : new(worker, remaining), active) == active)
+                return;
+        }
     }
 
-    internal void Release(Worker worker)
-    {
-        if (Volatile.Read(ref _selection) is { } active && active.Owner == worker)
-            Interlocked.CompareExchange(ref _selection, null, active);
-    }
 }
 
 internal sealed class Slot
@@ -2767,12 +3003,13 @@ internal sealed class Slot
     public long PoisonAt = long.MaxValue; // owner-published due boundary; callbacks never scan the mutable inbox
     public int PendingJobRestrictions; // synchronized with physical driver entry by locking this slot
     public long RunnableCreation = -1; // checked at physical entry, including after waiting on a scheduler
+    public bool? WithheldAtCheckpoint; // null if another actor's trial deferred publication
     public long ActiveCreation;    // volatile latch captured by background drivers; retired/missing is -1
     public InstanceRow? Row;        // committed actor row or retired lifecycle predecessor
     public InstanceRow? CurrentRow => Row is { Retired: false } row ? row : null;
     public Message? Starting;     // semantic creation envelope, including a failed initial turn; excludes transport retry identity
     public object? State;           // the live state between turns, equal to Row.State
-    public bool Loaded, Busy, DeferredFresh;
+    public bool Loaded, Busy, DeferredFresh, DetachedAuthoredTurn;
     public long WrittenDuringAliasRead; // current lookup whose snapshot this slot's commit can invalidate
     public long AbsentAt; // date of an alias-aware absence, whether observed or locally minted
     public long Comparison; // latest accepted provider lookup that included this canonical slot
@@ -2798,6 +3035,7 @@ internal sealed record JobDeadline([property: System.Text.Json.Serialization.Jso
 
 internal sealed class JobContext(InstanceRef instance, string key, string? arguments, long creation, int attemptNumber, long? deadline) : IJob
 {
+    internal string? FoundationInlineTenant { get; init; }
     public InstanceRef Instance { get; } = instance;
     public string Key { get; } = key;
     public string? Arguments { get; } = arguments;

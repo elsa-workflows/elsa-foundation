@@ -23,6 +23,8 @@ public static class LeaseChecks
         await OrdinaryIngressChecks.Run(Check);
         await FoundationKeyIngressChecks.Run(Check);
         await IngressContractChecks.Run(Check);
+        await InlineEphemeralChecks.Run(Check, Flaw.None);
+        await InlineTrialChecks.Run(Check);
         await PublicOwnerChecks.Run(Check, Flaw.None);
         await FoundationJobDeadlineChecks.Run(Check);
         await OperatorIngressChecks.Run(Check);
@@ -790,6 +792,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;

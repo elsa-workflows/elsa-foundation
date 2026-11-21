@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowDefinitionVersion } from "../api/workflowDesign";
-import { runExecutable } from "../api/runtime";
+import { listExecutables, runExecutable } from "../api/runtime";
 import type {
   WorkflowExecutableReference,
   WorkflowExecutableRunResponse,
@@ -12,6 +12,7 @@ import type {
 import { readWorkflowInputs } from "../workflowReferenceAuthoring";
 import { formatExecutableRunError, getExecutableReferenceStatus, readExecutableRunWorkflowExecutionId } from "./editorHelpers";
 import type { ExecutableRunState } from "./editorTypes";
+import { getNotifications } from "./notifications";
 
 export interface ExecutableWorkflowRunTarget {
   artifactId: string;
@@ -27,6 +28,44 @@ export function createExecutableWorkflowRunTarget(executable: WorkflowExecutable
     definitionVersionId: reference.definitionVersionId,
     sourceReferenceId: reference.sourceReferenceId
   };
+}
+
+export async function resolvePublishedDefinitionRunTarget(
+  context: StudioEndpointContext,
+  definitionId: string
+): Promise<ExecutableWorkflowRunTarget | null> {
+  const executables = await listExecutables(context, { scope: "published", includeRetired: false });
+  const candidates = executables.flatMap(executable => {
+    const references = (executable.references ?? []).filter(reference => reference.definitionId === definitionId);
+    const reference = findPublishedRunReference(references);
+    const target = reference ? createExecutableWorkflowRunTarget({ ...executable, references }) : null;
+    return target && reference ? [{ target, reference }] : [];
+  });
+  candidates.sort((left, right) => {
+    const leftDate = Date.parse(left.reference.publishedAt ?? left.reference.createdAt);
+    const rightDate = Date.parse(right.reference.publishedAt ?? right.reference.createdAt);
+    const leftTimestamp = Number.isFinite(leftDate) ? leftDate : Number.NEGATIVE_INFINITY;
+    const rightTimestamp = Number.isFinite(rightDate) ? rightDate : Number.NEGATIVE_INFINITY;
+    return rightTimestamp - leftTimestamp
+      || left.target.artifactId.localeCompare(right.target.artifactId)
+      || left.target.sourceReferenceId.localeCompare(right.target.sourceReferenceId);
+  });
+  return candidates[0]?.target ?? null;
+}
+
+export function notifyPublishedRunStarted(name: string, result: WorkflowExecutableRunResponse): void {
+  const workflowExecutionId = readExecutableRunWorkflowExecutionId(result);
+  getNotifications().notify({
+    level: "success",
+    title: "Run started",
+    message: `Started ${name}.`,
+    ...(workflowExecutionId ? {
+      link: {
+        label: "Open run",
+        path: qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(workflowExecutionId)}`)
+      }
+    } : {})
+  });
 }
 
 export function findPublishedRunReference(

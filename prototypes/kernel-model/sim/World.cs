@@ -119,6 +119,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
 {
     public Func<long>? FoundationClock => world.Store.FoundationClock;
     public bool SupportsCommitWindow => world.Store.SupportsCommitWindow;
+    public bool SupportsJobTrialClear => world.Store.SupportsJobTrialClear;
     public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => world.Store.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => world.Store.CommitClockAvailable;
