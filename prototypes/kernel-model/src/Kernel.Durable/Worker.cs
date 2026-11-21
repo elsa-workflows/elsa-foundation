@@ -1790,7 +1790,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
         slot.Starting = creator < 0 ? null : due[creator].Message;
         if (creator >= 0) slot.Ambient = due[creator].StarterAmbient;
         var input = new TurnInput(this, slot, instance, due, Math.Max(creator, 0), spec, now);
-        if (_type.Command(input) is { } command)
+        if (request.Operator is not null && !_type.SupportsFoundationOperator(input.Row))
+            Enqueue(Bound(CreationProtocol.Refuse(instance, input.Row, due, "OperatorUnavailable"), slot), cancellationToken);
+        else if (_type.Command(input) is { } command)
             Enqueue(Bound(command, slot), cancellationToken);
         else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.JobFinished) is { } poison)
         {

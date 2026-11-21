@@ -28,6 +28,8 @@ internal static class RequestReplies
             {
                 "StaleSelection" => "stale selection",
                 "Protected" => "protected",
+                "ProtectionUnavailable" => "protection unavailable",
+                "OperatorUnavailable" => "operator unavailable",
                 _ => "missing"
             });
         var status = (ActorStatus?)reply.Status;

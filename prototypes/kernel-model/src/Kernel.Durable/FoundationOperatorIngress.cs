@@ -11,9 +11,12 @@ public sealed partial class InMemoryStore
         {
             if (callerKey is not null)
                 reference = _foundationCallerBindings.GetValueOrDefault(tenant + "_" + callerKey)?.Reference;
-            if (BoundActor(tenant, reference) is null) return (OperatorAdmission.Unavailable, null);
-            if (selection is not null && !MatchesFoundationSelection(tenant, reference, selection))
-                return (OperatorAdmission.StaleSelection, null);
+            if (selection is not null)
+            {
+                if (BoundActor(tenant, reference) is null) return (OperatorAdmission.Unavailable, null);
+                if (!MatchesFoundationSelection(tenant, reference, selection))
+                    return (OperatorAdmission.StaleSelection, null);
+            }
 
             return AddFoundationMessage(tenant, reference, id, kind, payload, due, keepFor, replyTo: replyTo, @operator: new(selection)) switch
             {

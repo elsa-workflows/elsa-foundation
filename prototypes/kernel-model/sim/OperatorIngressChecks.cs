@@ -13,7 +13,7 @@ internal static class OperatorIngressChecks
         var scope = new Contract.BoundScope("acme");
         var foreign = new Contract.BoundScope("other");
         Contract.IIngress ordinary = new InMemoryIngress(store, requests, "operator-owner");
-        Contract.IIngress operators = new InMemoryIngress(store, requests, "operator-owner", (selected, _) => selected == scope);
+        Contract.IIngress operators = new InMemoryIngress(store, requests, "operator-owner", (selected, _) => selected == scope || selected == foreign);
         Contract.IActorReads reads = new ActorList(store, 10);
         var model = new Probe();
         var worker = new Worker("operator-owner", 0, store, new ActorAdapter(store, model, (requests, "operator-owner")),
@@ -24,7 +24,11 @@ internal static class OperatorIngressChecks
             "start", Contract.Kinds.Start);
         var reference = start.Actor!.Value;
         var exact = new Contract.Target.Ref(reference);
+        var beforeBirth = await operators.SendAsync(scope, exact, "early-migrate", Contract.Kinds.Migrate);
         await Pump(owner);
+        check(beforeBirth is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: var accepted } && accepted == reference &&
+            ReadState().SequenceEqual(["start", Contract.Kinds.Migrate]),
+            "a control without a selection can address the tenant's admitted creator before its first turn");
 
         var unbound = await ordinary.SendAsync(scope, exact, "no-operator", Contract.Kinds.Suspend);
         var cross = await operators.SendAsync(foreign, exact, "foreign-operator", Contract.Kinds.Suspend);
@@ -36,11 +40,11 @@ internal static class OperatorIngressChecks
         await operators.SendAsync(scope, exact, "migrate", Contract.Kinds.Migrate);
         await Pump(owner);
         var withheld = ReadState();
-        check(withheld.SequenceEqual(["start", Contract.Kinds.Suspend, Contract.Kinds.Migrate]),
+        check(withheld.SequenceEqual(["start", Contract.Kinds.Migrate, Contract.Kinds.Suspend, Contract.Kinds.Migrate]),
             "trusted migrate passes withholding alone while later ordinary input stays queued");
         await operators.SendAsync(scope, exact, "resume", Contract.Kinds.Resume);
         await Pump(owner);
-        check(ReadState().SequenceEqual(["start", Contract.Kinds.Suspend, Contract.Kinds.Migrate, Contract.Kinds.Resume, "ordinary"]),
+        check(ReadState().SequenceEqual(["start", Contract.Kinds.Migrate, Contract.Kinds.Suspend, Contract.Kinds.Migrate, Contract.Kinds.Resume, "ordinary"]),
             "resume is delivered alone and the withheld input then progresses");
 
         var liveView = await reads.GetAsync(scope, reference);
@@ -67,6 +71,14 @@ internal static class OperatorIngressChecks
         check(await protectedDelete.WaitAsync(TimeSpan.FromSeconds(2)) is { Error: "protected" } &&
             (await reads.GetAsync(scope, reference))?.Header.Status == Contract.ActorStatus.Finished,
             "the committed ended actor retains its exact life when its type protects deletion");
+        model.ThrowProtection = true;
+        var throwingDelete = operators.RequestAsync(scope, exact, "throwing-hook", Contract.Kinds.Delete, endedSelection, null,
+            new(null, now + 100)).AsTask();
+        await Pump(owner);
+        check(await throwingDelete.WaitAsync(TimeSpan.FromSeconds(2)) is { Error: "protection unavailable" } &&
+            (await reads.GetAsync(scope, reference))?.Header.Status == Contract.ActorStatus.Finished,
+            "a throwing deletion hook refuses without stranding the owner or changing the ended checkpoint");
+        model.ThrowProtection = false;
         model.Protect = false;
         await operators.SendAsync(scope, exact, "allowed", Contract.Kinds.Delete, endedSelection);
         await Pump(owner);
@@ -74,6 +86,53 @@ internal static class OperatorIngressChecks
             "an authorized fresh selection retires the ended life through a real fenced delete");
 
         List<string> ReadState() => Json.Read<List<string>>(store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row.State);
+    }
+
+    public static async Task Fallback(Action<bool, string> check)
+    {
+        const long now = 1_701_100_000_000;
+        var store = new InMemoryStore(1, () => now);
+        var requests = new Requests("operator-fallback");
+        var scope = new Contract.BoundScope("acme");
+        Contract.IIngress edge = new InMemoryIngress(store, requests, "fallback", (selected, _) => selected == scope);
+        Contract.IActorReads reads = new ActorList(store, 10);
+        var legacy = new WorkflowInstance([new LegacyProbe()]);
+        var router = new ActorTypeRouter(legacy, new Dictionary<string, IActorType> { ["operator-probe"] = new ActorAdapter(store, new Probe()) });
+        var worker = new Worker("fallback", 0, store, router, new WorkerOptions { Monotonic = () => 0, Transport = new Replies(requests) });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+
+        var start = await edge.SendAsync(scope, new Contract.Target.Start(new("legacy-operator", "parent")), "start", Contract.Kinds.Start);
+        var reference = start.Actor!.Value;
+        var target = new Contract.Target.Ref(reference);
+        await Pump(owner);
+        var running = await reads.GetAsync(scope, reference);
+        await edge.SendAsync(scope, target, "finish", "finish");
+        var deleted = edge.RequestAsync(scope, target, "running-delete", Contract.Kinds.Delete,
+            Json.Write(new Contract.OperatorCommand(running!.Selection!)), null, new(null, now + 100)).AsTask();
+        await Pump(owner);
+        check(await deleted.WaitAsync(TimeSpan.FromSeconds(2)) is { Error: "operator unavailable" } &&
+            store.ReadFoundationActor(scope.Tenant, reference.Id).Actor is { Row: { Status: InstanceStatus.Finished, Children: not null } },
+            "a mixed router fails closed before a legacy fallback can retire a live child with a stale selection");
+
+        var ended = await reads.GetAsync(scope, reference);
+        var current = edge.RequestAsync(scope, target, "ended-delete", Contract.Kinds.Delete,
+            Json.Write(new Contract.OperatorCommand(ended!.Selection!)), null, new(null, now + 100)).AsTask();
+        await Pump(owner);
+        check(await current.WaitAsync(TimeSpan.FromSeconds(2)) is { Error: "operator unavailable" } &&
+            store.ReadFoundationActor(scope.Tenant, reference.Id).Actor is { Row.Children: not null },
+            "a still-current operator selection cannot bypass the guard through the legacy fallback");
+    }
+
+    private sealed class LegacyProbe : Model<List<string>>
+    {
+        public override string Key => "legacy-operator";
+
+        protected override void Turn(ITurn turn, List<string> state)
+        {
+            if (turn.Inbox.Any(message => message.Kind == Kinds.Start) && turn.Instance.Definition == "parent")
+                turn.Start(new StartSpec(Key, "child"));
+            if (turn.Inbox.Any(message => message.Kind == "finish")) turn.SetStatus(InstanceStatus.Finished);
+        }
     }
 
     private static async Task Pump(IScopeActivation owner)
@@ -95,6 +154,7 @@ internal static class OperatorIngressChecks
     {
         public string Type => "operator-probe";
         public bool Protect { get; set; }
+        public bool ThrowProtection { get; set; }
         public bool Withholds(Contract.ActorHeader header) => header.TypeData == "suspended";
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
@@ -117,6 +177,7 @@ internal static class OperatorIngressChecks
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => new((object?)null);
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
-        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => Protect;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) =>
+            ThrowProtection ? throw new InvalidOperationException("Unsupported stored state.") : Protect;
     }
 }

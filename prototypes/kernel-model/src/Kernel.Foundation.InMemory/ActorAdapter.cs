@@ -8,6 +8,8 @@ namespace Kernel.Foundation.InMemory;
 internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
     (Durable.Requests Requests, string Node)? local = null) : Durable.IActorType
 {
+    public bool SupportsFoundationOperator(Durable.InstanceRow? row) => row?.Model == actor.Type;
+
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
         var checkpoint = store.FoundationTurnHeader(row);
@@ -32,8 +34,17 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         {
             var checkpoint = store.FoundationTurnHeader(ended);
             if (ended.Status == Durable.InstanceStatus.Running || checkpoint.Park is not null ||
-                ended.Children is not null || ended.Jobs is not null || actor.ProtectsDeletion(Header(checkpoint), ended.State, input.Services.Now))
+                ended.Children is not null || ended.Jobs is not null)
                 return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "Protected");
+            try
+            {
+                if (actor.ProtectsDeletion(Header(checkpoint), ended.State, input.Services.Now))
+                    return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "Protected");
+            }
+            catch (Exception)
+            {
+                return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "ProtectionUnavailable");
+            }
 
             var marker = Durable.CreationProtocol.Retire(ended);
             return new(input.Actor)
