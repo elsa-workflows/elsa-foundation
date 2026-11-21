@@ -97,6 +97,8 @@ internal sealed partial class ActorAdapter
 
         public void StartJob(string key, string? arguments = null, TimeSpan? timeout = null)
         {
+            if (Encoding.UTF8.GetByteCount(key) > 1_024)
+                throw new ArgumentException("A job key may occupy at most 1,024 UTF-8 bytes.", nameof(key));
             ArgumentOutOfRangeException.ThrowIfLessThan(timeout ?? TimeSpan.Zero, TimeSpan.Zero, nameof(timeout));
             long? deadline = timeout is { } period ? checked(Now + (long)period.TotalMilliseconds) : null;
             _turn.StartJobWithPayload(key, arguments, deadline);

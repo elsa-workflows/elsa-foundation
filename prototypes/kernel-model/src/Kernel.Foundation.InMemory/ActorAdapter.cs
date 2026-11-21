@@ -14,6 +14,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     private const int TerminalHeaderReserve = 16_384;
     private const int TerminalChildBytes = 384;
     private const int TerminalJobBytes = 12_416;
+    private const int MaxFaultTextBytes = 4_096;
 
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => row?.Model == actor.Type;
 
@@ -149,7 +150,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         // This is the built-in in-memory encoding. Keep enough space for the terminal registry even when the live row is smaller.
         var children = row.Children is null ? 0 : Durable.ChildRegistry.Read(row.Children).Count;
         var jobs = row.Jobs is null ? 0 : Durable.DurableKeyJson.ReadKeys(row.Jobs).Count;
-        var bytes = TerminalHeaderReserve + children * (long)TerminalChildBytes + jobs * (long)TerminalJobBytes
+        var registryBytes = Math.Max(Bytes(row.Children), children * (long)TerminalChildBytes)
+            + Math.Max(Bytes(row.Jobs), jobs * (long)TerminalJobBytes);
+        var bytes = TerminalHeaderReserve + registryBytes
             + Bytes(row.State) + Bytes(row.CustomHandles) + Bytes(row.CommitTimes) + Bytes(row.Model) + Bytes(row.Definition)
             + Bytes(header.TypeData) + header.Labels.Sum(label => Bytes(label.Key) + Bytes(label.Value));
         if (growth < 0 || growth > TerminalEnvelopeLimit - bytes)
@@ -182,7 +185,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         next = next with
         {
             Status = running ? Durable.InstanceStatus.Faulted : next.Status,
-            Fault = running ? error : next.Fault,
+            Fault = running ? BoundFaultText(error) : next.Fault,
             Revision = checked(next.Revision + 1)
         };
         result.Row = next;
@@ -193,6 +196,15 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (row is null) result.FoundationHeader = InitialHeader(next.Definition);
         if (running && next.Parent is not null) result.Sent.Add(Notice(next, null, final: false));
         return result;
+    }
+
+    private static string BoundFaultText(string error)
+    {
+        if (Encoding.UTF8.GetByteCount(error) <= MaxFaultTextBytes) return error;
+        const string suffix = "…";
+        Span<byte> prefix = stackalloc byte[MaxFaultTextBytes - 3];
+        Encoding.UTF8.GetEncoder().Convert(error.AsSpan(), prefix, flush: true, out var chars, out _, out _);
+        return string.Concat(error.AsSpan(0, chars), suffix);
     }
 
     private Contract.ActorHeader Header(Durable.InMemoryStore.ActorCheckpoint checkpoint)

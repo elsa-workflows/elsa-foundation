@@ -83,6 +83,10 @@ internal static class FoundationEnvelopeChecks
         var overflow = await Start("overflow");
         var excessive = await Start("overstated");
         var existing = await Start("existing");
+        var fault = await Start("fault");
+        var jobAtCap = await Start("key-fit");
+        var jobAboveCap = await Start("key-over");
+        var hugeJob = await Start("key-huge");
         await Pump();
 
         var fitted = await reads.GetAsync(scope, fit);
@@ -104,6 +108,25 @@ internal static class FoundationEnvelopeChecks
             Row(existing).State == before.State && Row(existing).Revision == before.Revision + 1 &&
             store.Messages.Values.All(item => item.Message.Target.Id != before.Id || item.Message.Kind != "growth-leak"),
             "an over-limit update preserves the existing checkpoint and parks without its staged effects");
+
+        var beforeFault = Row(fault);
+        await ingress.SendAsync(scope, new Contract.Target.Ref(fault), "large-fault", "large-fault");
+        await Pump();
+        var parked = Row(fault);
+        check(parked.State == beforeFault.State && parked.Status == InstanceStatus.Faulted &&
+            parked.Fault is { } error && error[0] == 'é' && error.EndsWith('…') && System.Text.Encoding.UTF8.GetByteCount(error) <= 4_096,
+            "a large multibyte fault preserves the last checkpoint with a bounded diagnostic");
+
+        check(Row(jobAtCap) is { Status: InstanceStatus.Running, State: "key-fit" } && model.LegalJobEntered,
+            "a job key at the 1,024-byte admission bound can run");
+        foreach (var rejected in new[] { jobAboveCap, hugeJob })
+        {
+            var row = Row(rejected);
+            check(row is { Status: InstanceStatus.Faulted, State: "null", Jobs: null } &&
+                store.Messages.Values.All(item => item.Message.Target.Id != row.Id || item.Message.Kind != "speculative"),
+                rejected == jobAboveCap ? "one excess job-key byte parks and rolls back staged effects" :
+                    "a huge job key cannot enter the published checkpoint or the background driver");
+        }
 
         var selection = new Contract.OperatorCommand(fitted!.Selection!);
         var terminate = await ingress.SendAsync(scope, new Contract.Target.Ref(fit), "terminate", Contract.Kinds.Terminate, Json.Write(selection));
@@ -134,6 +157,7 @@ internal static class FoundationEnvelopeChecks
     {
         public const string ModelType = "terminal-probe";
         public string Type => ModelType;
+        public bool LegalJobEntered { get; private set; }
         public bool Withholds(Contract.ActorHeader header) => false;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
@@ -141,6 +165,17 @@ internal static class FoundationEnvelopeChecks
             foreach (var message in turn.Inbox)
                 switch (message.Kind)
                 {
+                    case Contract.Kinds.Start when message.Payload is "key-fit" or "key-over" or "key-huge":
+                        turn.State = message.Payload;
+                        turn.Send(turn.Header.Ref, "speculative", dueAt: turn.Now + 1);
+                        var key = message.Payload switch
+                        {
+                            "key-fit" => new string('é', 512),
+                            "key-over" => new string('é', 512) + "x",
+                            _ => new string('x', 40_000)
+                        };
+                        turn.StartJob(key);
+                        break;
                     case Contract.Kinds.Start:
                         turn.State = message.Payload switch
                         {
@@ -150,6 +185,8 @@ internal static class FoundationEnvelopeChecks
                         };
                         turn.Send(turn.Header.Ref, "speculative", dueAt: turn.Now + 1);
                         break;
+                    case "large-fault":
+                        throw new InvalidOperationException(new string('é', 200_000));
                     case "grow":
                         turn.State += "x";
                         turn.Send(turn.Header.Ref, "growth-leak", dueAt: turn.Now + 1);
@@ -162,7 +199,11 @@ internal static class FoundationEnvelopeChecks
             return default;
         }
 
-        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => new((object?)null);
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token)
+        {
+            LegalJobEntered |= job.Key == new string('é', 512);
+            return new((object?)null);
+        }
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => state == "overstated" ? long.MaxValue : growth;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
