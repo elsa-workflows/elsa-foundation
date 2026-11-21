@@ -78,6 +78,77 @@ internal static class ActorAdapterChecks
             "public actor lifecycle entries survive the Minimal history level");
     }
 
+    public static async Task EventAmbient(Action<bool, string> check)
+    {
+        const long now = 1_700_200_000_000;
+        var store = new InMemoryStore(2, () => now);
+        var requests = new Requests("public-event");
+        var transport = new LocalReplies(requests);
+        var probe = new Probe();
+        var scope = new Contract.BoundScope("acme");
+        var bound = new EventRequests(store, requests, "receiving-node");
+        var ambient = new object();
+        var root = Arm(0, "local", "acme");
+        var remote = Arm(1, "remote", "acme");
+        var foreign = Arm(1, "foreign", "other");
+
+        async Task<IScopeActivation> Owner(string name, int partition)
+        {
+            var adapter = new ActorAdapter(store, probe, (requests, name));
+            var worker = new Worker(name, partition, store, adapter,
+                new WorkerOptions { Transport = transport, Monotonic = () => 0, Partitions = 2 });
+            return (await new DurableHost([worker]).ActivateAsync(partition))!;
+        }
+
+        await using var local = await Owner("receiving-node", 0);
+        await using var elsewhere = await Owner("remote-node", 1);
+        await Pump(local);
+        await Pump(elsewhere);
+
+        // Publish a legacy event with the same spelling and id. It cannot answer the scoped request or consume its wait.
+        await Events.PublishAsync(store, new EventRow("acme_signal", "event-1", "unbound", now + 10_000), 2);
+        await Pump(local);
+        await Pump(elsewhere);
+        check(Read("acme", root).Count == 0 && Read("acme", remote).Count == 0 && Read("other", foreign).Count == 0,
+            "a legacy publication with the same event key cannot reach a scoped actor");
+
+        var wait = bound.RequestAsync(scope, new("signal"), "event-1", "request", null,
+            new(ambient, now + 10_000)).AsTask();
+        var addresses = store.Messages.Values.Where(row => row.Message.ReplyTo is not null).ToArray();
+        check(addresses.Length == 2 && !wait.IsCompleted, "one bound event reaches both local and remote live waits");
+        await Pump(local);
+        await Pump(elsewhere);
+        check(await wait.WaitAsync(TimeSpan.FromSeconds(2)) is { Channel: "signal", Item: "request" } &&
+            Read("acme", root) is { Count: 1, WithAmbient: 1 } && Read("acme", remote) is { Count: 1, WithAmbient: 0 } &&
+            Read("other", foreign).Count == 0,
+            "only the addressed node sees the event request Ambient, and both matching actors consume the event");
+
+        check(store.AddFoundationMessage("acme", remote.Id, "turn-publish", "publish", "actor output") == true,
+            "a typed actor can receive a request to publish an event");
+        await Pump(elsewhere);
+        await Pump(local);
+        check(Read("acme", root) is { Count: 2, WithAmbient: 1, LastEvent: { } id } && id.StartsWith('~') &&
+            Read("acme", remote).Count == 2 && Read("other", foreign).Count == 0,
+            "the turn's durable publish ticket preserves tenant scope and returns the same opaque event id as delivery");
+
+        Contract.ActorRef Arm(int partition, string name, string tenant)
+        {
+            var spec = new StartSpec(probe.Type, name, "wait", Creation: new(1, 0, name));
+            return new(store.AdmitFoundationStart(tenant, new Message(name, InstanceRef.In(partition, name), Kinds.Start,
+                Start: spec, TargetCreation: 1))!);
+        }
+
+        ProbeState Read(string tenant, Contract.ActorRef reference) => Json.Read<ProbeState>(store.ReadFoundationActor(tenant, reference.Id).Actor!.Row.State);
+    }
+
+    private sealed class LocalReplies(Requests requests) : IReplyTransport
+    {
+        public void Send(string node, Reply reply)
+        {
+            if (node == "receiving-node") requests.Receive(reply);
+        }
+    }
+
     private static async Task Pump(IScopeActivation activation)
     {
         for (var step = 0; step < 24; step++)
@@ -94,6 +165,9 @@ internal static class ActorAdapterChecks
         public string? Child { get; set; }
         public string? ChildOutput { get; set; }
         public int Fires { get; set; }
+        public int Count { get; set; }
+        public int WithAmbient { get; set; }
+        public string? LastEvent { get; set; }
         public long? FiredAt { get; set; }
     }
 
@@ -109,6 +183,18 @@ internal static class ActorAdapterChecks
             {
                 switch (message.Kind)
                 {
+                    case Contract.Kinds.Start when message.Payload == "wait":
+                        turn.Subscribe("signal", "active");
+                        break;
+                    case "publish":
+                        turn.Publish("signal", message.Payload, TimeSpan.FromSeconds(10));
+                        break;
+                    case Contract.Kinds.Event when message.Event is { Key: "signal", Wait: "active" } delivered:
+                        state.Count++;
+                        if (turn.Ambient is not null) state.WithAmbient++;
+                        state.LastEvent = delivered.Id;
+                        turn.Emit("signal", message.Payload);
+                        break;
                     case Contract.Kinds.Start when message.Payload == "child":
                         break;
                     case Contract.Kinds.Start:

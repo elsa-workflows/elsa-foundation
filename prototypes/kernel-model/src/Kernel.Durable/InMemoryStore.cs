@@ -40,6 +40,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         (a, b) => a is null || b is null ? a == b : (a.Key, a.Instance, a.Wait) == (b.Key, b.Instance, b.Wait),
         row => HashCode.Combine(row.Key, row.Instance, row.Wait)));
     public Dictionary<(string Key, string Id), EventRow> EventRows { get; } = [];
+    internal Dictionary<(string Key, string Id), EventRow> FoundationEvents { get; } = [];
+
+    private Dictionary<(string Key, string Id), EventRow> EventsFor(EventRow @event) =>
+        @event.FoundationTenant is null ? EventRows : FoundationEvents;
+
     public Dictionary<(int Partition, long Position), JournalRow> Journal { get; } = [];
     public List<string> Ghost { get; } = [];
     public Dictionary<string, NodeRow> Nodes { get; } = new(StringComparer.Ordinal);
@@ -442,9 +447,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         {
             cancellationToken.ThrowIfCancellationRequested();
             var key = (request.Key, request.Id);
+            var events = EventsFor(request);
             // The original match and deliveries were committed atomically. A retry cannot match new waits.
-            if (EventRows.ContainsKey(key)) return [];
-            var deliveries = Subscriptions.Where(wait => wait.Key == request.Key)
+            if (events.ContainsKey(key)) return [];
+            var deliveries = Subscriptions.Where(wait => wait.Key == request.Key && wait.FoundationTenant == request.FoundationTenant)
                 .OrderBy(wait => wait.Instance, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal)
                 .Select(wait => Events.Route(request, wait, partitions, replyTo)).ToArray();
             if (deliveries.Length == 0) return null;
@@ -452,7 +458,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             foreach (var delivery in deliveries) ValidateEventIdentity(delivery);
             var starts = deliveries.Count(delivery => delivery.Message.Start is not null && !Messages.ContainsKey(delivery.Message.InboxKey));
             _ = checked(_eventSerial + starts);
-            EventRows.Add(key, request);
+            events.Add(key, request);
             return Array.ConvertAll(deliveries, InsertEventDelivery);
         }
     }
@@ -484,7 +490,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             Subscriptions.Add(row);
 
             var now = clock();
-            foreach (var @event in EventRows.Values.Where(@event => @event.Key == key && @event.KeepUntil >= now).OrderBy(@event => @event.Id, StringComparer.Ordinal))
+            foreach (var @event in FoundationEvents.Values.Where(@event => @event.FoundationTenant == tenant && @event.Key == key && @event.KeepUntil >= now).OrderBy(@event => @event.Id, StringComparer.Ordinal))
                 InsertEventDelivery(Events.Route(@event, row, partitions));
         }
     }
@@ -506,7 +512,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
     {
-        lock (_gate) EventRows.TryAdd((@event.Key, @event.Id), @event);
+        lock (_gate) EventsFor(@event).TryAdd((@event.Key, @event.Id), @event);
         return default;
     }
 
@@ -534,8 +540,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default)
     {
-        lock (_gate) return new(EventRows.TryGetValue((published.Key, published.Id), out var stored)
-            ? Subscriptions.Where(s => s.Key == stored.Key).OrderBy(s => s.Instance, StringComparer.Ordinal).Select(s => new EventRoute(stored, s)).ToList() : []);
+        lock (_gate) return new(EventsFor(published).TryGetValue((published.Key, published.Id), out var stored)
+            ? Subscriptions.Where(s => s.Key == stored.Key && s.FoundationTenant == stored.FoundationTenant).OrderBy(s => s.Instance, StringComparer.Ordinal).Select(s => new EventRoute(stored, s)).ToList() : []);
     }
 
     public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default)
@@ -543,10 +549,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         lock (_gate)
         {
             var now = clock();
-            var selected = waits.Select(w => (w.Key, w.Instance, w.Wait, w.Creation)).ToHashSet();
-            return new((from e in EventRows.Values orderby e.Id
-                join s in Subscriptions on e.Key equals s.Key
-                where e.KeepUntil >= now && selected.Contains((s.Key, s.Instance, s.Wait, s.Creation))
+            var selected = waits.Select(w => (w.Key, w.Instance, w.Wait, w.Creation, w.FoundationTenant)).ToHashSet();
+            return new((from e in EventRows.Values.Concat(FoundationEvents.Values) orderby e.Id
+                join s in Subscriptions on (e.Key, e.FoundationTenant) equals (s.Key, s.FoundationTenant)
+                where e.KeepUntil >= now && selected.Contains((s.Key, s.Instance, s.Wait, s.Creation, s.FoundationTenant))
                 select new EventRoute(e, s)).ToList());
         }
     }
@@ -608,7 +614,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             var events = EventRows.Values.Where(e => e.KeepUntil < now).Select(e => (e.Key, e.Id)).ToList();
             messages.ForEach(id => Messages.Remove(id));
             events.ForEach(key => EventRows.Remove(key));
-            return new(messages.Count + events.Count);
+            var foundationEvents = FoundationEvents.Where(pair => pair.Value.KeepUntil < now).Select(pair => pair.Key).ToList();
+            foundationEvents.ForEach(key => FoundationEvents.Remove(key));
+            return new(messages.Count + events.Count + foundationEvents.Count);
         }
     }
 }

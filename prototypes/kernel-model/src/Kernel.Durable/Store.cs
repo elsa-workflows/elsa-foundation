@@ -32,12 +32,17 @@ public sealed record SubscriptionRow(
     [property: JsonConverter(typeof(DurableKeyJson))] string Instance,
     [property: JsonConverter(typeof(DurableKeyJson))] string Wait, StartSpec? Start = null, long Creation = 0)
 {
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     internal string? FoundationTenant { get; init; }
 }
 
 public sealed record EventRow(
     [property: JsonConverter(typeof(DurableKeyJson))] string Key,
-    [property: JsonConverter(typeof(DurableKeyJson))] string Id, string? Payload, long KeepUntil);
+    [property: JsonConverter(typeof(DurableKeyJson))] string Id, string? Payload, long KeepUntil)
+{
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal string? FoundationTenant { get; init; }
+}
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries);
 

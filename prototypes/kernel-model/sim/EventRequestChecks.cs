@@ -105,10 +105,14 @@ internal static class EventRequestChecks
         var missedTyped = bound.RequestAsync(scope, eventTarget, "typed-request", "typed", keep, options);
         check(missedTyped.IsCompletedSuccessfully &&
               (await missedTyped) is { Error: "no waiter", Status: null } &&
-              !store.EventRows.ContainsKey(("acme_typed", "typed-request")) && requests.All.Count == 0,
+              !store.FoundationEvents.ContainsKey(("acme_typed", "typed-request")) && requests.All.Count == 0,
             "the bound request returns no waiter immediately, publishes nothing and releases the caller");
 
         await Events.SubscribeAsync(store, starter with { Key = "acme_typed" }, 2);
+        var sameSpelling = await bound.RequestAsync(scope, eventTarget, "typed-request", "typed", null, options);
+        check(sameSpelling.Error == "no waiter" && !store.FoundationEvents.ContainsKey(("acme_typed", "typed-request")),
+            "an unbound wait with the same spelling cannot receive a tenant-bound request");
+        await bound.SetStartAsync(scope, "typed", "scoped", new Contract.StartSpec("event-probe", "event"));
         var boundAnswer = bound.RequestAsync(scope, eventTarget, "typed-request", "typed", null, options).AsTask();
         await Pump();
         check((await boundAnswer.WaitAsync(TimeSpan.FromSeconds(2))) is { Channel: "event-output", Item: "typed" },
@@ -130,8 +134,8 @@ internal static class EventRequestChecks
             "cancelling the caller closes its registration and keeps the admitted delivery");
 
         await store.SweepAsync();
-        check(!store.EventRows.ContainsKey(("acme_typed", "typed-request")) &&
-              store.EventRows.ContainsKey(("acme_typed", "cancelled-caller")),
+        check(!store.FoundationEvents.ContainsKey(("acme_typed", "typed-request")) &&
+              store.FoundationEvents.ContainsKey(("acme_typed", "cancelled-caller")),
             "sweep removes an admitted event without a keep window and preserves one still kept");
     }
 

@@ -5,7 +5,8 @@ using Durable = Kernel.Durable;
 namespace Kernel.Foundation.InMemory;
 
 /// <summary>Runs a contract actor in the owner's turn. The adapter only stages effects.</summary>
-internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor) : Durable.IActorType
+internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
+    (Durable.Requests Requests, string Node)? local = null) : Durable.IActorType
 {
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services) =>
         actor.Withholds(Header(row));
@@ -33,7 +34,13 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
 
     public async ValueTask<Durable.TurnOutcome> TurnAsync(Durable.TurnInput input)
     {
-        var turn = new ActorTurn(store, input, input.Row is { } row ? Header(row) : StartHeader(input));
+        var header = input.Row is { } row ? Header(row) : StartHeader(input);
+        var ambient = local is { } host
+            ? input.Taken.Skip(input.From).Select(delivery => delivery.Message.ReplyTo).OfType<string>()
+                .Select(address => host.Requests.LocalAmbient(address, host.Node, header.Tenant, input.Services.Now))
+                .FirstOrDefault(value => value is not null)
+            : null;
+        var turn = new ActorTurn(store, input, header, ambient);
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray());
         await actor.TurnAsync(turn, CancellationToken.None);
         return turn.Seal();

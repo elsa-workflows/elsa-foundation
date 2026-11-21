@@ -22,12 +22,13 @@ internal sealed partial class ActorAdapter
         private Contract.ActorStatus _status;
         private object? _output;
 
-        public ActorTurn(Durable.InMemoryStore store, Durable.TurnInput input, Contract.ActorHeader header)
+        public ActorTurn(Durable.InMemoryStore store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient)
         {
             _store = store;
             _input = input;
             _turn = new(input);
             Header = header;
+            Ambient = ambient;
             _row = input.Row ?? NewRow(input.Actor, input.Spec!, input.Taken[input.From].Message);
             State = input.Row is null ? null : input.Row.State;
             _status = header.Status;
@@ -46,7 +47,7 @@ internal sealed partial class ActorAdapter
         public long Now => _input.Services.Now;
         public IReadOnlyList<Contract.Message> Inbox { get; }
         public string? State { get; set; }
-        public object? Ambient => _input.Ambient;
+        public object? Ambient { get; }
 
         public void Emit(string channel, object? item) => _turn.Emit(channel, item);
         public void Reply(Contract.Message message, string channel, object? item) => _turn.Reply(Received(message), channel, item);
@@ -92,7 +93,7 @@ internal sealed partial class ActorAdapter
 
         public void Subscribe(string key, string wait, bool keep = false) => _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
         public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait);
-        public string Publish(string key, string? payload, TimeSpan keepFor) => _turn.Publish(Qualify(key), payload, keepFor, _store);
+        public string Publish(string key, string? payload, TimeSpan keepFor) => _turn.Publish(Qualify(key), payload, keepFor, _store, Header.Tenant);
 
         public void Record(object entry)
         {

@@ -475,13 +475,13 @@ public sealed class DurableTurn
     public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation));
 
     // NATIVE N1: the publish is a ticket to self, so "the inbox alone says what is owed" holds for it too.
-    public string Publish(string key, string? payload, TimeSpan keep) => Publish(key, payload, keep, null);
+    public string Publish(string key, string? payload, TimeSpan keep) => Publish(key, payload, keep, null, null);
 
-    internal string Publish(string key, string? payload, TimeSpan keep, InMemoryStore? store)
+    internal string Publish(string key, string? payload, TimeSpan keep, InMemoryStore? store, string? tenant)
     {
         var wire = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal:D4}");
         var id = store?.MessageHandle("event:" + wire) ?? wire;
-        SendNext(Actor, Kinds.Publish, new EventRow(key, id, payload, Services.Now + (long)keep.TotalMilliseconds));
+        SendNext(Actor, Kinds.Publish, new EventRow(key, id, payload, checked(Services.Now + (long)keep.TotalMilliseconds)) { FoundationTenant = tenant });
         return id;
     }
 
