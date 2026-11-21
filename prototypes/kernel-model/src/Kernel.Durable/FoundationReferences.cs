@@ -14,6 +14,7 @@ public sealed partial class InMemoryStore
     private readonly Dictionary<string, ReferenceBinding> _referenceBindings = new(StringComparer.Ordinal);
     private readonly Dictionary<CreationAddress, ReferenceBinding> _referenceBirths = [];
     private readonly Dictionary<CreationAddress, long> _foundationEnds = [];
+    internal TimeSpan IngressDeduplicationWindow { get; init; } = TimeSpan.FromMinutes(1);
 
     // A turn may form the ref for a prospective child before commit. Until the creator is stored, it has no binding.
     internal string ReferenceFor(string tenant, CreationAddress address)
@@ -116,12 +117,14 @@ public sealed partial class InMemoryStore
             _foundationEnds.TryAdd(address, now);
     }
 
-    /// <summary>Resolve an outside exact send and insert its delivery in one operation.
-    /// The caller supplies an id already scoped for storage.</summary>
+    /// <summary>Resolve an outside exact send and insert its delivery and deduplication marker in one operation.</summary>
     /// <returns>Null for an unavailable reference, false for a duplicate, true for a new delivery.</returns>
-    internal bool? AddFoundationMessage(string tenant, string? reference, string id, string kind, string? payload = null, long? dueAt = null)
+    internal bool? AddFoundationMessage(string tenant, string? reference, string id, string kind, string? payload = null,
+        long? dueAt = null, TimeSpan? keepFor = null)
     {
         Kinds.RequireApplicationSend(kind);
+        var window = keepFor is { } requested && requested < IngressDeduplicationWindow ? requested : IngressDeduplicationWindow;
+        ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero, nameof(keepFor));
         lock (_gate)
         {
             if (reference is null || !_referenceBindings.TryGetValue(reference, out var binding) || binding.Tenant != tenant)
@@ -135,10 +138,16 @@ public sealed partial class InMemoryStore
                 !creator.Done && creator.Message.Target.Id == address.Id && creator.Message.Start?.Creation?.Generation == address.Creation;
             if (!live && !starting) return null;
 
-            var message = new Message(id, new InstanceRef(address.Id), kind, payload, Due: dueAt, TargetCreation: address.Creation);
+            // Keep the caller's id in the envelope. The storage identity scopes it to the exact life.
+            var storageId = binding.Reference + "/" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
+            var now = clock();
+            var message = new Message(id, new InstanceRef(address.Id), kind, payload, Due: dueAt,
+                KeepUntil: checked(now + (long)window.TotalMilliseconds), TargetCreation: address.Creation)
+                { StorageId = storageId };
             if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
-            if (Messages.ContainsKey(message.InboxKey)) return false;
-            Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
+            if (Messages.TryGetValue(message.InboxKey, out var previousSend) &&
+                (!previousSend.Done || previousSend.Message.KeepUntil >= now)) return false;
+            Messages[message.InboxKey] = new MessageRow(message, ++_seq, 0);
             return true;
         }
     }
