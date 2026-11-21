@@ -88,6 +88,24 @@ internal static class ActorListChecks
         check(parkView is { Header.Status: Contract.ActorStatus.Faulted, Park.At: stamp } &&
               await reader.GetAsync(wrongTenant, new(parked)) is null,
             "the bound point read shows Park and masks a foreign exact ref");
+        var latestPark = store.ReadFoundationActor(scope.Tenant, parked).Actor!.Row;
+        check(store.MatchesFoundationSelection(scope.Tenant, parked, parkView?.Selection) &&
+            !store.MatchesFoundationSelection(wrongTenant.Tenant, parked, parkView?.Selection) &&
+            !store.MatchesFoundationSelection(scope.Tenant, authoredFault, parkView?.Selection) &&
+            !store.MatchesFoundationSelection(scope.Tenant, parked, first.Next?.Value),
+            "an operator selection authenticates only the chosen tenant, actor, resolution mark and token kind");
+        var priorSelection = parkView?.Selection;
+        now = stamp;  // Reuse the first Park's timestamp to exercise the revision guard independently.
+        var refault = new TurnCommit(latestPark.Id, latestPark with { Revision = latestPark.Revision + 1 }, latestPark.Revision,
+            [], [], [], [], [], "[\"repark\"]") { OpensPark = true };
+        var currentFence = store.Partitions[0];
+        var marked = await store.CommitAsync(new CommitBatch(0, currentFence.Epoch, currentFence.Position, TimeSpan.FromSeconds(10),
+            false, [refault], [], []));
+        var sameClockPark = await reader.GetAsync(scope, new(parked));
+        check(marked.Landed && sameClockPark?.Park?.At == now &&
+            !store.MatchesFoundationSelection(scope.Tenant, parked, priorSelection) &&
+            store.MatchesFoundationSelection(scope.Tenant, parked, sameClockPark?.Selection),
+            "a new Park revision invalidates the old selection");
         var parkedOnly = await reader.ListAsync(scope, new(Parked: true));
         check(parkedOnly.Items is [{ Header.Ref.Id: var parkedRef }] && parkedRef == parked,
             "the Park filter returns parked work through the live read route");
