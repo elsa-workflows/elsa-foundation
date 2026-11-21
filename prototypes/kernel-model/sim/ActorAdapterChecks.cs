@@ -109,15 +109,17 @@ internal static class ActorAdapterChecks
         await Events.PublishAsync(store, new EventRow("acme_signal", "event-1", "unbound", now + 10_000), 2);
         await Pump(local);
         await Pump(elsewhere);
-        check(Read("acme", root).Count == 0 && Read("acme", remote).Count == 0 && Read("other", foreign).Count == 0,
-            "a legacy publication with the same event key cannot reach a scoped actor");
+        var isolated = Read("acme", root).Count == 0 && Read("acme", remote).Count == 0 && Read("other", foreign).Count == 0;
+        check(isolated, "a legacy publication with the same event key cannot reach a scoped actor");
+        if (!isolated) return;
 
         var wait = bound.RequestAsync(scope, new("signal"), "event-1", "request", null,
             new(ambient, now + 10_000)).AsTask();
         var addresses = store.Messages.Values.Where(row => row.Message.ReplyTo is not null).ToArray();
         check(addresses.Length == 2 && !wait.IsCompleted, "one bound event reaches both local and remote live waits");
-        await Pump(local);
         await Pump(elsewhere);
+        await Pump(local);
+        transport.Deliver();
         check(await wait.WaitAsync(TimeSpan.FromSeconds(2)) is { Channel: "signal", Item: "request" } &&
             Read("acme", root) is { Count: 1, WithAmbient: 1 } && Read("acme", remote) is { Count: 1, WithAmbient: 0 } &&
             Read("other", foreign).Count == 0,
@@ -128,7 +130,8 @@ internal static class ActorAdapterChecks
         await Pump(elsewhere);
         await Pump(local);
         check(Read("acme", root) is { Count: 2, WithAmbient: 1, LastEvent: { } id } && id.StartsWith('~') &&
-            Read("acme", remote).Count == 2 && Read("other", foreign).Count == 0,
+            Read("acme", remote) is { Count: 2, LastEvent: var received, Published: var issued } && id == received && id == issued &&
+            Read("other", foreign).Count == 0,
             "the turn's durable publish ticket preserves tenant scope and returns the same opaque event id as delivery");
 
         Contract.ActorRef Arm(int partition, string name, string tenant)
@@ -143,9 +146,17 @@ internal static class ActorAdapterChecks
 
     private sealed class LocalReplies(Requests requests) : IReplyTransport
     {
+        private readonly List<Reply> _sent = [];
+
         public void Send(string node, Reply reply)
         {
-            if (node == "receiving-node") requests.Receive(reply);
+            if (node == "receiving-node") _sent.Add(reply);
+        }
+
+        public void Deliver()
+        {
+            foreach (var reply in _sent) requests.Receive(reply);
+            _sent.Clear();
         }
     }
 
@@ -168,6 +179,7 @@ internal static class ActorAdapterChecks
         public int Count { get; set; }
         public int WithAmbient { get; set; }
         public string? LastEvent { get; set; }
+        public string? Published { get; set; }
         public long? FiredAt { get; set; }
     }
 
@@ -187,7 +199,7 @@ internal static class ActorAdapterChecks
                         turn.Subscribe("signal", "active");
                         break;
                     case "publish":
-                        turn.Publish("signal", message.Payload, TimeSpan.FromSeconds(10));
+                        state.Published = turn.Publish("signal", message.Payload, TimeSpan.FromSeconds(10));
                         break;
                     case Contract.Kinds.Event when message.Event is { Key: "signal", Wait: "active" } delivered:
                         state.Count++;
