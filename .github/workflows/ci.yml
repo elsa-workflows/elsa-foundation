@@ -1947,12 +1947,24 @@ jobs:
             dotnet build "$p" -c Release --no-restore
           done
 
-      - name: Trace four complete 4,096-partition conformance runs
+      - name: Trace split conformance under competing runtime suites
         run: |
-          failed=0
-          for round in 1 2 3 4; do
-            echo "::group::Runtime conformance diagnostic $round"
-            dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096 || failed=1
-            echo "::endgroup::"
+          RTC="conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
+          logs="$RUNNER_TEMP/split-diagnostic"
+          mkdir -p "$logs"
+          pids=()
+          for instance in 1 2 3; do
+            (
+              failed=0
+              for round in 1 2 3; do
+                echo "Instance $instance, round $round"
+                dotnet "$RTC" semantic --partitions 4096 || failed=1
+              done
+              exit "$failed"
+            ) > "$logs/$instance.log" 2>&1 &
+            pids+=("$!")
           done
+          failed=0
+          for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
+          for log in "$logs"/*.log; do cat "$log"; done
           exit "$failed"
