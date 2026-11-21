@@ -22,6 +22,25 @@ public sealed class RuntimeStandaloneIngressProtocolTests
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private const string Hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void History_fingerprints_screen_actual_standalone_rows_without_admitting_them_as_workflow_mutations(bool withCausedWorkflowIntent)
+    {
+        var item = Pending();
+        Assert.Null(item.Intent);
+        var intent = new RuntimePostCommitIntent("intent", "workflow", "Test.Workflow", Now, null, "key", null)
+            { HistoryCausation = new("history-event", "workflow", "delivery", "command", "work") };
+        var commit = new RuntimeCheckpointCommit("screening", new("checkpoint", "DeferredWork", "workflow", Now, [], new Dictionary<string, string>()),
+            new(null, null, [], [], [], [], [], postCommitOutbox:
+                [new(item.OutboxItemId, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>())]),
+            withCausedWorkflowIntent ? [intent] : [], new Dictionary<string, string>());
+        var refusal = Assert.Throws<RuntimeCheckpointCommitValidationException>(() => RuntimeCheckpointCommitValidator.Validate(commit));
+        Assert.Contains("standalone sources", refusal.Message);
+        Assert.Equal(64, RuntimeCheckpointCommitFingerprint.Compute(commit).Length);
+        Assert.Equal(64, RuntimeCheckpointCommitFingerprint.ComputeHistorySource(commit).Length);
+        Assert.Null(item.Intent);
+    }
+
     [Fact]
     public async Task ExistingProcessor_DispatchesAnActualStandaloneSourceThroughTheSameRegistry()
     {

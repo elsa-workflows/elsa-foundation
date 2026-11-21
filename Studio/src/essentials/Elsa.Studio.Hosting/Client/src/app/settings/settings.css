@@ -116,6 +116,11 @@
 
 .settings-preset-preview { display: flex; gap: 8px; width: 100%; height: 96px; padding: 6px; overflow: hidden; border-radius: 7px; background: var(--preview-background); }
 .settings-preset-nav { display: flex; flex-direction: column; gap: 7px; width: 22%; padding: 12px 6px; border-radius: 4px; background: var(--preview-sidebar); }
+.settings-preset-nav[data-sidebar-backdrop="starfield"] {
+  --studio-nav-bg: var(--preview-sidebar);
+  --studio-nav-text: var(--preview-ink);
+  --studio-nav-active: var(--preview-accent);
+}
 .settings-preset-nav b { height: 3px; border-radius: 2px; background: var(--preview-ink); opacity: .4; }
 .settings-preset-nav b:nth-child(2) { background: var(--preview-accent); opacity: 1; }
 .settings-preset-content { display: flex; flex-direction: column; flex: 1; gap: 5px; padding: 13px 7px; border-radius: 4px; background: var(--preview-card); }

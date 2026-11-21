@@ -146,6 +146,108 @@ class WorkflowScopeTests(unittest.TestCase):
             self.assertIn(f"{'b' * 40}...{'a' * 40}", run.call_args.args[0])
         self.assertIsNone(scope.changed_paths('merge_group', {}, 'a' * 40))
 
+    PUSH_ENV = {'GITHUB_REPOSITORY': 'o/r', 'GITHUB_REF_NAME': 'main', 'GITHUB_RUN_ID': '9',
+                'GITHUB_WORKFLOW_REF': 'o/r/.github/workflows/ci.yml@refs/heads/main'}
+
+    def history(self, runs, plan_scope=None, ancestors=None, head='h' * 40, pages=None):
+        """Runs newest first, as the API lists them; plan_scope maps a run id to its plan-scope conclusion."""
+        calls = []
+
+        def fetch(path):
+            calls.append(path)
+            if '/jobs?' in path:
+                run_id = int(path.split('/runs/')[1].split('/')[0])
+                return {'jobs': [{'name': 'Plan tiers', 'conclusion': 'success'},
+                                 {'name': scope.PLAN_SCOPE_JOB, 'conclusion': (plan_scope or {}).get(run_id, 'success')}]}
+            if pages is not None:
+                return {'workflow_runs': pages[int(path.rsplit('page=', 1)[1]) - 1]}
+            return {'workflow_runs': runs}
+
+        with patch.dict(scope.os.environ, self.PUSH_ENV):
+            base = scope.last_validated_push(head, fetch, lambda commit, _: commit in (ancestors or {r['head_sha'] for r in runs}))
+        return base, calls
+
+    @staticmethod
+    def ci_run(run_id, sha, conclusion):
+        return {'id': run_id, 'head_sha': sha * 40, 'conclusion': conclusion}
+
+    def test_push_diffs_from_the_last_run_that_validated_skipping_cancelled_runs(self):
+        # #4686: its merge commit's run was replaced while pending, so the next push's `before` hid its Studio change.
+        base, calls = self.history([self.ci_run(8, 'c', 'cancelled'), self.ci_run(7, 'b', 'cancelled'),
+                                    self.ci_run(6, 'a', 'success')])
+        self.assertEqual('a' * 40, base)
+        self.assertIn('/repos/o/r/actions/workflows/ci.yml/runs?event=push&branch=main&status=completed', calls[0])
+        self.assertEqual(['/repos/o/r/actions/runs/6/jobs?filter=latest&per_page=100'], [c for c in calls if '/jobs?' in c])
+        with patch.object(scope.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = 'Studio/src/Feature.ts\0docs/x.md\0'
+            changed = scope.changed_paths('push', {'before': 'c' * 40}, 'h' * 40, base)
+            self.assertIn(f"{'a' * 40}..{'h' * 40}", run.call_args.args[0])
+        self.assertTrue(self.selected('push', changed)['studio-heavy'])
+
+    def test_a_failed_run_counts_as_validated(self):
+        self.assertEqual('a' * 40, self.history([self.ci_run(8, 'a', 'failure'), self.ci_run(7, 'b', 'success')])[0])
+
+    def test_runs_that_validated_nothing_are_skipped(self):
+        runs = [self.ci_run(9, 'z', 'success'),           # this run itself (a re-run attempt)
+                self.ci_run(8, 'y', 'success'),           # not an ancestor of this head
+                self.ci_run(7, 'x', 'skipped'),
+                self.ci_run(6, 'w', 'failure'),           # plan-scope itself failed: nothing was selected
+                self.ci_run(5, 'v', 'timed_out'),
+                self.ci_run(4, 'u', 'success')]
+        base, _ = self.history(runs, plan_scope={6: 'failure'}, ancestors={'z' * 40, 'x' * 40, 'w' * 40, 'v' * 40, 'u' * 40})
+        self.assertEqual('u' * 40, base)
+
+    def test_the_search_reads_later_pages_and_stops_at_the_last(self):
+        full = [self.ci_run(100 + i, 'c', 'cancelled') for i in range(100)]
+        base, calls = self.history([], pages=[full, [self.ci_run(5, 'a', 'success')]], ancestors={'c' * 40, 'a' * 40})
+        self.assertEqual('a' * 40, base)
+        self.assertEqual(['page=1', 'page=2'], [c.rsplit('&', 1)[1] for c in calls if '/workflows/' in c])
+        base, calls = self.history([], pages=[[self.ci_run(8, 'c', 'cancelled')]], ancestors={'c' * 40})
+        self.assertIsNone(base)
+        self.assertEqual(1, len([c for c in calls if '/workflows/' in c]))
+
+    def test_unreadable_or_missing_history_selects_every_proof(self):
+        def broken(_):
+            raise OSError('HTTP 503')
+        with patch.dict(scope.os.environ, self.PUSH_ENV):
+            self.assertIsNone(scope.last_validated_push('h' * 40, broken, lambda *_: True))
+        self.assertIsNone(self.history([self.ci_run(8, 'c', 'cancelled')])[0])
+        self.assertIsNone(scope.changed_paths('push', {'before': 'c' * 40}, 'h' * 40, None))
+        self.assertTrue(self.selected('push', None)['studio-heavy'])
+
+    def test_the_event_before_is_never_the_push_base(self):
+        with patch.object(scope.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = ''
+            scope.changed_paths('push', {'before': 'b' * 40}, 'h' * 40, 'a' * 40)
+            self.assertIn(f"{'a' * 40}..{'h' * 40}", run.call_args.args[0])
+
+    def test_main_reads_the_history_for_a_push_only(self):
+        import tempfile
+        for event_name, calls in (('push', 1), ('pull_request', 0), ('merge_group', 0), ('schedule', 0)):
+            with self.subTest(event=event_name), tempfile.TemporaryDirectory() as tmp:
+                event_path, output_path = Path(tmp, 'event.json'), Path(tmp, 'output')
+                event_path.write_text(json.dumps({'before': 'b' * 40}))
+                env = {'GITHUB_EVENT_PATH': str(event_path), 'GITHUB_EVENT_NAME': event_name,
+                       'GITHUB_SHA': 'h' * 40, 'GITHUB_OUTPUT': str(output_path)}
+                with patch.dict(scope.os.environ, env), \
+                        patch.object(scope, 'last_validated_push', return_value=None) as history, \
+                        patch.object(scope.subprocess, 'run') as run:
+                    run.return_value.returncode = 0
+                    run.return_value.stdout = ''
+                    scope.main()
+                self.assertEqual(calls, history.call_count)
+                if event_name == 'push':
+                    self.assertIn('studio-heavy=true', output_path.read_text())
+
+    def test_plan_scope_can_read_runs_and_only_a_push_gets_the_token(self):
+        workflow = (scope.ROOT / '.github/workflows/ci.yml').read_text()
+        job = workflow.split('\n  plan-scope:\n', 1)[1].split('\n  plan-tiers:\n', 1)[0]
+        self.assertIn('    permissions:\n      contents: read\n      actions: read\n', job)
+        self.assertIn("GH_TOKEN: ${{ github.event_name == 'push' && github.token || '' }}", job)
+        self.assertEqual(1, job.count('GH_TOKEN'))
+
     def test_manual_suites_are_isolated(self):
         for suite in [*self.patterns, 'studio-order']:
             with self.subTest(suite=suite):

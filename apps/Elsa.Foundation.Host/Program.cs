@@ -1,7 +1,6 @@
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
-using CShells.Nuplane;
 using Elsa.Attention.Core;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
@@ -9,12 +8,9 @@ using Elsa.Foundation.DataProtection;
 using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.ModuleManagement;
 using Elsa.Foundation.Host.Shells;
-using Nuplane;
+using Elsa.Foundation.Hosting;
 using Nuplane.Admin;
-using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Reconciliation;
-using Nuplane.Sources.Directory.Configuration;
-using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,35 +19,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
 
 var configuration = builder.Configuration;
-var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
 // ---------------------------------------------------------------------------------------------------------
 // Nuplane — the package feed and runtime assembly loader that supplies feature assemblies to CShells.
 // ---------------------------------------------------------------------------------------------------------
-// * AddNuplane itself reads Nuplane:Setup:Feeds and registers every entry carrying a ServiceIndex as a remote
-//   NuGet feed. Remote feeds need no call here; see docs/foundation-host-feeds.md. Note that a remote feed's
-//   IncludePatterns must name package ids literally — a wildcard contributes nothing and does so silently.
-// * AddDirectoryFeedsFromConfiguration translates the entries carrying a DirectoryPath instead. It is a separate
-//   call only because the directory source ships in its own package, which AddNuplane cannot reach. A feed with
-//   Directory:Watch=true installs the folder listener that reconciles the package set when the drop-folder changes.
-// * AutoloadPackages installs the assembly-loading subsystem used by CShells feature discovery.
-builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
-{
-    // The content root, which is where this host's own appsettings.json was just read from. A module-owned
-    // builder extension resolves its relative configured paths against NuplaneBuilder.BasePath when
-    // something sets one, and against the process's current directory otherwise — and those two are the
-    // same place only when the host happens to be started from its own directory. Without this line a host
-    // whose content root is set independently of where it was launched (ASPNETCORE_CONTENTROOT, a systemd
-    // unit, a container WORKDIR) reads "DirectoryPath": "packages" out of one directory and then looks for
-    // that folder under another, which presents as an empty feed with nothing saying why. Nuplane's core
-    // package never reads IHostEnvironment itself, which is why this stays the host's own line to write.
-    nuplane.UseBasePath(builder.Environment.ContentRootPath);
-    nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
-    nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
-});
-builder.Services.ConfigureOptions<NuplaneIntegrationOptionsSetup>();
-builder.Services.AddSingleton<IOptionsChangeTokenSource<NuplaneIntegrationOptions>>(
-    new ConfigurationChangeTokenSource<NuplaneIntegrationOptions>(Options.DefaultName, configuration.GetSection("Elsa:Shells")));
+builder.AddFoundationNuplane();
 
 // ---------------------------------------------------------------------------------------------------------
 // Cluster membership — selected once per host, on this container, never per shell (#2143).
@@ -84,9 +56,7 @@ builder.Services.AddShellStartupValidation();
 // ---------------------------------------------------------------------------------------------------------
 // CShells — activate shells, map them, own per-shell middleware.
 // ---------------------------------------------------------------------------------------------------------
-builder.Services.AddCShellsAspNetCore(shells => shells
-    // Domain feature assemblies come from the Nuplane feed; the host compiles in no Elsa features of its own.
-    .WithNuplaneFeatureDiscovery()
+var shellActivation = builder.AddFoundationShellHosting(shells => shells
     // Also scan the host's own referenced assemblies so the FastEndpoints runtime seam is available to every
     // shell without each feed feature declaring DependsOn "FastEndpoints". The only host assembly that carries
     // a [ShellFeature] is CShells.FastEndpoints (its built-in "FastEndpoints" feature, which scans a shell's
@@ -95,8 +65,6 @@ builder.Services.AddCShellsAspNetCore(shells => shells
     // CShells.FastEndpoints.Abstractions. CShells.FastEndpoints.Abstractions is a shared assembly (see
     // Nuplane:Loading:SharedAssemblies) so a feed feature's IFastEndpointsShellFeature is the same type here.
     .WithHostAssemblies()
-    // Shell composition is read from shells.json (default section name "CShells").
-    .WithConfigurationProvider(configuration)
     // Path-based shell routing; the health probes below bypass shell resolution.
     .WithWebRouting(options =>
     {
@@ -104,21 +72,8 @@ builder.Services.AddCShellsAspNetCore(shells => shells
         options.ExcludePaths = ["/health/live", "/health/ready"];
     }));
 
-// Root-only attempt scheduling; adapters retain the host's startup and recovery policy.
-builder.Services.AddShellActivationRunner();
-
-// Optional — eager activation: activate the configured shell(s) at boot so shell-lifetime work (most notably
-// the feed's Tasks feature: startup/background/recurring tasks) starts without waiting for the first request.
-// Gated by Elsa:Boot:EagerShellActivation:Enabled (default on). A shell that fails to activate is retried with a capped
-// backoff (Elsa:Boot:EagerShellActivation:Retry), and what the failed attempts left is read by /health/ready and by the
-// Attention item below. The tracker is an instance, which CShells hands to every shell as it is rather than building a second
-// one, and the contributor is registered as an instance for the same reason: every active shell's Attention endpoint then
-// lists the shells that are not. Registered whether or not eager activation is on, because the probe reads the tracker either way.
-var shellActivation = new ShellActivationTracker();
-builder.Services.AddSingleton(shellActivation);
+// Each shell's Attention endpoint can read the same tracker as the host's readiness probe.
 builder.Services.AddSingleton<IAttentionContributor>(new ShellActivationAttentionContributor(shellActivation));
-if (EagerShellActivationHostedService.IsEnabled(configuration))
-    builder.Services.AddHostedService<EagerShellActivationHostedService>();
 
 // Optional extra #1 — module-management surface (Nuplane reconcile + CShells shell reload). Compiled in but
 // only wired when Elsa:ModuleManagement:Enabled is true at startup: the decision is read once here, so
@@ -127,16 +82,13 @@ var moduleManagement = ModuleManagementOptions.Read(configuration);
 if (moduleManagement.Enabled)
     builder.Services.AddNuplaneAdmin();
 
-// Nuplane registers its trigger ingress, reconcile coordinator and admin operations by type or by factory, so every shell
-// container CShells builds from copies of these registrations would hold second instances of them, and a reconcile enqueued
-// on a shell's copy of the queue is read by no dispatcher (#2159). Shells resolve the host's own instead.
-builder.Services.ShareWithShells<IReconciliationTriggerIngress>();
+// Admin operations use the same coordinator as the host, not one created in a shell's container (#2159).
 if (moduleManagement.Enabled)
     builder.Services.ShareWithShells<ManualReconcileCoordinator>().ShareWithShells<INuplaneAdminOperations>();
 
 var app = builder.Build();
 
-// Host-level probes: liveness (process up) + readiness (configured shells activated — reflects eager load).
+// Host-level probes: liveness (process up) + readiness (configured shells are settled and current).
 app.MapHostHealth();
 
 if (moduleManagement.Enabled)

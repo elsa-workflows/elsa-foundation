@@ -197,8 +197,8 @@ export async function expectAccessible(page: Page, selector: string) {
 /** The two replay-safe warnings (spec 261 OD20 A) for a step whose forward activity and compensation are both leaves. */
 export function replaySafeWarnings(step: string) {
   return [
-    `"${step}" is marked safe to repeat, so its call may not be committed before it runs; if the process stops, recovery may not know it happened. Mark it as an external effect unless it has none.`,
-    `The compensation of "${step}" is marked safe to repeat, so an undo may run again after a restart without a committed claim. Mark it as an external effect unless it is idempotent and has no effect of its own.`
+    `"${step}" is marked safe to repeat, so if the process stops before Elsa records its attempt, recovery may not know whether it ran. If this is demo-only logging, no action is needed. If it performs a real external operation, replace it with an External activity and make retries safe with an idempotency key.`,
+    `The compensation of "${step}" is marked safe to repeat, so if the process stops before Elsa records its attempt, recovery may run the undo again. If this is demo-only logging, no action is needed. If it performs a real external operation, replace it with an External activity and make the undo safe to retry with an idempotency key.`
   ];
 }
 

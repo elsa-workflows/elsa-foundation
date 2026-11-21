@@ -4,7 +4,7 @@ using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.ModuleManagement;
-using Elsa.Foundation.Host.Shells;
+using Elsa.Foundation.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;

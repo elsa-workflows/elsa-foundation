@@ -33,6 +33,32 @@ function click(button: HTMLButtonElement) {
 }
 
 describe("compact workflow toolbar", () => {
+  it("renders the workflow parent as a breadcrumb link and keeps return handling in the editor", () => {
+    const onBack = vi.fn();
+    const { container } = render({ onBack });
+    const breadcrumbs = container.querySelector<HTMLElement>('nav[aria-label="Breadcrumb"]')!;
+    const parentLink = breadcrumbs.querySelector<HTMLAnchorElement>("a")!;
+
+    expect(parentLink.textContent).toBe("Definitions");
+    expect(parentLink.getAttribute("href")).toContain("/workflows/definitions");
+    expect(breadcrumbs.querySelector('[aria-current="page"]')?.textContent).toContain("Customer quote");
+    parentLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("uses the template parent and preserves its current-item badge", () => {
+    const onBack = vi.fn();
+    const { container } = render({ templateMode: true, onBack });
+    const breadcrumbs = container.querySelector<HTMLElement>('nav[aria-label="Breadcrumb"]')!;
+    const parentLink = breadcrumbs.querySelector<HTMLAnchorElement>("a")!;
+
+    expect(parentLink.textContent).toBe("Templates");
+    expect(parentLink.getAttribute("href")).toContain("/workflows/templates");
+    expect(breadcrumbs.querySelector('[aria-current="page"]')?.textContent).toContain("Template");
+    parentLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
   it("keeps primary commands directly available with descriptive accessible labels", () => {
     const { container, commands } = render();
     const save = container.querySelector<HTMLButtonElement>(".wf-save-button")!;

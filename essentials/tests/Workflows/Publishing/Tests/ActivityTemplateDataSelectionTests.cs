@@ -18,7 +18,7 @@ using DesignContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 
 namespace Elsa.Workflows.Publishing.Tests;
 
-public sealed class ActivityTemplateDataSelectionTests
+public sealed partial class ActivityTemplateDataSelectionTests
 {
     [Theory]
     [InlineData(false)]

@@ -96,6 +96,98 @@ public sealed class WorkflowExecutableInputValidatorTests
     }
 
     [Fact]
+    public void Missing_required_input_with_literal_default_is_materialized()
+    {
+        var validator = new WorkflowExecutableInputValidator(Registry(("String", typeof(string))));
+        var result = validator.Validate(
+            Contract(new WorkflowDeclaredInput("greeting", new TypeReference("String"), true, Json("\"hello\""))),
+            Array.Empty<KeyValuePair<string, JsonElement>>());
+
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Findings);
+        Assert.Equal("hello", result.NormalizedInputs["greeting"].GetString());
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, true)]
+    public void Explicit_null_is_accepted_only_for_nullable_optional_inputs(bool isRequired, bool isNullable, bool isValid)
+    {
+        var validator = new WorkflowExecutableInputValidator(Registry(("String", typeof(string))));
+        var result = validator.Validate(
+            Contract(new WorkflowDeclaredInput("value", new TypeReference("String"), isRequired, defaultValue: Json("\"fallback\""), isNullable: isNullable)),
+            [Pair("value", Json("null"))]);
+
+        Assert.Equal(isValid, result.IsValid);
+        if (isValid)
+        {
+            Assert.Equal(JsonValueKind.Null, result.NormalizedInputs["value"].ValueKind);
+            return;
+        }
+
+        var finding = Assert.Single(result.Findings);
+        Assert.Equal(WorkflowExecutableInputValidationReasonCodes.IncompatibleValue, finding.ReasonCode);
+        Assert.Equal("value", finding.InputName);
+        Assert.Empty(result.NormalizedInputs);
+    }
+
+    [Theory]
+    [InlineData("Int32", typeof(int), false)]
+    [InlineData("Int32", typeof(int), true)]
+    [InlineData("Boolean", typeof(bool), false)]
+    [InlineData("Boolean", typeof(bool), true)]
+    public void Nullable_optional_value_types_accept_explicit_and_defaulted_null(string alias, Type type, bool useDefault)
+    {
+        var validator = new WorkflowExecutableInputValidator(Registry((alias, type)));
+        var contract = Contract(new WorkflowDeclaredInput("value", new TypeReference(alias), false, Json("null"), isNullable: true));
+
+        var result = validator.Validate(contract, useDefault ? [] : [Pair("value", Json("null"))]);
+
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Findings);
+        Assert.Equal(JsonValueKind.Null, result.NormalizedInputs["value"].ValueKind);
+    }
+
+    [Fact]
+    public void Explicit_zero_false_and_empty_string_override_literal_defaults()
+    {
+        var validator = new WorkflowExecutableInputValidator(Registry(("Int32", typeof(int)), ("Boolean", typeof(bool)), ("String", typeof(string))));
+        var contract = Contract(
+            new WorkflowDeclaredInput("count", new TypeReference("Int32"), true, Json("10")),
+            new WorkflowDeclaredInput("enabled", new TypeReference("Boolean"), true, Json("true")),
+            new WorkflowDeclaredInput("label", new TypeReference("String"), true, Json("\"default\"")));
+
+        var result = validator.Validate(contract,
+        [
+            Pair("count", Json("0")),
+            Pair("enabled", Json("false")),
+            Pair("label", Json("\"\""))
+        ]);
+
+        Assert.True(result.IsValid);
+        Assert.Equal(0, result.NormalizedInputs["count"].GetInt32());
+        Assert.False(result.NormalizedInputs["enabled"].GetBoolean());
+        Assert.Equal(string.Empty, result.NormalizedInputs["label"].GetString());
+    }
+
+    [Fact]
+    public void Default_false_nullability_is_omitted_but_true_nullability_is_serialized()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var defaultContract = new WorkflowDeclaredInput("legacy", new TypeReference("String"), false);
+        var nullableContract = new WorkflowDeclaredInput("nullable", new TypeReference("String"), false, defaultValue: null, isNullable: true);
+        var defaultJson = JsonSerializer.Serialize(defaultContract, options);
+        var nullableJson = JsonSerializer.Serialize(nullableContract, options);
+
+        Assert.DoesNotContain("isNullable", defaultJson, StringComparison.Ordinal);
+        Assert.Contains("\"isNullable\":true", nullableJson, StringComparison.Ordinal);
+        Assert.False(JsonSerializer.Deserialize<WorkflowDeclaredInput>(defaultJson, options)!.IsNullable);
+        Assert.True(JsonSerializer.Deserialize<WorkflowDeclaredInput>(nullableJson, options)!.IsNullable);
+    }
+
+    [Fact]
     public void Unknown_declared_type_alias_fails_closed()
     {
         var validator = new WorkflowExecutableInputValidator(Registry(("String", typeof(string))));

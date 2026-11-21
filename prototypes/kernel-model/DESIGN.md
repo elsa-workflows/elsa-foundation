@@ -1,12 +1,16 @@
 # Execution kernel: design as built (the kernel model in three layers, 12 November 2026)
 
+> **19 November 2026:** the Orleans reference adapter (`runtime/Kernel.Runtime.Orleans`) is retired at the owner's
+> decision: layers 1 and 2 are one replaceable foundation behind layer 3's contract ([register](../../docs/architecture/decisions.md#owner-decisions-after-k1-19-november)).
+> The sections below that describe it are history.
+
 Status: the design of the kernel model after round 4 stage A, which split the merged kernel into three layer projects
 and renamed step to turn and off-step work (run) to background job, at the owner's decisions of 12 November. Stage A
 changed no behaviour: every gate gives the numbers it gave before (FINDINGS section 24). Round 4's graph engine
 (FINDINGS section 26) puts the native Flowchart on main's Flowchart engine (`models/Graph`) and adds the graph
 invariants G1 to G5 to the simulation; it changes no kernel behaviour and no round trip. Round 4's runtimes (FINDINGS
 section 27) add the built-in runtime on a clock (`RuntimeNode`), the Orleans adapter and the runtime conformance suite,
-and change layer 2 where the seam needed it: a pass renews an idle lease (R1), a new activation is woken (R4), and a
+and change layer 2 where the seam needed it: the historical R1 idle-lease contract, a new activation is woken (R4), and a
 job's body may run off the runtime's scheduler (R14); every gate of README's "The gates of a refactor", SQLite and
 PostgreSQL, gives main's numbers at the stack's final state (FINDINGS section 27). The source of design intent is
 draft 5 of the kernel sketch (three layers, partitions only, deployment profiles, persistence as an abstraction,
@@ -87,17 +91,20 @@ public interface IWakeSignal                       // layer 1, pluggable; not du
 ```
 
 - **Partitions only** (the owner's decision of 12 November): a scope is a partition, so there is no granularity and no
-  sweep. Orleans hosts each partition as a grain (`runtime/Kernel.Runtime.Orleans`, below).
-- **Activating a scope takes the fence.** `DurableHost.ActivateAsync` asks the partition's worker to take it (a take
-  bumps the epoch and starts from empty memory) and returns the worker, or null when the store refuses. Disposing the
-  activation releases the partition. Layer 2 never trusts the runtime: two activations of one scope on two nodes
-  leave one writer, because the fence lets one of them commit.
+  sweep. Since K1 a partition is one of 1,024 virtual partitions, each with its own fence row, epoch, position and
+  journal ([PARTITIONS.md](PARTITIONS.md)). Orleans hosts each partition as a grain (`runtime/Kernel.Runtime.Orleans`, below).
+- **Activating a scope takes the fence.** On a node's host (`DurableHost.ForNode`, K1 D1) one worker serves every
+  scope the node activates, as one owned set: activating a scope takes that partition's fence row at a new epoch and
+  adds it to the set (`Worker.GainAsync`), and disposing the activation releases that row (`Worker.LoseAsync`). The
+  worker polls the set in one query and flushes the partitions a batch touches under a k-row fence, locked in ascending
+  id, all or nothing. A store without owned sets (`commit=ef`) gets a worker per scope, which takes from empty memory.
+  Layer 2 never trusts the runtime: two activations of one scope on two nodes leave one writer, because the fence lets
+  one of them commit.
 - **One pass at a time per scope.** `PartitionRuntime.PassAsync` calls `RunAsync` and never two at once for a scope.
   A pass reads the inbox if it was woken, loads what is missing, reads kept events, runs every turn that is ready in id
-  order and flushes; if no commit renewed the lease for a third of it, it beats (an empty fenced commit). It returns
-  zero while there is work, otherwise the sooner of the next timer it holds and the next beat (never zero), and null
-  once the scope is not held: a runtime that calls again when asked keeps an idle scope's lease. A cancelled token
-  stops it at a turn boundary, before its commit: a process that goes away.
+  order and flushes. The host heartbeats independently, renewing one node lease while the Worker's passes complete
+  within the lease window. A pass returns zero for more work, a positive delay for the next pass, or null after it
+  stands down. A cancelled token stops the pass at a turn boundary, before its commit.
 - **The wake signal is a hint; polling is the guarantee.** `WakeAsync` sends over the signal; a runtime that hears it
   for a scope it holds calls `WokenAsync`, and the next pass polls. A lost hint costs latency until the host's poll
   interval, when the host calls `WokenAsync(null)`. The built-in signal is a call within one process.
@@ -136,9 +143,8 @@ named preset of the last two; a workflow behaves the same under every profile.
 
 | Profile | Runtime | Store | In the code |
 |---|---|---|---|
-| Embedded | Built-in, one node | SQLite typically: **1 partition** by default | `EfStore.CreateAsync()` on SQLite |
-| Cluster | Built-in, partitions over nodes | PostgreSQL, SQL Server, MySQL, MongoDB: **64 partitions** by default | `EfStore.CreateAsync()`, `MongoStore.CreateAsync()` |
-| Orleans | The adapter: each partition a grain | Any | `AddKernelRuntime` on a silo, then `OrleansActorRuntime.StartAsync` with layer 2's host |
+| Embedded | Built-in, one node | SQLite typically: **1,024 virtual partitions** by default, one node's set | `EfStore.CreateAsync()` on SQLite |
+| Cluster | Built-in, partitions over nodes | PostgreSQL, SQL Server, MySQL, MongoDB: **1,024 virtual partitions** by default | `EfStore.CreateAsync()`, `MongoStore.CreateAsync()` |
 
 Inline execution is what `Worker.Post` does: a start without a caller's key runs in the receiving process, in a
 partition it owns, with no row written until the instance commits.
@@ -198,8 +204,8 @@ in the one bulk write.
 
 | Table | Row | Notes |
 |---|---|---|
-| `partition` | id, owner, epoch, lease_until, position, died | `position` counts journal rows written. `epoch` changes only when ownership is taken. Times are database time in milliseconds |
-| `node` | id, seen_at | A heartbeat per process start, for the fair share. Liveness only |
+| `partition` | id, owner, epoch, position, died | `position` counts journal rows written. `epoch` changes only when ownership is taken. Times are database time in milliseconds |
+| `node` | id, seen_at, lease_until | One lease per process start, renewed by the node heartbeat and by takes. The last heartbeat supplies the fair share |
 | `instance` | id, partition, model, definition, status, state, state_version, history, suspended, jobs, children, revision, parent, fault | `state` is opaque to the kernel. `jobs`: the background jobs in flight; `children`: the instances it started that have not finished. Layer 2's columns and layer 3's in one row (FINDINGS section 24) |
 | `message` | seq, id, partition, target, kind, payload, sender, reply_to, start, due, seen, trial, attempts, keep_until, done | The inbox. `seq` is the order key; `id` makes adding idempotent; `due` makes a timer; `start` creates the target; `reply_to` is a caller on some node |
 | `subscription` | key, instance, wait, partition, start | A wait of an instance, or with a start spec and no instance a definition an event starts |
@@ -214,7 +220,7 @@ subscriptions `(instance)` and journal `(partition, instance)` for terminate and
 ## The commit
 
 The owner of partition `p` at epoch `e`, which believes the position is `n`, commits `k` instance turns in one
-transaction: the fence `UPDATE partition SET position = n + j, lease_until = ... WHERE id = p AND epoch = e AND
+transaction: the fence `UPDATE partition SET position = n + j WHERE id = p AND epoch = e AND
 position = n` (`j` the journal rows written), checked before anything else is sent, or carried as concurrency tokens
 in the batch; the instance rows at their revisions (inserts, updates, deletes); consumed messages deleted, outside
 commands marked done, held messages taken off trial, polled messages marked seen or put on trial; sent messages
@@ -235,14 +241,18 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
 
 ## Ownership
 
-- **Take** (`PartitionRuntime.ActivateAsync` → `DurableHost` → `Worker.TakeAsync`) bumps the epoch; a take from another owner can only succeed because its lease expired. Every take starts
-  from empty memory. **Reset** is the same path as start-up.
+- **Take** (`PartitionRuntime.ActivateAsync` → `DurableHost` → `Worker.GainAsync`, or `Worker.TakeAsync` for a
+  worker of a fixed set) bumps the partition's epoch. The take reads previous owners' node leases before renewing
+  the taker's lease and locking the partition rows. A missing or expired node record permits takeover. A gain keeps the rest of the set, its epochs, positions and memory. **Reset** after a refused fence or a
+  lost answer retakes each partition the node still holds, one at a time at a new epoch (`IKernelStore.RetakeAsync`).
+  The costs of each, scattered and contiguous, are PARTITIONS.md's "K1 costs".
 - **The lease is 10 s by default** (`Defaults.Lease`, the owner's of 12 November). A takeover waits for it, so
   failover takes about one lease. The simulation and the stress tests use short leases of their own.
 - **Leases decide who should write. The fence decides who can.**
-- **Fair share** (`PartitionRuntime.BalanceAsync`): a node beats, counts the nodes heard from, releases what is above its share and takes free
-  partitions up to it. The number of partitions is fixed when the store is created: 64 on a server database, 1 on
-  SQLite by default.
+- **Fair share** (`PartitionRuntime.BalanceAsync`): a node uses its last heartbeat’s membership, releases what is above its share and takes free
+  partitions up to it. It gives up the highest first and asks for the lowest free first, so it moves the fewest and a
+  node's set may be scattered (`Balancer.Plan`, K1). The number of partitions is fixed when the store is created:
+  1,024 on every store by default (K1 slice 7); on SQLite one node owns them all as one set.
 - **A node's name is unique per process start** (F9). One process owns several partitions and dies for all of them,
   which matters for poison (F11).
 
@@ -260,6 +270,29 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
 - **Local lease deadline:** the worker stands down before starting new work once its conservative monotonic lease window expires. Existing work may still have external effects; the fence remains authoritative. The trace, scheduler tests and clock limitations are in [LEASE.md](LEASE.md).
 - **Redelivery:** `ITurn.Redelivered(message)` is true when its polled row already carried a seen or trial marker.
   This is an observed-history hint: false does not prove that another owner did not execute it (F-N6, #4362).
+- **Side effects run at least once; the kernel makes none of them exactly once** (decision 1; round 5 C). A crash
+  between an effect and its commit, a lost turn result, a redelivery or a takeover runs the activity again. What the
+  kernel gives the activity instead is a **stable effect key** (`EffectKey.For`, `src/Kernel.Workflows/EffectKey.cs`):
+  **`{instance origin}/{node}/{iteration path}/{attempt}`**, the owner's shape of 16 November, from committed facts
+  only. The instance id is fixed at creation and the key never reads partitions or positions; the node is the activity's
+  stable id in the definition; the iteration path is the iteration numbers of the repeating scopes that enclose the
+  activation (a ForEach index, a While pass, a Flowchart round and, forward of a Merge, the token named by the merge
+  and the arrival's source, a Flowchart join's firing ordinal in its round, a StateMachine visit serial, a retry
+  generation), each from the enclosing activity's committed state, root first; the attempt is 0, or 1 for an External
+  activity in Durable mode, and takes no other
+  value. One logical activation re-derives one key on whichever owner replays it; two activations of one node never
+  share one; a retry after a definite failure is a new generation in the path, so a new key. The frame number is not in
+  the key (the owner's reason): in Balanced and Ephemeral a replayed burst mints frame numbers from the committed state
+  in agenda order, and a replay over a longer inbox (a timer that became due meanwhile) orders the agenda differently,
+  so a frame number can land on another activity or on another iteration of the same one, and a receiver would drop a
+  genuine effect as a repeat; the iteration path does not move with the agenda, and no extra commit is paid. The
+  activity hands the key to the receiver where the receiver looks for a repeat: the native `SendHttpRequest` sends it
+  as the `Idempotency-Key` header and `SendEmail` as the local part of the `Message-ID`. **Deduplication is the
+  receiving side's job**, conditional on its keeping the keys it has seen; the kernel records no key and drops no
+  repeat. The simulation's N7 checks the carrying, the stability (one activation, one key across its resends; a
+  resend's content is not compared, the receiver keeps the first), that one key belongs to one activation, and that a
+  key never leaves in two turns that both landed; the smoke's alias check replays one committed state over a shorter
+  and a longer inbox and asserts the same.
 - **Poison:** suspects (rows another owner had) are tried apart, alone in the process (F2, F11), one at a time or in
   halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the instance is
   parked and the deliveries consumed. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
@@ -366,6 +399,10 @@ public interface ITurn
   than once, its result (`job-finished`) changes state once; a result goes ahead of other messages, so a model never
   sees its own cancel first.
 - **Models compose through messages only.** A parent starts a child of any model and gets `child-finished`.
+- **Effect keys** (`EffectKey.For(turn.Instance, node, iterationPath, attempt)`, round 5 C): the one derivation every model
+  uses for the key an activity hands a partner, so that a BPMN task and a native activity name an activation the same
+  way. The model owns what a node, an iteration path and an attempt are (they must come from its committed state, never
+  from the order of a burst); the kernel owns the instance's origin and the shape of the key.
 - **How the known models sit on it:** native (built: activity frames, agenda, waits and variables as state; slow
   activities are background jobs; a Flowchart's paths, arrivals and dead paths are the graph engine's, in its frame's
   state, and add no database call; NATIVE.md). BPMN stores tokens, runs tasks as jobs, keeps early messages and uses
@@ -434,7 +471,10 @@ published after the wait committed is delivered once); 14 one bad instance; 15 c
 mix: N1 an activity completes once, N2 a join fires once (a Flowchart join once per scheduling id; G2 holds it to once per round where no merge lies
 upstream), N3 a child starts once and resumes once, N4 a Durable
 External effect runs only under a committed attempt, N5 final variables equal a run without faults, and N6 (merge) an
-External effect sees the delivery-history hint implied by the metadata observed before marking; false does not prove no other owner executed. The graph invariants of the sketch (round 4):
+External effect sees the delivery-history hint implied by the metadata observed before marking; false does not prove no other owner executed, and N7 (round 5 C) an
+outbound effect (HTTP, email) carries its effect key where its receiver looks, the same key every time the same logical
+activation (node, iteration path, attempt) is sent, one key belongs to one activation, and a key never leaves in two turns that
+both landed (a resend's content is not compared). The graph invariants of the sketch (round 4):
 G1 path conservation, G2 a join fires at most once per round, G3 an All join fires once every inbound of its round has
 arrived, live or dead (G2 and G3 skip a merge and every node forward of it; the mix has no merge), G4 a graph completes exactly when no path is live, G5 no path outlives its cancelled scope.
 
@@ -476,8 +516,8 @@ marked.
 | # | Gain | Price | Lever |
 |---|---|---|---|
 | 1 | No reads while a workflow runs | Memory per active instance; the whole state rewritten per commit | Bound on instances held; values by reference |
-| 2 | One writer per partition: no locks, many instances per commit | Failover takes about one lease; a hot partition has one writer; the partition count is fixed at creation | Partitions (64 on servers, 1 on SQLite: decided); lease (10 s: decided) |
-| 3 | An idle owner needs little traffic | A heartbeat per owned partition about three times per lease, plus one node beat | Lease |
+| 2 | One writer per partition: no locks, many instances per commit | Failover takes about one lease; a hot partition has one writer; the partition count is fixed at creation | Partitions (1,024 virtual partitions: decided 16 November); lease (10 s: decided) |
+| 3 | An idle owner renews one node row | The heartbeat reads ownership and membership and runs about three times per lease. The prior partition-lease path wrote about 161 MB of PostgreSQL WAL an hour with four idle nodes and 1,024 partitions | Lease and heartbeat cadence. See PARTITIONS.md for the K1 baseline |
 | 4 | Batching under load | A commit waits for the one before it | Rows per flush |
 | 5 | Balanced mode: one commit per wait | Activities since the last commit run again after a crash; `Redelivered` reports observed delivery history, not every possible rerun | Persistence mode per workflow |
 | 6 | A background job does not block the instance | It can execute more than once | None: inherent |
@@ -512,7 +552,7 @@ marked.
 | "Everything else is definite" (failures) | Unknown when the provider cannot tell | M4: an interrupted operation would park an innocent instance |
 | The store contract lists nine guarantees | Plus heartbeat, start subscriptions, projector row, view rows, delete, held messages | Round 3 built them; the suite tests each on every store |
 | Owner lost while a request waits: 503 | 503 on the receiving node; 504 at the deadline when the owner was on another node | No signal from owner to receiving node yet |
-| Lease and partition count left to the owner | 10 s; 64 on servers, 1 on SQLite | Decided 12 November |
+| Lease and partition count left to the owner | 10 s; 1,024 virtual partitions on every store | Decided 12 November; the count 16 November, built in K1 |
 
 ## What the tests did and did not show
 

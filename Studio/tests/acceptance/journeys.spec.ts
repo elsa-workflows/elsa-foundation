@@ -1,7 +1,9 @@
+import { scopedExpressionReferencesJourney } from "./scopedExpressionReferencesJourney";
 import { activityValidationReportingJourney } from "./activityValidationReportingJourney";
 import { nativeBlockValidationJourney } from "./nativeBlockValidationJourney";
 import { setOutputJourney } from "./setOutputJourney";
 import { namedBlocksJourney } from "./namedBlocksJourney";
+import { blockPromotionJourney } from "./blockPromotionJourney";
 import { bpmnNamedBlocksJourney } from "./bpmnNamedBlocksJourney";
 import { authoredActivityNamesJourney } from "./authoredActivityNamesJourney";
 import { cleanupDashboardJourney } from "./dashboardJourneySupport";
@@ -25,8 +27,10 @@ import { decisionsJourney } from "./decisionsJourney";
 import { settingsTabsJourney } from "./settingsTabsJourney";
 import { assertToastPlacementHolds, holdToastForPlacement, releaseToastPlacementHolds } from "./toastPlacementControl";
 import { structuredLogsJourney } from "./structuredLogsJourney";
+import { activityDataCopyJourney } from "./activityDataCopyJourney";
 import { activityDataMembersJourney } from "./activityDataMembersJourney";
 import { activityDataSourcesJourney } from "./activityDataSourcesJourney";
+import { activityExpressionInsertionJourney, expressionModulePreservationJourney } from "./activityExpressionInsertionJourney";
 import { numericBindingJourney } from "./numericBindingJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
@@ -160,7 +164,7 @@ test.afterEach(async ({ page, playwright }, info) => {
 
 test.beforeEach(async ({ page }, info) => {
   const reportedAppearance = info.title === "feature filtering and settings dialogs";
-  const authoredNamesTheme = ["explicit authored activity names survive publication and execution", "named blocks across graph authoring", "named blocks preserve declared expression results"].includes(info.title)
+  const authoredNamesTheme = ["explicit authored activity names survive publication and execution", "named blocks across graph authoring", "named blocks preserve declared expression results", "named blocks promote to reusable activities"].includes(info.title)
     ? info.project.use.colorScheme === "dark" ? "builtin:graphite" : "builtin:porcelain"
     : undefined;
   await page.addInitScript(({ mode, reportedAppearance, authoredNamesTheme }) => {
@@ -501,27 +505,33 @@ test("agent authoring and navigation", async ({ page }, info) => {
     const settings = member.getByRole("tablist", { name: "Member settings", exact: true });
     await expect(member.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
     await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+    const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
     if (kind === "input") {
+      await expect(key).toHaveValue("topic");
       await member.getByRole("combobox", { name: "Default", exact: true }).selectOption("literal");
       await member.getByRole("textbox", { name: "Value", exact: true }).fill("A retained topic");
     }
     await capture(page, info, `${kind}-general`);
-    await settings.getByRole("tab", { name: "General", exact: true }).focus();
-    await page.keyboard.press("ArrowRight");
-    await expect(settings.getByRole("tab", { name: "Presentation", exact: true })).toBeFocused();
+    if (kind === "input") {
+      await settings.getByRole("tab", { name: "General", exact: true }).focus();
+      await page.keyboard.press("ArrowRight");
+      await expect(settings.getByRole("tab", { name: "Presentation", exact: true })).toBeFocused();
+    } else {
+      await member.locator("summary").filter({ hasText: /^Presentation$/ }).click();
+    }
     await member.getByRole("textbox", { name: /^Display name/ }).fill(kind === "input" ? "Writing topic" : "Written result");
     await member.getByRole("combobox", { name: /^Category/ }).fill("Writing");
     await member.getByRole("spinbutton", { name: "Order", exact: true }).fill("2");
     await capture(page, info, `${kind}-presentation`);
-    await settings.getByRole("tab", { name: "Advanced", exact: true }).click();
+    if (kind === "input") await settings.getByRole("tab", { name: "Advanced", exact: true }).click();
+    else await member.locator("summary").filter({ hasText: /^Advanced$/ }).click();
     await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
     await expect(member.getByText("Type alias", { exact: true })).toHaveCount(0);
-    const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
+    await capture(page, info, `${kind}-advanced`);
+    if (kind === "input") await settings.getByRole("tab", { name: "General", exact: true }).click();
     await key.fill(`${kind}-writing`);
     await member.getByRole("button", { name: "Apply key", exact: true }).click();
     await expect(member.getByRole("button", { name: "Apply key", exact: true })).toBeDisabled();
-    await capture(page, info, `${kind}-advanced`);
-    await settings.getByRole("tab", { name: "General", exact: true }).click();
     if (kind === "input") {
       await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A retained topic");
       await member.getByRole("button", { name: "Apply default", exact: true }).click();
@@ -531,10 +541,12 @@ test("agent authoring and navigation", async ({ page }, info) => {
     await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: kind === "input" ? "Inputs (1)" : "Outputs (1)", exact: true }).click();
     const saved = page.locator(`[data-contract-kind="${kind}"][data-contract-selected="true"]`);
     if (kind === "input") await expect(saved.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A retained topic");
-    await saved.getByRole("tab", { name: "Presentation", exact: true }).click();
+    if (kind === "input") await saved.getByRole("tab", { name: "Presentation", exact: true }).click();
+    else await saved.locator("summary").filter({ hasText: /^Presentation$/ }).click();
     await expect(saved.getByRole("combobox", { name: /^Category/ })).toHaveValue("Writing");
     await expect(saved.getByRole("spinbutton", { name: "Order", exact: true })).toHaveValue("2");
-    await saved.getByRole("tab", { name: "Advanced", exact: true }).click();
+    if (kind === "input") await saved.getByRole("tab", { name: "General", exact: true }).click();
+    else await saved.locator("summary").filter({ hasText: /^Advanced$/ }).click();
     await expect(saved.getByRole("textbox", { name: "Stable reference key", exact: true })).toHaveValue(`${kind}-writing`);
   }
   await tabs.getByRole("tab", { name: "Outcomes (1)", exact: true }).click();
@@ -931,7 +943,7 @@ test("workflow template metadata defaults", async ({ page }, info) => {
     await sequence.press("Space");
     await expect(sequence).toBeChecked();
     await dialog.getByRole("button", { name: "Create template", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Templates", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Templates", exact: true })).toBeVisible();
   }
 
   const submitAndInspect = async (expectedName: string, expectedDescription: string) => {
@@ -1036,6 +1048,15 @@ test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture, id => designerDefinitions.get(page)!.push(id));
 });
 
+for (const [title, mode] of [
+  ["copy activity data pairs", "pairs"],
+  ["copy sequence activity data pairs", "sequence-pairs"],
+  ["copy scoped and portable activity data", "scopes"],
+  ["preserve external activity references on copy", "external"]
+] as const) test(title, async ({ page }, info) => {
+  await activityDataCopyJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); }, mode);
+});
+
 test("choose nested activity data", async ({ page }, info) => {
   await activityDataMembersJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
@@ -1050,6 +1071,20 @@ test("Double activity output binds to text", async ({ page }, info) => {
 test("choose data for activity outputs", async ({ page }, info) => {
   await chooseDataJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
+test("repair scoped JavaScript references", async ({ page }, info) => {
+  await scopedExpressionReferencesJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+test("insert JavaScript activity data", async ({ page }, info) => {
+  await activityExpressionInsertionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); }, "JavaScript");
+});
+test("insert Liquid activity data", async ({ page }, info) => {
+  await activityExpressionInsertionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); }, "Liquid");
+});
+if (process.env.UX_ACTIVITY_DATA_COMPOSITION === "minimal") {
+  test("preserve expression data without optional modules", async ({ page }, info) => {
+    await expressionModulePreservationJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+  });
+}
 
 test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
   await tabbedSecretsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
@@ -1078,6 +1113,11 @@ test("explicit authored activity names survive publication and execution", async
 test("named blocks across graph authoring", async ({ page }, info) => {
   test.setTimeout(240_000);
   await namedBlocksJourney(page, info, capture);
+});
+
+test("named blocks promote to reusable activities", async ({ page }, info) => {
+  test.setTimeout(240_000);
+  await blockPromotionJourney(page, info, capture);
 });
 
 test("named blocks preserve declared expression results", async ({ page }, info) => {

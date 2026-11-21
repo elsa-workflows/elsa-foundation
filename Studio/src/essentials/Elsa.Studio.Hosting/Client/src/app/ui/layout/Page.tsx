@@ -1,4 +1,5 @@
 import React from "react";
+import { StudioRefreshControl, type StudioRefreshContribution } from "./RefreshControl";
 
 /** A route's content frame. The host owns the main landmark and outer page gutter. */
 export function StudioPage({ className, ...props }: React.ComponentPropsWithoutRef<"section">) {
@@ -7,26 +8,34 @@ export function StudioPage({ className, ...props }: React.ComponentPropsWithoutR
 
 export interface StudioPageHeaderProps extends Omit<React.ComponentPropsWithoutRef<"header">, "title"> {
   title: React.ReactNode;
+  breadcrumbs?: React.ReactNode;
   description?: React.ReactNode;
   /** Optional context, only when it adds information beyond the title/navigation. */
   eyebrow?: React.ReactNode;
   icon?: React.ReactNode;
   actions?: React.ReactNode;
+  actionsLabel?: string;
+  /** Opt-in Contribution to the page header's contextual refresh Slot. */
+  refresh?: StudioRefreshContribution;
   titleId?: string;
   /** Use 2 when the host already renders the page's h1. */
   headingLevel?: 1 | 2;
 }
 
-export function StudioPageHeader({ title, description, eyebrow, icon, actions, titleId, headingLevel = 1, className, children, ...props }: StudioPageHeaderProps) {
+export function StudioPageHeader({ title, breadcrumbs, description, eyebrow, icon, actions, actionsLabel, refresh, titleId, headingLevel = 1, className, children, ...props }: StudioPageHeaderProps) {
   const Heading = headingLevel === 2 ? "h2" : "h1";
   return <header className={["studio-page-header", className].filter(Boolean).join(" ")} {...props}>
     <div className="studio-page-header-copy">
+      {breadcrumbs}
       {eyebrow ? <span className="studio-page-eyebrow">{eyebrow}</span> : null}
       <Heading id={titleId} title={typeof title === "string" ? title : undefined}>{icon ? <span aria-hidden="true">{icon}</span> : null}{title}</Heading>
       {description ? <p>{description}</p> : null}
       {children}
     </div>
-    {actions ? <div className="studio-page-actions">{actions}</div> : null}
+    {actions || refresh ? <div className="studio-page-actions" role={actionsLabel ? "group" : undefined} aria-label={actionsLabel}>
+      {actions}
+      {refresh ? <StudioRefreshControl key={refresh.id} refresh={refresh} /> : null}
+    </div> : null}
   </header>;
 }
 
@@ -65,4 +74,9 @@ export function StudioResultState({ title, description, actions, icon, tone = "n
     {children}
     {actions ? <div className="studio-page-actions">{actions}</div> : null}
   </div>;
+}
+
+/** Empty state for a collection with no rows. Keeps error and loading feedback distinct. */
+export function StudioCollectionEmptyState({ className, ...props }: StudioResultStateProps) {
+  return <StudioResultState {...props} className={["studio-collection-empty", className].filter(Boolean).join(" ")} />;
 }

@@ -1,6 +1,6 @@
 import { Bot } from "lucide-react";
 import React from "react";
-import type { ElsaStudioModuleApi, StudioActivityDefinitionImplementationEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioActivityDefinitionImplementationEditorContribution, StudioIncidentRootCauseProviderContribution, StudioIncidentStateSummary } from "@elsa-workflows/studio-sdk";
 import { AgentsPage } from "./AgentsPage";
 import { HumanReviewPage } from "./HumanReviewPage";
 import { AgentEditor } from "./AgentEditor";
@@ -102,4 +102,24 @@ export function register(api: ElsaStudioModuleApi) {
     label: "Review",
     component: () => <HumanReviewPage context={api.backend} />
   });
+  // Provide tailored root cause guidance for agent model turn failures.
+  const agentIncidentProvider: StudioIncidentRootCauseProviderContribution = {
+    id: "agent-incident-root-cause",
+    order: 10,
+    failureTypes: ["AgentTurnFailed", "AgentModelTurnFailed"],
+    metadataKeyPrefixes: ["runtime.agentTurnCode", "agent."],
+    getRootCause: (incident: StudioIncidentStateSummary) => {
+      const message = (incident.message ?? "").toLowerCase();
+      const failureType = (incident.failureType ?? "").toLowerCase();
+      const metadata = incident.metadata ?? {};
+      const isAgentFailure = failureType.includes("agent") || failureType.includes("turnfailed") ||
+        message.includes("agent turn") ||
+        Boolean(metadata["runtime.agentTurnCode"]) ||
+        Object.keys(metadata).some(key => key.startsWith("agent."));
+      if (!isAgentFailure) return null;
+      const agentCode = metadata["runtime.agentTurnCode"]?.trim() || incident.failureType;
+      return `The agent model call failed (code: ${agentCode}). Common causes include invalid prompt placeholders, missing model connection credentials, or an unreachable model endpoint. Check the agent's prompt, model connection in Connections, and the technical details below for the exact cause.`;
+    }
+  };
+  api.incidentRootCauseProviders?.add(agentIncidentProvider);
 }

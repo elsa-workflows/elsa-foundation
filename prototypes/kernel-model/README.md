@@ -9,8 +9,9 @@ repository: the folder has its own `Directory.Build.*`, `Directory.Packages.prop
 What was found is in [FINDINGS.md](FINDINGS.md) (section 27: the runtime conformance suite and the Orleans adapter;
 section 26: the graph engine; section 25: round 4's decided items; section 24: the three layers and the round 4 names;
 section 23: the merge of the four branches and its gates); what each database engine does to the EF store is in
-[ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), native workflows as an execution model in
-[NATIVE.md](NATIVE.md), and write volume and bloat on PostgreSQL in [WRITES.md](WRITES.md).
+[ENGINES.md](ENGINES.md), the store's own commit SQL (round 5 B) in [COMMIT-SQL.md](COMMIT-SQL.md), MongoDB in
+[MONGO.md](MONGO.md), native workflows as an execution model in [NATIVE.md](NATIVE.md), virtual partitions and the fence
+granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on PostgreSQL in [WRITES.md](WRITES.md).
 
 ## Layout
 
@@ -24,7 +25,7 @@ section 23: the merge of the four branches and its gates); what each database en
 | `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
 | `models/Native.Run` | Native smoke tests, cost and memory measurement |
-| `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs` |
+| `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
 | `ef/Kernel.Ef.Conformance` | The conformance suite against the EF store, every engine |
 | `conformance/Kernel.Store.Conformance` | The store conformance suite: semantic cases, the stress test, the cost runs, for any provider |
@@ -32,17 +33,23 @@ section 23: the merge of the four branches and its gates); what each database en
 | `conformance/Kernel.Runtime.Conformance` | The runtime conformance suite: semantic cases, the fence broken on purpose, the stress test, for any actor runtime |
 | `conformance/Kernel.Runtime.Conformance.Run` | The runtime suite against the built-in runtime |
 | `runtime/Kernel.Runtime.Hosting` | `RuntimeNode`: the built-in runtime of one node on a clock |
-| `runtime/Kernel.Runtime.Orleans` | The Orleans adapter: each partition a grain |
-| `runtime/Kernel.Runtime.Orleans.Conformance` | The runtime suite against the Orleans adapter, on Orleans' in-process test cluster |
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
+| `experiments/VirtualPartitions` | Round 5 A: the two fence granularities of virtual partitions (per virtual partition, per owned range) as EF stores, the measurement harness and the ownership simulation; results in [PARTITIONS.md](PARTITIONS.md) |
+| `experiments/K1.LockOrder` | K1 slice 3: two overlapping range commits on PostgreSQL, SQL Server and MySQL, with the k fence rows locked in ascending partition id and, as the negative, in batch order; [its README](experiments/K1.LockOrder/README.md) |
+| `experiments/Astra4.Sizes` | The fourth gate 2 review's size and identity probe: the real event-match encoding, placement hash and Native background arm, measured beside the proposed compact forms; see its [README](experiments/Astra4.Sizes/README.md) |
+| `experiments/Review4.Blockers` | Gate 2, fourth review: FR-1 (R4-B1, release cohort precedence) and RT-1 (R4-B2, the retirement obligation) on the real Native model and creation protocol, each under the reviewed, repaired and negative rules; [its README](experiments/Review4.Blockers/README.md) |
+| `experiments/Review5.Delivery` | Gate 2, fifth review: EV-1 (R5-M2, event eligibility by the match step, the entitlement point and the sweep's coverage), FR-2 (R5-M3, the drain's handoff credit), JR-1 (R5-M4, a fenced job result across Park) and PO-1 (R5-M6, precedence in the poison comparison) on the real in-memory store and Native model, each under the reviewed, repaired and negative rules; [its README](experiments/Review5.Delivery/README.md) |
+| `experiments/Review5.Termination` | Gate 2, fifth review: RT-2 (R5-B1, idempotent cancellation of a job ticket; R5-m3, generation-carrying jobs), RT-3 (R5-B2, the paged, durable cascade, ThenDelete and key reuse while Discharging) and RT-4 (R5-M5, the parent binding of kernel-marked terminates at running and ended recipients, with the open-drain and marker paths), every turn's commit through the real `InMemoryStore.CommitAsync`, each under the reviewed, repaired and negative rules; [its README](experiments/Review5.Termination/README.md) |
+| `experiments/Review6.Blockers` | Gate 2, sixth review: NT-1 (R6-B1, the model's terminal growth reserved in the envelope check, on the real Native `TerminateMetadata` and `WorkflowInstance` terminate, with the measured 7 bytes per open invocation inbox) and PI-1 (R6-B2, deliveries bound to a publication incarnation, on the real in-memory publish, match, catch-up and sweep paths; event-first's split sweeps are harness batches that remove rows directly, so the built `SweepAsync` is no evidence for that interleaving), each under the reviewed, repaired and negative rules; [its README](experiments/Review6.Blockers/README.md) |
+| `experiments/Review7.Blockers` | Gate 2, seventh review: NT-2 (R7-B1, the terminal projection counts the retained `CustomHandles`, `Model` and `Definition` at their encoded size, on real detached starts through `Turn.Start` and `DurableTurn.StartChild`, the real `WorkflowInstance` terminate and the in-memory commit, whose `Refuses` hook holds the row cap measured as the JSON UTF-8 size of the row's fields) and MX-1 (R7-M1, workflow-issued event ids carry a reserved `~` and the outside publish refuses it, on the real `DurableTurn.Publish` and the in-memory publish, match and delivery paths), each under the reviewed, repaired and negative rules; [its README](experiments/Review7.Blockers/README.md) |
 
 ## Build
 
 One project at a time (they share `obj/` folders through project references):
 
 ```
-for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance; do dotnet build $p -c Release; done
+for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
@@ -52,10 +59,26 @@ dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 SIM="dotnet sim/bin/Release/net10.0/Kernel.Sim.dll"
 $SIM --seeds 200000                                  # 200,000 seeds of 300 actions each
 $SIM --seeds 20000 --actions 1000                    # 20,000 seeds of 1,000 actions
+$SIM --seeds 200000 --count 4096                     # K1: the store's virtual partitions, 1,024 (the default) or 4,096
 $SIM --native --seeds 200000                         # the same with native instances in the mix (40 % of outside actions)
 $SIM --native --seeds 20000 --actions 1000
 $SIM --seed 22 --flaw TrialPerPartition              # replay one seed; prints a shrunk trace when it fails
+$SIM --contract --seeds 100 --actions 300              # K2 public-contract delivery workload
+$SIM --contract --seed 1 --flaw WallClockTimers        # replay the early timer negative control
+$SIM --contract --seed 1 --flaw KeepConsumedMessages  # replay the committed inbox negative control
+$SIM --contract-native --seeds 100                   # run the original Native mix through the public actor turn
+$SIM --contract-native --seed 1 --native-flaw UnstableEffectKey
+$SIM --contract-native --seed 1 --native-flaw JoinWithoutGuard
+$SIM --contract-actors --seeds 100 --actions 100      # public counter and parent-child workloads
+$SIM --contract-evolution --seeds 100                 # rolling state upgrade and atomic start followed by send
+$SIM --contract-evolution --seed 1 --flaw SkipUpgrade
+$SIM --contract-actors --seed 1 --flaw CancelKnownChildren
+$SIM --contract-actors --seed 1 --flaw KeepConsumedMessages
+$SIM --contract-events --seeds 100                   # sequences, waiters, correlation actors and event starts
+$SIM --contract-events --seed 1 --flaw CorrelationForgets
+$SIM --contract-events --seed 1 --flaw KeepConsumedMessages
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
+$SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
 $SIM --native-mutations --seeds 20000                # break the native model on purpose
 $SIM --native --native-flaw ResumeAnyChild --seed 1  # replay one native flaw
@@ -63,6 +86,47 @@ $SIM --seeds 4000 --coverage                         # also count what happened
 $SIM --seeds 5000 --actions 1000 --faults 2          # scale the faults
 $SIM --backlog 1000                                  # how long a backlog of suspects takes to recover
 ```
+
+The K2 contract workload drives `IIngress` and checks `IActorReads`. Each seed boots two caller keys in
+two tenants. It interleaves exact and keyed sends, retries, future inputs, and live event fan-out.
+The driver expires an owner and takes its scopes on a second node. It loses one turn commit before
+it executes and one answer after the batch lands. The oracle reads the paged journal and checks
+once-only effects, order of ordinary inputs, due time and tenant isolation. It also checks the
+committed receipt count and the empty inbox. An adapter can run the same schedule and oracle by
+providing its ingress, reads, and deterministic clock and fault controls.
+
+The Native workload uses the original nine `NativeWorkflows.Mix` definitions. It starts them through
+`WorkflowRuntime` and drives the same clock and owner controls. A pending Native timer crosses takeover,
+the Balanced outbound workflow replays a lost write, and the built-in publisher advances a live Flowchart
+after its commit answer is lost. The seeded schedule varies signals, due times, takeovers and the execution
+mode of the other workflows. Public journal and read observations check the background job, attached and
+detached children, threshold joins, graph arrivals and completion. The observed HTTP and email effects
+check that a replay keeps its key and that different activations keep distinct keys.
+
+The public actor workload uses the legacy Counter and parent-child inputs through the public workflow
+turn. The counter's journal checks each sender's sequence through holds, forwards, a definition rebind,
+retries, and loss before and after a write. Two live owners run the family workloads. A lost creation
+answer leaves one child per start, a pending timer crosses takeover, and each parent receives one final
+notice from the exact child. In the cancellation case the other owner takes its child scopes after the
+parent sends the cancel.
+
+The sequence and event workload runs Balanced and Durable sequences, live and keeping waiters,
+actor-managed correlation and event-created actors through the public turn. It checks each sequence's
+journal order and commit boundaries across a lost write and a lost answer. It also checks retained
+events versus live delivery, event expiry, duplicate publication and registration, and route removal.
+The sequence cases use durable ingress. The legacy suite covers unwritten Ephemeral starts.
+Actor-managed start-on-match stays outside this replay.
+
+The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
+response after takeover and an input that stays durable across local reset. The seeded actor workload
+uses already-started counter receivers and one state version. The other legacy actor and transport
+mixes continue to use their separate simulation and case suites.
+
+The Counter evolution workload moves a version-one checkpoint through upgrade, a rollback to an older
+owner and another compatible takeover. It portably expresses legacy start-on-forward as a detached
+`Start` and a `Send` staged in the same turn, keeping the receiver ref in the sender's checkpoint. An
+aborted creator's provisional ref never routes. Once the creator commits, the exact ref receives later
+forwards and survives a lost commit answer.
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
 `Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 22 lists the first failing seed of every round-3 flaw (the seeds of earlier flaws, in sections 2 and 3, have since moved), section 24 the two flaws round 4 renamed.
@@ -90,17 +154,14 @@ SQL Server runs under amd64 emulation on arm64: slow, but the counts are not aff
 
 ## The runtime conformance suite
 
-On the in-memory store, the built-in runtime and the Orleans adapter (Orleans' in-process test cluster on its in-memory
-transport: no socket, no cloud). Each command's exit code says whether the runtime conforms; the `-broken` forms break
+On the in-memory store and the built-in runtime. (The Orleans adapter ran here too until its retirement on 19 November;
+FINDINGS section 27 and the K1 costs keep its results.) Each command's exit code says whether the runtime conforms; the `-broken` forms break
 the store's fence on purpose and must fail on it.
 
 ```
 RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll"
-ORC="dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll"
 $RTC semantic [filter]; $RTC semantic-broken
 $RTC stress 20 2000; $RTC stress-broken 10 1000
-$ORC semantic [filter]; $ORC semantic-broken
-$ORC stress 20 2000; $ORC stress-broken 10 1000
 ```
 
 ## The store conformance suite
@@ -108,8 +169,10 @@ $ORC stress 20 2000; $ORC stress-broken 10 1000
 ```
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic     # in memory
 EFC="dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll"
-$EFC sqlite [--fence-in-batch|--checked-fence] semantic               # no flag: the engine's default fence, below
-$EFC postgres "$PG" [--fence-in-batch|--checked-fence] [--m5] semantic # --m5: E1 switched off, must fail the fence cases
+$EFC sqlite [--fence-in-batch|--checked-fence] [--ef-commit|--owned-commit] semantic   # no flag: the engine's default fence, below; the owned commit (COMMIT-SQL.md)
+$EFC postgres "$PG" [--fence-in-batch|--checked-fence] [--m5] semantic # --m5: E1 switched off; it changes nothing on the owned commit (COMMIT-SQL.md), and failed the fence cases on EF's
+$EFC <engine> ... --checked-fence semantic-broken fence                # the fence broken on purpose: the three fence cases must fail (exit 0)
+$EFC <engine> ... --checked-fence --fence-ignores-count semantic fence          # the owned fence's count ignored: the same three must fail (exit 1; semantic-broken would break the fence itself)
 $EFC sqlserver "$MS" [--fence-in-batch|--checked-fence] [--rcsi-off] semantic
 $EFC mysql "$MY;uid=root;pwd=kernel" [--fence-in-batch|--checked-fence] [--rc] semantic
 MOR="dotnet mongo/Kernel.Mongo.Run/bin/Release/net10.0/Kernel.Mongo.Run.dll"
@@ -130,14 +193,22 @@ $EFR x stress postgres "$PG;Database=kernel_stress" seconds=40 messages=5000 [fe
 $EFR x stress sqlserver "$MS;Database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch]   # RCSI on unless rcsi=0
 $EFR x stress mysql "$MY;database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch] [isolation=rc]
 $EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [fence=checked|batch] [wal=0]
-$EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1 fence=<as recorded>   # the fence broken on purpose: must fail (ENGINES.md: batch on PostgreSQL, checked elsewhere)
-$EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch]       # round trips on the TCP stream
+$EFR x stress <engine> "<same>" stalelease=1 [fence=checked|batch]                 # the Worker's lease check off: stale owners reach the fence, and the fence alone keeps the end state (must hold)
+$EFR x stress <engine> "<same>" stalelease=1 unfenced=1 [fence=checked|batch]      # the fence broken on purpose: must fail on every engine (FINDINGS 29 F-B8); without stalelease=1 it holds on PostgreSQL and MySQL (F-B2)
+$EFR x stress <engine> "<same>" stalelease=1 fencecount=0 [fence=checked|batch]    # the owned fence's count ignored: must fail on every engine (F-B8)
+$EFR x stress <engine> "<same>" [commit=ef|owned]                                    # the commit writer (default: owned, COMMIT-SQL.md)
+$EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch] [commit=ef|owned]   # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
+$EFR x fence <engine> "<connection;Database=kernel_fence>"                            # the k-row fence over eight partitions, one stale: COMMIT-SQL.md
+$EFR x setcost <engine> "<connection;Database=kernel_setcost>" proxy=1 [writes=1] [runs=5] [shape=both|scattered|contiguous] [count=4096]   # K1: ownership of a set in the integrated Worker, PARTITIONS.md "K1 costs"
+$EFR x setidle postgres "<connection;Database=kernel_idle>" seconds=120 writes=1      # K1, D3: four RuntimeNodes idle, the beat's WAL
 $EFR x stress|cost postgres "<connection>" writes=1 [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]   # WRITES.md; the container needs -c wal_keep_size=4GB
 ```
 
-Without a fence option the EF store takes the engine's default: the fence in the batch, but the checked fence on SQL
-Server (decided 13 November; ENGINES.md E9). `EngineRun.cs` lists every option. The stress test drives round 1's models plus round 3's commands (suspend, resume,
+Without a fence option the EF store takes the engine's default: the fence in the batch on every engine (SQL Server since
+16 November, for the owned commit; ENGINES.md E9; `fence=checked` is the 13 November fallback and stays the default with
+`commit=ef`, whose batch still deadlocks takes). Without a commit option it writes the commit with its own SQL on every
+engine (round 5 B, COMMIT-SQL.md); `commit=ef` is EF's SaveChanges, the reference. `EngineRun.cs` lists every option. The stress test drives round 1's models plus round 3's commands (suspend, resume,
 terminate, delete) and starts on events. Do not run the conformance suite on an engine while a stress test runs there:
 the stress test kills the suite's sessions too.
 
@@ -168,8 +239,9 @@ $EFC sqlite --checked-fence semantic; $EFC sqlite --fence-in-batch semantic
 $NAT smoke; $NAT cost sqlite
 dotnet test models/Graph.Tests -c Release
 mkdir -p .out; $EFR x cost sqlite "Data Source=.out/cost.db" fence=checked                # and fence=batch; delete .out/cost.db* between runs
-$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 fence=checked                     # and fence=batch
+$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 fence=checked                     # and fence=batch; and commit=ef for the reference path
 $EFC postgres "$PG" --checked-fence semantic; $EFC postgres "$PG" --fence-in-batch semantic
+$EFR x fence postgres "$PG;Database=kernel_fence"
 $NAT cost postgres "$PG;Database=kernel_native"
 ```
 
@@ -178,10 +250,14 @@ counted and sent round trips do not.
 
 ## How the simulation works
 
-- Several nodes run against one in-memory store. Each `(node, partition)` pair is an *actor* with its own worker. The
-  simulation is the actor runtime (layer 1): each process has a `PartitionRuntime` over a `DurableHost`, and takes,
-  releases and balancing go through them; the pieces of a pass (poll, load, turn, flush, meet) are separate actions, so
-  that one seed keeps its schedule. Once faults stop, the settling loop runs whole passes (`PassAsync`).
+- Several nodes run against one in-memory store, which has a fence row and a journal for each of `--count` virtual
+  partitions (1,024 by default, or 4,096). A world places four of them on its two or three nodes (K1 slice 7). Each
+  node's process is an *actor* with one worker that owns a set of those partitions, through `DurableHost.ForNode`, so a
+  flush spans the partitions it touches under the k-row fence. Every seventh seed runs a worker per partition instead,
+  as on a store without owned sets. The simulation is the actor runtime (layer 1): each process has a
+  `PartitionRuntime` over the node's host, and takes, give-ups and balancing go through them, one at a time; the
+  pieces of a pass (poll, load, turn, flush, meet) are separate actions, so that one seed keeps its schedule. Once
+  faults stop, the settling loop runs whole passes (`PassAsync`).
 - One action happens at a time, chosen from the seed: a runtime activates a partition (a take) or gives it up; a
   worker polls, loads, runs one turn, flushes, beats or reads events; a node balances; a store call executes; its
   answer arrives, arrives as "connection lost" although it executed, or the call never executes; an outsider adds a

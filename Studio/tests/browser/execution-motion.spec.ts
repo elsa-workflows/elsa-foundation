@@ -1,10 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-async function showRunData(page: Page, host: string) {
-  if (host !== "instance") return;
-  const data = page.getByRole("complementary", { name: "Run details panel", exact: true }).getByRole("tab", { name: "Data", exact: true });
-  if (await data.getAttribute("aria-selected") !== "true") await data.click();
-}
+import { expect, test } from "@playwright/test";
+import { openExecutionInputs } from "./executionDetails";
 
 for (const host of ["editor", "instance"]) {
   for (const theme of ["light", "dark"]) {
@@ -19,7 +14,7 @@ for (const host of ["editor", "instance"]) {
       const source = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
       await expect(source).toHaveAccessibleName(/Run state: Completed/);
       await source.click();
-      await showRunData(page, host);
+      await openExecutionInputs(page);
       await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
       const connection = canvas.locator('.wf-execution-edge-pulse[data-execution-pulse="connection"]');
       await expect(connection).toHaveCount(0);
@@ -68,7 +63,7 @@ for (const host of ["editor", "instance"]) for (const reduced of [false, true]) 
     const source = canvas.getByRole("button", { name: "1. Notify buyer", exact: true });
     await expect(source.locator("..")).toContainText("Completed");
     await source.click();
-    await showRunData(page, host);
+    await openExecutionInputs(page);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     const pulses = canvas.locator('.wf-execution-sequence-pulse[data-execution-pulse="connection"]');
     await expect(pulses).toHaveCount(0);
@@ -92,7 +87,7 @@ for (const host of ["editor", "instance"]) {
     }
     const source = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
     await expect(source).toHaveAccessibleName(/Run state: Completed/); await source.click();
-    await showRunData(page, host);
+    await openExecutionInputs(page);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     await page.evaluate(() => {
       const state = window as Window & { recoveredConnectionPulses?: number };
@@ -103,7 +98,9 @@ for (const host of ["editor", "instance"]) {
       }).observe(document.body, { childList: true, subtree: true });
     });
     await page.getByRole("button", { name: "Disconnect fixture reads", exact: true }).click();
-    await expect(page.getByText(/Execution observation disconnected|Fixture connection dropped/).first()).toBeVisible();
+    if (host === "editor") await expect(page.getByText(/Execution observation disconnected|Fixture connection dropped/).first()).toBeVisible();
+    // The run instance workbench no longer shows a live observation notice (#4903); wait for a dropped read instead.
+    else await expect.poll(() => page.evaluate(() => (window as Window & { droppedFixtureReads?: number }).droppedFixtureReads ?? 0)).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
     await page.getByRole("button", { name: "Reconnect fixture reads", exact: true }).click();
     await expect(canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ })).toHaveAccessibleName(/Run state: Completed/);

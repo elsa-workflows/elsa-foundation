@@ -70,6 +70,23 @@ public sealed class DecisionWorkflowTests
         Assert.Equal("version-1", DecisionWorkflowPin.Parse(node.Metadata[DecisionWorkflowPin.MetadataKey]).VersionId);
     }
 
+    [Theory]
+    [InlineData("asset@latest", "unpublished")]
+    [InlineData("asset@version-1", "unpublished")]
+    [InlineData("asset@latest", "recycled")]
+    [InlineData("asset@version-1", "recycled")]
+    public async Task New_workflow_publications_cannot_bind_unavailable_decisions(string selection, string state)
+    {
+        var fixture = new Fixture
+        {
+            Selection = selection,
+            IsPublished = state != "unpublished" && state != "recycled",
+            DeletedAt = state == "recycled" ? DateTimeOffset.UtcNow : null
+        };
+        var exception = await Assert.ThrowsAsync<DecisionInvocationException>(async () => await fixture.PublishAsync());
+        Assert.Equal("invalid-selection", exception.Code);
+    }
+
     [Fact]
     public async Task Current_execution_permission_is_rechecked_on_retry()
     {
@@ -225,6 +242,8 @@ public sealed class DecisionWorkflowTests
         public DecisionEngine Engine { get; } = new();
         public string Selection { get; init; } = "asset@latest";
         public DecisionVersion Version { get; set; }
+        public bool IsPublished { get; init; } = true;
+        public DateTimeOffset? DeletedAt { get; init; }
         public bool VersionAvailable { get; set; } = true;
         public bool CanPublish { get; set; } = true;
         public CurrentSubjectPermissionResult Permission { get; set; } = CurrentSubjectPermissionResult.Granted;
@@ -279,7 +298,7 @@ public sealed class DecisionWorkflowTests
         {
             var reader = Port<IDecisionReader>((name, _) => name switch
             {
-                nameof(IDecisionReader.FindAssetAsync) => ValueTask.FromResult<DecisionAsset?>(new("asset", "Approval", null, "draft", Xml, Version.SourceHash, false, Version.Id, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)),
+                nameof(IDecisionReader.FindAssetAsync) => ValueTask.FromResult<DecisionAsset?>(new("asset", "Approval", null, "draft", Xml, Version.SourceHash, false, IsPublished ? Version.Id : null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, DeletedAt)),
                 nameof(IDecisionReader.FindVersionAsync) => ValueTask.FromResult(VersionAvailable ? Version : null),
                 _ => throw new NotSupportedException(name)
             });

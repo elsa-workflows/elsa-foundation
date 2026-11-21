@@ -1,0 +1,26 @@
+=== dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll semantic
+ 4:32  up 16 days, 14:31, 1 user, load averages: 7.75 10.97 18.74
+pass   poll: a message added without a hint is handled within the poll interval  (567 ms)
+built-in on in-memory: 16 passed, 0 required failed, 0 reference differ
+exit 0 in 39 s
+=== dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll semantic --partitions 1024
+ 4:32  up 16 days, 14:32, 1 user, load averages: 5.29 9.93 18.00
+pass   poll: a message added without a hint is handled within the poll interval  (596 ms)
+built-in on in-memory: 16 passed, 0 required failed, 0 reference differ
+exit 0 in 39 s
+=== dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll semantic crash --partitions 4096
+ 4:33  up 16 days, 14:33, 1 user, load averages: 3.89 9.00 17.29
+built-in on in-memory: 1 passed, 0 required failed, 0 reference differ
+exit 0 in 14 s
+=== dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll semantic
+ 4:33  up 16 days, 14:33, 1 user, load averages: 3.51 8.75 17.10
+pass   poll: a message added without a hint is handled within the poll interval  (574 ms)
+differ join: a node that joins gets a share of the scopes  (6427 ms)
+orleans on in-memory: 14 passed, 0 required failed, 1 reference differ
+exit 0 in 38 s
+=== dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll semantic --partitions 1024
+ 4:34  up 16 days, 14:33, 1 user, load averages: 2.44 7.84 16.38
+pass   poll: a message added without a hint is handled within the poll interval  (651 ms)
+differ join: a node that joins gets a share of the scopes  (6484 ms)
+orleans on in-memory: 14 passed, 0 required failed, 1 reference differ
+exit 0 in 40 s

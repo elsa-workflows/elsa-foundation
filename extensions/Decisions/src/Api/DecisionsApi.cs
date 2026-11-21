@@ -29,11 +29,16 @@ public static class DecisionsApi
                 async context => await Handle(context, action), containFailures: false).DisableCookieRedirect().RequirePermission(permission);
         }
         Map("GET", "", "DecisionsList", DecisionPermissions.Read, typeof(DecisionAssetsResponse), async (ctx, service, caller) => new DecisionAssetsResponse(await service.ListAsync(caller, ctx.RequestAborted)));
+        Map("GET", "/recycle-bin", "DecisionsRecycleBin", DecisionPermissions.Read, typeof(DecisionAssetsResponse), async (ctx, service, caller) => new DecisionAssetsResponse(await service.RecycleBinAsync(caller, ctx.RequestAborted)));
         Map("POST", "", "DecisionsCreate", DecisionPermissions.Manage, typeof(DecisionAssetView), async (ctx, service, caller) => await service.SaveAsync(caller, null, await Body<SaveDecisionRequest>(ctx), ctx.RequestAborted));
         Map("GET", "/{id}", "DecisionsGet", DecisionPermissions.Read, typeof(DecisionAssetView), async (ctx, service, caller) => await service.GetAsync(caller, Id(ctx), ctx.RequestAborted));
         Map("PUT", "/{id}", "DecisionsUpdate", DecisionPermissions.Manage, typeof(DecisionAssetView), async (ctx, service, caller) => await service.SaveAsync(caller, Id(ctx), await Body<SaveDecisionRequest>(ctx), ctx.RequestAborted));
         Map("POST", "/{id}/validate", "DecisionsValidate", DecisionPermissions.Manage, typeof(DecisionValidation), async (ctx, service, caller) => await service.ValidateAsync(caller, Id(ctx), await Body<ValidateDecisionRequest>(ctx), ctx.RequestAborted));
         Map("POST", "/{id}/publish", "DecisionsPublish", DecisionPermissions.Publish, typeof(DecisionVersionView), async (ctx, service, caller) => await service.PublishAsync(caller, Id(ctx), await Body<PublishDecisionRequest>(ctx), ctx.RequestAborted));
+        Map("POST", "/{id}/unpublish", "DecisionsUnpublish", DecisionPermissions.Publish, typeof(DecisionWriteConfirmation), async (ctx, service, caller) => await service.UnpublishAsync(caller, Id(ctx), await Body<DecisionLifecycleRequest>(ctx), ctx.RequestAborted));
+        Map("POST", "/{id}/recycle", "DecisionsRecycle", DecisionPermissions.Manage, typeof(DecisionWriteConfirmation), async (ctx, service, caller) => await service.RecycleAsync(caller, Id(ctx), await Body<DecisionLifecycleRequest>(ctx), ctx.RequestAborted));
+        Map("POST", "/{id}/restore", "DecisionsRestore", DecisionPermissions.Manage, typeof(DecisionWriteConfirmation), async (ctx, service, caller) => await service.RestoreAsync(caller, Id(ctx), await Body<DecisionLifecycleRequest>(ctx), ctx.RequestAborted));
+        Map("POST", "/{id}/purge", "DecisionsPurge", DecisionPermissions.Manage, typeof(DecisionWriteConfirmation), async (ctx, service, caller) => await service.PurgeAsync(caller, Id(ctx), await Body<DecisionLifecycleRequest>(ctx), ctx.RequestAborted));
         Map("GET", "/{id}/versions", "DecisionVersions", DecisionPermissions.Read, typeof(DecisionVersionsResponse), async (ctx, service, caller) => new DecisionVersionsResponse(await service.VersionsAsync(caller, Id(ctx), ctx.RequestAborted)));
         Map("GET", "/{id}/versions/{versionId}", "DecisionVersion", DecisionPermissions.Read, typeof(DecisionVersionView), async (ctx, service, caller) => await service.GetVersionAsync(caller, Id(ctx), Route(ctx, "versionId"), ctx.RequestAborted));
         Map("POST", "/{id}/clone-to-draft", "DecisionsClone", DecisionPermissions.Manage, typeof(DecisionAssetView), async (ctx, service, caller) => await service.CloneAsync(caller, Id(ctx), await Body<CloneDecisionRequest>(ctx), ctx.RequestAborted));
@@ -79,7 +84,7 @@ public static class DecisionsApi
         catch (DecisionDesignException ex)
         {
             context.Response.StatusCode = ex.Code switch { "unauthenticated" => 401, "forbidden" => 403, "not-found" => 404, "conflict" => 409, "unavailable" or "corrupt" => 503, _ => 400 };
-            await context.Response.WriteAsJsonAsync(new DecisionProblem(ex.Code, ex.Message), Json, context.RequestAborted);
+            await context.Response.WriteAsJsonAsync(new DecisionProblem(ex.Code, ex.Message, ex.Diagnostics), Json, context.RequestAborted);
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException or BadHttpRequestException)
         {
@@ -107,4 +112,4 @@ public sealed record DecisionAssetsResponse(IReadOnlyList<DecisionAssetView> Ite
 public sealed record DecisionVersionsResponse(IReadOnlyList<DecisionVersionView> Items);
 public sealed record DecisionCasesResponse(IReadOnlyList<DecisionCaseView> Items);
 public sealed record DecisionRunsResponse(IReadOnlyList<DecisionTestReceipt> Items);
-public sealed record DecisionProblem(string Code, string Message);
+public sealed record DecisionProblem(string Code, string Message, IReadOnlyList<DecisionDiagnostic>? Diagnostics = null);

@@ -16,17 +16,23 @@
   gap: 8px;
 }
 
-.wf-editor-identity > button,
-.wf-editor-identity > svg {
-  flex-shrink: 0;
+.wf-editor-identity .studio-breadcrumbs {
+  width: 100%;
+  margin-bottom: 0;
 }
 
-.wf-editor-heading {
+.wf-editor-identity .studio-breadcrumbs ol {
+  flex-wrap: nowrap;
+}
+
+.wf-editor-identity .studio-breadcrumbs li:last-child,
+.wf-editor-identity .studio-breadcrumb-current {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.wf-editor-toolbar .wf-editor-identity > svg {
-  margin-top: 0;
+.wf-editor-identity .studio-breadcrumb-current {
+  display: flex;
 }
 
 .wf-editor-title {
@@ -185,14 +191,6 @@
   margin-left: auto;
   color: var(--studio-text-muted);
   font-size: 12px;
-}
-
-/* Quiet chrome leaves the canvas and primary publish command in focus. */
-.wf-editor-toolbar .wf-editor-identity > .wf-link-button {
-  padding: 0 4px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--studio-text-muted);
 }
 
 .wf-editor-toolbar .wf-canvas-tools {

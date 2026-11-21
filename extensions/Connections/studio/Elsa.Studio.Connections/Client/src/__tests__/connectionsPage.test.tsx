@@ -15,6 +15,19 @@ afterEach(() => {
 });
 
 describe("Connections page", () => {
+  it("renders Last tested with the shared date and time layout", async () => {
+    const { context } = endpointContext();
+    const { host } = renderPage(context);
+
+    await waitFor(() => detailsButton(host) !== null);
+    const timestamp = host.querySelector<HTMLTimeElement>(".connections-date .studio-timestamp");
+    const testedAt = new Date(connection.lastTestedAt!);
+
+    expect(timestamp?.dateTime).toBe(connection.lastTestedAt);
+    expect(timestamp?.querySelector(".studio-timestamp-date")?.textContent).toBe(new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(testedAt));
+    expect(timestamp?.querySelector(".studio-timestamp-time")?.textContent).toBe(new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(testedAt));
+  });
+
   it("keeps details closed until requested and restores focus after Escape", async () => {
     const { context } = endpointContext();
     const { host } = renderPage(context);
@@ -247,6 +260,7 @@ const connection: ConnectionMetadata = {
   owner: "tenant",
   status: "Ready",
   createdAt: "2026-10-18T00:00:00Z",
+  lastTestedAt: "2026-10-18T00:00:00Z",
   tags: []
 };
 

@@ -1,0 +1,65 @@
+ 4:42  up 16 days, 14:42, 1 user, load averages: 4.75 7.65 12.30
+528eabf7ee8778e9b3bbc9c61c22cba48d0b03d9
+
+postgres: isolation read committed; fence in the batch; commit owned SQL; 4096 virtual partitions, 4 nodes
+shape scattered: the four sets are 1024 in 1 ranges, 1024 in 1 ranges, 1024 in 2 ranges, 1024 in 3 ranges; node A holds 1024 in 3 ranges (1024-1365, 3072-3413, 3756-4095)
+run                                                                                          commands begin commit counted   tcp  exec  rows        ms
+take: the per-node host gains A's 1024, one activation each (start-up)                           1024  1024   1024    2048  2048  1024  1024     830.2
+    the runs' counts differ (commands begin commit tcp exec rows): 1024 1024 1024 2053 1024 1024 | 1024 1024 1024 2048 1024 1024 | 1024 1024 1024 2048 1024 1024
+    statements by kind: take 1024; ms per run: 1003.9 830.2 434.4
+take: one set take of A's 1024 (a worker of the set, fixed host)                                    1     1      1       2     2     1  1024      11.5
+    statements by kind: take 1; ms per run: 11.5 12.3 4.0
+take: one set take of A's 1024 while a live node holds the upper 512 (fixed host)                   1     1      1       2     2     1   512       3.3
+    statements by kind: take 1; ms per run: 3.3 5.3 2.8
+beat: the node's worker renews its 1024 (an empty fenced commit)                                    1     1      1       2     2     2  1024       5.2
+    statements by kind: commit (fenced) 1; ms per run: 23.2 5.2 4.8
+heartbeat: the membership's node row, live count and free list                                      3     0      0       3     3     3     0       2.6
+    statements by kind: heartbeat 2, partitions (other) 1; ms per run: 19.4 2.6 1.5
+poll: the set poll over 1024, nothing to read                                                       1     0      0       1     1     1     0       1.6
+    statements by kind: poll 1; ms per run: 1.6 1.6 1.5
+flush, 100 new instances over k of A: the set poll that reads them                                  1     0      0       1     1     1     0       2.4
+    statements by kind: poll 1; ms per run: 7.1 2.2 2.4
+flush, 100 new instances over k of A: the load                                                      1     0      0       1     1     1     0       0.6
+    statements by kind: load 1; ms per run: 31.8 0.6 0.6
+flush, 100 new instances over k of A: flush 1                                                       1     1      1       2     2     3   100       2.5
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 3 94 | 1 1 1 2 3 100 | 1 1 1 2 3 100
+    statements by kind: commit (fenced) 1; ms per run: 5.9 2.3 2.5
+flush, 100 new instances over k of A: flush 2                                                       1     1      1       2     2     5   100       6.5
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 5 94 | 1 1 1 2 5 100 | 1 1 1 2 5 100
+    statements by kind: commit (fenced) 1; ms per run: 10.6 5.2 6.5
+flush, the same 100 again: the set poll that reads them                                             1     0      0       1     1     1     0       2.4
+    statements by kind: poll 1; ms per run: 2.3 2.4 2.8
+flush, the same 100 again: the load                                                                 0     0      0       0     0     0     0       0.0
+    statements by kind: none; ms per run: 0.0 0.0 0.0
+flush, the same 100 again: flush 1                                                                  1     1      1       2     2     3   100       2.5
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 3 94 | 1 1 1 2 3 100 | 1 1 1 2 3 100
+    statements by kind: commit (fenced) 1; ms per run: 5.0 2.3 2.5
+flush, the same 100 again: flush 2                                                                  1     1      1       2     2   104    94       7.9
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 104 94 | 1 1 1 3 104 100 | 1 1 1 2 104 100
+    statements by kind: commit (fenced) 1; ms per run: 6.9 7.9 10.6
+    k, the distinct partitions of each run's 100 instances: 94 100 100
+takeover: one set take of a dead node's 1024 (fixed host)                                           2     1      1       3     3     2  1024       8.9
+    statements by kind: take 1, death count 1; ms per run: 8.9 6.3 9.6
+takeover: the per-node host gains a dead node's 1024, one activation each                        2048  1024   1024    3072  3072  2048  1024     506.4
+    statements by kind: take 1024, death count 1024; ms per run: 506.4 555.8 501.3
+release: the per-node host gives up 512 of 1024, one scope each                                   512     0      0     512   512   512   512     136.7
+    statements by kind: release 512; ms per run: 162.5 136.7 128.2
+release: one set release of 512 (the store's, as a stand-down sends it)                             1     0      0       1     1     1   512       2.5
+    statements by kind: release 1; ms per run: 4.1 2.5 2.4
+reset: a beat refused on 1 of 1024, then the retake of the rest, one each                        1025     1      0    1025  1026  1026  1023     242.4
+    statements by kind: retake 1024, commit (fenced) 1; ms per run: 242.4 236.9 242.5
+rebalance: a fourth node joins, the four run rounds until none changes                           2076  1024   1024    3100  3100  2076  1024     687.9
+    statements by kind: take 1024, release 1024, heartbeat 18, partitions (other) 10; ms per run: 738.7 678.7 687.9
+    2 rounds (the last changes nothing), 1024 partitions moved, held [1024 1024 1024 1024]
+rebalance: a node leaves gracefully, its stop (one scope at a time)                              1024     0      0    1024  1024  1024  1024     237.6
+    statements by kind: release 1024; ms per run: 237.6 238.2 237.2
+rebalance: then the other three run rounds until none changes                                    1042  1024   1024    2066  2066  1042  1024     441.8
+    statements by kind: take 1024, heartbeat 12, partitions (other) 6; ms per run: 437.8 441.8 451.6
+    2 rounds (the last changes nothing), 1024 partitions moved, held [1366 1366 1364]
+takeover through the runtime: a node dies, the other three run rounds                            2066  1024   1024    3090  3090  2066  1024     598.8
+    statements by kind: take 1024, death count 1024, heartbeat 12, partitions (other) 6; ms per run: 597.7 598.8 606.4
+    2 rounds (the last changes nothing), 1024 partitions moved, held [1366 1366 1364]
+
+every check passed
+exit 0
+ 4:43  up 16 days, 14:43, 1 user, load averages: 5.50 7.44 12.01

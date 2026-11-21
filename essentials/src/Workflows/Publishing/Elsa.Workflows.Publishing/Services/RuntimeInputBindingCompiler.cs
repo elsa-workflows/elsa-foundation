@@ -73,6 +73,125 @@ public sealed class RuntimeInputBindingCompiler(
         return CompileAll(nodeId, inputDefinitions, states);
     }
 
+    IReadOnlyDictionary<string, RuntimeInputBinding> IActivityTemplateInputBindingCompiler.CompileGraphIntrinsicInputs(
+        string nodeId, IEnumerable<InputDefinition> inputDefinitions, IEnumerable<ArgumentState> inputStates)
+    {
+        var definitions = inputDefinitions.ToArray();
+        var states = inputStates.Select(state => InputReadLowering.Lower(state, key => key)).ToArray();
+        var statesByKey = states.GroupBy(state => state.ReferenceKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        if (statesByKey.Count != definitions.Length || statesByKey.Values.Any(group => group.Length != 1) ||
+            definitions.Any(definition => !statesByKey.ContainsKey(definition.ReferenceKey)))
+        {
+            throw new ArgumentException(
+                $"Workflow intrinsic node '{nodeId}' requires exactly these inputs: {string.Join(", ", definitions.Select(definition => definition.ReferenceKey).Order(StringComparer.Ordinal))}.");
+        }
+        if (SecretInputKeys(states).FirstOrDefault() is { } secretKey)
+            throw SecretBindingDiagnostics.IntrinsicInputRefused(nodeId, secretKey);
+        return definitions.ToDictionary(
+            definition => definition.ReferenceKey,
+            definition => CompileIntrinsicInput(nodeId, definition, statesByKey[definition.ReferenceKey][0]),
+            StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Compiles one native intrinsic input. Workflow publication and reusable graph bodies share this rule: the input's
+    /// declared policy applies, and conversion intent is forwarded only for whole result, variable and request reads.
+    /// </summary>
+    internal RuntimeInputBinding CompileIntrinsicInput(string nodeId, InputDefinition inputDefinition, ArgumentState state) =>
+        Compile(nodeId, inputDefinition, state.Value, ForwardsIntrinsicConversion(state.Value) ? state.Conversion : null);
+
+    private static bool ForwardsIntrinsicConversion(ArgumentValue value) =>
+        string.Equals(value.ExpressionType, ActivityResultExpressionType, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value.ExpressionType, WorkflowRequestExpressionType, StringComparison.OrdinalIgnoreCase);
+
+    JsonElement IActivityTemplateInputBindingCompiler.CompileGraphVariables(
+        string nodeId, IEnumerable<VariableDefinition> variables)
+    {
+        var declarations = variables.ToArray();
+        if (declarations.GroupBy(variable => variable.ReferenceKey, StringComparer.Ordinal).Any(group => group.Count() > 1))
+            throw new ArgumentException($"Activity node '{nodeId}' declares a variable more than once.");
+        // The same wire form ExecutableNodeCompiler.CompileStructure writes and placement reads back.
+        return JsonSerializer.SerializeToElement(
+            declarations.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray(),
+            DescriptorPayloadSerializer.Options);
+    }
+
+    internal RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
+    {
+        var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
+        // The built-in JSON driver encodes into the checkpoint itself. It is not an external
+        // storage profile; Studio advertises this driver for durable variable declarations.
+        var storageProfile = StringComparer.Ordinal.Equals(variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
+            ? null
+            : variable.StorageDriverType;
+        var policy = ValuePolicyCombiner.ToProtectionPolicy(
+            ValuePolicyCombiner.FromAuthoredStorage(storageProfile));
+        if (policy.Storage != DurableValueStorage.Inline)
+        {
+            throw new ArgumentException(
+                $"VF-ACT-005: Variable '{variable.ReferenceKey}' on activity node '{nodeId}' selects external storage profile '{variable.StorageDriverType}', but canonical variable-frame externalization is not implemented. Publication is refused instead of accepting an unusable declaration.");
+        }
+        RuntimeInputBinding? initialBinding = null;
+        if (RuntimeInputBindingCompiler.IsSecretBinding(variable.Default))
+            throw SecretBindingDiagnostics.VariableDefaultRefused(nodeId, variable.ReferenceKey);
+        if (variable.Default is not null)
+        {
+            initialBinding = Compile(
+                nodeId,
+                new InputDefinition(
+                    variable.ReferenceKey,
+                    variable.Name,
+                    variable.Type,
+                    storageProfile,
+                    variable.Name,
+                    Category: null,
+                    IsNullable: true),
+                variable.Default);
+            if (initialBinding.Source != RuntimeInputBindingSource.Literal)
+                throw new ArgumentException($"Variable '{variable.ReferenceKey}' on activity node '{nodeId}' requires a persistable literal initial binding.");
+        }
+
+        return new RuntimeVariableDeclaration(variable.ReferenceKey, variable.Name, type, policy, initialBinding);
+    }
+
+    RuntimeInputBinding IActivityTemplateInputBindingCompiler.PinAssignmentSourceConversion(
+        string nodeId, RuntimeInputBinding binding, TypeReference? sourceType) =>
+        PinAssignmentSourceConversion(nodeId, binding, sourceType);
+
+    internal RuntimeInputBinding PinAssignmentSourceConversion(
+        string nodeId, RuntimeInputBinding binding, TypeReference? sourceType, ValueConversionPlanResolver? resolver = null)
+    {
+        // A member read has no static source contract here (a result member's is planned by the linker, a variable
+        // member's is never known): the intrinsic validates the selected member against its destination when it reads it.
+        if (binding.Source is RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember or RuntimeInputBindingSource.WorkflowRequestMember)
+            return binding;
+        if (binding.Selection is not null)
+            throw PublishedMemberReadDiagnostics.Unsupported(nodeId, binding);
+        if (binding.Source is not RuntimeInputBindingSource.VariableRead and not RuntimeInputBindingSource.WorkflowRequest)
+            return binding;
+
+        // Dynamic JSON has no static source contract. Runtime validates its actual payload against
+        // the destination contract before storage; do not invent a source type or parse string content.
+        if (sourceType is null || sourceType.Alias == "Elsa.Any")
+            return binding;
+        var source = new ValueTypeDescriptor(sourceType.Alias, sourceType.CollectionKind);
+        try
+        {
+            var context = new ValueConversionBindingContext(nodeId, binding.InputKey, ValueConversionBindingKind.Input);
+            var plan = (resolver ?? resolvedConversionPlanResolver).Resolve(source, ValueRepresentationDefaults.Infer(source),
+                binding.TargetType, binding: context);
+            return new RuntimeInputBinding(binding.InputKey, binding.TargetType, binding.EffectivePolicy, binding.Source,
+                binding.Literal, binding.WorkflowRequest, binding.Variable, binding.ActivityResult, binding.Expression, binding.Metadata,
+                plan, binding.ConversionRequest, binding.Secret);
+        }
+        catch (ValueConversionPublicationException exception)
+        {
+            throw new ArgumentException($"Workflow intrinsic node '{nodeId}' input '{binding.InputKey}': {exception.Message}", exception);
+        }
+    }
+
     /// <summary>
     /// Compiles every input of a node against its catalog input definitions. The credential-literal rule
     /// is applied to the whole node first, so its refusal wins over <c>VF-ACT-011</c> and over any other input's
@@ -710,6 +829,20 @@ public sealed class RuntimeInputBindingCompiler(
         ValueProtectionPolicy effectivePolicy,
         AuthoredValueConversionRequest? conversion)
     {
+        var reference = ReadActivityResultReference(nodeId, inputDefinition, value);
+
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: ToValueTypeDescriptor(inputDefinition),
+            effectivePolicy: effectivePolicy,
+            source: RuntimeInputBindingSource.ActivityResult,
+            activityResult: reference,
+            metadata: BuildInputMetadata(inputDefinition),
+            conversionRequest: AuthoredValueConversionMapper.ToRuntimeRequest(conversion));
+    }
+
+    internal static RuntimeActivityResultReference ReadActivityResultReference(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
         var payload = RequireObjectPayload(nodeId, inputDefinition, value, ActivityResultExpressionType);
         var producerNodeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerNodeId");
         var projectionKey = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "projectionKey");
@@ -721,14 +854,7 @@ public sealed class RuntimeInputBindingCompiler(
                          optionalElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
                          optionalElement.GetBoolean();
 
-        return new RuntimeInputBinding(
-            inputKey: inputDefinition.ReferenceKey,
-            targetType: ToValueTypeDescriptor(inputDefinition),
-            effectivePolicy: effectivePolicy,
-            source: RuntimeInputBindingSource.ActivityResult,
-            activityResult: new RuntimeActivityResultReference(producerNodeId, projectionKey, producerScopeId, isOptional),
-            metadata: BuildInputMetadata(inputDefinition),
-            conversionRequest: AuthoredValueConversionMapper.ToRuntimeRequest(conversion));
+        return new RuntimeActivityResultReference(producerNodeId, projectionKey, producerScopeId, isOptional);
     }
 
     /// <summary>
@@ -1113,7 +1239,7 @@ public sealed class RuntimeInputBindingCompiler(
             metadata: BuildInputMetadata(inputDefinition));
     }
 
-    private static bool TryReadPortableExpressionDefinition(object? value, out ExpressionDefinition definition)
+    internal static bool TryReadPortableExpressionDefinition(object? value, out ExpressionDefinition definition)
     {
         if (value is ExpressionDefinition instance)
         {

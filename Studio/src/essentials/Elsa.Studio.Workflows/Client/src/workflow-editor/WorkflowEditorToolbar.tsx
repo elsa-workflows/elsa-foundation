@@ -1,7 +1,8 @@
 import "./WorkflowEditorToolbar.css";
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Check, ChevronRight, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
-import { AnchoredPopover } from "@elsa-workflows/studio-ui";
+import { createContext, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Check, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
+import { AnchoredPopover, StudioBreadcrumbs } from "@elsa-workflows/studio-ui";
+import { StudioLink } from "../StudioLink";
 import { PublishActionButton, type WorkflowPublishMode } from "./PublishActionButton";
 
 export interface WorkflowToolbarActionGroup {
@@ -13,6 +14,66 @@ export interface WorkflowToolbarActionGroup {
     title?: string;
     onSelect(): void;
   }[];
+}
+
+export const WorkflowCanvasToolsHostContext = createContext<HTMLElement | null>(null);
+
+export function WorkflowEditorToolbarFrame({ identity, metadata, actions, afterActions, className }: {
+  identity: ReactNode;
+  metadata: ReactNode;
+  actions: ReactNode;
+  afterActions?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <header className={`wf-editor-top wf-editor-toolbar${className ? ` ${className}` : ""}`}>
+      <div className="wf-editor-identity">{identity}</div>
+      <div className="wf-editor-metadata">{metadata}</div>
+      <div className="wf-editor-actions">{actions}</div>
+      {afterActions}
+    </header>
+  );
+}
+
+export function WorkflowCanvasCommandBar({
+  canUndo,
+  canRedo,
+  canAutoLayout,
+  onUndo,
+  onRedo,
+  onAutoLayout,
+  canvasToolsSlot,
+  ariaLabel = "Canvas tools",
+  undoLabel = "Undo",
+  redoLabel = "Redo",
+  autoLayoutLabel = "Auto-layout",
+  undoTitle = "Undo (Ctrl+Z)",
+  redoTitle = "Redo (Ctrl+Shift+Z)",
+  autoLayoutTitle = "Auto-layout the canvas"
+}: {
+  canUndo: boolean;
+  canRedo: boolean;
+  canAutoLayout: boolean;
+  onUndo(): void;
+  onRedo(): void;
+  onAutoLayout(): void;
+  canvasToolsSlot?: (element: HTMLElement | null) => void;
+  ariaLabel?: string;
+  undoLabel?: string;
+  redoLabel?: string;
+  autoLayoutLabel?: string;
+  undoTitle?: string;
+  redoTitle?: string;
+  autoLayoutTitle?: string;
+}) {
+  return (
+    <div className="wf-canvas-tools" role="group" aria-label={ariaLabel}>
+      <button type="button" className="wf-icon-button" aria-label={undoLabel} title={undoTitle} disabled={!canUndo} onClick={onUndo}><Undo2 size={16} /></button>
+      <button type="button" className="wf-icon-button" aria-label={redoLabel} title={redoTitle} disabled={!canRedo} onClick={onRedo}><Redo2 size={16} /></button>
+      <button type="button" className="wf-icon-button" aria-label={autoLayoutLabel} title={autoLayoutTitle} disabled={!canAutoLayout} onClick={onAutoLayout}><Network size={16} /></button>
+      <span ref={canvasToolsSlot} className="wf-canvas-tools-slot" />
+    </div>
+  );
 }
 
 interface WorkflowEditorToolbarProps {
@@ -36,6 +97,7 @@ interface WorkflowEditorToolbarProps {
   canRun: boolean;
   publicationUnavailableReason?: string;
   directBpmnPublication?: ReactNode;
+  canvasToolsSlot?: (element: HTMLElement | null) => void;
   runTitle: string;
   moreActions: WorkflowToolbarActionGroup[];
 }
@@ -74,31 +136,40 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
   };
 
   return (
-    <header className="wf-editor-top wf-editor-toolbar">
-      <div className="wf-editor-identity">
-        <button type="button" className="wf-link-button" onClick={props.onBack}>{props.templateMode ? "Templates" : "Definitions"}</button>
-        <ChevronRight size={14} aria-hidden="true" />
-        <div className="wf-editor-heading">
-          <div className="wf-editor-title">
+    <WorkflowEditorToolbarFrame
+      identity={
+        <StudioBreadcrumbs
+          items={[{ href: props.templateMode ? "/workflows/templates" : "/workflows/definitions", label: props.templateMode ? "Templates" : "Definitions" }]}
+          current={<span className="wf-editor-title">
             <strong title={props.name}>{props.name}</strong>
             <span className="wf-chip">{props.templateMode ? "Template" : "Draft"}</span>
-          </div>
-        </div>
-      </div>
-      <div className="wf-editor-metadata">
+          </span>}
+          renderLink={item => <StudioLink href={item.href} onClick={event => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            props.onBack();
+          }}>{item.label}</StudioLink>}
+        />
+      }
+      metadata={
         <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={props.status || undefined} data-pending={pending || undefined}>
           {props.status ? <>
             {pending ? <LoaderCircle size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
             <span>{props.status}</span>
           </> : null}
         </span>
-      </div>
-      <div className="wf-editor-actions">
-        <div className="wf-canvas-tools" role="group" aria-label="Canvas tools">
-          <button type="button" className="wf-icon-button" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!props.canUndo} onClick={props.onUndo}><Undo2 size={16} /></button>
-          <button type="button" className="wf-icon-button" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!props.canRedo} onClick={props.onRedo}><Redo2 size={16} /></button>
-          <button type="button" className="wf-icon-button" aria-label="Auto-layout" title="Auto-layout the canvas" disabled={!props.canAutoLayout} onClick={props.onAutoLayout}><Network size={16} /></button>
-        </div>
+      }
+      actions={
+        <>
+        <WorkflowCanvasCommandBar
+          canUndo={props.canUndo}
+          canRedo={props.canRedo}
+          canAutoLayout={props.canAutoLayout}
+          onUndo={props.onUndo}
+          onRedo={props.onRedo}
+          onAutoLayout={props.onAutoLayout}
+          canvasToolsSlot={props.canvasToolsSlot}
+        />
         <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={15} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
         {!props.templateMode ? props.directBpmnPublication : null}
         {!props.templateMode ? <PublishActionButton unavailableReason={props.publicationUnavailableReason} busy={props.busy} saving={props.saving} onPublish={props.onPublish} /> : null}
@@ -124,7 +195,9 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
             }
           }}
         ><MoreHorizontal size={18} /></button>
-      </div>
+        </>
+      }
+      afterActions={
       <AnchoredPopover anchorRef={triggerRef} open={open} className="wf-editor-actions-popover" minWidth={240} maxHeight={480} onDismiss={() => closeMenu(false)} onPositioned={focusInitialMenuItem}>
         <div ref={menuRef} id={menuId} role="menu" aria-label="More workflow actions" onKeyDown={handleMenuKeyDown}>
           <div role="group" aria-label="Saving">
@@ -146,6 +219,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           ))}
         </div>
       </AnchoredPopover>
-    </header>
+      }
+    />
   );
 }

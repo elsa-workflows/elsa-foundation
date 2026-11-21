@@ -19,7 +19,7 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 | Contract | Built-in default | Replace when |
 |---|---|---|
 | `IActivityTemplateCompiler` *(Publishing Core)* | `ActivityTemplateCompiler` (scoped) | Candidate dependency resolution, provider compilation or template admission differs. |
-| `IActivityTemplateInputBindingCompiler` *(Publishing Core)* | Scoped `RuntimeInputBindingCompiler` | A template provider needs the registered binding compiler to lower graph input reads and validate authored intrinsic inputs. |
+| `IActivityTemplateInputBindingCompiler` *(Publishing Core)* | Scoped `RuntimeInputBindingCompiler` | A template provider needs the registered binding compiler to lower graph input reads, compile native intrinsic inputs under their declared policy, compile canonical native-container variables and pin assignment conversions from actual declared source types. |
 | `IActivityPublicationCandidateEvaluator` *(Publishing Core)* | `ActivityPublicationCandidateEvaluator` (scoped) | One publication verdict combines validated candidate content, compiler diagnostics and selected capability readiness. |
 | `IActivityPublicationReadiness` *(Publishing Core)* | `ActivityPublicationReadiness` (scoped) | Runtime/storage availability or its stable review fingerprint differs. |
 | `IActivityCatalogProjection` *(Publishing Core)* | `ActivityCatalogProjection` (scoped) | Derived read-only activity descriptors/publication metadata need a different projection. |

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openExecutionInputs, openExecutionOutputs } from "./executionDetails";
 import axe from "axe-core";
 
 async function showRunData(page: Page, host: string) {
@@ -25,7 +26,7 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     const narrowInstance = host === "instance" && width === 390;
     await expect(source).toHaveAccessibleName(/Run state: Completed/);
     await source.press("Enter");
-    await showRunData(page, host);
+    await openExecutionInputs(page);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     if (narrowInstance) {
       await page.getByRole("button", { name: "Back to workflow run canvas", exact: true }).press("Enter");
@@ -33,23 +34,28 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     }
     await expect(source).toHaveAccessibleName(/Selected/);
 
-    if (host === "editor") await page.getByRole("tab", { name: "Runtime", exact: true }).press("Enter");
-    await page.getByRole("button", { name: "Pause live updates", exact: true }).press("Enter");
-    const follow = page.getByRole("button", { name: "Resume live updates", exact: true });
-    await expect(follow).toBeFocused();
-    await expect(page.getByText(/^Live updates paused/)).toBeVisible();
-    await expect(source).toHaveAccessibleName(/Selected/);
-    await follow.press("Enter");
-    await expect(page.getByRole("button", { name: "Pause live updates", exact: true })).toBeFocused();
+    // Only the attached Test Run keeps pause/resume; #4903 removed it from the run instance workbench.
+    if (host === "editor") {
+      await page.getByRole("tab", { name: "Runtime", exact: true }).press("Enter");
+      await page.getByRole("button", { name: "Pause live updates", exact: true }).press("Enter");
+      const follow = page.getByRole("button", { name: "Resume live updates", exact: true });
+      await expect(follow).toBeFocused();
+      await expect(page.getByText(/^Live updates paused/)).toBeVisible();
+      await expect(source).toHaveAccessibleName(/Selected/);
+      await follow.press("Enter");
+      await expect(page.getByRole("button", { name: "Pause live updates", exact: true })).toBeFocused();
+    }
 
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).press("Enter");
     await expect(canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ })).toHaveAccessibleName(/Run state: Completed/);
     await expect(source).toHaveAccessibleName(/Selected/);
     await source.press(" ");
-    await showRunData(page, host);
+    // The narrow run details panel reopens on its Overview tab.
+    if (narrowInstance) await openExecutionInputs(page);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
-    await expect(page.getByText("Completion receipt: 1", { exact: true })).toBeVisible();
     if (!narrowInstance) await expect(source).toBeFocused();
+    await openExecutionOutputs(page);
+    await expect(page.getByText("Completion receipt: 1", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
 
     await page.addScriptTag({ content: axe.source });

@@ -94,6 +94,22 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
         Run(context, Begin(state, plan, messageId, context.FrameId));
     }
 
+    /// <summary>
+    /// Round 5 C (the owner's decision of 16 November): a state's activity is one activation per visit of the state, and
+    /// the visit is named by its committed serial (<see cref="StateVisit.Occurrence"/>, <c>frame/state/serial</c>, from
+    /// <see cref="MachineState.VisitSerial"/>). The child reaches the visit through its lexical scope, which this machine
+    /// created for exactly that visit. A state entered twice gives its activity two keys; a control child has no visit.
+    /// </summary>
+    protected internal override string? IterationOf(System.Text.Json.Nodes.JsonNode? state, string? childTag, IReadOnlyDictionary<string, System.Text.Json.Nodes.JsonNode?>? childScope, string? childLexicalScope)
+    {
+        if (childLexicalScope is null || Values.To<MachineState>(state) is not { Scopes.Visits: { } visits } machine) return null;
+        var occurrence = visits.FirstOrDefault(v => v.Value == childLexicalScope).Key;
+        if (occurrence is null) return null;
+        var serial = occurrence[(occurrence.LastIndexOf('/') + 1)..];
+        var visit = (machine.Visits ?? []).Concat(machine.PlannedVisits ?? []).FirstOrDefault(v => v.Occurrence == occurrence);
+        return visit is null ? serial : $"{visit.State}-{serial}";
+    }
+
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
         var state = MaterializeScopes(context, State(context, child.Frame));

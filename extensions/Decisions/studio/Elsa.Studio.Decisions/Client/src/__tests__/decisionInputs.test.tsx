@@ -339,6 +339,7 @@ describe("Evaluate Decision Inputs editor", () => {
 describe("Evaluate Decision version picker", () => {
   it("explains that an unpublished draft cannot be pinned before Review & publish", async () => {
     const api = stubApi(), onChange = vi.fn(), onValidationChange = vi.fn();
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/decisions") ? { items: [{ ...asset, publishedVersionId: null }] } : path.endsWith("/versions") ? { items: [] } : asset as never);
     const { host, update } = mount(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="" disabled={false} onChange={onChange} onValidationChange={onValidationChange} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Approval"));
     select(host.querySelector<HTMLSelectElement>('[aria-label="Business decision"]')!, asset.id);

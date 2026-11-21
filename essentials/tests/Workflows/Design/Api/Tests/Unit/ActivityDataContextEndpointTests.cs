@@ -394,6 +394,48 @@ public sealed class ActivityDataContextEndpointTests
         { Calls++; throw new InvalidOperationException("Neutral acquisition must not fabricate an expression symbol."); }
     }
 
+    [Fact]
+    public async Task Portable_parameter_metadata_round_trips_the_canonical_offer_and_exact_path_without_writing()
+    {
+        using var host = new Host();
+        var before = host.Drafts.Draft.State;
+        var root = await host.Invoke(host.Request() with { Query = new() { ExpressionType = "JavaScript" } });
+        Assert.Equal("supported", root.Body.State); Assert.True(root.Body.Analysis!.ExpressionParametersEnabled); Assert.Equal("JavaScript", root.Body.Analysis.ExpressionType);
+        var parameter = new ActivityResultExpressionParameterBinding("producer", "$result");
+        var result = await host.Invoke(host.Request() with { ExpectedSnapshotHash = root.Body.SnapshotHash,
+            Query = new() { ExpressionType = "JavaScript", ParameterSource = parameter, MemberPath = ["a.b", ""] } });
+        Assert.Equal("supported", result.Body.State); Assert.Equal("no-store", result.CacheControl);
+        Assert.Equal(root.Body.SnapshotHash, result.Body.SnapshotHash);
+        Assert.False(result.Body.Analysis!.MemberReadsEnabled); Assert.Empty(result.Body.Analysis.MemberReads);
+        var offer = Assert.Single(result.Body.Analysis.Sources); Assert.Equal(parameter, offer.ParameterSource);
+        Assert.Equal(new[] { "a.b", "" }, offer.ParameterPath!.Value.ToArray());
+        using var json = JsonDocument.Parse(result.Json);
+        var wire = json.RootElement.GetProperty("analysis").GetProperty("sources")[0];
+        Assert.Equal("ActivityResult", wire.GetProperty("parameterSource").GetProperty("kind").GetString());
+        Assert.False(wire.GetProperty("parameterSource").TryGetProperty("memberPath", out _));
+        Assert.Equal(new[] { "a.b", "" }, wire.GetProperty("parameterPath").EnumerateArray().Select(segment => segment.GetString()));
+        Assert.Same(before, host.Drafts.Draft.State);
+    }
+
+    [Theory]
+    [InlineData("denied", "denied")]
+    [InlineData("stale", "stale")]
+    [InlineData("snapshot", "incompatible")]
+    [InlineData("mixed", "invalid")]
+    public async Task Portable_parameter_queries_keep_endpoint_authority_snapshot_and_mode_fences(string scenario, string expected)
+    {
+        using var host = new Host(); var before = host.Drafts.Draft.State;
+        if (scenario == "denied") host.Owner.Allowed = false;
+        var request = host.Request() with { Query = new() { ExpressionType = "JavaScript", ParameterSource = new ActivityResultExpressionParameterBinding("producer", "$result"),
+            Source = scenario == "mixed" ? Result("producer") : null, MemberPath = ["customerId"] } };
+        if (scenario == "stale") request = request with { ExpectedBaseRevision = "older" };
+        if (scenario == "snapshot") request = request with { ExpectedSnapshotHash = "different" };
+        var result = await host.Invoke(request);
+        Assert.Equal(expected, result.Body.State); Assert.Equal("no-store", result.CacheControl);
+        if (scenario == "mixed") Assert.Empty(result.Body.Analysis!.Sources); else Assert.Null(result.Body.Analysis);
+        Assert.Same(before, host.Drafts.Draft.State);
+    }
+
     private sealed class Host : IDisposable
     {
         internal ServiceProvider Services { get; }

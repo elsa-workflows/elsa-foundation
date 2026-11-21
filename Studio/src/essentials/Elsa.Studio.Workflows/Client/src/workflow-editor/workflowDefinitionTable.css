@@ -7,7 +7,6 @@
 .wf-definitions-list .wf-definition-description { display: none; }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-description { display: block; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row { border-bottom-style: var(--studio-row-boundary-style); }
-html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row:hover { background: var(--studio-row-hover); }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row[aria-selected="true"] { background: var(--studio-row-selected); box-shadow: inset 3px 0 0 var(--studio-selection-mark); }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-version .wf-status-badge { background: transparent; border-color: transparent; padding-inline: 0; }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid:not([data-library-columns]) { grid-template-columns: var(--wf-definition-selection-track) minmax(124px, 1fr) 104px 72px minmax(168px, .22fr) 104px 120px 60px; min-width: 936px; }
@@ -15,7 +14,7 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 /* Keep actions reachable while optional controls settle or overflowing columns scroll.
    Blend state tints over the surface so columns never show through the pinned cell. */
 .wf-definitions-list :is(.wf-definition-actions-header, .wf-row-actions) { position: sticky; right: 0; background: var(--studio-surface); }
-.wf-definitions-list .wf-grid-row:hover .wf-row-actions { background: linear-gradient(var(--studio-row-hover) 0 0), var(--studio-surface); }
+.wf-definitions-list .wf-grid-row[data-studio-row-interactive]:where(:not([aria-selected="true"])):is(:hover, :focus-visible) .wf-row-actions { background: linear-gradient(var(--studio-row-hover) 0 0), var(--studio-surface); }
 .wf-definitions-list .wf-grid-row[aria-selected="true"] .wf-row-actions { background: linear-gradient(var(--studio-row-selected) 0 0), var(--studio-surface); }
 
 .wf-definitions-list .wf-folder-content > .wf-toolbar {
@@ -132,11 +131,6 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
   border-bottom: 0;
 }
 
-.wf-definitions-list .wf-definition-grid > .wf-grid-row:focus-visible {
-  outline: 2px solid var(--studio-accent);
-  outline-offset: -2px;
-}
-
 .wf-definitions-list .wf-definition-grid > .wf-grid-head > span {
   display: block;
 }
@@ -152,7 +146,8 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 }
 
 .wf-definitions-list .wf-definition-modified {
-  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
 }
 
 .wf-definitions-list .wf-definition-name > * {
@@ -166,6 +161,7 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 
 .wf-definitions-list .wf-definition-link {
   display: block;
+  width: fit-content;
   overflow: hidden;
   color: var(--studio-text);
   font-weight: 600;
@@ -414,22 +410,22 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 
 .wf-library-toolbar {
   display: grid;
-  gap: 14px;
+  gap: var(--studio-space-2);
   min-width: 0;
   margin: 8px 0 16px;
-  padding: 16px;
+  padding: var(--studio-space-3);
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-md);
   background: var(--studio-surface);
 }
 
-.wf-library-toolbar > .studio-collection-toolbar {
+.wf-library-toolbar .studio-collection-toolbar {
   align-items: center;
-  justify-content: space-between;
+  gap: var(--studio-space-2);
 }
 
 .wf-library-toolbar .studio-collection-toolbar > .studio-search {
-  flex: 1 1 240px;
+  flex: 1 1 10rem;
   max-width: 560px;
 }
 

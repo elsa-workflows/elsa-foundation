@@ -476,6 +476,7 @@ function InputEditor({ member, index, selected, nameInputRef, capabilities, auth
     {capabilities && !available ? <UnavailableType alias={member.type.alias} /> : null}
     <MemberFieldTabs general={<div className="ad-contract-fields">
       <StagedNameField field="name" value={member.name} readOnly={readOnly} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} />
+      <ReferenceKeyField value={member.referenceKey} readOnly={readOnly} onApply={onReferenceKeyChange} />
       <TypeFields member={member} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
       <StudioField className="ad-contract-description" label={<><span>Description</span></>}><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></StudioField>
       <label className="ad-contract-check"><input data-contract-field="isRequired" type="checkbox" checked={member.isRequired} onChange={event => onChange({ ...member, isRequired: event.target.checked })} disabled={readOnly} /><span>Required</span><small>A value must be available after the default is applied.</small></label>
@@ -491,7 +492,6 @@ function InputEditor({ member, index, selected, nameInputRef, capabilities, auth
       />
       <AdvancedTypeFields member={member} type={type} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
       <DurabilityFields member={member} type={type} capabilities={capabilities} readOnly={readOnly} onChange={onChange} />
-      <ReferenceKeyField value={member.referenceKey} readOnly={readOnly} onApply={onReferenceKeyChange} />
     </div>} />
   </section>;
 }
@@ -828,8 +828,13 @@ function PresentationFields<T extends ActivityInputContract | ActivityOutputCont
 
 function ReferenceKeyField({ value, readOnly, onApply }: { value: string; readOnly: boolean; onApply(key: string): void }) {
   const [candidate, setCandidate] = useState(value);
+  const helpId = useId();
   useEffect(() => setCandidate(value), [value]);
-  return <div className="ad-contract-staged-field ad-contract-reference-field"><StudioField label={<><span>Stable reference key</span></>}><input data-contract-reference-key-control data-contract-field="referenceKey" value={candidate} onChange={event => setCandidate(event.target.value)} disabled={readOnly} /></StudioField><button type="button" aria-label="Apply key" title="Apply key" onClick={() => onApply(candidate)} disabled={readOnly || !candidate.trim() || candidate.trim() === value}><Check size={16} aria-hidden /></button><small>Changing a published key is a breaking change.</small></div>;
+  return <div className="ad-contract-staged-field ad-contract-reference-field">
+    <StudioField label={<><span>Stable reference key</span></>}><input data-contract-reference-key-control data-contract-field="referenceKey" value={candidate} aria-describedby={helpId} onChange={event => setCandidate(event.target.value)} disabled={readOnly} /></StudioField>
+    <button type="button" aria-label="Apply key" title="Apply key" onClick={() => onApply(candidate)} disabled={readOnly || !candidate.trim() || candidate.trim() === value}><Check size={16} aria-hidden /></button>
+    <small id={helpId}>Used in saved bindings. Changing a published key is a breaking change.</small>
+  </div>;
 }
 
 function StagedNameField({ value, field = "name", readOnly, inputRef, onApply }: { value: string; field?: string; readOnly: boolean; inputRef?: { current: HTMLInputElement | null }; onApply(name: string): void }) {

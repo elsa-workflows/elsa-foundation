@@ -175,6 +175,28 @@ public sealed class LiquidExplicitParametersTests
             Assert.Equal(2, result[1].GetInt32());
     }
 
+    public static TheoryData<string> LiteralMemberKeys => new()
+    { "", "a.b", """quoted"key""", "single'key", """both"'key""", """back\slash""", "class", "日本語", "\n", "__proto__", "constructor" };
+
+    [Theory]
+    [MemberData(nameof(LiteralMemberKeys))]
+    public async Task Inserted_literal_member_access_reads_the_exact_JSON_key_and_combines_parameters(string key)
+    {
+        var literal = JsonSerializer.Serialize(key, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+        var result = await Handler().EvaluateAsync(Request("{{ data[" + literal + "] | append: ':' | append: other }}",
+            new Dictionary<string, JsonElement> { ["data"] = JsonSerializer.SerializeToElement(new Dictionary<string, string> { [key] = "selected" }),
+                ["other"] = JsonSerializer.SerializeToElement("combined") }));
+        Assert.Equal("selected:combined", result.GetString());
+    }
+
+    [Fact]
+    public async Task Reference_looking_text_inside_a_raw_block_is_not_a_parameter_read()
+    {
+        var result = await Handler().EvaluateAsync(Request("{% raw %}{{ data }}{% endraw %}",
+            new Dictionary<string, JsonElement> { ["data"] = JsonSerializer.SerializeToElement("selected") }));
+        Assert.Equal("{{ data }}", result.GetString());
+    }
+
     private static PortableLiquidExpressionHandler Handler() => new(new FluidParser());
 
     private static ExpressionEvaluationRequest Request(

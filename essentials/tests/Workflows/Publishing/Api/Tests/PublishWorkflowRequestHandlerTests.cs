@@ -1693,9 +1693,10 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         IWorkflowDefinitionVersionStore versionStore,
         IExpressionDraftSemanticValidator? expressionValidator = null,
         bool configureExpressionValidator = true,
-        ILogger<PublishWorkflowRequestHandler>? logger = null)
+        ILogger<PublishWorkflowRequestHandler>? logger = null,
+        IReadOnlyCollection<IActivityTriggerStimulusProvider>? triggerProviders = null)
     {
-        var extractor = new WorkflowTriggerBindingExtractor([]);
+        var extractor = new WorkflowTriggerBindingExtractor(triggerProviders ?? []);
         return new(
             compiler,
             _store,

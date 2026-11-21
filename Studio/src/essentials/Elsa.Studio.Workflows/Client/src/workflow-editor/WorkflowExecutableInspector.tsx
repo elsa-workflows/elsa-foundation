@@ -1,9 +1,9 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, type Edge, type Node } from "@xyflow/react";
-import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { Fingerprint, ListTree, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioBreadcrumbs, StudioButton } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -38,11 +38,10 @@ import { buildExecutableActivityGraph, ghostNodeLabel, isGhostFact, type Executa
 import { ConversionPlanCaption } from "../ConversionPlanCaption";
 import { formatDate } from "../workflowFormatting";
 import { WfErrorCard } from "./StatusViews";
-import { PanelTabList } from "./PanelTabList";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ExecutableReferenceList, ExecutableRunStatusLine } from "./executableShared";
-import type { ExecutableRunState, WorkflowEditorPanelTab } from "./editorTypes";
+import type { ExecutableRunState } from "./editorTypes";
 import {
   computeExecutableSourceDrift,
   createDraftSnapshotId,
@@ -52,8 +51,8 @@ import {
   formatReferenceScope
 } from "./editorHelpers";
 import { useSidePanelLayout } from "./useSidePanelLayout";
-import { maxInspectorWidth, minInspectorWidth } from "./constants";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
+import { notifySuccess } from "./notifications";
 import {
   createExecutableWorkflowRunFeedback,
   findPublishedRunReference,
@@ -66,13 +65,15 @@ import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
+import { GraphAuthoringWorkbench } from "../graph-authoring/GraphAuthoringWorkbench";
+import { StudioLink } from "../StudioLink";
+import { WorkflowEditorToolbarFrame } from "./WorkflowEditorToolbar";
+import "./executableInspector.css";
 import type { WorkflowWeaverController } from "../workflowWeaver";
 import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
-import { WorkflowExecutableCanvasHeader } from "./WorkflowExecutableCanvasHeader";
 import {
   describeExecutableReferenceSelection,
-  resolveExecutableInspectorDisplayName,
-  type ExecutableInspectorIdentity
+  formatExecutableInspectorPageTitle
 } from "./executableInspectorIdentity";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
@@ -85,15 +86,16 @@ interface ExecutableInspectionData {
   detail: WorkflowExecutableDetails;
   activityCatalog: ActivityCatalogItem[];
   inputSources: WorkflowExecutableInputSources | null;
+  requestedSourceReferenceId: string | null;
 }
 
 type SourceDefinitionState =
-  | { status: "idle" | "loading" }
-  | { status: "ready"; definition: WorkflowDefinitionSummary; draft: WorkflowDraft | null }
-  | { status: "absent" }
-  | { status: "failed"; error: string };
+  | { status: "idle" | "loading"; definitionId: string | null }
+  | { status: "ready"; definitionId: string; definition: WorkflowDefinitionSummary; draft: WorkflowDraft | null }
+  | { status: "absent"; definitionId: string | null }
+  | { status: "failed"; definitionId: string; error: string };
 
-export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runInputEditors, artifactId, sourceReferenceId, onSelectReference, onIdentityChange }: {
+export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runInputEditors, artifactId, sourceReferenceId, onSelectReference }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
   /** The Workflows module's Weaver state: the inspector contributes the exact Executable it shows (spec 1193 FR-028). */
@@ -102,28 +104,18 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   artifactId: string;
   sourceReferenceId: string | null;
   onSelectReference(sourceReferenceId: string | null): void;
-  onIdentityChange?(identity: ExecutableInspectorIdentity): void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [data, setData] = useState<ExecutableInspectionData | null>(null);
-  const [sourceDefinition, setSourceDefinition] = useState<SourceDefinitionState>({ status: "idle" });
+  const [sourceDefinition, setSourceDefinition] = useState<SourceDefinitionState>({ status: "idle", definitionId: null });
   const [runStatus, setRunStatus] = useState("");
   const [runError, setRunError] = useState("");
   const [lastRun, setLastRun] = useState<ExecutableRunState | null>(null);
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const {
-    inspectorWidth,
-    inspectorCollapsed,
-    maximizedSidePanel,
-    inspectorExpanded,
-    editorBodyStyle,
-    toggleSidePanelCollapsed,
-    toggleSidePanelMaximized,
-    startSidePanelResize,
-    handleSidePanelResizeKeyDown
-  } = useSidePanelLayout();
+  const [activeInspectorTab, setActiveInspectorTab] = useState<"activity" | "identity" | "references">("identity");
+  const sidePanelLayout = useSidePanelLayout(undefined, { palettePresent: false });
   const explainAction = findAiAction(ai, "weaver.workflows.explain-executable");
 
   const load = useCallback(async () => {
@@ -147,9 +139,10 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
       const inputSources = chosenReferenceId
         ? await getExecutableInputSources(context, detail.artifactId, chosenReferenceId).catch(() => null)
         : null;
-      setData({ detail, activityCatalog: activityCatalog.activities, inputSources });
+      setData({ detail, activityCatalog: activityCatalog.activities, inputSources, requestedSourceReferenceId: sourceReferenceId });
       setFrames([]);
       setSelectedNodeId(null);
+      setActiveInspectorTab("identity");
       setState("ready");
     } catch (e) {
       setData(null);
@@ -162,11 +155,31 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
     void load();
   }, [load]);
 
-  const chosenReference = useMemo(() => findChosenReference(data?.detail ?? null), [data]);
+  const currentData = state === "ready" && data?.detail.artifactId === artifactId
+    && data.requestedSourceReferenceId === sourceReferenceId ? data : null;
+  const chosenReference = useMemo(() => findChosenReference(currentData?.detail ?? null), [currentData]);
+  const requestedDefinitionId = chosenReference?.definitionId?.trim() || null;
+  const currentSourceDefinition: SourceDefinitionState = sourceDefinition.definitionId === requestedDefinitionId
+    ? sourceDefinition
+    : requestedDefinitionId
+      ? { status: "loading", definitionId: requestedDefinitionId }
+      : { status: "absent", definitionId: null };
+  const currentDefinitionName = currentData && chosenReference && currentSourceDefinition.status === "ready"
+    ? currentSourceDefinition.definition.name
+    : null;
+  const pageTitle = formatExecutableInspectorPageTitle(
+    currentDefinitionName,
+    artifactId,
+    chosenReference?.artifactVersion
+  );
   // The exact Executable Weaver may read while it is shown: identity bound to its Artifact Hash, withdrawn while loading,
   // after a failed load and on unmount. The server reads the content itself and refuses a hash that no longer matches.
-  const inspected = state === "ready" && data
-    ? { artifactId: data.detail.artifactId, artifactHash: data.detail.artifactHash, sourceReferenceId: data.detail.chosenReference?.sourceReferenceId ?? null }
+  const inspected = currentData
+    ? {
+        artifactId: currentData.detail.artifactId,
+        artifactHash: currentData.detail.artifactHash,
+        sourceReferenceId: currentData.detail.chosenReference?.sourceReferenceId ?? chosenReference?.sourceReferenceId ?? null
+      }
     : null;
   useWorkflowInspectionContext({ controller: weaver, clientId: ai.clientId, kind: "executable", identity: inspected });
   const publishedRunReference = findPublishedRunReference(data?.detail.references);
@@ -185,35 +198,26 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   // The source definition is looked up for the drift caption and the Open-source-definition gate.
   // A missing definition is a supported state (the artifact traveled without its source), not an error.
   useEffect(() => {
-    const definitionId = chosenReference?.definitionId;
+    const definitionId = chosenReference?.definitionId?.trim();
     if (!definitionId) {
-      setSourceDefinition({ status: "absent" });
+      setSourceDefinition({ status: "absent", definitionId: null });
       return;
     }
 
     let cancelled = false;
-    setSourceDefinition({ status: "loading" });
+    setSourceDefinition({ status: "loading", definitionId });
     getDefinition(context, definitionId).then(
-      details => { if (!cancelled) setSourceDefinition({ status: "ready", definition: details.definition, draft: details.draft ?? null }); },
+      details => { if (!cancelled) setSourceDefinition({ status: "ready", definitionId, definition: details.definition, draft: details.draft ?? null }); },
       error => {
         if (cancelled) return;
         setSourceDefinition(isNotFound(error)
-          ? { status: "absent" }
-          : { status: "failed", error: error instanceof Error ? error.message : String(error) });
+          ? { status: "absent", definitionId }
+          : { status: "failed", definitionId, error: error instanceof Error ? error.message : String(error) });
       }
     );
 
     return () => { cancelled = true; };
   }, [chosenReference?.definitionId, context]);
-
-  useEffect(() => {
-    if (state !== "ready" || data?.detail.artifactId !== artifactId) return;
-    onIdentityChange?.({
-      definitionName: sourceDefinition.status === "ready" ? sourceDefinition.definition.name : null,
-      artifactId,
-      version: chosenReference?.artifactVersion ?? null
-    });
-  }, [artifactId, chosenReference?.artifactVersion, data?.detail.artifactId, onIdentityChange, sourceDefinition, state]);
 
   const graph = useMemo(
     () => data ? buildExecutableActivityGraph(
@@ -237,15 +241,8 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
       sourceReferenceId: data.detail.chosenReference?.sourceReferenceId ?? null,
       attached: Boolean(weaver?.inspection)
     })) {
-      setRunError("");
-      setLastRun(null);
-      setRunStatus(`Sent ${data.detail.artifactId} to Weaver`);
+      notifySuccess(`Sent ${data.detail.artifactId} to Weaver`);
     }
-  };
-
-  const goBack = () => {
-    window.history.pushState({}, "", qualifyStudioBackendPath("/workflows/executables"));
-    window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
   const openSourceDefinition = () => {
@@ -255,11 +252,22 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
-  const workbenchClassName = [
-    "wf-instance-detail-workbench wf-executable-workbench",
-    inspectorCollapsed ? "inspector-collapsed" : "",
-    maximizedSidePanel === "inspector" ? "inspector-maximized" : ""
-  ].filter(Boolean).join(" ");
+  const selectNode = (nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+    if (nodeId) {
+      setActiveInspectorTab("activity");
+      if (sidePanelLayout.inspectorCollapsed) sidePanelLayout.toggleSidePanelCollapsed("inspector");
+    }
+  };
+  const inspectorPanelProps = currentData && graph ? {
+    detail: currentData.detail,
+    activityCatalog: currentData.activityCatalog,
+    graph,
+    chosenReference,
+    sourceDefinition: currentSourceDefinition,
+    selectedNodeId,
+    onSelectReference
+  } : null;
 
   return (
     <>
@@ -271,89 +279,74 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
           onCancel={executableRun.cancel}
         />
       ) : null}
-      <div className="wf-toolbar">
-        <StudioButton type="button" onClick={goBack}><ChevronLeft size={14} /> Executables</StudioButton>
-        <StudioButton type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</StudioButton>
-        {data ? (
-          <ExecutableRunButton
-            target={publishedRunTarget}
-            runningArtifactId={executableRun.runningArtifactId}
-            iconSize={14}
-            variant="primary"
-            onRequest={executableRun.request}
-          />
-        ) : null}
-        {data && explainAction ? (
-          <StudioButton type="button" onClick={explain}><Sparkles size={13} /> Explain</StudioButton>
-        ) : null}
-        {data ? (
-          <SourceDefinitionAction
-            reference={chosenReference}
-            sourceDefinition={sourceDefinition}
-            onOpen={openSourceDefinition}
-          />
-        ) : null}
-      </div>
+      <WorkflowEditorToolbarFrame
+        className="wf-executable-toolbar"
+        identity={<StudioBreadcrumbs items={[{ href: "/workflows/executables", label: "Executables" }]} current={
+          <h2 className="wf-editor-title"><strong title={pageTitle}>{pageTitle}</strong></h2>
+        } renderLink={item => <StudioLink href={item.href}>{item.label}</StudioLink>} />}
+        metadata={chosenReference ? <span className="wf-executable-header-meta">{formatExecutableSourceKind(chosenReference.sourceKind)} · {formatReferenceScope(chosenReference.scope)}</span> : null}
+        actions={<>
+          <StudioButton type="button" size="sm" aria-label="Refresh executable" title="Refresh executable" onClick={() => void load()}><RotateCcw size={14} /> Refresh</StudioButton>
+          {currentData ? (
+            <ExecutableRunButton
+              target={publishedRunTarget}
+              runningArtifactId={executableRun.runningArtifactId}
+              iconSize={14}
+              variant="primary"
+              onRequest={executableRun.request}
+            />
+          ) : null}
+          {currentData && explainAction ? (
+            <StudioButton type="button" onClick={explain}><Sparkles size={13} /> Explain</StudioButton>
+          ) : null}
+          {currentData ? (
+            <SourceDefinitionAction
+              reference={chosenReference}
+              sourceDefinition={currentSourceDefinition}
+              onOpen={openSourceDefinition}
+            />
+          ) : null}
+        </>}
+      />
       {runError ? <WfErrorCard message={runError} title="The executable could not be run" /> : null}
       {runStatus ? <ExecutableRunStatusLine status={runStatus} run={lastRun} /> : null}
       {state === "loading" ? <div className="wf-empty">Loading executable...</div> : null}
       {state === "failed" ? <WfErrorCard message={error} /> : null}
-      {state === "ready" && data && graph ? (
-        <div className={workbenchClassName} style={{ ...editorBodyStyle, "--wf-run-inspector-width": `${inspectorWidth}px` } as React.CSSProperties}>
-          <WorkflowExecutableCanvas
-            detail={data.detail}
-            activityCatalog={data.activityCatalog}
+      {currentData && graph ? (
+        <GraphAuthoringWorkbench
+          layout={sidePanelLayout}
+          className="wf-executable-workbench"
+          canvas={<WorkflowExecutableCanvas
+            detail={currentData.detail}
+            activityCatalog={currentData.activityCatalog}
             graph={graph}
-            chosenReference={chosenReference}
-            displayName={resolveExecutableInspectorDisplayName(
-              sourceDefinition.status === "ready" ? sourceDefinition.definition.name : null,
-              data.detail.artifactId
-            )}
             frames={frames}
             onNavigateToScope={setFrames}
             selectedNodeId={selectedNodeId}
-            onSelectNode={setSelectedNodeId}
-          />
-          {inspectorExpanded && !maximizedSidePanel ? (
-            <div
-              className="wf-side-resize-handle right"
-              role="separator"
-              aria-label="Resize executable details panel"
-              aria-orientation="vertical"
-              aria-valuemin={minInspectorWidth}
-              aria-valuemax={maxInspectorWidth}
-              aria-valuenow={inspectorWidth}
-              tabIndex={0}
-              onPointerDown={event => startSidePanelResize("inspector", event)}
-              onKeyDown={event => handleSidePanelResizeKeyDown("inspector", event)}
-            />
-          ) : <div className="wf-side-resize-spacer" />}
-          <WorkflowExecutableSidePanel
-            detail={data.detail}
-            activityCatalog={data.activityCatalog}
-            graph={graph}
-            chosenReference={chosenReference}
-            sourceDefinition={sourceDefinition}
-            selectedNodeId={selectedNodeId}
-            onSelectReference={onSelectReference}
-            collapsed={inspectorCollapsed}
-            expanded={inspectorExpanded}
-            maximized={maximizedSidePanel === "inspector"}
-            onToggleCollapsed={() => toggleSidePanelCollapsed("inspector")}
-            onToggleMaximized={() => toggleSidePanelMaximized("inspector")}
-          />
-        </div>
+            onSelectNode={selectNode}
+          />}
+          inspector={{
+            ariaLabel: "Executable details panel",
+            tabLabel: "Executable details tabs",
+            className: "wf-instance-inspector",
+            tabs: [
+              { id: "identity", title: "Identity", order: 0, icon: <Fingerprint size={14} />, render: () => <WorkflowExecutablePanelContent activeTab="identity" {...inspectorPanelProps!} /> },
+              { id: "activity", title: "Activity", order: 1, icon: <WorkflowIcon size={14} />, render: () => <WorkflowExecutablePanelContent activeTab="activity" {...inspectorPanelProps!} /> },
+              { id: "references", title: `References (${currentData.detail.references.length})`, order: 2, icon: <ListTree size={14} />, render: () => <WorkflowExecutablePanelContent activeTab="references" {...inspectorPanelProps!} /> }
+            ],
+            activeTabId: activeInspectorTab,
+            onSelect: tabId => setActiveInspectorTab(tabId as "activity" | "identity" | "references")
+          }}
+        />
       ) : null}
     </>
   );
 }
 
-export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenReference, displayName, frames, onNavigateToScope, selectedNodeId, onSelectNode }: {
+export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, frames, onNavigateToScope, selectedNodeId, onSelectNode }: {
   detail: WorkflowExecutableDetails;
   activityCatalog: ActivityCatalogItem[];
   graph: ExecutableActivityGraph;
-  chosenReference: WorkflowExecutableReference | null;
-  displayName: string;
   frames: ScopeFrame[];
   onNavigateToScope(frames: ScopeFrame[]): void;
   selectedNodeId: string | null;
@@ -366,19 +359,9 @@ export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chose
   );
   const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(canvas.nodes);
   const scopeKey = frames.length === 0 ? "root" : frames.map(frame => `${frame.ownerNodeId}:${frame.slotId}`).join("/");
-  const selectionLabel = detail.chosenReference
-    ? describeExecutableReferenceSelection(detail.chosenReference.selection, detail.chosenReference.sourceReferenceId)
-    : "No source reference; automatic layout";
-
   return (
-    <section className="wf-instance-canvas-shell" aria-label="Executable canvas">
-      <WorkflowExecutableCanvasHeader
-        displayName={displayName}
-        version={chosenReference?.artifactVersion ?? null}
-        artifactId={detail.artifactId}
-        selectionLabel={selectionLabel}
-      />
-      <ScopeBreadcrumb className="wf-instance-breadcrumb" frames={frames} onNavigate={onNavigateToScope} />
+    <section className="wf-canvas-shell wf-executable-canvas" aria-label="Executable canvas">
+      {frames.length > 0 ? <ScopeBreadcrumb className="wf-instance-breadcrumb" frames={frames} onNavigate={onNavigateToScope} /> : null}
       <div className="wf-instance-canvas" onKeyDownCapture={event => activateWorkflowCanvasNode(event, nodeId => {
         const node = canvas.nodes.find(candidate => candidate.id === nodeId);
         if (node) onSelectNode(node.data.runtimeNodeId ?? node.id);
@@ -506,7 +489,8 @@ export function buildExecutableInspectorCanvas(
   };
 }
 
-function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenReference, sourceDefinition, selectedNodeId, onSelectReference, collapsed, expanded, maximized, onToggleCollapsed, onToggleMaximized }: {
+function WorkflowExecutablePanelContent({ activeTab, detail, activityCatalog, graph, chosenReference, sourceDefinition, selectedNodeId, onSelectReference }: {
+  activeTab: "activity" | "identity" | "references";
   detail: WorkflowExecutableDetails;
   activityCatalog: ActivityCatalogItem[];
   graph: ExecutableActivityGraph;
@@ -514,17 +498,7 @@ function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenRef
   sourceDefinition: SourceDefinitionState;
   selectedNodeId: string | null;
   onSelectReference(sourceReferenceId: string | null): void;
-  collapsed: boolean;
-  expanded: boolean;
-  maximized: boolean;
-  onToggleCollapsed(): void;
-  onToggleMaximized(): void;
 }) {
-  const [activeTab, setActiveTab] = useState<"identity" | "references">("identity");
-  const tabs: WorkflowEditorPanelTab[] = [
-    { id: "identity", title: "Identity", order: 0, icon: <Fingerprint size={14} />, render: () => null },
-    { id: "references", title: `References (${detail.references.length})`, order: 1, icon: <ListTree size={14} />, render: () => null }
-  ];
   const selectedFact = selectedNodeId ? graph.factsByNodeId.get(selectedNodeId) : null;
   const selectedPresentation = selectedNodeId
     ? graph.activityPresentation.find(record => record.nodeId === selectedNodeId)
@@ -538,9 +512,11 @@ function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenRef
   const selectedDisplayName = selectedFact
     ? resolveActivityLabel(selectedPresentation, selectedCatalogItem, selectedFact.activityType)
     : null;
-  const workflowDisplayName = resolveExecutableIdentityTitle(sourceDefinition);
   const rootActivityLabel = resolveExecutableRootActivityLabel(detail, activityCatalog, graph);
   const definitionNames = definitionNamesFromSource(sourceDefinition);
+  const layoutProvenance = chosenReference
+    ? describeExecutableReferenceSelection(detail.chosenReference?.selection, detail.chosenReference?.sourceReferenceId ?? chosenReference.sourceReferenceId)
+    : "No source reference; automatic layout";
   const sourceDraft = sourceDefinition.status === "ready" ? sourceDefinition.draft : null;
   const sourceDefinitionId = sourceDefinition.status === "ready" ? sourceDefinition.definition.id : null;
   const currentDraftVersionId = useMemo(
@@ -559,106 +535,80 @@ function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenRef
   );
 
   return (
-    <aside className="wf-instance-inspector" aria-label="Executable details panel">
-      <div className="wf-panel-title wf-instance-panel-title">
-        <PanelTabList label="Executable details tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => setActiveTab(tabId as "identity" | "references")} />
-        <span className="wf-panel-actions">
-          <button
-            type="button"
-            className="wf-panel-action-button"
-            aria-label={collapsed ? "Expand executable details panel" : "Collapse executable details panel"}
-            title={collapsed ? "Expand" : "Collapse"}
-            onClick={onToggleCollapsed}
-          >
-            {collapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-          </button>
-          {!collapsed ? (
-            <button
-              type="button"
-              className="wf-panel-action-button"
-              aria-label={maximized ? "Restore executable details panel" : "Maximize executable details panel"}
-              title={maximized ? "Restore" : "Maximize"}
-              onClick={onToggleMaximized}
-            >
-              {maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
-          ) : null}
-        </span>
-      </div>
-      {expanded ? (
+    <div className="wf-instance-tab-content">
+      {activeTab === "identity" ? (
         <>
-          <div className="wf-inspector-context wf-executable-identity">
-            <h3>{workflowDisplayName}</h3>
-            <div className="wf-executable-addresses">
-              <CopyableIdentifier label="Artifact ID" value={detail.artifactId} />
-              <CopyableIdentifier label="Artifact hash" value={detail.artifactHash} />
-            </div>
-          </div>
-          <div className="wf-instance-tab-content">
-            {activeTab === "identity" ? (
-              <>
-                <section className="wf-instance-section">
-                  <h4>Identity</h4>
-                  <dl className="wf-instance-meta">
-                    <dt>Root activity</dt>
-                    <dd className="wf-identity-cell">
-                      <span>{rootActivityLabel}</span>
-                      {detail.rootActivityVersion ? <small>Version {detail.rootActivityVersion}</small> : null}
-                    </dd>
-                    <dt>Nodes</dt>
-                    <dd>{detail.nodeCount}</dd>
-                    <dt>Resume targets</dt>
-                    <dd>{detail.resumeTargetCount}</dd>
-                    <dt>Created</dt>
-                    <dd>{formatDate(detail.createdAt)}</dd>
-                  </dl>
-                </section>
-                <section className="wf-instance-section">
-                  <h4>Source</h4>
-                  {chosenReference ? (
-                    <>
-                      <dl className="wf-instance-meta">
-                        <dt>Kind</dt>
-                        <dd>{formatExecutableSourceKind(chosenReference.sourceKind)}</dd>
-                        <dt>Scope</dt>
-                        <dd>{formatReferenceScope(chosenReference.scope)}</dd>
-                      </dl>
-                      <div className="wf-executable-source-ids">
-                        <CopyableIdentifier label="Definition ID" value={chosenReference.definitionId} />
-                        <CopyableIdentifier label="Definition version ID" value={chosenReference.definitionVersionId} />
-                      </div>
-                    </>
-                  ) : (
-                    <p className="wf-muted">This artifact carries no source references.</p>
-                  )}
-                  <SourceDriftCaption
-                    reference={chosenReference}
-                    sourceDefinition={sourceDefinition}
-                    hasDraftEquivalence={hasDraftEquivalence}
-                  />
-                </section>
-                <WorkflowExecutableNodePanel
-                  fact={selectedFact ?? null}
-                  displayName={selectedDisplayName}
-                  description={selectedPresentation?.description}
-                />
-              </>
-            ) : (
-              <section className="wf-instance-section">
-                <h4>Source references</h4>
-                <ExecutableReferenceList
-                  references={detail.references}
-                  activeReferenceId={detail.chosenReference?.sourceReferenceId ?? null}
-                  definitionNames={definitionNames}
-                  variant="collection"
-                  onSelect={reference => onSelectReference(reference.sourceReferenceId)}
-                />
-              </section>
-            )}
-          </div>
+          <section className="wf-instance-section">
+            <h4>Identity</h4>
+            <dl className="wf-instance-meta">
+              <dt>Artifact ID</dt>
+              <dd><CopyableIdentifier label="Artifact ID" value={detail.artifactId} labelPlacement="external" /></dd>
+              <dt>Artifact hash</dt>
+              <dd><CopyableIdentifier label="Artifact hash" value={detail.artifactHash} labelPlacement="external" /></dd>
+              <dt>Root activity</dt>
+              <dd className="wf-identity-cell">
+                <span>{rootActivityLabel}</span>
+                {detail.rootActivityVersion ? <small>Version {detail.rootActivityVersion}</small> : null}
+              </dd>
+              <dt>Nodes</dt>
+              <dd>{detail.nodeCount}</dd>
+              <dt>Resume targets</dt>
+              <dd>{detail.resumeTargetCount}</dd>
+              <dt>Created</dt>
+              <dd>{formatDate(detail.createdAt)}</dd>
+            </dl>
+          </section>
+          <section className="wf-instance-section">
+            <h4>Source</h4>
+            <dl className="wf-instance-meta">
+              {chosenReference ? (
+                <>
+                  <dt>Kind</dt>
+                  <dd>{formatExecutableSourceKind(chosenReference.sourceKind)}</dd>
+                  <dt>Scope</dt>
+                  <dd>{formatReferenceScope(chosenReference.scope)}</dd>
+                </>
+              ) : null}
+              <dt>Layout source</dt>
+              <dd className="wf-executable-layout-provenance">{layoutProvenance}</dd>
+              {chosenReference ? (
+                <>
+                  <dt>Definition ID</dt>
+                  <dd><CopyableIdentifier label="Definition ID" value={chosenReference.definitionId} labelPlacement="external" /></dd>
+                  <dt>Definition version ID</dt>
+                  <dd><CopyableIdentifier label="Definition version ID" value={chosenReference.definitionVersionId} labelPlacement="external" /></dd>
+                </>
+              ) : null}
+            </dl>
+            {!chosenReference ? (
+              <p className="wf-muted">This artifact carries no source references.</p>
+            ) : null}
+            <SourceDriftCaption
+              reference={chosenReference}
+              sourceDefinition={sourceDefinition}
+              hasDraftEquivalence={hasDraftEquivalence}
+            />
+          </section>
         </>
-      ) : null}
-    </aside>
+      ) : activeTab === "activity" ? (
+        <WorkflowExecutableNodePanel
+          fact={selectedFact ?? null}
+          displayName={selectedDisplayName}
+          description={selectedPresentation?.description}
+        />
+      ) : (
+        <section className="wf-instance-section">
+          <h4>Source references</h4>
+          <ExecutableReferenceList
+            references={detail.references}
+            activeReferenceId={detail.chosenReference?.sourceReferenceId ?? null}
+            definitionNames={definitionNames}
+            variant="collection"
+            onSelect={reference => onSelectReference(reference.sourceReferenceId)}
+          />
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -674,11 +624,16 @@ function WorkflowExecutableNodePanel({
   displayName: string | null;
   description?: string | null;
 }) {
-  if (!fact) return null;
+  if (!fact) return (
+    <section className="wf-instance-section">
+      <h4>Activity details</h4>
+      <p className="wf-muted">Select an activity in the graph to inspect its details.</p>
+    </section>
+  );
 
   return (
     <section className="wf-instance-section">
-      <h4>Selected node</h4>
+      <h4>Activity details</h4>
       <dl className="wf-instance-meta">
         <dt>Display name</dt>
         <dd>{displayName}</dd>
@@ -696,6 +651,18 @@ function WorkflowExecutableNodePanel({
         <dd>{fact.authoredActivityId}</dd>
       </dl>
       {!fact.available ? <p className="wf-instance-note">This activity is not available in this environment; the executable cannot run here.</p> : null}
+      {fact.structureDiagnostics && fact.structureDiagnostics.length > 0 ? (
+        <div className="wf-instance-note" role="note">
+          <strong>Executable structure mapping</strong>
+          <ul>
+            {fact.structureDiagnostics.map((diagnostic, index) => (
+              <li key={`${diagnostic.code}:${diagnostic.wireSlot}:${index}`}>
+                <code>{diagnostic.wireSlot}</code>: {diagnostic.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {fact.inputBindings.length > 0 ? (
         <dl className="wf-instance-meta wf-executable-bindings">
           {fact.inputBindings.map(binding => (
@@ -789,14 +756,6 @@ function SourceDriftCaption({ reference, sourceDefinition, hasDraftEquivalence }
       This reference was published from version {drift.referenceVersion ?? reference.definitionVersionId}; the definition&apos;s latest is {drift.latestVersion ?? sourceDefinition.definition.latestVersionId}.
     </p>
   );
-}
-
-function resolveExecutableIdentityTitle(sourceDefinition: SourceDefinitionState) {
-  if (sourceDefinition.status === "ready") {
-    const name = sourceDefinition.definition.name?.trim();
-    if (name) return name;
-  }
-  return "Executable";
 }
 
 function resolveExecutableRootActivityLabel(

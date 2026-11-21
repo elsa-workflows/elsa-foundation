@@ -25,7 +25,7 @@ import { applyRuntimeOverlays, isActiveIncident } from "../workflowRuntimeOverla
 import { buildExecutableActivityGraph } from "../executableGraph";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowExecutableNode } from "../workflowTypes";
 import { decorateWorkflowCanvasElements } from "../workflow-editor/workflowAccessibility";
-import { writeLine } from "./fixtures";
+import { ifActivity, writeLine } from "./fixtures";
 
 // The sequence/flowchart variants below deliberately have NO design facets, and this file's forEach
 // facet declares mode "sequence" — they exercise the legacy/fallback structure paths, unlike the
@@ -186,6 +186,16 @@ describe("workflow adapter", () => {
       mode: "sequence",
       activities: []
     })]);
+  });
+
+  it("creates empty If child slots from catalog descriptors with null optional fields", () => {
+    const activity = createActivityNode(ifActivity, "if");
+
+    expect(activity.structure?.payload).toEqual({ then: null, else: null });
+    expect(getChildSlots(activity, ifActivity).map(({ label, activities }) => ({ label, activities }))).toEqual([
+      { label: "Then", activities: [] },
+      { label: "Else", activities: [] }
+    ]);
   });
 
   it("does not infer generic child slots from null payload fields without a facet", () => {
@@ -354,7 +364,7 @@ describe("workflow adapter", () => {
             collectionProperty: "cases",
             childProperty: "activity",
             labelProperty: "name",
-            slotNameTemplate: "Case {label}"
+            slotNameTemplate: "Case {name}"
           }],
           initialPayload: { cases: [] }
         }

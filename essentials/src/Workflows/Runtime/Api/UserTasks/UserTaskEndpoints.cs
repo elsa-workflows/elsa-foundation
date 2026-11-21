@@ -11,6 +11,11 @@ internal sealed record TaskListRequest(string View = "mine", int Limit = 25, str
 internal sealed record TaskIdRequest(string Id);
 internal sealed record FormPageRequest(int Limit = 25, string? After = null);
 internal sealed record FormVersionRequest(string Id, string Version);
+internal sealed record FormDefinitionRequest(string Id);
+internal sealed record FormHistoryRequest(string Id, int Limit = 25, string? After = null);
+internal sealed record FormDraftRequest(long Revision, UserTaskForm Form);
+internal sealed record FormRevisionRequest(long Revision);
+internal sealed record FormPublishRequest(long Revision, UserTaskForm Form);
 internal sealed record TaskMutationRequest(long Revision, string RequestId);
 internal sealed record TaskCompletionRequest(long Revision, string RequestId, string Action, JsonElement Data);
 internal sealed record TaskAssignmentRequest(long Revision, string RequestId, string? AssigneeId, string? GroupId);
@@ -96,6 +101,76 @@ internal sealed class ListTaskForms(IUserTaskOperations tasks) : ApiEndpoint<For
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "ListUserTaskForms";
     public override Task<UserTaskFormPage> HandleAsync(FormPageRequest request, CancellationToken cancellationToken) => tasks.ListFormsAsync(request.Limit, request.After, cancellationToken).AsTask();
+}
+
+[Get("runtime/user-task-forms/definitions")]
+[RequireAnyPermission(UserTaskPermissions.FormsRead, UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
+internal sealed class ListTaskFormDefinitions(IUserTaskOperations tasks) : ApiEndpoint<FormPageRequest, UserTaskFormDefinitionPage>
+{
+    public override void Configure(ApiEndpointOptions options) => options.Operation = "ListUserTaskFormDefinitions";
+    public override Task<UserTaskFormDefinitionPage> HandleAsync(FormPageRequest request, CancellationToken cancellationToken) =>
+        tasks.ListFormDefinitionsAsync(request.Limit, request.After, cancellationToken).AsTask();
+}
+
+[Get("runtime/user-task-forms/{id}/definition")]
+[RequireAnyPermission(UserTaskPermissions.FormsRead, UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
+internal sealed class ReadTaskFormDefinition(IUserTaskOperations tasks) : ApiEndpoint<FormDefinitionRequest, UserTaskFormDefinition>
+{
+    public override void Configure(ApiEndpointOptions options) => options.Operation = "GetUserTaskFormDefinition";
+    public override Task<UserTaskFormDefinition> HandleAsync(FormDefinitionRequest request, CancellationToken cancellationToken) =>
+        tasks.GetFormDefinitionAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, cancellationToken).AsTask();
+}
+
+[Get("runtime/user-task-forms/{id}/versions")]
+[RequireAnyPermission(UserTaskPermissions.FormsRead, UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
+internal sealed class ListTaskFormVersions(IUserTaskOperations tasks) : ApiEndpoint<FormHistoryRequest, UserTaskFormPage>
+{
+    public override void Configure(ApiEndpointOptions options) => options.Operation = "ListUserTaskFormVersions";
+    public override Task<UserTaskFormPage> HandleAsync(FormHistoryRequest request, CancellationToken cancellationToken) =>
+        tasks.ListFormVersionsAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, request.Limit, request.After, cancellationToken).AsTask();
+}
+
+[Post("runtime/user-task-forms/{id}/draft")]
+[RequirePermission(UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
+internal sealed class SaveTaskFormDraft(IUserTaskOperations tasks) : ApiEndpoint<FormDraftRequest, UserTaskFormDefinition>
+{
+    public override void Configure(ApiEndpointOptions options) { options.Operation = "SaveUserTaskFormDraft"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
+    public override Task<UserTaskFormDefinition> HandleAsync(FormDraftRequest request, CancellationToken cancellationToken) =>
+        tasks.SaveFormDraftAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, request.Form, request.Revision, cancellationToken).AsTask();
+}
+
+[Post("runtime/user-task-forms/{id}/discard")]
+[RequirePermission(UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
+internal sealed class DiscardTaskFormDraft(IUserTaskOperations tasks) : ApiEndpoint<FormRevisionRequest, UserTaskFormDefinition>
+{
+    public override void Configure(ApiEndpointOptions options) { options.Operation = "DiscardUserTaskFormDraft"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
+    public override Task<UserTaskFormDefinition> HandleAsync(FormRevisionRequest request, CancellationToken cancellationToken) =>
+        tasks.DiscardFormDraftAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, request.Revision, cancellationToken).AsTask();
+}
+
+[Post("runtime/user-task-forms/{id}/delete")]
+[RequirePermission(UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
+internal sealed class DeleteTaskForm(IUserTaskOperations tasks) : ApiEndpoint<FormRevisionRequest, UserTaskFormDefinition>
+{
+    public override void Configure(ApiEndpointOptions options) { options.Operation = "DeleteUserTaskForm"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
+    public override Task<UserTaskFormDefinition> HandleAsync(FormRevisionRequest request, CancellationToken cancellationToken) =>
+        tasks.DeleteFormAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, request.Revision, cancellationToken).AsTask();
+}
+
+[Post("runtime/user-task-forms/{id}/publish")]
+[RequirePermission(UserTaskPermissions.FormsManage)]
+[RuntimeProblems("processing user tasks")]
+internal sealed class PublishTaskForm(IUserTaskOperations tasks) : ApiEndpoint<FormPublishRequest, UserTaskFormVersion>
+{
+    public override void Configure(ApiEndpointOptions options) { options.Operation = "PublishUserTaskForm"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
+    public override Task<UserTaskFormVersion> HandleAsync(FormPublishRequest request, CancellationToken cancellationToken) =>
+        tasks.PublishFormAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, request.Form, request.Revision, cancellationToken).AsTask();
 }
 
 [Post("runtime/user-task-forms")]

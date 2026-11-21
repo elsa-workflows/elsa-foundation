@@ -16,6 +16,7 @@ export default tseslint.config(
   {
     // Global ignores — must be a standalone object (no other keys) to apply repo-wide.
     ignores: [
+      'Studio/artifacts/**',
       '**/dist/**',
       '**/node_modules/**',
       '**/wwwroot/**',

@@ -1,3 +1,4 @@
+import { liquidSourceInsertion } from "./sourceInsertion";
 import React from "react";
 import {
   createStudioCodeToolingProjection,
@@ -14,6 +15,7 @@ const liquidSyntax = "Liquid";
 export function register(api: ElsaStudioModuleApi) {
   api.expressionEditors.add({
     id: "elsa.liquid-expression-editor",
+    sourceInsertion: liquidSourceInsertion,
     order: 110,
     supports: context => context.syntax === liquidSyntax,
     surfaces: {
@@ -58,6 +60,8 @@ export function LiquidExpandedEditor(props: StudioExpressionEditorProps) {
 
 function LiquidCodeEditor({
   descriptor,
+  documentEditing,
+  actions,
   value,
   disabled,
   initialFocus,
@@ -90,6 +94,8 @@ function LiquidCodeEditor({
         completionProvider={tooling.completionProvider}
         diagnostics={diagnostics}
         document={document}
+        documentEditing={documentEditing}
+        actions={actions}
         hoverProvider={tooling.hoverProvider}
         languageAdapter={liquidLanguageAdapter}
         minHeight={profile === "compact" ? "2.25rem" : "240px"}
@@ -101,7 +107,7 @@ function LiquidCodeEditor({
         signatureProvider={tooling.signatureProvider}
         status={toolingStatus(context)}
         theme="studio"
-        onChange={nextDocument => onChange(nextDocument.value)}
+        onChange={(nextDocument, edit) => edit ? onChange(nextDocument.value, edit) : onChange(nextDocument.value)}
         onBlur={context.onBlur}
         onFocus={context.onFocus}
         onExpand={onExpand}

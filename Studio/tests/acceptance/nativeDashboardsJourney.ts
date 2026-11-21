@@ -32,6 +32,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
     }
     async function share(kind: "questions" | "dashboards", id: string, revoke = false) {
       await page.goto(`/${kind}/${id}`);
+      if (kind === "dashboards") await page.locator(".named-dashboard-actions > summary").click();
       await page.getByRole("button", { name: "Share", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: /^Share / });
       if (revoke) await dialog.getByRole("button", { name: "Remove dashboard-qa-reader", exact: true }).click();
@@ -198,13 +199,20 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await capture(page, info, "question-saved-refresh-drill");
       await captureReadableDrillValues(page, info, capture, "question-saved-refresh-drill-values", drill);
       await drill.press("Escape");
+      await page.getByRole("textbox", { name: "Description", exact: true }).fill("Unsaved local description to replace from history.");
       await page.getByRole("button", { name: "History", exact: true }).click();
       const history = page.getByRole("dialog", { name: "Definition history", exact: true });
       await expect(history.getByRole("button", { name: /^Inspect revision / })).toHaveCount(2);
+      await expect(history.getByText("Current", { exact: true })).toBeVisible();
+      await expect(history.getByRole("button", { name: `Restore revision ${updatedQuestion.revision}`, exact: true })).toHaveCount(0);
       await history.getByRole("button", { name: `Inspect revision ${saved.revision}`, exact: true }).click();
+      await history.getByText("View technical definition", { exact: true }).click();
       await expect(history.locator("pre")).toContainText("workflow.started-count");
       await capture(page, info, "question-history");
       await history.getByRole("button", { name: `Restore revision ${saved.revision}`, exact: true }).click();
+      await expect(history).toContainText("Unsaved changes will be replaced");
+      await capture(page, info, "question-history-restore-confirmation");
+      await history.getByRole("button", { name: `Confirm restore ${saved.revision}`, exact: true }).click();
       await expect(history).toBeHidden(); await expect(page.getByRole("textbox", { name: "Description", exact: true })).toHaveValue(saved.description);
       await page.getByRole("button", { name: "Copy saved version", exact: true }).click();
       const copy = page.getByRole("dialog", { name: "Save a private copy", exact: true });
@@ -268,6 +276,8 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("button", { name: "Move question 1 later", exact: true }).press("Enter");
       await expect(page.getByRole("button", { name: "Move question 2 earlier", exact: true })).toBeFocused();
       await expect(page.locator(".named-announcement")).toContainText("Tile moved to position 2 of 2");
+      await expect(page.locator(".named-tile .named-result")).toHaveCount(0);
+      await expect(page.locator(".named-tile").first()).toContainText("Results are shown on the dashboard view.");
       await capture(page, info, "dashboard-layout");
       // Keep the two-tile endpoint focus proof, then exercise native admission with four references.
       for (let index = 0; index < 2; index++) {
@@ -278,16 +288,37 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         await picker.getByRole("button", { name: `Add ${saved.name}`, exact: true }).click();
       }
       const dashboardResponse = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/dashboards$/.test(response.url()));
-      await page.getByRole("button", { name: "Save layout", exact: true }).click();
+      await page.getByRole("button", { name: "Create dashboard", exact: true }).click();
       const dashboard = await (await dashboardResponse).json() as Resource; dashboardId = dashboard.id; resources.push({ kind: "dashboards", id: dashboard.id });
       expect(dashboard.tiles.map(tile => tile.questionId)).toEqual([saved.id, saved.id, saved.id, saved.id]); expect(new Set(dashboard.tiles.map(tile => tile.id)).size).toBe(4);
       expect(dashboard.tiles.map(tile => tile.size)).toEqual(["medium", "wide", "medium", "medium"]);
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/dashboards/${dashboard.id}/audience`)).items).toEqual([]);
       await page.reload(); await expect(page.locator(".named-tile .named-result")).toHaveCount(4);
-      await expect(page.getByRole("combobox", { name: "Size for question 2", exact: true })).toHaveValue("wide");
+      await expect(page.getByRole("button", { name: "Edit dashboard", exact: true })).toBeVisible();
+      await expect(page.getByRole("combobox", { name: "Size for question 2", exact: true })).toHaveCount(0);
+      await page.getByRole("button", { name: "Edit dashboard", exact: true }).click();
+      await page.getByLabel("Description", { exact: true }).fill("Unsaved description for a cancellation check.");
+      const declinedPrompt = page.waitForEvent("dialog"); const declinedCancel = page.getByRole("button", { name: "Cancel", exact: true }).click();
+      const decline = await declinedPrompt; expect(decline.type()).toBe("confirm"); await decline.dismiss(); await declinedCancel;
+      await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Unsaved description for a cancellation check.");
+      const acceptedPrompt = page.waitForEvent("dialog"); const acceptedCancel = page.getByRole("button", { name: "Cancel", exact: true }).click();
+      const accept = await acceptedPrompt; expect(accept.type()).toBe("confirm"); await accept.accept(); await acceptedCancel;
+      await expectResourceLocation("dashboards", dashboard.id);
+      await expect(page.getByRole("heading", { name: dashboard.name, level: 2, exact: true })).toBeVisible();
+      const firstSavedTile = page.locator(".named-tile").first();
+      await expect(firstSavedTile.locator(".named-result tbody tr").first()).toBeVisible();
+      const resultDetails = firstSavedTile.locator(".named-result-details");
+      const resultDetailsSummary = resultDetails.locator("summary");
+      await expect(firstSavedTile.locator(".named-result-provenance")).toContainText("Coverage:");
+      await expect(resultDetails).toHaveJSProperty("open", false);
+      await resultDetailsSummary.focus(); await resultDetailsSummary.press("Enter");
+      await expect(resultDetails).toHaveJSProperty("open", true);
+      await expect(resultDetails).toContainText("Last successful refresh:");
+      await resultDetailsSummary.press("Enter"); await expect(resultDetails).toHaveJSProperty("open", false);
+      await resultDetailsSummary.evaluate(element => (element as HTMLElement).blur());
       await capture(page, info, "dashboard-reopened");
       await capture(page, info, "dashboard-multi-tile");
-      await page.getByRole("button", { name: "Back to dashboards", exact: true }).click();
+      await page.goto("/dashboards");
       await expect(page.getByRole("link", { name: dashboard.name, exact: true })).toBeVisible();
       await captureDashboardAppearances(page, info, capture, "dashboards-collection", async name => {
         await expect(page.getByRole("button", { name: "Create dashboard", exact: true })).toBeVisible();
@@ -302,8 +333,9 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         for (let index = 0; index < 4; index++) {
           const tile = page.locator(".named-tile").nth(index);
           await captureScrollPosition(page, info, capture, `${name}-tile-${index + 1}-header`, tile.locator(":scope > header"));
-          await captureNativeResultSections(page, info, capture, `${name}-tile-${index + 1}`, tile.locator(".named-result"));
+          await captureNativeResultSections(page, info, capture, `${name}-tile-${index + 1}`, tile.locator(".named-result"), true);
         }
+        await page.locator(".named-dashboard-actions > summary").click();
         const shareButton = page.getByRole("button", { name: "Share", exact: true });
         await shareButton.click();
         const shareReview = page.getByRole("dialog", { name: `Share ${dashboard.name}`, exact: true });
@@ -313,7 +345,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         await captureScrollPosition(page, info, capture, `${name}-share-review-end`, shareReview.getByRole("button", { name: "Save audience", exact: true }), "end");
         await shareReview.getByRole("button", { name: `Close Share ${dashboard.name}`, exact: true }).press("Escape");
         await expect(shareButton).toBeFocused();
-        const copyButton = page.getByRole("button", { name: "Copy saved version", exact: true });
+        const copyButton = page.getByRole("button", { name: "Make a copy", exact: true });
         await copyButton.click();
         const copyReview = page.getByRole("dialog", { name: "Review dashboard copy dependencies", exact: true });
         await expect(copyReview.getByRole("region", { name: "Included question access review", exact: true })).toContainText(saved.name);
@@ -345,6 +377,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       const retried = await retriedResponse!.json() as Result; expect(retried.outcome).toBe("succeeded"); expect(retried.rows[0].values.started.value).toBe("4");
       await expect(page.locator(".named-tile .named-result")).toHaveCount(4);
       await capture(page, info, "dashboard-refresh-retried");
+      await page.getByRole("button", { name: "Edit dashboard", exact: true }).click();
       await page.getByRole("button", { name: "Settings for question 1", exact: true }).click();
       const tileSettings = page.getByRole("dialog", { name: "Tile presentation and parameters", exact: true });
       await tileSettings.getByRole("combobox", { name: "Tile visualization", exact: true }).selectOption("line");
@@ -353,7 +386,8 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await tileSettings.getByLabel("Override value for workflow", { exact: true }).fill(seeded.definitionId);
       await capture(page, info, "dashboard-tile-settings"); await tileSettings.getByRole("button", { name: "Use tile settings", exact: true }).click();
       const layoutUpdated = page.waitForResponse(response => response.request().method() === "PUT" && response.url().endsWith(`/dashboards/${dashboard.id}`));
-      await page.getByRole("button", { name: "Save layout", exact: true }).click(); expect((await layoutUpdated).ok()).toBe(true);
+      await page.getByRole("button", { name: "Save changes", exact: true }).click(); expect((await layoutUpdated).ok()).toBe(true);
+      await expectResourceLocation("dashboards", dashboard.id);
       await expect(page.locator(".named-tile").first().locator(".named-line")).toHaveCount(3);
       const tileDrill = page.waitForResponse(response => response.url().includes(`/dashboards/${dashboard.id}/tiles/`) && response.url().endsWith("/drill"));
       await page.locator(".named-tile").first().getByRole("button", { name: "View matching records for result 1", exact: true }).click();
@@ -361,7 +395,8 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await capture(page, info, "dashboard-drill");
       await captureReadableDrillValues(page, info, capture, "dashboard-drill-values", drill);
       await drill.press("Escape");
-      await page.getByRole("button", { name: "Copy saved version", exact: true }).click();
+      await page.locator(".named-dashboard-actions > summary").click();
+      await page.getByRole("button", { name: "Make a copy", exact: true }).click();
       const dependencyReview = page.getByRole("dialog", { name: "Review dashboard copy dependencies", exact: true });
       const dependencies = dependencyReview.getByRole("region", { name: "Included question access review", exact: true });
       await expect(dependencies).toContainText(saved.name); await expect(dependencies).toContainText("Tiles 1, 2, 3, 4");
@@ -385,6 +420,29 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       expect(dashboardCopy.tiles.map(tile => tile.questionId)).toEqual([saved.id, saved.id, saved.id, saved.id]);
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/dashboards/${dashboardCopy.id}/audience`)).items).toEqual([]);
       await expectResourceLocation("dashboards", dashboardCopy.id); await capture(page, info, "dashboard-copy");
+      await page.goto("/dashboards");
+      await page.getByRole("searchbox", { name: "Search dashboards", exact: true }).fill(dashboardCopy.name);
+      await page.getByRole("button", { name: "Search", exact: true }).click();
+      await expect(page.getByRole("link", { name: dashboardCopy.name, exact: true })).toBeVisible();
+      const deleteCopy = page.getByRole("button", { name: `Delete ${dashboardCopy.name}`, exact: true });
+      await deleteCopy.press("Enter");
+      const cancelDelete = page.getByRole("dialog", { name: "Delete dashboard", exact: true });
+      await expect(cancelDelete).toContainText(dashboardCopy.name);
+      await cancelDelete.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
+      await expect(page.getByRole("link", { name: dashboardCopy.name, exact: true })).toBeVisible();
+      expect((await backend.response(`/_elsa/studio/dashboards/${dashboardCopy.id}`)).status()).toBe(200);
+      const deleteResponse = page.waitForResponse(response => response.request().method() === "DELETE" && response.url().endsWith(`/dashboards/${dashboardCopy.id}`));
+      await deleteCopy.press("Enter");
+      const confirmDelete = page.getByRole("dialog", { name: "Delete dashboard", exact: true });
+      await expect(confirmDelete).toContainText(dashboardCopy.name);
+      await confirmDelete.getByRole("button", { name: "Confirm", exact: true }).press("Enter");
+      const deleted = await deleteResponse;
+      expect(deleted.ok()).toBe(true);
+      expect(deleted.request().headers()["if-match"]).toBe(`"${dashboardCopy.revision}"`);
+      await expect(page.getByRole("heading", { name: "No matching definitions", exact: true })).toBeVisible();
+      expect((await backend.response(`/_elsa/studio/dashboards/${dashboardCopy.id}`)).status()).toBe(404);
+      expect((await backend.api<Resource>(`/_elsa/studio/dashboards/${dashboard.id}`)).id).toBe(dashboard.id);
+      await capture(page, info, "dashboard-copy-deleted");
       await share("questions", questionId); await share("dashboards", dashboardId);
       await signInDashboardReader(reader, info);
       await reader.getByRole("searchbox", { name: "Search questions", exact: true }).fill(suffix);
@@ -512,14 +570,14 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
 
       // List is a presentation override on an existing tile. Keep all four identities,
       // their order and question references while saving and reopening the native layout.
-      await page.goto(`/dashboards/${dashboardId}`); await expect(page.locator(".named-tile .named-result")).toHaveCount(4);
+      await page.goto(`/dashboards/${dashboardId}/edit`); await expect(page.locator(".named-tile")).toHaveCount(4);
       await page.getByRole("button", { name: "Settings for question 3", exact: true }).click();
       const listOptions = page.getByRole("dialog", { name: "Tile presentation and parameters", exact: true });
       await listOptions.getByRole("combobox", { name: "Tile visualization", exact: true }).selectOption("list");
       await listOptions.getByLabel("Tile label", { exact: true }).fill("Run quality as a list");
       await listOptions.getByRole("button", { name: "Use tile settings", exact: true }).click();
       const listSavedResponse = page.waitForResponse(response => response.request().method() === "PUT" && response.url().endsWith(`/dashboards/${dashboardId}`));
-      await page.getByRole("button", { name: "Save layout", exact: true }).click();
+      await page.getByRole("button", { name: "Save changes", exact: true }).click();
       const listSavedReply = await listSavedResponse; expect(listSavedReply.ok()).toBe(true); const listLayout = await listSavedReply.json() as Resource;
       expect(listLayout.tiles.map(tile => tile.id)).toEqual(dashboard.tiles.map(tile => tile.id));
       expect(listLayout.tiles.map(tile => tile.questionId)).toEqual([saved.id, saved.id, saved.id, saved.id]);
@@ -565,7 +623,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await expect.poll(() => metricPicker.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       await metricPicker.getByRole("button", { name: `Add ${metricQuestion.name}`, exact: true }).click();
       const metricDashboardResponse = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/dashboards$/.test(response.url()));
-      await page.getByRole("button", { name: "Save layout", exact: true }).click();
+      await page.getByRole("button", { name: "Create dashboard", exact: true }).click();
       const metricDashboardReply = await metricDashboardResponse; expect(metricDashboardReply.ok()).toBe(true); const metricDashboard = await metricDashboardReply.json() as Resource;
       resources.push({ kind: "dashboards", id: metricDashboard.id }); expect(metricDashboard.tiles).toHaveLength(1); expect(metricDashboard.tiles[0].questionId).toBe(metricQuestion.id);
       await page.reload(); await expect(page.locator(".named-tile .named-metric strong")).toHaveText("4");
@@ -580,6 +638,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await metricValues.evaluate(element => { element.scrollLeft = element.scrollWidth; });
       await capture(page, info, "dashboard-metric-values-end");
       await captureScrollPosition(page, info, capture, "dashboard-long-name", page.getByRole("heading", { name: longDashboardName, level: 2, exact: true }));
+      await page.locator(".named-dashboard-actions > summary").click();
       await page.getByRole("button", { name: "Share", exact: true }).click();
       const longNameShare = page.getByRole("dialog", { name: `Share ${longDashboardName}`, exact: true });
       await expect(longNameShare.getByRole("button", { name: "Save audience", exact: true })).toBeEnabled();
@@ -623,8 +682,10 @@ async function captureScrollPosition(page: Page, info: TestInfo, capture: Captur
   await capture(page, info, name);
 }
 
-async function captureNativeResultSections(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator) {
-  const provenance = result.locator(".named-result-provenance > p");
+async function captureNativeResultSections(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator, compactProvenance = false) {
+  const details = result.locator(".named-result-details");
+  if (compactProvenance) await details.locator("summary").click();
+  const provenance = compactProvenance ? result.locator(".named-result-details-content > p") : result.locator(".named-result-provenance > p");
   await captureScrollPosition(page, info, capture, `${name}-provenance`, provenance.first());
   await captureScrollPosition(page, info, capture, `${name}-coverage-periods`, provenance.last(), "end");
   const series = result.locator(".named-chart-series"); await expect(series).toHaveCount(3);
@@ -635,6 +696,7 @@ async function captureNativeResultSections(page: Page, info: TestInfo, capture: 
   await values.evaluate(element => { element.scrollLeft = element.scrollWidth; });
   await capture(page, info, `${name}-exact-values-end`);
   await values.evaluate(element => { element.scrollLeft = 0; });
+  if (compactProvenance) await details.locator("summary").click();
 }
 
 type DashboardAppearance = { style: string; mode: string; navigation: string; layout: string };

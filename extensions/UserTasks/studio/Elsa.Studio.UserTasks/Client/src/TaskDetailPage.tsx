@@ -1,8 +1,9 @@
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, RefreshCw } from "lucide-react";
-import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
-import { actor, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
+import { ArrowLeft, History as HistoryIcon } from "lucide-react";
+import { OverflowMenu, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
+import { actor, basicProvider, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
+import { resolveTaskFieldControl } from "./fieldControls";
 import { TaskStatus } from "./TaskStatus";
 import { taskPerson } from "./taskPeople";
 import { readTaskBrowseLocation, taskCollectionPath } from "./taskNavigation";
@@ -40,9 +41,23 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const [errors, setErrors] = useState<Record<string, string>>({}); const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false); const [missing, setMissing] = useState(false); const [stale, setStale] = useState(false);
   const [targetKind, setTargetKind] = useState("user"); const [target, setTarget] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false); const [reassignOpen, setReassignOpen] = useState(false); const [reassignError, setReassignError] = useState("");
+  const historyDialog = useRef<HTMLDialogElement>(null); const reassignDialog = useRef<HTMLDialogElement>(null);
   const owner = useMemo(() => ({ api, id }), [api, id]);
   const currentOwner = useRef(owner); currentOwner.current = owner;
   const content = useRef<HTMLDivElement>(null); const focused = useRef<string | null>(null);
+  useEffect(() => {
+    const dialog = historyDialog.current;
+    if (!dialog) return;
+    if (historyOpen && !dialog.open) dialog.showModal();
+    else if (!historyOpen && dialog.open) dialog.close();
+  }, [historyOpen]);
+  useEffect(() => {
+    const dialog = reassignDialog.current;
+    if (!dialog) return;
+    if (reassignOpen && !dialog.open) dialog.showModal();
+    else if (!reassignOpen && dialog.open) dialog.close();
+  }, [reassignOpen]);
   useStudioWorkspaceTitle(task?.title, "User task");
   useEffect(() => {
     if (!task?.id || focused.current === task.id) return;
@@ -90,9 +105,12 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
       if (operation === "complete") edited.current = false;
       if (result.status === "CompletionPending") setNotice(responsePendingNotice);
       else api.notifications?.notify({ level: "success", title: "Task updated." });
+      if (operation === "reassign") { setReassignError(""); setReassignOpen(false); }
     } catch (failure) {
       if (currentOwner.current !== owner) return;
-      const status = statusOf(failure); setNotice(status === 409 ? "This task changed. Refresh to review its current state; your entered values are preserved." : message(failure));
+      const status = statusOf(failure);
+      const failureNotice = status === 409 ? "This task changed. Refresh to review its current state; your entered values are preserved." : message(failure);
+      if (operation === "reassign") setReassignError(failureNotice); else setNotice(failureNotice);
       if (status === 409 || status === 403 || status === 404) setStale(true);
       if (status >= 400 && status < 500 && !retrying) attempt.current = null;
       const payload = typeof failure === "object" && failure !== null && "payload" in failure ? failure.payload : null;
@@ -133,27 +151,51 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const terminal = task.status === "Completed" || task.status === "Cancelled";
   const pending = task.status === "CompletionPending";
   const own = task.assigneeId === identity.userId || task.claimantId === identity.userId;
-  const canComplete = identity.canAct && own && !terminal && !pending && !stale;
+  const unavailableFieldControls = task.form?.provider === basicProvider
+    ? task.form.fields.map(field => ({ field, result: resolveTaskFieldControl(field, api.userTaskFieldControls) })).filter(item => item.result.status !== "available")
+    : [];
+  const canComplete = identity.canAct && own && !terminal && !pending && !stale && unavailableFieldControls.length === 0;
   const renderers = task.form ? api.userTaskForms?.list().filter(item => item.provider === task.form?.provider) ?? [] : [];
   const Renderer = renderers.length === 1 ? renderers[0].component : null;
   const claimable = !own && Boolean(task.groupId) && task.status === "Open" && identity.canAct;
   const releasable = task.claimantId === identity.userId && task.status === "Claimed" && identity.canAct;
   const respondable = own && !terminal && !pending && task.actions.length > 0;
+  const manageable = identity.canManage && !terminal && !pending;
   return frame(<>
-    <StudioPageHeader title={task.title} description={task.description ? <span className="user-task-description">{task.description}</span> : undefined} actions={<>{back}<StudioButton onClick={() => void refresh()} disabled={busy}><RefreshCw size={16} aria-hidden="true" />Refresh task</StudioButton></>}><TaskStatus status={task.status} /></StudioPageHeader>
+    <StudioPageHeader title={task.title} description={task.description ? <span className="user-task-description">{task.description}</span> : undefined} actions={<div className="user-task-detail-tools">
+      {back}
+      <StudioButton aria-controls="user-task-history-dialog" aria-expanded={historyOpen} onClick={() => setHistoryOpen(true)}><HistoryIcon size={16} aria-hidden="true" />History</StudioButton>
+      <OverflowMenu ariaLabel="Task actions" items={[
+        { id: "refresh", label: "Refresh task", onSelect: () => void refresh(), disabled: busy },
+        ...(manageable ? [{ id: "reassign", label: "Reassign task", onSelect: () => { setReassignError(""); setReassignOpen(true); }, disabled: busy || stale || Boolean(attempt.current) }] : [])
+      ]} />
+    </div>}><TaskStatus status={task.status} /></StudioPageHeader>
     {accessNotice}
     {notice ? <p role={stale || Object.keys(errors).length ? "alert" : "status"}>{notice}</p> : null}
-    {task.form ? Renderer ? <div className="user-task-response" data-final={terminal || undefined}><Renderer form={task.form} value={data} onChange={next => { edited.current = true; setData(next); if (validationNotice) { setNotice(""); setValidationNotice(false); } setErrors(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => Object.is(data[key], next[key])))); }} readOnly={!canComplete || busy || Boolean(attempt.current)} errors={errors} /></div>
-      : <StudioResultState tone="danger" title="Form integration unavailable" description="Install the matching form integration before completing this task." /> : null}
-    {(claimable || releasable || respondable) && <div className="user-task-actions">
-      {claimable ? <StudioButton disabled={busy || stale} onClick={() => void act("claim")}>Claim task</StudioButton> : null}
-      {releasable ? <StudioButton disabled={busy || stale || Boolean(attempt.current)} onClick={() => void act("release")}>Release task</StudioButton> : null}
-      {respondable ? task.actions.map((action, index) => <StudioButton variant={index === 0 ? "primary" : "default"} key={action} disabled={!canComplete || busy || Boolean(task.form && !Renderer) || Boolean(attempt.current && attempt.current.action !== action)} onClick={() => void act("complete", action)}>{attempt.current?.action === action ? `Retry ${action}` : action}</StudioButton>) : null}
-    </div>}
-    {identity.canManage && !terminal && !pending ? <fieldset disabled={busy || stale || Boolean(attempt.current)}><legend>Reassign task</legend>
-      <StudioField label="Assign to"><select value={targetKind} onChange={event => setTargetKind(event.target.value)}><option value="user">User</option><option value="group">Group</option></select></StudioField>
-      <StudioField label={<>{targetKind === "user" ? "User ID" : "Group ID"}</>}><input value={target} onChange={event => setTarget(event.target.value)} /></StudioField>
-      <StudioButton disabled={!target.trim()} onClick={() => void act("reassign")}>Reassign</StudioButton></fieldset> : null}
-    <details><summary>History</summary><ol>{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}>{entry.operation}{entry.action ? ` · ${entry.action}` : ""} · {taskPerson(identity, entry.actorId, entry.actorName)} · <time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time></li>)}</ol></details>
+    {(task.form || claimable || releasable || respondable) ? <section className="user-task-response-card" aria-label="Task response">
+      <h2>Your response</h2>
+      {task.form ? Renderer ? <div className="user-task-response" data-final={terminal || undefined}><Renderer form={task.form} value={data} onChange={next => { edited.current = true; setData(next); if (validationNotice) { setNotice(""); setValidationNotice(false); } setErrors(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => Object.is(data[key], next[key])))); }} readOnly={!canComplete || busy || Boolean(attempt.current)} errors={errors} /></div>
+        : <StudioResultState tone="danger" title="Form integration unavailable" description="Install the matching form integration before completing this task." /> : null}
+      {unavailableFieldControls.length ? <StudioAlert tone="danger">This task form cannot be completed because these field controls are unavailable: {unavailableFieldControls.map(item => `${item.field.label} (${item.result.reason ?? item.result.status})`).join("; ")}. Install the contributing module or contact the Studio administrator.</StudioAlert> : null}
+      {(claimable || releasable || respondable) && <div className="user-task-actions">
+        {claimable ? <StudioButton disabled={busy || stale} onClick={() => void act("claim")}>Claim task</StudioButton> : null}
+        {releasable ? <StudioButton disabled={busy || stale || Boolean(attempt.current)} onClick={() => void act("release")}>Release task</StudioButton> : null}
+        {respondable ? task.actions.map((action, index) => <StudioButton variant={index === 0 ? "primary" : "default"} key={action} disabled={!canComplete || busy || Boolean(task.form && !Renderer) || Boolean(attempt.current && attempt.current.action !== action)} onClick={() => void act("complete", action)}>{attempt.current?.action === action ? `Retry ${action}` : action}</StudioButton>) : null}
+      </div>}
+    </section> : null}
+    <dialog ref={historyDialog} id="user-task-history-dialog" className="user-task-history-panel" aria-labelledby="user-task-history-title" onClose={() => setHistoryOpen(false)} onClick={event => { if (event.target === event.currentTarget) setHistoryOpen(false); }}>
+      <header className="user-task-dialog-header"><h2 id="user-task-history-title">Task history</h2><StudioButton variant="ghost" onClick={() => setHistoryOpen(false)}>Close</StudioButton></header>
+      <ol className="user-task-history-list">{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}><strong>{entry.operation}{entry.action ? ` · ${entry.action}` : ""}</strong><span> · {taskPerson(identity, entry.actorId, entry.actorName)} · <time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time></span></li>)}</ol>
+    </dialog>
+    {manageable ? <dialog ref={reassignDialog} className="user-task-reassign-dialog" aria-labelledby="user-task-reassign-title" onClose={() => setReassignOpen(false)} onCancel={event => { if (busyRef.current) event.preventDefault(); }}>
+      <header className="user-task-dialog-header"><h2 id="user-task-reassign-title">Reassign task</h2><StudioButton variant="ghost" disabled={busy} onClick={() => setReassignOpen(false)}>Close</StudioButton></header>
+      <p className="user-task-dialog-description">Choose a user or group to assign this task to.</p>
+      {reassignError ? <StudioAlert tone="danger">{reassignError}</StudioAlert> : null}
+      <fieldset className="user-task-reassign-fields" disabled={busy || stale || Boolean(attempt.current)}>
+        <StudioField label="Assign to"><select value={targetKind} onChange={event => { setTargetKind(event.target.value); setReassignError(""); }}><option value="user">User</option><option value="group">Group</option></select></StudioField>
+        <StudioField label={targetKind === "user" ? "User ID" : "Group ID"}><input value={target} onChange={event => { setTarget(event.target.value); setReassignError(""); }} /></StudioField>
+      </fieldset>
+      <footer className="user-task-dialog-actions"><StudioButton variant="ghost" disabled={busy} onClick={() => setReassignOpen(false)}>Cancel</StudioButton><StudioButton variant="primary" disabled={!target.trim() || busy || stale || Boolean(attempt.current)} onClick={() => void act("reassign")}>Reassign</StudioButton></footer>
+    </dialog> : null}
   </>);
 }

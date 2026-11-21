@@ -95,6 +95,7 @@ public sealed class DomainManagementApiCompositionTests
         new("/design/activities/definitions", "GET"),
         new("/design/activities/definitions/{definitionId}", "GET"),
         new("/design/activities/definitions/{definitionId}", "PATCH"),
+        new("/design/activities/definitions/{definitionId}", "DELETE"),
         new("/design/activities/definitions/{definitionId}/recommendation", "PUT"),
         new("/design/activities/definitions/picker", "GET"),
         new("/design/activities/definitions/{definitionId}/drafts", "GET"),
@@ -224,7 +225,7 @@ public sealed class DomainManagementApiCompositionTests
         var publishingIdentities = publishing.SelectMany(entry => entry.Identities).ToArray();
 
         // Retain the reviewed legacy inventory; classify the context and candidate operations explicitly.
-        Assert.Equal(38, ExpectedActivitiesDesignRoutes.Length);
+        Assert.Equal(39, ExpectedActivitiesDesignRoutes.Length);
         var expectedActivities = ExpectedActivitiesDesignRoutes.Append(ActivityDataContextRoute).Append(ActivityCandidateValidationRoute).ToArray();
         Assert.Equal(expectedActivities.Length, activities.Length);
         Assert.Equal(expectedActivities.Length, identities.Length);

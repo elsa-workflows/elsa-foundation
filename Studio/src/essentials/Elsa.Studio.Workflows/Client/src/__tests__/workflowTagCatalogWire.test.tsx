@@ -22,7 +22,7 @@ function render(tag?: WorkflowTag) {
   let visible = true;
   const setVisibility = (mode: "visible" | "hidden") => {
     visible = mode === "visible";
-    flushSync(() => root.render(<StudioWorkspaceTabProvider value={{ id: "tags", active: visible, location: "/workflows/tags/new", isActive: () => visible, markPendingWork: () => undefined, setTitle: () => undefined }}><Activity mode={mode}><WorkflowTagEditor context={context} tag={tag} onBack={() => undefined} onCreated={onCreated} /></Activity></StudioWorkspaceTabProvider>));
+    flushSync(() => root.render(<StudioWorkspaceTabProvider value={{ id: "tags", active: visible, location: "/workflows/tags/new", isActive: () => visible, markPendingWork: () => undefined, setTitle: () => undefined }}><Activity mode={mode}><WorkflowTagEditor context={context} tag={tag} onBack={() => undefined} navigate={() => undefined} onCreated={onCreated} /></Activity></StudioWorkspaceTabProvider>));
   };
   setVisibility("visible");
   return { container, postJson, putJson, onCreated, setVisibility };

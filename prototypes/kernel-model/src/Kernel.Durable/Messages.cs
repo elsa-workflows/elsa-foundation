@@ -18,20 +18,29 @@ public sealed record CreationStart(long Generation, long Previous, string Intent
 public sealed record StartSpec(string Model, string Definition, string? Input = null, string? Parent = null, bool Ephemeral = false, History History = History.Full,
     CreationStart? Creation = null, long ParentCreation = 0, TimeSpan? ShortWait = null);
 
-public sealed record SendOptions(TimeSpan? Delay = null, StartSpec? Start = null, long? TargetCreation = null);
+public sealed record SendOptions(TimeSpan? Delay = null, StartSpec? Start = null, long? TargetCreation = null, long? DueAt = null);
 
 /// <summary>The storage key scopes an opaque wire ID without modifying it. Positive scopes identify
 /// tickets by the exact split of the logical actor!key string, including when actor or key contains '!'.</summary>
 public readonly record struct InboxKey(string Id, long Scope = 0, string? Match = null)
 {
     internal const long ChildCreatorScope = long.MaxValue;
+    internal const long EventDeliveryScope = -2;
+    internal const long EventCreatorScope = -3;
     public bool HasIssuedOrigin => Scope == -1 || Scope > 0;
     public static InboxKey Issued(string id) => new(id, -1);
     public static InboxKey Custom(string actor, string id) => new(id, (long)int.MaxValue + 2 + actor.Length);
     public static InboxKey Ticket(string actor, string key, long creation = 0) => new(Worker.TicketId(actor, key, creation), (long)CreationProtocol.Origin(actor, creation).Length + 1);
+    internal static InboxKey JobResult(string actor, string key, long creation)
+    {
+        var ticket = Ticket(actor, key, creation);
+        return ticket with { Id = ticket.Id + "/result" };
+    }
     public static implicit operator InboxKey(string ordinaryId) => new(ordinaryId);
     public override string ToString() => Id;
 }
+
+internal sealed record FoundationOperatorCommand(string? Selection);
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
 public sealed record Message(
@@ -40,10 +49,17 @@ public sealed record Message(
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public long InboxScope { get; private init; }
+    internal bool BindFoundationChild { get; init; }
+    internal FoundationOperatorCommand? Operator { get; init; }
+    internal bool IsControl => Operator is not null || Kinds.IsControl(Kind);
+    internal bool ActorAuthored { get; init; }
+    internal bool FoundationJobResult { get; init; }
+    internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]
     public string? EventMatch { get; private init; }
     [System.Text.Json.Serialization.JsonIgnore]
-    public InboxKey InboxKey => new(Id, InboxScope, EventMatch);
+    public InboxKey InboxKey => new(StorageId ?? Id, InboxScope, EventMatch);
+    internal string? StorageId { get; init; }
     public Message WithInboxScope(long scope, string? match = null) => this with { InboxScope = scope, EventMatch = match };
     public Message AsIssued() => WithInboxScope(InboxKey.Issued(Id).Scope);
     public Message AsOrdinary() => InboxScope == 0 && EventMatch is null ? this : WithInboxScope(0);
@@ -62,6 +78,7 @@ public static class Kinds
     public const string Start = "start";
     public const string JobFinished = "job-finished";
     public const string Event = "event";
+    internal const string JobDeadline = "kernel.job-deadline";
     public const string Job = "kernel.job";    // a job's ticket: the intent while the work is in flight, the result afterwards
     public const string Meet = "kernel.meet";  // "read the events for the keys this commit subscribed"
 
@@ -74,7 +91,7 @@ public static class Kinds
 
     public static void RequireApplicationSend(string kind)
     {
-        if (kind == Job) throw new ArgumentException("A kernel job ticket must be created by DurableTurn.StartJob.", nameof(kind));
+        if (kind is Job or JobDeadline) throw new ArgumentException("The foundation issues job tickets and deadlines.", nameof(kind));
         if (kind is Meet or Publish) throw new ArgumentException("Event tickets must be created by DurableTurn.Subscribe or Publish.", nameof(kind));
     }
 
@@ -87,6 +104,9 @@ public interface IJob
 {
     InstanceRef Instance { get; }
     long Creation => 0;
+    string? AttemptId => null;
+    int AttemptNumber => 1;
+    long? Deadline => null;
     string Key { get; }
     string? Arguments { get; }
 }

@@ -11,6 +11,7 @@
     <Compile Include="../../sim/Correlation.cs" Link="Correlation.cs" />
     <ProjectReference Include="../Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
     <ProjectReference Include="../../src/Kernel.Workflows/Kernel.Workflows.csproj" />
+    <ProjectReference Include="../../runtime/Kernel.Runtime.Hosting/Kernel.Runtime.Hosting.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

@@ -30,6 +30,12 @@ for (const width of [320, 360, 1280]) {
     await expect(runKind).not.toBeChecked();
     await expect(page.getByLabel("Selected grouping fields")).toHaveText("status");
 
+    const filters = page.locator('.named-query-controls details[data-query-path="query.filters"]');
+    await expect(filters).not.toHaveAttribute("open", "");
+    await filters.locator("summary").focus(); await page.keyboard.press("Enter");
+    await expect(filters).toHaveAttribute("open", "");
+    await expect(filters.getByRole("button", { name: "Add condition", exact: true })).toBeVisible();
+
     await page.getByRole("button", { name: "Open tile settings", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Tile presentation and parameters", exact: true });
     const category = dialog.getByRole("group", { name: "category (string)", exact: true }).getByRole("checkbox");
@@ -39,6 +45,29 @@ for (const width of [320, 360, 1280]) {
     await page.getByRole("button", { name: "Use tile settings", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByLabel("Tile parameter overrides")).toHaveText('{"category":{"type":"string","literal":"retail"},"minimum":{"type":"integer","literal":"1"}}');
+  });
+}
+
+for (const width of [360, 1280]) {
+  test(`question authoring reveals query controls and preview after dataset selection at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/dashboard-checkboxes.html?emptyQuestion");
+    const controls = page.locator(".named-query-controls");
+    const dataset = page.getByRole("combobox", { name: "Dataset", exact: true });
+    const queryForm = controls.getByRole("combobox", { name: "Query form", exact: true });
+    await expect(dataset).toBeVisible();
+    await expect(queryForm).toHaveCount(0);
+    await expect(controls.getByRole("group", { name: "Group by", exact: true })).toHaveCount(0);
+    await expect(page.locator(".named-preview")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+    await info.attach(`question-authoring-empty-${width}px`, { body: await page.screenshot({ path: info.outputPath(`question-authoring-empty-${width}px.png`) }), contentType: "image/png" });
+
+    await dataset.selectOption("checkbox-runs");
+    await expect(queryForm).toBeVisible();
+    await expect(controls.getByRole("group", { name: "Group by", exact: true })).toBeVisible();
+    await expect(page.locator(".named-preview")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+    await info.attach(`question-authoring-selected-${width}px`, { body: await page.screenshot({ path: info.outputPath(`question-authoring-selected-${width}px.png`) }), contentType: "image/png" });
   });
 }
 

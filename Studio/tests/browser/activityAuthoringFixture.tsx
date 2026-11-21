@@ -2,11 +2,10 @@ import { agentEditorContributions, register as registerAgents } from "../../../e
 import { register as registerSecrets } from "../../../extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/module";
 import { register as registerConnections } from "../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/module";
 import { createStudioRegistry } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry";
-import { createEndpointContext } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, createEndpointContext, StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { initialAgentManifest } from "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/agentManifest";
 import { useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AnonymousAuthProvider, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionDraftEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor";
 import { activityGraphSchema2ImplementationEditorContribution } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
 import { inputReferenceContribution } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/inputReferenceContribution";
@@ -19,7 +18,7 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 const scenario = new URLSearchParams(location.search);
 const agent = scenario.get("provider") === "agent";
 const outcomeOnly = agent || scenario.get("contract") === "outcome-only";
-const storageKey = `activity-authoring-2994-fixture${scenario.has("contract-diagnostics") ? ":contract-diagnostics" : ""}${agent ? ":agent" : ""}${scenario.has("invalid") ? ":invalid" : ""}${scenario.has("invalid-limits") ? ":invalid-limits" : ""}${outcomeOnly ? ":outcome-only" : ""}${scenario.has("read-only") ? ":read-only" : ""}`;
+const storageKey = `activity-authoring-2994-fixture${scenario.has("contract-diagnostics") ? ":contract-diagnostics" : ""}${agent ? ":agent" : ""}${scenario.has("invalid") ? ":invalid" : ""}${scenario.has("invalid-limits") ? ":invalid-limits" : ""}${outcomeOnly ? ":outcome-only" : ""}${scenario.has("read-only") ? ":read-only" : ""}${scenario.has("unavailable-connection") ? ":unavailable-connection" : ""}`;
 const timestamp = "2026-10-19T09:00:00Z";
 const contractType = { alias: "Decimal", collectionKind: "Single", supportsDurability: true };
 const input = (name: string, referenceKey: string, description: string) => ({
@@ -41,7 +40,7 @@ function initialDraft(): ActivityDefinitionDraftView {
     contract: { contractSchemaVersion: "1", inputs: outcomeOnly ? [] : [subtotal, { ...input("Shipping", "shipping", "The shipping charge to include."), isRequired: false, default: { syntax: "Literal", value: 0 } }],
       outputs: outcomeOnly ? [] : [{ ...subtotal, referenceKey: "amount", name: "Amount", displayName: "Amount", description: "The amount returned to the calling workflow." }],
       outcomes: [{ referenceKey: outcomeOnly ? "done" : "quoted", name: outcomeOnly ? "Done" : "Quoted", isEmitted: true, description: "The quote is ready." }] },
-    provider: agent ? { providerKey: "elsa.agent", schemaVersion: "2", manifestFingerprint: "sha256:agent-fixture", payload: { ...initialAgentManifest(), ...(scenario.has("invalid") || scenario.has("publication-blocked") ? {} : { instructions: "Proofread the supplied text. Return clear, concise suggestions.", model: { providerKey: "azure-openai", connectionName: "proofreader", modelId: "editor-model" } }), ...(scenario.has("invalid-limits") ? { limits: { maximumModelCalls: 0, timeoutMilliseconds: 30000 } } : {}) } } : { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "sha256:quote-fixture-1",
+    provider: agent ? { providerKey: "elsa.agent", schemaVersion: "2", manifestFingerprint: "sha256:agent-fixture", payload: { ...initialAgentManifest(), ...(scenario.has("invalid") || scenario.has("publication-blocked") ? {} : { instructions: "Proofread the supplied text. Return clear, concise suggestions.", model: { providerKey: "azure-openai", connectionName: "proofreader", modelId: "editor-model" } }), ...(scenario.has("unavailable-connection") ? { model: { providerKey: "azure-openai", connectionName: "openai", modelId: "gpt-4o" } } : {}), ...(scenario.has("invalid-limits") ? { limits: { maximumModelCalls: 0, timeoutMilliseconds: 30000 } } : {}) } } : { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "sha256:quote-fixture-1",
       payload: { rootActivity: { nodeId: "root", activityVersionId: "sequence-v1", inputs: [], outputs: [], structure: { kind: "Sequence", schemaVersion: "1", payload: { activities: [] } } }, variables: [], outputMappings: outcomeOnly ? [] : [{ outputReferenceKey: "amount", source: { syntax: "Input", value: { referenceKey: "subtotal" } } }], outcomeMappings: [{ sourceOutcomeReferenceKey: "done", boundaryOutcomeReferenceKey: outcomeOnly ? "done" : "quoted" }] } }, layout: []
   };
 }
@@ -96,8 +95,11 @@ export function ActivityAuthoringFixture() {
       },
       postJson: async (url: string, body?: unknown) => {
         const current = draft.current;
-        if (url === "/connections/picker") return { items: [{ name: "proofreader", displayName: "Proofreader model", status: "Ready", settings: { modelId: "editor-model" } }] };
-        if (url === "/agent/model-capabilities") return { supportsJsonSchema: true, maximumOutputTokens: 4096, settingsSchema: { type: "object", properties: { temperature: { type: "number", minimum: 0, maximum: 1 } } } };
+        if (url === "/connections/picker") return { items: parameters.has("unavailable-connection") ? [] : [{ name: "proofreader", displayName: "Proofreader model", status: "Ready", settings: { modelId: "editor-model" } }] };
+        if (url === "/agent/model-capabilities") {
+          if (parameters.has("unavailable-connection")) throw new StudioHttpError(422, "Unprocessable");
+          return { supportsJsonSchema: true, maximumOutputTokens: 4096, settingsSchema: { type: "object", properties: { temperature: { type: "number", minimum: 0, maximum: 1 } } } };
+        }
         if (url.endsWith("/publication")) {
           const request = body as { idempotencyKey: string; expectedDraftRevision: number; reviewToken: string; version: string };
           return { idempotencyKey: request.idempotencyKey, status: "Rejected", draftId: current.draftId,

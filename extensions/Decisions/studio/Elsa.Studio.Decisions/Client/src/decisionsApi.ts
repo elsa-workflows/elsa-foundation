@@ -2,8 +2,9 @@ import { getBackendCapabilities, resolveBackendPath, type ElsaStudioModuleApi } 
 export const decisionsCapability = [{ id: "elsa.api.decisions", contractVersion: "1", relations: ["decisions"] }];
 export type Scalar = { kind: "number" | "string" | "boolean" | "null"; value: string | null };
 export type DecisionValue = Scalar | DecisionValue[] | { [key: string]: DecisionValue };
-export interface DecisionAsset { id: string; name: string; description?: string | null; revision: string; sourceHash: string; xml: string | null; isSensitive: boolean; publishedVersionId?: string | null; createdAt: string; updatedAt: string }
+export interface DecisionAsset { id: string; name: string; description?: string | null; revision: string; sourceHash: string; xml: string | null; isSensitive: boolean; publishedVersionId?: string | null; deletedAt?: string | null; createdAt: string; updatedAt: string }
 export interface DecisionVersion { id: string; assetId: string; number: number; name: string; xml: string | null; sourceHash: string; publishedAt: string; isSensitive?: boolean }
+export interface DecisionLifecycleResult { id: string; revision: string; replayed?: boolean }
 export interface Diagnostic { code: string; message: string; severity?: string; decisionId?: string; ruleId?: string | null; clauseId?: string | null }
 export interface Validation { success: boolean; diagnostics: Diagnostic[] }
 export interface RuleTrace { ruleId: string; matched: boolean; selected: boolean; cells: { inputId: string; truth: string }[] }
@@ -11,6 +12,7 @@ export interface Evaluation { status: string; result?: DecisionValue | null; dia
 export interface DecisionCase { id: string; name: string; revision: string; inputs: Record<string, Scalar> | null; expectedStatus: string; expectedResult: DecisionValue | null; isSensitive?: boolean }
 export interface Comparison { caseId: string; name: string; passed: boolean; status: string; expected?: unknown; actual?: unknown; failurePath?: string; matchedRules?: string[]; selectedRules?: string[]; trace?: RuleTrace[] }
 export interface TestRun { id: string; candidateId: string; candidateHash: string; comparisons?: Comparison[] | null; passed: boolean; hasDetailedPayload: boolean; evaluatedAt: string; completedAt: string }
+export interface DecisionFailure { message: string; diagnostics: Diagnostic[] }
 export interface SaveAsset { name: string; description?: string; xml: string; isSensitive: boolean }
 async function base(api: ElsaStudioModuleApi) {
   const document = api.backendSession?.capabilities ?? await getBackendCapabilities(api.backend);
@@ -24,11 +26,18 @@ const segment = (value: string) => { if (!value || /[\\/]/.test(value) || Array.
 async function address(api: ElsaStudioModuleApi, id?: string, suffix = "") { return `${await base(api)}${id ? `/${segment(id)}` : ""}${suffix}`; }
 export const operationId = () => crypto.randomUUID();
 export const listDecisions = async (api: ElsaStudioModuleApi, signal?: AbortSignal) => (await api.backend.http.getJson<{ items: DecisionAsset[] }>(await address(api), { signal })).items;
+export const listRecycleBin = async (api: ElsaStudioModuleApi, signal?: AbortSignal) => (await api.backend.http.getJson<{ items: DecisionAsset[] }>(await address(api, undefined, "/recycle-bin"), { signal })).items;
 export const getDecision = async (api: ElsaStudioModuleApi, id: string, signal?: AbortSignal) => api.backend.http.getJson<DecisionAsset>(await address(api, id), { signal });
 export const createDecision = async (api: ElsaStudioModuleApi, input: SaveAsset) => api.backend.http.postJson<DecisionAsset>(await address(api), { operationId: operationId(), ...input });
 export const saveDecision = async (api: ElsaStudioModuleApi, asset: DecisionAsset, input: SaveAsset) => api.backend.http.putJson<DecisionAsset>(await address(api, asset.id), { operationId: operationId(), expectedRevision: asset.revision, ...input });
 export const validateDecision = async (api: ElsaStudioModuleApi, asset: DecisionAsset) => api.backend.http.postJson<Validation>(await address(api, asset.id, "/validate"), { expectedRevision: asset.revision });
 export const publishDecision = async (api: ElsaStudioModuleApi, asset: DecisionAsset) => api.backend.http.postJson<DecisionVersion>(await address(api, asset.id, "/publish"), { operationId: operationId(), expectedRevision: asset.revision });
+const lifecycle = async (api: ElsaStudioModuleApi, asset: DecisionAsset, action: "unpublish" | "recycle" | "restore" | "purge") =>
+  api.backend.http.postJson<DecisionLifecycleResult>(await address(api, asset.id, `/${action}`), { operationId: operationId(), expectedRevision: asset.revision });
+export const unpublishDecision = (api: ElsaStudioModuleApi, asset: DecisionAsset) => lifecycle(api, asset, "unpublish");
+export const recycleDecision = (api: ElsaStudioModuleApi, asset: DecisionAsset) => lifecycle(api, asset, "recycle");
+export const restoreDecision = (api: ElsaStudioModuleApi, asset: DecisionAsset) => lifecycle(api, asset, "restore");
+export const purgeDecision = (api: ElsaStudioModuleApi, asset: DecisionAsset) => lifecycle(api, asset, "purge");
 export const versions = async (api: ElsaStudioModuleApi, id: string) => (await api.backend.http.getJson<{ items: DecisionVersion[] }>(await address(api, id, "/versions"))).items;
 export const version = async (api: ElsaStudioModuleApi, id: string, versionId: string) => api.backend.http.getJson<DecisionVersion>(await address(api, id, `/versions/${segment(versionId)}`));
 export const cloneVersion = async (api: ElsaStudioModuleApi, asset: DecisionAsset, versionId: string) => api.backend.http.postJson<DecisionAsset>(await address(api, asset.id, "/clone-to-draft"), { operationId: operationId(), expectedRevision: asset.revision, versionId });
@@ -54,5 +63,29 @@ export function can(api: ElsaStudioModuleApi, permission: string) {
   const identity = api.backendSession?.identity;
   return !identity || identity.status !== "authenticated" || identity.permissions.includes(permission) || identity.permissions.includes("*");
 }
-export const failureMessage = (error: unknown) => error instanceof Error ? error.message : "The operation could not be completed.";
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
+const problemPayload = (error: unknown) => isRecord(error) && isRecord(error.payload) ? error.payload : null;
+export const failureMessage = (error: unknown) => {
+  const message = problemPayload(error)?.message;
+  return typeof message === "string" && message.trim() ? message : error instanceof Error ? error.message : "The operation could not be completed.";
+};
+export const decisionFailure = (error: unknown): DecisionFailure => {
+  const payload = problemPayload(error), diagnostics: Diagnostic[] = [];
+  if (Array.isArray(payload?.diagnostics)) {
+    for (const value of payload.diagnostics) {
+      if (!isRecord(value) || typeof value.code !== "string" || typeof value.message !== "string" || value.code.length > 128 || value.message.length > 2048) continue;
+      const diagnostic: Diagnostic = {
+        code: value.code,
+        message: value.message,
+        ...(typeof value.decisionId === "string" && value.decisionId.length <= 256 ? { decisionId: value.decisionId } : {}),
+        ...(typeof value.ruleId === "string" && value.ruleId.length <= 256 ? { ruleId: value.ruleId } : value.ruleId === null ? { ruleId: null } : {}),
+        ...(typeof value.clauseId === "string" && value.clauseId.length <= 256 ? { clauseId: value.clauseId } : value.clauseId === null ? { clauseId: null } : {}),
+        ...(typeof value.severity === "string" && value.severity.length <= 64 ? { severity: value.severity } : {})
+      };
+      diagnostics.push(diagnostic);
+      if (diagnostics.length >= 100) break;
+    }
+  }
+  return { message: failureMessage(error), diagnostics };
+};
 export const isConflict = (error: unknown) => typeof error === "object" && error !== null && "status" in error && error.status === 409;

@@ -90,7 +90,8 @@ describe("publication review model", () => {
             cardinality: "single",
             collectionProperty: "cases",
             childProperty: "activity",
-            labelProperty: "name"
+            labelProperty: "name",
+            slotNameTemplate: "Case {name}"
           }],
           initialPayload: { cases: [] }
         }

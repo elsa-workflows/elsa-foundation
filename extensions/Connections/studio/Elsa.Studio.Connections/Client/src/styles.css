@@ -354,6 +354,8 @@ html[data-workspace-style="minimal"] .connections-modal button[type="submit"] { 
 .connections-dialog-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding: 1rem 1.5rem; border-top: 1px solid var(--connections-border); background: var(--studio-material-panel-bg-soft); }
 .connections-modal button.connections-danger { color: var(--studio-danger-fg); background: transparent; }
 .connections-modal button.connections-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--studio-danger-fg) 10%, var(--connections-surface)); }
+.connections-modal button.connections-edit { color: var(--connections-accent); background: transparent; }
+.connections-modal button.connections-edit:hover:not(:disabled) { background: color-mix(in srgb, var(--connections-accent) 10%, var(--connections-surface)); }
 .connections-create-header h2 { margin: 0.25rem 0 0.5rem; }
 .connections-create-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .connections-create-field { display: grid; gap: 0.4rem; min-width: 0; }

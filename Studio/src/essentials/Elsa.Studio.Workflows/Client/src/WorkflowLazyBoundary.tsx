@@ -3,6 +3,8 @@ import React, { Component, Suspense } from "react";
 type WorkflowLazyBoundaryProps = {
   label: string;
   children: React.ReactNode;
+  recoveryAction?: { label: string; onClick: () => void };
+  backdropOptOut?: boolean;
 };
 
 type WorkflowLazyBoundaryState = {
@@ -26,9 +28,9 @@ export class WorkflowLazyBoundary extends Component<WorkflowLazyBoundaryProps, W
 
   render() {
     if (this.state.error) {
-      const chunkFailure = isChunkLoadFailure(this.state.error);
+      const chunkFailure = isWorkflowChunkLoadFailure(this.state.error);
       return (
-        <div className="wf-lazy-state error" role="alert">
+        <div className="wf-lazy-state error" data-studio-workspace-backdrop={this.props.backdropOptOut ? "none" : undefined} role="alert">
           <strong>Unable to load {this.props.label}</strong>
           <span>{chunkFailure
             ? "The Studio module may have been updated while this page was open."
@@ -36,6 +38,11 @@ export class WorkflowLazyBoundary extends Component<WorkflowLazyBoundaryProps, W
           <button type="button" className="wf-lazy-reload" onClick={() => window.location.reload()}>
             Reload page
           </button>
+          {this.props.recoveryAction ? (
+            <button type="button" className="wf-lazy-reload" onClick={this.props.recoveryAction.onClick}>
+              {this.props.recoveryAction.label}
+            </button>
+          ) : null}
         </div>
       );
     }
@@ -48,6 +55,7 @@ export class WorkflowLazyBoundary extends Component<WorkflowLazyBoundaryProps, W
         // that resolves quickly never flashes a fallback at all.
         <div
           className="wf-lazy-state wf-lazy-skeleton"
+          data-studio-workspace-backdrop={this.props.backdropOptOut ? "none" : undefined}
           role="status"
           aria-live="polite"
           aria-busy="true"
@@ -64,6 +72,7 @@ export class WorkflowLazyBoundary extends Component<WorkflowLazyBoundaryProps, W
   }
 }
 
-function isChunkLoadFailure(error: Error) {
-  return error.name === "ChunkLoadError" || /dynamically imported module|loading chunk|importing a module script/i.test(error.message);
+export function isWorkflowChunkLoadFailure(error: unknown) {
+  const failure = error instanceof Error ? error : new Error(String(error));
+  return failure.name === "ChunkLoadError" || /dynamically imported module|loading chunk|importing a module script|failed to load module script|unable to preload css|does not provide an export named/i.test(failure.message);
 }

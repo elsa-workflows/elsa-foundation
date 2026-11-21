@@ -186,6 +186,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
         AuthorizationSnapshot authorization)
     {
         var designOwned = definition.ContentAuthority.Kind == ActivityContentAuthorityKind.Design;
+        var mutable = definition.ArchivedAt is null;
         var recommendation = definition.Recommendation;
         var hasActiveRecommendation = recommendation?.Lifecycle == ActivityDefinitionVersionLifecycle.Active;
         var forkTargets = hasActiveRecommendation
@@ -193,9 +194,10 @@ public sealed class ActivityDefinitionManagementProjectionService(
             : default;
         return
         [
-            Action("edit-definition", authorization.CanManage && designOwned, authorization.CanManage ? "activity.definition.source-owned" : ActivityErrorCodes.ActionForbidden),
-            Action("create-draft", authorization.CanManage && designOwned, authorization.CanManage ? "activity.definition.source-owned" : ActivityErrorCodes.ActionForbidden),
-            Action("set-recommendation", authorization.CanManage, ActivityErrorCodes.ActionForbidden),
+            Action("edit-definition", authorization.CanManage && designOwned && mutable, !authorization.CanManage ? ActivityErrorCodes.ActionForbidden : !designOwned ? "activity.definition.source-owned" : "activity.definition.archived"),
+            Action("create-draft", authorization.CanManage && designOwned && mutable, !authorization.CanManage ? ActivityErrorCodes.ActionForbidden : !designOwned ? "activity.definition.source-owned" : "activity.definition.archived"),
+            Action("set-recommendation", authorization.CanManage && mutable, !authorization.CanManage ? ActivityErrorCodes.ActionForbidden : "activity.definition.archived"),
+            Action("archive-definition", authorization.CanManage && designOwned && mutable, !authorization.CanManage ? ActivityErrorCodes.ActionForbidden : !designOwned ? "activity.definition.source-owned" : "activity.definition.archived"),
             Action("fork-definition", authorization.CanManage && !designOwned && hasActiveRecommendation && forkTargets.HasAuthorizedTarget,
                 ForkUnavailableCode(authorization, designOwned, forkTargets, hasActiveRecommendation))
         ];

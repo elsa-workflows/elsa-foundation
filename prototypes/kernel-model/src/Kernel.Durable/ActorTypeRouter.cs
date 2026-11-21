@@ -16,11 +16,13 @@ public sealed class ActorTypeRouter(IActorType fallback, IReadOnlyDictionary<str
         return null;
     }
 
+    public bool SupportsFoundationOperator(InstanceRow? row) => For(row?.Model).SupportsFoundationOperator(row);
     public bool SingleMessage(Message message) => fallback.SingleMessage(message);
     public bool SingleMessage(string? model, InstanceRow? row, Delivery delivery) => For(model).SingleMessage(model, row, delivery);
     public bool SelectsAlone(string? model, InstanceRow? row, Delivery delivery) => For(model).SelectsAlone(model, row, delivery);
     public bool RevisitsHeld(string? model, InstanceRow row, Delivery delivery) => For(model).RevisitsHeld(model, row, delivery);
     public bool Withholds(InstanceRow row, ITurnServices services) => For(row.Model).Withholds(row, services);
+    bool IActorType.SettlesWhileWithheld(InstanceRow row, Delivery delivery) => For(row.Model).SettlesWhileWithheld(row, delivery);
     public TurnOutcome? Command(TurnInput input) => For(input.Row?.Model ?? input.Spec?.Model).Command(input);
     public ValueTask<TurnOutcome> TurnAsync(TurnInput input) => For(input.Model).TurnAsync(input);
     public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error) =>

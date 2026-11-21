@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { getRunHistoryBackLocation, parseRunHistoryReturnTo, WorkflowInstances } from "../workflow-editor/WorkflowInstances";
@@ -29,6 +30,54 @@ afterEach(() => {
 });
 
 describe("workflow run history", () => {
+  it("keeps cursor, selection, results and unapplied filters during contextual refresh", async () => {
+    window.history.replaceState({}, "", "/workflows/instances?status=Completed&pageSize=10&cursor=current-cursor");
+    let pending: Promise<unknown> | null = null;
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? deletionCapabilities : pending ?? page("execution-1"));
+    const navigate = vi.fn();
+    const container = render(context(getJson), navigate);
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    click(input(container, "Select workflow run execution-1"));
+    openMoreFilters(container);
+    fill(input(container, "Workflow run correlation"), "not-yet-applied");
+    const table = container.querySelector('[role="table"]');
+    let resolveRefresh!: (value: unknown) => void;
+    pending = new Promise(resolve => { resolveRefresh = resolve; });
+    const refresh = button(container, "Refresh workflow runs");
+    click(refresh);
+    click(refresh);
+    await waitFor(() => expect(getJson).toHaveBeenLastCalledWith(expect.stringMatching(/status=Completed.*take=10.*cursor=current-cursor/)));
+
+    expect(refresh.disabled).toBe(true);
+    expect(container.querySelector('[role="table"]')).toBe(table);
+    expect(input(container, "Select workflow run execution-1").checked).toBe(true);
+    expect(input(container, "Workflow run correlation").value).toBe("not-yet-applied");
+    resolveRefresh(page("execution-1"));
+    await waitFor(() => expect(refresh.disabled).toBe(false));
+    expect(getJson.mock.calls.filter(([url]) => url.includes("instances/page"))).toHaveLength(2);
+    expect(input(container, "Select workflow run execution-1").checked).toBe(true);
+    expect(input(container, "Workflow run correlation").value).toBe("not-yet-applied");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps previous run results after a refresh error, but clears protected results on denial", async () => {
+    const getJson = vi.fn(async (url: string): Promise<unknown> => url === "/capabilities" ? capabilities : page("execution-1"));
+    const container = render(context(getJson), vi.fn());
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    const refresh = button(container, "Refresh workflow runs");
+    getJson.mockRejectedValueOnce(new Error("Temporarily offline"));
+    click(refresh);
+    await waitFor(() => expect(refresh.disabled).toBe(false));
+    expect(container.textContent).toContain("Temporarily offline");
+    expect(container.querySelector('[role="table"]')).not.toBeNull();
+
+    getJson.mockRejectedValueOnce(new StudioHttpError(403, "Access denied"));
+    click(refresh);
+    await waitFor(() => expect(refresh.disabled).toBe(false));
+    expect(container.textContent).toContain("Access denied");
+    expect(container.querySelector('[role="table"]')).toBeNull();
+  });
+
   it("keeps the execution ID primary and discloses copyable secondary IDs without opening the row", async () => {
     const exactRun = {
       ...page("workflow-execution-0123456789abcdef0123456789abcdef").items[0],

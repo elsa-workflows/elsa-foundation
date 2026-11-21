@@ -6,12 +6,13 @@
 
 import { defaultNodeWidth, readSavedNodeWidth } from "./graph-authoring/nodeWidth";
 
-export type LayoutMode = "flowchart" | "sequence";
+export type LayoutMode = "flowchart" | "sequence" | "bpmn";
 
 export interface LayoutNode {
   id: string;
   /** Explicit (resized) width; nodes without one use the default node width. */
   width?: number;
+  measured?: { width?: number };
 }
 
 export interface LayoutEdge {
@@ -29,6 +30,7 @@ export interface LayoutPosition {
 // the edge midpoint both fit without overlapping for typical outcome names. With default
 // 246px nodes that is a 440px column step.
 const COLUMN_GAP = 194;
+const BPMN_COLUMN_GAP = 80;
 const ROW_STEP = 140;
 
 export function computeAutoLayout(
@@ -37,7 +39,7 @@ export function computeAutoLayout(
   mode: LayoutMode
 ): Map<string, LayoutPosition> {
   if (mode === "sequence") return layoutSequence(nodes);
-  return layoutFlowchart(nodes, edges);
+  return layoutFlowchart(nodes, edges, mode);
 }
 
 function layoutSequence(nodes: readonly LayoutNode[]): Map<string, LayoutPosition> {
@@ -50,7 +52,8 @@ function layoutSequence(nodes: readonly LayoutNode[]): Map<string, LayoutPositio
 
 function layoutFlowchart(
   nodes: readonly LayoutNode[],
-  edges: readonly LayoutEdge[]
+  edges: readonly LayoutEdge[],
+  mode: "flowchart" | "bpmn"
 ): Map<string, LayoutPosition> {
   const positions = new Map<string, LayoutPosition>();
   if (nodes.length === 0) return positions;
@@ -94,12 +97,17 @@ function layoutFlowchart(
     else columns.set(column, [node.id]);
   }
 
-  const widthById = new Map(nodes.map(node => [node.id, readSavedNodeWidth(node.width) ?? defaultNodeWidth]));
+  const widthById = new Map(nodes.map(node => {
+    const measuredWidth = mode === "bpmn" ? node.measured?.width : undefined;
+    return [node.id, readSavedNodeWidth(node.width) ??
+      (measuredWidth && Number.isFinite(measuredWidth) && measuredWidth > 0 ? measuredWidth : defaultNodeWidth)] as const;
+  }));
+  const columnGap = mode === "bpmn" ? BPMN_COLUMN_GAP : COLUMN_GAP;
   const columnX = new Map<number, number>();
   let x = 0;
   for (const column of [...columns.keys()].sort((a, b) => a - b)) {
     columnX.set(column, x);
-    x += Math.max(...columns.get(column)!.map(id => widthById.get(id)!)) + COLUMN_GAP;
+    x += Math.max(...columns.get(column)!.map(id => widthById.get(id)!)) + columnGap;
   }
 
   for (const [column, columnNodes] of columns) {

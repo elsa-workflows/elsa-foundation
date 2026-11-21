@@ -404,7 +404,7 @@ describe("workflow Test Run setup", () => {
       workflowInputNames: update[3],
       driverActionError: update[5]
     }} onOpenRun={vi.fn()} />));
-    expect(container.querySelector(".wf-runtime-card h3")?.textContent).toBe("Latest test run");
+    expect(container.querySelector(".wf-runtime-details button[aria-expanded]")?.textContent).toContain("Run details");
     expect(container.querySelector(".wf-runtime-outcome")?.textContent).toContain("Trigger prepared");
     expect(container.textContent).toContain("The trigger action could not be sent.");
   });
@@ -451,6 +451,37 @@ describe("workflow Test Run setup", () => {
     expect(onStart).toHaveBeenCalledTimes(1);
     expect(capturedInputs).toHaveBeenCalledWith({ customerId: "cust-1042" });
     expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("retains compiled defaults and restores omission after an explicit override", async () => {
+    publishingMocks.getOptions.mockResolvedValue({
+      options: [],
+      inputContract: { version: 1, inputs: [{ name: "customerId", type: { alias: "String", collectionKind: "Single" }, isRequired: true, defaultValue: "default-customer" }] }
+    });
+    const capturedInputs = vi.fn();
+    const onStart = vi.fn(async (_snapshot: WorkflowDraft, inputs: WorkflowExecutionInputs) => {
+      capturedInputs(inputs);
+      return testRunView;
+    });
+    const container = renderPanel({ stimulusEditors: [], onStart });
+    await settle();
+
+    expect(container.textContent).toContain("Uses default if omitted.");
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(capturedInputs).toHaveBeenLastCalledWith({});
+
+    const useEmptyString = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Use empty string")!;
+    flushSync(() => useEmptyString.click());
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(capturedInputs).toHaveBeenLastCalledWith({ customerId: "" });
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Use default for customerId']")!.click());
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(capturedInputs).toHaveBeenLastCalledWith({});
+    expect(capturedInputs).toHaveBeenCalledTimes(3);
   });
 
   it("sends only a same-origin root-relative HTTP action and records the real response", async () => {

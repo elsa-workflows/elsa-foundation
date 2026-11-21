@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Bot, Plus, RefreshCw } from "lucide-react";
 import { StudioHttpError, useOptionalAuthContext, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
-  SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioDataGrid,
-  StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, type StudioDataGridColumn
+  SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioDataGrid,
+  StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTimestamp, type StudioDataGridColumn
 } from "@elsa-workflows/studio-ui";
 import {
   createAgent, getAgentAuthoring, listActiveAgentDrafts, listAgents, agentProviderKey, type AgentRow, type AgentAuthoring
@@ -175,7 +175,7 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
     ) },
     { id: "status", header: "Status", render: row => <AgentStatus row={row} /> },
     { id: "authority", header: "Defined in", render: row => <AgentAuthority row={row} /> },
-    { id: "updated", header: "Updated", render: row => <time dateTime={row.updatedAt}>{formatDate(row.updatedAt)}</time> }
+    { id: "updated", header: "Updated", render: row => <StudioTimestamp value={row.updatedAt} fallback={formatDate(row.updatedAt)} /> }
   ];
 
   return (
@@ -198,12 +198,10 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
       ) : null}
       {collection.kind === "ready" ? (
         <>
-          {collection.items.length === 0 ? <div className="studio-table-container">
-            <StudioResultState headingLevel={3} icon={<Bot aria-hidden="true" />}
+          {collection.items.length === 0 ? <StudioCollectionEmptyState headingLevel={3} icon={<Bot aria-hidden="true" />}
               title={query ? "No matching agents" : "No agents yet"}
               description={query ? "Try a different name or clear your search." : canCreate ? "Create an agent to use it in workflows." : "Agents will appear here when available."}
-              actions={query ? <StudioButton onClick={() => setSearch("")}>Clear search</StudioButton> : canCreate ? <StudioButton variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> Create agent</StudioButton> : undefined} />
-          </div> : <StudioDataGrid columns={columns} items={collection.items} getKey={row => row.definition.definitionId}
+              actions={query ? <StudioButton onClick={() => setSearch("")}>Clear search</StudioButton> : canCreate ? <StudioButton variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> Create agent</StudioButton> : undefined} /> : <StudioDataGrid columns={columns} items={collection.items} getKey={row => row.definition.definitionId}
             onSelect={row => void open(row)}
             gridColumns="minmax(12rem, 2fr) minmax(9rem, 1fr) minmax(8rem, 1fr) minmax(7rem, auto)" />}
           <StudioCollectionFooter>

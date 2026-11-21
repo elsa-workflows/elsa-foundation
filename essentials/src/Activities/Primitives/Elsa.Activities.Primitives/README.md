@@ -31,7 +31,7 @@ activity's own commit through `IPublishStimulusStager`, then completes `Done` im
 `PublishStimulusStagingBuffer` (registered as both the activity-facing stager and the engine-facing
 `IPublishStimulusStagingAccessor` the invoke handler drains) builds a `PublishStimulusIntentKind` post-commit
 intent carrying the shared `Event` stimulus identity. After the checkpoint commits, `PublishStimulusExecutor`
-routes it via `IStimulusRouter.RouteAsync(StartAndResume)` — so one send both starts every published
+routes the verified physical source and its saved recipient cohort via `IStimulusRouter.RouteSourceAsync` — so one send both starts every published
 message-start workflow listening on the name and resumes every parked same-name catch — with the outbox's
 retry/poison discipline. The staging seam mirrors the DispatchWorkflow stager's layering exactly but is
 publish-typed (it takes the send's facets, never a raw intent), so an activity cannot forge an arbitrary
@@ -46,3 +46,32 @@ driver guide](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS
 Coverage lives in `Essentials/tests/Activities/Runtime/Tests`, especially the CLR activator, input hydrator,
 pinned-input, and completion contract fixtures, plus `PublishEventTests` (durable-first staging, the buffer's
 intent shape, and the `StartAndResume` handler pin).
+
+## Cross-domain contributions
+
+`ActivitiesPrimitivesFeature` registers the private cross-domain `PublishStimulusHistoryEnricher` as
+Workflows Runtime Core's `IRuntimeCheckpointCommitEnricher` at `Order = 1900`, before native history
+capture at phase2000. It contributes safe publication inputs through Core's optional
+`IRuntimeHistorySourceExtension` before native capture. It stamps the logical intent and supplied pending
+projection only when the original final profile promises `StimulusPublicationCommitted`,
+`StimulusRoutingAttemptObserved` and `StimulusRoutingDispositionObserved`. Earlier vocabularies retain
+their original unstamped replay identity. This contribution does not advertise recording support or enable
+an expanded admission profile; complete source/admission qualification follows separately. See the
+[Runtime extension catalog](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the shared source boundary.
+
+The same feature constructs its scoped `PublishStimulusExecutor` with the actual selected source, native
+owner, observation pair and clock. Its existing durable-handler port qualifies that actual chain; the
+original one-argument constructor remains available and does not qualify stamped history. For a stamped
+source the handler revalidates the canonical physical source and original native policy before recording
+its attempt. A separate closed disposition reports the actual routing return/failure/capacity shed, without
+claiming a recipient executed. Ambiguous observation writes retry the same immutable event once, never
+the routing effect. Primary and observation failures retain both causes; unchanged unstamped delivery
+uses the existing path. Native source/profile admission qualification remains separate; this handler
+support does not add a default supported source kind. Canonical source reads precede the shared retained
+source-scope shape check; that check preserves logical tenancy independently of physical partition and
+grants no initial admission or live claim authority.
+
+Current qualification is recorded on [PR #4678](https://github.com/elsa-workflows/elsa-foundation/pull/4678):
+whole Activities891 and Runtime4382 passed with zero skips at the recorded source. Controlled policy/
+observation ports and actual native component controls retain their individual scopes; this is not
+complete publication, restart or Studio acceptance. New independent review remains pending.

@@ -161,3 +161,39 @@ for (const scenario of ["empty", "failed", "loading"]) {
     else await expect(page.getByRole("heading", { name: "No active workflow definitions in All workflows", exact: true })).toBeVisible();
   });
 }
+
+test("Space shows through ordinary Workflow Definitions frames while list surfaces stay solid", async ({ page }, info) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  for (const workspaceStyle of ["linen", "minimal"] as const) {
+    await page.goto(`/?mode=definition-versions&theme=space&workspaceStyle=${workspaceStyle}&scenario=showcase`);
+    await expect(page.getByRole("heading", { name: "Workflow definitions", exact: true })).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "space");
+    await expect(page.locator("html")).toHaveAttribute("data-workspace-style", workspaceStyle);
+
+    const surfaces = await page.evaluate(() => {
+      const color = (selector: string) => {
+        const element = document.querySelector(selector);
+        return element ? getComputedStyle(element).backgroundColor : null;
+      };
+      return {
+        image: getComputedStyle(document.querySelector(".content")!).backgroundImage,
+        frame: color(".wf-page"),
+        toolbarControl: color(".wf-page .studio-search"),
+        table: color(".wf-definition-table-scroll")
+      };
+    });
+
+    expect(surfaces.image.match(/radial-gradient/g)?.length).toBe(11);
+    expect(surfaces.frame).toBe("rgba(0, 0, 0, 0)");
+    expect(surfaces.toolbarControl).not.toBeNull();
+    expect(surfaces.toolbarControl).not.toBe("rgba(0, 0, 0, 0)");
+    expect(surfaces.table).not.toBeNull();
+    expect(surfaces.table).not.toBe("rgba(0, 0, 0, 0)");
+
+    if (workspaceStyle === "minimal") {
+      const screenshotPath = info.outputPath("space-workflow-definitions.png");
+      await page.screenshot({ path: screenshotPath, fullPage: true, animations: "disabled" });
+    }
+  }
+});

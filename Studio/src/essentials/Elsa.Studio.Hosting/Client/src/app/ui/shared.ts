@@ -11,6 +11,8 @@
  * host-only component and is re-exported from `./index` for host code only.
  */
 export * from "./data-grid/DataGrid";
+export * from "./data-grid/rowInteraction";
+export * from "./data-grid/StudioTimestamp";
 export * from "./feedback/FeedbackStates";
 export * from "./feedback/ActionNotice";
 export * from "./feedback/StatusChip";
@@ -21,10 +23,15 @@ export * from "./forms/SearchInput";
 export * from "./forms/SettingEditors";
 export * from "./inspector/Inspector";
 export * from "./identity/CopyableIdentifier";
+export * from "./layout/Breadcrumbs";
 export * from "./layout/Tabs";
 export * from "./layout/Toolbar";
 export * from "./layout/Page";
+export * from "./layout/RefreshControl";
 export * from "./layout/DialogFooter";
+export * from "./layout/VersionHistory";
+export * from "./layout/ResizeHandle";
+export * from "./layout/SidePanelLayout";
 export * from "./list/ListRow";
 export * from "./overlay/AnchoredPopover";
 export * from "./stat/StatTile";

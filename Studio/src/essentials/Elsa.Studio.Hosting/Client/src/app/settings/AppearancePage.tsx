@@ -8,10 +8,10 @@ import {
   themeModePreferenceLabels,
   type ThemeModePreference
 } from "../themes/appearance";
-import { getSupportedThemeModes, getThemeModeDefinition, isThemeMode } from "../themes/presets";
+import { getSupportedThemeModes, getThemeModeDefinition, isThemeMode, type SidebarBackdrop } from "../themes/presets";
 import { isNavModePreference, navModePreferenceLabels, navModePreferences } from "../themes/navMode";
 import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
-import { minimalStudioPresets, type MinimalStudioPresetId } from "../themes/minimalPresets";
+import { studioPresets, type StudioPresetId } from "../themes/studioPresets";
 import { isSidebarColorPreference, sidebarColorPreferenceLabels, sidebarColorPreferences } from "../themes/sidebarColor";
 
 /** The radio-group arrow keys wrap around; Home/End jump to the ends. Undefined for any other key. */
@@ -66,13 +66,13 @@ export function AppearancePage({
       <AppearanceCard title="Studio presets" description="Start with a complete look, then adjust each choice below.">
         <RadioCardGroup
           ariaLabel="Studio preset"
-          value={workspaceStyle === "minimal" && currentColorScheme.id === currentTheme.id && minimalStudioPresets.some(preset => preset.id === currentTheme.id && preset.mode === mode) ? currentTheme.id : ""}
-          options={minimalStudioPresets.flatMap(preset => {
+          value={workspaceStyle === "minimal" && currentColorScheme.id === currentTheme.id && studioPresets.some(preset => preset.id === currentTheme.id && preset.mode === mode) ? currentTheme.id : ""}
+          options={studioPresets.flatMap(preset => {
             const theme = availableThemes.find(candidate => candidate.id === preset.id);
             const colors = theme && getThemeModeDefinition(theme, preset.mode);
-            return colors ? [{ value: preset.id, label: preset.name, description: preset.description, preview: colors }] : [];
+            return colors ? [{ value: preset.id, label: preset.name, description: preset.description, preview: colors, sidebarBackdrop: theme.sidebarBackdrop }] : [];
           })}
-          onChange={value => applyPreset(value as MinimalStudioPresetId)}
+          onChange={value => applyPreset(value as StudioPresetId)}
         />
       </AppearanceCard>
 
@@ -222,7 +222,7 @@ function RadioCardGroup({
   ariaLabel: string;
   workspacePreviews?: boolean;
   value: string;
-  options: Array<{ value: string; label: string; description?: string; defaultValue?: boolean; swatches?: string[]; disabled?: boolean; preview?: ReturnType<typeof getThemeModeDefinition> }>;
+  options: Array<{ value: string; label: string; description?: string; defaultValue?: boolean; swatches?: string[]; disabled?: boolean; preview?: ReturnType<typeof getThemeModeDefinition>; sidebarBackdrop?: SidebarBackdrop }>;
   onChange: (value: string) => void;
 }) {
   const optionRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
@@ -257,7 +257,7 @@ function RadioCardGroup({
             "--preview-background": option.preview.background, "--preview-sidebar": option.preview.sidebar,
             "--preview-card": option.preview.card, "--preview-muted": option.preview.muted,
             "--preview-ink": option.preview.mutedForeground, "--preview-accent": option.preview.ring
-          } as React.CSSProperties}><i className="settings-preset-nav"><b /><b /><b /></i><i className="settings-preset-content"><b /><b /><b /><b /></i></span> : null}
+          } as React.CSSProperties}><i className="settings-preset-nav" data-sidebar-backdrop={option.sidebarBackdrop}><b /><b /><b /></i><i className="settings-preset-content"><b /><b /><b /><b /></i></span> : null}
           {workspacePreviews && option.value !== "theme" ? (
             <span className="workspace-style-preview" data-style={option.value} aria-hidden="true"><i /><i /><i /></span>
           ) : null}

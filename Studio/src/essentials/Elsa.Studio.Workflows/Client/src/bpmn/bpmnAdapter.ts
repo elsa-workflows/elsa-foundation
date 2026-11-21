@@ -66,6 +66,12 @@ export function findBpmnElement(owner: ActivityNode | null | undefined, elementI
   return readBpmnElements(owner).find(element => element.elementId === elementId) ?? null;
 }
 
+export function findBpmnElementForActivity(owner: ActivityNode | null | undefined, activityNodeId: string | null | undefined): BpmnElement | null {
+  if (!owner || !activityNodeId) return null;
+  const matchingElements = readBpmnElements(owner).filter(element => element.childNodeId === activityNodeId);
+  return matchingElements.length === 1 ? matchingElements[0]! : null;
+}
+
 export function buildBpmnCanvas(
   scope: CanvasScope,
   catalog: ActivityCatalogItem[],

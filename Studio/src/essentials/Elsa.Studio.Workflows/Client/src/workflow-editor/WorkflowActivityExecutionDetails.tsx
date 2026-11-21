@@ -1,7 +1,7 @@
 import { getNotifications } from "./notifications";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Activity as ActivityIcon, ChevronRight, Info, Undo2 } from "lucide-react";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioTabPanel, StudioTabs } from "@elsa-workflows/studio-ui";
 import type { StudioActivityInputDescriptor, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { WorkflowRunRelatedLinks } from "./WorkflowRunRelatedLinks";
 import { getActivityExecutionInspection } from "../api/runtime";
@@ -26,6 +26,11 @@ const ActivityBookmarkHistory = lazy(async () => ({ default: (await import("./ru
 const HistoryInspection = lazy(async () => ({ default: (await import("./run-history/HistoryInspection")).HistoryInspection }));
 
 const ReusableBoundaryInspector = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).ReusableBoundaryInspector }));
+const activityExecutionDetailTabs = [
+  { id: "overview", label: "Overview" },
+  { id: "inputs", label: "Inputs" },
+  { id: "outputs", label: "Outputs" }
+];
 
 type ActivityExecutionInspectionState = {
   activityExecutionId: string | null;
@@ -121,6 +126,12 @@ export function WorkflowActivityExecutionDetails({
   };
   useEffect(() => {
     if (focusInputKey) setHistoryView({ identity: historyIdentity, tab: "data", selection: null });
+  }, [focusInputKey, historyIdentity]);
+  const [activeDetailTab, setActiveDetailTab] = useState("overview");
+  const detailTabsId = useId();
+
+  useEffect(() => {
+    if (focusInputKey) setActiveDetailTab("inputs");
   }, [focusInputKey, historyIdentity]);
 
   const requestedRevision = useRef(refreshKey); requestedRevision.current = refreshKey;
@@ -275,14 +286,6 @@ export function WorkflowActivityExecutionDetails({
           </span>
         </div>
 
-        {!compact ? <dl className="wf-activity-summary-grid">
-          <ActivityMetadataValue scope={copyScope} label="Started" value={startedLabel} copiedLabel="start time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-          <ActivityMetadataValue scope={copyScope} label="Elapsed" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-          <ActivityMetadataValue scope={copyScope} label="Incidents" value={incidentCount == null ? "Unavailable" : String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-        </dl> : null}
-
-        <p className="wf-instance-note">Elapsed includes time waiting. Active execution time is not recorded.</p>
-
         {isCompensationHandlerExecution(activity) && activity.provenance?.schedulingActivityExecutionId ? (
           <CompensatesRow
             forwardActivityExecutionId={activity.provenance.schedulingActivityExecutionId}
@@ -308,51 +311,74 @@ export function WorkflowActivityExecutionDetails({
           : activeHistoryView.tab === "bookmarks" ? <Suspense fallback={<p role="status">Loading recorded bookmarks…</p>}><ActivityBookmarkHistory
             key={historyIdentity} context={context} workflowExecutionId={activity.workflowExecutionId} activityExecutionId={activity.activityExecutionId} refreshKey={bookmarkRefreshKey} onSelect={selectHistory} /></Suspense> : null}
       {!activeHistoryView.selection && activeHistoryView.tab === "data" ? <>
-      {currentInspectionState.status === "ready" && (!compact || recordedIncidents === null || recordedIncidents.length > 0) ? <section className="wf-instance-section" aria-label="Activity incidents">
-        <h4>Incidents</h4>
-        {recordedIncidents === null ? <p>Incident details are unavailable for this execution.</p> : recordedIncidents.length ? <ul>{recordedIncidents.map(incident => <li key={incident.incidentId}>
-          <WorkflowStatusBadge status={incident.status} /><p>{incident.message}</p><small>{incident.failureType}</small>
-        </li>)}</ul> : <p>No incidents recorded for this execution.</p>}
-      </section> : null}
       <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
-        <WorkflowActivityInputEvidence
-          state={currentInspectionState}
-          declarations={declaredInputs}
-          executableNodeFacts={executableNodeFacts}
-          expressionEditors={expressionEditors}
-          focusInputKey={focusInputKey}
+        <StudioTabs
+          baseId={detailTabsId}
+          tabs={activityExecutionDetailTabs}
+          activeTab={activeDetailTab}
+          onSelect={setActiveDetailTab}
+          ariaLabel="Activity execution details"
+          className="wf-activity-inspection-tabs"
         />
-        <WorkflowActivityValueEvidence
-          state={currentInspectionState}
-          subject="ActivityOutput"
-          title="Outputs"
-          loadingText="Loading runtime output evidence..."
-          failureText="Runtime output evidence is unavailable."
-          emptyText="No runtime output snapshots were recorded for this execution."
-        />
-        <WorkflowActivityOutcomeEvidence state={currentInspectionState} />
+        <StudioTabPanel baseId={detailTabsId} index={0} hidden={activeDetailTab !== "overview"} className="wf-activity-inspection-tab-panel">
+          {!compact ? <dl className="wf-activity-summary-grid">
+            <ActivityMetadataValue scope={copyScope} label="Started" value={startedLabel} copiedLabel="start time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+            <ActivityMetadataValue scope={copyScope} label="Duration" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+            <ActivityMetadataValue scope={copyScope} label="Incidents" value={incidentCount == null ? "Unavailable" : String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+          </dl> : null}
+          {currentInspectionState.status === "ready" && (recordedIncidents === null || recordedIncidents.length > 0) ? <section className="wf-instance-section wf-activity-incidents" aria-label="Activity incidents">
+            <header className="wf-runtime-evidence-heading">
+              <h4>Incidents</h4>
+              {recordedIncidents ? <span className="wf-runtime-evidence-count" aria-label={`${recordedIncidents.length} incidents`}>{recordedIncidents.length}</span> : null}
+            </header>
+            {recordedIncidents === null ? <p>Incident details are unavailable for this execution.</p> : recordedIncidents.length ? <ul>{recordedIncidents.map(incident => <li key={incident.incidentId}>
+              <WorkflowStatusBadge status={incident.status} /><p>{incident.message}</p><small>{incident.failureType}</small>
+            </li>)}</ul> : <p>No incidents recorded for this execution.</p>}
+          </section> : null}
+          <WorkflowActivityOutcomeEvidence state={currentInspectionState} />
+          {currentInspectionState.status === "ready" && currentInspectionState.inspection?.boundary ? (
+            <ActivityBoundaryDetails
+              key={JSON.stringify([selectedContextIdentity, selectedWorkflowExecutionId, selectedActivityExecutionId])}
+              context={context}
+              inspection={currentInspectionState.inspection}
+              activityLabel={activityLabel}
+            />
+          ) : null}
+          <section className="wf-instance-section">
+            <details className="wf-activity-inspection-disclosure wf-activity-execution-details">
+              <summary>
+                <ChevronRight size={14} aria-hidden="true" />
+                <span>Execution details</span>
+                <small>{executionDetailRows.length} values</small>
+              </summary>
+              <dl className="wf-activity-detail-list">
+                {executionDetailRows.map(row => (
+                  <ActivityMetadataValue scope={copyScope} key={row.label} {...row} onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                ))}
+              </dl>
+            </details>
+          </section>
+        </StudioTabPanel>
+        <StudioTabPanel baseId={detailTabsId} index={1} hidden={activeDetailTab !== "inputs"} className="wf-activity-inspection-tab-panel">
+          <WorkflowActivityInputEvidence
+            state={currentInspectionState}
+            declarations={declaredInputs}
+            executableNodeFacts={executableNodeFacts}
+            expressionEditors={expressionEditors}
+            focusInputKey={focusInputKey}
+          />
+        </StudioTabPanel>
+        <StudioTabPanel baseId={detailTabsId} index={2} hidden={activeDetailTab !== "outputs"} className="wf-activity-inspection-tab-panel">
+          <WorkflowActivityValueEvidence
+            state={currentInspectionState}
+            subject="ActivityOutput"
+            title="Outputs"
+            loadingText="Loading runtime output evidence..."
+            failureText="Runtime output evidence is unavailable."
+            emptyText="No runtime output snapshots were recorded for this execution."
+          />
+        </StudioTabPanel>
       </RuntimeValueEvidenceResolutionProvider>
-      {currentInspectionState.status === "ready" && currentInspectionState.inspection?.boundary ? (
-        <ActivityBoundaryDetails
-          key={JSON.stringify([selectedContextIdentity, selectedWorkflowExecutionId, selectedActivityExecutionId])}
-          context={context}
-          inspection={currentInspectionState.inspection}
-          activityLabel={activityLabel}
-        />
-      ) : null}
-      <section className="wf-instance-section">
-        <details className="wf-activity-execution-details">
-          <summary>
-            <span>Execution details</span>
-            <small>{executionDetailRows.length} values</small>
-          </summary>
-          <dl className="wf-activity-detail-list">
-            {executionDetailRows.map(row => (
-              <ActivityMetadataValue scope={copyScope} key={row.label} {...row} onCopied={markCopied} onCopyFailed={markCopyFailed} />
-            ))}
-          </dl>
-        </details>
-      </section>
       </> : null}
     </>
   );
@@ -363,7 +389,7 @@ function ActivityBoundaryDetails({ context, inspection, activityLabel }: { conte
 
   return (
     <section className="wf-instance-section wf-activity-boundary-details">
-      <details onToggle={event => setOpen(event.currentTarget.open)}>
+      <details className="wf-activity-inspection-disclosure" onToggle={event => setOpen(event.currentTarget.open)}>
         <summary>
           <ChevronRight size={14} aria-hidden="true" />
           <span>Inside this activity</span>
@@ -380,51 +406,32 @@ function ActivityBoundaryDetails({ context, inspection, activityLabel }: { conte
 
 function WorkflowActivityOutcomeEvidence({ state }: { state: ActivityExecutionInspectionState }) {
   if (state.status === "idle") return null;
-
-  if (state.status === "loading") {
-    return (
-      <section className="wf-instance-section">
-        <h4>Outcomes</h4>
-        <p>Loading runtime outcomes...</p>
-      </section>
-    );
-  }
-
-  if (state.status === "failed") {
-    return (
-      <section className="wf-instance-section">
-        <h4>Outcomes</h4>
-        <p>Runtime outcomes are unavailable.</p>
-        {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
-      </section>
-    );
-  }
-
-  const outcomeNames = state.inspection?.outcomeNames ?? [];
-  if (outcomeNames.length === 0) {
-    return (
-      <section className="wf-instance-section">
-        <h4>Outcomes</h4>
-        <p>No runtime outcomes were recorded for this execution.</p>
-      </section>
-    );
-  }
+  const outcomeNames = state.status === "ready" ? state.inspection?.outcomeNames ?? [] : [];
+  const presentation = state.status === "ready"
+    ? outcomeNames.length > 0 ? "recorded" : "empty"
+    : state.status === "loading" ? "loading" : "unavailable";
+  const presentationLabel = presentation === "recorded" ? "Recorded"
+    : presentation === "empty" ? "No records"
+      : presentation === "loading" ? "Loading"
+        : "Unavailable";
 
   return (
-    <section className="wf-instance-section">
+    <section className="wf-instance-section wf-activity-outcomes" data-state={presentation}>
       <header className="wf-runtime-evidence-heading">
-        <h4>
-          Outcomes
-          <span className="wf-runtime-evidence-count" aria-label={`${outcomeNames.length} outcomes`}>
-            {outcomeNames.length}
-          </span>
-        </h4>
+        <h4>Outcomes{presentation === "recorded" ? <span className="wf-runtime-evidence-count" aria-label={`${outcomeNames.length} outcomes`}>{outcomeNames.length}</span> : null}</h4>
+        <span className="wf-activity-outcome-state" data-state={presentation}>{presentationLabel}</span>
       </header>
-      <div className="wf-activity-outcome-list" role="list">
-        {outcomeNames.map((outcomeName, index) => (
-          <span className="wf-activity-outcome-chip" role="listitem" key={`${outcomeName}:${index}`}>{outcomeName}</span>
-        ))}
-      </div>
+      {state.status === "loading" ? <p>Loading runtime outcomes...</p>
+        : state.status === "failed" ? <>
+          <p>Runtime outcomes are unavailable.</p>
+          {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
+        </>
+          : outcomeNames.length === 0 ? <p>No runtime outcomes were recorded for this execution.</p>
+            : <div className="wf-activity-outcome-list" role="list">
+              {outcomeNames.map((outcomeName, index) => (
+                <span className="wf-activity-outcome-chip" role="listitem" key={`${outcomeName}:${index}`}>{outcomeName}</span>
+              ))}
+            </div>}
     </section>
   );
 }
@@ -527,6 +534,27 @@ function WorkflowActivityInputEvidence({
   );
 }
 
+function sourceValueFallback(_row: InputInspectionRow, source: InputInspectionRow["authoredSource"], sourceProtected: boolean) {
+  if (sourceProtected || !source || !source.expressionType) return false;
+  const portableDefinition = readPortableExpressionDefinition(source.value, source.expressionType);
+  return portableDefinition?.source ?? source.value;
+}
+
+function AuthoredSourceValueFallback({ source }: { source: InputInspectionRow["authoredSource"] }) {
+  const expressionType = source?.expressionType || "Unknown";
+  const portableDefinition = source ? readPortableExpressionDefinition(source.value, expressionType) : null;
+  const sourceValue = portableDefinition?.source ?? source?.value;
+  const text = formatSnapshotPayload(sourceValue);
+  const bounded = text.length > 4_000 ? `${text.slice(0, 3_997)}...` : text;
+
+  return (
+    <div className="wf-input-inspection-authored-fallback">
+      <small>Authored value</small>
+      {bounded.includes("\n") || bounded.length > 160 ? <pre>{bounded}</pre> : <code>{bounded}</code>}
+    </div>
+  );
+}
+
 function InputInspectionRowCard({
   row,
   sourceAccess,
@@ -584,9 +612,11 @@ function InputInspectionRowCard({
         </div>
         <div className="wf-input-inspection-value" aria-label={`${row.name} runtime value`}>
           {runtimeSnapshot ? <RuntimeValueEvidenceContent snapshot={runtimeSnapshot} presentation="input" /> : (
-            <p className="wf-input-inspection-unavailable">
-              {inspectionStatus === "loading" ? "Loading captured value…" : inspectionStatus === "failed" ? "Runtime evidence unavailable" : "No evaluation evidence recorded"}
-            </p>
+            inspectionStatus === "loading" ? <p className="wf-input-inspection-unavailable">Loading captured value…</p>
+              : inspectionStatus === "failed" ? <p className="wf-input-inspection-unavailable">Runtime evidence unavailable</p>
+              : sourceValueFallback(row, shownSource, sourceProtected)
+                ? <AuthoredSourceValueFallback source={shownSource} />
+                : <p className="wf-input-inspection-unavailable">No evaluation evidence recorded</p>
           )}
         </div>
         <StudioButton

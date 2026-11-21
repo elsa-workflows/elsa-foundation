@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getDefinition, listDefinitions } from "../api/workflowDesign";
 import type { WorkflowDefinitionSummary } from "../workflowTypes";
@@ -198,12 +198,10 @@ export function RunWorkflowPicker({ context, definitionId, onChange }: {
         setActiveIndex(-1);
       }
     }}>
-      <label htmlFor={inputId}>Workflow</label>
       <div className="wf-workflow-picker-input">
-        <input
+        <StudioSearchInput
           id={inputId}
           ref={inputRef}
-          type="search"
           role="combobox"
           aria-label="Workflow"
           aria-autocomplete="list"

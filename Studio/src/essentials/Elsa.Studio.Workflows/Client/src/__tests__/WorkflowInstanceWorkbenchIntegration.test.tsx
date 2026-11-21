@@ -452,7 +452,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector(".wf-sequence-insert, .wf-sequence-actions")).toBeNull();
     expect(container.querySelector(".wf-sequence-step")?.getAttribute("draggable")).toBe("false");
     expect(api.getExecutable).toHaveBeenCalledWith(expect.anything(), "artifact-1", "reference-1");
-    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell > header")?.textContent).toContain("Current renamed Flowchart"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-detail-header h2")?.textContent).toContain("Current renamed Flowchart"));
     expect(container.querySelector(".wf-sequence-designer")).toBeTruthy();
   });
 
@@ -475,11 +475,15 @@ describe("workflow run workbench incident navigation", () => {
     renderWorkbench();
 
     await vi.waitFor(() => expect(container.querySelector(".wf-mock-react-flow")).toBeTruthy());
+    expect(container.querySelector(".wf-instance-breadcrumb")).toBeNull();
+    expect(container.querySelector(".wf-execution-scope")).toBeNull();
     expect(container.querySelector(".wf-sequence-designer")).toBeNull();
     click(buttonByText(container, "Show affected activity"));
     await vi.waitFor(() => expect(container.querySelector(".wf-sequence-step[data-runtime-node-id='target-node']")).toBeTruthy());
+    expect(container.querySelector(".wf-instance-breadcrumb button")?.textContent).toBe("Root");
     click(buttonByText(container.querySelector(".wf-instance-breadcrumb")!, "Root"));
     await vi.waitFor(() => expect(container.querySelector(".wf-mock-react-flow")).toBeTruthy());
+    expect(container.querySelector(".wf-instance-breadcrumb")).toBeNull();
     expect(container.querySelector(".wf-sequence-designer")).toBeNull();
   });
 
@@ -1331,7 +1335,7 @@ describe("workflow run workbench definition names", () => {
 
     renderWorkbench();
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("definition-1"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-detail-header h2")?.textContent).toContain("definition-1"));
     expect(container.textContent).not.toContain("Loading workflow run...");
     expect(container.textContent).not.toContain("Loading run details...");
     expect(container.textContent).not.toContain("Order fulfillment");
@@ -1343,8 +1347,7 @@ describe("workflow run workbench definition names", () => {
       totalCount: 1
     });
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("Order fulfillment"));
-    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("1.0.0");
+    await vi.waitFor(() => expect(container.querySelector(".wf-detail-header h2")?.textContent).toBe("Run · Order fulfillment"));
   });
 
   it("keeps definition and version ids on the Details row before and after the name loads", async () => {
@@ -1379,7 +1382,7 @@ describe("workflow run workbench definition names", () => {
     renderWorkbench("details");
 
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")).toBeTruthy());
-    expect(container.textContent).toContain("Executable graph unavailable");
+    expect(container.textContent).toContain("pinned executable graph could not be resolved");
     expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")?.querySelector("strong")?.textContent)
       .toBe("definition-1");
 
@@ -1403,7 +1406,7 @@ describe("workflow run workbench definition names", () => {
 
     renderWorkbench();
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("definition-1"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-detail-header h2")?.textContent).toContain("definition-1"));
     expect(container.textContent).not.toContain("Loading workflow run...");
     expect(container.textContent).not.toContain("Design is unavailable");
     expect(container.querySelector(".studio-result-state[data-tone=\"danger\"]")).toBeNull();

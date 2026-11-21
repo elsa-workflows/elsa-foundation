@@ -42,7 +42,8 @@ public sealed class OpenIddictTokenService(
     OpenIddictValidationService validationService,
     IOptionsMonitor<OpenIddictServerOptions> serverOptions,
     IOptions<OpenIddictIdentityOptions> options,
-    IUserTokenEligibility userEligibility, IAuthenticationSessionStore? sessions = null,
+    IUserTokenEligibility userEligibility,
+    IAuthenticationSessionStore? sessions = null,
     ICanonicalUserSignInService? canonical = null) : ITokenService
 {
     public async ValueTask<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default)

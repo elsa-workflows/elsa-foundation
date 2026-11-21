@@ -1,0 +1,13 @@
+961b599ea3b004d596ba25c39dd465b07dd5a384
+=== built-in cost 1024 10 1024
+ 5:09  up 16 days, 15:09, 1 user, load averages: 2.18 3.26 6.14
+| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+| built-in | 1024 | idle, a second | 1433.6 | 1.4 | 1 | 0 | - | 2.2 |
+| built-in | 1024 | 1024 tokens | 1795 | 28 | 27 | 27 | 37.9 | 3154 |
+built-in: the burst applied in 131 ms
+=== built-in cost 4096 10 4096
+ 5:10  up 16 days, 15:09, 1 user, load averages: 2.43 3.26 6.09
+| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+| built-in | 4096 | idle, a second | 4258.4 | 1.4 | 1 | 0 | - | 2.2 |
+| built-in | 4096 | 4096 tokens | 814 | 277 | 277 | 276 | 14.8 | 13118 |
+built-in: the burst applied in 916 ms

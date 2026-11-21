@@ -47,6 +47,7 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
         var services = new ServiceCollection();
         services.AddHttpContextAccessor();
         services.AddLogging();
+        services.AddAuthorization();
         services.AddPersistenceCore("test-partition");
         services.AddScoped<HttpTriggerSourceContext>();
         services.AddScoped<StandaloneHttpTriggerMiddleware>();

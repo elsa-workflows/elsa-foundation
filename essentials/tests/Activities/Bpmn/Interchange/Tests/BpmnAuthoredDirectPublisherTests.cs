@@ -37,11 +37,12 @@ public sealed class BpmnAuthoredDirectPublisherTests
     [InlineData(true)]
     public async Task Authored_explicit_null_defaults_are_refused_before_lossy_projection_or_publication(bool immutableSource)
     {
+        // An explicit-null default is a literal JSON null with its syntax; a null without one denotes no default (#4903).
         var fixture = new Fixture();
         fixture.Version.State = fixture.Version.State with
         {
             Inputs = [new("value", "value", new("String"), null, "Value", null, false,
-                DefaultValue: JsonSerializer.SerializeToElement<string?>(null), IsRequired: true)]
+                DefaultValue: JsonSerializer.SerializeToElement<string?>(null), DefaultSyntax: "Literal", IsRequired: true)]
         };
         if (immutableSource) fixture.Version.StateSource = JsonSerializer.Serialize(fixture.Version.State, Web);
         var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());

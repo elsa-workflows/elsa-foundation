@@ -1,7 +1,7 @@
 import { graphBoundaryCompleteTypeKey } from "../workflowAdapter";
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
-import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Copy, Plus, Power, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Copy, Eye, Plus, Power, Trash2 } from "lucide-react";
 import { renderActivityIcon } from "../activityIconView";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { activityDragDataType } from "../workflow-editor/constants";
@@ -11,7 +11,8 @@ import { ExecutionActivityPulse, ExecutionSequencePulse } from "../workflow-edit
 import { resolveNodeActivityVisual } from "../workflow-editor/workflowNodeVisual";
 import { isTechnicalActivityLabel } from "../technicalActivityLabel";
 import { shortTypeName as formatShortTypeName } from "../workflowFormatting";
-import type { ChildSlot, WorkflowNodeData } from "../workflowAdapter";
+import type { ActivityCardPreview, ChildSlot, WorkflowNodeData } from "../workflowAdapter";
+import { useSequenceActivityPreviewPreference } from "./sequencePreviewPreference";
 import "./sequenceDesigner.css";
 import { NodeCollectionActions } from "../workflow-editor/NodeSlotBadges";
 import type { CollectionSlotAction } from "../workflow-editor/contexts";
@@ -72,6 +73,7 @@ export function SequenceDesigner({
   availabilityLookup,
   children
 }: SequenceDesignerProps) {
+  const [previewEnabled, setPreviewEnabled] = useSequenceActivityPreviewPreference();
   const [rovingNodeId, setRovingNodeId] = useState(() => selectedNodeId ?? nodes[0]?.id ?? null);
   const previousSelectedNodeId = useRef(selectedNodeId);
   const selectionAnchor = useRef<string | null>(selectedNodeId);
@@ -179,6 +181,12 @@ export function SequenceDesigner({
     }}>
       <header className="wf-sequence-heading">
         <span className="wf-sequence-mode-pill">Sequence · runs top to bottom</span>
+        <button type="button" className="wf-sequence-preview-setting" aria-label="Preview activities" aria-pressed={previewEnabled}
+          title={previewEnabled ? "Hide previews for all sequence activities" : "Show previews for all sequence activities"}
+          onClick={() => setPreviewEnabled(!previewEnabled)}>
+          <Eye size={14} aria-hidden="true" />
+          <span>Preview activities</span>
+        </button>
       </header>
 
       <div className="wf-sequence-content">
@@ -211,6 +219,7 @@ export function SequenceDesigner({
                   onOpenSlot={onOpenSlot}
                   onAddCollectionItem={readOnly ? undefined : onAddCollectionItem}
                   availabilityLookup={availabilityLookup}
+                  previewEnabled={previewEnabled}
                 />
                 {index < nodes.length - 1 && node.data.activityTypeKey !== graphBoundaryCompleteTypeKey ? (
                   <div className="wf-sequence-connector" aria-hidden="true"><ArrowDown size={15} /><ExecutionSequencePulse pulse={nodes[index + 1].data.incomingExecutionPulse} /></div>
@@ -244,7 +253,8 @@ function SequenceStep({
   onSetWorkflowStart,
   onOpenSlot,
   onAddCollectionItem,
-  availabilityLookup
+  availabilityLookup,
+  previewEnabled
 }: {
   node: Node<WorkflowNodeData>;
   index: number;
@@ -262,6 +272,7 @@ function SequenceStep({
   onOpenSlot?: SequenceDesignerProps["onOpenSlot"];
   onAddCollectionItem?: CollectionSlotAction;
   availabilityLookup?: WorkflowNodeAvailabilityLookup;
+  previewEnabled: boolean;
 }) {
   const { data } = node;
   const { icon, fallback, tone } = resolveNodeActivityVisual(data);
@@ -340,19 +351,8 @@ function SequenceStep({
 
       {data.childSlots.length || (!readOnly && data.collectionSlots?.length) ? (
         <div className="wf-sequence-slots" aria-label={`${data.label} child slots`}>
-          {data.childSlots.map(slot => (
-            <button
-              key={slot.id}
-              type="button"
-              className="wf-sequence-slot"
-              aria-label={`Open ${slot.label}, ${slotSummary(slot)}`}
-              disabled={!onOpenSlot}
-              onClick={() => onOpenSlot?.(node.id, data.label, slot)}
-            >
-              <span>{slot.label}</span>
-              <span className="wf-sequence-slot-summary">{slotSummary(slot)}<ChevronRight size={14} aria-hidden="true" /></span>
-            </button>
-          ))}
+          {data.childSlots.length > 0 && <SequenceSlotList slots={data.childSlots} previews={data.childPreviews} previewEnabled={previewEnabled}
+            onOpen={onOpenSlot ? slot => onOpenSlot(node.id, data.label, slot) : undefined} />}
           {!readOnly ? <NodeCollectionActions ownerNodeId={node.id} collections={data.collectionSlots} onAdd={onAddCollectionItem} className="wf-sequence-slot" /> : null}
         </div>
       ) : null}
@@ -382,11 +382,44 @@ function SequenceStep({
   );
 }
 
+function SequenceSlotList({ slots, previews, previewEnabled, onOpen }: {
+  slots: ChildSlot[];
+  previews?: Record<string, ActivityCardPreview>;
+  previewEnabled: boolean;
+  onOpen?(slot: ChildSlot): void;
+}) {
+  const id = useId();
+
+  return (
+    <div id={id} className="wf-sequence-slot-list" data-expanded={previewEnabled}>
+      {slots.map((slot, index) => {
+        const summary = slotSummary(slot);
+        const contentId = `${id}-slot-${index}`;
+        return <button key={slot.id} type="button" className="wf-sequence-slot" aria-label={`Open ${slot.label}, ${summary}`}
+          aria-describedby={previewEnabled && slot.activities.length ? contentId : undefined} disabled={!onOpen} onClick={() => onOpen?.(slot)}>
+          <span className="wf-sequence-slot-label">{slot.label}</span>
+          <span className="wf-sequence-slot-summary">{!previewEnabled && summary}<ChevronRight size={14} aria-hidden="true" /></span>
+          {previewEnabled && <span id={contentId} className="wf-sequence-slot-contents">
+            {slot.activities.length === 0 ? <span className="wf-sequence-child-empty">Empty</span> : slot.activities.map(child => {
+              const preview = previews?.[child.nodeId] ?? { label: formatShortTypeName(child.activityVersionId) || "Activity" };
+              const detail = preview.summary?.trim() || preview.description?.trim();
+              return <span className="wf-sequence-child" key={child.nodeId}>
+                <strong>{sequenceCardTitle(preview)}</strong>
+                {detail && <span className="wf-sequence-summary">{detail}</span>}
+              </span>;
+            })}
+          </span>}
+        </button>;
+      })}
+    </div>
+  );
+}
+
 function slotSummary(slot: ChildSlot) {
   const count = slot.activities.length;
   if (count === 0) return "Empty";
-  const noun = slot.mode === "sequence" ? "step" : "activity";
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+  if (slot.mode === "sequence") return `${count} ${count === 1 ? "step" : "steps"}`;
+  return `${count} ${count === 1 ? "activity" : "activities"}`;
 }
 
 function insertionLabel(nodes: Node<WorkflowNodeData>[], index: number) {
@@ -395,7 +428,7 @@ function insertionLabel(nodes: Node<WorkflowNodeData>[], index: number) {
   return `Insert step between ${nodes[index - 1]?.data.label ?? "previous step"} and ${nodes[index]?.data.label ?? "next step"}`;
 }
 
-function sequenceCardTitle(data: WorkflowNodeData) {
+function sequenceCardTitle(data: ActivityCardPreview) {
   if (data.hasAuthoredLabel || !isTechnicalActivityLabel(data.label)) return data.label;
   const fromType = formatShortTypeName(data.activityTypeKey);
   return fromType && !isTechnicalActivityLabel(fromType) ? fromType : "Activity";

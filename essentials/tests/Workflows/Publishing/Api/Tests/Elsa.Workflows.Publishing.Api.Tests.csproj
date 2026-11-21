@@ -12,6 +12,8 @@
   <ItemGroup>
     <!-- W30b (#418): compiler characterization goldens; copied so the harness can assert against them. -->
     <Content Include="Fixtures\CompilerGoldens\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1204-named-embedded-blocks/contracts/block-promotion-cases.json"
+          Link="Fixtures/native-blocks/block-promotions.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

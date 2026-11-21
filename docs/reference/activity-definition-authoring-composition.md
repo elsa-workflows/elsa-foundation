@@ -95,4 +95,8 @@ These checks run both when a draft is validated and when the activity compiles:
 | `activity.graph.argument-malformed` | A node's `inputs` or `outputs` is not a list of arguments, or an argument has no `referenceKey` or a `value` that is not an expression object. An argument without a value is unbound, not malformed |
 | `activity.graph.root-activity-malformed` | The root activity cannot be read as an activity node for any other reason |
 | `activity.graph.set-output-mapping-conflict` | The same public output has both a Set Output assignment and a mapped value |
-| `activity.graph.intrinsic-unsupported` | A node uses an engine intrinsic other than Set Output (such as Set Variable, Correlate or Set Name) ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023)) |
+| `activity.graph.intrinsic-unsupported` | A node uses an engine intrinsic other than Set Output or Set (such as Correlate or Set Name) ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023)) |
+| `activity.graph.set-local-target-invalid` | A Set does not target exactly one declared variable of an enclosing native body container below the graph boundary. A target in the workflow or graph scope, outside the graph, in a sibling container, or not declared exactly once is refused |
+| `activity.graph.set-local-invalid` | A Set does not have exactly one `value` input, has a missing or secret value, or has outputs, child structure or an execution placement |
+
+When the activity compiles, `activity.graph.local-value-invalid` refuses a body-local Set value or native-container variable declaration that cannot be compiled to its declared contract, for example a declaration that selects external storage.

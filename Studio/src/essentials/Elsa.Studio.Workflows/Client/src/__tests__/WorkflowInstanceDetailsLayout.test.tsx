@@ -23,7 +23,14 @@ vi.mock("../workflow-editor/WorkflowInstances", () => ({
     useEffect(() => {
       onRunTitleChange?.("Run · Invoice settlement");
     }, [onRunTitleChange]);
-    return <div data-initial-inspector-tab={initialInspectorTab} data-initial-activity-execution-id={initialActivityExecutionId ?? ""} data-initial-return-to={initialReturnTo ?? ""} data-initial-history-search={initialHistorySearch}>Run workbench</div>;
+    return <>
+      <div className="wf-detail-header" role="group" aria-label="Run workspace actions">
+        <button type="button">Runs</button>
+        <h2 className="wf-detail-header__title" title="Run · Invoice settlement">Run · Invoice settlement</h2>
+        <button type="button" aria-label="Refresh execution">Refresh</button>
+      </div>
+      <div data-initial-inspector-tab={initialInspectorTab} data-initial-activity-execution-id={initialActivityExecutionId ?? ""} data-initial-return-to={initialReturnTo ?? ""} data-initial-history-search={initialHistorySearch}>Run workbench</div>
+    </>;
   }
 }));
 
@@ -123,10 +130,12 @@ describe("Run detail page layout", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("Run workbench"));
     const page = container.querySelector(".wf-page--run-workbench");
     expect(page).toBeTruthy();
-    expect(page?.querySelector(":scope > .studio-page-header")).toBeTruthy();
-    await vi.waitFor(() => expect(page?.querySelector(".studio-page-header h2")?.textContent).toBe("Run · Invoice settlement"));
-    expect(page?.querySelector(".studio-page-header h2")?.getAttribute("title")).toBe("Run · Invoice settlement");
-    expect(page?.querySelector(".wf-page-context")?.textContent).toContain("run-1");
+    expect(page?.getAttribute("data-studio-workspace-backdrop")).toBe("none");
+    expect(page?.querySelector(":scope > .studio-page-header")).toBeNull();
+    await vi.waitFor(() => expect(page?.querySelector(".wf-detail-header h2")?.textContent).toBe("Run · Invoice settlement"));
+    expect(page?.querySelector(".wf-detail-header h2")?.getAttribute("title")).toBe("Run · Invoice settlement");
+    expect(page?.querySelector(".wf-detail-header [aria-label='Refresh execution']")).toBeTruthy();
+    expect(page?.querySelector(".wf-detail-header .studio-copyable-identifier")).toBeNull();
     expect(page?.querySelector(".wf-status-line")).toBeNull();
     expect(page?.querySelector(".studio-result-state[data-tone='danger']")).toBeNull();
     expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("timeline");

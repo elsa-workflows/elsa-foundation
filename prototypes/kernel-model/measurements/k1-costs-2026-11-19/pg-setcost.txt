@@ -1,0 +1,164 @@
+ 4:42  up 16 days, 14:41, 1 user, load averages: 6.41 8.39 12.83
+528eabf7ee8778e9b3bbc9c61c22cba48d0b03d9
+
+postgres: isolation read committed; fence in the batch; commit owned SQL; 1024 virtual partitions, 4 nodes
+shape scattered: the four sets are 256 in 1 ranges, 256 in 1 ranges, 256 in 2 ranges, 256 in 3 ranges; node A holds 256 in 3 ranges (256-341, 768-853, 940-1023)
+run                                                                                          commands begin commit counted   tcp  exec  rows        ms
+take: the per-node host gains A's 256, one activation each (start-up)                             256   256    256     512   512   256   256     195.4
+    the runs' counts differ (commands begin commit tcp exec rows): 256 256 256 517 256 256 | 256 256 256 512 256 256 | 256 256 256 512 256 256 | 256 256 256 512 256 256 | 256 256 256 512 256 256
+    statements by kind: take 256; ms per run: 262.7 203.3 193.9 195.4 169.6
+take: one set take of A's 256 (a worker of the set, fixed host)                                     1     1      1       2     2     1   256       3.4
+    statements by kind: take 1; ms per run: 15.5 3.4 2.8 4.4 2.4
+    WAL by table and record type: Partitions Heap/LOCK 451 x 24,354 B, Heap/UPDATE 193 x 20,651 B, Btree/INSERT_LEAF 187 x 11,968 B, Heap/HOT_UPDATE 61 x 5,368 B, Btree/DELETE 4 x 1,310 B, Btree/INSERT_POST 8 x 528 B, Heap2/PRUNE_ON_ACCESS 1 x 300 B, Heap/UPDATE+INIT 2 x 214 B; aborted 0 B
+take: one set take of A's 256 while a live node holds the upper 128 (fixed host)                    1     1      1       2     2     1   128       2.9
+    statements by kind: take 1; ms per run: 4.3 2.9 2.9 3.0 2.7
+    WAL by table and record type: Partitions Heap/LOCK 256 x 13,824 B, Heap/HOT_UPDATE 128 x 11,264 B; aborted 0 B
+beat: the node's worker renews its 256 (an empty fenced commit)                                     1     1      1       2     2     2   256       3.6
+    statements by kind: commit (fenced) 1; ms per run: 34.2 3.6 3.6 3.3 3.4
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 250 x 17,998 B, Heap/LOCK 262 x 14,148 B, Heap/UPDATE 6 x 642 B, Btree/INSERT_LEAF 6 x 384 B; aborted 0 B
+heartbeat: the membership's node row, live count and free list                                      3     0      0       3     3     3     0       2.7
+    statements by kind: heartbeat 2, partitions (other) 1; ms per run: 21.2 3.5 2.1 2.7 1.8
+    WAL by table and record type: Nodes Btree/NEWROOT 1 x 90 B, Heap/INSERT+INIT 1 x 71 B, Btree/INSERT_LEAF 1 x 64 B, Heap/HEAP_CONFIRM 1 x 48 B; aborted 0 B
+poll: the set poll over 256, nothing to read                                                        1     0      0       1     1     1     0       1.4
+    statements by kind: poll 1; ms per run: 1.6 7.2 1.2 1.3 1.4
+    WAL by table and record type: ; aborted 0 B
+flush, 100 new instances over k of A: the set poll that reads them                                  1     0      0       1     1     1     0       1.3
+    statements by kind: poll 1; ms per run: 5.9 1.4 1.3 1.2 1.2
+    WAL by table and record type: ; aborted 0 B
+flush, 100 new instances over k of A: the load                                                      1     0      0       1     1     1     0       0.6
+    statements by kind: load 1; ms per run: 30.6 0.7 0.6 0.5 0.6
+    WAL by table and record type: ; aborted 0 B
+flush, 100 new instances over k of A: flush 1                                                       1     1      1       2     2     3    91       2.1
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 3 86 | 1 1 1 2 3 91 | 1 1 1 2 3 91 | 1 1 1 2 3 74 | 1 1 1 2 3 87
+    statements by kind: commit (fenced) 1; ms per run: 7.1 2.5 2.1 2.0 1.6
+flush, 100 new instances over k of A: flush 2                                                       1     1      1       2     2     5    91       5.3
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 3 5 86 | 1 1 1 2 5 91 | 1 1 1 2 5 91 | 1 1 1 2 5 74 | 1 1 1 2 5 87
+    statements by kind: commit (fenced) 1; ms per run: 10.1 4.8 5.0 6.5 5.3
+flush, the same 100 again: the set poll that reads them                                             1     0      0       1     1     1     0       1.2
+    statements by kind: poll 1; ms per run: 1.5 1.2 1.1 1.2 1.2
+    WAL by table and record type: Messages Heap2/PRUNE_ON_ACCESS 4 x 416 B; aborted 0 B
+flush, the same 100 again: the load                                                                 0     0      0       0     0     0     0       0.0
+    statements by kind: none; ms per run: 0.0 0.0 0.0 0.0 0.0
+    WAL by table and record type: ; aborted 0 B
+flush, the same 100 again: flush 1                                                                  1     1      1       2     2     3    91       2.1
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 3 86 | 1 1 1 2 3 91 | 1 1 1 2 3 91 | 1 1 1 2 3 74 | 1 1 1 2 3 87
+    statements by kind: commit (fenced) 1; ms per run: 3.1 2.2 2.0 2.1 1.6
+flush, the same 100 again: flush 2                                                                  1     1      1       2     2   104    91       8.1
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 104 86 | 1 1 1 2 104 91 | 1 1 1 2 104 91 | 1 1 1 3 104 74 | 1 1 1 2 104 87
+    statements by kind: commit (fenced) 1; ms per run: 11.3 6.4 10.1 8.1 6.8
+    k, the distinct partitions of each run's 100 instances: 86 91 91 74 87
+takeover: one set take of a dead node's 256 (fixed host)                                            2     1      1       3     3     2   256       2.6
+    statements by kind: take 1, death count 1; ms per run: 4.6 2.6 2.5 3.6 2.5
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 248 x 24,056 B, Heap/LOCK 264 x 14,256 B, Heap/UPDATE 8 x 856 B, Btree/INSERT_LEAF 8 x 512 B, Btree/DELETE 1 x 495 B; aborted 0 B
+takeover: the per-node host gains a dead node's 256, one activation each                          512   256    256     768   768   512   256     160.8
+    statements by kind: take 256, death count 256; ms per run: 175.3 174.7 160.8 146.8 151.4
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 256 x 22,528 B, Heap2/PRUNE_ON_ACCESS 6 x 1,568 B; aborted 0 B
+release: the per-node host gives up 128 of 256, one scope each                                    128     0      0     128   128   128   128      33.8
+    statements by kind: release 128; ms per run: 40.8 30.6 34.5 33.8 31.9
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 128 x 9,472 B, Heap2/PRUNE_ON_ACCESS 8 x 1,226 B; aborted 0 B
+release: one set release of 128 (the store's, as a stand-down sends it)                             1     0      0       1     1     1   128       0.9
+    statements by kind: release 1; ms per run: 4.2 0.9 1.0 0.8 0.8
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 128 x 9,472 B, Heap/LOCK 128 x 6,912 B; aborted 0 B
+reset: a beat refused on 1 of 256, then the retake of the rest, one each                          257     1      0     257   258   258   255      62.2
+    statements by kind: retake 256, commit (fenced) 1; ms per run: 72.4 70.5 62.2 57.3 59.9
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 255 x 20,289 B, Heap2/PRUNE_ON_ACCESS 3 x 854 B; aborted 32,073 B
+rebalance: a fourth node joins, the four run rounds until none changes                            540   256    256     796   796   540   256     159.9
+    statements by kind: take 256, release 256, heartbeat 18, partitions (other) 10; ms per run: 169.8 161.0 159.9 156.8 156.3
+    2 rounds (the last changes nothing), 256 partitions moved, held [256 256 256 256]
+    WAL by table and record type: Nodes Heap/HOT_UPDATE 8 x 572 B, Heap/LOCK 8 x 432 B, Heap/INSERT 1 x 71 B, Btree/INSERT_LEAF 1 x 64 B, Heap/HEAP_CONFIRM 1 x 48 B; Partitions Heap/HOT_UPDATE 512 x 41,462 B, Heap2/PRUNE_ON_ACCESS 6 x 1,798 B; aborted 0 B
+rebalance: a node leaves gracefully, its stop (one scope at a time)                               256     0      0     256   256   256   256      52.3
+    statements by kind: release 256; ms per run: 53.2 43.8 43.7 52.3 53.1
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 256 x 17,920 B, Heap2/PRUNE_ON_ACCESS 5 x 1,452 B; aborted 0 B
+rebalance: then the other three run rounds until none changes                                     274   256    256     530   530   274   256      99.0
+    statements by kind: take 256, heartbeat 12, partitions (other) 6; ms per run: 99.0 97.2 101.0 102.3 97.8
+    2 rounds (the last changes nothing), 256 partitions moved, held [342 342 340]
+    WAL by table and record type: Nodes Heap/HOT_UPDATE 6 x 429 B, Heap/LOCK 6 x 324 B; Partitions Heap/HOT_UPDATE 256 x 23,552 B, Heap2/PRUNE_ON_ACCESS 5 x 1,416 B; aborted 0 B
+takeover through the runtime: a node dies, the other three run rounds                             530   256    256     786   786   530   256     138.0
+    statements by kind: take 256, death count 256, heartbeat 12, partitions (other) 6; ms per run: 160.8 138.0 135.9 139.6 135.5
+    2 rounds (the last changes nothing), 256 partitions moved, held [342 342 340]
+    WAL by table and record type: Nodes Heap/HOT_UPDATE 6 x 429 B, Heap/LOCK 6 x 324 B; Partitions Heap/HOT_UPDATE 256 x 25,344 B, Heap2/PRUNE_ON_ACCESS 5 x 1,414 B; aborted 0 B
+
+postgres: isolation read committed; fence in the batch; commit owned SQL; 1024 virtual partitions, 4 nodes
+shape contiguous: the four sets are 256 in 1 ranges, 256 in 1 ranges, 256 in 1 ranges, 256 in 1 ranges; node A holds 256 in 1 ranges (0-255)
+run                                                                                          commands begin commit counted   tcp  exec  rows        ms
+take: the per-node host gains A's 256, one activation each (start-up)                             256   256    256     512   512   256   256      82.7
+    the runs' counts differ (commands begin commit tcp exec rows): 256 256 256 516 256 256 | 256 256 256 512 256 256 | 256 256 256 512 256 256 | 256 256 256 512 256 256 | 256 256 256 512 256 256
+    statements by kind: take 256; ms per run: 138.7 80.8 77.6 82.7 84.8
+take: one set take of A's 256 (a worker of the set, fixed host)                                     1     1      1       2     2     1   256       1.2
+    statements by kind: take 1; ms per run: 3.7 1.4 1.2 1.1 1.1
+    WAL by table and record type: Partitions Heap/LOCK 398 x 21,492 B, Heap/UPDATE 140 x 14,980 B, Heap/HOT_UPDATE 114 x 10,032 B, Btree/INSERT_LEAF 142 x 9,088 B, Btree/DELETE 1 x 239 B, Heap/UPDATE+INIT 2 x 214 B; aborted 0 B
+take: one set take of A's 256 while a live node holds the upper 128 (fixed host)                    1     1      1       2     2     1   128       1.1
+    statements by kind: take 1; ms per run: 1.8 1.2 1.1 1.1 1.0
+    WAL by table and record type: Partitions Heap/LOCK 263 x 14,202 B, Heap/HOT_UPDATE 121 x 10,648 B, Heap/UPDATE 7 x 749 B, Btree/INSERT_LEAF 7 x 448 B, Btree/DELETE 1 x 441 B; aborted 0 B
+beat: the node's worker renews its 256 (an empty fenced commit)                                     1     1      1       2     2     2   256       1.4
+    statements by kind: commit (fenced) 1; ms per run: 2.1 2.3 1.4 1.4 1.4
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 224 x 15,913 B, Heap/LOCK 288 x 15,552 B, Heap/UPDATE 32 x 3,424 B, Btree/INSERT_LEAF 32 x 2,048 B; aborted 0 B
+heartbeat: the membership's node row, live count and free list                                      3     0      0       3     3     3     0       2.6
+    statements by kind: heartbeat 2, partitions (other) 1; ms per run: 4.7 2.6 2.6 1.9 1.9
+    WAL by table and record type: Nodes Btree/NEWROOT 1 x 90 B, Heap/INSERT+INIT 1 x 71 B, Btree/INSERT_LEAF 1 x 64 B, Heap/HEAP_CONFIRM 1 x 48 B; aborted 0 B
+poll: the set poll over 256, nothing to read                                                        1     0      0       1     1     1     0       1.6
+    statements by kind: poll 1; ms per run: 1.9 1.9 1.6 1.6 1.6
+    WAL by table and record type: ; aborted 0 B
+flush, 100 new instances over k of A: the set poll that reads them                                  1     0      0       1     1     1     0       1.0
+    statements by kind: poll 1; ms per run: 1.4 1.1 0.9 0.9 1.0
+    WAL by table and record type: ; aborted 0 B
+flush, 100 new instances over k of A: the load                                                      1     0      0       1     1     1     0       0.5
+    statements by kind: load 1; ms per run: 0.9 0.5 0.5 0.5 0.5
+    WAL by table and record type: ; aborted 0 B
+flush, 100 new instances over k of A: flush 1                                                       1     1      1       2     2     3    90       2.0
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 3 90 | 1 1 1 2 3 86 | 1 1 1 2 3 89 | 1 1 1 2 3 84 | 1 1 1 2 3 91
+    statements by kind: commit (fenced) 1; ms per run: 3.2 4.8 1.9 2.0 1.5
+    WAL by table and record type: Messages Heap/UPDATE 96 x 34,848 B, Btree/INSERT_LEAF 200 x 15,200 B, Heap/LOCK 100 x 5,400 B, Heap/UPDATE+INIT 4 x 1,452 B; Partitions Heap/HOT_UPDATE 90 x 6,480 B, Heap/LOCK 90 x 4,860 B; aborted 0 B
+flush, 100 new instances over k of A: flush 2                                                       1     1      1       2     2     5    90       3.4
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 5 90 | 1 1 1 2 5 86 | 1 1 1 2 5 89 | 1 1 1 2 5 84 | 1 1 1 2 5 91
+    statements by kind: commit (fenced) 1; ms per run: 5.5 4.6 3.4 3.2 3.0
+    WAL by table and record type: Instances Heap/INSERT 97 x 21,156 B, Btree/INSERT_LEAF 100 x 6,776 B, Heap/INSERT+INIT 3 x 644 B, Btree/NEWROOT 1 x 90 B; Journal Btree/INSERT_LEAF 200 x 14,400 B, Heap/INSERT 99 x 9,682 B, Btree/NEWROOT 2 x 180 B, Heap/INSERT+INIT 1 x 94 B; Messages Heap/DELETE 100 x 5,400 B, Heap2/PRUNE_ON_ACCESS 4 x 416 B; Partitions Heap/HOT_UPDATE 90 x 7,110 B, Heap/LOCK 90 x 4,860 B; aborted 0 B
+flush, the same 100 again: the set poll that reads them                                             1     0      0       1     1     1     0       1.0
+    statements by kind: poll 1; ms per run: 1.2 0.9 1.0 1.0 0.9
+    WAL by table and record type: Messages Heap2/PRUNE_ON_ACCESS 4 x 416 B; aborted 0 B
+flush, the same 100 again: the load                                                                 0     0      0       0     0     0     0       0.0
+    statements by kind: none; ms per run: 0.0 0.0 0.0 0.0 0.0
+    WAL by table and record type: ; aborted 0 B
+flush, the same 100 again: flush 1                                                                  1     1      1       2     2     3    90       2.0
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 3 90 | 1 1 1 2 3 86 | 1 1 1 2 3 89 | 1 1 1 2 3 84 | 1 1 1 2 3 91
+    statements by kind: commit (fenced) 1; ms per run: 4.2 1.8 2.0 2.1 1.4
+    WAL by table and record type: Messages Heap/UPDATE 96 x 34,848 B, Btree/INSERT_LEAF 198 x 15,048 B, Heap/LOCK 99 x 5,346 B, Heap/UPDATE+INIT 3 x 1,089 B, Btree/DEDUP 1 x 340 B, Btree/DELETE 1 x 105 B, Heap/HOT_UPDATE 1 x 79 B; Partitions Heap/HOT_UPDATE 90 x 6,480 B, Heap/LOCK 90 x 4,860 B; aborted 0 B
+flush, the same 100 again: flush 2                                                                  1     1      1       2     2   104    90       5.5
+    the runs' counts differ (commands begin commit tcp exec rows): 1 1 1 2 104 90 | 1 1 1 2 104 86 | 1 1 1 2 104 89 | 1 1 1 2 104 84 | 1 1 1 3 104 91
+    statements by kind: commit (fenced) 1; ms per run: 15.8 5.5 4.8 5.0 5.5
+    WAL by table and record type: Instances Heap/UPDATE 97 x 25,087 B, Heap/LOCK 200 x 10,800 B, Btree/INSERT_LEAF 100 x 6,776 B, Heap/UPDATE+INIT 3 x 781 B; Journal Btree/INSERT_LEAF 200 x 14,400 B, Heap/INSERT 99 x 9,682 B, Heap/INSERT+INIT 1 x 94 B; Messages Heap/DELETE 100 x 5,400 B, Heap2/PRUNE_ON_ACCESS 4 x 414 B; Partitions Heap/HOT_UPDATE 90 x 7,110 B, Heap/LOCK 90 x 4,860 B; aborted 0 B
+    k, the distinct partitions of each run's 100 instances: 90 86 89 84 91
+takeover: one set take of a dead node's 256 (fixed host)                                            2     1      1       3     3     2   256       1.8
+    statements by kind: take 1, death count 1; ms per run: 2.6 2.1 1.8 1.8 1.8
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 249 x 24,153 B, Heap/LOCK 263 x 14,202 B, Heap/UPDATE 7 x 749 B, Btree/INSERT_LEAF 7 x 448 B; aborted 0 B
+takeover: the per-node host gains a dead node's 256, one activation each                          512   256    256     768   768   512   256     130.6
+    statements by kind: take 256, death count 256; ms per run: 162.3 137.1 129.5 130.6 129.8
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 256 x 22,528 B, Heap2/PRUNE_ON_ACCESS 3 x 754 B; aborted 0 B
+release: the per-node host gives up 128 of 256, one scope each                                    128     0      0     128   128   128   128      27.3
+    statements by kind: release 128; ms per run: 27.7 27.3 26.5 28.1 26.4
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 128 x 9,472 B, Heap2/PRUNE_ON_ACCESS 3 x 252 B; aborted 0 B
+release: one set release of 128 (the store's, as a stand-down sends it)                             1     0      0       1     1     1   128       0.8
+    statements by kind: release 1; ms per run: 1.7 0.8 0.7 0.8 0.8
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 128 x 9,472 B, Heap/LOCK 128 x 6,912 B; aborted 0 B
+reset: a beat refused on 1 of 256, then the retake of the rest, one each                          257     1      0     257   258   258   255      58.1
+    statements by kind: retake 256, commit (fenced) 1; ms per run: 62.6 47.8 69.2 58.1 57.1
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 255 x 20,260 B, Heap2/PRUNE_ON_ACCESS 5 x 1,460 B; aborted 31,929 B
+rebalance: a fourth node joins, the four run rounds until none changes                           1054   513    513    1567  1567  1054   513     327.6
+    statements by kind: take 513, release 513, heartbeat 18, partitions (other) 10; ms per run: 323.1 329.2 332.5 327.6 311.4
+    2 rounds (the last changes nothing), 513 partitions moved, held [256 256 256 256]
+    WAL by table and record type: Nodes Heap/HOT_UPDATE 8 x 572 B, Heap/LOCK 8 x 432 B, Heap/INSERT 1 x 71 B, Btree/INSERT_LEAF 1 x 64 B, Heap/HEAP_CONFIRM 1 x 48 B; Partitions Heap/HOT_UPDATE 1026 x 83,106 B, Heap2/PRUNE_ON_ACCESS 18 x 5,090 B; aborted 0 B
+rebalance: a node leaves gracefully, its stop (one scope at a time)                               256     0      0     256   256   256   256      54.7
+    statements by kind: release 256; ms per run: 52.1 54.7 54.7 51.8 62.6
+    WAL by table and record type: Partitions Heap/HOT_UPDATE 256 x 17,920 B, Heap2/PRUNE_ON_ACCESS 4 x 1,098 B; aborted 0 B
+rebalance: then the other three run rounds until none changes                                     444   341    341     785   785   444   341     150.1
+    statements by kind: take 341, release 85, heartbeat 12, partitions (other) 6; ms per run: 164.3 150.1 178.1 144.2 148.4
+    2 rounds (the last changes nothing), 341 partitions moved, held [342 341 341]
+    WAL by table and record type: Nodes Heap/HOT_UPDATE 6 x 429 B, Heap/LOCK 6 x 324 B; Partitions Heap/HOT_UPDATE 426 x 37,322 B, Heap2/PRUNE_ON_ACCESS 2 x 618 B; aborted 0 B
+takeover through the runtime: a node dies, the other three run rounds                             700   341    341    1041  1041   700   341     211.7
+    statements by kind: take 341, death count 256, release 85, heartbeat 12, partitions (other) 6; ms per run: 210.5 190.8 211.7 220.4 253.1
+    2 rounds (the last changes nothing), 341 partitions moved, held [342 341 341]
+    WAL by table and record type: Nodes Heap/HOT_UPDATE 6 x 429 B, Heap/LOCK 6 x 324 B; Partitions Heap/HOT_UPDATE 426 x 38,858 B, Heap2/PRUNE_ON_ACCESS 6 x 1,746 B; aborted 0 B
+
+every check passed
+exit 0
+ 4:42  up 16 days, 14:42, 1 user, load averages: 5.52 7.89 12.44

@@ -15,11 +15,16 @@ public sealed class NuGetLockFileTests
 {
     private const string LockFileName = "packages.lock.json";
 
+    /// <summary>Self-contained repositories outside the solution, each with its own build and package files.</summary>
+    private const string PrototypesDirectory = "prototypes/";
+
     /// <summary>
     /// CI restores in locked mode, which fails when a committed lock file no longer matches its project, but not when
     /// there is none: NuGet then writes one and carries on. A project added without its lock file would restore in CI
     /// resolved afresh while every restore step reads as locked, so its absence fails here instead. Two projects in one
-    /// directory would share one lock file, and a lock file with no project beside it pins nothing.
+    /// directory would share one lock file, and a lock file with no project beside it pins nothing. Under
+    /// <c>prototypes/</c>, a self-contained repository of its own outside the solution, a lock file needs a committed
+    /// project file beside it instead.
     /// </summary>
     [Fact]
     public void Every_solution_project_has_a_committed_lock_file_and_every_lock_file_a_solution_project()
@@ -27,21 +32,77 @@ public sealed class NuGetLockFileTests
         var projects = XDocument.Load(Path.Join(RepoRoot, "Elsa.Server.slnx")).Descendants("Project")
             .Select(project => project.Attribute("Path")!.Value.Replace('\\', '/'))
             .ToArray();
-        var (exitCode, output) = ChildProcess.Run("git", ["ls-files", "-z", "--", $"*{LockFileName}"], RepoRoot);
-        Assert.True(exitCode == 0, $"git ls-files failed with exit {exitCode}:\n{output}");
-        var committed = output.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
-        var expected = projects.Select(project => DirectoryOf(project) + LockFileName).ToHashSet(StringComparer.Ordinal);
+        var violations = LockFileViolations(projects, CommittedFiles($"*{LockFileName}"), CommittedFiles($"{PrototypesDirectory}*.csproj"));
 
-        var violations = projects.GroupBy(DirectoryOf, StringComparer.Ordinal).Where(directory => directory.Count() > 1)
+        Assert.True(projects.Length > 0, "Elsa.Server.slnx lists no projects, so this guard would check nothing.");
+        Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    /// <summary>
+    /// A prototype restores against its own lock files from its own <c>Directory.Packages.props</c>, so its locked
+    /// restores stay reproducible; the lock file passes while a project file sits beside it.
+    /// </summary>
+    [Fact]
+    public void A_prototype_lock_file_beside_a_project_file_passes()
+    {
+        var violations = LockFileViolations(
+            ["src/A/A.csproj"],
+            ["src/A/packages.lock.json", "prototypes/model/sim/packages.lock.json"],
+            ["prototypes/model/sim/Model.Sim.csproj"]);
+
+        Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    /// <summary>
+    /// The prototype scope excuses only a lock file under <c>prototypes/</c> with a project file in the same directory:
+    /// one whose project file sits elsewhere pins nothing, and a project file outside <c>prototypes/</c> that the
+    /// solution does not list excuses nothing.
+    /// </summary>
+    [Fact]
+    public void A_prototype_lock_file_with_no_project_file_beside_it_fails()
+    {
+        var violations = LockFileViolations(
+            ["src/A/A.csproj"],
+            ["src/A/packages.lock.json", "prototypes/model/old/packages.lock.json", "docs/repro/packages.lock.json"],
+            ["prototypes/model/sim/Model.Sim.csproj", "docs/repro/Repro.csproj"]);
+
+        Assert.Equal(
+            [
+                $"docs/repro/{LockFileName} sits beside no project in Elsa.Server.slnx",
+                $"prototypes/model/old/{LockFileName} sits beside no project file",
+            ],
+            violations.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// Each solution project without its lock file, each directory two solution projects share, and each committed lock
+    /// file that sits beside no solution project, or, under <c>prototypes/</c>, beside no committed project file.
+    /// </summary>
+    private static string[] LockFileViolations(IReadOnlyCollection<string> projects, IEnumerable<string> committedLockFiles, IEnumerable<string> committedProjectFiles)
+    {
+        var committed = committedLockFiles.ToHashSet(StringComparer.Ordinal);
+        var expected = projects
+            .Concat(committedProjectFiles.Where(project => project.StartsWith(PrototypesDirectory, StringComparison.Ordinal)))
+            .Select(project => DirectoryOf(project) + LockFileName)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return projects.GroupBy(DirectoryOf, StringComparer.Ordinal).Where(directory => directory.Count() > 1)
             .Select(directory => $"{string.Join(" and ", directory)} share {directory.Key}{LockFileName}; give one its own NuGetLockFilePath")
             .Concat(projects.Where(project => !committed.Contains(DirectoryOf(project) + LockFileName))
                 .Select(project => $"{project} has no committed {DirectoryOf(project)}{LockFileName}; restore, then commit it"))
             .Concat(committed.Where(lockFile => !expected.Contains(lockFile))
-                .Select(lockFile => $"{lockFile} sits beside no project in Elsa.Server.slnx"))
+                .Select(lockFile => lockFile.StartsWith(PrototypesDirectory, StringComparison.Ordinal)
+                    ? $"{lockFile} sits beside no project file"
+                    : $"{lockFile} sits beside no project in Elsa.Server.slnx"))
             .ToArray();
+    }
 
-        Assert.True(projects.Length > 0, "Elsa.Server.slnx lists no projects, so this guard would check nothing.");
-        Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
+    /// <summary>The committed files a git pathspec matches, repo-relative.</summary>
+    private static string[] CommittedFiles(string pathspec)
+    {
+        var (exitCode, output) = ChildProcess.Run("git", ["ls-files", "-z", "--", pathspec], RepoRoot);
+        Assert.True(exitCode == 0, $"git ls-files failed with exit {exitCode}:\n{output}");
+        return output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
     }
 
     /// <summary>

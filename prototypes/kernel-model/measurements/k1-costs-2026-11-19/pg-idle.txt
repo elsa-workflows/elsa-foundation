@@ -1,0 +1,28 @@
+ 4:39  up 16 days, 14:39, 1 user, load averages: 10.19 6.60 13.02
+528eabf7ee8778e9b3bbc9c61c22cba48d0b03d9
+
+postgres: isolation read committed; 1024 virtual partitions, 4 RuntimeNodes, lease 10 s, loop defaults (balance and poll every second, window 3 s)
+  idle-n0 joined: held [1024]
+  idle-n1 joined: held [512 512]
+  idle-n2 joined: held [342 342 340]
+  idle-n3 joined: held [256 256 256 256]
+  idle 120.0 s, held [256 256 256 256], loop errors 0: 17.0 statements and 1.20 COMMITs a second
+  statements a second by kind: heartbeat 7.97, partitions (other) 3.98, poll 3.98, commit (fenced) 1.20
+  WAL 5,363,688 bytes (44,697 a second, 153.5 MB an hour), 79,690 records, 1 full-page images
+    (catalog)                  6 records        1,128 B (        9 B/s), first-block FPI 0 B
+    Nodes        heap        962 records       69,853 B (      582 B/s), first-block FPI 8,192 B
+    Partitions   heap     76,277 records    5,025,419 B (   41,878 B/s), first-block FPI 0 B
+    Partitions   index     1,789 records      119,536 B (      996 B/s), first-block FPI 0 B
+    pg_statistic heap         21 records        2,359 B (       20 B/s), first-block FPI 0 B
+    pg_statistic index         2 records          128 B (        1 B/s), first-block FPI 0 B
+    (catalog)    Heap/INPLACE 6 x 1,128 B
+    Nodes        Heap/HOT_UPDATE 478 x 34,440 B, Heap/LOCK 478 x 25,812 B, Heap2/VISIBLE 2 x 8,315 B, Heap2/PRUNE_ON_ACCESS 2 x 788 B, Heap2/PRUNE_VACUUM_SCAN 2 x 498 B
+    Partitions   Heap/HOT_UPDATE 35,098 x 2,529,648 B, Heap/LOCK 38,630 x 2,086,020 B, Heap/UPDATE 1,750 x 201,250 B, Heap2/PRUNE_ON_ACCESS 581 x 180,208 B, Btree/INSERT_LEAF 1,766 x 113,024 B, Heap2/PRUNE_VACUUM_CLEANUP 61 x 10,802 B, Heap2/PRUNE_VACUUM_SCAN 54 x 10,518 B, Heap2/VISIBLE 87 x 5,133 B, Btree/DELETE 10 x 3,714 B, Btree/VACUUM 13 x 2,798 B, Heap/UPDATE+INIT 16 x 1,840 B
+    pg_statistic Heap/HOT_UPDATE 18 x 1,823 B, Heap/INSERT 2 x 450 B, Btree/INSERT_LEAF 2 x 128 B, Heap2/PRUNE_ON_ACCESS 1 x 86 B
+  table            upd      hot dead before dead after autovac    heap B
+  Partitions    36,864   35,098       2,584      1,486       2   385,024
+  Nodes            477      477          73         47       2     8,192
+  Messages           0        0           0          0       0         0
+  Instances          0        0           0          0       0         0
+exit 0
+ 4:41  up 16 days, 14:41, 1 user, load averages: 7.36 8.67 13.00

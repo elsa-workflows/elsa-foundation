@@ -202,6 +202,7 @@ export interface GraphCanvasInteractionsResult {
   insertSequenceActivity(activity: ActivityCatalogItem, index: number): void;
   moveSequenceActivity(nodeId: string, boundary: number): void;
   onConnectMenuPick(activity: ActivityCatalogItem): void;
+  onConnectMenuPickElement(element: GraphPaletteElement): void;
   onElementClick(element: GraphPaletteElement): void;
   onElementDragStart(event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
   onElementDragEnd(event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
@@ -789,7 +790,7 @@ export function useGraphCanvasInteractions({
   const canAutoLayout = !isUnsupported && mode !== "sequence" && nodes.length > 0;
   const autoLayout = useCallback(() => {
     if (isUnsupported || mode === "sequence" || nodes.length === 0) return;
-    const positions = computeAutoLayout(nodes, edges, "flowchart");
+    const positions = computeAutoLayout(nodes, edges, mode === "bpmn" ? "bpmn" : "flowchart");
     const nextNodes = nodes.map(node => {
       const position = positions.get(node.id);
       return position ? { ...node, position } : node;
@@ -954,6 +955,13 @@ export function useGraphCanvasInteractions({
     if (edge) spliceActivityIntoEdge(activity, edge, fallbackPosition);
   };
 
+  const onConnectMenuPickElement = (element: GraphPaletteElement) => {
+    const menu = connectMenu;
+    if (!menu || menu.kind !== "fromEmpty") return;
+    setConnectMenu(null);
+    tryAddPaletteItemAtClientPoint({ kind: "element", element }, menu.clientX, menu.clientY);
+  };
+
   const edgeActions = useMemo<WorkflowEdgeActions>(() => ({
     highlightedEdgeId,
     deleteEdge,
@@ -999,6 +1007,7 @@ export function useGraphCanvasInteractions({
     insertSequenceActivity,
     moveSequenceActivity,
     onConnectMenuPick,
+    onConnectMenuPickElement,
     onElementClick,
     onElementDragStart,
     onElementDragEnd,

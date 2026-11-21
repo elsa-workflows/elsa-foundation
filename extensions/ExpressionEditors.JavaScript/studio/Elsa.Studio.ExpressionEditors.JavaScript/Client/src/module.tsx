@@ -1,3 +1,5 @@
+import { javaScriptSourceInsertion } from "./sourceInsertion";
+import { javaScriptResultCheck } from "./resultCheck";
 import React, { memo } from "react";
 import {
   createStudioCodeToolingProjection,
@@ -16,10 +18,17 @@ const javaScriptSyntax = "JavaScript";
 export function register(api: ElsaStudioModuleApi) {
   api.expressionEditors.add({
     id: "elsa.javascript-expression-editor",
+    sourceInsertion: javaScriptSourceInsertion,
+    resultCheck: javaScriptResultCheck,
     order: 100,
     variableAdditionPreservation: {
       language: javaScriptSyntax,
       revision: "binding-pure-v1.1",
+      allows: preservesJavaScriptWithAddedVariable
+    },
+    reusableBoundaryPreservation: {
+      language: javaScriptSyntax,
+      revision: "explicit-args-closed-boundary-v1",
       allows: preservesJavaScriptWithAddedVariable
     },
     supports: context => context.syntax === javaScriptSyntax,
@@ -66,6 +75,8 @@ export function JavaScriptExpandedEditor(props: StudioExpressionEditorProps) {
 
 function JavaScriptCodeEditor({
   descriptor,
+  documentEditing,
+  actions,
   value,
   disabled,
   initialFocus,
@@ -99,6 +110,8 @@ function JavaScriptCodeEditor({
         completionProvider={tooling.completionProvider}
         diagnostics={diagnostics}
         document={document}
+        documentEditing={documentEditing}
+        actions={actions}
         hoverProvider={tooling.hoverProvider}
         languageAdapter={javaScriptLanguageAdapter}
         minHeight={profile === "compact" ? "2.25rem" : "260px"}
@@ -110,7 +123,7 @@ function JavaScriptCodeEditor({
         signatureProvider={tooling.signatureProvider}
         status={toolingStatus(context)}
         theme="studio"
-        onChange={nextDocument => onChange(nextDocument.value)}
+        onChange={(nextDocument, edit) => edit ? onChange(nextDocument.value, edit) : onChange(nextDocument.value)}
         onBlur={context.onBlur}
         onFocus={context.onFocus}
         onExpand={onExpand}
@@ -141,7 +154,7 @@ function sameJavaScriptEditorProps(
   previous: StudioExpressionEditorProps & { profile: StudioCodeEditorProfile },
   next: StudioExpressionEditorProps & { profile: StudioCodeEditorProfile }
 ) {
-  return previous.descriptor === next.descriptor &&
+  return previous.documentEditing === next.documentEditing && previous.actions === next.actions && previous.descriptor === next.descriptor &&
     previous.syntax === next.syntax &&
     previous.value === next.value &&
     previous.disabled === next.disabled &&

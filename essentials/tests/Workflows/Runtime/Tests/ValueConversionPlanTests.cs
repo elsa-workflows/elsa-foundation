@@ -261,6 +261,76 @@ public sealed class ValueConversionPlanTests
         Assert.Equal(2, converted.InlineValue!.Value.EnumerateArray().First().GetProperty("id").GetInt32());
     }
 
+    [Theory]
+    [InlineData(ValueRepresentation.TypedValue)]
+    [InlineData(ValueRepresentation.StructuredValue)]
+    public void Json_string_profile_serializes_the_inline_json_without_changing_content_or_protection(ValueRepresentation representation)
+    {
+        const string json = "{\"wire_name\":9007199254740993,\"amount\":1234567890.123456789012345,\"nested\":{\"value\":null}}";
+        var sourceType = new ValueTypeDescriptor("Acme.Customer");
+        var targetType = new ValueTypeDescriptor("System.String");
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true);
+        var plan = new ValueConversionPlan(
+            ValueConversionPlan.CurrentSchemaVersion,
+            representation,
+            sourceType,
+            targetType,
+            ValueConversionMode.Profile,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.json-string", "1"),
+            ValueConversionLimits.Default,
+            null);
+        using var document = JsonDocument.Parse(json);
+
+        var converted = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(sourceType, document.RootElement, policy), plan);
+
+        Assert.Equal(ValuePresence.Present, converted.Presence);
+        Assert.Equal(targetType, converted.Type);
+        Assert.Equal(policy, converted.Policy);
+        Assert.Equal(json, converted.InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public void Json_string_profile_preserves_explicit_null_and_rejects_an_over_limit_payload()
+    {
+        var sourceType = new ValueTypeDescriptor("Acme.Customer");
+        var targetType = new ValueTypeDescriptor("String");
+        var plan = JsonStringPlan(sourceType, targetType, ValueRepresentation.StructuredValue);
+        var absent = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Absent(sourceType, ValueProtectionPolicy.InstanceInline), plan);
+        var nullValue = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Null(sourceType, ValueProtectionPolicy.InstanceInline), plan);
+        using var rootNull = JsonDocument.Parse("null");
+        var jsonNull = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(sourceType, rootNull.RootElement, ValueProtectionPolicy.InstanceInline), plan);
+        using var document = JsonDocument.Parse("{\"name\":\"Ada\"}");
+        var limitedPlan = JsonStringPlan(sourceType, targetType, ValueRepresentation.StructuredValue,
+            new ValueConversionLimits(64, 10_000, 4));
+
+        Assert.Equal(ValuePresence.Absent, absent.Presence);
+        Assert.Equal(ValuePresence.ExplicitNull, nullValue.Presence);
+        Assert.Equal(targetType, nullValue.Type);
+        Assert.Equal(ValuePresence.Present, jsonNull.Presence);
+        Assert.Equal("null", jsonNull.InlineValue!.Value.GetString());
+        Assert.Throws<RuntimeValueConversionException>(() => new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(sourceType, document.RootElement, ValueProtectionPolicy.InstanceInline), limitedPlan));
+    }
+
+    [Fact]
+    public void Json_string_profile_serializes_structured_collections_as_ordered_json_arrays()
+    {
+        const string json = "[{\"id\":1},null,{\"id\":2}]";
+        var sourceType = new ValueTypeDescriptor("Acme.Customer", CollectionKind.List);
+        using var document = JsonDocument.Parse(json);
+
+        var converted = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(sourceType, document.RootElement, ValueProtectionPolicy.InstanceInline),
+            JsonStringPlan(sourceType, new ValueTypeDescriptor("String"), ValueRepresentation.StructuredValue));
+
+        Assert.Equal(json, converted.InlineValue!.Value.GetString());
+    }
+
     [Fact]
     public void Json_profile_requires_object_shape_for_json_object_targets()
     {
@@ -582,6 +652,22 @@ public sealed class ValueConversionPlanTests
             ValueConversionOperation.Profile,
             new ValueConversionProfileReference("elsa.xml", "1"),
             limits: ValueConversionLimits.Default,
+            options: null);
+
+    private static ValueConversionPlan JsonStringPlan(
+        ValueTypeDescriptor sourceType,
+        ValueTypeDescriptor targetType,
+        ValueRepresentation representation,
+        ValueConversionLimits? limits = null) =>
+        new(
+            ValueConversionPlan.CurrentSchemaVersion,
+            representation,
+            sourceType,
+            targetType,
+            ValueConversionMode.JsonString,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.json-string", "1"),
+            limits ?? ValueConversionLimits.Default,
             options: null);
 
     private static ValueEnvelope JsonSource(string json) =>

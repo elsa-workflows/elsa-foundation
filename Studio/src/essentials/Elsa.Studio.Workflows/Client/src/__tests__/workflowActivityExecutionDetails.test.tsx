@@ -249,6 +249,30 @@ function valueEvidence(overrides: Partial<ActivityExecutionInspectionValueSnapsh
 const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 setNotifications(notifications);
 describe("WorkflowActivityExecutionDetails", () => {
+  it("groups execution evidence into accessible tabs while keeping activity identity visible", () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+    const tablist = container.querySelector<HTMLElement>('[role="tablist"][aria-label="Activity execution details"]')!;
+    const tabs = [...tablist.querySelectorAll<HTMLButtonElement>("[role=tab]")];
+    const panels = tabs.map(tab => document.getElementById(tab.getAttribute("aria-controls")!)!);
+
+    expect(tabs.map(tab => tab.textContent)).toEqual(["Overview", "Inputs", "Outputs"]);
+    expect(tabs.map(tab => tab.getAttribute("aria-selected"))).toEqual(["true", "false", "false"]);
+    expect(panels.map(panel => panel.getAttribute("aria-labelledby"))).toEqual(tabs.map(tab => tab.id));
+    expect(panels.map(panel => panel.hidden)).toEqual([false, true, true]);
+    expect(container.querySelector(".wf-activity-overview")?.closest('[role="tabpanel"]')).toBeNull();
+
+    flushSync(() => tablist.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })));
+    expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tabs[1]);
+    expect(panels.map(panel => panel.hidden)).toEqual([true, false, true]);
+
+    flushSync(() => tablist.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true })));
+    expect(tabs[2]!.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tabs[2]);
+    expect(panels.map(panel => panel.hidden)).toEqual([true, true, false]);
+  });
+
   it("uses projected incident counts and falls back only to available legacy IDs", () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
@@ -264,6 +288,38 @@ describe("WorkflowActivityExecutionDetails", () => {
       rerender(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, ...summary }} activityCatalog={catalog} />);
       expect(metadataValue(container, "Incidents")).toBe(expected);
     }
+  });
+
+  it("does not repeat a known-zero incident count as an empty evidence section", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("No runtime outcomes were recorded for this execution."));
+    expect(metadataValue(container, "Incidents")).toBe("0");
+    expect(container.querySelector('[aria-label="Activity incidents"]')).toBeNull();
+    expect(container.querySelector(".wf-activity-outcomes")?.getAttribute("data-state")).toBe("empty");
+    expect(container.querySelector(".wf-activity-outcome-state")?.textContent).toBe("No records");
+  });
+
+  it("keeps unavailable incident details distinct from a recorded zero", async () => {
+    const unavailableInspection = { ...inspection([]), incidents: undefined } as unknown as ActivityExecutionInspection;
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(unavailableInspection);
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, incidentCount: null, incidentIds: undefined }} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Incident details are unavailable for this execution."));
+    expect(metadataValue(container, "Incidents")).toBe("Unavailable");
+  });
+
+  it("shows incident evidence when incidents were recorded", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue({ ...inspection([]), incidents: [incident] });
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, incidentCount: 1 }} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Input failed to evaluate."));
+    expect(container.querySelector('[aria-label="Activity incidents"]')).not.toBeNull();
+    expect(metadataValue(container, "Incidents")).toBe("1");
   });
 
   it("prefers projected bookmark counts and uses legacy IDs only when the count is absent", () => {
@@ -296,6 +352,7 @@ describe("WorkflowActivityExecutionDetails", () => {
           activityType: activity.activityType,
           activityTypeVersion: activity.activityTypeVersion,
           structureKind: null,
+          structureDiagnostics: [],
           available: true,
           outputCaptures: [],
           authoredInputsAccess: "visible",
@@ -418,6 +475,8 @@ describe("WorkflowActivityExecutionDetails", () => {
     const outcomes = [...container.querySelectorAll<HTMLElement>(".wf-instance-section")]
       .find(section => section.querySelector("h4")?.textContent?.includes("Outcomes"));
     expect(outcomes?.querySelectorAll("[role=listitem]")).toHaveLength(2);
+    expect(outcomes?.getAttribute("data-state")).toBe("recorded");
+    expect(outcomes?.querySelector(".wf-activity-outcome-state")?.textContent).toBe("Recorded");
     expect(outcomes?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("2");
     expect(outcomes?.textContent).toContain("Completed");
   });
@@ -759,6 +818,94 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.querySelector(".wf-input-inspection-value")?.textContent).not.toContain("Not evaluated");
   });
 
+  it("shows authored source value as fallback when no runtime evaluation is recorded", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const executableNodeFacts: ExecutableGraphNodeFacts = {
+      executableNodeId: "node-1",
+      authoredActivityId: "write-line",
+      activityType: activity.activityType,
+      activityTypeVersion: activity.activityTypeVersion,
+      structureKind: null,
+      structureDiagnostics: [],
+      available: true,
+      outputCaptures: [],
+      authoredInputsAccess: "visible",
+      authoredInputs: [
+        {
+          executableNodeId: "node-1",
+          inputKey: "message-key",
+          expressionType: "Literal",
+          value: "rand-1",
+          isSensitive: false
+        }
+      ],
+      inputBindings: [],
+      presentation: { nodeId: "write-line", displayName: "Write Line", description: null }
+    };
+    const declaredCatalog: ActivityCatalogItem[] = [{
+      ...catalog[0]!, inputs: [{ referenceKey: "message-key", name: "Message", typeName: "System.String" }]
+    }];
+    const container = render(
+      <WorkflowActivityExecutionDetails
+        context={context}
+        activity={activity}
+        activityCatalog={declaredCatalog}
+        executableNodeFacts={executableNodeFacts}
+      />
+    );
+
+    await waitFor(() => expect(container.querySelector(".wf-input-inspection-authored-fallback")?.textContent).toContain("rand-1"));
+    expect(container.querySelector(".wf-input-inspection-authored-fallback")?.textContent).toContain("Authored value");
+    expect(container.querySelector(".wf-input-inspection-value")?.textContent).not.toContain("No evaluation evidence recorded");
+  });
+
+  it("shows authored portable expression source as fallback when no runtime evaluation is recorded", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const executableNodeFacts: ExecutableGraphNodeFacts = {
+      executableNodeId: "node-1",
+      authoredActivityId: "write-line",
+      activityType: activity.activityType,
+      activityTypeVersion: activity.activityTypeVersion,
+      structureKind: null,
+      structureDiagnostics: [],
+      available: true,
+      outputCaptures: [],
+      authoredInputsAccess: "visible",
+      authoredInputs: [
+        {
+          executableNodeId: "node-1",
+          inputKey: "message-key",
+          expressionType: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source: "'rand-1'",
+            resultType: { typeName: "System.String" },
+            parameters: {},
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          },
+          isSensitive: false
+        }
+      ],
+      inputBindings: [],
+      presentation: { nodeId: "write-line", displayName: "Write Line", description: null }
+    };
+    const declaredCatalog: ActivityCatalogItem[] = [{
+      ...catalog[0]!, inputs: [{ referenceKey: "message-key", name: "Message", typeName: "System.String" }]
+    }];
+    const container = render(
+      <WorkflowActivityExecutionDetails
+        context={context}
+        activity={activity}
+        activityCatalog={declaredCatalog}
+        executableNodeFacts={executableNodeFacts}
+      />
+    );
+
+    await waitFor(() => expect(container.querySelector(".wf-input-inspection-authored-fallback")?.textContent).toContain("'rand-1'"));
+    expect(container.querySelector(".wf-input-inspection-authored-fallback")?.textContent).toContain("Authored value");
+  });
+
   it("keeps compact input details independently controlled for punctuation-containing keys", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const pairedCatalog: ActivityCatalogItem[] = [{
@@ -802,6 +949,7 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={pairedCatalog} focusInputKey="a-b" />);
     await vi.waitFor(() => expect(document.activeElement).toBe(buttons[1]));
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Inputs");
     expect(buttons[1]!.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(ids[1]!)?.hidden).toBe(false);
   });
@@ -855,6 +1003,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       activityType: activity.activityType,
       activityTypeVersion: activity.activityTypeVersion,
       structureKind: null,
+      structureDiagnostics: [],
       available: true,
       outputCaptures: [],
       authoredInputsAccess: "visible",
@@ -923,6 +1072,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       activityType: activity.activityType,
       activityTypeVersion: activity.activityTypeVersion,
       structureKind: null,
+      structureDiagnostics: [],
       available: true,
       outputCaptures: [],
       authoredInputsAccess: "visible",
@@ -1020,6 +1170,7 @@ describe("WorkflowActivityExecutionDetails", () => {
           activityType: activity.activityType,
           activityTypeVersion: activity.activityTypeVersion,
           structureKind: null,
+          structureDiagnostics: [],
           available: true,
           outputCaptures: [],
           authoredInputsAccess: "permissionHidden",
@@ -1072,6 +1223,7 @@ describe("WorkflowActivityExecutionDetails", () => {
             activityType: activity.activityType,
             activityTypeVersion: activity.activityTypeVersion,
             structureKind: null,
+            structureDiagnostics: [],
             available: true,
             outputCaptures: [],
             authoredInputsAccess: "visible",
@@ -1190,7 +1342,7 @@ describe("WorkflowActivityExecutionDetails", () => {
         activityCatalog={[{ ...catalog[0]!, inputs: [{ referenceKey: "token-key", name: "Token", typeName: "System.String", isSensitive: sensitivitySource === "declaration" }] }]}
         executableNodeFacts={{
           executableNodeId: "node-1", authoredActivityId: "write-line", activityType: activity.activityType, activityTypeVersion: activity.activityTypeVersion,
-          structureKind: null, available: true, outputCaptures: [], authoredInputsAccess: "visible",
+          structureKind: null, structureDiagnostics: [], available: true, outputCaptures: [], authoredInputsAccess: "visible",
           authoredInputs: [{ executableNodeId: "node-1", inputKey: "token-key", expressionType: "Literal", value: "PINNED_SECRET", isSensitive: sensitivitySource === "authored source" }],
           inputBindings: [{ inputKey: "token-key", inputName: "Token", source: "Literal", literal: "PINNED_SECRET", isSensitive: sensitivitySource === "compiled binding" }]
         }}
@@ -1267,9 +1419,11 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
     const overview = container.querySelector<HTMLElement>(".wf-activity-overview")!;
+    const overviewTab = container.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')!;
+    const overviewPanel = document.getElementById(overviewTab.getAttribute("aria-controls")!)!;
 
     expect(overview.querySelector("h4")?.textContent).toBe("Write Line");
-    expect(overview.querySelectorAll(".wf-activity-summary-grid .wf-activity-meta-item")).toHaveLength(3);
+    expect(overviewPanel.querySelectorAll(".wf-activity-summary-grid .wf-activity-meta-item")).toHaveLength(3);
     const executionDetails = container.querySelector<HTMLElement>(".wf-activity-execution-details")!;
     expect(executionDetails.hasAttribute("open")).toBe(false);
     expect(executionDetails.querySelector("summary small")?.textContent).toBe("5 values");

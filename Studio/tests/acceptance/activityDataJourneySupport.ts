@@ -1,12 +1,12 @@
 import { writeFileSync } from "node:fs";
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Page, type Request, type TestInfo } from "@playwright/test";
 import type { ExpressionDescriptorsResponse } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { createActivityDataResponseCollector } from "./activityDataResponseCollector.mjs";
 
 export type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 export type Binding = { expressionType: string; value: unknown };
-export type Node = { nodeId: string; activityVersionId: string; inputs: { referenceKey: string; value: Binding }[]; outputs: unknown[];
-  structure?: { kind: string; schemaVersion: string; payload: { activities: Node[]; variables?: unknown[]; [key: string]: unknown } } };
+export type Node = { nodeId: string; activityVersionId: string; inputs: { referenceKey: string; value: Binding; conversion?: unknown; autoEvaluate?: boolean }[]; outputs: unknown[];
+  structure?: { kind: string; schemaVersion: string; payload: { activities: Node[]; variables?: unknown[]; [key: string]: unknown } } | null };
 export type State = { rootActivity: Node; variables: unknown[]; inputs: unknown[]; outputs: unknown[] };
 export type Created = { definition: { id: string }; draftId: string };
 type Draft = { state: State; layout: unknown; activityPresentation: unknown };
@@ -74,13 +74,17 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   const contextResponses = createActivityDataResponseCollector(`${base}/design/workflows/activity-data/context`, contexts, transportControls);
   let compositionObservation: { features: FeatureFact[]; mandatoryClosure: string[]; expressionTypes: string[]; syntaxChoices: string[] } | undefined;
   let writes = 0;
-  page.on("requestfailed", request => contextResponses.requestFailed(request));
+  const contextUrl = (url: string) => url.includes("/design/workflows/activity-data/context");
+  const contextRequests = new Set<Request>();
+  page.on("requestfailed", request => { contextRequests.delete(request); contextResponses.requestFailed(request); });
+  page.on("requestfinished", request => { contextRequests.delete(request); });
   page.on("response", response => {
-    if (response.url().includes("/design/workflows/activity-data/context") && response.ok()) {
+    if (contextUrl(response.url()) && response.ok()) {
       contextResponses.observe(response);
     }
   });
   page.on("request", request => {
+    if (contextUrl(request.url())) contextRequests.add(request);
     if (request.resourceType() === "script") scripts.push(request.url());
     if (request.method() === "PUT" && /\/design\/workflows\/drafts\//.test(request.url())) writes++;
   });
@@ -149,6 +153,12 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     await expect(page.locator('.wf-sequence-step[data-id="consumer"],.react-flow__node[data-id="consumer"]').first()).toBeAttached();
     await select(); await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   }
+  // A reload or navigation discards the old document's response bodies. Call this first: every context
+  // request has ended and every observed body is read. Failures stay recorded for settle().
+  async function settleContext() {
+    await expect.poll(() => contextRequests.size, { message: "Activity data context requests ended before the page goes away", timeout: 30_000 }).toBe(0);
+    await contextResponses.drain();
+  }
   const chooser = () => page.getByRole("dialog", { name: "Choose data for Text", exact: true });
   const trigger = () => page.getByRole("button", { name: "Choose data for Text", exact: true });
   const replace = () => page.getByRole("button", { name: "Replace data for Text", exact: true });
@@ -184,7 +194,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     await page.getByRole("tab", { name: "Designer", exact: true }).click();
     await expect.poll(() => stored(created)).toEqual(before); await open(created);
   }
-  async function publishRun(created: Created, expected: string, inputs: unknown = {}, producer = false) {
+  async function publishRun(created: Created, expected: string, inputs: unknown = {}, producer = false, authoring: "native" | "expression" = "native") {
     const authoredBinding = await stored(created);
     await page.getByRole("button", { name: "Review & publish", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Publish workflow", exact: true });
@@ -209,7 +219,9 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     expect(payload.payload.preview).toBe(expected);
     runtime.push({ definitionId: created.definition.id, workflowExecutionId: run.workflowExecutionId, expected, committed: payload.payload.preview, consumer, producers });
     // Publication returns the Inspector to the workflow root. Navigate back explicitly before the next input edit.
-    await select(); await expect(replace()).toBeVisible();
+    await select();
+    if (authoring === "native") await expect(replace()).toBeVisible();
+    else await expect(page.getByRole("button", { name: "Insert data", exact: true })).toBeVisible();
     expect(await stored(created), "Publication/runtime did not change the authored input").toEqual(authoredBinding);
     return { instance, consumerInput: payload.payload, publication, run };
   }
@@ -236,5 +248,5 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     }
   }
   return { api, version, line, root, seed, saved, stored, binding, canvas, select, open, chooser, trigger, replace, reference, memberName, path,
-    commit, history, codeApply, publishRun, assertComposition, contexts, observations, selections, transportControls, writes: () => writes };
+    commit, history, codeApply, publishRun, assertComposition, settleContext, contexts, observations, selections, transportControls, writes: () => writes };
 }

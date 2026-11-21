@@ -12,6 +12,7 @@ import { stubApi, waitUntil } from "../../__tests__/testSupport";
 
 const dataset: DatasetDeclaration = { id: "processing", ownerModuleId: "Acme", schemaRevision: "1", title: "Processing", description: "Declared records", fields: [], metrics: [] };
 const question = (): DashboardResource => ({ id: "q1", kind: "question", revision: "r1", name: "Finance", description: "", ownerId: "owner", capabilities: { canRead: true, canEdit: true, canShare: true, canDelete: true, canCopy: true }, definition: initialDefinition(dataset), definitionState: "available", createdAt: "", updatedAt: "" });
+const dashboard = (id = "d1", canDelete = true, name = "My Cockpit"): DashboardResource => ({ ...question(), id, kind: "dashboard", revision: "dashboard-r7", name, capabilities: { ...question().capabilities, canDelete }, tiles: [] });
 const result = (marker = "42"): QueryResult => ({ outcome: "succeeded", columns: [{ id: "count", label: "Count", type: "integer" }], rows: [{ key: "one", values: { count: { type: "integer", value: marker } }, drill: { proof: "authorized-group" } }] });
 const cleanups: (() => void)[] = [];
 function mount(content: React.ReactNode) {
@@ -32,6 +33,16 @@ function submitSearch(view: HTMLElement, value: string) {
   flushSync(() => view.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 }
 afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); vi.restoreAllMocks(); });
+
+function dashboardCollection(items: DashboardResource[]) {
+  window.history.replaceState({}, "", "/dashboards");
+  const module = { ...stubApi(), dialogs: { prompt: vi.fn(async () => null), confirm: vi.fn(async () => false), alert: vi.fn(async () => undefined) } };
+  const results = { items };
+  const list = vi.spyOn(DashboardApi.prototype, "list").mockImplementation(async () => ({ items: results.items }));
+  const navigate = vi.fn();
+  const view = mount(<AnonymousAuthProvider><NamedDashboardsRoute api={module} kind="dashboard" view="list" navigate={navigate} /></AnonymousAuthProvider>);
+  return { view, module, results, list, navigate };
+}
 
 describe("submitted collection scope", () => {
   it("preserves the submitted search when switching Mine to Shared with me", async () => {
@@ -64,6 +75,45 @@ describe("submitted collection scope", () => {
     expect(view.textContent).not.toContain("LATE-MINE-RESULT");
     click(view, "Refresh"); await waitUntil(() => list.mock.calls.filter(call => call[1] === "shared").length === 2);
     expect(list.mock.calls.at(-1)?.[2]).toBe("finance");
+  });
+});
+
+describe("dashboard collection deletion", () => {
+  it("shows Delete only when the resource capability allows it", async () => {
+    const { view } = dashboardCollection([dashboard(), dashboard("d2", false, "Read-only dashboard")]);
+    await waitUntil(() => view.textContent?.includes("Read-only dashboard") === true);
+    expect(view.querySelector('button[aria-label="Delete My Cockpit"]')).not.toBeNull();
+    expect(view.querySelector('button[aria-label="Delete Read-only dashboard"]')).toBeNull();
+  });
+
+  it("leaves the collection unchanged when deletion is canceled", async () => {
+    const { view, module, list } = dashboardCollection([dashboard()]);
+    await waitUntil(() => view.textContent?.includes("My Cockpit") === true);
+    click(view, "Delete"); await waitUntil(() => module.dialogs.confirm.mock.calls.length === 1);
+    expect(module.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Delete dashboard", message: expect.stringContaining("My Cockpit"), tone: "danger" }));
+    expect(module.backend.http.deleteJson).not.toHaveBeenCalled();
+    expect(list).toHaveBeenCalledOnce(); expect(view.textContent).toContain("My Cockpit");
+  });
+
+  it("deletes with the listed revision, refreshes the current collection, and does not navigate", async () => {
+    const { view, module, results, list, navigate } = dashboardCollection([dashboard()]);
+    const deleteJson = vi.spyOn(module.backend.http, "deleteJson").mockImplementation(async () => { results.items = []; return {}; });
+    module.dialogs.confirm.mockResolvedValue(true);
+    await waitUntil(() => view.textContent?.includes("My Cockpit") === true);
+    click(view, "Delete"); await waitUntil(() => list.mock.calls.length === 2);
+    expect(deleteJson).toHaveBeenCalledWith(expect.stringContaining("/dashboards/d1"), expect.objectContaining({ headers: { "If-Match": '"dashboard-r7"' } }));
+    expect(list.mock.calls.at(-1)?.slice(0, 3)).toEqual(["dashboard", "mine", ""]);
+    expect(view.textContent).not.toContain("My Cockpit"); expect(navigate).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(view.querySelector('[aria-label="Search dashboards"]'));
+  });
+
+  it("keeps the row and reports a deletion failure", async () => {
+    const { view, module, list } = dashboardCollection([dashboard()]);
+    vi.spyOn(module.backend.http, "deleteJson").mockRejectedValue(new Error("Delete was rejected"));
+    module.dialogs.confirm.mockResolvedValue(true);
+    await waitUntil(() => view.textContent?.includes("My Cockpit") === true);
+    click(view, "Delete"); await waitUntil(() => view.querySelector('[role="alert"]')?.textContent?.includes("Delete was rejected") === true);
+    expect(view.textContent).toContain("My Cockpit"); expect(list).toHaveBeenCalledOnce();
   });
 });
 
