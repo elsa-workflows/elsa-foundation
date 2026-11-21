@@ -16,7 +16,7 @@ public sealed partial class InMemoryStore
     private readonly Dictionary<(string Actor, string Operation), CallerReceipt> _foundationCallerReceipts = [];
 
     internal KeyAdmissionReceipt AdmitFoundationKey(string tenant, string key, string id, string kind, string? payload,
-        StartSpec? spec, long? due, TimeSpan? keepFor)
+        StartSpec? spec, long? due, TimeSpan? keepFor, string? replyTo = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
         var window = FoundationIngressWindow(keepFor);
@@ -38,7 +38,7 @@ public sealed partial class InMemoryStore
             if (spec is null)
             {
                 if (binding is null || AddFoundationMessage(tenant, binding.Reference, request.WireId,
-                    kind, payload, due, keepFor, keyed: true) is null)
+                    kind, payload, due, keepFor, keyed: true, replyTo: replyTo) is null)
                     return new(KeyAdmissionOutcome.Missing);
                 reference = binding.Reference;
             }
@@ -52,7 +52,7 @@ public sealed partial class InMemoryStore
                 var generation = checked((previous?.Creation ?? 0) + 1);
                 var until = checked(now + (long)window.TotalMilliseconds);
                 var start = spec with { Creation = new CreationStart(generation, generation - 1, operation) };
-                var creator = new Message(request.WireId, address, Kinds.Start, start.Input, Start: start, Due: due, TargetCreation: generation);
+                var creator = new Message(request.WireId, address, Kinds.Start, start.Input, Start: start, Due: due, ReplyTo: replyTo, TargetCreation: generation);
                 var created = AdmitFoundationStart(tenant, creator);
                 if (created is null) return new(KeyAdmissionOutcome.Conflict);
 

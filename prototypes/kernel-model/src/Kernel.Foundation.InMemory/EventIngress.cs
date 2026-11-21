@@ -37,20 +37,7 @@ internal sealed class EventIngress(Durable.InMemoryStore store, Durable.Requests
                 open.ReplyAddress(node, request.ReleaseBeforeCommit), cancellationToken);
             if (accepted is null) return Error("no waiter");
 
-            var completion = requests.CompletionOf(open);
-            while (!completion.IsCompleted)
-            {
-                var remaining = (decimal)request.Deadline - store.FoundationClock();
-                if (remaining <= 0)
-                {
-                    requests.Timeout(open);
-                    break;
-                }
-                var delay = TimeSpan.FromMilliseconds((double)Math.Min(remaining, 1000));
-                try { return ToContract(await completion.WaitAsync(delay, cancellationToken)); }
-                catch (TimeoutException) { }  // Read the shared clock again, which can step back.
-            }
-            return ToContract(await completion.WaitAsync(cancellationToken));
+            return await RequestReplies.WaitAsync(store, requests, open, scope, null, cancellationToken);
         }
         finally
         {
@@ -71,6 +58,4 @@ internal sealed class EventIngress(Durable.InMemoryStore store, Durable.Requests
 
     private static Reply Error(string error) => new(null, null, Error: error);
 
-    private static Reply ToContract(Durable.Reply reply) =>
-        new(reply.Channel, reply.Item, (ActorStatus?)reply.Status, reply.Error);
 }
