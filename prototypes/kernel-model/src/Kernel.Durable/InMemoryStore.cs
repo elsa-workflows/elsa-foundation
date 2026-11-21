@@ -695,7 +695,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             foundationEvents.ForEach(key => FoundationEvents.Remove(key));
             var eventReceipts = _foundationEventReceipts.Where(pair => pair.Value < now).Select(pair => pair.Key).ToList();
             eventReceipts.ForEach(key => _foundationEventReceipts.Remove(key));
-            return new(messages.Count + events.Count + foundationEvents.Count + eventReceipts.Count + SweepFoundationStarts(now));
+            return new(messages.Count + events.Count + foundationEvents.Count + eventReceipts.Count + SweepFoundationIngressReceipts(now));
         }
     }
 }

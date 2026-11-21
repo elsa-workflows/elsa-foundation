@@ -30,6 +30,7 @@ public readonly record struct InboxKey(string Id, long Scope = 0, string? Match 
     internal const long ChildCreatorScope = long.MaxValue;
     internal const long EventDeliveryScope = -2;
     internal const long EventCreatorScope = -3;
+    internal const long FoundationOccurrenceScope = -4;
     public bool HasIssuedOrigin => Scope == -1 || Scope > 0;
     public static InboxKey Issued(string id) => new(id, -1);
     public static InboxKey Custom(string actor, string id) => new(id, (long)int.MaxValue + 2 + actor.Length);

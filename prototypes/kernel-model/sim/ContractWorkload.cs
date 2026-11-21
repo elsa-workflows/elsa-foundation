@@ -292,17 +292,19 @@ internal static class ContractWorkload
         private int _node;
         private bool? _loseAt;
 
-        internal InMemoryDriver(int partitions, Flaw flaws, Contract.IActorType type)
+        internal InMemoryDriver(int partitions, Flaw flaws, Contract.IActorType type,
+            int maxAttempts = 10, Func<Contract.BoundScope, string, bool>? authorizeOperator = null,
+            Func<InstanceRow, bool>? refuses = null)
         {
             ArgumentOutOfRangeException.ThrowIfLessThan(partitions, 2);
             _type = type;
-            _store = new(partitions, () => Now, flaws);
+            _store = new(partitions, () => Now, flaws) { Refuses = refuses };
             _wire = new CountingStore(_store, () => { }, ObserveCommit);
-            Ingress = new InMemoryIngress(_store, new Requests(Model), Model);
+            Ingress = new InMemoryIngress(_store, new Requests(Model), Model, authorizeOperator);
             Reads = new ActorList(_store, 7);
             _options = new()
             {
-                Partitions = partitions, Lease = TimeSpan.FromMilliseconds(Lease), MaxAttempts = 10,
+                Partitions = partitions, Lease = TimeSpan.FromMilliseconds(Lease), MaxAttempts = maxAttempts,
                 Monotonic = () => Now - Initial, WallClock = () => Now + 30, Flaws = flaws
             };
         }

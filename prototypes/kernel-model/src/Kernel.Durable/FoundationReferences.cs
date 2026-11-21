@@ -314,16 +314,22 @@ public sealed partial class InMemoryStore
                 !creator.Done && creator.Message.Target.Id == address.Id && creator.Message.Start?.Creation?.Generation == address.Creation;
             if (!live && !starting) return null;
 
-            // Keep the caller's id in the envelope. The storage identity scopes it to the exact life.
-            var storageId = binding.Reference + "/" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
+            // The receipt expires independently of delivery. A delayed input can still be pending when the id is reused.
+            var receipt = binding.Reference + "/" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
             var now = clock();
+            if (_foundationSendReceipts.TryGetValue(receipt, out var previousUntil) && previousUntil >= now)
+                return false;
+
+            var occurrence = checked(_seq + 1);
+            var until = checked(now + (long)window.TotalMilliseconds);
             var message = new Message(id, new InstanceRef(address.Id), kind, payload, Due: dueAt,
-                KeepUntil: checked(now + (long)window.TotalMilliseconds), ReplyTo: replyTo, TargetCreation: address.Creation)
-                { StorageId = storageId, Operator = @operator };
+                KeepUntil: until, ReplyTo: replyTo, TargetCreation: address.Creation)
+                { StorageId = FormattableString.Invariant($"{receipt}/{occurrence}"), Operator = @operator }
+                .WithInboxScope(InboxKey.FoundationOccurrenceScope);
             if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
-            if (Messages.TryGetValue(message.InboxKey, out var previousSend) &&
-                (!previousSend.Done || previousSend.Message.KeepUntil >= now)) return false;
-            Messages[message.InboxKey] = new MessageRow(message, ++_seq, 0);
+            Messages.Add(message.InboxKey, new MessageRow(message, occurrence, 0));
+            _seq = occurrence;
+            _foundationSendReceipts[receipt] = until;
             return true;
         }
     }
