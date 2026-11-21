@@ -6,27 +6,14 @@ test("reviews and applies one exact version while preserving stable and unresolv
 
   await page.getByRole("button", { name: "Change exact version" }).click();
   const dialog = page.getByRole("dialog", { name: "Review exact Activity Definition Version change" });
-  await expect(dialog).toContainText("Current version v1.0.0");
-  const targetVersion = dialog.getByLabel("Target active version");
-  await expect(targetVersion).toHaveValue("version-2");
-  await expect(targetVersion.locator('option[value="version-0"]')).toHaveText("v0.9.0");
+  await expect(dialog).toContainText("v1.0.0 · version-1");
+  await expect(dialog.getByRole("radio", { name: /v2\.0\.0.*Recommended/ })).toBeChecked();
+  await expect(dialog.getByRole("radio", { name: /v0\.9\.0.*Active/ })).toBeVisible();
   await expect(dialog).not.toContainText("version-retired");
-  const summary = dialog.getByRole("region", { name: "Compatibility and unresolved impact" });
-  await expect(summary).toContainText("Breaking");
-  const unresolvedBindings = summary.locator("dl > div").nth(2);
-  await expect(unresolvedBindings.locator("dt")).toHaveText("Unresolved input bindings");
-  await expect(unresolvedBindings.locator("dd")).toHaveText("1");
-  const unresolvedConnections = summary.locator("dl > div").nth(3);
-  await expect(unresolvedConnections.locator("dt")).toHaveText("Unresolved outcome connections");
-  await expect(unresolvedConnections.locator("dd")).toHaveText("1");
-  await expect(dialog.getByText("Amount", { exact: true })).not.toBeVisible();
-  await expect(dialog.getByText("Legacy", { exact: true })).not.toBeVisible();
-  await expect(dialog.getByText("Rejected", { exact: true })).not.toBeVisible();
-  await dialog.getByText("Detailed technical evidence", { exact: true }).click();
-  await expect(dialog.getByText("Amount", { exact: true })).toBeVisible();
-  await expect(dialog.getByText("Legacy", { exact: true })).toBeVisible();
-  await expect(dialog.getByText("Rejected", { exact: true })).toBeVisible();
-  await expect(dialog).toContainText("version-1");
+  await expect(dialog).toContainText("Breaking");
+  await expect(dialog).toContainText("Amount");
+  await expect(dialog).toContainText("Legacy");
+  await expect(dialog).toContainText("Rejected");
 
   await dialog.getByRole("button", { name: "Apply to this occurrence" }).click();
   await expect(page.getByText("Authoritative exact version change applied")).toBeVisible();
@@ -57,8 +44,8 @@ test("allows deliberate rollback to an older active version", async ({ page }) =
 
   await page.getByRole("button", { name: "Change exact version" }).click();
   const dialog = page.getByRole("dialog", { name: "Review exact Activity Definition Version change" });
-  await dialog.getByLabel("Target active version").selectOption("version-0");
-  await expect(dialog).toContainText("Target version v0.9.0");
+  await dialog.getByRole("radio", { name: /v0\.9\.0.*Active/ }).check();
+  await expect(dialog).toContainText("v0.9.0 · version-0");
   await dialog.getByRole("button", { name: "Apply to this occurrence" }).click();
 
   await expect(page.getByTestId("invoice-one")).toContainText("version-0");
@@ -77,56 +64,7 @@ test("stale review preserves local work and performs no authoritative write", as
   expect(state.draftWrites).toBe(0);
 });
 
-test("keeps review actions available on a narrow viewport when technical evidence is expanded", async ({ page }) => {
-  await mockVersionChange(page);
-  await page.setViewportSize({ width: 390, height: 600 });
-  await page.goto("/?mode=version-change");
-
-  await page.getByRole("button", { name: "Change exact version" }).click();
-  const dialog = page.getByRole("dialog", { name: "Review exact Activity Definition Version change" });
-  await dialog.getByText("Detailed technical evidence", { exact: true }).click();
-
-  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeInViewport();
-  await expect(dialog.getByRole("button", { name: "Apply to this occurrence" })).toBeInViewport();
-});
-
-test("allows choosing an exact version from a later page", async ({ page }) => {
-  const state = await mockVersionChange(page, { paginated: true });
-  await page.goto("/?mode=version-change");
-
-  await page.getByRole("button", { name: "Change exact version" }).click();
-  const dialog = page.getByRole("dialog", { name: "Review exact Activity Definition Version change" });
-  const targetVersion = dialog.getByLabel("Target active version");
-  await dialog.getByRole("button", { name: "More versions" }).click();
-  await expect(dialog.getByRole("status")).toContainText("No other active version is available.");
-  await expect(targetVersion).toBeDisabled();
-  await expect(dialog.getByRole("button", { name: "Apply to this occurrence" })).toBeDisabled();
-  await dialog.getByRole("button", { name: "More versions" }).click();
-  await expect(targetVersion).toHaveValue("version-0");
-  await expect(dialog.getByRole("button", { name: "Previous versions" })).toBeEnabled();
-  await expect(dialog.getByRole("button", { name: "More versions" })).toHaveCount(0);
-
-  await targetVersion.selectOption("version-3");
-  await expect(dialog).toContainText("Target version v3.0.0");
-  await dialog.getByRole("button", { name: "Apply to this occurrence" }).click();
-
-  await expect(page.getByTestId("invoice-one")).toContainText("version-3");
-  expect(state.draftWrites).toBe(1);
-});
-
-test("keeps apply disabled when active versions cannot be loaded", async ({ page }) => {
-  await mockVersionChange(page, { versionRequestFails: true });
-  await page.goto("/?mode=version-change");
-
-  await page.getByRole("button", { name: "Change exact version" }).click();
-  const dialog = page.getByRole("dialog", { name: "Review exact Activity Definition Version change" });
-  await expect(dialog.getByRole("alert")).toContainText("Authorized exact-version evidence could not be loaded");
-  await expect(dialog.getByLabel("Target active version")).toBeDisabled();
-  await expect(dialog.getByRole("button", { name: "Apply to this occurrence" })).toBeDisabled();
-});
-
-async function mockVersionChange(page: Page, options: { paginated?: boolean; versionRequestFails?: boolean } = {}) {
-  const { paginated = false, versionRequestFails = false } = options;
+async function mockVersionChange(page: Page) {
   const state = {
     draftWrites: 0,
     lastDraft: null as Record<string, unknown> | null
@@ -153,45 +91,32 @@ async function mockVersionChange(page: Page, options: { paginated?: boolean; ver
       ]
     })
   }));
-  await page.route(/\/design\/activities\/definitions\/activity-def-browser\/versions\?.*/, route => {
-    if (versionRequestFails) {
-      return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Unavailable" }) });
-    }
-    const cursor = new URL(route.request().url()).searchParams.get("cursor");
-    const items = paginated && cursor === "next-versions"
-      ? [versionSummary("version-retired", "3.0.0", "Retired", false)]
-      : paginated && cursor === "later-active"
-        ? [versionSummary("version-0", "0.9.0", "Active", false), versionSummary("version-3", "3.0.0", "Active", false)]
-        : [
+  await page.route(/\/design\/activities\/definitions\/activity-def-browser\/versions\?.*/, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      items: [
         versionSummary("version-2", "2.0.0", "Active", true),
-        ...(!paginated ? [versionSummary("version-0", "0.9.0", "Active", false), versionSummary("version-retired", "3.0.0", "Retired", false)] : [])
-      ];
-    const continuation = paginated
-      ? cursor === "next-versions" ? "later-active" : cursor ? null : "next-versions"
-      : null;
-    return route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        items,
-        totalCount: paginated ? 4 : 3,
-        hasMore: Boolean(continuation),
-        continuation,
-        snapshot: { snapshotId: "versions-snapshot", asOf: "2026-07-19T00:00:00Z" }
-      })
-    });
-  });
-  await page.route(/\/design\/activities\/versions\/(version-2|version-0|version-3)$/, route => {
-    const versionId = route.request().url().match(/\/(version-2|version-0|version-3)$/)?.[1] ?? "version-2";
+        versionSummary("version-0", "0.9.0", "Active", false),
+        versionSummary("version-retired", "3.0.0", "Retired", false)
+      ],
+      totalCount: 3,
+      hasMore: false,
+      continuation: null,
+      snapshot: { snapshotId: "versions-snapshot", asOf: "2026-07-19T00:00:00Z" }
+    })
+  }));
+  await page.route(/\/design\/activities\/versions\/(version-2|version-0)$/, route => {
+    const versionId = route.request().url().endsWith("version-0") ? "version-0" : "version-2";
     const version = versionId === "version-0" ? "0.9.0" : "2.0.0";
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(versionDetail(versionId, versionId === "version-3" ? "3.0.0" : version))
+      body: JSON.stringify(versionDetail(versionId, version))
     });
   });
-  await page.route(/\/design\/activities\/versions\/version-1\/diff\/(version-2|version-0|version-3)$/, route => {
-    const toVersionId = route.request().url().match(/\/(version-2|version-0|version-3)$/)?.[1] ?? "version-2";
+  await page.route(/\/design\/activities\/versions\/version-1\/diff\/(version-2|version-0)$/, route => {
+    const toVersionId = route.request().url().endsWith("version-0") ? "version-0" : "version-2";
     return route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -268,10 +193,9 @@ function contractInput(referenceKey: string) {
 }
 
 function versionDiff(toVersionId: string) {
-  const version = toVersionId === "version-0" ? "0.9.0" : toVersionId === "version-3" ? "3.0.0" : "2.0.0";
   return {
     from: { kind: "Version", definitionId: "activity-def-browser", versionId: "version-1", version: "1.0.0" },
-    to: { kind: "Version", definitionId: "activity-def-browser", versionId: toVersionId, version },
+    to: { kind: "Version", definitionId: "activity-def-browser", versionId: toVersionId, version: toVersionId === "version-0" ? "0.9.0" : "2.0.0" },
     compatibility: "Breaking",
     requiredBump: "Major",
     behaviorChanged: true,

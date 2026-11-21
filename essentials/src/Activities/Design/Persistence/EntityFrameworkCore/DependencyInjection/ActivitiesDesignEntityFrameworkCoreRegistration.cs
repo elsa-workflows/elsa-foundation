@@ -118,7 +118,6 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
             Alias<ICreateActivityDraftCommand>(services);
             Alias<IUpdateActivityDefinitionPresentationCommand>(services);
             Alias<IArchiveActivityDefinitionCommand>(services);
-            Alias<IRestoreActivityDefinitionCommand>(services);
             Alias<IUpdateActivityDraftPresentationCommand>(services);
             Alias<IStoreActivityDraftValidationCommand>(services);
             Alias<IChangeActivityVersionLifecycleCommand>(services);

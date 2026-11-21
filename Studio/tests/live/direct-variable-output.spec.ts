@@ -54,7 +54,7 @@ test("direct graph Variable source survives Studio publication and returns the f
   const picker = source.getByRole("combobox", { name: "Variable reference", exact: true });
   await expect(picker.locator('option[value="workflow::running-total"]')).toBeEnabled();
   await picker.focus(); await picker.press("r"); await picker.press("Enter"); await expect(picker).toHaveValue("workflow::running-total");
-  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved"); await capture(page, info, "variable-source-selected-light");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved"); await capture(page, info, "variable-source-selected-light");
   const saved = await api<ActivityDefinitionDraftView>(`/design/activities/drafts/${outer.draft.draftId}`);
   expect((saved.provider.payload as { outputMappings: unknown[] }).outputMappings).toEqual([{ outputReferenceKey: "sum", source: { syntax: "Variable", value: reference } }]);
   await page.reload(); await views.getByRole("tab", { name: /^Outputs/ }).click(); await expect(picker).toHaveValue("workflow::running-total");

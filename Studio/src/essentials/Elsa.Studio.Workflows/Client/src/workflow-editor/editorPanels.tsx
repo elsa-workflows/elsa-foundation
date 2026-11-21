@@ -1,5 +1,5 @@
-import { Suspense, useEffect, useState, type ReactNode } from "react";
-import { AlertCircle, AlertTriangle, Check, ChevronDown, Flag, Layers, MapPin, Wrench } from "lucide-react";
+import { Suspense, useState, type ReactNode } from "react";
+import { AlertCircle, AlertTriangle, Check, Flag, Layers, MapPin, Wrench } from "lucide-react";
 import { CopyableIdentifier, DisclosureFold, StudioButton, TechnicalDetails } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ValidationError, WorkflowDraft, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
@@ -8,8 +8,7 @@ import {
   STRUCTURAL_NO_START_TYPE,
   STRUCTURAL_START_TRIGGER_TYPE,
   collectVariableRepairItems,
-  parseValidationErrorPath,
-  validationHint
+  parseValidationErrorPath
 } from "../validationDiagnostics";
 import type { ValidationActivityLabels } from "../validationActivityLabels";
 import { formatDate } from "../workflowFormatting";
@@ -21,8 +20,10 @@ import { StudioLink } from "../StudioLink";
 import { isWarningSeverity } from "./publicationReview";
 
 /**
- * Renders the unified draft-validation surface. The caller passes the merged validation set so the
- * footer agrees with the promotion gate; details stay collapsed until requested.
+ * Renders the unified draft-validation surface (issue #453). `errors` (server-derived + reconciled +
+ * structural, merged by the caller) overrides the draft's own list when provided, so the footer never
+ * says "No validation errors" while the promotion gate would refuse. Each entry offers a "Repair" jump
+ * for unresolved-variable references and a "Go to" jump for any error that resolves to a node.
  */
 export function ValidationPanel({
   draft,
@@ -30,51 +31,34 @@ export function ValidationPanel({
   onRepair,
   onSelectNode,
   onSetAsStartNode,
-  activityLabels,
   unavailable,
-  pending,
-  expanded,
-  onExpandedChange
+  pending
 }: {
   draft: WorkflowDraft;
   errors?: ValidationError[];
   onRepair(nodeId: string | null): void;
   onSelectNode?(nodeId: string, path?: string): void;
+  /**
+   * Applies the fix for a start-node fault: the two structural start errors report a node that cannot be
+   * reached, and the fix is to make it the start. Absent when the canvas is not a Flowchart.
+   */
   onSetAsStartNode?(nodeId: string): void;
-  activityLabels?: ValidationActivityLabels;
   unavailable?: boolean;
   pending?: boolean;
-  expanded?: boolean;
-  onExpandedChange?(open: boolean): void;
 }) {
-  const [localDetailsOpen, setLocalDetailsOpen] = useState(false);
-  const detailsOpen = expanded ?? localDetailsOpen;
-  const setDetailsOpen = (open: boolean) => {
-    if (expanded === undefined) setLocalDetailsOpen(open);
-    onExpandedChange?.(open);
-  };
   const errors = providedErrors ?? (Array.isArray(draft.validationErrors) ? draft.validationErrors : []);
-  useEffect(() => {
-    if (!errors.length) {
-      if (expanded === undefined) setLocalDetailsOpen(false);
-      onExpandedChange?.(false);
-    }
-  }, [errors.length, expanded, onExpandedChange]);
   if (!errors.length) {
     if (pending) {
       return (
         <div className="wf-validation" role="status">
           Checking validation…
-          {unavailable ? <span className="wf-validation-note">Server validation unavailable on this backend.</span> : null}
         </div>
       );
     }
-    if (unavailable) {
-      return <div className="wf-validation" role="status">Server validation unavailable on this backend.</div>;
-    }
     return (
-      <div className="wf-validation ok" role="status">
-        <Check size={14} /> No validation issues found
+      <div className="wf-validation ok">
+        <Check size={14} /> No validation errors
+        {unavailable ? <span className="wf-validation-note"> (server validation unavailable on this backend)</span> : null}
       </div>
     );
   }
@@ -90,89 +74,43 @@ export function ValidationPanel({
       : `${errors.length} validation issue${errors.length === 1 ? "" : "s"}`;
 
   return (
-    <div className={`wf-validation${detailsOpen ? " expanded" : ""}`}>
-      <button
-        type="button"
-        className="wf-validation-toggle"
-        aria-expanded={detailsOpen}
-        aria-controls="wf-validation-details"
-        onClick={() => setDetailsOpen(!detailsOpen)}
-      >
-        <span className="wf-validation-summary">
-          {errorCount === 0 ? <AlertTriangle size={14} /> : <AlertCircle size={14} />}
-          {summary}
-          {repairItems.length > 0 ? (
-            <span className="wf-validation-variable-count"> · {repairItems.length} invalid variable reference{repairItems.length === 1 ? "" : "s"}</span>
-          ) : null}
-          {pending ? <span className="wf-validation-note"> · Still checking</span> : null}
-          {unavailable ? <span className="wf-validation-note"> · Server validation unavailable</span> : null}
-        </span>
-        <ChevronDown size={14} aria-hidden="true" />
-      </button>
-      <div className="wf-validation-details" id="wf-validation-details" hidden={!detailsOpen}>
-        <ul className="wf-validation-list" aria-label="Validation findings">
-          {errors.map((error, index) => {
-            const repair = repairByError.get(error);
-            const path = repair?.path ?? parseValidationErrorPath(error.path);
-            const nodeId = path.nodeId;
-            const startNodeFix = onSetAsStartNode && nodeId && isStartNodeError(error) ? nodeId : null;
-            const warning = isWarningSeverity(error.severity);
-            const hint = validationHint(error);
-            const location = formatValidationLocation(path, activityLabels);
-            const inputTarget = path.bag === "inputs" && !!path.referenceKey;
-            return (
-              <li key={index} className={`wf-validation-item${repair ? " repairable" : ""}${warning ? " warning" : ""}`}>
-                <div className="wf-validation-item-heading">
-                  <span className="wf-validation-severity" data-severity={warning ? "warning" : "error"}>{warning ? "Warning" : "Error"}</span>
-                  {location ? <span className="wf-validation-location">{location}</span> : null}
-                </div>
-                <p className="wf-validation-message" title={nodeId ?? undefined}>{error.message ?? "Validation issue."}</p>
-                {hint ? <p className="wf-validation-hint"><strong>What to try:</strong> {hint}</p> : null}
-                <div className="wf-validation-actions">
-                  {startNodeFix ? (
-                    <button type="button" className="wf-validation-repair" onClick={() => onSetAsStartNode?.(startNodeFix)}>
-                      <Flag size={12} /> Set as start
-                    </button>
-                  ) : null}
-                  {repair?.path.nodeId ? (
-                    <button
-                      type="button"
-                      className="wf-validation-repair"
-                      onClick={() => inputTarget && onSelectNode
-                        ? onSelectNode(repair.path.nodeId!, error.path ?? undefined)
-                        : onRepair(repair.path.nodeId)}
-                    >
-                      <Wrench size={12} /> Repair
-                    </button>
-                  ) : nodeId && onSelectNode ? (
-                    <button type="button" className="wf-validation-repair wf-validation-node-action" onClick={() => onSelectNode(nodeId, error.path ?? undefined)}>
-                      <MapPin size={12} /> Go to {inputTarget ? "input" : "activity"}
-                    </button>
-                  ) : null}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+    <div className="wf-validation">
+      <div className="wf-validation-summary">
+        {errorCount === 0 ? <AlertTriangle size={14} /> : <AlertCircle size={14} />}
+        {summary}
+        {repairItems.length > 0 ? (
+          <span className="wf-validation-variable-count"> · {repairItems.length} invalid variable reference{repairItems.length === 1 ? "" : "s"}</span>
+        ) : null}
       </div>
+      <ul className="wf-validation-list">
+        {errors.map((error, index) => {
+          const repair = repairByError.get(error);
+          const nodeId = repair?.path.nodeId ?? parseValidationErrorPath(error.path).nodeId;
+          const startNodeFix = onSetAsStartNode && nodeId && isStartNodeError(error) ? nodeId : null;
+          const warning = isWarningSeverity(error.severity);
+          return (
+            <li key={index} className={`wf-validation-item${repair ? " repairable" : ""}${warning ? " warning" : ""}`}>
+              <span className="wf-validation-message" title={nodeId ?? undefined}>{error.message ?? "Validation issue."}</span>
+              {startNodeFix ? (
+                <button type="button" className="wf-validation-repair" onClick={() => onSetAsStartNode?.(startNodeFix)}>
+                  <Flag size={12} /> Set as start
+                </button>
+              ) : null}
+              {repair?.path.nodeId ? (
+                <button type="button" className="wf-validation-repair wf-validation-node-action" onClick={() => onRepair(repair.path.nodeId)}>
+                  <Wrench size={12} /> Repair
+                </button>
+              ) : nodeId && onSelectNode ? (
+                <button type="button" className="wf-validation-repair wf-validation-node-action" onClick={() => onSelectNode(nodeId, error.path ?? undefined)}>
+                  <MapPin size={12} /> Go to
+                </button>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
-}
-
-function formatValidationLocation(
-  path: ReturnType<typeof parseValidationErrorPath>,
-  activityLabels?: ValidationActivityLabels
-): string | null {
-  const parts: string[] = [];
-  if (path.isWorkflowScope) parts.push("Workflow");
-  else if (path.nodeId) parts.push(activityLabels?.labelFor(path.nodeId) ?? path.nodeId);
-  if (path.bag) parts.push(path.bag[0].toUpperCase() + path.bag.slice(1));
-  if (path.referenceKey) {
-    parts.push(path.bag === "inputs"
-      ? activityLabels?.inputLabelFor(path.nodeId ?? undefined, path.referenceKey) ?? path.referenceKey
-      : path.referenceKey);
-  }
-  return parts.length ? parts.join(" → ") : null;
 }
 
 /** The two structural faults a start-node change fixes (see draftValidation). */
@@ -372,4 +310,3 @@ function RejectedReason({
     </div>
   );
 }
-

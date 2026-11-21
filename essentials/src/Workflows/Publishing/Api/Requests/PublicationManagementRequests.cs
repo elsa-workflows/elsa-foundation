@@ -38,6 +38,4 @@ public sealed record PublishWorkflowRequest(
 
 public sealed record UnpublishPublicationSlotRequest(string DefinitionId, string SlotName);
 
-public sealed record UnpublishPublicationSlotAtRevisionRequest(string DefinitionId, string SlotName, long ExpectedRevision);
-
 public sealed record RestorePublicationSlotRequest(string DefinitionId, string SlotName);

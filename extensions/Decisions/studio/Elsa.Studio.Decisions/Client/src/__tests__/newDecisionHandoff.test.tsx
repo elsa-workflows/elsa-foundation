@@ -45,7 +45,7 @@ const decisionTab = (host: HTMLElement) => host.querySelector<HTMLElement>('[dat
 async function saveNewDecision(host: HTMLElement) {
   await vi.waitFor(() => expect(decisionTab(host)?.querySelector('[role="grid"]')).not.toBeNull());
   const name = Array.from(decisionTab(host).querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
-  type(name, created.name); click(button(decisionTab(host), "Save"));
+  type(name, created.name); click(button(decisionTab(host), "Save decision"));
 }
 
 describe("New decision handoff to the Evaluate Decision picker", () => {

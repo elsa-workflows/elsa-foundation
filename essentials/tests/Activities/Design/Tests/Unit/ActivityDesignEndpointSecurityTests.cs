@@ -27,7 +27,7 @@ public sealed class ActivityDesignEndpointSecurityTests
     {
         var endpoints = MapEndpoints();
 
-        Assert.Equal(ActivitiesDesignCompatibilityCases.Manifest.Count + 4, endpoints.Count);
+        Assert.Equal(ActivitiesDesignCompatibilityCases.Manifest.Count + 3, endpoints.Count);
         var activityData = Assert.Single(endpoints, endpoint =>
             endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods is [var method] &&
             new Elsa.Api.Compatibility.Testing.Manifests.EndpointIdentity(endpoint.RoutePattern.RawText!, method) ==
@@ -40,10 +40,6 @@ public sealed class ActivityDesignEndpointSecurityTests
             endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods is [var method] &&
             new Elsa.Api.Compatibility.Testing.Manifests.EndpointIdentity(endpoint.RoutePattern.RawText!, method) ==
             new Elsa.Api.Compatibility.Testing.Manifests.EndpointIdentity("/design/activities/definitions/{definitionId}", HttpMethods.Delete));
-        var restore = Assert.Single(endpoints, endpoint =>
-            endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods is [var method] &&
-            new Elsa.Api.Compatibility.Testing.Manifests.EndpointIdentity(endpoint.RoutePattern.RawText!, method) ==
-            new Elsa.Api.Compatibility.Testing.Manifests.EndpointIdentity("/design/activities/definitions/{definitionId}/restore", HttpMethods.Post));
         var routes = ActivitiesDesignCompatibilityCases.Manifest.Select(route =>
             (Endpoint: Find(endpoints, route), Permission: route.Action switch
             {
@@ -51,8 +47,8 @@ public sealed class ActivityDesignEndpointSecurityTests
                 "manage" => ActivityDesignPermissions.Manage,
                 _ => throw new InvalidOperationException($"Unexpected manifest action '{route.Action}'.")
             }));
-        // Keep the migration oracle unchanged and apply its full security contract to additive endpoints.
-        foreach (var (endpoint, permission) in routes.Append((activityData, ActivityDesignPermissions.Read)).Append((candidateValidation, ActivityDesignPermissions.Manage)).Append((archive, ActivityDesignPermissions.Manage)).Append((restore, ActivityDesignPermissions.Manage)))
+        // Keep the migration oracle unchanged and apply its full security contract to the additive endpoint.
+        foreach (var (endpoint, permission) in routes.Append((activityData, ActivityDesignPermissions.Read)).Append((candidateValidation, ActivityDesignPermissions.Manage)).Append((archive, ActivityDesignPermissions.Manage)))
         {
             var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
             var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);

@@ -61,7 +61,7 @@ internal static class WorkflowsPublishingJsonOptions
     PropertyNameCaseInsensitive = true,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 
-// Request and lifecycle command models, including path-bound commands with no JSON body.
+// Requests accepted by the 23 Publishing registrations.
 [JsonSerializable(typeof(ConstructActivity))]
 [JsonSerializable(typeof(ListConstructableActivities))]
 [JsonSerializable(typeof(ListIncidentStrategies))]
@@ -75,7 +75,6 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(PreflightWorkflowPublicationSnapshot))]
 [JsonSerializable(typeof(PublishWorkflowRequest))]
 [JsonSerializable(typeof(UnpublishPublicationSlotRequest))]
-[JsonSerializable(typeof(UnpublishPublicationSlotAtRevisionRequest))]
 [JsonSerializable(typeof(RestorePublicationSlotRequest))]
 [JsonSerializable(typeof(UnpublishPublicationSlot))]
 [JsonSerializable(typeof(RestorePublicationSlot))]

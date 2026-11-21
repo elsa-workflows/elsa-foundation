@@ -223,9 +223,6 @@ public sealed class CaptureSlotLifecycle(IHttpContextAccessor accessor) : IPubli
     public Task<WorkflowActivationSlot> UnpublishAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
         CannedAsync(cancellationToken);
 
-    public Task<WorkflowActivationSlot> UnpublishAtRevisionAsync(string workflowDefinitionId, string slotName, long expectedRevision, CancellationToken cancellationToken) =>
-        CannedAsync(cancellationToken);
-
     public Task<WorkflowActivationSlot> RestoreAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
         CannedAsync(cancellationToken);
 
