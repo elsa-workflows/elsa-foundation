@@ -2290,10 +2290,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private TurnOutcome ParkRefusedTurn(TurnOutcome unit, Slot slot, bool preserve)
     {
-        var park = slot.Unwritten
-            ? _type.Park(preserve ? slot.Row! : slot.Row! with { State = "null" }, unit.Instance,
-                unit.Consumed, unit.Spec, _refusal, slot.Pending)
-            : _type.Park(slot.CurrentRow, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, _refusal);
+        var previous = slot.CurrentRow;
+        var unwritten = slot.Unwritten;
+        if (unwritten && !preserve && previous is not null)
+            previous = previous with
+            {
+                State = "null",
+                FoundationNullState = previous.FoundationInlineBirth is not null || previous.FoundationNullState
+            };
+        var park = unwritten
+            ? _type.Park(previous, unit.Instance, unit.Consumed, unit.Spec, _refusal, slot.Pending)
+            : _type.Park(previous, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, _refusal);
         Bound(MarkPark(park, slot.CurrentRow), slot);
         if (slot.Unwritten) RetireVolatileJobs(park);
         Promote(park);

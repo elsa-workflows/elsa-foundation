@@ -8,7 +8,7 @@ internal static class InlineEphemeralChecks
     public static async Task Run(Action<bool, string> check, Flaw flaws)
     {
         string[] shapes = flaws.HasFlag(Flaw.ForgetShortWaits) ? ["promote"]
-            : ["finish", "timer", "job", "timed", "timed-fast", "promote", "handover", "overlong", "child", "hold", "refused", "refused-later", "lost-before", "lost-after", "fallback"];
+            : ["finish", "timer", "job", "timed", "timed-fast", "promote", "handover", "overlong", "child", "hold", "refused", "refused-later", "refused-both", "lost-before", "lost-after", "fallback"];
         foreach (var shape in shapes)
             await new Schedule(shape, check, flaws).Run();
     }
@@ -38,7 +38,8 @@ internal static class InlineEphemeralChecks
                 lost = true;
                 throw new IOException("the first durable inline answer was lost");
             });
-            if (shape is "refused" or "refused-later") store.Refuses = row => row.State == "discard this state";
+            if (shape is "refused" or "refused-later" or "refused-both")
+                store.Refuses = row => row.State == "discard this state" || shape == "refused-both" && row.State == "checkpoint";
             Worker MakeOwner(string node)
             {
                 var adapter = new ActorAdapter(store, actor, (requests, node));
@@ -51,7 +52,9 @@ internal static class InlineEphemeralChecks
             Contract.IIngress ingress = new InMemoryIngress(store, requests, "inline-owner", inlineOwner: worker);
             Contract.IActorReads reads = new ActorList(store, 5);
 
-            var recipe = shape is "lost-before" or "lost-after" ? "child" : shape == "handover" ? "promote" : shape;
+            var recipe = shape is "lost-before" or "lost-after" ? "child" :
+                shape == "handover" ? "promote" :
+                shape == "refused-both" ? "refused-later" : shape;
             var target = new Contract.Target.Start(new Contract.StartSpec(shape == "fallback" ? "unregistered" : actor.Type, recipe, null, Ephemeral: true));
             var deadline = _now + (shape == "promote" ? 60 : 400);
             var reply = ingress.RequestAsync(_scope, target, shape, Contract.Kinds.Start, null, null,
@@ -72,7 +75,7 @@ internal static class InlineEphemeralChecks
             await Pass(owner);
             check(actor.Reference is not null && duplicate.Actor == actor.Reference, $"inline {shape} ran the same provisional life on the local owner");
             var reference = actor.Reference.GetValueOrDefault();
-            if (shape is "timer" or "timed" or "promote" or "handover" or "refused-later")
+            if (shape is "timer" or "timed" or "promote" or "handover" or "refused-later" or "refused-both")
             {
                 check(await reads.GetAsync(_scope, reference) is null && store.Messages.Count == 0 && store.Journal.Count == 0,
                     $"inline {shape} waits without a durable birth");
@@ -81,7 +84,7 @@ internal static class InlineEphemeralChecks
                 if (shape == "handover") await owner.DisposeAsync();
                 else
                 {
-                    _now += shape is "timer" or "timed" or "refused-later" ? 20 : 60;
+                    _now += shape is "timer" or "timed" or "refused-later" or "refused-both" ? 20 : 60;
                     if (shape == "promote") await worker.FlushAsync();
                     else await Pass(owner);
                 }
@@ -165,15 +168,17 @@ internal static class InlineEphemeralChecks
                     store.FoundationEvents.Count == 0 && actor.JobsEntered == 0,
                     "refusal rolls back the staged state, header, journal, response, sends, timer, job, subscription, publish and child");
             }
-            else if (shape == "refused-later")
+            else if (shape is "refused-later" or "refused-both")
             {
                 var view = await reads.GetAsync(_scope, reference);
                 var history = await reads.TailAsync(_scope, reference);
+                var row = store.Instances.Values.Single();
+                var empty = shape == "refused-both";
                 check(answer is { Status: Contract.ActorStatus.Faulted, Item: null } &&
                     view is { Header.Status: Contract.ActorStatus.Faulted, Header.TypeData: "accepted", Header.Labels.Count: 1 } &&
-                    store.Instances.Values.Single().State == "checkpoint" && store.Subscriptions.Count == 0 &&
+                    row.State == (empty ? "null" : "checkpoint") && row.FoundationNullState == empty && store.Subscriptions.Count == 0 &&
                     history.Items.Select(item => Json.Read<string>(item.Entry)).SequenceEqual(["start", "waiting", "parked"]),
-                    "a refused later promotion retains the last accepted in-memory checkpoint and journal");
+                    $"a refused later promotion retains the accepted history and the allowed checkpoint ({shape})");
             }
             else if (loss)
             {
