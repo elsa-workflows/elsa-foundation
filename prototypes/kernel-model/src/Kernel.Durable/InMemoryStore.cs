@@ -211,12 +211,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
-                    foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription);
                     StoreBatchRules.ValidateActorSends(turn, previous);
                     ValidateFoundationHeader(turn);
                     var inlineRoot = turn.Row is { FoundationInlineBirth: not null } local ? BindInlineRoot(local) : null;
                     if (inlineRoot is not null && !(inlineRoots ??= new(StringComparer.Ordinal)).TryAdd(turn.Instance, inlineRoot))
                         Diverged($"two inline births for {turn.Instance}");
+                    foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription, inlineRoot);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
@@ -600,10 +600,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         return default;
     }
 
-    private void RequireSameSubscriptionScope(SubscriptionRow subscription)
+    private void RequireSameSubscriptionScope(SubscriptionRow subscription, ReferenceBinding? inlineRoot = null)
     {
-        var targetTenant = subscription.Creation is > 0
-            ? _referenceBirths.GetValueOrDefault(new(subscription.Instance, subscription.Creation))?.Tenant : null;
+        var target = new CreationAddress(subscription.Instance, subscription.Creation);
+        var targetTenant = inlineRoot?.Address == target ? inlineRoot.Tenant
+            : subscription.Creation > 0 ? _referenceBirths.GetValueOrDefault(target)?.Tenant : null;
         if (subscription.Start is null && targetTenant != subscription.FoundationTenant)
             throw new StoreException(Failure.Definite, "The subscription's scope does not own the target creation.");
         if (Subscriptions.TryGetValue(subscription, out var previous) && previous.FoundationTenant != subscription.FoundationTenant)

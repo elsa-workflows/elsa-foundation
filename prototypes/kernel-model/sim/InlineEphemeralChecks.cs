@@ -9,7 +9,7 @@ internal static class InlineEphemeralChecks
     {
         string[] shapes = flaws.HasFlag(Flaw.ForgetShortWaits) ? ["promote"]
             : flaws.HasFlag(Flaw.IgnoreLeaseDeadline) ? ["stale"]
-            : ["finish", "timer", "job", "timed", "timed-fast", "promote", "handover", "overlong", "child", "hold", "refused", "refused-later", "refused-both", "lost-before", "lost-after", "fallback", "stale", "park-cutoff"];
+            : ["finish", "timer", "job", "timed", "timed-fast", "promote", "handover", "overlong", "child", "hold", "refused", "refused-later", "refused-both", "lost-before", "lost-after", "fallback", "stale", "park-cutoff", "subscribe", "subscribe-later"];
         foreach (var shape in shapes)
             await new Schedule(shape, check, flaws).Run();
     }
@@ -110,6 +110,25 @@ internal static class InlineEphemeralChecks
                 return;
             }
 
+            if (shape is "subscribe" or "subscribe-later")
+            {
+                if (shape == "subscribe-later")
+                {
+                    check(await reads.GetAsync(_scope, reference) is null && store.Subscriptions.Count == 0,
+                        "the delayed subscription leaves the birth volatile before its timer");
+                    _now += 10;
+                    await Pass(owner);
+                }
+                check(await reads.GetAsync(_scope, reference) is { Header.Status: Contract.ActorStatus.Running, Header.Ref: var bound } &&
+                    bound == reference && store.Subscriptions.Count == 1,
+                    $"the first durable outcome binds the life and its subscription together ({shape})");
+                await ingress.SendAsync(new Contract.BoundScope("other"), new Contract.Target.Event("signal"), "foreign", "ignored", "foreign");
+                await Pass(owner);
+                check(!reply.IsCompleted, $"a foreign publication cannot resolve the provisional life ({shape})");
+                await ingress.SendAsync(_scope, new Contract.Target.Event("signal"), "same-scope", "ignored", "same-scope");
+                await Pass(owner);
+            }
+
             if (shape == "park-cutoff")
             {
                 check(actor.JobsEntered == 1 && store.Messages.Count == 0, "the armed timed job is still local before Park");
@@ -171,6 +190,12 @@ internal static class InlineEphemeralChecks
                     store.Instances.Values.Single().State == "checkpoint" &&
                     entries.SequenceEqual(["start", "waiting", expected, "end"]),
                     $"a short timed job promotes its header, state and journal and leaves no deadline ({shape})");
+            }
+            else if (shape is "subscribe" or "subscribe-later")
+            {
+                check(answer is { Channel: "response", Item: "same-scope" } && store.Subscriptions.Count == 0 &&
+                    await reads.GetAsync(_scope, reference) is { Header.Status: Contract.ActorStatus.Finished },
+                    $"the promoted subscription delivers once and End removes it ({shape})");
             }
             else if (shape == "park-cutoff")
             {
@@ -304,6 +329,8 @@ internal static class InlineEphemeralChecks
                         case "overlong":
                             turn.Send(turn.Header.Ref, "slow-timer", dueAt: turn.Now + 20);
                             break;
+                        case "subscribe": turn.Subscribe("signal", "next"); break;
+                        case "subscribe-later": turn.Send(turn.Header.Ref, "arm-subscription", dueAt: turn.Now + 10); break;
                         case "park-cutoff":
                             turn.StartJob("timed", timeout: TimeSpan.FromMilliseconds(30));
                             turn.Send(turn.Header.Ref, "throw-timer", dueAt: turn.Now + 10);
@@ -330,6 +357,11 @@ internal static class InlineEphemeralChecks
                 }
 
                 if (message.Kind == "resume") continue;
+                if (message.Kind == "arm-subscription")
+                {
+                    turn.Subscribe("signal", "next");
+                    continue;
+                }
                 if (message.Kind == "throw-timer") throw new InvalidOperationException("short-wait Park control");
                 if (message.Kind == "refused-timer")
                 {
@@ -347,6 +379,7 @@ internal static class InlineEphemeralChecks
                     Contract.Kinds.Start when recovered => "hold",
                     Contract.Kinds.Start => turn.Ambient as string == "caller" ? "finish" : "wrong ambient",
                     Contract.Kinds.JobFinished => JobAnswer(message),
+                    Contract.Kinds.Event => message.Payload,
                     _ => message.Kind
                 };
                 if (message.Kind == Contract.Kinds.JobFinished && turn.Header.TypeData == "timed-updated")
