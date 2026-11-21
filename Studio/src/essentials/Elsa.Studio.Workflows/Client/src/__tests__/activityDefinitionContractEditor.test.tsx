@@ -34,12 +34,11 @@ describe("ActivityDefinitionContractEditor", () => {
       expressions={[]} providerRequiredOutcomes={[]} baselineUnavailable={false}
       readOnly={readOnly} capabilitiesUnavailable={false} onChange={() => undefined}
       onLocalValidityChange={() => undefined} />));
-    click(buttonByText(container, "Advanced"));
-    const driver = controlByLabel<HTMLSelectElement>(container, "Durable storage driver");
+    const driver = controlByAriaLabel<HTMLSelectElement>(container, "Durable storage driver");
     expect(driver.value).toBe(stored);
     expect(driver.disabled).toBe(disabled);
     expect([...driver.options].map(option => option.value)).toEqual([...new Set([stored, ...active])]);
-    expect(driver.closest(".studio-field")?.textContent).toContain(active.length ? "Only one compatible storage driver" : "No compatible storage driver");
+    expect(driver.title).toContain(active.length ? "Only one compatible storage driver" : "No compatible storage driver");
     if (!active.includes(stored)) expect(driver.selectedOptions[0].disabled).toBe(true);
   });
 
@@ -57,6 +56,7 @@ describe("ActivityDefinitionContractEditor", () => {
       expressions={[]} providerRequiredOutcomes={[]} sourceVersionId={null} baselineUnavailable={false}
       readOnly={false} capabilitiesUnavailable={false} onChange={() => { committed = true; }}
       onLocalValidityChange={() => undefined} />));
+    openMemberDetails(container, "input", "value");
     const source = '{"Id":9007199254740993}';
     change(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)"), source);
     expect(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)").value).toBe(source);
@@ -96,11 +96,15 @@ describe("ActivityDefinitionContractEditor", () => {
     }
 
     flushSync(() => root.render(<Harness />));
+    openMemberDetails(container, "input", "value");
     const input = container.querySelector<HTMLElement>("[data-contract-kind='input'][data-contract-selected='true']")!;
     expect(input.hidden).toBe(false);
     const basicFields = input.querySelector<HTMLElement>(".ad-contract-fields")!;
     const basicLabels = [...basicFields.querySelectorAll(":scope label > span, :scope .ad-readonly-fact > span")].map(label => label.textContent?.trim());
-    expect(basicLabels).toEqual(expect.arrayContaining(["Name", "Type", "Required", "Default"]));
+    expect(basicLabels).toEqual(expect.arrayContaining(["Description", "Default"]));
+    expect(basicLabels).not.toContain("Name");
+    expect(basicLabels).not.toContain("Type");
+    expect(basicLabels).not.toContain("Required");
     expect(basicLabels).not.toContain("Capability type");
     expect([...basicFields.querySelector<HTMLSelectElement>("[data-contract-field='default']")!.options].map(option => ({ text: option.textContent, value: option.value }))).toEqual([
       { text: "No default", value: "none" },
@@ -111,11 +115,11 @@ describe("ActivityDefinitionContractEditor", () => {
 
     const advanced = input.querySelectorAll<HTMLElement>("[role='tabpanel']")[2];
     expect(advanced.hidden).toBe(true);
-    expect(basicFields.querySelector("[data-contract-field='referenceKey']")).toBeTruthy();
-    expect(advanced.querySelector("[data-contract-field='referenceKey']")).toBeNull();
-    expect(advanced.querySelector("[data-contract-field='storageDriverKey']")).toBeTruthy();
+    expect(basicFields.querySelector("[data-contract-field='referenceKey']")).toBeNull();
+    expect(advanced.querySelector("[data-contract-field='referenceKey']")).toBeTruthy();
+    expect(container.querySelector("[data-contract-field='storageDriverKey']")).toBeTruthy();
     expect(advanced.querySelector("[data-contract-field='type.alias']")).toBeNull();
-    expect(advanced.querySelector("[data-contract-field='type.collectionKind']")).toBeTruthy();
+    expect(advanced.querySelector("[data-contract-field='type.collectionKind']")).toBeNull();
     expect(advanced.querySelector("[data-contract-field='isNullable']")).toBeTruthy();
     expect(input.textContent).not.toContain("CLR type names");
     expect(input.textContent).not.toContain("Type alias");
@@ -135,11 +139,11 @@ describe("ActivityDefinitionContractEditor", () => {
     expect(input.querySelector("datalist option")?.getAttribute("value")).toBe("Customer");
     click(buttonByText(input, "Advanced"));
     expect(advanced.hidden).toBe(false);
-    changeSelect(controlByLabel<HTMLSelectElement>(advanced, "Durable storage driver"), "elsa.memory");
+    changeSelect(controlByAriaLabel<HTMLSelectElement>(container, "Durable storage driver"), "elsa.memory");
     click(buttonByText(input, "General"));
-    const keyInput = basicFields.querySelector<HTMLInputElement>("[data-contract-field='referenceKey']")!;
+    const keyInput = advanced.querySelector<HTMLInputElement>("[data-contract-field='referenceKey']")!;
     changeInput(keyInput, "custom_reference");
-    click(buttonByText(basicFields, "Apply key"));
+    click(buttonByText(advanced, "Apply key"));
     expect(controlByLabel<HTMLInputElement>(input, "Value")).toBe(originalSource);
     expect(originalSource.value).toBe("pending default");
     expect(committed?.inputs[0]).toMatchObject({
@@ -204,6 +208,7 @@ describe("ActivityDefinitionContractEditor", () => {
     }
 
     flushSync(() => root.render(<Harness />));
+    openMemberDetails(container, "input", "value");
     expect(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)").value).toBe("1");
 
     click(buttonByText(container, "Replace upstream default"));
@@ -287,6 +292,18 @@ function controlByLabel<T extends HTMLInputElement | HTMLTextAreaElement | HTMLS
   const control = label?.control;
   if (!control) throw new Error(`Control labelled '${text}' not found.`);
   return control as T;
+}
+
+function controlByAriaLabel<T extends HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(container: HTMLElement, text: string) {
+  const control = container.querySelector<T>(`[aria-label="${text}"]`);
+  if (!control) throw new Error(`Control labelled '${text}' not found.`);
+  return control;
+}
+
+function openMemberDetails(container: HTMLElement, kind: string, referenceKey: string) {
+  const toggle = container.querySelector<HTMLButtonElement>(`button[data-member-kind="${kind}"][data-member-reference-key="${referenceKey}"]`);
+  if (!toggle) throw new Error(`Contract member details '${kind}:${referenceKey}' not found.`);
+  if (toggle.getAttribute("aria-expanded") !== "true") click(toggle);
 }
 
 function changeInput(element: HTMLInputElement, value: string) {

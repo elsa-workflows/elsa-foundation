@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnonymousAuthProvider } from "@elsa-workflows/studio-sdk";
 import { DashboardApi } from "../api";
-import { QueryControls } from "../QueryControls";
 import { TileOptionsDialog } from "../ResourceDialogs";
 import { NamedDashboardsRoute } from "../NamedDashboards";
 import { initialDefinition, type DashboardResource, type DatasetDeclaration, type Page, type QueryResult } from "../types";
@@ -20,10 +19,27 @@ function mount(content: React.ReactNode) {
   flushSync(() => root.render(content)); cleanups.push(() => { flushSync(() => root.unmount()); view.remove(); }); return view;
 }
 function action(view: HTMLElement, text: string) {
-  const button = [...view.querySelectorAll("button")].find(item => item.textContent?.trim() === text);
+  const actionName = text === "Refresh results" || text === "Preview question" ? "Preview" : text;
+  const findButton = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === actionName);
+  let button = findButton();
+  if (!button && view.querySelector('[aria-label="More question actions"]')) {
+    flushSync(() => view.querySelector<HTMLButtonElement>('[aria-label="More question actions"]')!.click());
+    button = findButton();
+  }
   expect(button, `Action ${text}`).toBeDefined(); return button!;
 }
 function click(view: HTMLElement, text: string) { flushSync(() => action(view, text).click()); }
+function editLimit(view: HTMLElement, value: string) {
+  const build = view.querySelector<HTMLButtonElement>('.named-question-view-toolbar [data-tab-id="build"]');
+  if (build?.getAttribute("aria-selected") !== "true") flushSync(() => build?.click());
+  const sort = [...view.querySelectorAll<HTMLAnchorElement>(".named-query-section-nav a")].find(button => button.textContent?.startsWith("Sort"));
+  if (sort?.getAttribute("aria-current") !== "page") flushSync(() => sort?.click());
+  edit(view.querySelector<HTMLInputElement>('input[type="number"]')!, value);
+}
+function openProperties(view: HTMLElement) {
+  const button = [...view.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === "Properties");
+  if (button?.getAttribute("aria-expanded") !== "true") flushSync(() => button?.click());
+}
 function edit(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
   Object.getOwnPropertyDescriptor(input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, "value")!.set!.call(input, value);
   flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
@@ -135,11 +151,11 @@ function savedQuestionEditor() {
 
 describe("accepted definition result binding", () => {
   it.each(["metadata", "definition"] as const)("clears the old %s preview on save and enables current-revision refresh and drill", async change => {
-    const { view, post, put } = savedQuestionEditor(); await waitUntil(() => view.querySelector('input[type="number"]') !== null);
-    if (change === "definition") edit(view.querySelector<HTMLInputElement>('input[type="number"]')!, "7");
+    const { view, post, put } = savedQuestionEditor(); await waitUntil(() => view.querySelector(".named-query-section-nav") !== null);
+    if (change === "definition") editLimit(view, "7");
     click(view, change === "definition" ? "Preview question" : "Refresh results"); await waitUntil(() => view.querySelector(".named-result") !== null);
-    if (change === "metadata") edit(view.querySelector("textarea")!, "Updated description");
-    click(view, "Save question"); await waitUntil(() => view.textContent?.includes("Revision r2") === true); expect(put).toHaveBeenCalledOnce();
+    if (change === "metadata") { openProperties(view); edit(view.querySelector("textarea")!, "Updated description"); }
+    click(view, "Save question"); await waitUntil(() => put.mock.calls.length === 1); expect(put).toHaveBeenCalledOnce();
     expect(view.querySelector(".named-result")).toBeNull();
     expect(view.textContent).not.toContain("Save this question before investigating its changed definition.");
     expect(view.textContent).not.toContain("current data access could not be established");
@@ -152,10 +168,10 @@ describe("accepted definition result binding", () => {
   });
 
   it("aborts an old in-flight refresh when save accepts a new revision and rejects its late result", async () => {
-    const { view, module } = savedQuestionEditor(); let finish!: (value: QueryResult) => void; let signal!: AbortSignal;
+    const { view, module, put } = savedQuestionEditor(); let finish!: (value: QueryResult) => void; let signal!: AbortSignal;
     module.backend.http.postJson = vi.fn((_url: string, _body: unknown, init?: { signal?: AbortSignal }) => { signal = init!.signal!; return new Promise(resolve => { finish = resolve; }); }) as typeof module.backend.http.postJson;
-    await waitUntil(() => view.querySelector("textarea") !== null); click(view, "Refresh results"); await waitUntil(() => typeof finish === "function");
-    edit(view.querySelector("textarea")!, "Saved while refresh is pending"); click(view, "Save question"); await waitUntil(() => view.textContent?.includes("Revision r2") === true);
+    await waitUntil(() => view.querySelector(".named-question-view-toolbar") !== null); click(view, "Refresh results"); await waitUntil(() => typeof finish === "function");
+    openProperties(view); edit(view.querySelector("textarea")!, "Saved while refresh is pending"); click(view, "Save question"); await waitUntil(() => put.mock.calls.length === 1);
     expect(signal.aborted).toBe(true); finish(result("STALE-R1-COMPLETION"));
     await new Promise(resolve => setTimeout(resolve, 0)); expect(view.textContent).not.toContain("STALE-R1-COMPLETION"); expect(view.querySelector(".named-result")).toBeNull();
     expect(action(view, "Refresh results").disabled).toBe(false);
@@ -164,17 +180,22 @@ describe("accepted definition result binding", () => {
 
 describe("saved comparison aliases", () => {
   it.each([[true, "rate"], [true, "current.rate"], [false, "rate"], [false, "current.rate"]] as const)("retains metric binding %s/%s in question and tile controls", async (comparison, binding) => {
+    window.history.replaceState({}, "", "/questions/q1");
     const saved = question();
     saved.definition!.query.metrics = [{ alias: "rate", metric: "workflow.failure-rate", revision: "1" }];
     saved.definition!.query.comparison = comparison ? { mode: "absolute", from: "2026-10-01T00:00:00Z", to: "2026-10-08T00:00:00Z" } : undefined;
     saved.definition!.query.sort = [{ reference: binding, direction: "ascending", nulls: "last" }];
     saved.definition!.visualization = { kind: "metric", y: [binding] };
-    const view = mount(<QueryControls definition={saved.definition!} datasets={[dataset]} disabled={false} onChange={vi.fn()} />);
+    const api = stubApi();
+    api.backend.http.getJson = vi.fn(async (url: string) => url.includes("dashboard-datasets") ? { items: [dataset] } : saved) as typeof api.backend.http.getJson;
+    const view = mount(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" navigate={vi.fn()} /></AnonymousAuthProvider>);
+    await waitUntil(() => view.querySelector('[aria-label="Question workspace views"]') !== null);
+    click(view, "Properties");
     const values = view.querySelector<HTMLSelectElement>('select[multiple]')!;
     expect([...values.selectedOptions].map(option => option.value)).toEqual([binding]);
     expect([...view.querySelectorAll<HTMLSelectElement>("select")].some(select => select.value === binding && !select.multiple)).toBe(true);
-    const api = new DashboardApi(stubApi().backend); vi.spyOn(api, "get").mockResolvedValue(saved);
-    const tile = mount(<TileOptionsDialog api={api} tile={{ id: "tile", questionId: "q1", size: "medium" }} onClose={vi.fn()} onApply={vi.fn()} />);
+    const client = new DashboardApi(stubApi().backend); vi.spyOn(client, "get").mockResolvedValue(saved);
+    const tile = mount(<TileOptionsDialog api={client} tile={{ id: "tile", questionId: "q1", size: "medium" }} onClose={vi.fn()} onApply={vi.fn()} />);
     await waitUntil(() => tile.querySelector('select[multiple]') !== null);
     expect([...tile.querySelector<HTMLSelectElement>('select[multiple]')!.selectedOptions].map(option => option.value)).toEqual([binding]);
   });

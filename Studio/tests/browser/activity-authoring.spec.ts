@@ -9,14 +9,22 @@ for (const style of ["quiet", "focus", "open"]) for (const theme of ["light", "d
     }, style);
     await page.goto(`/?mode=activity-authoring&theme=${theme}`);
     const title = page.getByRole("heading", { name: "Prepare order quote", exact: true });
-    const saved = page.locator(".ad-save-chip");
+    const saved = page.locator(".wf-editor-save-status");
     await expect(title).toBeVisible();
     await expect(page.getByRole("complementary", { name: "Inspector panel", exact: true })).toBeVisible();
     await expect(saved).toHaveText("Saved");
-    const titleBox = (await title.boundingBox())!;
-    const statusBox = (await saved.boundingBox())!;
-    expect(statusBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
-    const back = page.getByRole("button", { name: "Back to Activity Definition", exact: true });
+    const statusPlacement = await page.evaluate(() => {
+      const status = document.querySelector(".wf-editor-save-status")!;
+      const metadata = document.querySelector(".wf-editor-metadata")!;
+      const actions = document.querySelector(".wf-editor-actions")!;
+      const statusBox = status.getBoundingClientRect();
+      const actionsBox = actions.getBoundingClientRect();
+      return { insideMetadata: metadata.contains(status), gap: actionsBox.left - statusBox.right };
+    });
+    expect(statusPlacement.insideMetadata).toBe(true);
+    expect(statusPlacement.gap).toBeGreaterThanOrEqual(0);
+    expect(statusPlacement.gap).toBeLessThanOrEqual(24);
+    const back = page.getByRole("link", { name: "Activity Definition", exact: true });
     await back.focus();
     await expect(back).toBeFocused();
     await title.click();
@@ -30,12 +38,13 @@ for (const style of ["quiet", "focus", "open"]) for (const theme of ["light", "d
     const longTitle = page.getByRole("heading", { name: longName, exact: true });
     await expect(longTitle).toBeVisible();
     await expect(page.getByRole("complementary", { name: "Inspector panel", exact: true })).toBeVisible();
-    expect(await longTitle.evaluate(element => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight)).toBe(true);
+    await expect(longTitle).toHaveAttribute("title", longName);
+    expect(await longTitle.evaluate(element => getComputedStyle(element).textOverflow)).toBe("ellipsis");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const toolbar = (await page.locator(".ad-draft-editor-toolbar").boundingBox())!;
     const tabs = (await page.getByRole("tablist", { name: "Activity Definition authoring views" }).boundingBox())!;
     expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(tabs.y + 1);
-    for (const name of ["Review & publish", "Test Run", "Save now"]) {
+    for (const name of ["Review & publish", "Test Run", "Save"]) {
       const action = page.getByRole("button", { name, exact: true });
       await expect(action).toBeVisible();
       const box = (await action.boundingBox())!;
@@ -123,7 +132,7 @@ for (const theme of ["light", "dark"]) {
     await variables.getByRole("textbox", { name: "Variable name", exact: true }).fill("LineCount");
     await variables.getByRole("textbox", { name: "Variable default value", exact: true }).fill("0");
     await expect(page.locator(".ad-revision-gate")).toHaveCount(0);
-    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
     const fieldset = variables.locator("fieldset.wf-container-variables");
     expect(await fieldset.evaluate(element => getComputedStyle(element).borderWidth)).toBe("0px");
     await page.screenshot({ path: testInfo.outputPath("activity-variables.png") });
@@ -135,7 +144,7 @@ for (const theme of ["light", "dark"]) {
     await expect(inspector.getByRole("textbox", { name: "Variable default value", exact: true })).toHaveValue("0");
     expect(await inspector.locator("fieldset.wf-container-variables").evaluate(element => getComputedStyle(element).borderWidth)).toBe("0px");
     await inspector.getByRole("button", { name: "Add variable", exact: true }).click();
-    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
     await page.reload();
     await views.getByRole("tab", { name: "Variables", exact: true }).click();
     await expect(variables.getByRole("textbox", { name: "Variable name", exact: true })).toHaveCount(2);
@@ -176,7 +185,7 @@ test("edits a reusable activity interface without losing unapplied defaults or s
   await expect(member.getByRole("button", { name: "Apply default", exact: true })).toBeDisabled();
   await member.getByRole("textbox", { name: "Value", exact: true }).fill("2.5");
   await member.getByRole("button", { name: "Apply default", exact: true }).click();
-  await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
   await page.reload();
   await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await page.getByRole("button", { name: "Discount Number", exact: true }).click();
@@ -240,7 +249,7 @@ for (const theme of ["light", "dark", "material"]) for (const width of [390, 144
     await page.screenshot({ path: `/tmp/argument-button-${theme}-${width}.png` });
     await add.click();
     await expect(panel.getByRole("textbox", { name: "Variable name", exact: true })).toHaveCount(1);
-    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
     // The shared editor also runs inside disabled fieldsets in read-only views.
     await panel.locator("fieldset.wf-container-variables").evaluate(element => { (element as HTMLFieldSetElement).disabled = true; });
     await expect(add).toBeDisabled();

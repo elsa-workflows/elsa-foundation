@@ -180,3 +180,11 @@ Call `AddWorkflowRuntime()` for the host-agnostic runtime. It supplies in-memory
 process-local payload key only. A durable host must compose a durable alteration store and configure a retained
 AES-256 key ring before admitting plans that must survive restart. See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for
 replaceable contracts.
+
+### Timer history ownership
+
+`AddRuntimeDurableTimerScheduler` preserves explicit replacements and composes scoped memory adapters over the native checkpoint state when the selected history and liveness owners match. Scheduling honors the original captured or uncaptured admission and resolves history collaborators only when that choice needs them. The public parameterless memory store remains an uncaptured, process-local option.
+
+Optional `IDurableTimerHistoryStore` ownership retains deterministic schedule/terminal observations until durable acknowledgement, keeps retired sources out of due work, and separately fences bounded discharge for successful Ephemeral completion without a native record. Native deletion owns cleanup of indexed timer sources. Capability defaults are conservative; custom decorators must preserve and qualify the actual owner chain. See [the timer extension contracts](EXTENSION_POINTS.md#idurabletimerhistorystore-core--elsaworkflowsruntimecore).
+
+This memory-owner integration does not enable the expanded timer capture profile. The recurring pump, provider model/migrations, real Delay execution and restart checks qualify that composed behavior separately.

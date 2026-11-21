@@ -1,6 +1,6 @@
 import "./WorkflowEditorToolbar.css";
 import { createContext, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Check, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
+import { AlertTriangle, Check, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
 import { AnchoredPopover, StudioBreadcrumbs } from "@elsa-workflows/studio-ui";
 import { StudioLink } from "../StudioLink";
 import { PublishActionButton, type WorkflowPublishMode } from "./PublishActionButton";
@@ -32,6 +32,26 @@ export function WorkflowEditorToolbarFrame({ identity, metadata, actions, afterA
       <div className="wf-editor-actions">{actions}</div>
       {afterActions}
     </header>
+  );
+}
+
+export function WorkflowEditorSaveStatus({ status, saving, success, attention }: {
+  status: string;
+  saving: boolean;
+  success?: boolean;
+  attention?: boolean;
+}) {
+  const pending = saving || /^(Autosaving|Saving|Preparing|Starting|Exporting|Promoting|Publishing)/.test(status);
+  const needsAttention = attention ?? /offline|conflict|failed|failure|error|unavailable/i.test(status);
+  const isSuccess = success ?? (!pending && !needsAttention);
+
+  return (
+    <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={status || undefined} data-pending={pending || undefined} data-attention={needsAttention || undefined}>
+      {status ? <>
+        {pending ? <LoaderCircle size={12} aria-hidden="true" /> : isSuccess ? <Check size={12} aria-hidden="true" /> : needsAttention ? <AlertTriangle size={12} aria-hidden="true" /> : null}
+        <span>{status}</span>
+      </> : null}
+    </span>
   );
 }
 
@@ -94,6 +114,9 @@ interface WorkflowEditorToolbarProps {
   onSave(): void;
   onPublish(mode: WorkflowPublishMode): void;
   onRun(): void;
+  onRunPublished?(): void;
+  canRunPublished?: boolean;
+  runPublishedTitle?: string;
   canRun: boolean;
   publicationUnavailableReason?: string;
   directBpmnPublication?: ReactNode;
@@ -108,8 +131,6 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const openAtEndRef = useRef(false);
   const menuId = useId();
-  const pending = props.saving || /^(Autosaving|Saving|Preparing|Starting|Exporting|Promoting|Publishing)/.test(props.status);
-
   const closeMenu = (restoreFocus = true) => {
     setOpen(false);
     if (restoreFocus) triggerRef.current?.focus();
@@ -152,12 +173,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
         />
       }
       metadata={
-        <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={props.status || undefined} data-pending={pending || undefined}>
-          {props.status ? <>
-            {pending ? <LoaderCircle size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
-            <span>{props.status}</span>
-          </> : null}
-        </span>
+        <WorkflowEditorSaveStatus status={props.status} saving={props.saving} />
       }
       actions={
         <>
@@ -173,6 +189,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
         <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={15} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
         {!props.templateMode ? props.directBpmnPublication : null}
         {!props.templateMode ? <PublishActionButton unavailableReason={props.publicationUnavailableReason} busy={props.busy} saving={props.saving} onPublish={props.onPublish} /> : null}
+        {!props.templateMode && props.onRunPublished ? <button type="button" className="wf-run-published-button" disabled={!props.canRunPublished || props.busy} title={props.runPublishedTitle} onClick={props.onRunPublished}><Play size={15} aria-hidden="true" /> Run</button> : null}
         {!props.templateMode ? <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} aria-hidden="true" /> Test Run</button> : null}
         <button
           ref={triggerRef}

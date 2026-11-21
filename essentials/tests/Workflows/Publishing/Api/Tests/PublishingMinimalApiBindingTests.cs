@@ -209,6 +209,7 @@ public sealed class PublishingMinimalApiBindingTests
     private static bool HasRequestMetadata(PublishingRoute route) => route.Id is not
         ("TestRuns.Get" or "TestRuns.Waits" or "TestRuns.Stop" or "IncidentStrategies.List" or
         "ValueConversionProfiles.List" or
+        "PublicationSlots.UnpublishReviewed" or
         "WorkflowExecutable.Export" or
         "ActivityPublications.GetReceipt" or
         "ActivityTestRuns.Get" or

@@ -15,7 +15,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   const surface = page.locator(".decisions-page:visible");
   const button = (name: string) => surface.getByRole("button", { name, exact: true });
   const view = (name: "Rules" | "Tests" | "Settings") => surface.getByRole("tab", { name, exact: true }).click();
-  async function decisionAction(name: "Validate" | "Publish" | "Export DMN") {
+  async function decisionAction(name: "Validate" | "Export DMN") {
     await button("More decision actions").click(); await page.getByRole("menuitem", { name, exact: true }).click();
   }
   async function tableAction(name: "Add input") {
@@ -45,7 +45,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   }
   async function save(): Promise<Asset> {
     const response = page.waitForResponse(value => ["POST", "PUT"].includes(value.request().method()) && /\/decisions(?:\/[^/?]+)?$/.test(new URL(value.url()).pathname));
-    await button("Save decision").click(); const result = await response; expect(result.ok(), await result.text()).toBe(true);
+    await button("Save").click(); const result = await response; expect(result.ok(), await result.text()).toBe(true);
     await expect(surface.getByText("Unsaved changes", { exact: true })).toHaveCount(0); return result.json();
   }
   async function run(passed: boolean): Promise<Receipt> {
@@ -155,7 +155,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   await view("Tests"); await run(true);
 
   const publishing = page.waitForResponse(value => value.request().method() === "POST" && new URL(value.url()).pathname.endsWith("/publish"));
-  await decisionAction("Publish"); const publication = await publishing; expect(publication.ok(), await publication.text()).toBe(true);
+  await button("Publish").click(); const publication = await publishing; expect(publication.ok(), await publication.text()).toBe(true);
   const published = await publication.json() as Version;
   await expect(button("Clone to draft")).toBeVisible(); await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toBeDisabled();
   await confirmation("decision-published", `Version ${published.number} published`);
@@ -175,11 +175,11 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   const second = await page.context().newPage();
   try {
     await second.goto(page.url()); await second.locator(".decisions-page").getByRole("tab", { name: "Settings", exact: true }).click(); await second.locator(".decisions-page").getByLabel("Description", { exact: true }).fill("Concurrent editor saved this description.");
-    await second.getByRole("button", { name: "Save decision", exact: true }).click();
+    await second.getByRole("button", { name: "Save", exact: true }).click();
     await expect(second.locator(".studio-toast").getByText("Decision saved", { exact: true })).toBeVisible();
     await expect(second.locator(".decisions-page").getByText("Decision saved", { exact: true })).toHaveCount(0);
   } finally { await second.close(); }
-  await surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true }).fill("<= 999"); await button("Save decision").click();
+  await surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true }).fill("<= 999"); await button("Save").click();
   await expect(surface.getByText("Your unsaved work is still here.", { exact: false })).toBeVisible();
   await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toHaveValue("<= 999"); await part("decision-conflict", button("Reload server draft"));
   await button("Reload server draft").click(); await confirm("Reload"); await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toHaveValue("<= 1000");

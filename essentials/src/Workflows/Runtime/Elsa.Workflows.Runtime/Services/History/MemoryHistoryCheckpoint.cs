@@ -17,14 +17,15 @@ internal static class MemoryHistoryCheckpoint
             enabled != (incoming.HistoryCapturePolicy is not null))
             throw new InvalidOperationException("Native history admission provenance disagrees with its pinned policy.");
         string? scope = null;
+        var timerOwner = state.TimerSources.HasHistoryOwner(commit.WorkflowExecutionId);
         if (access is not null)
         {
             try { scope = access.Current.RequireScope().Value; }
-            catch (InvalidOperationException) when (batches is not { Count: > 0 } && incomingPolicy is null) { return null; }
+            catch (InvalidOperationException) when (batches is not { Count: > 0 } && incomingPolicy is null && !timerOwner) { return null; }
         }
         if (scope is null)
         {
-            if (batches is { Count: > 0 } || incomingPolicy?.Required == true)
+            if (batches is { Count: > 0 } || incomingPolicy?.Required == true || timerOwner)
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History checkpoint persistence requires its scoped provider.");
             return null;
         }
@@ -34,6 +35,7 @@ internal static class MemoryHistoryCheckpoint
             throw new InvalidOperationException("A captured native run cannot change its history scope.");
         state.HistoryHeads.TryGetValue(key, out var head);
         state.RequiredHistoryRuns.TryGetValue(key, out var required);
+        state.TimerSources.ValidateHistoryOwner(scope, commit.WorkflowExecutionId, head?.Policy ?? admittedPolicy ?? incomingPolicy);
         if (batches is not { Count: > 0 })
         {
             if (incomingPolicy?.Required == true || required is not null || head?.Policy.Required == true)
@@ -104,7 +106,8 @@ internal static class MemoryHistoryCheckpoint
         var nextHead = new RuntimeHistoryHead(commit.WorkflowExecutionId,
             head is { FirstSequence: > 0 } ? head.FirstSequence : events.Count == 0 ? 0 : events[0].Sequence, sequence,
             commit.CommitId, recordedAt, policy,
-            head?.CapturedFromStart ?? batches.Any(batch => batch.StartsAtRunStart), head?.HasGaps ?? false, head?.PurgedThroughSequence ?? 0);
+            head?.CapturedFromStart ?? batches.Any(batch => batch.StartsAtRunStart),
+            head?.HasGaps ?? state.TimerSources.HasNoRecordCompletion(scope, commit.WorkflowExecutionId), head?.PurgedThroughSequence ?? 0);
         return () =>
         {
             state.HistoryHeads[key] = nextHead;
