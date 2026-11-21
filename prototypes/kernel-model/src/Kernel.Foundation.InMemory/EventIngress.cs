@@ -7,8 +7,19 @@ namespace Kernel.Foundation.InMemory;
 /// The event route of the built-in foundation's bound ingress. Cancellation releases the reply registration.
 /// A request's deliveries remain eligible once they are committed.
 /// </summary>
-internal sealed class EventRequests(Durable.InMemoryStore store, Durable.Requests requests, string node)
+internal sealed class EventIngress(Durable.InMemoryStore store, Durable.Requests requests, string node)
 {
+    public ValueTask<Admission> SendAsync(BoundScope scope, Target.Event target, string id, string? payload,
+        AddOptions? options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (id.StartsWith('~')) return new(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.InvalidEventId));
+        if (options?.DueAt is not null) return new(new Admission(AdmissionOutcome.Refused));
+        var accepted = store.PublishFoundationEvent(scope.Tenant, target.CorrelationKey, id, payload, options?.KeepFor, null, cancellationToken);
+        return new(new Admission(accepted == true ? AdmissionOutcome.Accepted : AdmissionOutcome.Duplicate));
+    }
+
     public async ValueTask<Reply> RequestAsync(BoundScope scope, Target.Event target, string id, string? payload,
         AddOptions? options, RequestOptions request, CancellationToken cancellationToken = default)
     {
@@ -19,14 +30,11 @@ internal sealed class EventRequests(Durable.InMemoryStore store, Durable.Request
 
         var now = store.FoundationClock();
         if (request.Deadline <= now) return Error("timeout");
-        var until = options?.KeepFor is { Ticks: > 0 } keep
-            ? checked(now + (long)keep.TotalMilliseconds)
-            : now - 1;
-        var @event = new Durable.EventRow($"{scope.Tenant}_{target.CorrelationKey}", id, payload, until) { FoundationTenant = scope.Tenant };
         var open = requests.OpenBound(id, request.Deadline, scope.Tenant, request.Ambient);
         try
         {
-            var accepted = store.PublishRequest(@event, open.ReplyAddress(node, request.ReleaseBeforeCommit), cancellationToken);
+            var accepted = store.PublishFoundationEvent(scope.Tenant, target.CorrelationKey, id, payload, options?.KeepFor,
+                open.ReplyAddress(node, request.ReleaseBeforeCommit), cancellationToken);
             if (accepted is null) return Error("no waiter");
 
             var completion = requests.CompletionOf(open);

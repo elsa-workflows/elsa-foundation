@@ -45,6 +45,9 @@ public sealed record EventRow(
 {
     [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     internal string? FoundationTenant { get; init; }
+
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    internal long FoundationOccurrence { get; init; }
 }
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries)
@@ -409,7 +412,11 @@ public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
     {
         if (Event.FoundationTenant != Wait.FoundationTenant || Event.Key != Wait.Key)
             throw new ArgumentException("The event and wait must share their key and tenant scope.");
-        var match = new EventMatch(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation) { FoundationTenant = Wait.FoundationTenant };
+        var match = new EventMatch(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation)
+        {
+            FoundationTenant = Wait.FoundationTenant,
+            FoundationOccurrence = Event.FoundationOccurrence
+        };
         return new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, match, Wait.FoundationTenant);
     }
 }
@@ -428,6 +435,9 @@ public sealed record EventMatch(
 {
     [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     internal string? FoundationTenant { get; init; }
+
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    internal long FoundationOccurrence { get; init; }
 
     public string Encode() => Json.Write(this);
     public static EventMatch Decode(string text) => Json.Read<EventMatch>(text);

@@ -132,7 +132,7 @@ internal static class ActorAdapterChecks
         var transport = new LocalReplies(requests);
         var probe = new Probe();
         var scope = new Contract.BoundScope("acme");
-        var bound = new EventRequests(store, requests, "receiving-node");
+        var bound = new EventIngress(store, requests, "receiving-node");
         var ambient = new object();
         var root = Arm(0, "local", "acme");
         var remote = Arm(1, "remote", "acme");

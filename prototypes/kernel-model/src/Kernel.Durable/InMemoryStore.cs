@@ -467,23 +467,55 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     internal IReadOnlyList<EventAcceptance>? PublishRequest(EventRow request, string replyTo, CancellationToken cancellationToken = default)
     {
         lock (_gate)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var key = (request.Key, request.Id);
-            var events = EventsFor(request);
-            // The original match and deliveries were committed atomically. A retry cannot match new waits.
-            if (events.ContainsKey(key)) return [];
-            var deliveries = Subscriptions.Where(wait => wait.Key == request.Key && wait.FoundationTenant == request.FoundationTenant)
-                .OrderBy(wait => wait.Instance, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal)
-                .Select(wait => Events.Route(request, wait, partitions, replyTo)).ToArray();
-            if (deliveries.Length == 0) return null;
+            return PublishOutside(request, replyTo, requiresWait: true, reuseUntil: null, clock(), cancellationToken)?.Deliveries;
+    }
 
-            foreach (var delivery in deliveries) ValidateEventIdentity(delivery);
-            var starts = deliveries.Count(delivery => delivery.Message.Start is not null && !Messages.ContainsKey(delivery.Message.InboxKey));
-            _ = checked(_eventSerial + starts);
-            events.Add(key, request);
-            return Array.ConvertAll(deliveries, InsertEventDelivery);
+    private sealed record OutsideEventReceipt(bool Duplicate, IReadOnlyList<EventAcceptance> Deliveries);
+    private readonly Dictionary<(string Key, string Id), long> _foundationEventReceipts = [];
+    private long _foundationEventOccurrence;
+
+    internal bool? PublishFoundationEvent(string tenant, string correlation, string id, string? payload, TimeSpan? keepFor,
+        string? replyTo, CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(keepFor ?? TimeSpan.Zero, TimeSpan.Zero, nameof(keepFor));
+        lock (_gate)
+        {
+            var now = clock();
+            var until = keepFor is { Ticks: > 0 } keep ? checked(now + (long)keep.TotalMilliseconds) : now - 1;
+            var reuseUntil = checked(now + (long)(keepFor ?? IngressDeduplicationWindow).TotalMilliseconds);
+            var publication = new EventRow(tenant + "_" + correlation, id, payload, until) { FoundationTenant = tenant };
+            var receipt = PublishOutside(publication, replyTo, replyTo is not null, reuseUntil, now, cancellationToken);
+            return receipt is null ? null : !receipt.Duplicate;
         }
+    }
+
+    private OutsideEventReceipt? PublishOutside(EventRow request, string? replyTo, bool requiresWait, long? reuseUntil, long now,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = (request.Key, request.Id);
+        var events = EventsFor(request);
+        if (reuseUntil is null ? events.ContainsKey(key) :
+            _foundationEventReceipts.TryGetValue(key, out var prior) && now <= prior)
+            return new(true, []);
+
+        if (reuseUntil is not null)
+            request = request with { FoundationOccurrence = checked(_foundationEventOccurrence + 1) };
+        var deliveries = Subscriptions.Where(wait => wait.Key == request.Key && wait.FoundationTenant == request.FoundationTenant)
+            .OrderBy(wait => wait.Instance, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal)
+            .Select(wait => Events.Route(request, wait, partitions, replyTo)).ToArray();
+        if (deliveries.Length == 0 && requiresWait) return null;
+
+        foreach (var delivery in deliveries) ValidateEventIdentity(delivery);
+        var starts = deliveries.Count(delivery => delivery.Message.Start is not null && !Messages.ContainsKey(delivery.Message.InboxKey));
+        _ = checked(_eventSerial + starts);
+        if (reuseUntil is { } expires)
+        {
+            _foundationEventOccurrence = request.FoundationOccurrence;
+            _foundationEventReceipts[key] = expires;
+        }
+        events[key] = request;
+        return new(false, Array.ConvertAll(deliveries, InsertEventDelivery));
     }
 
     private void ValidateEventIdentity(EventDelivery delivery)
@@ -653,7 +685,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             events.ForEach(key => EventRows.Remove(key));
             var foundationEvents = FoundationEvents.Where(pair => pair.Value.KeepUntil < now).Select(pair => pair.Key).ToList();
             foundationEvents.ForEach(key => FoundationEvents.Remove(key));
-            return new(messages.Count + events.Count + foundationEvents.Count + SweepFoundationStarts(now));
+            var eventReceipts = _foundationEventReceipts.Where(pair => pair.Value < now).Select(pair => pair.Key).ToList();
+            eventReceipts.ForEach(key => _foundationEventReceipts.Remove(key));
+            return new(messages.Count + events.Count + foundationEvents.Count + eventReceipts.Count + SweepFoundationStarts(now));
         }
     }
 }

@@ -96,7 +96,7 @@ internal static class EventRequestChecks
               store.Messages.Values.All(row => row.Message.Target != lateWaiter || Events.Delivered(row.Message)?.Event != fanout.Id),
             "repeating the event id cannot deliver the old publication to a new non-keeping wait");
 
-        var bound = new EventRequests(store, requests, "caller");
+        var bound = new EventIngress(store, requests, "caller");
         var scope = new Contract.BoundScope("acme");
         var eventTarget = new Contract.Target.Event("typed");
         var keep = new Contract.AddOptions(KeepFor: TimeSpan.FromMinutes(1));
