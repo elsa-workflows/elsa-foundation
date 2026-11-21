@@ -21,12 +21,14 @@ internal static class CommandAuthorityChecks
             ("stale", Kinds.Terminate, child, 6L), ("private", "kernel.cascade", child, 7L),
             ("migrate", "kernel.migrate", child, 7L) };
 
-        foreach (var (id, kind, target, creation) in inputs)
+        var cases = inputs.Select(input => (input.Item1, input.Item2, input.Item3, input.Item4, (string?)null)).Append(
+            ("then-delete", Kinds.Terminate, child, 7L, """{"thenDelete":true}"""));
+        foreach (var (id, kind, target, creation, payload) in cases)
         {
             var source = new Message(id, parent, "trigger");
             await store.AddAsync(source);
             var next = row with { Revision = 2, State = "{\"changed\":true}" };
-            var authored = new Message("authored-" + id, target, kind, Sender: parent.Id, TargetCreation: creation) { ActorAuthored = true };
+            var authored = new Message("authored-" + id, target, kind, payload, Sender: parent.Id, TargetCreation: creation) { ActorAuthored = true };
             var batch = new CommitBatch(0, lease.Epoch, 1, leaseFor, true,
                 [new TurnCommit(parent.Id, next, 1, [source.InboxKey], [], [authored], [new("key", parent.Id, id)], [], "[2]")], [], []);
             var refused = false;

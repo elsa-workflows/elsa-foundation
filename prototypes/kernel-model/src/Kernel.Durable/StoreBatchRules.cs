@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -75,13 +76,30 @@ public static class StoreBatchRules
         foreach (var message in turn.Sent)
         {
             if (!message.ActorControl) continue;
-            if (message.Kind == Kinds.Terminate && message.TargetCreation is > 0)
+            if (message.Kind == Kinds.Terminate && message.TargetCreation is > 0 && !RequestsOperatorDelete(message.Payload))
             {
                 children ??= ChildRegistry.Read(turn.Row is { } row ? row.Children : previous?.Children);
                 if (children.Contains(new CreationAddress(message.Target.Id, message.TargetCreation.Value))) continue;
             }
 
             throw new StoreException(Failure.Definite, "Actor turns may send only Terminate to a registered child creation.");
+        }
+    }
+
+    private static bool RequestsOperatorDelete(string? payload)
+    {
+        if (payload is null) return false;
+        try
+        {
+            using var body = JsonDocument.Parse(payload);
+            return body.RootElement.ValueKind == JsonValueKind.Object &&
+                body.RootElement.EnumerateObject().Any(property =>
+                    string.Equals(property.Name, "ThenDelete", StringComparison.OrdinalIgnoreCase) &&
+                    property.Value.ValueKind == JsonValueKind.True);
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 
