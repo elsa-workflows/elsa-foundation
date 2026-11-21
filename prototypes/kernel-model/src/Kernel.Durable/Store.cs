@@ -44,7 +44,10 @@ public sealed record EventRow(
     internal string? FoundationTenant { get; init; }
 }
 
-public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries);
+public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries)
+{
+    internal long FoundationCreation { get; init; }
+}
 
 /// <summary>
 /// A projector's position, and the partition's position read just before: every journal position up to <c>Written</c>

@@ -13,6 +13,7 @@ public static class LeaseChecks
         await FoundationReferenceChecks.Run(Check);
         await FoundationChildReferences.Run(Check);
         await ActorListChecks.Run(Check);
+        await ActorJournalChecks.Run(Check);
         await ActorAdapterChecks.Run(Check);
         await ActorAdapterChecks.EventAmbient(Check);
         await EventRequestChecks.Run(Check);
