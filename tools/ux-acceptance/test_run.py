@@ -883,6 +883,7 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual((owned[3][3], owned[2][3]), (browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
         self.assertNotIn('UX_DESIGN_STUDIO_URL', browser)
         self.assertEqual(report['ownedRoot'], browser['UX_ACCEPTANCE_OWNED_ROOT'])
+        self.assertEqual(Path(report['ownedRoot']) / 'workbench', Path(browser['UX_WORKBENCH_DIRECTORY']))
         self.assertNotIn('UX_WORKFLOW_ASSET_SHA256S', browser)
         self.assertNotIn('UX_COPY_IMPLEMENTATION_ASSETS', browser)
         self.assertFalse(Path(browser['UX_WORKFLOW_ASSET_MANIFEST']).exists())

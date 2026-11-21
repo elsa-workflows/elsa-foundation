@@ -39,19 +39,11 @@ credentials; exchanges by another subject, failed exchanges and direct preview w
 Browser response checks separately require the existing administrator subject. This avoids counting a normal
 exchange in both a database baseline and a later independently sampled browser delta.
 
-The Studio producer has a bounded 80-minute operational ceiling, including queue time. Hosted run
-43649254402 hit the previous 65-minute wrapper limit after starting case 154 of 171; its 153 complete
-traces span 58 minutes 25 seconds after 6 minutes 24 seconds of preparation. Extrapolating that pace
-puts the full producer near 73 minutes, an allocation estimate rather than a successful execution or
-performance guarantee. The interrupted case and 17 not-started cases remain unqualified.
-
-The earlier 171-case run 43628431065 took 53 minutes 19 seconds but retained two failed cases. Hosted
-run 43627566756 was stopped at its former 30-minute ceiling after reaching journey 71 of 104. Neither
-failed run establishes acceptance. The 120-minute enclosing job leaves room for the standard producer,
-subsequent qualification stages and evidence upload. A separate controller-log artifact retains command
-timings without changing the standard evidence archive's root layout. These finite allocations change
-no case budgets, assertions, producer recipes, source/tool identity checks or child-process cleanup.
-The complete 171-case suite still has to pass.
+The Studio producer has a 170-minute operational ceiling, including queue time, within a 210-minute
+job that also runs the Decision and external sign-in checks and uploads evidence. In hosted run
+44287433992 the serial browser suite reached case 152 of 279 at the former 80-minute limit. That
+limit was sized for 171 cases. The controller log and browser traces are retained separately so a
+deadline can be distinguished from a failed journey. Acceptance requires every selected case to pass.
 
 ## Browser and owning dependencies
 

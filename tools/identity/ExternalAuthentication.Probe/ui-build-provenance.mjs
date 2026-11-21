@@ -10,10 +10,9 @@ const repo = resolve(import.meta.dirname, "../../..");
 const studioBin = "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0";
 const probeProject = "tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj";
 const moduleRoot = "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot";
-// The retained 153 completed traces span 58m25s, after 6m24s of setup.
-// The full 171-case projection is about 73m; keep finite headroom for that same inventory.
-// Individual case, request, retry and owned-cleanup budgets stay unchanged.
-const studioTimeoutMinutes = 80;
+// Run 44287433992 reached case 152 of 279 at 80 minutes, including setup.
+// Allow the serial suite to finish at that pace, with headroom for runner variation.
+const studioTimeoutMinutes = 170;
 const marker = "elsa-external-auth-ui-build/v1";
 const digest = value => createHash("sha256").update(value).digest("hex");
 function phaseExecutable(phase, tools) {

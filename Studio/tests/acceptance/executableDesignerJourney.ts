@@ -119,13 +119,18 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     const last = editor.locator('.wf-sequence-step[data-id="frame-15"]');
     await last.scrollIntoViewIfNeeded();
     expect(await scroller.evaluate(node => node.scrollTop), "The inner canvas actually scrolled").toBeGreaterThan(0);
-    await expect(last).toBeInViewport({ ratio: 1 });
-    expect(await last.evaluate(node => {
-      const rect = node.getBoundingClientRect();
-      const canvas = node.closest(".wf-sequence-designer")!.getBoundingClientRect();
-      return rect.top >= canvas.top && rect.bottom <= canvas.bottom &&
+    await expect(last).toBeInViewport();
+    expect(await last.evaluate(async node => {
+      const intersection = await new Promise<IntersectionObserverEntry>(resolve => {
+        const observer = new IntersectionObserver(([entry]) => { observer.disconnect(); resolve(entry); });
+        observer.observe(node);
+      });
+      // Scroll offsets are rounded to CSS pixels. Include clipping by every ancestor of the card.
+      const rect = intersection.boundingClientRect, visible = intersection.intersectionRect;
+      return intersection.isIntersecting && visible.left - rect.left <= 1 && rect.right - visible.right <= 1 &&
+        visible.top - rect.top <= 1 && rect.bottom - visible.bottom <= 1 &&
         node.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2));
-    }), "The final real activity remains inside the scrollable canvas and unobscured").toBe(true);
+    }), "The final real activity remains fully visible inside the scrollable canvas and unobscured").toBe(true);
     expect(await page.locator(".content").evaluate(node => node.scrollTop)).toBe(geometry.content.scrollTop);
     await info.attach(`${name}-geometry`, { body: JSON.stringify({ ...geometry, canvasScrollTop: await scroller.evaluate(node => node.scrollTop) }), contentType: "application/json" });
     await capture(page, info, name);
