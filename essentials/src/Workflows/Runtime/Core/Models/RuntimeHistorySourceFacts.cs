@@ -5,6 +5,8 @@ public static class RuntimeHistorySourceFacts
 {
     private const string PublicationAttempt = "StimulusRoutingAttemptObserved";
     private const string PublicationDisposition = "StimulusRoutingDispositionObserved";
+    /// <summary>Closed observation vocabulary supplied by a qualified publication owner.</summary>
+    public static IReadOnlyList<string> PublicationObservationKinds { get; } = Array.AsReadOnly(new[] { PublicationAttempt, PublicationDisposition });
     private static readonly HashSet<string> PublicationDispositions = new(StringComparer.Ordinal)
     {
         "routing-source-unavailable-observed", "routing-source-refused-observed", "routing-failure-observed",

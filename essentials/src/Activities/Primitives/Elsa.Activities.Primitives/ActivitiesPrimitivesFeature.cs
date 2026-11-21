@@ -28,6 +28,9 @@ namespace Elsa.Activities.Primitives;
 )]
 public class ActivitiesPrimitivesFeature : IShellFeature
 {
+    private static readonly RuntimeHistorySourceSupport PublicationHistory = RuntimeHistorySourceSupport.ForSourceOwner(
+        PublishStimulusConstants.PublishStimulusIntentKind, [RuntimeHistorySourceFactKind.StimulusPublicationCommitted]);
+
     public void ConfigureServices(IServiceCollection services)
     {
         // The CLR activator binds each activity's scope to the partition of the scope it activates in.
@@ -51,6 +54,8 @@ public class ActivitiesPrimitivesFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IStimulusDeliveryIntentAdapter, PublishStimulusIntentAdapter>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, PublishStimulusSchemaGuard>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, PublishStimulusHistoryEnricher>());
+        if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, PublicationHistory)))
+            services.AddSingleton(PublicationHistory);
         services.TryAddSingleton<IPublishStimulusStager>(
             serviceProvider => serviceProvider.GetRequiredService<PublishStimulusStagingBuffer>());
         services.TryAddSingleton<IPublishStimulusStagingAccessor>(
