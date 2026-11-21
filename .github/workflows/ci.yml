@@ -2061,4 +2061,7 @@ jobs:
           run sqlserver "$MS" case=mutual mutation=rr expect=deadlock
           run sqlserver "$MS" case=mutual rcsi=0 mutation=rr expect=deadlock
           run sqlserver "$MS" case=heartbeats rcsi=0 mutation=membership expect=deadlock
+          # NL-C1 on the other engines: hold both owners' node records and force the mutual take.
+          run mysql "$MY" case=mutual mutation=rr-subquery expect=deadlock
+          run postgres "$PG" case=mutual mutation=share expect=deadlock
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
