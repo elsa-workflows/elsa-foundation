@@ -16,6 +16,7 @@ public static class LeaseChecks
         await ActorJournalChecks.Run(Check);
         await ActorInboxChecks.Run(Check);
         await ActorAdapterChecks.Run(Check);
+        await FoundationSendCapChecks.Run(Check);
         await ActorAdapterChecks.EventAmbient(Check);
         await OrdinaryIngressChecks.Run(Check);
         await FoundationKeyIngressChecks.Run(Check);

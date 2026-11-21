@@ -8,6 +8,8 @@ namespace Kernel.Foundation.InMemory;
 internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
     (Durable.Requests Requests, string Node)? local = null) : Durable.IActorType
 {
+    private const int MaxTurnSends = 10_000;
+
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => row?.Model == actor.Type;
 
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
@@ -79,6 +81,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray());
         await actor.TurnAsync(turn, CancellationToken.None);
         var outcome = turn.Seal();
+        if (outcome.Sent.Count > MaxTurnSends)
+            throw new InvalidOperationException($"A turn may send at most {MaxTurnSends:N0} messages.");
         if (outcome.Row is { Status: Durable.InstanceStatus.Running } && outcome.FoundationHeader is { } next)
             outcome.FoundationWithholds = actor.Withholds(header with { TypeData = next.TypeData, Labels = next.Labels });
         return outcome;
