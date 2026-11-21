@@ -1947,7 +1947,7 @@ jobs:
             dotnet build "$p" -c Release --no-restore
           done
 
-      - name: Trace split conformance under competing runtime suites
+      - name: Check the repaired split witness under competing runtimes
         run: |
           RTC="conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
           logs="$RUNNER_TEMP/split-diagnostic"
@@ -1958,7 +1958,7 @@ jobs:
               failed=0
               for round in 1 2 3; do
                 echo "Instance $instance, round $round"
-                dotnet "$RTC" semantic --partitions 4096 || failed=1
+                dotnet "$RTC" semantic split --partitions 4096 || failed=1
               done
               exit "$failed"
             ) > "$logs/$instance.log" 2>&1 &
