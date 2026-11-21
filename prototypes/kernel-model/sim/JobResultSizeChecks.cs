@@ -17,6 +17,11 @@ internal static class JobResultSizeChecks
         await Run("one byte over", new string('x', PayloadLimit - overhead + 1), true);
         var escapedOverhead = Encoding.UTF8.GetByteCount(Json.Write(new JobFinished(Key, Json.Write("&"), null)));
         await Run("escaped one byte over", new string('x', PayloadLimit - escapedOverhead + 1) + "&", true);
+        var chunk = new string('x', PayloadLimit / 4);
+        await Schedule(new[] { chunk, chunk, chunk, chunk, chunk }, false, true, flaws,
+            (ok, name) => check(ok, $"oversized compound value: {name}"));
+        await Schedule(new string('x', 166_666_667), false, true, flaws,
+            (ok, name) => check(ok, $"value beyond the serializer's single-token limit: {name}"));
 
         async Task Run(string shape, string value, bool tooLarge)
         {
@@ -27,7 +32,7 @@ internal static class JobResultSizeChecks
         }
     }
 
-    private static async Task Schedule(string value, bool suspended, bool tooLarge, Flaw flaws, Action<bool, string> check)
+    private static async Task Schedule(object value, bool suspended, bool tooLarge, Flaw flaws, Action<bool, string> check)
     {
         const long now = 1_701_200_000_000;
         var store = new InMemoryStore(1, () => now);
@@ -78,7 +83,7 @@ internal static class JobResultSizeChecks
         }
     }
 
-    private sealed class Probe(string value) : Contract.IActorType
+    private sealed class Probe(object value) : Contract.IActorType
     {
         public string Type => "job-result-size";
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -102,7 +107,8 @@ internal static class JobResultSizeChecks
                     case Contract.Kinds.JobFinished:
                         var completion = Json.Read<Contract.JobFinished>(message.Payload!);
                         Completions++;
-                        Observed = completion.Error ?? (Json.Read<string>(completion.Result!) == value ? "original" : "wrong result");
+                        Observed = completion.Error ?? (value is string text && Json.Read<string>(completion.Result!) == text
+                            ? "original" : "wrong result");
                         break;
                 }
             return default;
