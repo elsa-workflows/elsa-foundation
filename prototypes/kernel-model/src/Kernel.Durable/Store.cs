@@ -30,7 +30,10 @@ public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, 
 public sealed record SubscriptionRow(
     [property: JsonConverter(typeof(DurableKeyJson))] string Key,
     [property: JsonConverter(typeof(DurableKeyJson))] string Instance,
-    [property: JsonConverter(typeof(DurableKeyJson))] string Wait, StartSpec? Start = null, long Creation = 0);
+    [property: JsonConverter(typeof(DurableKeyJson))] string Wait, StartSpec? Start = null, long Creation = 0)
+{
+    internal string? FoundationTenant { get; init; }
+}
 
 public sealed record EventRow(
     [property: JsonConverter(typeof(DurableKeyJson))] string Key,
@@ -372,7 +375,13 @@ public interface IKernelStore : IMembership
 /// <summary>A read-only event delivery. Only the event router constructs this envelope.</summary>
 public sealed class EventDelivery
 {
-    internal EventDelivery(Message message, EventMatch match) => Message = message.WithInboxScope(-2, match.Encode());
+    internal EventDelivery(Message message, EventMatch match, string? foundationTenant = null)
+    {
+        Message = message.WithInboxScope(-2, match.Encode());
+        FoundationTenant = foundationTenant;
+    }
+
+    internal string? FoundationTenant { get; }
     public Message Message { get; }
     public Message At(long serial) => Message.Start is null ? Message : Message with { Target = InstanceRef.ForEvent(Message.Target.Partition, serial) };
 }
@@ -380,7 +389,7 @@ public sealed class EventDelivery
 public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
 {
     public EventDelivery Delivery(int partitions = 1, string? replyTo = null) =>
-        new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, new(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation));
+        new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, new(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation), Wait.FoundationTenant);
 }
 
 public sealed record EventAcceptance(bool Added, InstanceRef Target)

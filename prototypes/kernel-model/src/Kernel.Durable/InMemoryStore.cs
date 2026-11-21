@@ -404,7 +404,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     private long _eventSerial;
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default)
     {
-        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(delivery.Message);
+        ValidateEventIdentity(delivery);
         lock (_gate) return new(InsertEventDelivery(delivery));
     }
 
@@ -413,7 +413,19 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         if (Messages.TryGetValue(delivery.Message.InboxKey, out var existing))
             return new(false, existing.Message.Target);
         var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++_eventSerial));
+        ReferenceBinding? binding = null;
+        if (delivery.FoundationTenant is { } tenant && message.Start is { } start)
+        {
+            var address = new CreationAddress(message.Target.Id, 1);
+            start = start with { Creation = new CreationStart(1, 0, address.Id) };
+            message = message with { Start = start, TargetCreation = 1 };
+            var reference = ReferenceFor(tenant, address);
+            binding = new ReferenceBinding(tenant, reference, address, message.InboxKey,
+                CreationProtocol.Fingerprint(start, message.Kind, message.Payload)!);
+        }
+
         Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
+        if (binding is not null) InsertReference(binding);
         return new(true, message.Target);
     }
 
@@ -434,12 +446,42 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 .Select(wait => Events.Route(request, wait, partitions, replyTo)).ToArray();
             if (deliveries.Length == 0) return null;
 
-            if (!CreationIdentityAvailable)
-                foreach (var delivery in deliveries) CreationProtocol.RejectUnsupported(delivery.Message);
+            foreach (var delivery in deliveries) ValidateEventIdentity(delivery);
             var starts = deliveries.Count(delivery => delivery.Message.Start is not null && !Messages.ContainsKey(delivery.Message.InboxKey));
             _ = checked(_eventSerial + starts);
             EventRows.Add(key, request);
             return Array.ConvertAll(deliveries, InsertEventDelivery);
+        }
+    }
+
+    private void ValidateEventIdentity(EventDelivery delivery)
+    {
+        if (CreationIdentityAvailable) return;
+        if (delivery.FoundationTenant is not null)
+            throw new StoreException(Failure.Definite, "A bound event starter requires qualified creation identity.");
+        CreationProtocol.RejectUnsupported(delivery.Message);
+    }
+
+    internal void SetFoundationEventStart(string tenant, string correlationKey, string wait, StartSpec? start)
+    {
+        if (start is not null && (start.Parent is not null || start.ParentCreation != 0 || start.Creation is not null))
+            throw new ArgumentException("A start subscription supplies no creator identity or parent.", nameof(start));
+        var key = tenant + "_" + correlationKey;
+        lock (_gate)
+        {
+            if (start is not null && !CreationIdentityAvailable)
+                throw new StoreException(Failure.Definite, "A bound event starter requires qualified creation identity.");
+
+            Subscriptions.RemoveWhere(subscription => subscription.Key == key && subscription.Instance == "" &&
+                subscription.Wait == wait && subscription.FoundationTenant == tenant);
+            if (start is null) return;
+
+            var row = new SubscriptionRow(key, "", wait, start) { FoundationTenant = tenant };
+            if (!Subscriptions.Add(row)) return;
+
+            var now = clock();
+            foreach (var @event in EventRows.Values.Where(@event => @event.Key == key && @event.KeepUntil >= now).OrderBy(@event => @event.Id, StringComparer.Ordinal))
+                InsertEventDelivery(Events.Route(@event, row, partitions));
         }
     }
 
