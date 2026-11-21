@@ -14,8 +14,17 @@
           "Kernel.Runtime": "[1.0.0, )"
         }
       },
+      "kernel.foundation.contracts": {
+        "type": "Project"
+      },
       "kernel.graph": {
         "type": "Project"
+      },
+      "kernel.model.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )"
+        }
       },
       "kernel.native": {
         "type": "Project",
@@ -30,7 +39,8 @@
       "kernel.workflows": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Durable": "[1.0.0, )"
+          "Kernel.Durable": "[1.0.0, )",
+          "Kernel.Model.Contracts": "[1.0.0, )"
         }
       }
     }
