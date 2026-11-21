@@ -84,6 +84,8 @@ $SIM --contract-jobs --seed 1 --flaw VolatileJobTicket
 $SIM --contract-jobs --seed 1 --flaw JobPoisonAsError
 $SIM --contract-jobs --seed 1 --tree-stall           # reproduce the unbounded trial liveness failure (exit 1)
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
+$SIM --public-owner-check                            # FC-1 per-owner serialization and fenced takeover
+$SIM --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
 $SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
 $SIM --native-mutations --seeds 20000                # break the native model on purpose
