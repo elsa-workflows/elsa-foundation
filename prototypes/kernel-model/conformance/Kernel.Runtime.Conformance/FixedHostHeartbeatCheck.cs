@@ -15,7 +15,7 @@ public static class FixedHostHeartbeatCheck
     {
         const int n = 4;
         var lease = TimeSpan.FromSeconds(2);
-        var store = new InMemoryStore(n, InMemoryProvider.Clock) { NodeLeaseAvailable = true };
+        var store = new InMemoryStore(n, InMemoryProvider.Clock);
         var wire = new NodeStore(store) { WithoutOwnedSets = true };
         var host = DurableHost.ForNode("fixed", wire, new WorkflowInstance(Stress.Models()), n, new WorkerOptions { Lease = lease, Partitions = n });
         var node = new RuntimeNode("fixed", wire, n, new LoopOptions { BalanceEvery = lease / 4, Window = lease / 2, PollInterval = TimeSpan.FromMilliseconds(200) });

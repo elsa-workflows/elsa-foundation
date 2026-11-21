@@ -41,10 +41,10 @@ internal static class WorkerSetChecks
               && store.Journal.Values.Where(j => j.Partition == 0).All(j => j.Instance == x.Id) && store.Journal.Values.Where(j => j.Partition == 1).All(j => j.Instance == y.Id),
             $"turns in two partitions flush as one owned batch: ready [{string.Join(", ", ready)}], commits {commits - before}, positions {p0}/{worker.PositionOf(0)} and {p1}/{worker.PositionOf(1)}");
 
-        // The marks land at each partition's epoch. Then partition 1's lease runs out for another node, which takes it.
+        // The marks land at each partition's epoch. The store then sees the owner's node lease expire, and another node takes 1.
         ready = await Deliver("three", "four");
         check(store.Messages["three"].Seen == e0 && store.Messages["four"].Seen == e1, "each mark records its own partition's epoch");
-        store.Partitions[1].LeaseUntil = 0;
+        store.Nodes[store.Partitions[1].Owner!].LeaseUntil = 0;
         var taken = await store.TakeAsync(1, "b", Defaults.Lease);
         before = commits;
         await worker.FlushAsync();      // the turns in 0 and 1: the fence of 1 is stale
@@ -194,7 +194,7 @@ internal static class WorkerSetChecks
         gate.SetResult();
 
         // A trial in 1: what "b" marked there at epoch 2 before it was lost.
-        (store, host, scopes) = await Node(s => (s.Partitions[1].Owner, s.Partitions[1].Epoch, s.Partitions[1].LeaseUntil) = ("b", 2, 0));
+        (store, host, scopes) = await Node(s => (s.Partitions[1].Owner, s.Partitions[1].Epoch) = ("b", 2));
         worker = host.NodeWorker!;
         await store.AddAsync(new("m", InstanceRef.In(1, "z"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
         store.Messages["m"].Seen = 2;
@@ -293,7 +293,7 @@ internal static class WorkerSetChecks
         var (e0, e2) = (worker.EpochOf(0), worker.EpochOf(2));
         await store.AddAsync(Add(InstanceRef.In(1, "y"), "two"));
         await Step(worker);
-        store.Partitions[1].LeaseUntil = 0;
+        store.Nodes[store.Partitions[1].Owner!].LeaseUntil = 0;
         await store.TakeAsync(1, "b", Defaults.Lease);
         wire.DelayRetake = true;
         var flush = worker.FlushAsync();        // refused: the retake of 0 executes, and its answer waits
@@ -322,7 +322,7 @@ internal static class WorkerSetChecks
         }
         await worker.FlushAsync();
         var unwritten = worker.Unwritten.Order(StringComparer.Ordinal).ToList();
-        store.Partitions[0].LeaseUntil = 0;
+        store.Nodes[store.Partitions[0].Owner!].LeaseUntil = 0;
         await store.TakeAsync(0, "b", Defaults.Lease);
         await worker.DisposeAsync();            // writes 0/t and 1/u first: the fence of 0 is stale
         check(unwritten.SequenceEqual(["0/t", "1/u"]) && !worker.Owns && store.Partitions[1].Epoch == e1 && !store.Instances.ContainsKey("1/u"),
@@ -335,7 +335,7 @@ internal static class WorkerSetChecks
     private static string Unserved(InMemoryStore store, Worker worker, long now)
     {
         var unserved = Enumerable.Range(0, store.Partitions.Length).Where(p => store.Partitions[p] is var row && row.Owner == worker.Node
-            && row.LeaseUntil >= now && worker.EpochOf(p) != row.Epoch).ToList();
+            && store.Nodes.TryGetValue(worker.Node, out var node) && node.LeaseUntil >= now && worker.EpochOf(p) != row.Epoch).ToList();
         return unserved.Count == 0 ? "" : $"; unserved: {string.Join(" ", unserved)}";
     }
 
@@ -362,7 +362,7 @@ internal static class WorkerSetChecks
         await store.AddAsync(Add(x, "one"));
         await store.AddAsync(Add(y, "two"));
         await Step(worker);
-        store.Partitions[2].LeaseUntil = 0;
+        store.Nodes[store.Partitions[2].Owner!].LeaseUntil = 0;
         var moved = await store.TakeAsync(2, "b", Defaults.Lease);
         wire.LoseNext = true;
         await worker.FlushAsync();      // fences 0 and 1, lands, and the answer is lost
@@ -386,7 +386,7 @@ internal static class WorkerSetChecks
         await store.AddAsync(Add(InstanceRef.In(2, "z"), "two"));
         await Step(worker);
         await store.ReleaseAsync(1, epochs[1]);
-        store.Partitions[2].LeaseUntil = 0;
+        store.Nodes[store.Partitions[2].Owner!].LeaseUntil = 0;
         await store.TakeAsync(2, "b", Defaults.Lease);
         var elsewhere = await store.TakeAsync(3, "a", Defaults.Lease);
         await worker.FlushAsync();      // the turn in 2: its fence is stale
@@ -432,12 +432,14 @@ internal static class WorkerSetChecks
         var handedOver = store.Messages.Values.SingleOrDefault(m => m.Message.Kind == "timer")?.Seen;
         await store.AddAsync(Add(InstanceRef.In(1, "y"), "two"));
         await Step(worker);
-        store.Partitions[1].LeaseUntil = 0;
+        store.Nodes[store.Partitions[1].Owner!].LeaseUntil = 0;
         await store.TakeAsync(1, "b", Defaults.Lease);
         await worker.FlushAsync();      // refused: 1 is stale
+        var beat = new NodeHeartbeat(worker.Node, store, [worker], Defaults.Lease, Defaults.Lease);
         for (var i = 0; i < 40 && Fired(store) == 0; i++)
         {
             time += 2_000;
+            await beat.BeatAsync();
             await worker.WokenAsync(null);
             await worker.RunAsync();
         }
@@ -467,7 +469,7 @@ internal static class WorkerSetChecks
         await Step(worker);
         var (revision, p0) = (store.Instances[y.Id].Revision, store.Partitions[0].Position);
         var queued = worker.Queued;
-        store.Partitions[1].LeaseUntil = 0;
+        store.Nodes[store.Partitions[1].Owner!].LeaseUntil = 0;
         await store.TakeAsync(1, "b", Defaults.Lease);
         await worker.FlushAsync();
         check(queued > 0 && store.Instances[y.Id].Revision == revision && store.Messages.ContainsKey("three") && store.Partitions[0].Position == p0
@@ -509,7 +511,7 @@ internal static class WorkerSetChecks
         const long time = 100;
         var store = new InMemoryStore(2, () => time);
         store.Partitions[0].Epoch = 1;      // "a" takes 0 at epoch 2
-        (store.Partitions[1].Owner, store.Partitions[1].Epoch, store.Partitions[1].LeaseUntil) = ("b", 2, 0);    // "b" held 1 at epoch 2 and was lost
+        (store.Partitions[1].Owner, store.Partitions[1].Epoch) = ("b", 2);    // "b" held 1 at epoch 2 and was lost
         var (x, z) = (InstanceRef.In(0, "x"), InstanceRef.In(1, "z"));
         await store.AddAsync(new("m", z, "add", Json.Write(new Add("m")), Start: Counter.Spec));
         store.Messages["m"].Seen = 2;       // what "b" marked before it was lost
@@ -524,7 +526,7 @@ internal static class WorkerSetChecks
             $"a trial in partition 1 holds back partition 0 of the same worker, as it would any partition of its process: ready [{string.Join(", ", worker.Ready)}]");
 
         // Partition 1 moves while its trial is in flight. The beat's fence is refused, and the reset retakes 0 at a new epoch.
-        store.Partitions[1].LeaseUntil = 0;
+        store.Nodes[store.Partitions[1].Owner!].LeaseUntil = 0;
         var moved = await store.TakeAsync(1, "c", Defaults.Lease);
         await worker.BeatAsync();
         check(moved is not null && !worker.Trial.Any() && worker.Fences.Select(f => (f.Partition, f.Epoch)).SequenceEqual([(0, e0 + 1)]) && store.Messages["n"].Attempts == 0,
@@ -582,7 +584,7 @@ internal static class WorkerSetChecks
         var retaken = worker.EpochOf(0);
 
         // Partition 1 moves; the beat is refused, and the reset retakes partition 0 at a new epoch again.
-        store.Partitions[1].LeaseUntil = 0;
+        store.Nodes[store.Partitions[1].Owner!].LeaseUntil = 0;
         await store.TakeAsync(1, "b", Defaults.Lease);
         await worker.BeatAsync();
         var again = worker.EpochOf(0);

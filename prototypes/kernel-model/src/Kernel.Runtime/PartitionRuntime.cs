@@ -130,7 +130,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
     }
 
-    /// <summary>K1b: the node's lease, when the host keeps one (<see cref="INodeLeaseHost"/>); null under the per-partition lease.</summary>
+    /// <summary>K1b: the node's lease, when the host keeps one (<see cref="INodeLeaseHost"/>); null for a host with no node lease.</summary>
     public TimeSpan? NodeLease => (_host as INodeLeaseHost)?.NodeLease;
 
     /// <summary>

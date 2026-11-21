@@ -96,13 +96,12 @@ public static class Cases
         {
             for (var i = 0; i < 3; i++) await h.StartAsync();
             await Settle(h);
-            await Task.Delay(h.Lease * 4);      // idle: no commit renews a lease, only the pass's beat
+            await Task.Delay(h.Lease * 4);      // idle: no commit renews a lease, only the node's heartbeat
             That(h.Settled(), $"after an idle spell: {Holders(h)}");
             for (var p = 0; p < h.Partitions; p++)
                 That(await h.Outside.TakeAsync(p, "probe", h.Lease) is null, $"partition {p}'s lease ran out while it was held and idle: another node could take it");
-            if (h.Setup.NodeLease)
-                foreach (var n in h.Alive)
-                    That(n.Heartbeats.Renewed > 0, $"{n.Name} renewed {n.Heartbeats.Renewed} of {n.Heartbeats.Sent} heartbeats");
+            foreach (var n in h.Alive)
+                That(n.Heartbeats.Renewed > 0, $"{n.Name} renewed {n.Heartbeats.Renewed} of {n.Heartbeats.Sent} heartbeats");
         }),
 
         new("placement: no activation comes or goes while the cluster is idle", Level.Reference, async h =>
@@ -434,7 +433,7 @@ public static class Cases
         }),
     ];
 
-    public static async Task<List<RuntimeOutcome>> RunAsync(IRuntimeProvider runtime, IStoreProvider store, bool brokenFence = false, Func<RuntimeCase, bool>? filter = null, TextWriter? output = null, int? partitions = null, bool nodeLease = false)
+    public static async Task<List<RuntimeOutcome>> RunAsync(IRuntimeProvider runtime, IStoreProvider store, bool brokenFence = false, Func<RuntimeCase, bool>? filter = null, TextWriter? output = null, int? partitions = null)
     {
         output ??= Console.Out;
         var outcomes = new List<RuntimeOutcome>();
@@ -448,7 +447,7 @@ public static class Cases
                 var setup = @case.Setup ?? Default;
                 if (partitions is { } count && @case.AnyCount && setup.Partitions == Default.Partitions) setup = setup with { Partitions = count };     // a case that chose its own count keeps it
                 var timeout = Scaled(setup.Partitions, Timeout);
-                await using var harness = await Harness.CreateAsync(runtime, store, setup with { BrokenFence = brokenFence, NodeLease = nodeLease });     // K1b: --node-lease, the store's switch on
+                await using var harness = await Harness.CreateAsync(runtime, store, setup with { BrokenFence = brokenFence });
                 try
                 {
                     await @case.Body(harness).WaitAsync(timeout);

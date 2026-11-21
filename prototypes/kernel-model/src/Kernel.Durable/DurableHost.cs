@@ -128,8 +128,8 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
 
     private IKernelStore? Store => _counted?.Store ?? Workers.FirstOrDefault()?.Store;
 
-    /// <summary>The node's lease, once the store keeps one (<see cref="IKernelStore.NodeLeaseAvailable"/>); null before.</summary>
-    public TimeSpan? NodeLease => Store is { NodeLeaseAvailable: true } ? _lease : null;
+    /// <summary>The node lease when the host has a store.</summary>
+    public TimeSpan? NodeLease => Store is null ? null : _lease;
 
     /// <summary>
     /// The node's heartbeat over every Worker of this host, its pass gate deciding (<see cref="NodeHeartbeat"/>). It runs

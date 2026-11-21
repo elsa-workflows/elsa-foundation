@@ -536,30 +536,16 @@ public sealed partial class World
         var published = false;
         // K1b: under the node lease a lost owner's partitions wait a lease of one-second rounds, so a poison message that
         // kills process after process needs more rounds to be counted down.
-        var rounds = Config.NodeLease ? 600 : 150;
+        const int rounds = 600;
         for (var round = 0; round < rounds; round++)
         {
-            // Expire a missing owner's lease; while every partition has an owner, give healthy owners passes within
-            // their lease. Advancing past every lease on every round would manufacture repeated owner loss.
-            var missing = Enumerable.Range(0, Config.Partitions).Any(p => !slots.Any(s => s.Partition == p && Of(s.Node, p).Worker.Holds(p)));
             // K1b: one node lease covers every partition of a process, so a missing owner's lease runs out by itself while the
             // live nodes beat every round; a long silence would expire every node at once.
-            Time += Config.NodeLease ? 1_000 : round == 0 || missing ? 11_000 : 1_000;
-            var beaten = new HashSet<Actor>();
-            if (Config.NodeLease)       // K1b: each node's heartbeat, which its pass gate may withhold
-                foreach (var runtime in LiveRuntimes.ToList())
-                {
-                    Watch(runtime.HeartbeatAsync().AsTask());
-                    if (_dying.Count != 0) FinishDeaths();
-                }
-            else for (var p = 0; p < Config.Partitions; p++)
+            Time += 1_000;
+            foreach (var runtime in LiveRuntimes.ToList())
             {
-                foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Holds(p)))
-                {
-                    if (!beaten.Add(Of(node, p))) continue;     // a worker beats once a round, for its whole set
-                    Watch(Of(node, p).Worker.BeatAsync());   // even this acknowledgement can start a job that kills its process
-                    if (_dying.Count != 0) FinishDeaths();
-                }
+                Watch(runtime.HeartbeatAsync().AsTask());
+                if (_dying.Count != 0) FinishDeaths();
             }
             for (var n = 0; n < Config.Nodes; n++) Watch(Runtimes[(n + round) % Config.Nodes].BalanceAsync());   // every node beats and asks for its share
             foreach (var (node, reply) in Deliveries.ToList())      // the transport delivers what it still carries
@@ -576,7 +562,7 @@ public sealed partial class World
                     // K1b: the runtime's node pass, as the built-in runtime's pass loop runs it: a Worker whose only partitions
                     // are pending keeps getting passes, so that its gate reopens, one that holds none gets a pass while a
                     // heartbeat answer waits for it, and what a Worker took back by itself is adopted before it is checked.
-                    if (Config.NodeLease && !actor.Dead && !Actors.Any(a => a.Runtime == actor.Runtime && a.Passing)
+                    if (!actor.Dead && !Actors.Any(a => a.Runtime == actor.Runtime && a.Passing)
                         && (!worker.Owns && (worker.Pending.ContainsKey(partition) || worker.AnswerWaiting) || worker.Holds(partition) && !actor.Runtime.Owns(partition) && !actor.Runtime.Activating(partition)))
                     {
                         Watch(actor.Runtime.NodePassAsync());

@@ -121,8 +121,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly Dictionary<InboxKey, int> _behind = [];    // own rows written while catching up, not yet polled, with their partition
     private readonly List<TurnOutcome> _queue = [];
     private long _generation, _anchor = long.MinValue, _local, _observed;
-    private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
-    private long _safeUntil = long.MinValue;    // local monotonic deadline, measured from the start of a successful take or commit; none before the first
+    private long _safeUntil = long.MinValue;    // local monotonic deadline, measured from the send time of a successful take or heartbeat; none before the first
     private long _expiredGeneration = -1; // monotonically latched by an off-turn callback; only the owner resets state
     private bool _aliasesChangedDuringLoad, _retryAliases;
     private long _aliasRead, _aliasBirths = 1, _birthComparison, _previousBirths;
@@ -144,7 +143,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         public readonly long Epoch = epoch;
         public long Position = position;
-        public long Renewed, SafeUntil;     // per partition: a commit renews only the rows it fences
     }
     private readonly SortedDictionary<int, Held> _held = [];
     // K1b, the node lease ("Liveness follows the Worker's passes"): the partitions a guard expiry stood down, at the epoch
@@ -245,9 +243,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool CommitClockAvailable => _store.CommitClockAvailable;
     /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
-
-    /// <summary>Database time as far as this worker knows, whatever the flaws: what the lease is reckoned in.</summary>
-    private long DbNow => _anchor + _options.Monotonic();
 
     public bool Taking => _taking;
     public bool Polling => _polling;
@@ -389,12 +384,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>
     /// One pass, as the hosts drive a worker: read the inbox if woken, load, read kept events, run every turn that is
-    /// ready (in id order), and flush; then, if no commit has renewed the lease for a third of it, beat (an empty fenced
-    /// commit, which also tells a stale owner that it is one). Zero when the pass found work or received a job result; otherwise the
-    /// time until the earliest timer held in memory or the next beat, whichever is sooner; null once the scope is not
-    /// held. A runtime that calls again when asked therefore keeps an idle scope's lease. A cancelled token stops the
-    /// pass before the next turn, the flush and the beat. A pass already cancelled leaves wakes, job retries and
-    /// published results for the next owner pass or handoff.
+    /// ready (in id order), and flush. Zero when the pass found work or received a job result. Otherwise, return the
+    /// next delay, capped at a third of the lease so the host can observe completed passes. Null means the scope is
+    /// no longer held. A cancelled token stops before the next turn or flush and leaves pending work for a later pass.
     /// </summary>
     public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default)
     {
@@ -443,7 +435,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
             RunTurn(id, cancellationToken);
         }
         if (!cancellationToken.IsCancellationRequested) await FlushAsync(cancellationToken);
-        if (!cancellationToken.IsCancellationRequested && Owns && !NodeLease && DbNow >= RenewBy) await BeatAsync(cancellationToken);    // the node lease: the host's heartbeat renews
         if (!Owns) return null;
         Evict();
         if (busy || cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
@@ -451,13 +442,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value - now)
             .Concat(_slots.Values.Where(s => s.Unwritten && s.Until > now).Select(s => s.Until - now)).DefaultIfEmpty(long.MaxValue).Min();
         var caller = Callers.Select(to => ReplyTo.Parse(to).Deadline - now).DefaultIfEmpty(long.MaxValue).Min();
-        var delay = TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(caller, Math.Min(next, NodeLease ? (long)(_options.Lease.TotalMilliseconds / 3) : RenewBy - DbNow))));
+        var delay = TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(caller, Math.Min(next, (long)(_options.Lease.TotalMilliseconds / 3)))));
         // Flush can receive a result after the last Ready scan. Give that inbox another pass before advising sleep.
         return _lastReceivedJob != receivedBeforePass || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _jobsWaitingForTrial && _gate.Idle ? TimeSpan.Zero : delay;
     }
-
-    /// <summary>When the pass beats if nothing commits before: a third of the lease after it was last renewed (the sketch's cadence).</summary>
-    private long RenewBy => _renewed + (long)(_options.Lease.TotalMilliseconds / 3);
 
     // A successful response can arrive arbitrarily late. The lease was renewed no earlier than when its request began;
     // stop at that conservative local deadline, even if the actual database lease has more time. No read is needed.
@@ -486,8 +474,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
         return false;
     }
 
-    /// <summary>K1b: the store keeps the node lease, so the host's heartbeat renews and a commit renews nothing.</summary>
-    private bool NodeLease => _store.NodeLeaseAvailable;
     internal IKernelStore Store => _store;      // K1b: the host's heartbeat goes to the Workers' store
     internal TimeSpan Lease => _options.Lease;
 
@@ -684,13 +670,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (CanStartWork) return true;
         // Stood down by the guard: pending. What the host is giving up (a release, or a hand-over under way) is given up too:
         // its counting retake at the next answer counts the death and releases instead of installing.
-        if (NodeLease)
-            lock (_turnSync)
-                foreach (var fence in Fences)
-                {
-                    _pending[fence.Partition] = fence.Epoch;
-                    if (_releasing || _handingOver.Contains(fence.Partition)) _givenUp.Add(fence.Partition);
-                }
+        lock (_turnSync)
+            foreach (var fence in Fences)
+            {
+                _pending[fence.Partition] = fence.Epoch;
+                if (_releasing || _handingOver.Contains(fence.Partition)) _givenUp.Add(fence.Partition);
+            }
         Reset();
         return false;
     }
@@ -722,7 +707,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>K1b: the host's pass gate, set by its heartbeat (<see cref="NodeHeartbeat"/>). While it is closed the Worker takes nothing.</summary>
     public Func<bool>? TakesOpen { get; set; }
-    private bool TakesClosed => NodeLease && TakesOpen is { } open && !open() && !Has(Flaw.TakeRenewsWedgedHost);     // MUTATION: a wedged host takes
+    private bool TakesClosed => TakesOpen is { } open && !open() && !Has(Flaw.TakeRenewsWedgedHost);     // MUTATION: a wedged host takes
 
     /// <summary>Test-only (N1, N6): how many times <see cref="ClaimedPartitions"/> ran. One answer asks each Worker once.</summary>
     internal long ClaimedLookups { get; private set; }
@@ -881,18 +866,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             Reset();    // a take starts from empty memory
             Observe(lease.Now);
-            _renewed = lease.Now;
             foreach (var taken in lease.Taken)
             {
-                _held[taken.Partition] = new(taken.Epoch, taken.Position) { Renewed = lease.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds };
+                _held[taken.Partition] = new(taken.Epoch, taken.Position);
                 _mine.Add((taken.Partition, taken.Epoch));
             }
-            if (NodeLease)
-            {
-                RenewGuard(started, fresh: true);
-                Volatile.Write(ref _lastPass, _options.Monotonic());     // a fresh take: its first pass is due within the lease
-            }
-            else Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
+            RenewGuard(started, fresh: true);
+            Volatile.Write(ref _lastPass, _options.Monotonic());     // a fresh take: its first pass is due within the lease
         }
     }
 
@@ -1030,11 +1010,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var given = _givenUp.Remove(partition);     // CR-5: the host gave it up meanwhile: released, not installed
             if (lease is not null && generation == _generation && Owns && !_releasing && !_retaking && !given)
             {
-                _held[partition] = new(lease.Epoch, lease.Position) { Renewed = lease.Now, SafeUntil = started + (long)_options.Lease.TotalMilliseconds };
+                _held[partition] = new(lease.Epoch, lease.Position);
                 _mine.Add((partition, lease.Epoch));
                 Observe(lease.Now);
-                Renewed();
-                if (NodeLease) RenewGuard(started);
+                RenewGuard(started);
                 _caughtUp = false;      // F1: until a short poll has read the new partition's inbox, nothing is handed over in memory
                 (_woken, installed) = (true, true);
             }
@@ -1186,7 +1165,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _held.Remove(fence.Partition);
             _issuers.Remove(fence.Partition);
         }
-        Renewed();
     }
 
     /// <summary>Recovery after any doubt is the same path as start-up: drop everything; the host takes the partition again.</summary>
@@ -2114,7 +2092,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     public Task FlushAsync(CancellationToken cancellationToken = default) => FlushAsync(false, cancellationToken);
 
-    /// <summary>An empty commit: renews the lease of an idle partition and tells a stale owner that it is one.</summary>
+    /// <summary>Force a fenced flush even when idle. The node heartbeat handles renewal.</summary>
     public Task BeatAsync(CancellationToken cancellationToken = default) => FlushAsync(true, cancellationToken);
 
     private async Task FlushAsync(bool beat, CancellationToken cancellationToken)
@@ -2229,14 +2207,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         while (true)
         {
-            // When the lease is renewed at the latest, as far as this worker can tell: its estimate of database time
-            // never runs ahead of the database, and the commit executes after it is sent. A store may answer without
-            // the database's time (Now 0). The EF store with the fence in the batch writes the lease from the node's
-            // own clock instead (ENGINES.md); a beat at a third of the lease then tolerates up to two thirds of a lease
-            // of skew between the node's clock and the database's.
             if (!LeaseUsable()) return Outcome.Lost;
-            var sending = DbNow;
-            var started = _options.Monotonic();
             List<int> journaled = [];
             Committed result;
             try
@@ -2283,11 +2254,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     var moved = _held[fence.Partition];
                     if (batch.PositionsIn(fence.Partition) > 0) journaled.Add(fence.Partition);
                     moved.Position += batch.PositionsIn(fence.Partition);
-                    moved.Renewed = Math.Max(moved.Renewed, sending);      // a commit that lands renews the lease of the rows it fences
-                    moved.SafeUntil = Math.Max(moved.SafeUntil, started + (long)_options.Lease.TotalMilliseconds);
                 }
                 Observe(result.Now);
-                Renewed();
             }
             if (journaled.Count > 0) _options.OnJournal?.Invoke(journaled);
             if (!LeaseUsable()) return Outcome.Lost; // a late acknowledgement cannot revive the old local deadline
@@ -2330,17 +2298,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
         touched.UnionWith(marks.Select(i => i.Message.Target.Partition));
         if (beat || touched.Count == 0) touched.UnionWith(_held.Keys);
         return [.. touched.Where(Holds).Select(p => new PartitionFence(p, _held[p].Epoch, _held[p].Position))];
-    }
-
-    /// <summary>
-    /// The lease as the worker reckons it: that of the partition renewed longest ago. Under the node lease a commit renews
-    /// nothing, so only <see cref="RenewGuard"/> moves the deadline.
-    /// </summary>
-    private void Renewed()
-    {
-        if (!Owns) return;
-        _renewed = _held.Values.Min(h => h.Renewed);
-        if (!NodeLease) Volatile.Write(ref _safeUntil, _held.Values.Min(h => h.SafeUntil));
     }
 
     /// <summary>A message held in memory and never written: one that needs no delete when it is cancelled.</summary>

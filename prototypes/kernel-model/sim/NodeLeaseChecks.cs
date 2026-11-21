@@ -1,7 +1,7 @@
 namespace Kernel.Sim;
 
 /// <summary>
-/// K1b slice 4a: the Worker under the node lease, on the in-memory store with the switch on and a clock the check moves.
+/// K1b slice 4a: the Worker under the node lease, on the in-memory store with a clock the check moves.
 /// The guard (decisions, "The local lease guard"): one deadline, the latest send time plus the lease over the heartbeats
 /// and takes whose reply came within their send time plus the lease; a commit renews nothing; a late reply restarts
 /// nothing. The heartbeat's answer (ownership and fencing, "The node's heartbeat"): a partition held at the send that the
@@ -525,7 +525,7 @@ internal static class NodeLeaseChecks
     {
         var (store, clock, advance) = World(3, out _);
         var wire = new DelayedCommit(store);
-        var host = DurableHost.ForNode("p", wire, new WorkflowInstance([new Counter()]), 3, new() { Monotonic = clock, Partitions = 3 });
+        var host = DurableHost.ForNode("p", wire, new WorkflowInstance([new Counter()]), 3, new() { Monotonic = clock, Partitions = 3, Flaws = Flaws });
         await host.ActivateAsync(0);
         await store.TakeAsync([2], "r", Lease);     // r takes 2, then dies
         var worker = host.NodeWorker!;
@@ -554,7 +554,7 @@ internal static class NodeLeaseChecks
     private static (InMemoryStore Store, Func<long> Clock, Action<long> Advance) World(int partitions, out long start)
     {
         var time = start = 100_000L;
-        var store = new InMemoryStore(partitions, () => time, Flaws) { NodeLeaseAvailable = true };
+        var store = new InMemoryStore(partitions, () => time, Flaws);
         return (store, () => time, by => time += by);
     }
 
@@ -626,21 +626,30 @@ internal static class NodeLeaseChecks
     // An answer sent before a reset is discarded on both sides: the retaken partitions are neither stood down nor renewed by it.
     private static async Task DiscardsAnAnswerFromBeforeAReset(Action<bool, string> check)
     {
-        var (store, clock, advance) = World(2, out _);
+        var (store, clock, _) = World(3, out _);
         var worker = Owner(store, [0, 1], clock);
         await new DurableHost([worker]).ActivateAsync(0);
+        // The old answer carries a partition whose take landed without the Worker installing it.
+        var orphan = await store.TakeAsync(2, worker.Node, Lease);
         var sent = worker.BeforeHeartbeat();
         var answer = await store.NodeHeartbeatAsync(worker.Node, Lease, Window);
-        // A refused fence resets the worker, and it takes 0 and 1 back one at a time at new epochs.
+        worker.HeartbeatAnswered(sent, answer);
+        var recorded = worker.AnswerWaiting;
+
+        // A refused fence resets the Worker before the scheduled pass can judge the answer.
         store.Partitions[0].Position++;
         await store.AddAsync(new Message("m", InstanceRef.In(0, "x"), "add", Json.Write(new Add("m")), Start: Counter.Spec));
-        await worker.PollAsync(); await worker.FlushAsync();
+        await worker.PollAsync();
+        await worker.FlushAsync();
         var retaken = worker.Fences;
-        worker.HeartbeatAnswered(sent, answer);      // lists 0 and 1 at the epochs from before the retakes
         await worker.RunAsync();
-        advance(1_000);
-        check(retaken.Count > 0 && worker.Fences.SequenceEqual(retaken) && sent.Generation != worker.BeforeHeartbeat().Generation,
-            $"an answer sent before a reset is discarded: retaken [{string.Join(", ", retaken)}], after the answer [{string.Join(", ", worker.Fences)}]");
+        check(orphan is not null && recorded && !worker.AnswerWaiting && store.Partitions[2].Owner == worker.Node
+            && retaken.Count == 2 && worker.Fences.SequenceEqual(retaken),
+            "NL-8: a recorded heartbeat cannot release an unclaimed row after the Worker resets");
+
+        worker.HeartbeatAnswered(sent, answer);
+        check(sent.Generation != worker.BeforeHeartbeat().Generation && !worker.AnswerWaiting,
+            "NL-8: a heartbeat answered after reset is discarded before it is recorded");
     }
 
     // NL-7's schedules: q's gain of partition 1 is sent at 0 and answered at 11 s. A heartbeat answered at 5 s set the guard

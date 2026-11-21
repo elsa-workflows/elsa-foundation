@@ -200,7 +200,7 @@ public interface IKernelStore : IMembership
     /// owner can only succeed because that owner's lease expired: that is a death, and in the same transaction every
     /// message the dead owner had on trial gets one more attempt. <paramref name="node"/> must be unique per process
     /// start, or a restarted process would look like its predecessor taking again. Under the node lease, "expired" is
-    /// the owner's node record, and the take renews its taker (<see cref="NodeLeaseAvailable"/>).
+    /// the owner's node record, and the take renews its taker.
     /// </summary>
     ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default);
 
@@ -235,15 +235,8 @@ public interface IKernelStore : IMembership
     /// fence renews no lease: <see cref="CommitBatch.Lease"/>
     /// renews nothing (slice 4 makes it the commit-step deadline), and the fence still checks and locks every fenced
     /// row, a batch with no journal rows included. Membership's free partitions are those unowned or whose owner's node
-    /// lease has expired. Under the node lease the host's membership call is <see cref="NodeHeartbeatAsync"/>: the
-    /// runtime's balancing round reads the cluster its last renewing heartbeat saw (K1b slice 5), and
-    /// <see cref="IMembership.HeartbeatAsync"/> stays for the per-partition lease only. Off by default: until K1b slice 6
-    /// deletes the switch, the per-partition lease stands.
-    /// </summary>
-    bool NodeLeaseAvailable => false;
-
-    /// <summary>
-    /// The node's heartbeat under <see cref="NodeLeaseAvailable"/>. One statement or transaction writes this node's
+    /// lease has expired. The runtime balances from the cluster last seen by a renewing heartbeat.
+    /// One statement or transaction writes this node's
     /// record, <c>SeenAt</c> at database time and <c>LeaseUntil</c> at database time plus <paramref name="lease"/>, then
     /// reads the partitions whose owner is <paramref name="node"/> with their epochs (a read that writes nothing). The
     /// membership reads (the live-node count for <paramref name="window"/> and the free list) run after it, outside any
@@ -259,13 +252,13 @@ public interface IKernelStore : IMembership
     /// <summary>
     /// Take a set of virtual partitions. Each is taken, or left out, exactly as the one-partition take decides for it,
     /// with its own epoch and its own death count; the set need not be contiguous. <c>Now</c> is the store's time when a row was taken; when nothing was, a caller must not read it (every store returns 0).
-    /// Under the node lease a caller does not bound its node lease by <c>Now</c> either (<see cref="NodeLeaseAvailable"/>).
+    /// The caller bounds the node lease by its monotonic send time.
     /// The default takes one at a time, k round trips: if one of them fails, the partitions before it are taken already,
     /// so a failure is an unknown outcome and the caller treats the whole set as it treats a failed take.
     /// </summary>
     async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
-        // The earliest take's time, so that a lease reckoned from it never outlasts any of the rows.
+        // Report the earliest database time among the landed takes.
         var (taken, now) = (new List<PartitionFence>(), long.MaxValue);
         foreach (var partition in partitions.Distinct().Order())
         {

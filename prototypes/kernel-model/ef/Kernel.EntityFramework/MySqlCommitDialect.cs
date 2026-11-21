@@ -14,21 +14,20 @@ internal sealed class MySqlCommitDialect : CommitDialect
     /// <summary>LAST_INSERT_ID() names one insert's first id, so a message is an insert of its own.</summary>
     public override int MessageRowsPerStatement => 1;
 
-    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, long? leaseMs, CommitWindow? window, bool unfenced, bool ignoreCount = false)
+    public override void Fence(OwnedCommand c, IReadOnlyList<FenceRow> rows, CommitWindow? window, bool unfenced, bool ignoreCount = false)
     {
         if (window is not null) throw new NotSupportedException("Commit windows are PostgreSQL's.");
-        var lease = leaseMs is { } ms ? FormattableString.Invariant($"\"LeaseUntil\" = {Now} + {ms}") : null;     // none under the node lease: the unchanged update still locks and counts
         if (rows.Count == 1)
         {
             var r = rows[0];
-            c.Statement(FormattableString.Invariant($"""UPDATE "Partitions" SET "Position" = {r.NewPosition}{(lease is null ? "" : ", " + lease)} WHERE "Id" = {r.Id} AND ({(unfenced ? "1 = 1" : FormattableString.Invariant($"\"Epoch\" = {r.Epoch} AND \"Position\" = {r.Position}"))})"""));
+            c.Statement(FormattableString.Invariant($"""UPDATE "Partitions" SET "Position" = {r.NewPosition} WHERE "Id" = {r.Id} AND ({(unfenced ? "1 = 1" : FormattableString.Invariant($"\"Epoch\" = {r.Epoch} AND \"Position\" = {r.Position}"))})"""));
         }
         else
         {
             // k rows: locked in ascending Id order first, then one UPDATE over a derived table.
             LockRows(c, rows);
             var f = string.Join(" UNION ALL ", rows.Select(r => FormattableString.Invariant($"SELECT {r.Id} AS id, {r.Epoch} AS epoch, {r.Position} AS pos, {r.NewPosition} AS np")));
-            c.Statement($"""UPDATE "Partitions" p JOIN ({f}) AS f ON p."Id" = f.id SET p."Position" = f.np{(lease is null ? "" : ", p." + lease)} WHERE {(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}""");
+            c.Statement($"""UPDATE "Partitions" p JOIN ({f}) AS f ON p."Id" = f.id SET p."Position" = f.np WHERE {(unfenced ? "1 = 1" : "p.\"Epoch\" = f.epoch AND p.\"Position\" = f.pos")}""");
         }
         c.Statement($"""SELECT ROW_COUNT() AS "Matched", {Now} AS "Now" """, Expect.Fence, rows.Count);
     }

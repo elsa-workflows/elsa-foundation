@@ -29,9 +29,9 @@ public sealed partial class EfStore
     /// seconds, at least one), which is also how long SQLite's provider retries a busy database. A timeout fails the
     /// statement; disposing the transaction rolls the take back, and the caller takes again at its next round. SQL Server's
     /// pool resets the session's LOCK_TIMEOUT when the connection is next taken; MySQL's session keeps its setting, so the
-    /// take puts it back (<see cref="LockTimeoutReset"/>). Both read back by <c>x locktimeout</c> (slice 6a).
+    /// take puts it back (<see cref="Reset"/>). Both read back by <c>x locktimeout</c> (slice 6a).
     /// </summary>
-    private async Task<IDbContextTransaction> BeginNodeTakeAsync(KernelDb db, TimeSpan lease, CancellationToken cancellationToken)
+    private async Task<(IDbContextTransaction Transaction, IAsyncDisposable? Reset)> BeginNodeTakeAsync(KernelDb db, TimeSpan lease, CancellationToken cancellationToken)
     {
         db.Database.SetCommandTimeout(Math.Max(1, (int)lease.TotalSeconds));
         var transaction = await (RepeatableReadTake && (Engine is not null || postgres) ? db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken) : BeginReadCommittedAsync(db, cancellationToken));
@@ -43,8 +43,18 @@ public sealed partial class EfStore
             null when postgres => $"SET LOCAL lock_timeout = {ms}",
             _ => null,
         };
-        if (bound is not null) await db.Database.ExecuteSqlRawAsync(bound, cancellationToken);
-        return transaction;
+        var reset = Engine is MySqlEngine ? new Reset(db) : null;
+        try
+        {
+            if (bound is not null) await db.Database.ExecuteSqlRawAsync(bound, cancellationToken);
+            return (transaction, reset);
+        }
+        catch
+        {
+            try { if (reset is not null) await reset.DisposeAsync(); }
+            finally { await transaction.DisposeAsync(); }
+            throw;
+        }
     }
 
     /// <summary>
@@ -52,7 +62,6 @@ public sealed partial class EfStore
     /// for a 9 s lease, against the default 50). The take sets it back to the default as its last step, before its
     /// transaction ends whether it committed or not; a reset that fails is on a broken session, which leaves the pool.
     /// </summary>
-    private IAsyncDisposable? LockTimeoutReset(KernelDb db) => NodeLease && Engine is MySqlEngine ? new Reset(db) : null;
 
     private sealed class Reset(KernelDb db) : IAsyncDisposable
     {
@@ -68,7 +77,7 @@ public sealed partial class EfStore
     /// the lease (<see cref="CommitBatch.Lease"/>), the owner's guard has expired too, so the store rolls back instead of
     /// sending COMMIT and answers "not landed". This covers a client that pauses between the batch's answer and COMMIT.
     /// </summary>
-    private bool PastCommitStep(long sent, CommitBatch batch) => NodeLease && System.Diagnostics.Stopwatch.GetElapsedTime(sent) > batch.Lease;
+    private bool PastCommitStep(long sent, CommitBatch batch) => System.Diagnostics.Stopwatch.GetElapsedTime(sent) > batch.Lease;
 
     private Task<IDbContextTransaction> BeginReadCommittedAsync(KernelDb db, CancellationToken cancellationToken) =>
         Engine is null && !postgres ? db.Database.BeginTransactionAsync(cancellationToken) : db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
@@ -121,7 +130,6 @@ public sealed partial class EfStore
     /// </summary>
     public async ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default)
     {
-        if (!NodeLease) throw new NotSupportedException("The node lease is off in this store.");
         long now;
         List<OwnedEpoch> owned;
         Cluster? inside = null;
@@ -156,7 +164,7 @@ public sealed partial class EfStore
     /// Null for anything else, which propagates as it is.
     /// </summary>
     private StoreException? TransientTake(Exception e) =>
-        NodeLease && e is not StoreException && Classify(e) is { Failure: Failure.Transient } transient ? transient : null;
+        e is not StoreException && Classify(e) is { Failure: Failure.Transient } transient ? transient : null;
 
     /// <summary>
     /// The retake in one transaction: under the node lease the taker's record is written first, also when the retake is
@@ -172,12 +180,13 @@ public sealed partial class EfStore
     private async ValueTask<Lease?> RetakeInOneTransactionAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken)
     {
         await using var db = create();
-        await using var transaction = await (NodeLease ? BeginNodeTakeAsync(db, lease, cancellationToken) : Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        await using var reset = LockTimeoutReset(db);       // disposed before the transaction, on its open connection
-        if (NodeLease) await ReadAndRenewAsync(db, null, node, lease, cancellationToken);
-        var update = $"""UPDATE "Partitions" SET "Epoch" = "Epoch" + 1{(NodeLease ? "" : $", \"LeaseUntil\" = {Now} + {"{3}"}")}""";
+        var begun = await BeginNodeTakeAsync(db, lease, cancellationToken);
+        await using var transaction = begun.Transaction;
+        await using var reset = begun.Reset;
+        await ReadAndRenewAsync(db, null, node, lease, cancellationToken);
+        var update = $"""UPDATE "Partitions" SET "Epoch" = "Epoch" + 1""";
         const string mine = """ "Id" = {0} AND "Owner" = {1} AND "Epoch" = {2}""";
-        object[] parameters = NodeLease ? [partition, node, epoch] : [partition, node, epoch, (long)lease.TotalMilliseconds];
+        object[] parameters = [partition, node, epoch];
         List<Engine.TakeRow> rows;
         if (Engine is MySqlEngine)
             rows = await db.Database.ExecuteSqlRawAsync(Q($"{update} WHERE{mine}"), parameters, cancellationToken) != 1 ? []

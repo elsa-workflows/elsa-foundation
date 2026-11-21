@@ -20,8 +20,7 @@ public interface IStoreProvider
 /// <param name="BrokenFence">MUTATION: the commit ignores epoch and position. The stress test must fail with it.</param>
 /// <param name="Counting">The provider should count what goes on the wire, for <see cref="ProvidedStore.Counter"/>.</param>
 /// <param name="Flaws">A defect switched on in a store that has it, for a mutation's witness (the in-memory store's; others ignore it).</param>
-/// <param name="NodeLease">K1b: the node lease switched on, in a store that has it (the in-memory store's; others ignore it).</param>
-public sealed record StoreSetup(bool BrokenFence = false, bool Counting = false, Flaw Flaws = Flaw.None, bool NodeLease = false);
+public sealed record StoreSetup(bool BrokenFence = false, bool Counting = false, Flaw Flaws = Flaw.None);
 
 public abstract class ProvidedStore : IAsyncDisposable
 {
@@ -108,7 +107,7 @@ public sealed class InMemoryProvider : IStoreProvider
     public string Name => "in-memory";
 
     public Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup) =>
-        Task.FromResult<ProvidedStore>(new Provided(new InMemoryStore(partitions, Clock, (setup.BrokenFence ? Flaw.FenceWithoutEpoch | Flaw.FenceWithoutPosition : Flaw.None) | setup.Flaws) { NodeLeaseAvailable = setup.NodeLease }));
+        Task.FromResult<ProvidedStore>(new Provided(new InMemoryStore(partitions, Clock, (setup.BrokenFence ? Flaw.FenceWithoutEpoch | Flaw.FenceWithoutPosition : Flaw.None) | setup.Flaws)));
 
     private sealed class Provided(InMemoryStore store) : ProvidedStore
     {

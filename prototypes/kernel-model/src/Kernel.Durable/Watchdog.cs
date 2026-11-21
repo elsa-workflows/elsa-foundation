@@ -119,7 +119,6 @@ public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKerne
     public bool HasActorAliases => inner.HasActorAliases;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
-    public bool NodeLeaseAvailable => inner.NodeLeaseAvailable;
 
     // The owner path, watched.
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>

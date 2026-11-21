@@ -206,8 +206,8 @@ heartbeat) has outlasted twice the lease, the watchdog first closes that call's 
 closes the socket and makes the server roll the transaction back; it ends the process only when the connection cannot
 be closed, that is when the call is still in flight a grace of a third of the lease after the close. The watchdog looks
 every third of a lease, so it closes a stuck call between 2 and 2⅓ leases after the call was sent, and ends the process
-⅓ to ⅔ of a lease after that close: about 3 leases after the send in the worst case. In the Embedded profile, where the host process is the application, that last step is the
-application's policy. A batch's command timeout is at most the lease. This is the bound on SQL Server,
+⅓ to ⅔ of a lease after that close: about 3 leases after the send in the worst case. In the Embedded profile, where
+the host process is the application, that last step is the application's policy. A batch's command timeout is at most the lease. This is the bound on SQL Server,
 where `LOCK_TIMEOUT` cancels only the waiting take and keepalive detects only a dead peer. K4 qualifies these bounds on
 each provider, the server-side heartbeat timeout and a stuck holder on a live connection included. With one Worker per node (D1) that Worker is the node's; a fixed host with a Worker per
 partition stops renewing when any of its Workers is wedged, and so gives up all its partitions.
@@ -316,7 +316,5 @@ MongoDB (K1b), and on the providers (K4). Process P owns partitions {a, b, c}; Q
 
 ## Contract and evidence
 
-The [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#the-commit) defines the commit and ownership protocol. The prototype's [DESIGN.md](../../prototypes/kernel-model/DESIGN.md), [lost-answer analysis](../../prototypes/kernel-model/FINDINGS.md#3-mutation-check), [engine notes](../../prototypes/kernel-model/ENGINES.md#e9-sql-server-fence-in-the-batch-merged-kernel-the-take-deadlocks-with-a-stale-commit-run-fixed-in-round-4-the-checked-fence-closed-by-round-5-b-the-owned-in-batch-fence-is-the-default-again) and [local lease guard](../../prototypes/kernel-model/LEASE.md) separate implementation evidence from this approved architecture. Until K1b builds the node lease, LEASE.md and
-DESIGN.md describe the per-partition lease as built: the guard renews on a take or a landed commit, and the runtime's
-renewal contract (`Seam.cs`, R1: a runtime that calls again when asked keeps an idle scope's lease) holds. K1b moves
-the guard to the heartbeat and rewrites R1 for the node lease.
+The [design sketch](../reports/clean-slate-kernel/design-sketch-draft-5.md#the-commit) defines the commit and ownership protocol. The prototype's [DESIGN.md](../../prototypes/kernel-model/DESIGN.md), [lost-answer analysis](../../prototypes/kernel-model/FINDINGS.md#3-mutation-check), [engine notes](../../prototypes/kernel-model/ENGINES.md#e9-sql-server-fence-in-the-batch-merged-kernel-the-take-deadlocks-with-a-stale-commit-run-fixed-in-round-4-the-checked-fence-closed-by-round-5-b-the-owned-in-batch-fence-is-the-default-again) and [local lease guard](../../prototypes/kernel-model/LEASE.md) separate implementation evidence from this approved architecture. The prototype uses the node lease. A take or timely heartbeat extends the local guard. A commit locks the fenced rows
+without renewing the lease. The runtime contract in `Seam.cs` ties continued renewal to completed passes.

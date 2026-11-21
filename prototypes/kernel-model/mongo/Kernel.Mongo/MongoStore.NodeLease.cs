@@ -5,20 +5,14 @@ namespace Kernel.Mongo;
 
 /// <summary>
 /// K1b, the node lease on MongoDB (ownership-and-fencing.md, "The partition record" and "The node's heartbeat"; the
-/// storage model's <c>nodes.leaseUntil</c> and <c>partitions.fenced</c>). Behind <see cref="MongoStoreOptions.NodeLease"/>.
+/// storage model's <c>nodes.leaseUntil</c> and <c>partitions.fenced</c>).
 /// </summary>
 public sealed partial class MongoStore
 {
-    public bool NodeLeaseAvailable => _options.NodeLease;
 
-    /// <summary>
-    /// What a fence writes besides its position: the per-partition lease, or under the node lease one more <c>fenced</c>,
-    /// which renews nothing. Either way every fenced document is written, a batch with no journal rows included, so a
-    /// concurrent take's transaction conflicts with the commit's.
-    /// </summary>
-    private BsonElement Renewal(long leaseMs) => _options.NodeLease
-        ? new("fenced", new BsonDocument("$add", new BsonArray { new BsonDocument("$ifNull", new BsonArray { "$fenced", 0L }), 1L }))
-        : new("leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, leaseMs }));
+    // Even a batch with no journal rows must write every fenced document to conflict with a concurrent take.
+    private static BsonElement FenceWrite() =>
+        new("fenced", new BsonDocument("$add", new BsonArray { new BsonDocument("$ifNull", new BsonArray { "$fenced", 0L }), 1L }));
 
     /// <summary>The node document's write: <c>seenAt</c> at the primary's time, <c>leaseUntil</c> at that time plus the lease.</summary>
     private static UpdateDefinition<BsonDocument> NodeRenewal(TimeSpan lease) => Builders<BsonDocument>.Update.Pipeline(new BsonDocument[]
@@ -46,10 +40,7 @@ public sealed partial class MongoStore
             catch (MongoException e) when (e.HasErrorLabel("TransientTransactionError") && !cancellationToken.IsCancellationRequested)
             {
                 if (attempt >= 5)
-                {
-                    if (_options.NodeLease) throw new StoreException(Failure.Transient, $"The take's transaction still conflicted after {attempt} attempts.", e);
-                    throw;
-                }
+                    throw new StoreException(Failure.Transient, $"The take's transaction still conflicted after {attempt} attempts.", e);
                 await Task.Delay(Random.Shared.Next(5, 30), cancellationToken);
             }
         }
@@ -121,8 +112,8 @@ public sealed partial class MongoStore
     };
 
     /// <summary>The retake, counting a death on the previous epoch's unfinished trial messages when asked (#4837, a pending partition).</summary>
-    public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) =>
-        _options.NodeLease || countDeaths ? await RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths, cancellationToken) : await RetakeAsync(partition, node, epoch, lease, cancellationToken);
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) =>
+        new(RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths, cancellationToken));
 
     /// <summary>
     /// The retake in one session transaction: under the node lease this node's document first, also when the retake is
@@ -131,10 +122,9 @@ public sealed partial class MongoStore
     private async Task<Lease?> RetakeInTransactionAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken)
     {
         var set = new BsonDocument { { "epoch", new BsonDocument("$add", new BsonArray { "$epoch", 1L }) }, { "now", NowMs } };
-        if (!_options.NodeLease) set["leaseUntil"] = new BsonDocument("$add", new BsonArray { NowMs, (long)lease.TotalMilliseconds });
         var doc = await RetriedAsync(async session =>
         {
-            if (_options.NodeLease) await _nodes.UpdateOneAsync(session, new BsonDocument("_id", node), NodeRenewal(lease), new UpdateOptions { IsUpsert = true }, cancellationToken);
+            await _nodes.UpdateOneAsync(session, new BsonDocument("_id", node), NodeRenewal(lease), new UpdateOptions { IsUpsert = true }, cancellationToken);
             var taken = await _partitions.FindOneAndUpdateAsync(session, new BsonDocument { { "_id", partition }, { "owner", node }, { "epoch", epoch } },
                 Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", set) }), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
             if (taken is not null && countDeaths)
@@ -152,7 +142,6 @@ public sealed partial class MongoStore
     /// </summary>
     public async ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default)
     {
-        if (!_options.NodeLease) throw new NotSupportedException("The node lease is off in this store.");
         BsonDocument beat;
         List<BsonDocument> owned;
         try
@@ -170,21 +159,14 @@ public sealed partial class MongoStore
     }
 
     /// <summary>
-    /// The nodes heard within the window, and the free partitions: unowned, or (per-partition lease) past their lease, or
-    /// (node lease) owned by a process whose node document is missing or past its <c>leaseUntil</c>.
+    /// The nodes heard within the window and partitions that are unowned or whose owner has no live node record.
     /// </summary>
     private async Task<Cluster> MembershipAsync(long now, TimeSpan window, CancellationToken cancellationToken)
     {
         var nodes = await _nodes.CountDocumentsAsync(new BsonDocument("seenAt", new BsonDocument("$gte", now - (long)window.TotalMilliseconds)), cancellationToken: cancellationToken);
-        List<int> free;
-        if (_options.NodeLease)
-        {
-            var live = (await _nodes.Find(new BsonDocument("leaseUntil", new BsonDocument("$gte", now))).Project(new BsonDocument("_id", 1)).ToListAsync(cancellationToken)).Select(d => d["_id"].AsString).ToHashSet(StringComparer.Ordinal);
-            free = [.. (await _partitions.Find(FilterDefinition<BsonDocument>.Empty).Project(new BsonDocument("owner", 1)).ToListAsync(cancellationToken))
-                .Where(d => d["owner"].IsBsonNull || !live.Contains(d["owner"].AsString)).Select(d => d["_id"].AsInt32).Order()];
-        }
-        else free = [.. (await _partitions.Find(new BsonDocument("$or", new BsonArray { new BsonDocument("owner", BsonNull.Value), new BsonDocument("leaseUntil", new BsonDocument("$lt", now)) }))
-            .Project(new BsonDocument("_id", 1)).ToListAsync(cancellationToken)).Select(d => d["_id"].AsInt32).Order()];
+        var live = (await _nodes.Find(new BsonDocument("leaseUntil", new BsonDocument("$gte", now))).Project(new BsonDocument("_id", 1)).ToListAsync(cancellationToken)).Select(d => d["_id"].AsString).ToHashSet(StringComparer.Ordinal);
+        List<int> free = [.. (await _partitions.Find(FilterDefinition<BsonDocument>.Empty).Project(new BsonDocument("owner", 1)).ToListAsync(cancellationToken))
+            .Where(d => d["owner"].IsBsonNull || !live.Contains(d["owner"].AsString)).Select(d => d["_id"].AsInt32).Order()];
         return new Cluster((int)nodes, free, now);
     }
 }
