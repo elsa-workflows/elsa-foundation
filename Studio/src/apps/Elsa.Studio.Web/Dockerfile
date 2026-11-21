@@ -65,18 +65,17 @@ RUN test -f Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/index.html
 
 # Restore and publish only the web host; project references are pulled in transitively.
 #
-# WarningsNotAsErrors=NU1603 keeps the repo's TreatWarningsAsErrors intact while
-# tolerating a restore-only warning that appears in a clean environment: a transitive
-# preview dependency (ConsoleLogStreaming.AspNetCore preview.13) is no longer on the
-# feed and NuGet resolves the newer stable version instead.
+# NU1603 is listed in Studio/Directory.Build.props WarningsNotAsErrors so a command-line
+# -p:WarningsNotAsErrors=NU1603 is not used here: that global property would override the
+# props list and drop RS0016/RS0017. The warning itself appears in a clean environment
+# when a transitive preview dependency (ConsoleLogStreaming.AspNetCore preview.13) is no
+# longer on the feed and NuGet resolves the newer stable version instead.
 RUN dotnet restore Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
         --configfile Studio/NuGet.config \
-        -p:WarningsNotAsErrors=NU1603 \
         -p:Version=$STUDIO_VERSION
 RUN dotnet publish Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
         -c Release \
         --no-restore \
-        -p:WarningsNotAsErrors=NU1603 \
         -p:Version=$STUDIO_VERSION \
         -o /app/publish
 
