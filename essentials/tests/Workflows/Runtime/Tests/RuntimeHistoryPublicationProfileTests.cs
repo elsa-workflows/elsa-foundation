@@ -150,9 +150,9 @@ public sealed class RuntimeHistoryPublicationProfileTests
     }
 
     [Fact]
-    public async Task A_real_quiescence_flush_keeps_the_original_publication_group_and_raw_source()
+    public async Task Prior_protocol_real_quiescence_flush_keeps_the_original_publication_group_and_raw_source()
     {
-        using var f = new Fixture(decorated: true);
+        using var f = new Fixture(decorated: true, priorProtocol: true);
         await f.SeedAsync(RuntimeHistoryRegistration.ResolvePolicy(f.Services, "publisher")!);
         await using var drain = f.Services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>().Begin("publisher", new(PersistenceMode.Balanced, RunHasRecord: true));
         var pending = await f.PublishAsync();
@@ -165,11 +165,27 @@ public sealed class RuntimeHistoryPublicationProfileTests
         Assert.Single(f.Writer.ListCommits()); Assert.Equal(0, f.Actors.Calls);
     }
 
+    [Fact]
+    public async Task Current_subscription_publication_records_its_original_group_before_quiescence()
+    {
+        using var f = new Fixture(decorated: true);
+        await f.SeedAsync(RuntimeHistoryRegistration.ResolvePolicy(f.Services, "publisher")!);
+        await using var drain = f.Services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>().Begin("publisher", new(PersistenceMode.Balanced, RunHasRecord: true));
+        var pending = await f.PublishAsync();
+        var saved = (await f.Writer.FindDurableAsync(pending.OutboxItemId))!;
+        Assert.Equal(RuntimeSubscriptionDelivery.CurrentVersion, saved.SubscriptionDeliveryProtocolVersion);
+        var published = Assert.Single((await f.Reader.ReadPageAsync(new("publisher"))).Items, item => item.Name == "StimulusPublicationCommitted");
+        Assert.Equal(published.HistoryEventId, saved.Intent.HistoryCausation!.HistoryEventId);
+        await drain.FlushAtQuiescenceAsync();
+        Assert.Single(f.Writer.ListCommits()); Assert.Equal(0, f.Actors.Calls);
+        Assert.Equal(saved.Intent.HistoryCausation, (await f.Writer.FindDurableAsync(pending.OutboxItemId))!.Intent.HistoryCausation);
+    }
+
     [Theory]
     [InlineData("logical")] [InlineData("raw")]
     public async Task A_physical_flush_cannot_introduce_a_new_publication_outside_its_captured_logical_groups(string mode)
     {
-        using var f = new Fixture(decorated: true, change: services => services.AddScoped<IRuntimeCheckpointCommitEnricher>(sp =>
+        using var f = new Fixture(decorated: true, priorProtocol: true, change: services => services.AddScoped<IRuntimeCheckpointCommitEnricher>(sp =>
             new LatePublication(mode, true, sp.GetServices<RuntimePostCommitIntentHandlerContribution>().ToArray())));
         await f.SeedAsync(RuntimeHistoryRegistration.ResolvePolicy(f.Services, "publisher")!);
         await using var drain = f.Services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>().Begin("publisher", new(PersistenceMode.Balanced, RunHasRecord: true));
@@ -183,7 +199,7 @@ public sealed class RuntimeHistoryPublicationProfileTests
     [InlineData("rebind")] [InlineData("rewrite")] [InlineData("remove-source")]
     public async Task Physical_flush_preserves_the_exact_original_send_inventory_even_when_an_existing_event_is_reused(string mode)
     {
-        using var f = new Fixture(decorated: true, change: services => services.AddScoped<IRuntimeCheckpointCommitEnricher>(sp =>
+        using var f = new Fixture(decorated: true, priorProtocol: true, change: services => services.AddScoped<IRuntimeCheckpointCommitEnricher>(sp =>
             new LatePublication(mode, true, sp.GetServices<RuntimePostCommitIntentHandlerContribution>().ToArray())));
         await f.SeedAsync(RuntimeHistoryRegistration.ResolvePolicy(f.Services, "publisher")!);
         await using var drain = f.Services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>().Begin("publisher", new(PersistenceMode.Balanced, RunHasRecord: true));
@@ -244,13 +260,20 @@ public sealed class RuntimeHistoryPublicationProfileTests
         internal Actors Actors { get; } = new();
         internal InMemoryRuntimeCheckpointCommitStore Writer => Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
         internal IRuntimeHistoryStore Reader => Services.GetRequiredService<IRuntimeHistoryStore>();
-        internal Fixture(bool decorated = false, Action<ServiceCollection>? change = null)
+        internal Fixture(bool decorated = false, Action<ServiceCollection>? change = null, bool priorProtocol = false)
         {
             var services = new ServiceCollection(); services.AddLogging(); services.AddSingleton<TimeProvider>(new FakeTimeProvider(At));
             services.AddSingleton<IPersistenceAccessContextAccessor, Access>(); services.AddSingleton<IWorkflowExecutionActorProvider>(Actors);
-            services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
             services.AddSingleton<ISchemaDormancyCheck, ControlledSchema>();
             new ActivitiesPrimitivesFeature().ConfigureServices(services); new ActivitiesPrimitivesFeature().ConfigureServices(services);
+            if (priorProtocol)
+            {
+                var descriptor = Assert.Single(services, item => item.ImplementationInstance is RuntimePostCommitIntentHandlerContribution c && c.IntentKind == Kind);
+                var current = (RuntimePostCommitIntentHandlerContribution)descriptor.ImplementationInstance!;
+                services.Remove(descriptor);
+                services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(current.IntentKind, current.HandlerType,
+                    current.RetryPolicy, current.RequiresDurableSource, current.StimulusDeliveryProtocolVersion));
+            }
             services.AddWorkflowRuntime(); services.AddWorkflowStimulusRouter(); if (decorated) services.AddPersistenceModes();
             RuntimeHistoryRegistration.AddServices(services, Options);
             services.Configure<RuntimeRecoveryContinuationOptions>(options => options.SigningKey = "publication-profile-tests-key-at-least-32-bytes");
