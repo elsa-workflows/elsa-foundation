@@ -13,10 +13,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 {
     private readonly StringComparer _foundationEventEquality = StringComparer.Ordinal;
 
-    internal InMemoryStore(int partitions, Func<long> clock, Flaw flaws, StringComparer foundationEventEquality)
+    internal InMemoryStore(int partitions, Func<long> clock, Flaw flaws, StringComparer foundationEventEquality,
+        StringComparer? foundationCallerEquality = null)
         : this(partitions, clock, flaws)
     {
         _foundationEventEquality = foundationEventEquality;
+        if (foundationCallerEquality is not null) _foundationCallerBindings = new(foundationCallerEquality);
         var pairs = EqualityComparer<(string Key, string Id)>.Create(
             (a, b) => foundationEventEquality.Equals(a.Key, b.Key) && foundationEventEquality.Equals(a.Id, b.Id),
             pair => HashCode.Combine(foundationEventEquality.GetHashCode(pair.Key), foundationEventEquality.GetHashCode(pair.Id)));
