@@ -23,7 +23,8 @@ public sealed partial class InMemoryStore
                 if (selection is null || !NamesFoundationPark(tenant, reference, selection))
                     return (OperatorAdmission.StaleSelection, null);
             }
-            else if (selection is not null && !MatchesFoundationSelection(tenant, reference, selection))
+            else if ((kind == Kinds.Delete || selection is not null) &&
+                !MatchesFoundationSelection(tenant, reference, selection, requireTerminal: kind == Kinds.Delete))
                 return (OperatorAdmission.StaleSelection, null);
 
             // The receipt is scoped to the operation, and keeps the first target after the Park's mark changes.

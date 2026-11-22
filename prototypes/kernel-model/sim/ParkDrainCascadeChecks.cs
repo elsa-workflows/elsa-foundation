@@ -439,8 +439,9 @@ internal static class ParkDrainCascadeChecks
         var probe = new Probe(restoreTrial: true);
         var scheduler = new HeldScheduler();
         var queuedAtOpen = 0;
-        var edge = new InMemoryIngress(store, new Requests("terminate-recover"), "terminate-recover",
-            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate);
+        var requests = new Requests("terminate-recover");
+        var edge = new InMemoryIngress(store, requests, "terminate-recover",
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate or Contract.Kinds.Delete);
         var writes = new List<TurnCommit>();
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
@@ -453,7 +454,7 @@ internal static class ParkDrainCascadeChecks
             }
         });
         Worker Owner(string name) => new(name, 0, wire, new ActorAdapter(store, probe),
-            new WorkerOptions { Monotonic = () => now - initial, JobScheduler = scheduler });
+            new WorkerOptions { Monotonic = () => now - initial, JobScheduler = scheduler, Transport = new JobOpenReplies(requests) });
         var worker = Owner("recover-first");
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         var parent = (await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "parent")), "parent", Contract.Kinds.Start)).Actor!.Value;
@@ -478,7 +479,19 @@ internal static class ParkDrainCascadeChecks
                 { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
                 "an unselected operator cannot terminate the parked actor before Recover opens");
         await Send(child, "recover", Contract.Kinds.Recover, selection);
+        var queuedDelete = selected ? edge.RequestAsync(scope, new Contract.Target.Ref(child), "queued-delete", Contract.Kinds.Delete,
+            selection, null, new Contract.RequestOptions(null, now + 1_000)).AsTask() : null;
         await Step(child);
+        if (queuedDelete is not null)
+        {
+            var before = Row(child);
+            await Step(child);
+            var refusal = await queuedDelete.WaitAsync(TimeSpan.FromSeconds(5));
+            check(before is { Status: InstanceStatus.Running, ParkRecovery: not null } && Row(child) == before &&
+                  refusal is { Error: "stale selection" },
+                "DT-5 a Delete admitted during the Park loses its authority when Recover clears the terminal mark");
+            await NoTerminalMark("fresh-recover-delete", before);
+        }
         await Step(child);
         var recovering = Row(child);
         var source = selected ? "selected" : "unselected";
@@ -500,6 +513,7 @@ internal static class ParkDrainCascadeChecks
         check(admission.Outcome == Contract.AdmissionOutcome.Accepted && open,
             $"{source}: Terminate recalls the last Recover control, journals the interruption and opens a new generation without an end mark");
         if (!open) return;
+        if (selected) await NoTerminalMark("fresh-terminate-delete", opened);
         var pendingJobs = store.Messages.Values.Count(row => row.Message.Target.Id == id && row.Message.Kind == Kinds.Job &&
             (!row.Done || row.KeptBy is not null));
         var stoodDown = queuedAtOpen > 0 && probe.JobTokens.Count == 0 && opened.Jobs is null && pendingJobs == 0;
@@ -533,6 +547,33 @@ internal static class ParkDrainCascadeChecks
         if (!selected)
             check(await Send(child, "terminate", Contract.Kinds.Terminate) is { Outcome: Contract.AdmissionOutcome.Duplicate },
                 "the accepted unselected Terminate remains a duplicate after the drain ends");
+
+        if (selected)
+        {
+            var cancelled = (await reads.GetAsync(scope, child))?.Selection;
+            if (cancelled is null)
+            {
+                check(false, "DT-5 Complete must seal the new Cancelled mark");
+                return;
+            }
+            var delete = await Send(child, "qualified-after-complete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(cancelled)));
+            for (var pass = 0; pass < 8 && !store.Instances[id].Retired; pass++)
+            {
+                await active.WokenAsync(null);
+                await active.RunAsync();
+            }
+            check(delete.Outcome == Contract.AdmissionOutcome.Accepted && store.Instances[id].Retired,
+                "DT-5 the new Cancelled mark qualifies Delete after the former Running drain completes");
+        }
+
+        async Task NoTerminalMark(string operation, InstanceRow before)
+        {
+            var messages = store.Messages.Count;
+            var rejected = await Send(child, operation, Contract.Kinds.Delete, selection);
+            check(rejected is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection } &&
+                  store.Messages.Count == messages && Row(child) == before,
+                $"DT-5 {operation} cannot use the retained Park identity as a terminal mark");
+        }
 
         InstanceRow Row(Contract.ActorRef actor) => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row;
         ValueTask<Contract.Admission> Send(Contract.ActorRef actor, string operation, string kind, string? payload = null) =>
