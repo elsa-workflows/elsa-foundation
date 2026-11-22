@@ -443,7 +443,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
       {historyNext ? <StudioButton disabled={historyLoading || busy} onClick={() => currentId && void loadHistory(currentId, historyNext, true)}>{historyLoading ? "Loading versions…" : historyError ? "Retry older versions" : "Load older versions"}</StudioButton> : null}
     </>}
   />;
-  const title = editing ? (isNew && !form.name ? "Design the form" : form.name || "Untitled form") : "Reusable task forms";
+  const title = editing ? (isNew && !form.name ? "Design the form" : form.name || "Untitled form") : "Task forms";
   const hasFormAccess = !identity || identity.canReadForms || identity.canManageForms;
   const saveStatusLabel = hasUnappliedSource ? "Unapplied source"
     : autosaveStatus === "saving" ? "Saving draft"
@@ -482,7 +482,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
     {!editing ? <>
       {!loading && !error && !hasFormAccess ? <StudioResultState tone="danger" title="Form access unavailable" description="Your account does not have permission to view reusable forms." /> : null}
       {deleteError ? <StudioAlert tone="danger">{deleteError}</StudioAlert> : null}
-      {loading ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><div role="status">Loading forms…</div></StudioTableContainer> : definitions.length ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><table className="studio-table user-task-table user-task-forms-table" aria-label="Reusable task forms">
+      {loading ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><div role="status">Loading forms…</div></StudioTableContainer> : definitions.length ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><table className="studio-table user-task-table user-task-forms-table" aria-label="Task forms">
           <thead><tr><th scope="col">Form</th><th scope="col">Identifier</th><th scope="col">Published version</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
           <tbody>{definitions.map(definition => {
             const name = definition.draft?.form?.name || definition.latestPublished?.form.name || definition.id;

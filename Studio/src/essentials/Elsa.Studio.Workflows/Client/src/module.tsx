@@ -164,8 +164,8 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-elsa3-import", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions/import-elsa3",
-        label: "Elsa 3 import",
-        component: ({ navigate }) => deferred("Elsa 3 import", <Elsa3ReusableImportPage context={api.backend} navigate={navigate} />)
+        label: "Import from Elsa 3",
+        component: ({ navigate }) => deferred("Import from Elsa 3", <Elsa3ReusableImportPage context={api.backend} navigate={navigate} />)
       },
       {
         id: "workflows-activity-upgrades", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],

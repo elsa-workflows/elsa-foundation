@@ -521,8 +521,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const settingsSection = settingsSurface ? resolveSettingsSection(path, settingsGroups) : undefined;
   const pageTitle = settingsSection?.label
-    ?? navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
-    ?? activeRoute?.label
+    ?? screenLabel(path, activeRoute, navigation)
     ?? owningFeatureArea?.title
     ?? (settingsSurface ? "Settings" : "Studio");
   const tabViews: WorkspaceTabView[] = workspace.state.tabs.map(tab => {
@@ -609,11 +608,16 @@ export function describeScreen(
     return { title: route.label, detail: value ? value.length > 10 ? `${value.slice(0, 8)}…` : value : undefined };
   }
   return {
-    title: navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
-      ?? route?.label
+    title: screenLabel(path, route, navigation)
       ?? findFeatureAreaForPath(featureAreas, path)?.title
       ?? (path === "/" ? "Home" : "Studio")
   };
+}
+
+function screenLabel(path: string, route: { path: string; label: string } | undefined, navigation: StudioNavigationContribution[]) {
+  const active = navigation.find(item => isNavigationItemActive(item, path, navigation));
+  if (route?.path === path && active?.path !== path) return route.label;
+  return active?.label ?? route?.label;
 }
 
 /** Shell rendering must survive a malformed restored address; fall back to the raw segment. */

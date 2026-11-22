@@ -536,7 +536,7 @@ function ActivityDefinitionFailure({ kind, cursorInvalid, onRetry }: { kind: Ret
     expired: ["Collection snapshot expired", "Restart paging to request a fresh authorized snapshot."],
     failed: ["Couldn't load Activity Definitions", "Studio could not confirm the authorized collection. No unconfirmed data is shown."]
   }[kind];
-  return <StudioResultState tone="danger" icon={<AlertTriangle size={22} aria-hidden />} title={copy[0]} description={copy[1]} actions={<StudioButton onClick={onRetry}>{kind === "expired" ? "Restart paging" : "Try again"}</StudioButton>} />;
+  return <StudioResultState tone="danger" icon={<AlertTriangle size={22} aria-hidden />} title={copy[0]} description={copy[1]} actions={<StudioButton onClick={onRetry}>{kind === "expired" ? "Restart paging" : "Retry"}</StudioButton>} />;
 }
 
 function useDebouncedValue(value: string, delay: number, initialValue = value.trim()) {

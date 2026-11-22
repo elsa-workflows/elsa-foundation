@@ -48,7 +48,7 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
   if (mode === "lifecycle") return <FormLifecyclePage api={api} />;
   if (mode === "legacy") return <LegacyFormsPage api={api} />;
   return <StudioPage className="user-tasks" aria-label="Reusable task forms management">
-    <StudioPageHeader title="Reusable task forms" description="Manage reusable task forms and their published versions."
+    <StudioPageHeader title="Task forms" description="Manage reusable task forms and their published versions."
       actions={<a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks")}>Task inbox</a>} />
     {mode === "loading" ? <div role="status">Loading forms…</div> : <StudioResultState tone="danger" title="Forms unavailable"
       description={error || "This backend does not advertise the required User Task operation."}
@@ -158,7 +158,7 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
     setOpened(null); setWorkspaceTab("form");
     requestAnimationFrame(() => returnButtons.current.get(returnKey.current)?.focus());
   };
-  return <StudioPage className={`user-tasks${editing ? " user-tasks--editing" : ""}`} aria-label="Reusable task forms management"><StudioPageHeader className={editing ? "user-task-form-page-header--editing" : opened ? "user-task-form-page-header--workspace" : undefined} title={editing ? "Design the form" : opened ? opened.form.name : "Reusable task forms"} description={editing || opened ? undefined : "Manage published task forms. Selecting a form in a workflow pins its current version automatically."} actions={<>
+  return <StudioPage className={`user-tasks${editing ? " user-tasks--editing" : ""}`} aria-label="Reusable task forms management"><StudioPageHeader className={editing ? "user-task-form-page-header--editing" : opened ? "user-task-form-page-header--workspace" : undefined} title={editing ? "Design the form" : opened ? opened.form.name : "Task forms"} description={editing || opened ? undefined : "Manage published task forms. Selecting a form in a workflow pins its current version automatically."} actions={<>
       {!editing && !opened && identity?.canManageForms && <StudioButton ref={createButton} variant="primary" disabled={busy} onClick={() => { returnKey.current = ""; setFormError(""); setShowValidation(false); setHasUnappliedSource(false); setForm(initial()); setEditing(true); }}>Create form version</StudioButton>}
       {!editing && opened && <StudioButton disabled={busy} onClick={backToForms}>Back to forms</StudioButton>}
       {editing && <StudioButton disabled={busy} onClick={() => closeEditor()}>Back to forms</StudioButton>}
@@ -166,7 +166,7 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
     {error ? <StudioResultState tone="danger" title="Forms unavailable" description={error} actions={<StudioButton onClick={() => void refresh()}>Retry</StudioButton>} /> : null}
     {formError && editing ? <StudioAlert tone="danger">{formError}{versionConflict && <StudioButton disabled={busy} onClick={() => void recoverVersion()}>Use next available version</StudioButton>}</StudioAlert> : null}
     {!editing && !opened && <>
-      {!loading && !error && !hasFormAccess ? <StudioResultState tone="danger" title="Form access unavailable" description="Your account does not have permission to view reusable forms." /> : loading ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><SkeletonRows rows={3} label="Loading forms" /></StudioTableContainer> : latest.size ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><table className="studio-table user-task-table user-task-forms-table" aria-label="Reusable task forms">
+      {!loading && !error && !hasFormAccess ? <StudioResultState tone="danger" title="Form access unavailable" description="Your account does not have permission to view reusable forms." /> : loading ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><SkeletonRows rows={3} label="Loading forms" /></StudioTableContainer> : latest.size ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><table className="studio-table user-task-table user-task-forms-table" aria-label="Task forms">
           <thead><tr><th scope="col">Form</th><th scope="col">Identifier</th><th scope="col">Latest version</th>{identity?.canManageForms && <th scope="col">Actions</th>}</tr></thead>
           <tbody>{[...latest.values()].map(version => {
             const key = formIdentity(version);

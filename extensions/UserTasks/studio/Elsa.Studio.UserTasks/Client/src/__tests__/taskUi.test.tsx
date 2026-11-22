@@ -180,7 +180,7 @@ it("takes forms-only users directly to their permitted form workspace without re
   const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canRead: false, canManageForms: true, canReadForms: true } : path.includes("forms") ? { items: [] } : Promise.reject(new StudioHttpError(403, "Task read denied")));
   await act(async () => root.render(<TasksPage api={api(get)} />));
   await act(async () => {});
-  expect(container.textContent).toContain("Reusable task forms");
+  expect(container.textContent).toContain("Task forms");
   await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("No reusable forms yet"); });
   await click("New form"); expect(container.textContent).toContain("Design the form");
   expect(get.mock.calls.some(([path]) => path.startsWith("/runtime/user-tasks?"))).toBe(false);
@@ -741,7 +741,7 @@ it("shows a denied task detail without reading either tasks or the inbox", async
   const get = vi.fn().mockResolvedValue({ ...identity, canRead: false, canReadForms: true, canManageForms: true });
   await act(async () => root.render(<TaskDetailPage api={api(get)} id="task" navigate={vi.fn()} />));
   expect(container.textContent).toContain("Task access unavailable"); expect(container.querySelector("table")).toBeNull();
-  expect(container.textContent).not.toContain("Reusable task forms"); expect(get).toHaveBeenCalledTimes(1);
+  expect(container.textContent).not.toContain("Task forms"); expect(get).toHaveBeenCalledTimes(1);
 });
 
 it("keeps a response when discard is cancelled and releases the guard only after confirmed discard", async () => {

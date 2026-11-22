@@ -215,7 +215,7 @@ describe("studio auth mounting", () => {
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
 
     const retryButton = Array.from(container.querySelectorAll("button"))
-      .find(button => button.textContent === "Try again");
+      .find(button => button.textContent === "Retry");
     expect(retryButton).toBeDefined();
 
     flushSync(() => retryButton?.click());

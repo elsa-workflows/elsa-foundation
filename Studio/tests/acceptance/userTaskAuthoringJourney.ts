@@ -61,7 +61,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const operate = page.locator(".sidebar").getByRole("navigation", { name: "Operate", exact: true });
   const operateToggle = operate.getByRole("button", { name: "Operate", exact: true });
   if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
-  await operate.getByRole("link", { name: "Forms", exact: true }).click();
+  await operate.getByRole("link", { name: "Task forms", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks\/forms(?:\?|$)/);
   await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
   await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();

@@ -1658,7 +1658,7 @@ describe("Activity Definitions experience", () => {
     });
     await waitForText(rendered.container, "Activity Definition unavailable");
     expect(rendered.container.textContent).not.toContain("First evaluator");
-    click(buttonByText(rendered.container, "Try again"));
+    click(buttonByText(rendered.container, "Retry"));
     await waitForText(rendered.container, "First evaluator");
     await rendered.unmount();
   }, 15000);
@@ -2010,7 +2010,7 @@ describe("Activity Definitions experience", () => {
     const rendered = renderPage(getJson);
 
     await waitForText(rendered.container, "Couldn't load Activity Definitions");
-    expect(buttonByText(rendered.container, "Try again")).toBeTruthy();
+    expect(buttonByText(rendered.container, "Retry")).toBeTruthy();
     expect(rendered.container.textContent).not.toContain("Restart paging");
     await rendered.unmount();
   });

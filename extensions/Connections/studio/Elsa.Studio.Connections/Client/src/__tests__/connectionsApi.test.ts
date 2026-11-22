@@ -5,7 +5,7 @@ import { pickConnectionSecrets } from "../connectionsApi";
 const secretValue = "private-secret-value";
 
 describe("Connections Secret picker API", () => {
-  it("requests tenant-scoped active text Secret metadata and allowlists safe fields", async () => {
+  it("requests tenant-scoped active text secret metadata and allowlists safe fields", async () => {
     const calls: unknown[][] = [];
     const context = endpointContext(async (url, body) => {
       calls.push([url, body]);
