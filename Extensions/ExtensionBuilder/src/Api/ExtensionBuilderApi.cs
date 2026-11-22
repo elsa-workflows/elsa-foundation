@@ -16,7 +16,7 @@ public static class ElsaExtensionBuilderApi
 
     public static IEndpointRouteBuilder MapElsaExtensionBuilderApi(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/_elsa/extension-builder");
+        var group = endpoints.MapGroup("/_elsa/extension-builder").WithElsaJsonResponseHeaders();
         group.WithHostOwner("Elsa.Workbench")
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(

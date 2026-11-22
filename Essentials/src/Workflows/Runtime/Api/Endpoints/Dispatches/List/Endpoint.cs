@@ -13,7 +13,12 @@ namespace Elsa.Workflows.Runtime.Api.Endpoints.Dispatches.List;
 [RuntimeProblems("listing workflow dispatches")]
 public sealed class Endpoint(IWorkflowDispatchInspectionService dispatches) : ApiEndpoint<ListWorkflowDispatches, IReadOnlyCollection<WorkflowDispatchView>>
 {
-    public override void Configure(ApiEndpointOptions options) => options.Operation = "ListDispatches";
+    public override void Configure(ApiEndpointOptions options)
+    {
+        options.Operation = "ListDispatches";
+        options.Convention(builder => builder.AddEndpointMetadata(new EndpointParameterMetadata(
+            "afterCreatedAt", EndpointBindingSource.Query, typeof(DateTimeOffset?), false)));
+    }
 
     public override Task<IReadOnlyCollection<WorkflowDispatchView>> HandleAsync(ListWorkflowDispatches request, CancellationToken cancellationToken)
     {

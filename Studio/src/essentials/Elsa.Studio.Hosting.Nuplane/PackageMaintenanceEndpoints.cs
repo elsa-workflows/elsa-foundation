@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Studio.Api.Authorization;
@@ -14,7 +15,7 @@ internal static class PackageMaintenanceEndpoints
 
     public static void Map(IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/_elsa/module-management");
+        var group = endpoints.MapGroup("/_elsa/module-management").WithElsaJsonResponseHeaders();
         group.MapPost("/prune", PruneAsync).RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
         group.MapPut("/retention-policy", SaveRetentionAsync).RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
     }

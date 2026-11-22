@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -70,9 +71,9 @@ internal static partial class StudioBackendProfiles
 
     internal static void Map(IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet(Path, ReadAsync)
+        endpoints.MapGet(Path, ReadAsync).WithElsaJsonResponseHeaders()
             .RequireAuthorization(StudioBridgeAuthorization.BuildPermissionPolicy("studio/preferences:read"));
-        endpoints.MapPut(Path, WriteAsync)
+        endpoints.MapPut(Path, WriteAsync).WithElsaJsonResponseHeaders()
             .RequireAuthorization(StudioBridgeAuthorization.BuildPermissionPolicy("studio/preferences:write"));
     }
 

@@ -18,4 +18,7 @@
     <ProjectReference Include="../../../../Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
     <None Update="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+  </ItemGroup>
 </Project>

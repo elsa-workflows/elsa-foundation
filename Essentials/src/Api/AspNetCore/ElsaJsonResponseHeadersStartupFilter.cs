@@ -13,11 +13,11 @@ internal sealed class ElsaJsonResponseHeadersStartupFilter : IStartupFilter
         {
             context.Response.OnStarting(() =>
             {
-                if (context.GetEndpoint()?.Metadata.GetMetadata<ElsaJsonResponseHeadersMetadata>() is not null)
+                if (context.GetEndpoint()?.Metadata.GetMetadata<ElsaJsonResponseHeadersMetadata>() is { } policy)
                 {
                     context.Response.Headers.XContentTypeOptions = "nosniff";
                     var contentType = context.Response.ContentType;
-                    if (contentType is not null)
+                    if (policy.NormalizeContentType && contentType is not null)
                     {
                         var separator = contentType.IndexOf(';');
                         var mediaType = (separator < 0 ? contentType : contentType[..separator]).Trim();
@@ -33,7 +33,9 @@ internal sealed class ElsaJsonResponseHeadersStartupFilter : IStartupFilter
     };
 }
 
-internal sealed class ElsaJsonResponseHeadersMetadata
+internal sealed class ElsaJsonResponseHeadersMetadata(bool normalizeContentType)
 {
-    internal static readonly ElsaJsonResponseHeadersMetadata Instance = new();
+    internal static readonly ElsaJsonResponseHeadersMetadata Instance = new(true);
+    internal static readonly ElsaJsonResponseHeadersMetadata PreserveContentType = new(false);
+    internal bool NormalizeContentType { get; } = normalizeContentType;
 }

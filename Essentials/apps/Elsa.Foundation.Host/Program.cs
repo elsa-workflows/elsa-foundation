@@ -15,8 +15,10 @@ using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Reconciliation;
 using Nuplane.Sources.Directory.Configuration;
 using Microsoft.Extensions.Options;
+using Elsa.Api.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddElsaJsonResponseHeaders();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     Elsa.Serialization.Core.JsonBaseline.Configure(options.SerializerOptions);

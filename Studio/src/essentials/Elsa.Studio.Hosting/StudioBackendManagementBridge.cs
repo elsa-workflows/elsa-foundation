@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Text.Json;
 using Elsa.Studio.Api.Authorization;
 using Elsa.Studio.Api.Models;
@@ -23,7 +24,7 @@ internal static class StudioBackendManagementBridge
         // shell). A signed-in user lacking the permission is forbidden (403) — distinct from an unauthenticated 401 and
         // from the backend-status states this bridge also reports. A Studio module that relays its own backend surface
         // nests its routes under the same route group from its shell feature.
-        var group = endpoints.MapGroup(StudioBackendManagementRoutes.RouteGroup);
+        var group = endpoints.MapGroup(StudioBackendManagementRoutes.RouteGroup).WithElsaJsonResponseHeaders();
 
         group.MapGet("/status", GetStatusAsync)
             .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);

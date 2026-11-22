@@ -98,6 +98,7 @@ var bootStopwatch = Stopwatch.StartNew();
 ConsoleLogStreamingSetup.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddElsaJsonResponseHeaders();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     Elsa.Serialization.Core.JsonBaseline.Configure(options.SerializerOptions);

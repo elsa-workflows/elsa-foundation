@@ -87,6 +87,7 @@ public static class ConnectionsApi
             .RequireAnyPermission(PermissionKey.Wildcard, ConnectionsPermissions.Manage);
 
         endpoints.MapGet(OAuthCallbackPath, HandleOAuthCallbackAsync)
+            .WithElsaJsonResponseHeaders()
             .WithName("ConnectionsOAuthCallback")
             .AllowAnonymous();
     }

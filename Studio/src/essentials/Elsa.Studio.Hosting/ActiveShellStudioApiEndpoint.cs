@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Studio.Api.Contracts;
 
 namespace Elsa.Studio.Hosting;
@@ -7,9 +8,9 @@ internal static class ActiveShellStudioApiEndpoint
     public static IEndpointRouteBuilder MapActiveShellStudioApi(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/_elsa/studio/modules", (IStudioModuleManifestProvider manifests, StudioHostingSettings settings, HttpContext context) =>
-            ReadAsync(manifests, settings, context, false)).WithOrder(-1000);
+            ReadAsync(manifests, settings, context, false)).WithElsaJsonResponseHeaders().WithOrder(-1000);
         endpoints.MapGet("/_elsa/studio/module-registry", (IStudioModuleManifestProvider manifests, StudioHostingSettings settings, HttpContext context) =>
-            ReadAsync(manifests, settings, context, true)).WithOrder(-1000);
+            ReadAsync(manifests, settings, context, true)).WithElsaJsonResponseHeaders().WithOrder(-1000);
         return endpoints;
     }
 

@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -15,7 +16,7 @@ internal static class ModuleManagementEndpoints
 
     public static void Map(IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/_elsa/module-management");
+        var group = endpoints.MapGroup("/_elsa/module-management").WithElsaJsonResponseHeaders();
         group.MapGet("/registry", RegistryAsync).RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);
         group.MapPost("/packages/upload", UploadAsync).RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName)
             .Accepts<IFormFile>("multipart/form-data").DisableAntiforgery();

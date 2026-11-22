@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Text.Json;
 using Elsa.Studio.Hosting;
 using System.Text.Json.Serialization;
@@ -50,7 +51,7 @@ internal static class ThemeStoreApi
         string authorizationPolicy)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(authorizationPolicy);
-        var group = endpoints.MapGroup("/_elsa/theme-store")
+        var group = endpoints.MapGroup("/_elsa/theme-store").WithElsaJsonResponseHeaders()
             .RequireAuthorization(authorizationPolicy);
 
         group.MapGet("/capabilities/core", () => Results.Ok(new ThemeFeatureCapabilityResponse(true)));
@@ -65,7 +66,7 @@ internal static class ThemeStoreApi
         string authorizationPolicy)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(authorizationPolicy);
-        var group = endpoints.MapGroup("/_elsa/theme-store")
+        var group = endpoints.MapGroup("/_elsa/theme-store").WithElsaJsonResponseHeaders()
             .RequireAuthorization(authorizationPolicy);
 
         group.MapGet("/capabilities/picker", () => Results.Ok(new ThemeFeatureCapabilityResponse(true)));
@@ -78,7 +79,7 @@ internal static class ThemeStoreApi
         string authorizationPolicy)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(authorizationPolicy);
-        var group = endpoints.MapGroup("/_elsa/theme-store")
+        var group = endpoints.MapGroup("/_elsa/theme-store").WithElsaJsonResponseHeaders()
             .RequireAuthorization(authorizationPolicy);
 
         group.MapGet("/capabilities/management", () => Results.Ok(new ThemeFeatureCapabilityResponse(true)));

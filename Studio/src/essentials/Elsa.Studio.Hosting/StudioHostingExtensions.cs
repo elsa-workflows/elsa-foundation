@@ -1,4 +1,5 @@
 using CShells.AspNetCore.Configuration;
+using Elsa.Api.AspNetCore;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.Api.Contracts;
 using CShells.AspNetCore.Extensions;
@@ -23,6 +24,7 @@ public static class StudioHostingExtensions
     public static StudioBuilder AddElsaStudio(this WebApplicationBuilder builder, Action<StudioHostingOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        builder.Services.AddElsaJsonResponseHeaders();
         if (builder.Services.Any(service => service.ServiceType == typeof(StudioBuilder)))
             throw new InvalidOperationException("AddElsaStudio may only be called once per application.");
         var options = new StudioHostingOptions();

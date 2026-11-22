@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Exceptions;
 using Elsa.Modularity.Core.Models;
@@ -9,7 +10,7 @@ internal static class FeatureManagementEndpoints
 {
     public static void Map(IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/modularity/features");
+        var group = endpoints.MapGroup("/modularity/features").WithElsaJsonResponseHeaders();
         group.MapGet("", async (IFeatureManagementService service, CancellationToken token) => Results.Ok(await service.GetCatalogAsync(token)))
             .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);
         group.MapPost("/apply", ApplyAsync).RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
