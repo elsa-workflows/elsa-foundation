@@ -55,8 +55,17 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
       const bounds = element.getBoundingClientRect();
       const range = document.createRange(); range.selectNodeContents(element);
       const lines = [...range.getClientRects()];
+      const clips: { bounds: DOMRect; x: boolean; y: boolean }[] = [];
+      for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) {
+        const style = getComputedStyle(ancestor);
+        if (style.overflowX !== "visible" || style.overflowY !== "visible")
+          clips.push({ bounds: ancestor.getBoundingClientRect(), x: style.overflowX !== "visible", y: style.overflowY !== "visible" });
+      }
+      // Manrope's visible ink extends above its line box. Check actual clipping,
+      // while still requiring the full text to wrap within its available width.
       return lines.length > 0 && lines.every(line => line.left >= bounds.left - 1 && line.right <= bounds.right + 1 &&
-        line.top >= bounds.top - 1 && line.bottom <= bounds.bottom + 1);
+        clips.every(clip => (!clip.x || line.left >= clip.bounds.left - 1 && line.right <= clip.bounds.right + 1) &&
+          (!clip.y || line.top >= clip.bounds.top - 1 && line.bottom <= clip.bounds.bottom + 1)));
     }), { message: "The complete activity name or state summary must be readable without ellipsis" }).toBe(true);
   }
   async function run(versionId: string, expected: string, nodeId = "body") {
