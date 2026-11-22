@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: In progress — M0 reviewed at f064e47b7/PR #3912 on 6 November 2026; resumed 13 November 2026 as bounded stacked slices; product qualification outstanding
+**Status**: Implemented — finishing PR #4585; source-bound local qualification and scoped owner exceptions in the [delivery receipt](evidence/delivery-2026-11-22.md). Merge/resulting-main evidence is appended on the finishing PR.
 
 **Input**: [Canonical feature #3582](https://github.com/elsa-workflows/elsa-foundation/issues/3582), with [owner delivery authorization and milestone record](https://github.com/elsa-workflows/elsa-foundation/issues/3582#issuecomment-6671646417), 5 November 2026.
 
