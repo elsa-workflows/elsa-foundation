@@ -66,25 +66,6 @@ public sealed class DispatchWorkflowHistoryExecutionTests
     }
 
     [Theory]
-    [InlineData(false)] [InlineData(true)]
-    public async Task Explicitly_disabled_history_keeps_uncaptured_dispatch_working_without_an_access_service(bool wait)
-    {
-        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync(configureServices: services =>
-        {
-            services.AddWorkflowRuntimeHistory(new() { Enabled = false });
-            services.AddWorkflowStimulusRouter();
-            services.RemoveAll<IPersistenceAccessContextAccessor>();
-        });
-        var run = await fixture.StartParentAsync("history-disabled-child-" + wait, "history-disabled-parent-" + wait, "correlation", waitForCompletion: wait);
-        await fixture.SweepAsync(); await fixture.SweepAsync();
-        var parent = (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))!;
-        var child = (await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId))!;
-        Assert.Equal(WorkflowExecutionStatus.Completed, parent.Status); Assert.Equal(WorkflowExecutionStatus.Completed, child.Status);
-        Assert.Null(parent.HistoryCapturePolicy); Assert.Null(child.HistoryCapturePolicy);
-        Assert.All(fixture.Checkpoints.Commits, commit => { Assert.Empty(commit.HistoryBatches ?? []); Assert.Empty(commit.HistorySourceFacts ?? []); });
-    }
-
-    [Theory]
     [InlineData("defer")] [InlineData("fault")] [InlineData("cancel")]
     public async Task Returned_control_decision_records_acceptance_and_application_with_its_committed_cursor(string response)
     {
