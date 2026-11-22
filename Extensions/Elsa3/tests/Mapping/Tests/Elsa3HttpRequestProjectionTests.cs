@@ -101,7 +101,8 @@ public sealed class Elsa3HttpRequestProjectionTests
     {
         var root = Sequence("root",
             Endpoint(("parsedContent", Captured("body"))),
-            Activity("write", "Elsa.WriteLine", ("text", Captured("body"))));
+            // A dynamic input: request data into a typed one is refused (#4898).
+            Activity("write", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", Captured("body"))));
 
         var result = await ConvertAsync(root, new Elsa3Variable { Id = "body", Name = "body", TypeName = "Object" });
 
@@ -111,7 +112,7 @@ public sealed class Elsa3HttpRequestProjectionTests
         var target = (JsonElement)output.Value.Value!;
         Assert.Equal("body", target.GetProperty("referenceKey").GetString());
         Assert.Equal(VariableReference.WorkflowScopeId, target.GetProperty("declaringScopeId").GetString());
-        Assert.Equal("body", ((JsonElement)Input(Node(result.Value.State, "write"), "text").Value.Value!).GetProperty("referenceKey").GetString());
+        Assert.Equal("body", ((JsonElement)Input(Node(result.Value.State, "write"), "Payload").Value.Value!).GetProperty("referenceKey").GetString());
     }
 
     [Fact]
@@ -129,12 +130,13 @@ public sealed class Elsa3HttpRequestProjectionTests
     public async Task A_loop_value_captured_into_a_variable_is_the_loop_variable_inside_the_body()
     {
         var loop = Activity("loop", "Elsa.ForEach", ("items", Literal("[1,2]", "Object")), ("currentValue", Captured("item")));
-        loop.AdditionalProperties["body"] = Port(Activity("inside", "Elsa.WriteLine", ("text", Captured("item"))));
+        // A dynamic input: a loop item into a typed one is refused (#4898).
+        loop.AdditionalProperties["body"] = Port(Activity("inside", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", Captured("item"))));
 
         var result = await ConvertAsync(Sequence("root", loop), new Elsa3Variable { Id = "item", Name = "item", TypeName = "Object" });
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        var text = Input(Node(result.Value!.State, "inside"), "text");
+        var text = Input(Node(result.Value!.State, "inside"), "Payload");
         var reference = (JsonElement)text.Value.Value!;
         Assert.Equal("loop", reference.GetProperty("declaringScopeId").GetString());
         Assert.Equal("currentItem", reference.GetProperty("referenceKey").GetString());

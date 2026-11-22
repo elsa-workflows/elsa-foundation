@@ -62,7 +62,7 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             ? RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable)
             : projections.WorkflowInputEnvelopes;
         var readRecorder = new RuntimeVariableReadRecorder();
-        var warnings = new Elsa.Expressions.Core.Models.ExecutionWarningCollector();
+        var warnings = new ExecutionWarningCollector();
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: state.Execution.WorkflowExecutionId,
             activityExecutionId: state.InvocationId,
