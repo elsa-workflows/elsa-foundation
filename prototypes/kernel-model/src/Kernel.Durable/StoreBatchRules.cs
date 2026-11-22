@@ -20,7 +20,7 @@ public static class StoreBatchRules
         if (batch.Turns.Any(turn => turn.FoundationKept is { Count: > 0 }))
         {
             var kept = batch.Turns.SelectMany(turn => turn.FoundationKept?.Keys ?? []).ToHashSet();
-            if (batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
+            if (batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])).Concat(batch.Trial)
                 .Where(kept.Contains).GroupBy(key => key).Any(group => group.Skip(1).Any()))
                 throw new StoreException(Failure.Definite, "A Park's kept delivery may be mutated only once in a batch.");
         }

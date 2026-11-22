@@ -27,7 +27,7 @@ internal static class ParkKeptChecks
         var ordinary = store.Messages.Values.Single(message => message.Message.Id == "older");
         check(ordinary is { Done: true, KeptBy: null } && row.State == "saved", "ordinary done input has no Park disposition");
 
-        var poison = new Message("twin", new(row.Id), "poison", "private payload", TargetCreation: row.Creation, KeepUntil: now + 1).AsIssued();
+        var poison = new Message("twin", new(row.Id), "poison", "private payload", TargetCreation: row.Creation).AsIssued();
         var twin = new Message("twin", new(row.Id), "update", "ordinary payload", TargetCreation: row.Creation, KeepUntil: now + 2);
         var staged = new TurnCommit(row.Id, null, null, [], [], [poison, twin], [], [], null);
         var fence = worker.Fences.Single();
@@ -46,8 +46,24 @@ internal static class ParkKeptChecks
         var priorOffers = actor.Offers;
         var admission = await edge.SendAsync(scope, target, "twin", "update", "late payload",
             options: new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
-        await Pump(owner);
         var late = store.Messages.Values.Single(message => message.Message.Payload == "late payload").Message;
+        var checkpoint = store.Instances[row.Id];
+        fence = worker.Fences.Single();
+        var malformed = new TurnCommit(row.Id, checkpoint with { Revision = checkpoint.Revision + 1 }, checkpoint.Revision,
+            [], [late.InboxKey], [], [], [], Json.Write(new[] { "must not land" }))
+        { FoundationKept = new Dictionary<InboxKey, ParkKeepReason> { [late.InboxKey] = ParkKeepReason.Arrived } };
+        var rejected = false;
+        try
+        {
+            await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false,
+                [malformed], [], [late.InboxKey]));
+        }
+        catch (StoreException error) when (error.Failure == Failure.Definite) { rejected = true; }
+        check(rejected && store.Instances[row.Id] == checkpoint && store.Messages[late.InboxKey] is { Done: false, Trial: 0, KeptBy: null } &&
+            store.Journal.Values.All(entry => !entry.Entries.Contains("must not land", StringComparison.Ordinal)),
+            "a commit cannot keep a row and also put it on trial");
+
+        await Pump(owner);
         check(admission.Outcome == Contract.AdmissionOutcome.Accepted && late.InboxKey != poison.InboxKey && late.InboxKey != twin.InboxKey &&
             Retained(late, "late payload", ParkKeepReason.Arrived) && actor.Offers == priorOffers &&
             (await new ActorList(store, 10).GetAsync(scope, target.Actor))?.Park == parked?.Park,

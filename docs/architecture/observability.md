@@ -134,9 +134,9 @@ answer was lost counts as an unknown outcome.
 
 ### What Park keeps
 
-Today Park consumes its deliveries (deletes them, or marks done those that carry a `keep_until`), and later arrivals are
-dropped. A retry then has nothing to deliver again: only `resume` is possible. FINDINGS 25.9 records that Park does not
-keep consumed deliveries in a dead-letter queue. Retry of a parked message needs two additions, which **extend** the
+Before K3, Park deleted its consumed deliveries or marked them done if they carried a `keep_until`. Later arrivals
+were dropped or withheld. FINDINGS 25.9 describes the original Park without a retry queue. Retry of a parked message
+needs two additions, which **extend** the
 13 November decision. The owner adopted them on 17 November (decision 2). The in-memory foundation keeps the durable
 inputs consumed by Park and other durable arrivals while it is unresolved. The in-memory sweep skips these rows.
 `--park-kept-check` exercises both reasons and takeover. In-flight job conversion, the expiry control and the resolution
