@@ -118,9 +118,9 @@ across its own versions; it never names a tenant; and its waits come back exactl
 What the operator API, the HTTP adapter and the ingress adapters (brokers, webhooks, schedulers as idempotent adds)
 call. Each operation takes a `BoundScope` (`Tenant`; internal constructor, issued only by the hosting adapter,
 [tenancy](tenancy.md#where-the-tenant-comes-from)) and refuses without one (FC-12). A **`Target`** is one of
-`Ref(ref)` (an actor), `Key(callerKey, spec)` (the actor the caller key resolves to in this tenant; with a `spec`,
-created from it when available. While a run is active or its reuse window still applies, a new start operation answers
-`Repeat`; with no `spec`, resolve only. [Key binding and receipts](tenancy.md#names-one-namespace-per-tenant)), `Event(key)` (every actor waiting on the event key: an
+`Ref(ref)` (an actor), `Key(callerKey, spec)` (a tenant's caller key; with `spec`, request a new run under the
+[key binding and reuse rules](tenancy.md#names-one-namespace-per-tenant); without `spec`, resolve the current run),
+`Event(key)` (every actor waiting on the event key: an
 outside publish; a request to it with no live waiter and no start subscription on the key publishes nothing, FC-6) or `Start(spec)` (a new actor).
 
 | Member | Meaning and guarantee |
