@@ -339,6 +339,7 @@ export function ActivityGraphImplementationEditor({
   confirmationContextRef.current = { value, scopePath, selectedNodeId, readOnly };
   const expressionState = useActivityGraphExpressionDescriptors(context);
   const sidePanelLayout = useSidePanelLayout(activityGraphSidePanelStorageKeys, { palettePresent: true });
+  const { setInspectorCollapsed } = sidePanelLayout;
 
   const historyView = useRef<GraphAuthoringView>({ frames: [], selectedNodeIds: [], primaryNodeId: null });
   const pendingHistoryView = useRef<GraphAuthoringView | null>(null);
@@ -766,13 +767,18 @@ export function ActivityGraphImplementationEditor({
       if (!selectionId) return;
       setScopePath(targetPath);
       setSelectedNodeId(selectionId);
+      if (location.jsonPointer?.endsWith("/inputs")) {
+        setActiveRightPanelId("inspector");
+        setActiveInspectorTabId("inputs");
+        setInspectorCollapsed(false);
+      }
       pendingDiagnosticFocusRef.current?.complete(unsupportedGraphFocus());
       pendingDiagnosticFocusRef.current = { target: selectionId, complete: event.detail.complete };
       setDiagnosticFocusVersion(version => version + 1);
     };
     editor.addEventListener(activityGraphDiagnosticFocusEvent, focusDiagnostic);
     return () => editor.removeEventListener(activityGraphDiagnosticFocusEvent, focusDiagnostic);
-  }, [catalogByVersion, payload, root]);
+  }, [catalogByVersion, payload, root, setInspectorCollapsed]);
 
   useEffect(() => {
     const pending = pendingDiagnosticFocusRef.current;
@@ -907,7 +913,7 @@ export function ActivityGraphImplementationEditor({
     setSelectedNodeId(nodes.find(node => node.id === ownerNodeId || (node.data as unknown as BpmnNodeData).boundActivity?.nodeId === ownerNodeId)?.id ?? ownerNodeId);
     setActiveRightPanelId("inspector");
     setActiveInspectorTabId("slots");
-    sidePanelLayout.setInspectorCollapsed(false);
+    setInspectorCollapsed(false);
   };
   const inspectedNode = selected ?? owner;
   // Keep raw editor text: normalizing here removes a space before the next word is typed.
