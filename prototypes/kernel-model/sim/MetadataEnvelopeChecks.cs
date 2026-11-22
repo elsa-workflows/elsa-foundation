@@ -97,6 +97,22 @@ internal static class MetadataEnvelopeChecks
 
         var prior = Checkpoint(live);
         var fence = worker.Fences.Single();
+        var ordinary = new Message("ordinary-compose", new(prior.Id), "ok", TargetCreation: prior.Creation);
+        var malformed = new (string Field, Message Input)[]
+        {
+            ("id", ordinary with { Id = "id\uD800" }),
+            ("kind", ordinary with { Kind = "kind\uDFFF" }),
+            ("sender", ordinary with { Sender = "sender\uD800" }),
+            ("target", ordinary with { Target = new(prior.Id + "\uDFFF") }),
+            ("match", ordinary.WithInboxScope(InboxKey.EventDeliveryScope, "match\uD800"))
+        };
+        foreach (var (field, input) in malformed)
+            await RefuseComposed(input, $"S-6 composed {field}: an unpaired UTF-16 unit");
+
+        var wideStart = new StartSpec(model.Type, new string('t', 16 * 1_024), "x");
+        var duplicateContent = ordinary with { Id = "composed-start", Start = wideStart, Payload = fullStart };
+        await RefuseComposed(duplicateContent, "S-6 composed start: individually valid content exceeds the combined budget by one byte");
+
         var composedTurn = new DurableTurn(new TurnInput(worker, new Slot(), prior.Id, [], 0, new("probe", "definition"), now));
         var senderAtLimit = new string('x', 1_024 + 160);
         var overSender = false;
@@ -110,8 +126,22 @@ internal static class MetadataEnvelopeChecks
             "a send from a received address rejects excess sender bytes before staging or assigning an ordinal");
 
         foreach (var size in new[] { 4 * 1_024 * 1_024 - 1, 4 * 1_024 * 1_024, 4 * 1_024 * 1_024 + 1 })
+            await RefuseComposed(ordinary with { Kind = new string('k', size) }, $"S-6 composed kind of {size} bytes");
+
+        var issuedIdentity = (ordinary with { Id = "issued\uD800" }).AsIssued();
+        var exactContent = duplicateContent with { Payload = fullStart[..^1] };
+        var validTurn = new TurnCommit(prior.Id, prior with { Revision = prior.Revision + 1 }, prior.Revision,
+            [], [], [issuedIdentity, exactContent], [], [], "[]");
+        var landed = await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position,
+            Defaults.Lease, false, [validTurn], [], []));
+        check(landed.Landed && store.Messages.GetValueOrDefault(issuedIdentity.InboxKey)?.Message.Id == issuedIdentity.Id &&
+            store.Messages.GetValueOrDefault(exactContent.InboxKey)?.Message is { Payload: { } bodyAtCap, Start.Input: "x" } &&
+            bodyAtCap.Length == startBytes - 1 && Checkpoint(live).Revision == prior.Revision + 1 &&
+            store.Partitions[fence.Partition].Position == fence.Position + 1,
+            "S-6 exact composed content lands and an issued identity preserves the original UTF-16 unit");
+
+        async Task RefuseComposed(Message invalid, string description)
         {
-            var invalid = new Message("wide-kind", new(prior.Id), new string('k', size), TargetCreation: prior.Creation);
             var good = new Message("sibling", new(prior.Id), "ok", TargetCreation: prior.Creation);
             var turn = new TurnCommit(prior.Id, prior with { Revision = prior.Revision + 1 }, prior.Revision, [],
                 [], [good, invalid], [], [], "[]");
@@ -119,9 +149,11 @@ internal static class MetadataEnvelopeChecks
             try { await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [turn], [], [])); }
             catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
             var unchanged = Checkpoint(live) == prior && store.Partitions[fence.Partition].Position == fence.Position &&
+                !store.Journal.ContainsKey((fence.Partition, fence.Position + 1)) &&
                 !store.Messages.ContainsKey(good.InboxKey) && !store.Messages.ContainsKey(invalid.InboxKey);
-            check(refused && unchanged, $"a composed kind of {size} bytes refuses the checkpoint and every sibling write");
-            if (!refused || !unchanged) break;
+            check(refused && unchanged, $"{description} refuses the checkpoint and every sibling write");
+            if (!refused || !unchanged)
+                throw new InvalidOperationException($"The failed {description} changed the fixture baseline.");
         }
 
         const string oldPayload = "before-frame";
