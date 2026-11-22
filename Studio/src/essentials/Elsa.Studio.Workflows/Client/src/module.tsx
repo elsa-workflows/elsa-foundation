@@ -170,14 +170,14 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-activity-upgrades", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions/upgrades",
-        label: "Activity Definition upgrades",
+        label: "Activity definition upgrades",
         workspace: workspaceResource("activity-upgrade-plan", "plan"),
-        component: ({ navigate }) => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
+        component: ({ navigate }) => deferred("Activity definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
       },
       {
         id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions",
-        label: "Activity Definitions",
+        label: "Activity definitions",
         workspace: activityDefinitionWorkspace,
         component: ({ navigate }) => deferred("activity definitions", <ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
       },

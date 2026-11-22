@@ -148,10 +148,10 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
 - [x] **K8. Eyebrow.** (#5000) [verified] No new primitive is needed: `StudioPageHeader` has `eyebrow` and
   `icon`. Document D3 in the design spec: no kickers in dialogs or sections, sentence-case labels, and
   the page-header `eyebrow` only under its existing rule. `needs: D3` (PR #5279)
-- [ ] **K15. Shell breadcrumb trail (D5).** (#5001) **[check]** Find where the shell prints "Studio / X"
+- [x] **K15. Shell breadcrumb trail (D5).** (#5001) **[check]** Find where the shell prints "Studio / X"
   (start in `H/App.tsx`) and whether a page can already supply a multi-level, clickable trail to it;
   the audit did not identify such a mechanism. Design it before any X2 item starts, and say what
-  happens to the `StudioPageHeader breadcrumbs` prop and to `StudioBreadcrumbs`. `needs: D5`
+  happens to the `StudioPageHeader breadcrumbs` prop and to `StudioBreadcrumbs`. `needs: D5` (PR #5293)
 
 Candidates reported by source readers. Confirm the need before building any of them.
 
@@ -270,12 +270,12 @@ Workflows:
 - [ ] **X3.5** (#5041) [source] `HttpTestRequestDialog.tsx:240–247`.
 - [ ] **X3.6** (#5042) [source] `ActivityVersionChangeDialog.tsx:94–226`.
 - [ ] **X3.7** (#5043) [source] Inline dialog in `WorkflowEditor.tsx:1611–1624`.
-- [ ] **X3.8** (#5044) [source] `SaveWorkflowTemplateDialog.tsx:16–35`. Backdrop lacks `role="presentation"`;
-  footer is raw with `.wf-primary-button`.
+- [x] **X3.8** (#5044) [source] `SaveWorkflowTemplateDialog.tsx:16–35`. Backdrop lacks `role="presentation"`;
+  footer is raw with `.wf-primary-button`. (PR #5287)
 - [ ] **X3.9** (#5045) [source] `WorkflowTagsDialog.tsx:47` and `:111`.
-- [ ] **X3.10** (#5046) [source] `WorkflowViewsPage.tsx:152` (Edit view; uses `aria-label` where siblings use
-  `aria-labelledby`; "Update view" is not primary [seen] and becomes "Save" under D2).
-- [ ] **X3.11** (#5047) [source] `WorkflowLibraryControls.tsx:241`.
+- [x] **X3.10** (#5046) [source] `WorkflowViewsPage.tsx:152` (Edit view; uses `aria-label` where siblings use
+  `aria-labelledby`; "Update view" is not primary [seen] and becomes "Save" under D2). (PR #5290)
+- [x] **X3.11** (#5047) [source] `WorkflowLibraryControls.tsx:241`. (PR #5296)
 - [ ] **X3.12** (#5048) [source] `WorkflowFolderDeletionDialog.tsx:68–74`. Inline error is a
   `<p class="wf-dialog-error">` with an embedded raw "Reload preview" button → `StudioAlert` with action.
 - [ ] **X3.13** (#5049) [source] `WorkflowFolderMutationDialogs.tsx` (9 raw buttons, no `StudioButton`).
@@ -359,15 +359,15 @@ Decided (D6): a name-and-description dialog, then the editor opens.
 - [ ] **X5.2** (#5084) [seen] Rename to "Save" (D2): "Save changes" (Runtime evidence settings, Secrets), "Save
   draft" (Forms, ETL, Feature management), "Update view". Activity availability, Decisions and Theme
   builder already say "Save". `needs: D2`
-- [ ] **X5.3** (#5085) [verified] Route labels in `WF/module.tsx`: `:173` "Activity Definition upgrades" →
+- [x] **X5.3** (#5085) [verified] Route labels in `WF/module.tsx`: `:173` "Activity Definition upgrades" →
   "Activity definition upgrades" (D8); `:180` "Activity Definitions" → "Activity definitions", matching
-  the nav label and page title. Leave `:200` "Executable Inspector" as it is (D14).
+  the nav label and page title. Leave `:200` "Executable Inspector" as it is (D14). (PR #5291)
 - [ ] **X5.4** (#5086) [seen] Sentence case: "Create Workflow", "Create Activity Definition"
   (`WF/ActivityDefinitionCreateDialog.tsx:117`), "Theme Builder", "New Activity Type Key"
   (`WF/ActivityDefinitionForkDialog.tsx:194`). Use the creation verbs in D1 for dialog titles. Leave "Test Run"
   (`WF/workflow-editor/WorkflowEditorToolbar.tsx:189`) as it is (D14).
-- [ ] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
-  `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14`
+- [x] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
+  `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14` (PR #5289)
 - [ ] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
   title "Create Activity Definition". Use one string.
 - [ ] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
@@ -446,7 +446,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [ ] **X8.2** (#5117) [verified] `WF/ActivityDefinitionContractEditor.tsx:785` `.ad-member-tabs` → `StudioTabs`.
 - [ ] **X8.3** (#5118) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx:393` `.wf-boundary-pane-tabs`.
 - [ ] **X8.4** (#5119) [verified] `H/App.tsx:1180–1190` `bottom-panel-tab-list` hand-rolled tablist.
-- [ ] **X8.5** (#5120) [verified] `EXT/Diagnostics.OpenTelemetry/module.tsx:244`.
+- [x] **X8.5** (#5120) [verified] `EXT/Diagnostics.OpenTelemetry/module.tsx:244`. (PR #5298)
 - [ ] **X8.6** (#5121) [verified] `EXT/ExtensionBuilder/extension-builder/BottomDock.tsx:134`.
 - [ ] **X8.7** (#5122) [source] `PanelTabList` (`.wf-panel-tab-list`) in `WorkflowInstances.tsx:2540`,
   `WorkflowEditor.tsx:1283`, `graph-authoring/GraphAuthoringWorkbench.tsx:148`. Check whether
@@ -507,7 +507,7 @@ Replace local date formatting with `StudioTimestamp`.
 - [ ] **X10.6** (#5144) [verified] Identity `UserAccessPage.tsx:12`.
 - [ ] **X10.7** (#5145) [seen] Questions list shows "11/21/2026, 1:29:59 AM" where other lists show
   "Nov 21, 2026".
-- [ ] **X10.8** (#5146) [check] Console, OpenTelemetry and Structured logs modules.
+- [x] **X10.8** (#5146) [check] Console, OpenTelemetry and Structured logs modules. (PR #5298)
 - [ ] **X10.9** (#5147) [source] Drop the local `formatDate` fallbacks beside `StudioTimestamp`:
   `EXT/Agent/AgentsPage.tsx:178, 314`, `EXT/Secrets/SecretsPage.tsx:325, 407`.
 - [ ] **X10.10** (#5148) [source] Identifiers shown as plain text → `CopyableIdentifier`:
@@ -597,9 +597,9 @@ Uppercase labels (`needs: D3`):
 - [ ] **X13.6** (#5189) [source] `H/navigation/navigation.css:21`, `H/components/UserMenu.css:86`,
   `H/components/ThemeSwitcher.css:167`, `H/themes/layouts.css:76`, `H/themes/signal.css:26`,
   `H/themes/elsaCloud.css:24`.
-- [ ] **X13.7** (#5190) [verified] `EXT/Diagnostics.OpenTelemetry/styles.css:244, 311`.
-- [ ] **X13.8** (#5191) [verified] `EXT/Diagnostics.StructuredLogs/styles.css:168` ([seen] table headers TIME /
-  LEVEL / SOURCE).
+- [x] **X13.7** (#5190) [verified] `EXT/Diagnostics.OpenTelemetry/styles.css:244, 311`. (PR #5298)
+- [x] **X13.8** (#5191) [verified] `EXT/Diagnostics.StructuredLogs/styles.css:168` ([seen] table headers TIME /
+  LEVEL / SOURCE). (PR #5298)
 - [ ] **X13.9** (#5192) [verified] `EXT/Connections/styles.css:31`.
 - [ ] **X13.10** (#5193) [source] `WF/workflow-editor/activityInspection.css:181`,
   `WF/workflow-editor/graphCanvas.css:453`, `WF/graph-authoring/compensationScopeDesigner.css:292`.
@@ -626,10 +626,11 @@ Raw font sizes, weights, radii and colours:
 
 - [ ] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens.
   Many raw radii are `999px` pills; check each one before changing it.
+  Console stream, OpenTelemetry and Structured logs completed in PR #5298 (Console chrome colors in PR #5294).
 - [ ] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`,
   `--muted`, `--border`) with hex fallbacks. Remap to `--studio-*` and drop the fallbacks.
-- [ ] **X13.14** (#5197) [verified] `EXT/ConsoleStream/styles.css` carries about 57 hex/rgba values;
-  [source] it uses a private `--cs-*` namespace.
+- [x] **X13.14** (#5197) [verified] `EXT/ConsoleStream/styles.css` carries about 57 hex/rgba values;
+  [source] it uses a private `--cs-*` namespace. (PR #5294; fixed ANSI SGR colors retain the documented exemption.)
 - [ ] **X13.15** (#5198) [source] Hex `iconColor` literals in navigation registrations: `H/App.tsx:150–157`,
   `WF/module.tsx:121, 126–136`, `EXT/Connections/module.tsx:23`, `EXT/Secrets/module.tsx:24`.
 - [ ] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`.
@@ -721,8 +722,8 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [ ] **E5** (#5235) [seen] Dashboards and Questions: labels sit above fields here but use the floating-legend
   style elsewhere; Questions has an inline "Delete" per row instead of an overflow menu; the footer
   reads "1 loaded questions".
-- [ ] **E6** (#5236) [seen] Structured logs and Console: about ten same-weight toolbar buttons. Move the
-  secondary ones into an overflow menu.
+- [x] **E6** (#5236) [seen] Structured logs and Console: about ten same-weight toolbar buttons. Move the
+  secondary ones into an overflow menu. (PR #5292)
 - [ ] **E7** (#5237) [check] ETL: one-word page descriptions ("Design", "Runtime"); list and editor share one
   page.
 - [ ] **E8** (#5238) [verified] Feature management: the whole screen lives in one 2,298-line `module.tsx`.

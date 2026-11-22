@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton, StudioField, StudioToggleButton } from "@elsa-workflows/studio-ui";
+import { OverflowMenu, StudioPageHeader, StudioButton, StudioField, StudioTimestamp, StudioToggleButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { resolveBackendPath } from "@elsa-workflows/studio-sdk";
@@ -466,14 +466,16 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
             <StudioToggleButton pressed={state.compact} onClick={() => state.setCompact(current => !current)}>
               Compact
             </StudioToggleButton>
-            <StudioButton type="button" onClick={() => void state.copyRows(selectedRows)} disabled={selectedRows.length === 0}>Copy selected</StudioButton>
-            <StudioButton type="button" onClick={() => void state.copyRows(state.rows)}>Copy visible</StudioButton>
-            <StudioButton type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download visible</StudioButton>
           </>
-        ) : (
-          <StudioButton type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download</StudioButton>
-        )}
-        <StudioButton type="button" onClick={state.clear}>Clear</StudioButton>
+        ) : null}
+        <OverflowMenu ariaLabel="More structured log actions" items={[
+          ...(compactControls ? [] : [
+            { id: "copy-selected", label: "Copy selected", onSelect: () => void state.copyRows(selectedRows), disabled: selectedRows.length === 0 },
+            { id: "copy-visible", label: "Copy visible", onSelect: () => void state.copyRows(state.rows) }
+          ]),
+          { id: "download", label: compactControls ? "Download" : "Download visible", onSelect: () => state.downloadRows(state.rows), disabled: state.rows.length === 0 },
+          { id: "clear", label: "Clear", onSelect: state.clear }
+        ]} />
       </div></>} />
   );
 }
@@ -517,7 +519,7 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
           aria-label={`Select ${row.level} structured log from ${row.category}`}
           key={row.id}
         >
-          <span role="cell"><time dateTime={row.timestamp} title={row.timestamp}>{formatLogTime(row.timestamp)}</time></span>
+          <span role="cell"><StudioTimestamp value={row.timestamp} format="time" /></span>
           <LevelChip level={row.level} />
           <span role="cell" className="structured-log-source" title={row.sourceId ?? undefined}><span className="structured-log-metadata-label" aria-hidden="true">Source:</span>{row.sourceId ?? "local"}</span>
           <span role="cell" className="structured-log-category" title={row.category}><span className="structured-log-metadata-label" aria-hidden="true">Category:</span>{row.category}</span>
@@ -551,7 +553,7 @@ function StructuredLogInspector({ entry, sources, onClose }: { entry: Structured
     <aside className="structured-log-inspector" aria-label="Structured log details">
       <header>
         <div>
-          <span>{entry.level} · {formatLogTime(entry.timestamp)}</span>
+          <span>{entry.level} · <StudioTimestamp value={entry.timestamp} format="time" /></span>
           <h3 title={entry.category}>{entry.category}</h3>
         </div>
         <button type="button" onClick={onClose} aria-label="Close structured log details">Close</button>
@@ -812,11 +814,6 @@ function getConnectionStatusLabel(status: ConnectionStatus) {
   if (status === "failed")
     return "failed";
   return "reconnecting";
-}
-
-function formatLogTime(timestamp: string) {
-  const date = new Date(timestamp);
-  return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleTimeString();
 }
 
 function formatStructuredValue(value: unknown) {

@@ -69,11 +69,13 @@ for (const [theme, workspace] of [["linen", "linen"], ["classic", "minimal"]]) {
         await expect(details.getByText(source, { exact: true })).toBeVisible();
         await details.getByText(category, { exact: true }).last().scrollIntoViewIfNeeded();
         await expect(details.getByText(category, { exact: true }).last()).toBeVisible();
-        await page.getByRole("button", { name: "Copy selected", exact: true }).click();
+        await page.getByRole("button", { name: "More structured log actions" }).click();
+        await page.getByRole("menuitem", { name: "Copy selected", exact: true }).click();
         const copied = await page.evaluate(() => navigator.clipboard.readText());
         expect(copied).toContain(category);
         expect(copied).toContain(message);
-        const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download visible", exact: true }).click()]);
+        await page.getByRole("button", { name: "More structured log actions" }).click();
+        const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: "Download visible", exact: true }).click()]);
         const exported = (await readFile((await download.path())!)).toString("utf8").trim().split(/\r?\n/).map(line => JSON.parse(line));
         expect(exported).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: source, category, message })]));
         await page.getByRole("button", { name: "Close structured log details", exact: true }).click();
