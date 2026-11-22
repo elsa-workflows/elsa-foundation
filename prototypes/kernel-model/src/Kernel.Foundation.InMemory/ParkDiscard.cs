@@ -44,8 +44,10 @@ internal sealed partial class ActorAdapter
 
         var expiry = store.FoundationExpiry(row);
         var outcome = BeginClear(input, row, park, expiry, Durable.ParkClearKind.Terminate);
-        if (expiry?.Armed is { } armed) outcome.Cancelled.Add(armed);
+        if ((row.ParkRecovery?.Control ?? expiry?.Armed) is { } recalled) outcome.Cancelled.Add(recalled);
         outcome.Unsubscribe = true;
+        outcome.FoundationWithholds = true;
+        outcome.Journal = Durable.InMemoryStore.InterruptedRecoverJournal(row.ParkRecovery);
         outcome.ReplyTo(input.Taken[input.From], "started");
         return Durable.CascadeProtocol.Open(outcome, Durable.CascadeRegistry.From(row));
     }
@@ -72,9 +74,13 @@ internal sealed partial class ActorAdapter
     private static Durable.TurnOutcome BeginClear(Durable.TurnInput input, Durable.InstanceRow row,
         Durable.InMemoryStore.FoundationParkMark park, Durable.ParkExpiry? expiry, Durable.ParkClearKind kind)
     {
-        var next = row with { ParkResolutionGeneration = checked(row.ParkResolutionGeneration + 1) };
+        var next = row with
+        {
+            ParkResolutionGeneration = checked(row.ParkResolutionGeneration + 1),
+            ParkRecovery = null, ParkCohort = null
+        };
         return AdvanceClear(input, row, next, park, input.Taken[input.From].Message.Id, null, 0,
-            checked((expiry?.Serial ?? 0) + 1), kind);
+            checked((row.ParkRecovery?.Serial ?? expiry?.Serial ?? 0) + 1), kind);
     }
 
     private Durable.TurnOutcome ContinueDiscard(Durable.TurnInput input)
