@@ -2142,3 +2142,25 @@ it.each([false, true])("restores the exact later resume event without playback a
   expect(historyApi.getWorkflowHistoryEvent.mock.calls.slice(priorReads).length).toBeGreaterThanOrEqual(transient ? 2 : 1);
   expect(historyApi.getWorkflowHistoryEvent.mock.calls.slice(priorReads).every(([, , id]) => id === "later-resume")).toBe(true);
 });
+
+it.each(["unattributed", "admitted", "legacy"] as const)("keeps child authoring attribution truthful for %s source data", async mode => {
+  const details = workflowDetails({ activities: [], incidents: [] });
+  details.instance.parentWorkflowExecutionId = "parent-run";
+  details.instance.sourceReferenceId = mode === "unattributed" ? null : mode === "admitted" ? "reference-1" : undefined;
+  api.getWorkflowInstance.mockResolvedValue(details);
+  designApi.listDefinitions.mockResolvedValue({ definitions: [{ id: "definition-1", name: "First producer label" }], page: 1, pageSize: 100, totalCount: 1 });
+  designApi.getDefinition.mockResolvedValue({ definition: { id: "definition-1", name: "First producer label" } });
+  renderWorkbench("details", null, "timeline");
+  const header = () => container.querySelector(".wf-detail-header__title")?.textContent;
+  if (mode === "unattributed") {
+    await vi.waitFor(() => expect(header()).toContain("Child run · run-1"));
+    expect(header()).not.toContain("First producer label");
+    expect(buttonByText(container, "Open definition")).toBeUndefined();
+    expect(container.textContent).toContain("Source definition is unavailable for this child run.");
+    expect(container.textContent).toContain("definition-1");
+  } else {
+    await vi.waitFor(() => expect(header()).toContain("First producer label"));
+    await vi.waitFor(() => expect(buttonByText(container, "Open definition")).toBeTruthy());
+    expect(container.textContent).not.toContain("Source definition is unavailable for this child run.");
+  }
+});

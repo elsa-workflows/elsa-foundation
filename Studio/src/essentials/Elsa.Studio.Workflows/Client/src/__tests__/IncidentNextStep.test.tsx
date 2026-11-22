@@ -346,3 +346,12 @@ function incident(overrides: Partial<IncidentStateSummary> = {}): IncidentStateS
     ...overrides
   };
 }
+
+it("does not offer the artifact producer as an unattributed child source definition", async () => {
+  const { context, getJson } = definitionContext("child-without-source", id => Promise.resolve(definition(id)));
+  const container = render(context, summary({ parentWorkflowExecutionId: "parent-run", sourceReferenceId: null }), incident(), vi.fn());
+  await vi.waitFor(() => expect(container.textContent).toContain("Source definition is unavailable for this child run."));
+  expect([...container.querySelectorAll("button")].some(button => button.textContent?.includes("Review workflow definition"))).toBe(false);
+  expect(container.textContent).not.toContain("Checking whether this definition");
+  expect(getJson).not.toHaveBeenCalled();
+});

@@ -70,7 +70,7 @@ function Fixture() {
     <p>These responses test presentation behavior; they are not real runtime evidence.</p>
     <ActivityPlaybackControls playback={playback} scopeLabel="Entire fixture run" labelFor={entry => `Repeated activity ${Number(entry.position) % 3}`} />
     <output aria-label="Confirmed fixture occurrence">{selected || "None"}</output>
-    {scenario === "pointer" || scenario === "pointer-ended" ? <div onPointerDownCapture={() => { if (scenario === "pointer-ended") controls.release("1"); else playback.pause(); }}>
+    {scenario === "pointer" || scenario === "pointer-ended" ? <div onPointerDownCapture={() => { if (scenario === "pointer-ended") { controls.hold = false; controls.release("1"); } else playback.pause(); }}>
       <button type="button" onClick={() => setInspected(selected)}>Inspect occurrence below playback</button>
       <output aria-label="Inspected fixture occurrence">{inspected || "None"}</output>
     </div> : null}
