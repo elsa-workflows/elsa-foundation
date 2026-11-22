@@ -5,7 +5,11 @@ namespace Kernel.Durable;
 /// <summary>An exact actor creation. Zero is the explicitly unqualified legacy protocol.</summary>
 public sealed record CreationAddress(string Id, long Creation);
 
-public sealed record CreationResult(string Actor, string Result, long? Requested, long? Current);
+public sealed record CreationResult(string Actor, string Result, long? Requested, long? Current)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? OwningOperation { get; init; }
+}
 
 internal sealed record FoundationChildNotice(string Child, InstanceStatus Status, string? Output, long Creation, bool Final)
 {
@@ -121,11 +125,12 @@ public static class CreationProtocol
     internal static bool MatchesCascadeParent(InstanceRow? row, Message message) =>
         row?.Parent is { } parent && message.Sender == parent && message.SenderCreation == row.ParentCreation;
 
-    public static TurnOutcome Refuse(string actor, InstanceRow? row, IReadOnlyList<Delivery> taken, string reason)
+    public static TurnOutcome Refuse(string actor, InstanceRow? row, IReadOnlyList<Delivery> taken, string reason, string? owningOperation = null)
     {
         var outcome = new TurnOutcome(actor) { Consumed = [.. taken], Status = row?.Status, CreationRefused = true };
         foreach (var item in taken)
-            outcome.ReplyTo(item, new CreationResult(actor, reason, item.Message.TargetCreation ?? item.Message.Start?.Creation?.Generation, row?.Creation), creationRefusal: true);
+            outcome.ReplyTo(item, new CreationResult(actor, reason, item.Message.TargetCreation ?? item.Message.Start?.Creation?.Generation, row?.Creation)
+                { OwningOperation = owningOperation }, creationRefusal: true);
         return outcome;
     }
 

@@ -19,14 +19,17 @@ internal static class ParkDeleteChecks
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMinutes(10) };
         var scope = new Contract.BoundScope("park-delete");
         var probe = new Probe();
-        var edge = new InMemoryIngress(store, new Requests("park-delete"), "park-delete", (_, kind) => kind == Contract.Kinds.Delete);
+        var requests = new Requests("park-delete");
+        var edge = new InMemoryIngress(store, requests, "park-delete", (_, kind) => kind == Contract.Kinds.Delete);
         var commits = new List<TurnCommit>();
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
             if (landed) commits.AddRange(batch.Turns);
+            else if (batch.Turns.FirstOrDefault(turn => turn.Delete && turn.Row is { HeldCascade: not null }) is { } complete)
+                CheckRetirementGuards(store, batch, complete, check);
         });
         Worker Owner(string name) => new(name, 0, wire, new ActorAdapter(store, probe),
-            new WorkerOptions { Monotonic = () => now - initial });
+            new WorkerOptions { Monotonic = () => now - initial, Transport = new Replies(requests) });
         var worker = Owner("park-delete-first");
         await using var first = (await new DurableHost([worker]).ActivateAsync(0))!;
         var parent = (await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "root")), "parent", Contract.Kinds.Start)).Actor!.Value;
@@ -50,6 +53,8 @@ internal static class ParkDeleteChecks
         var beforeOpen = Row(child);
         var payload = Json.Write(new Contract.OperatorCommand(selected));
         var request = await Send(child, "delete", Contract.Kinds.Delete, payload);
+        var repeated = protectedAtOpen ? null : edge.RequestAsync(scope, new Contract.Target.Ref(child),
+            "different-operation", Contract.Kinds.Delete, payload, null, new Contract.RequestOptions(null, now + 1_000)).AsTask();
         await Step(worker, child);
         if (protectedAtOpen)
         {
@@ -65,6 +70,11 @@ internal static class ParkDeleteChecks
             Checkpoint(child).Terminal == previous.Terminal && !store.Messages.ContainsKey(expiry) && Notices() == 0;
         check(opened, "qualified Delete opens the drain without replacing the current Park mark or issuing its final notice");
         if (!opened) return;
+        await Step(worker, child);
+        var reply = await repeated!.WaitAsync(TimeSpan.FromSeconds(5));
+        check(reply is { Error: "in progress", Item: "delete" } &&
+              store.Instances[id].ParkDiscard is { Operation: "delete", Cleared: 0 },
+            "another qualified Delete reports the operation already owning this drain");
         await Step(worker, child);
         check(Row(child).ParkDiscard?.Cleared == InMemoryStore.ParkPageLimit && Kept() == count - InMemoryStore.ParkPageLimit,
             "Delete clears one bounded page and leaves a durable cursor for its successor");
@@ -97,6 +107,15 @@ internal static class ParkDeleteChecks
             "unprotected Complete retires the row with one deletion marker, one final notice and the descendant obligation";
         check(matched, name + (matched ? "" : $" (retired {after.Retired}, held cascade {after.HeldCascade?.Count}, " +
             $"notices {Notices()}, kept {Kept()}, journal {string.Join(", ", journal.Select(row => row.Revision))}, worker owns {successor.Owns})"));
+        if (matched && protectedAtEnd)
+        {
+            var laterSelection = (await reads.GetAsync(scope, child))!.Selection!;
+            var again = await Send(child, "later-delete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(laterSelection)));
+            await Step(successor, child);
+            check(again.Outcome == Contract.AdmissionOutcome.Accepted && laterSelection != selected &&
+                  Row(child) == after && Notices() == 1 && Kept() == 0,
+                "the new Faulted selection can name the row and protection still refuses a later Delete");
+        }
 
         int Kept() => store.Messages.Values.Count(row => row.Message.Target.Id == id && row.KeptBy is not null);
         int Notices() => commits.SelectMany(turn => turn.Sent).Count(message => message.Sender == id && message.Kind == Kinds.ChildFinished &&
@@ -124,6 +143,34 @@ internal static class ParkDeleteChecks
             owner.RunTurn(store.FoundationTarget(scope.Tenant, actor.Id)!.Id);
             await owner.FlushAsync();
         }
+    }
+
+    private static void CheckRetirementGuards(InMemoryStore store, CommitBatch batch, TurnCommit complete, Action<bool, string> check)
+    {
+        var before = store.Instances[complete.Instance];
+        var control = before.ParkDiscard!.Control;
+        var position = store.Partitions[batch.Partition].Position;
+        var changes = new (TurnCommit Turn, string Missing)[]
+        {
+            (complete with { Consumed = [], Done = [] }, "control"),
+            (complete with { Sent = [] }, "notice"),
+            (complete with { Row = complete.Row! with { HeldCascade = null, Parent = null, ParentCreation = 0 } }, "obligation")
+        };
+        foreach (var change in changes)
+        {
+            var turns = batch.Turns.Select(turn => ReferenceEquals(turn, complete) ? change.Turn : turn).ToArray();
+            var refused = false;
+            try { _ = store.CommitAsync(batch with { Turns = turns }).GetAwaiter().GetResult(); }
+            catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
+            check(refused && store.Instances[complete.Instance] == before && store.Messages.ContainsKey(control) &&
+                  store.Partitions[batch.Partition].Position == position,
+                $"the store refuses a retirement without its {change.Missing} before writing anything");
+        }
+    }
+
+    private sealed class Replies(Requests requests) : IReplyTransport
+    {
+        public void Send(string node, Reply reply) => requests.Receive(reply);
     }
 
     private sealed class Probe : Contract.IActorType

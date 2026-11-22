@@ -90,9 +90,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             if (message is { Kind: Contract.Kinds.Delete, Operator: { } deletion } && draining.ParkDiscard.Kind == Durable.ParkClearKind.Delete)
             {
                 var identity = store.FoundationIdentity(draining.Id, draining.Creation);
-                var reason = store.MatchesFoundationSelection(identity.Tenant, identity.Reference, deletion.Selection)
-                    ? "InProgress" : "StaleSelection";
-                return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, reason);
+                if (!store.MatchesFoundationSelection(identity.Tenant, identity.Reference, deletion.Selection))
+                    return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "StaleSelection");
+                return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "InProgress", draining.ParkDiscard.Operation);
             }
             return RefuseDuringDiscard(input, draining);
         }
