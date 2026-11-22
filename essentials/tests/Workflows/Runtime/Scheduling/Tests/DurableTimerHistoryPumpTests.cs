@@ -104,11 +104,12 @@ public sealed partial class DurableTimerHistoryPumpTests
         internal FakeTimeProvider Clock { get; } = new(At);
         internal Dispatcher Dispatcher { get; }
         internal ObservationFault Fault { get; } = new();
+        internal TerminalMutationFault TerminalFault { get; } = new();
         internal LogSink Log { get; } = new();
         internal List<int> DueQueryLimits { get; } = [];
         private readonly ServiceProvider provider;
         internal DurableTimerPumpTask Pump => Assert.Single(provider.GetServices<IRecurringTask>().OfType<DurableTimerPumpTask>());
-        internal Harness(BookmarkResumeDispatchStatus status = BookmarkResumeDispatchStatus.Dispatched, bool claimed = true, int maxTimersPerTick = 100)
+        internal Harness(BookmarkResumeDispatchStatus status = BookmarkResumeDispatchStatus.Dispatched, bool claimed = true, int maxTimersPerTick = 100, bool failTerminalMutation = false)
         {
             Dispatcher = new(status); var services = new ServiceCollection();
             services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
@@ -127,11 +128,11 @@ public sealed partial class DurableTimerHistoryPumpTests
                 if (Fault.FactoryArmed) { Fault.FactoryReads++; throw new IOException("controlled optional history factory outage"); }
                 return new Observer((IRuntimeHistoryObservationWriter)original.ImplementationFactory!(services), Fault);
             });
-            if (!claimed)
+            if (!claimed || failTerminalMutation)
             {
                 var timer = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IDurableTimerStore));
                 services.Remove(timer);
-                services.AddScoped<IDurableTimerStore>(services => new LegacyHistoryOwner((IDurableTimerHistoryStore)timer.ImplementationFactory!(services), DueQueryLimits));
+                services.AddScoped<IDurableTimerStore>(services => new LegacyHistoryOwner((IDurableTimerHistoryStore)timer.ImplementationFactory!(services), DueQueryLimits, claimed, failTerminalMutation ? TerminalFault : null));
             }
             provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         }

@@ -360,32 +360,51 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
         }
 
         var result = run.Result!;
-        switch (result.Status)
+        try
         {
-            case BookmarkResumeDispatchStatus.Dispatched:
-            case BookmarkResumeDispatchStatus.Duplicate:
-            case BookmarkResumeDispatchStatus.WorkflowExecutionMissing:
-            case BookmarkResumeDispatchStatus.ExecutableMissing:
-                await CompleteClaimAsync(persistenceScope, timerStore, run.Claim, result.Status, cancellationToken);
-                return result.Status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate;
-
-            case BookmarkResumeDispatchStatus.NotFound:
-                if (now - claim.Timer.DueTime > options.NotFoundGrace)
+            switch (result.Status)
+            {
+                case BookmarkResumeDispatchStatus.Dispatched:
+                case BookmarkResumeDispatchStatus.Duplicate:
+                case BookmarkResumeDispatchStatus.WorkflowExecutionMissing:
+                case BookmarkResumeDispatchStatus.ExecutableMissing:
                     await CompleteClaimAsync(persistenceScope, timerStore, run.Claim, result.Status, cancellationToken);
-                else
-                    await ReleaseAfterFailureAsync(persistenceScope, timerStore, run.Claim, options, now, cancellationToken);
-                return false;
+                    return result.Status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate;
 
-            default:
+                case BookmarkResumeDispatchStatus.NotFound:
+                    if (now - claim.Timer.DueTime > options.NotFoundGrace)
+                        await CompleteClaimAsync(persistenceScope, timerStore, run.Claim, result.Status, cancellationToken);
+                    else
+                        await ReleaseAfterFailureAsync(persistenceScope, timerStore, run.Claim, options, now, cancellationToken);
+                    return false;
+
+                default:
+                    await ReleaseAfterFailureAsync(persistenceScope, timerStore, run.Claim, options, now, cancellationToken);
+                    if (Logger.IsEnabled(LogLevel.Debug))
+                    {
+                        Logger.LogDebug(
+                            "Durable timer '{TimerId}' dispatch returned {Status}; releasing with backoff",
+                            claim.Timer.TimerId,
+                            result.Status);
+                    }
+                    return false;
+            }
+        }
+        catch (Exception error) when (run.Claim.Timer.HistoryResponsibility is not null &&
+            IsTerminalDisposition(run.Claim.Timer, result.Status, options, now) && IsHistoryFailure(error))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Logger.LogError(error, "Durable timer '{TimerId}' terminal history is unavailable; keeping its responsibility for retry", run.Claim.Timer.TimerId);
+            try
+            {
                 await ReleaseAfterFailureAsync(persistenceScope, timerStore, run.Claim, options, now, cancellationToken);
-                if (Logger.IsEnabled(LogLevel.Debug))
-                {
-                    Logger.LogDebug(
-                        "Durable timer '{TimerId}' dispatch returned {Status}; releasing with backoff",
-                        claim.Timer.TimerId,
-                        result.Status);
-                }
-                return false;
+            }
+            catch (Exception releaseError) when (IsHistoryFailure(releaseError))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Logger.LogError(releaseError, "Durable timer '{TimerId}' claim release is unavailable; retaining its visibility lease for recovery", run.Claim.Timer.TimerId);
+            }
+            return false;
         }
     }
 
@@ -424,32 +443,43 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
             return false;
         }
 
-        switch (result.Status)
+        try
         {
-            case BookmarkResumeDispatchStatus.Dispatched:
-            case BookmarkResumeDispatchStatus.Duplicate:
-            // The workflow execution or its executable is gone: the timer is orphaned, nothing to resume.
-            case BookmarkResumeDispatchStatus.WorkflowExecutionMissing:
-            case BookmarkResumeDispatchStatus.ExecutableMissing:
-                await DeleteAsync(persistenceScope, timerStore, timer, result.Status, cancellationToken);
-                return result.Status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate;
-
-            case BookmarkResumeDispatchStatus.NotFound:
-                // Past grace: the bookmark was consumed by an earlier fire (or never will match) — delete.
-                // Within grace: a very short delay may still be committing its bookmark — keep and retry.
-                if (now - timer.DueTime > options.NotFoundGrace)
+            switch (result.Status)
+            {
+                case BookmarkResumeDispatchStatus.Dispatched:
+                case BookmarkResumeDispatchStatus.Duplicate:
+                // The workflow execution or its executable is gone: the timer is orphaned, nothing to resume.
+                case BookmarkResumeDispatchStatus.WorkflowExecutionMissing:
+                case BookmarkResumeDispatchStatus.ExecutableMissing:
                     await DeleteAsync(persistenceScope, timerStore, timer, result.Status, cancellationToken);
-                else
-                    BackOff(persistenceScope, timer, options, now);
-                return false;
+                    return result.Status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate;
 
-            default:
-                // Rejected / Deferred / Ambiguous / ResumeResolutionFailed: transient or fault — keep the
-                // timer and back off so a poisoned timer cannot occupy a dispatch slot every tick.
-                BackOff(persistenceScope, timer, options, now);
-                if (Logger.IsEnabled(LogLevel.Debug))
-                    Logger.LogDebug("Durable timer '{TimerId}' dispatch returned {Status}; backing off", timer.TimerId, result.Status);
-                return false;
+                case BookmarkResumeDispatchStatus.NotFound:
+                    // Past grace: the bookmark was consumed by an earlier fire (or never will match) — delete.
+                    // Within grace: a very short delay may still be committing its bookmark — keep and retry.
+                    if (now - timer.DueTime > options.NotFoundGrace)
+                        await DeleteAsync(persistenceScope, timerStore, timer, result.Status, cancellationToken);
+                    else
+                        BackOff(persistenceScope, timer, options, now);
+                    return false;
+
+                default:
+                    // Rejected / Deferred / Ambiguous / ResumeResolutionFailed: transient or fault — keep the
+                    // timer and back off so a poisoned timer cannot occupy a dispatch slot every tick.
+                    BackOff(persistenceScope, timer, options, now);
+                    if (Logger.IsEnabled(LogLevel.Debug))
+                        Logger.LogDebug("Durable timer '{TimerId}' dispatch returned {Status}; backing off", timer.TimerId, result.Status);
+                    return false;
+            }
+        }
+        catch (Exception error) when (timer.HistoryResponsibility is not null &&
+            IsTerminalDisposition(timer, result.Status, options, now) && IsHistoryFailure(error))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Logger.LogError(error, "Durable timer '{TimerId}' terminal history is unavailable; keeping its responsibility for retry", timer.TimerId);
+            BackOff(persistenceScope, timer, options, now);
+            return false;
         }
     }
 
@@ -487,6 +517,12 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
             new TimerKey(persistenceScope, claim.Timer.WorkflowExecutionId, claim.Timer.TimerId),
             out _);
     }
+
+    private static bool IsTerminalDisposition(DurableTimer timer, BookmarkResumeDispatchStatus status,
+        DurableTimerPumpOptions options, DateTimeOffset now) => status is
+        BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate or
+        BookmarkResumeDispatchStatus.WorkflowExecutionMissing or BookmarkResumeDispatchStatus.ExecutableMissing ||
+        status == BookmarkResumeDispatchStatus.NotFound && now - timer.DueTime > options.NotFoundGrace;
 
     private RuntimeHistoryObservation TerminalObservation(DurableTimer timer, BookmarkResumeDispatchStatus status) =>
         (status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate

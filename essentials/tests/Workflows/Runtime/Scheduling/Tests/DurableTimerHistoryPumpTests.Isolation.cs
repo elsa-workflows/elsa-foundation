@@ -177,6 +177,47 @@ public sealed partial class DurableTimerHistoryPumpTests
             Assert.True(await ((IDurableTimerHistoryStore)services.GetRequiredService<IDurableTimerStore>()).HasPendingHistoryAsync("captured")));
     }
 
+    [Theory]
+    [InlineData(false, false)] [InlineData(true, false)]
+    [InlineData(false, true)] [InlineData(true, true)]
+    public async Task Terminal_history_mutation_failure_keeps_later_timers_moving_and_retains_recoverable_source(bool claimed, bool afterCommit)
+    {
+        await using var h = new Harness(claimed: claimed, failTerminalMutation: true);
+        await h.Seed("captured", head: true); await h.Schedule("captured");
+        await h.Seed("legacy", head: false, captured: false); await ScheduleLegacy(h, "legacy", At.AddSeconds(1));
+        h.Clock.Advance(TimeSpan.FromSeconds(2)); h.TerminalFault.Armed = true; h.TerminalFault.AfterCommit = afterCommit;
+        await h.Pump.ExecuteAsync(CancellationToken.None);
+        Assert.Equal(new[] { "captured", "legacy" }, h.Dispatcher.Requests.Select(request => request.WorkflowExecutionId));
+        await h.InScope(async services =>
+        {
+            var owner = (IDurableTimerHistoryStore)services.GetRequiredService<IDurableTimerStore>();
+            Assert.Null(await owner.FindAsync("legacy", "timer"));
+            var retained = await owner.FindAsync("captured", "timer");
+            if (afterCommit) Assert.Null(retained);
+            else { Assert.NotNull(retained); Assert.False(retained.HistoryResponsibility!.Retired); }
+        });
+        h.TerminalFault.Armed = false; h.Clock.Advance(TimeSpan.FromMinutes(2));
+        await h.Pump.ExecuteAsync(CancellationToken.None);
+        await h.InScope(async services =>
+        {
+            var owner = (IDurableTimerHistoryStore)services.GetRequiredService<IDurableTimerStore>();
+            Assert.Null(await owner.FindAsync("captured", "timer")); Assert.False(await owner.HasPendingHistoryAsync("captured"));
+            var journal = await services.GetRequiredService<IRuntimeHistoryStore>().ReadPageAsync(new("captured"));
+            Assert.Equal(new[] { "TimerScheduled", "TimerDispatched" }, journal.Items.Select(item => item.Name));
+        });
+        Assert.Single(h.Dispatcher.Requests, request => request.WorkflowExecutionId == "legacy");
+    }
+
+    private sealed class TerminalMutationFault
+    {
+        internal bool Armed { get; set; }
+        internal bool AfterCommit { get; set; }
+        internal void Check(bool after)
+        {
+            if (Armed && AfterCommit == after) throw new IOException("controlled terminal history mutation outage");
+        }
+    }
+
     private static Task ScheduleLegacy(Harness h, string run, DateTimeOffset? due = null) => h.InScope(async services =>
     {
         var timer = await services.GetRequiredService<IDurableTimerScheduler>().ScheduleAsync(new("timer", run, "Timer", "timer", due ?? At, At));
@@ -184,8 +225,14 @@ public sealed partial class DurableTimerHistoryPumpTests
     });
 
     // The real owner retains the source journal; this conduit uses its original list/delete dispatch path.
-    private sealed class LegacyHistoryOwner(IDurableTimerHistoryStore inner, List<int> dueQueryLimits) : IDurableTimerHistoryStore
+    private sealed class LegacyHistoryOwner(IDurableTimerHistoryStore inner, List<int> dueQueryLimits, bool claimed = false, TerminalMutationFault? fault = null) : IDurableTimerHistoryStore
     {
+        public bool SupportsClaimTransitions => claimed && inner.SupportsClaimTransitions;
+        public ValueTask<DateTimeOffset?> GetNextDueTimeAsync(CancellationToken token = default) => inner.GetNextDueTimeAsync(token);
+        public ValueTask<IReadOnlyCollection<RuntimeDurableTimerClaim>> ClaimDueAsync(RuntimeDurableTimerClaimRequest request, CancellationToken token = default) => inner.ClaimDueAsync(request, token);
+        public ValueTask<RuntimeDurableTimerClaimTransitionResult> RenewClaimAsync(RuntimeDurableTimerClaim claim, DateTimeOffset now, TimeSpan visibility, CancellationToken token = default) => inner.RenewClaimAsync(claim, now, visibility, token);
+        public ValueTask<RuntimeDurableTimerClaimTransitionResult> CompleteClaimAsync(RuntimeDurableTimerClaim claim, CancellationToken token = default) => inner.CompleteClaimAsync(claim, token);
+        public ValueTask<RuntimeDurableTimerClaimTransitionResult> ReleaseClaimAsync(RuntimeDurableTimerClaim claim, DateTimeOffset visibleAt, CancellationToken token = default) => inner.ReleaseClaimAsync(claim, visibleAt, token);
         public bool SupportsHistoryResponsibility => inner.SupportsHistoryResponsibility;
         public bool CanInspectHistorySources(IRuntimeHistoryStore reader) => inner.CanInspectHistorySources(reader);
         public bool CanDischargeUnrecordedCompletion(IRuntimeCheckpointCommitStore native) => inner.CanDischargeUnrecordedCompletion(native);
@@ -200,7 +247,13 @@ public sealed partial class DurableTimerHistoryPumpTests
         public ValueTask<bool> HasPendingHistoryAsync(string run, CancellationToken token = default) => inner.HasPendingHistoryAsync(run, token);
         public ValueTask<RuntimeStorePage<DurableTimer>> ListPendingHistoryAsync(DurableTimerHistoryQuery query, CancellationToken token = default) => inner.ListPendingHistoryAsync(query, token);
         public ValueTask<bool> AcknowledgeHistoryAsync(string run, string timer, string entry, CancellationToken token = default) => inner.AcknowledgeHistoryAsync(run, timer, entry, token);
-        public ValueTask<RuntimeDurableTimerClaimTransitionResult> CompleteClaimWithHistoryAsync(RuntimeDurableTimerClaim claim, RuntimeHistoryObservation observation, CancellationToken token = default) => inner.CompleteClaimWithHistoryAsync(claim, observation, token);
-        public ValueTask RetireWithHistoryAsync(string run, string timer, RuntimeHistoryObservation observation, CancellationToken token = default) => inner.RetireWithHistoryAsync(run, timer, observation, token);
+        public async ValueTask<RuntimeDurableTimerClaimTransitionResult> CompleteClaimWithHistoryAsync(RuntimeDurableTimerClaim claim, RuntimeHistoryObservation observation, CancellationToken token = default)
+        {
+            fault?.Check(false); var result = await inner.CompleteClaimWithHistoryAsync(claim, observation, token); fault?.Check(true); return result;
+        }
+        public async ValueTask RetireWithHistoryAsync(string run, string timer, RuntimeHistoryObservation observation, CancellationToken token = default)
+        {
+            fault?.Check(false); await inner.RetireWithHistoryAsync(run, timer, observation, token); fault?.Check(true);
+        }
     }
 }
