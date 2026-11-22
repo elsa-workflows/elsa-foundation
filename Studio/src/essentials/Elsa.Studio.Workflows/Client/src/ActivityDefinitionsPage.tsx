@@ -1,6 +1,6 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Database, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Database } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
   StudioActivityDefinitionImplementationEditorContribution,
