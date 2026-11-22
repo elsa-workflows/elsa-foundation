@@ -1579,7 +1579,7 @@ test("Activity Definition activity removal uses Studio confirmations in the insp
   await deleteSequenceStep.focus();
   await deleteSequenceStep.press("Enter");
   confirmation = page.getByRole("dialog");
-  await confirmation.getByRole("button", { name: "Remove", exact: true }).click();
+  await confirmation.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(0);
   await expectSavedRevision(page, 3);
 
@@ -1589,7 +1589,7 @@ test("Activity Definition activity removal uses Studio confirmations in the insp
   await removeInspectorActivity.press("Enter");
   confirmation = page.getByRole("dialog");
   await expect(confirmation).toContainText("Delete this activity and any nested graph content? This change will autosave.");
-  await confirmation.getByRole("button", { name: "Remove", exact: true }).click();
+  await confirmation.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(0);
   await expectSavedRevision(page, 4);
   expect(state.draft.revision).toBe(4);
@@ -1601,7 +1601,7 @@ test("Activity Definition provider contract proposals require review and apply a
 
   await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   const suggestions = page.locator("details.ad-interface-suggestions");
-  await expect(suggestions.getByRole("button", { name: "Technical details", exact: true }).first()).toBeAttached();
+  await expect(suggestions.getByText("Technical details", { exact: true }).first()).toBeAttached();
   await expect(suggestions.getByText("Technical comparison", { exact: true })).toBeAttached();
   await page.locator("details.ad-interface-suggestions > summary").click();
   await expect(page.getByText("Add input Currency")).toBeVisible();
