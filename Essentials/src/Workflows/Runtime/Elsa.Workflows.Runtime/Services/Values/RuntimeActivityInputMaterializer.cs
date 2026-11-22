@@ -693,7 +693,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
     private static string ComputeBindingFingerprint(ExecutableNode node)
     {
-        var canonical = JsonSerializer.Serialize(node.InputBindings
+        var bindings = node.InputBindings
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select(item => new
             {
@@ -707,26 +707,20 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 item.Value.ActivityResult,
                 item.Value.Expression,
                 metadata = item.Value.Metadata.OrderBy(metadata => metadata.Key, StringComparer.Ordinal)
-            }));
-        // Secret references are appended only when present, so every node without one keeps its fingerprint.
+            }).ToArray();
         var secrets = node.InputBindings
             .Where(item => item.Value.Secret is not null)
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select(item => new { key = item.Key, item.Value.Secret })
             .ToArray();
-        if (secrets.Length > 0)
-            canonical += JsonSerializer.Serialize(secrets);
-        // Read selections are appended only when present too, so every node without a member read keeps its fingerprint.
-        // They are rendered in the executable hasher's framed selection format, not by a serializer, so the fingerprint
-        // depends on no property name or enum rendering.
+        // Keep the selection protocol's explicit ordering and framing while giving the complete
+        // projection the shared JSON hash settings and lossless opaque protocol strings.
         var selections = node.InputBindings
             .Where(item => item.Value.Selection is not null)
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select(item => $"{item.Key.Length}#{item.Key}={Executables.WorkflowExecutableHasher.FormatSelection(item.Value.Selection!)}")
             .ToArray();
-        if (selections.Length > 0)
-            canonical += "|selections:" + string.Join('|', selections);
-        return $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant()}";
+        return "sha256:" + JsonHashInput.Hash(JsonHashInput.ProjectOpaqueClr(new { bindings, secrets, selections }, _ => null));
     }
 
     private async ValueTask<EvaluatedExpression> EvaluateExpressionAsync(

@@ -38,7 +38,7 @@ public sealed record TestRunDeliveryReceipt
     public string StorageValue => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{WaitId.Length}:{WaitId}:{ConfigurationDigest}")));
 
     public static string Digest(JsonElement? payload) =>
-        Convert.ToHexStringLower(SHA256.HashData(payload is { } value ? JsonSerializer.SerializeToUtf8Bytes(value) : "null"u8.ToArray()));
+        payload is { } value ? Elsa.Serialization.Core.JsonHashInput.Hash(value) : Elsa.Serialization.Core.JsonHashInput.HashJson("null");
 
     public bool? MatchesExisting(WorkflowExecutionState execution) =>
         execution.SystemMetadata.TryGetValue(StorageKey, out var existing) ? StringComparer.Ordinal.Equals(existing, StorageValue) : null;

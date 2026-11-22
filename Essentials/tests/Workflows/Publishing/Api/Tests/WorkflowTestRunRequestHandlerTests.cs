@@ -1215,7 +1215,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TestActivityAliases.ForActivityVersionId(id))),
+            DescriptorPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor(TestActivityAliases.ForActivityVersionId(id))),
             Inputs = [new InputDefinition(inputName, inputName, inputType, null, inputName, null, false)]
         };
 

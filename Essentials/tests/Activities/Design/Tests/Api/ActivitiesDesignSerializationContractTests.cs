@@ -208,7 +208,12 @@ public sealed class ActivitiesDesignSerializationContractTests
         options.TypeInfoResolverChain.Add((IJsonTypeInfoResolver)Activator.CreateInstance(ResolverType)!);
         options.TypeInfoResolverChain.Add(fallback);
 
-        foreach (var type in RouteContractTypes)
+        var owned = RouteContractTypes.Where(type => Elsa.Serialization.Core.JsonModuleMetadata.Owns(type, "Elsa.Activities.Design")).ToArray();
+        var foreign = RouteContractTypes.Except(owned).ToArray();
+        Assert.NotEmpty(owned); Assert.NotEmpty(foreign);
+        var ownerResolver = (IJsonTypeInfoResolver)Activator.CreateInstance(ResolverType)!;
+        foreach (var type in foreign) Assert.Null(ownerResolver.GetTypeInfo(type, options));
+        foreach (var type in owned)
         {
             var info = options.GetTypeInfo(type);
             Assert.NotNull(info);

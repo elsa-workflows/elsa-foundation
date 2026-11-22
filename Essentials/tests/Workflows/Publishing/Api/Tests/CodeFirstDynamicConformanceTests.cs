@@ -207,7 +207,7 @@ public sealed class CodeFirstDynamicConformanceTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(
+            DescriptorPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor(
                 id switch
                 {
                     // Producer/consumer catalog keys already carry the generated CLR type's full name.

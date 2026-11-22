@@ -127,7 +127,7 @@ internal static class SecretBindingCompilerFixture
         ActivityVersion(
             activityType.FullName!,
             WellKnownRuntimeActivityConsumers.ClrActivity,
-            JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType))),
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType))),
             activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Select(property => (Property: property, Attribute: property.GetCustomAttribute<ActivityInputAttribute>(inherit: true)))
                 .Where(candidate => candidate.Attribute is not null)

@@ -211,7 +211,7 @@ public sealed class SecretBindingCompilationTests
         var descriptor = new RuntimeActivityDescriptor(
             WellKnownRuntimeActivityConsumers.ClrActivity,
             RuntimeActivityDescriptor.InitialSchemaVersion,
-            JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Test.Unregistered.Activity")));
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor("Test.Unregistered.Activity")));
 
         var exception = Assert.Throws<ArgumentException>(() =>
             _compiler.EnsureSecretBindingsAdmissible("node-1", descriptor, [Secret(InputKey)]));

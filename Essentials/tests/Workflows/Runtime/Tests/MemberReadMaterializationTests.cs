@@ -90,11 +90,11 @@ public sealed class MemberReadMaterializationTests
 
     /// <summary>
     /// A member segment matches the stored name exactly. A variable seeded from a CLR value at start is stored with
-    /// its CLR property names, so it is read by those names; the camelCase name reads the member as absent.
+    /// the default camelCase conversion contract, so its camelCase name is read exactly.
     /// </summary>
     [Theory]
-    [InlineData("CustomerId", null)]
-    [InlineData("customerId", RuntimeReadSelectionException.AbsentMember)]
+    [InlineData("customerId", null)]
+    [InlineData("CustomerId", RuntimeReadSelectionException.AbsentMember)]
     public async Task A_member_of_a_clr_seeded_variable_is_read_by_its_stored_name(string segment, string? code)
     {
         var seeded = WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["customer"] = new SeededCustomer("c-1") })["customer"];
@@ -278,10 +278,11 @@ public sealed class MemberReadMaterializationTests
     {
         var snapshot = await MaterializeAsync(Member("variable", ["address", "street"]), Context("variable", external: false), Store());
 
-        Assert.Equal(ExpectedMemberFingerprint, snapshot.BindingFingerprint);
+        Assert.True(ExpectedMemberFingerprint == snapshot.BindingFingerprint,
+            $"Member binding JSON hash golden: Actual={snapshot.BindingFingerprint}. From Elsa 4's first stable release, this hash is frozen and changes require an explicit decision.");
     }
 
-    // Computed on this slice's first build of the framed rendering; it must never change.
+    // Regenerated once by S-9 before the first stable release; frozen from that release.
     internal const string ExpectedMemberFingerprint = "sha256:cedd66e95b724715ae7cce2ff05715cbf8842bb1f2aa568587d045b1e3c353f4";
 
     [Fact]

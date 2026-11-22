@@ -272,7 +272,7 @@ public sealed class RoleOwnedInputBindingContractTests
         var binding = compiler.Compile(
             "node-write",
             input,
-            new ArgumentValue(JsonSerializer.SerializeToElement(definition), "JavaScript"));
+            new ArgumentValue(Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(definition), "JavaScript"));
 
         Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
         var expression = Assert.IsType<RuntimeExpressionBinding>(binding.Expression);

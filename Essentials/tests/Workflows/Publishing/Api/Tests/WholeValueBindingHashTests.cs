@@ -25,20 +25,23 @@ public sealed class WholeValueBindingHashTests
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_node_payload_hash() =>
-        Assert.Equal(ExpectedNodePayloadHash, new WorkflowExecutableHasher().ComputeHash(Node()));
+        AssertHash(ExpectedNodePayloadHash, new WorkflowExecutableHasher().ComputeHash(Node()));
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_behavioural_executable_hash() =>
-        Assert.Equal(ExpectedExecutableHash, new WorkflowExecutableHasher().ComputeHash(Node(),
+        AssertHash(ExpectedExecutableHash, new WorkflowExecutableHasher().ComputeHash(Node(),
             new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []), []));
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_template_behaviour_hash() =>
-        Assert.Equal(ExpectedTemplateHash, ScopedActivityResultHashTests.TemplateHash(Node()));
+        AssertHash(ExpectedTemplateHash, ScopedActivityResultHashTests.TemplateHash(Node()));
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_input_snapshot_binding_fingerprint() =>
-        Assert.Equal(ExpectedBindingFingerprint, BindingFingerprint(Node()));
+        AssertHash(ExpectedBindingFingerprint, BindingFingerprint(Node()));
+
+    internal static void AssertHash(string expected, string actual) => Assert.True(expected == actual,
+        $"JSON hash golden: Expected={expected}; Actual={actual}. From Elsa 4's first stable release, this hash is frozen and changes require an explicit decision.");
 
     internal static string BindingFingerprint(ExecutableNode node) =>
         (string)typeof(RuntimeActivityInputMaterializer)

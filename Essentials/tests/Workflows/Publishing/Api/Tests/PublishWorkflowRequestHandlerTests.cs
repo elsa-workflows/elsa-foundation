@@ -439,9 +439,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var current = await _store.FindAsync(publication.ArtifactId);
         Assert.NotNull(current);
         Assert.Equal("Int32", current.RootActivity.InputBindings["value"].TargetType.Alias);
-        // The same authored expression and declarations collided under v1. The compatibility verifier
-        // recognizes that historical rendering, while publication emitted the distinct current identity.
-        Assert.True(new Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher()
+        // A changed destination has its own current identity; no historical verifier accepts the old pin.
+        Assert.False(new Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher()
             .MatchesHash(LegacyWorkflowHashFixture.WithRoot(legacy, current.RootActivity)));
         var retained = await _store.FindAsync(legacy.Identity.ArtifactId);
         Assert.Equal(legacy.Identity.ArtifactHash, retained!.Identity.ArtifactHash);
@@ -1997,7 +1996,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TestActivityAliases.ForActivityVersionId(id))),
+            DescriptorPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor(TestActivityAliases.ForActivityVersionId(id))),
             Inputs = inputs,
             DesignFacets = designFacets
         };

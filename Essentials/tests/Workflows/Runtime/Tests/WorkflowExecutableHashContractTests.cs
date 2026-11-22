@@ -12,18 +12,27 @@ public sealed class WorkflowExecutableHashContractTests
     private readonly WorkflowExecutableHasher _hasher = new();
 
     [Fact]
-    public void A_retained_v1_hash_still_verifies_without_reidentifying_the_artifact()
+    public void A_pre_migration_hash_has_no_historical_verification_fallback()
+    {
+        var seed = LegacyWorkflowHashFixture.Load();
+        var oldIdentity = new WorkflowExecutableIdentity("artifact-old", seed.Identity.DefinitionId, seed.Identity.DefinitionVersionId,
+            seed.Identity.ArtifactVersion, "sha256:7d70c113a0f4fd8857721b9cfafbb4e19b7f400700475ff8904de6a203f92edf");
+        Assert.False(_hasher.MatchesHash(LegacyWorkflowHashFixture.WithRoot(seed, seed.RootActivity, declaredIdentity: oldIdentity)));
+    }
+
+    [Fact]
+    public void The_regenerated_pre_stable_fixture_uses_the_single_current_hash_contract()
     {
         var legacy = LegacyWorkflowHashFixture.Load();
 
         Assert.Equal("sha256:7d70c113a0f4fd8857721b9cfafbb4e19b7f400700475ff8904de6a203f92edf", legacy.Identity.ArtifactHash);
-        Assert.True(_hasher.MatchesHash(legacy));
-        Assert.NotEqual(legacy.Identity.ArtifactHash, Hash(legacy));
-        Assert.Equal("artifact-7d70c113a0f4", legacy.Identity.ArtifactId);
+        Assert.True(_hasher.MatchesHash(legacy), $"Regenerate the pre-stable fixture once for S-9. Actual={Hash(legacy)}. From Elsa 4's first stable release, this JSON hash is frozen and changes require an explicit decision.");
+        Assert.Equal(legacy.Identity.ArtifactHash, Hash(legacy));
+        Assert.Equal(_hasher.CreateArtifactId("artifact-", legacy.Identity.ArtifactHash), legacy.Identity.ArtifactId);
     }
 
     [Fact]
-    public void Historical_verification_does_not_require_serializing_fields_outside_the_v1_coverage()
+    public void A_schema_beyond_the_current_hash_depth_is_refused_without_a_historical_verification_path()
     {
         var legacy = LegacyWorkflowHashFixture.Load();
         var json = string.Concat(Enumerable.Repeat("{\"nested\":", 1100)) + "0" + new string('}', 1100);
@@ -34,9 +43,7 @@ public sealed class WorkflowExecutableHashContractTests
                 binding.EffectivePolicy, RuntimeInputBindingSource.Expression, expression: binding.Expression,
                 metadata: binding.Metadata));
 
-        // V1 did not serialize destination schemas. Historical verification must keep that coverage,
-        // even when a schema admitted by an older host exceeds the new renderer's depth limit.
-        Assert.True(_hasher.MatchesHash(historical));
+        Assert.ThrowsAny<JsonException>(() => _hasher.MatchesHash(historical));
     }
 
     [Theory]

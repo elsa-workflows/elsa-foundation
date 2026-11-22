@@ -28,13 +28,13 @@ public sealed class ScopedActivityResultHashTests
     [Fact]
     public void A_scoped_reference_keeps_its_executable_hash()
     {
-        Assert.Equal(ExpectedExecutableHash, new WorkflowExecutableHasher().ComputeHash(Node(Scoped)));
+        WholeValueBindingHashTests.AssertHash(ExpectedExecutableHash, new WorkflowExecutableHasher().ComputeHash(Node(Scoped)));
     }
 
     [Fact]
     public void A_scoped_reference_keeps_its_template_behavior_hash()
     {
-        Assert.Equal(ExpectedTemplateHash, TemplateHash(Node(Scoped)));
+        WholeValueBindingHashTests.AssertHash(ExpectedTemplateHash, TemplateHash(Node(Scoped)));
     }
 
     // Computed on 6cf153dc94, the commit before the scope became optional.

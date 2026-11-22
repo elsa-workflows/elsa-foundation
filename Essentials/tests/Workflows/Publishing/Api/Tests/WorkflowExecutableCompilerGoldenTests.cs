@@ -578,7 +578,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(
+            DescriptorPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor(
                 id switch
                 {
                     "activity-probe" => TypeAliasConvention.CanonicalAlias(typeof(ResumeProbeActivity)),

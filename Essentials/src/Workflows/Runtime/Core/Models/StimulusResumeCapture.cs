@@ -40,8 +40,9 @@ public sealed class StimulusResumeCapture
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public string PayloadFingerprint { get; }
 
-    internal static string Fingerprint(BookmarkState bookmark) => Convert.ToHexStringLower(SHA256.HashData(
-        Encoding.UTF8.GetBytes(bookmark.Payload is { } payload ? "json:" + payload.GetRawText() : "absent")));
+    internal static string Fingerprint(BookmarkState bookmark) => bookmark.Payload is { } payload
+        ? Elsa.Serialization.Core.JsonHashInput.HashFramed([.. "json:"u8, .. Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(payload)])
+        : Elsa.Serialization.Core.JsonHashInput.HashFramed("absent"u8);
 
     internal bool Matches(BookmarkState bookmark) => RuntimeModelMetadata.AreEqual(Metadata, bookmark.Metadata) &&
         PayloadFingerprint == Fingerprint(bookmark);

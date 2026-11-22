@@ -75,14 +75,16 @@ public sealed class RuntimeReadSelectorTests
     /// hydrates <c>CustomerName</c> into a <c>CustomerName</c> property whatever the casing, a member read does not.
     /// </summary>
     [Fact]
-    public void Selection_is_case_sensitive_where_whole_value_hydration_is_not()
+    public void Selection_and_whole_value_hydration_match_exact_names()
     {
         using var document = JsonDocument.Parse("""{"CustomerName":"pascal"}""");
 
-        var hydrated = document.RootElement.Deserialize<Named>(Elsa.Activities.Runtime.Core.Serialization.ActivityValueJsonProfile.CreateOptions())!;
+        var warnings = new List<Elsa.Serialization.Core.JsonConversionDiagnostic>();
+        var hydrated = (Named)Elsa.Serialization.Core.JsonConversionContract.For(typeof(Named)).Read(document.RootElement, typeof(Named), warnings.Add)!;
         var selected = RuntimeReadSelector.Select(document.RootElement, ["customerName"]);
 
-        Assert.Equal("pascal", hydrated.CustomerName);
+        Assert.Null(hydrated.CustomerName);
+        Assert.Equal("json-unmatched-member", Assert.Single(warnings).Code);
         Assert.Equal(RuntimeReadSelectionOutcome.Absent, selected.Outcome);
     }
 
