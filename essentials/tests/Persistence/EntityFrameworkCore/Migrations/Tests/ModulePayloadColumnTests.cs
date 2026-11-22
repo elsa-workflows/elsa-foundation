@@ -27,7 +27,8 @@ public sealed class ModulePayloadColumnTests
             ["ContentJson"] = 47,
             ["PayloadJson"] = 1,
             ["MetadataJson"] = 1,
-            ["CleanupSafeFailureJson"] = 1
+            ["CleanupSafeFailureJson"] = 1,
+            ["TimerHistoryOwnerJson"] = 1
         },
         ["ExecutionCommandTransportDbContext"] = new(StringComparer.Ordinal) { ["PayloadJson"] = 1 },
         ["WorkflowsDesignDbContext"] = new(StringComparer.Ordinal)
