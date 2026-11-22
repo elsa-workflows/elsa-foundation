@@ -1,0 +1,1413 @@
+{
+  "kind": "resulting-main-diagnostics-supplement",
+  "canonicalCounts": {
+    "cases": 6,
+    "png": 90,
+    "aria": 90,
+    "oracles": 6,
+    "traces": 6
+  },
+  "selection": "Six actual resulting-main diagnostics executions; status/action and status/expiry-explanation views are complementary pairs. No old frame is relabelled.",
+  "rawExecutedCases": 6,
+  "rawCasePngAriaPairs": 90,
+  "supersededVisualSets": [],
+  "cases": [
+    {
+      "project": "desktop-dark",
+      "journey": "timeline durable diagnostics and process restart",
+      "actualTestHead": "1fc9a6e19152f804403747a0895cb203506f2b4e",
+      "files": [
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-before-restart.aria.yml",
+          "originalSha256": "a45501117f4c20b824b09f34dbcc52ed5ca6f716df60d21ea29d5a2ef8bd8177",
+          "sharedSha256": "a45501117f4c20b824b09f34dbcc52ed5ca6f716df60d21ea29d5a2ef8bd8177",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-before-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-before-restart.png",
+          "originalSha256": "e7b9f37adb11479b4d0cbc9a988803b9a2772024fc295cdf3c8129471546fc17",
+          "sharedSha256": "e7b9f37adb11479b4d0cbc9a988803b9a2772024fc295cdf3c8129471546fc17",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-before-restart.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-consumed-action.aria.yml",
+          "originalSha256": "bd684f1e56fd9adca714f4b4cdbc9ad04a898d3391333c2a809ca99823c5ebdd",
+          "sharedSha256": "bd684f1e56fd9adca714f4b4cdbc9ad04a898d3391333c2a809ca99823c5ebdd",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-consumed-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-consumed-action.png",
+          "originalSha256": "87ba7acedea41d1d41c2f7e02299e282f54cf19ce6da02f115cf9ab74fa5ad06",
+          "sharedSha256": "87ba7acedea41d1d41c2f7e02299e282f54cf19ce6da02f115cf9ab74fa5ad06",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-consumed-action.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-consumed.aria.yml",
+          "originalSha256": "bd684f1e56fd9adca714f4b4cdbc9ad04a898d3391333c2a809ca99823c5ebdd",
+          "sharedSha256": "bd684f1e56fd9adca714f4b4cdbc9ad04a898d3391333c2a809ca99823c5ebdd",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-consumed.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-consumed.png",
+          "originalSha256": "ddf92ad92fcc5339738f1e1c10ed3281029d449fcb27d153dacd77f50d6c7569",
+          "sharedSha256": "ddf92ad92fcc5339738f1e1c10ed3281029d449fcb27d153dacd77f50d6c7569",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-consumed.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-restored.aria.yml",
+          "originalSha256": "0c3b9444b55c761e4756a0680156fec61ddc278318209038347fae61bccada81",
+          "sharedSha256": "0c3b9444b55c761e4756a0680156fec61ddc278318209038347fae61bccada81",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-restored.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-restored.png",
+          "originalSha256": "e82a421afa1dfa45c74dc9bd998bf9c192ced2ef9a12005daa840282abaee624",
+          "sharedSha256": "e82a421afa1dfa45c74dc9bd998bf9c192ced2ef9a12005daa840282abaee624",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-restored.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-retained-action.aria.yml",
+          "originalSha256": "bec55f38469deead892e8174c5145659d3105f70997e275ed0228e28fbe57113",
+          "sharedSha256": "bec55f38469deead892e8174c5145659d3105f70997e275ed0228e28fbe57113",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-retained-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-retained-action.png",
+          "originalSha256": "7f60c73deda4752a0b9128966c1a7963859405523d0421aa5a5c6c6a045ad854",
+          "sharedSha256": "7f60c73deda4752a0b9128966c1a7963859405523d0421aa5a5c6c6a045ad854",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-retained-action.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-retained-after-restart.aria.yml",
+          "originalSha256": "bec55f38469deead892e8174c5145659d3105f70997e275ed0228e28fbe57113",
+          "sharedSha256": "bec55f38469deead892e8174c5145659d3105f70997e275ed0228e28fbe57113",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-retained-after-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-retained-after-restart.png",
+          "originalSha256": "4de5ff67d3f24ced4ce32732696e761979a49083dd14393b15142f987c15dbc2",
+          "sharedSha256": "4de5ff67d3f24ced4ce32732696e761979a49083dd14393b15142f987c15dbc2",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-retained-after-restart.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-duplicate-delivery.aria.yml",
+          "originalSha256": "59cd24ae265ae1f03f57a414456167d8c0664c25dce488cb0c02ce088b1e6882",
+          "sharedSha256": "59cd24ae265ae1f03f57a414456167d8c0664c25dce488cb0c02ce088b1e6882",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-duplicate-delivery.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-duplicate-delivery.png",
+          "originalSha256": "0c847e5b0a0e2dafbed1a2e540faadcf399c0925dc270ef995334b4623f4ffce",
+          "sharedSha256": "0c847e5b0a0e2dafbed1a2e540faadcf399c0925dc270ef995334b4623f4ffce",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-duplicate-delivery.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-recovered.aria.yml",
+          "originalSha256": "d1c8ae72741154f0af8c2332df465eaae8eb27d88e5dc0de2a1b54a5f2e9e5e9",
+          "sharedSha256": "d1c8ae72741154f0af8c2332df465eaae8eb27d88e5dc0de2a1b54a5f2e9e5e9",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-recovered.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-recovered.png",
+          "originalSha256": "165136da0ccd56b20d1f20af88acad73b01f9a404a9130a44d7f1ba13cf06230",
+          "sharedSha256": "165136da0ccd56b20d1f20af88acad73b01f9a404a9130a44d7f1ba13cf06230",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-recovered.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-stale.aria.yml",
+          "originalSha256": "f6bd4ce9148807f14f69e894df1ba4c1379cdda4c527f812dce735004371540e",
+          "sharedSha256": "f6bd4ce9148807f14f69e894df1ba4c1379cdda4c527f812dce735004371540e",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-stale.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-stale.png",
+          "originalSha256": "7e3f3e5d7c658dc18820c94c2e7ac283ff1715cf1b23a6fbf4e888ab3119b2d6",
+          "sharedSha256": "7e3f3e5d7c658dc18820c94c2e7ac283ff1715cf1b23a6fbf4e888ab3119b2d6",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-stale.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry-explanation.aria.yml",
+          "originalSha256": "27dfda6e889b3e0b3db7bc085dd1b29e626576db4e961b7e84c835b1b467061b",
+          "sharedSha256": "27dfda6e889b3e0b3db7bc085dd1b29e626576db4e961b7e84c835b1b467061b",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry-explanation.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry-explanation.png",
+          "originalSha256": "5bcc6d2e39f8d43c9aee33c8065e0b4a8f7aea66d638e702b96161213ea120f1",
+          "sharedSha256": "5bcc6d2e39f8d43c9aee33c8065e0b4a8f7aea66d638e702b96161213ea120f1",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry-explanation.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry-journal.aria.yml",
+          "originalSha256": "882d3435a03da273044733db3e54bc9eb0dbd2bdb49bf56c1217ef2e8ee0686a",
+          "sharedSha256": "882d3435a03da273044733db3e54bc9eb0dbd2bdb49bf56c1217ef2e8ee0686a",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry-journal.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry-journal.png",
+          "originalSha256": "80eaea0ecfe25ab0be7cc40a2aacc33844edfdfc6fc5122dd399cad4c5d2ca23",
+          "sharedSha256": "80eaea0ecfe25ab0be7cc40a2aacc33844edfdfc6fc5122dd399cad4c5d2ca23",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry-journal.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry.aria.yml",
+          "originalSha256": "27dfda6e889b3e0b3db7bc085dd1b29e626576db4e961b7e84c835b1b467061b",
+          "sharedSha256": "27dfda6e889b3e0b3db7bc085dd1b29e626576db4e961b7e84c835b1b467061b",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry.png",
+          "originalSha256": "b0ba472aba700d7d9963a3eef295f10aad2eddbf9abed70c66a07af2205ddf42",
+          "sharedSha256": "b0ba472aba700d7d9963a3eef295f10aad2eddbf9abed70c66a07af2205ddf42",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-single-consumption-action.aria.yml",
+          "originalSha256": "9cf2559b0111ab137ab0ffac5a4539b65fbe2604fe098ef4a2c5a27352d60f7e",
+          "sharedSha256": "9cf2559b0111ab137ab0ffac5a4539b65fbe2604fe098ef4a2c5a27352d60f7e",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-single-consumption-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-single-consumption-action.png",
+          "originalSha256": "9182c1325aee66e05943f5a8f36a5dbb642c9042dcaa1b672d90f7c7352fc1ef",
+          "sharedSha256": "9182c1325aee66e05943f5a8f36a5dbb642c9042dcaa1b672d90f7c7352fc1ef",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-single-consumption-action.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-single-consumption.aria.yml",
+          "originalSha256": "9cf2559b0111ab137ab0ffac5a4539b65fbe2604fe098ef4a2c5a27352d60f7e",
+          "sharedSha256": "9cf2559b0111ab137ab0ffac5a4539b65fbe2604fe098ef4a2c5a27352d60f7e",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-single-consumption.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-single-consumption.png",
+          "originalSha256": "21e2d534d350138b66f24745768f1a006b6d573fa2eac44b5b1b275e5a717255",
+          "sharedSha256": "21e2d534d350138b66f24745768f1a006b6d573fa2eac44b5b1b275e5a717255",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-single-consumption.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/reference.aria.yml",
+          "originalSha256": "2633385824c5e82c62634371f79c79303324be4090ba19a911ee13296d5fb415",
+          "sharedSha256": "2633385824c5e82c62634371f79c79303324be4090ba19a911ee13296d5fb415",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/reference.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/reference.png",
+          "originalSha256": "9c27449f653dee1255a94f5aa442d7ba0715d606282285d86379f1158a2e8a8e",
+          "sharedSha256": "9c27449f653dee1255a94f5aa442d7ba0715d606282285d86379f1158a2e8a8e",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/reference.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/timeline-diagnostics-oracle.json",
+          "originalSha256": "b607a661180c1b8d2691ad65a912d1fa482b8b25601280d258b943f4f4759c68",
+          "sharedSha256": "b5f56e4c987f3c7af14adf9e5e14fa8a2d77ed7f7eb7c251fe89536f3332f948",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/timeline-diagnostics-oracle.json"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/trace.zip",
+          "originalSha256": "7ba201920d21a9ad782ea137c39b601f870f77465e1374f093c0a92221837b5b",
+          "sharedSha256": "d1cca73dc5d487badb55d842332134c936ab2f2e8f6dbb4362575057fb5e7c9a",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/trace.zip"
+        }
+      ],
+      "runNamespace": "main-diagnostics"
+    },
+    {
+      "project": "desktop-light",
+      "journey": "timeline durable diagnostics and process restart",
+      "actualTestHead": "1fc9a6e19152f804403747a0895cb203506f2b4e",
+      "files": [
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-before-restart.aria.yml",
+          "originalSha256": "96a7bcfbc91ace15f7d964e5e6c38961c0a066926e3d540b331ffffdf8040712",
+          "sharedSha256": "96a7bcfbc91ace15f7d964e5e6c38961c0a066926e3d540b331ffffdf8040712",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-before-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-before-restart.png",
+          "originalSha256": "1b7eb94d1247429beef58c222bb68457baed0d8cd7371c8132d7c8158fa35095",
+          "sharedSha256": "1b7eb94d1247429beef58c222bb68457baed0d8cd7371c8132d7c8158fa35095",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-before-restart.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-consumed-action.aria.yml",
+          "originalSha256": "4538dd9af83145d4610b7071ecba5e8f1c25cd93296db302d3481ce8b1044450",
+          "sharedSha256": "4538dd9af83145d4610b7071ecba5e8f1c25cd93296db302d3481ce8b1044450",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-consumed-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-consumed-action.png",
+          "originalSha256": "af6109b5de0b54e9b44870f47d58d211ddb159906a55ab27a130897216f357b6",
+          "sharedSha256": "af6109b5de0b54e9b44870f47d58d211ddb159906a55ab27a130897216f357b6",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-consumed-action.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-consumed.aria.yml",
+          "originalSha256": "4538dd9af83145d4610b7071ecba5e8f1c25cd93296db302d3481ce8b1044450",
+          "sharedSha256": "4538dd9af83145d4610b7071ecba5e8f1c25cd93296db302d3481ce8b1044450",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-consumed.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-consumed.png",
+          "originalSha256": "a1706ee991a7d67889033afe3302fc020eb1b24ca8a4eb824a8a1dcabac2d3dd",
+          "sharedSha256": "a1706ee991a7d67889033afe3302fc020eb1b24ca8a4eb824a8a1dcabac2d3dd",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-consumed.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-restored.aria.yml",
+          "originalSha256": "46696c7ab2d1333dc5de1f0f41e73161ee2940e8ba7f35b70cdf4f9523e02341",
+          "sharedSha256": "46696c7ab2d1333dc5de1f0f41e73161ee2940e8ba7f35b70cdf4f9523e02341",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-restored.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-restored.png",
+          "originalSha256": "5e0af08173880112f1c7a16170d68bfa9fd8ad560ce72910dd131e4fbacc1cdf",
+          "sharedSha256": "5e0af08173880112f1c7a16170d68bfa9fd8ad560ce72910dd131e4fbacc1cdf",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-restored.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-retained-action.aria.yml",
+          "originalSha256": "939e9c46fa322135cb7f37f50db63af9f07f129e077b9681faeeb8d097d4fc22",
+          "sharedSha256": "939e9c46fa322135cb7f37f50db63af9f07f129e077b9681faeeb8d097d4fc22",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-retained-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-retained-action.png",
+          "originalSha256": "6783b8c4b0e7798bc0d775c5102e25f3ccea1bb0ee2ed267acb96f71854d2c2f",
+          "sharedSha256": "6783b8c4b0e7798bc0d775c5102e25f3ccea1bb0ee2ed267acb96f71854d2c2f",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-retained-action.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-retained-after-restart.aria.yml",
+          "originalSha256": "939e9c46fa322135cb7f37f50db63af9f07f129e077b9681faeeb8d097d4fc22",
+          "sharedSha256": "939e9c46fa322135cb7f37f50db63af9f07f129e077b9681faeeb8d097d4fc22",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-retained-after-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-retained-after-restart.png",
+          "originalSha256": "65c4289b17000561b734d67808168852bb617d9ee82787e0c41991672a98af45",
+          "sharedSha256": "65c4289b17000561b734d67808168852bb617d9ee82787e0c41991672a98af45",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-retained-after-restart.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-duplicate-delivery.aria.yml",
+          "originalSha256": "711d00496cd48bb353bea997dea99b2e7acc4d4d6262057da96f52fac3134b4f",
+          "sharedSha256": "711d00496cd48bb353bea997dea99b2e7acc4d4d6262057da96f52fac3134b4f",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-duplicate-delivery.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-duplicate-delivery.png",
+          "originalSha256": "ea6ce3041add236176c86474cbfb50c3491390d438eef37347f0efe6003b65d0",
+          "sharedSha256": "ea6ce3041add236176c86474cbfb50c3491390d438eef37347f0efe6003b65d0",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-duplicate-delivery.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-recovered.aria.yml",
+          "originalSha256": "d3eb15f41d90aa281934a9cafd3496c9d3d51b59f9b6124695e0592c10060d82",
+          "sharedSha256": "d3eb15f41d90aa281934a9cafd3496c9d3d51b59f9b6124695e0592c10060d82",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-recovered.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-recovered.png",
+          "originalSha256": "81e9d9f1e275320d3b0e2971a8f2415fd4d51d4e02c19ed17dfcb70e2b76db3e",
+          "sharedSha256": "81e9d9f1e275320d3b0e2971a8f2415fd4d51d4e02c19ed17dfcb70e2b76db3e",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-recovered.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-stale.aria.yml",
+          "originalSha256": "11e78dd208573a49a43c6aaaeb55a8cb0dbe8c00dc92b1f51b4621d56ae824b0",
+          "sharedSha256": "11e78dd208573a49a43c6aaaeb55a8cb0dbe8c00dc92b1f51b4621d56ae824b0",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-stale.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-stale.png",
+          "originalSha256": "10a39b8efb3bf2e45276d00750566f53595cdf1edd0707a235c345b3116e1c0c",
+          "sharedSha256": "10a39b8efb3bf2e45276d00750566f53595cdf1edd0707a235c345b3116e1c0c",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-stale.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry-explanation.aria.yml",
+          "originalSha256": "809e893243c10fc212308070d413296b2ca0607e94bcd17109019d8cb6c0f057",
+          "sharedSha256": "809e893243c10fc212308070d413296b2ca0607e94bcd17109019d8cb6c0f057",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry-explanation.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry-explanation.png",
+          "originalSha256": "5e7ca95838daa8d1c59c40c0312668ef80d25e0d4b9dea7b228c823cea5a1b03",
+          "sharedSha256": "5e7ca95838daa8d1c59c40c0312668ef80d25e0d4b9dea7b228c823cea5a1b03",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry-explanation.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry-journal.aria.yml",
+          "originalSha256": "00678d42060d27a87263b98aa5522b930ed1aa447970ff46bb21a0a34b9f652e",
+          "sharedSha256": "00678d42060d27a87263b98aa5522b930ed1aa447970ff46bb21a0a34b9f652e",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry-journal.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry-journal.png",
+          "originalSha256": "6f0bbf00557211310b0a2a2d21a43987379c5c46e7e506d375ebf950a75f1121",
+          "sharedSha256": "6f0bbf00557211310b0a2a2d21a43987379c5c46e7e506d375ebf950a75f1121",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry-journal.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry.aria.yml",
+          "originalSha256": "809e893243c10fc212308070d413296b2ca0607e94bcd17109019d8cb6c0f057",
+          "sharedSha256": "809e893243c10fc212308070d413296b2ca0607e94bcd17109019d8cb6c0f057",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry.png",
+          "originalSha256": "94abb58672ef1748fa5169a6c3be87f5580cd4ae8c61e30fa1998bc79d62f9be",
+          "sharedSha256": "94abb58672ef1748fa5169a6c3be87f5580cd4ae8c61e30fa1998bc79d62f9be",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-single-consumption-action.aria.yml",
+          "originalSha256": "c91e0f42c465d4335f78d047fd56c65e1819697ac953a8823e14cafe8ca3a216",
+          "sharedSha256": "c91e0f42c465d4335f78d047fd56c65e1819697ac953a8823e14cafe8ca3a216",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-single-consumption-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-single-consumption-action.png",
+          "originalSha256": "0873b194ffdcabb86825fe97673cba189839381056b96663dce8d6b9ebe5efa5",
+          "sharedSha256": "0873b194ffdcabb86825fe97673cba189839381056b96663dce8d6b9ebe5efa5",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-single-consumption-action.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-single-consumption.aria.yml",
+          "originalSha256": "c91e0f42c465d4335f78d047fd56c65e1819697ac953a8823e14cafe8ca3a216",
+          "sharedSha256": "c91e0f42c465d4335f78d047fd56c65e1819697ac953a8823e14cafe8ca3a216",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-single-consumption.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-single-consumption.png",
+          "originalSha256": "3b83ccef0266b4caa932deb63977027096a01598501d83a932c5f2068b2b2941",
+          "sharedSha256": "3b83ccef0266b4caa932deb63977027096a01598501d83a932c5f2068b2b2941",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-single-consumption.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/reference.aria.yml",
+          "originalSha256": "ed71579b5e23e1d44876b0ed05683d38c1055ec2e99810582b78536e433f75ac",
+          "sharedSha256": "ed71579b5e23e1d44876b0ed05683d38c1055ec2e99810582b78536e433f75ac",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/reference.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/reference.png",
+          "originalSha256": "4f93d1fd4fcea1b1946b2477b9e6bc7cc4a37cc1d783d952efaf4a6d9b95925a",
+          "sharedSha256": "4f93d1fd4fcea1b1946b2477b9e6bc7cc4a37cc1d783d952efaf4a6d9b95925a",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/reference.png",
+          "pixelWidth": 1440,
+          "pixelHeight": 1000
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/timeline-diagnostics-oracle.json",
+          "originalSha256": "5ccd49ce36250d7e0708d10103fd2153c568489c6413bc8bc9e23ac9152a1142",
+          "sharedSha256": "b16116588d3228083c05a938512ad368d205bedfd59d815a410dbb968b8eacf4",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/timeline-diagnostics-oracle.json"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/trace.zip",
+          "originalSha256": "bba7f87d04da3bda883757253ced175dc522e1d88482ec19844609a50f65e4fb",
+          "sharedSha256": "6079af68582d3daeb1c92a59d64f9890c192d125fdb86e3cedb03022a298a21b",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/trace.zip"
+        }
+      ],
+      "runNamespace": "main-diagnostics"
+    },
+    {
+      "project": "narrow-390-dark",
+      "journey": "timeline durable diagnostics and process restart",
+      "actualTestHead": "1fc9a6e19152f804403747a0895cb203506f2b4e",
+      "files": [
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-before-restart.aria.yml",
+          "originalSha256": "03b65816cb413eec79ae6fcbea33511f59b4fc566e9991420ee06efbc6c62169",
+          "sharedSha256": "03b65816cb413eec79ae6fcbea33511f59b4fc566e9991420ee06efbc6c62169",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-before-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-before-restart.png",
+          "originalSha256": "f8e936333c6482baf9fff9d7eea2be0ad7f1698bf86420d469f3105df6552534",
+          "sharedSha256": "f8e936333c6482baf9fff9d7eea2be0ad7f1698bf86420d469f3105df6552534",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-before-restart.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-consumed-action.aria.yml",
+          "originalSha256": "77a2224221d77e13e34fe6c6997d552c0abfd3505f0718e1c377654ca3be04f0",
+          "sharedSha256": "77a2224221d77e13e34fe6c6997d552c0abfd3505f0718e1c377654ca3be04f0",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-consumed-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-consumed-action.png",
+          "originalSha256": "fb92b4d5b734b5356fad3c9153542c12a50754b855ec22b75481e3f24624976f",
+          "sharedSha256": "fb92b4d5b734b5356fad3c9153542c12a50754b855ec22b75481e3f24624976f",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-consumed-action.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-consumed.aria.yml",
+          "originalSha256": "77a2224221d77e13e34fe6c6997d552c0abfd3505f0718e1c377654ca3be04f0",
+          "sharedSha256": "77a2224221d77e13e34fe6c6997d552c0abfd3505f0718e1c377654ca3be04f0",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-consumed.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-consumed.png",
+          "originalSha256": "3b14f220d2ae8431494f743f4ede1d06a65c368cb0bc7adbcbef34cc3871da25",
+          "sharedSha256": "3b14f220d2ae8431494f743f4ede1d06a65c368cb0bc7adbcbef34cc3871da25",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-consumed.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-restored.aria.yml",
+          "originalSha256": "fc8bcd085c1686fdd48bb67324e1cb8af7af8632297c1f35fb12c3aeae7ae1fa",
+          "sharedSha256": "fc8bcd085c1686fdd48bb67324e1cb8af7af8632297c1f35fb12c3aeae7ae1fa",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-restored.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-restored.png",
+          "originalSha256": "29debdf8982153f6596cbdd868fd99cfbd5b8628815f65fcdc6ac95483946b0c",
+          "sharedSha256": "29debdf8982153f6596cbdd868fd99cfbd5b8628815f65fcdc6ac95483946b0c",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-restored.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-retained-action.aria.yml",
+          "originalSha256": "28f78eab08f83e45c29f6f1938a6c90f3a1faf3f946756acfe9d711f4fa8714c",
+          "sharedSha256": "28f78eab08f83e45c29f6f1938a6c90f3a1faf3f946756acfe9d711f4fa8714c",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-retained-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-retained-action.png",
+          "originalSha256": "d0e0241336484a6cf435197c72daa0b051bff9d2a1a2f892946728c428b9753b",
+          "sharedSha256": "d0e0241336484a6cf435197c72daa0b051bff9d2a1a2f892946728c428b9753b",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-retained-action.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-retained-after-restart.aria.yml",
+          "originalSha256": "28f78eab08f83e45c29f6f1938a6c90f3a1faf3f946756acfe9d711f4fa8714c",
+          "sharedSha256": "28f78eab08f83e45c29f6f1938a6c90f3a1faf3f946756acfe9d711f4fa8714c",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-retained-after-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-retained-after-restart.png",
+          "originalSha256": "66e0b37a5f92de8e085612ade87ec47215eeb70d93bae531cdeda7780f3651f9",
+          "sharedSha256": "66e0b37a5f92de8e085612ade87ec47215eeb70d93bae531cdeda7780f3651f9",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-retained-after-restart.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-duplicate-delivery.aria.yml",
+          "originalSha256": "3affda3603782cc55e218e52f38e508041624a147f70ef49a2b2b19e96a77eda",
+          "sharedSha256": "3affda3603782cc55e218e52f38e508041624a147f70ef49a2b2b19e96a77eda",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-duplicate-delivery.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-duplicate-delivery.png",
+          "originalSha256": "1f9f042100184087e13360b29eda91caadc75fb4cf8e1dca18f7da3880d65346",
+          "sharedSha256": "1f9f042100184087e13360b29eda91caadc75fb4cf8e1dca18f7da3880d65346",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-duplicate-delivery.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-recovered.aria.yml",
+          "originalSha256": "6346259daab753c5c6f46957e4d4344ae3749d89aeb4bb4a2da527e5e6bf1da7",
+          "sharedSha256": "6346259daab753c5c6f46957e4d4344ae3749d89aeb4bb4a2da527e5e6bf1da7",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-recovered.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-recovered.png",
+          "originalSha256": "e7febba3d8e18f2907d880e5ceedcaba99b889b396b6a9f718f0021e20c89aa5",
+          "sharedSha256": "e7febba3d8e18f2907d880e5ceedcaba99b889b396b6a9f718f0021e20c89aa5",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-recovered.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-stale.aria.yml",
+          "originalSha256": "5cea4746e0285d7d206c8a64f4209120960915a23ec95b30420baf3a39ccd51e",
+          "sharedSha256": "5cea4746e0285d7d206c8a64f4209120960915a23ec95b30420baf3a39ccd51e",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-stale.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-stale.png",
+          "originalSha256": "c323836d99cebd43186dc654f2be9a4c4dadf2f3cdf8c7be5298d04b3725762d",
+          "sharedSha256": "c323836d99cebd43186dc654f2be9a4c4dadf2f3cdf8c7be5298d04b3725762d",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-stale.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry-explanation.aria.yml",
+          "originalSha256": "af20e16a3ca8ea7162344e68afe6db5a957347a9fc4ba4116b1b0fe5a8f9e543",
+          "sharedSha256": "af20e16a3ca8ea7162344e68afe6db5a957347a9fc4ba4116b1b0fe5a8f9e543",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry-explanation.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry-explanation.png",
+          "originalSha256": "f6a7065347c3f69bf8c9527e2c3b085a46b3565f58c18d038cc71b97a80e16c1",
+          "sharedSha256": "f6a7065347c3f69bf8c9527e2c3b085a46b3565f58c18d038cc71b97a80e16c1",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry-explanation.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry-journal.aria.yml",
+          "originalSha256": "0bf63309c0242fdbe6f72c051f741270f45bf3b0c6709a361cbcd57bbcdbb0c2",
+          "sharedSha256": "0bf63309c0242fdbe6f72c051f741270f45bf3b0c6709a361cbcd57bbcdbb0c2",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry-journal.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry-journal.png",
+          "originalSha256": "82f23f5763a3cbf1db1dd931d62b2af32f88ec6d72c7e4467f3c967e4bb50e32",
+          "sharedSha256": "82f23f5763a3cbf1db1dd931d62b2af32f88ec6d72c7e4467f3c967e4bb50e32",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry-journal.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry.aria.yml",
+          "originalSha256": "af20e16a3ca8ea7162344e68afe6db5a957347a9fc4ba4116b1b0fe5a8f9e543",
+          "sharedSha256": "af20e16a3ca8ea7162344e68afe6db5a957347a9fc4ba4116b1b0fe5a8f9e543",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry.png",
+          "originalSha256": "d1a08bec92c43e436682ef572f1a08ad75b50b77f1d528cdf2a7cfebc0a65365",
+          "sharedSha256": "d1a08bec92c43e436682ef572f1a08ad75b50b77f1d528cdf2a7cfebc0a65365",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-single-consumption-action.aria.yml",
+          "originalSha256": "834869ff61780d6fcda0c1e834cf4f34c716ae055e7ad0515d2909439bc43edf",
+          "sharedSha256": "834869ff61780d6fcda0c1e834cf4f34c716ae055e7ad0515d2909439bc43edf",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-single-consumption-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-single-consumption-action.png",
+          "originalSha256": "445127aec1b15e044d861e221ba7c0423c25259a98da8109565b1a87fbd2af56",
+          "sharedSha256": "445127aec1b15e044d861e221ba7c0423c25259a98da8109565b1a87fbd2af56",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-single-consumption-action.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-single-consumption.aria.yml",
+          "originalSha256": "834869ff61780d6fcda0c1e834cf4f34c716ae055e7ad0515d2909439bc43edf",
+          "sharedSha256": "834869ff61780d6fcda0c1e834cf4f34c716ae055e7ad0515d2909439bc43edf",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-single-consumption.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-single-consumption.png",
+          "originalSha256": "c314ff692697cce32a8cb486a879e00cb3f09bbde181c106ae600888abfbbf6a",
+          "sharedSha256": "c314ff692697cce32a8cb486a879e00cb3f09bbde181c106ae600888abfbbf6a",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-single-consumption.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/reference.aria.yml",
+          "originalSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+          "sharedSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/reference.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/reference.png",
+          "originalSha256": "bd9657cbcd08cb6ed798be01d308d62ad08c9719b3ad854faf391317accd25fe",
+          "sharedSha256": "bd9657cbcd08cb6ed798be01d308d62ad08c9719b3ad854faf391317accd25fe",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/reference.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/timeline-diagnostics-oracle.json",
+          "originalSha256": "35899c3b0ec5bbd3f7cf96d9bd336e1d395ac142e4a361e79e6280b501638c78",
+          "sharedSha256": "74a6d2637e332009637871dc6d64917a935ad45378fb592c114c9d0dc8a73bb0",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/timeline-diagnostics-oracle.json"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/trace.zip",
+          "originalSha256": "64def22856c216c70151f199cbdbfd124f52e0e2687ea53fec61cf31e4cd4a3f",
+          "sharedSha256": "cdd596e44e851d13bc6b4ededa8f3e202bc3f2e613379cbad3fc19d2eb223524",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/trace.zip"
+        }
+      ],
+      "runNamespace": "main-diagnostics"
+    },
+    {
+      "project": "narrow-390-light",
+      "journey": "timeline durable diagnostics and process restart",
+      "actualTestHead": "1fc9a6e19152f804403747a0895cb203506f2b4e",
+      "files": [
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-before-restart.aria.yml",
+          "originalSha256": "147796e2087ae730e32d11eb6074b60c0bf0cca4fd25b3c0320deb466f1d7003",
+          "sharedSha256": "147796e2087ae730e32d11eb6074b60c0bf0cca4fd25b3c0320deb466f1d7003",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-before-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-before-restart.png",
+          "originalSha256": "12bc847a8afe285e00f5ab4936d9cd79a04b8777b90761e7974adddd074a0354",
+          "sharedSha256": "12bc847a8afe285e00f5ab4936d9cd79a04b8777b90761e7974adddd074a0354",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-before-restart.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-consumed-action.aria.yml",
+          "originalSha256": "621b39d24815feeedc961051b85634a5d55ab27fcc5236c777606b012259ad5b",
+          "sharedSha256": "621b39d24815feeedc961051b85634a5d55ab27fcc5236c777606b012259ad5b",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-consumed-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-consumed-action.png",
+          "originalSha256": "7e4c4b6942a28bd0317766cc444794a7a57d1462cf3eca1e4d06e40f8c196d55",
+          "sharedSha256": "7e4c4b6942a28bd0317766cc444794a7a57d1462cf3eca1e4d06e40f8c196d55",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-consumed-action.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-consumed.aria.yml",
+          "originalSha256": "621b39d24815feeedc961051b85634a5d55ab27fcc5236c777606b012259ad5b",
+          "sharedSha256": "621b39d24815feeedc961051b85634a5d55ab27fcc5236c777606b012259ad5b",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-consumed.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-consumed.png",
+          "originalSha256": "8b19a67952c2f0202ffdfba6727710768ec6932d8be38e1f8e3a78d21d3179d1",
+          "sharedSha256": "8b19a67952c2f0202ffdfba6727710768ec6932d8be38e1f8e3a78d21d3179d1",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-consumed.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-restored.aria.yml",
+          "originalSha256": "5667862275ecfd35be1c709d479ff7fb6cfb2ae9e8544eae63c7fffcce98e09c",
+          "sharedSha256": "5667862275ecfd35be1c709d479ff7fb6cfb2ae9e8544eae63c7fffcce98e09c",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-restored.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-restored.png",
+          "originalSha256": "def8bc8fc24ba93a596b9ca3c24b885553829481285e60fdfe48096423dc3214",
+          "sharedSha256": "def8bc8fc24ba93a596b9ca3c24b885553829481285e60fdfe48096423dc3214",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-restored.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-retained-action.aria.yml",
+          "originalSha256": "7307f727a6b4b2507768957fef582a60b87f651df3e483dc56c2715bee43ba7d",
+          "sharedSha256": "7307f727a6b4b2507768957fef582a60b87f651df3e483dc56c2715bee43ba7d",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-retained-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-retained-action.png",
+          "originalSha256": "c464b31b9b3151616f81a60070b5417209d6d169064614565c1d3e32a0d81071",
+          "sharedSha256": "c464b31b9b3151616f81a60070b5417209d6d169064614565c1d3e32a0d81071",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-retained-action.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-retained-after-restart.aria.yml",
+          "originalSha256": "7307f727a6b4b2507768957fef582a60b87f651df3e483dc56c2715bee43ba7d",
+          "sharedSha256": "7307f727a6b4b2507768957fef582a60b87f651df3e483dc56c2715bee43ba7d",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-retained-after-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-retained-after-restart.png",
+          "originalSha256": "235b539fbee6e44751c2d2086baa334cedc49995b737f8f9577d77aeaf5475e7",
+          "sharedSha256": "235b539fbee6e44751c2d2086baa334cedc49995b737f8f9577d77aeaf5475e7",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-retained-after-restart.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-duplicate-delivery.aria.yml",
+          "originalSha256": "a37278bd8ea4706516f24a35b8c6b9d9322a1edaa286be0afacea29ff33e92c8",
+          "sharedSha256": "a37278bd8ea4706516f24a35b8c6b9d9322a1edaa286be0afacea29ff33e92c8",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-duplicate-delivery.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-duplicate-delivery.png",
+          "originalSha256": "6fd7292dfa67ccaad523d0d9cb3aca6809819986287bd2fcf30e259bbb5705a8",
+          "sharedSha256": "6fd7292dfa67ccaad523d0d9cb3aca6809819986287bd2fcf30e259bbb5705a8",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-duplicate-delivery.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-recovered.aria.yml",
+          "originalSha256": "01e69aafebe575366c09fd7520a99b7cf0b620a00daf522fe3458c2fde6b67ab",
+          "sharedSha256": "01e69aafebe575366c09fd7520a99b7cf0b620a00daf522fe3458c2fde6b67ab",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-recovered.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-recovered.png",
+          "originalSha256": "eaf76eabf8368993e1031e2f6514ca5724fdea250a29b4989fd3403b244c4556",
+          "sharedSha256": "eaf76eabf8368993e1031e2f6514ca5724fdea250a29b4989fd3403b244c4556",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-recovered.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-stale.aria.yml",
+          "originalSha256": "3fcf0face8a327f33d91b8546d2d96dd60523851edd69538f78ecdb85e548141",
+          "sharedSha256": "3fcf0face8a327f33d91b8546d2d96dd60523851edd69538f78ecdb85e548141",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-stale.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-stale.png",
+          "originalSha256": "63e47215eac8d2c8becdc2580cd7354b8e26bd0ce10aec7a123acd90a35de323",
+          "sharedSha256": "63e47215eac8d2c8becdc2580cd7354b8e26bd0ce10aec7a123acd90a35de323",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-stale.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry-explanation.aria.yml",
+          "originalSha256": "9374ba599b8edd5a53e52eaf7891f0bcfa3c28372bc32311debb9a2a23d4532c",
+          "sharedSha256": "9374ba599b8edd5a53e52eaf7891f0bcfa3c28372bc32311debb9a2a23d4532c",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry-explanation.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry-explanation.png",
+          "originalSha256": "3183566af87299fd5f0d92f6375a703fa95146cbec5fca05baf31a085d215c5d",
+          "sharedSha256": "3183566af87299fd5f0d92f6375a703fa95146cbec5fca05baf31a085d215c5d",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry-explanation.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry-journal.aria.yml",
+          "originalSha256": "a28da8bacf43dff05a2cf6de9e4eae6c4bd9d5ca1c6c9470dfb12f24c7b4baa2",
+          "sharedSha256": "a28da8bacf43dff05a2cf6de9e4eae6c4bd9d5ca1c6c9470dfb12f24c7b4baa2",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry-journal.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry-journal.png",
+          "originalSha256": "566d7ab75922506056013c4591833c0aede4e828e3778dabebf0cc19e52d37d1",
+          "sharedSha256": "566d7ab75922506056013c4591833c0aede4e828e3778dabebf0cc19e52d37d1",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry-journal.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry.aria.yml",
+          "originalSha256": "9374ba599b8edd5a53e52eaf7891f0bcfa3c28372bc32311debb9a2a23d4532c",
+          "sharedSha256": "9374ba599b8edd5a53e52eaf7891f0bcfa3c28372bc32311debb9a2a23d4532c",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry.png",
+          "originalSha256": "b0bf30421eadcc09f9132e4b21a6e1f7beef21ff954351141a2c22f9fffe047a",
+          "sharedSha256": "b0bf30421eadcc09f9132e4b21a6e1f7beef21ff954351141a2c22f9fffe047a",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-single-consumption-action.aria.yml",
+          "originalSha256": "4e7fc406a51e796456e60d8a09b844083efecbc4b2d29f75236bb853f70342e5",
+          "sharedSha256": "4e7fc406a51e796456e60d8a09b844083efecbc4b2d29f75236bb853f70342e5",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-single-consumption-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-single-consumption-action.png",
+          "originalSha256": "6fa9053d7368a6a467d2f01f7bf6c8d2f62c6ac03d195150ff7a19dd39f89ea5",
+          "sharedSha256": "6fa9053d7368a6a467d2f01f7bf6c8d2f62c6ac03d195150ff7a19dd39f89ea5",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-single-consumption-action.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-single-consumption.aria.yml",
+          "originalSha256": "4e7fc406a51e796456e60d8a09b844083efecbc4b2d29f75236bb853f70342e5",
+          "sharedSha256": "4e7fc406a51e796456e60d8a09b844083efecbc4b2d29f75236bb853f70342e5",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-single-consumption.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-single-consumption.png",
+          "originalSha256": "53dc30cf0a165fbd70515df5dff128b95ce4357f286a7f365f49683c4ca652ba",
+          "sharedSha256": "53dc30cf0a165fbd70515df5dff128b95ce4357f286a7f365f49683c4ca652ba",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-single-consumption.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/reference.aria.yml",
+          "originalSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+          "sharedSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/reference.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/reference.png",
+          "originalSha256": "ca9ce6d1738c99d7abcc772f33150571058488ee37b87ade494e13d92bb1b85a",
+          "sharedSha256": "ca9ce6d1738c99d7abcc772f33150571058488ee37b87ade494e13d92bb1b85a",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/reference.png",
+          "pixelWidth": 390,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/timeline-diagnostics-oracle.json",
+          "originalSha256": "8048b980b7a609106d43fea0b365f337d2294b8f6567f83e16b954ff98a95cf6",
+          "sharedSha256": "ec2ef8b5fccfa63c046159b2afcb740db47aae9397c8b1f420ae4b145ae0d634",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/timeline-diagnostics-oracle.json"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/trace.zip",
+          "originalSha256": "6723b8c717d915b1fdde7580bc1121d826e92c35ed3508c5e08c5d0ca5bbc418",
+          "sharedSha256": "8f2e3029520414dd9eb3907fa65ee38a627bfdc739bbcff32ef3738aa5ed05e1",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/trace.zip"
+        }
+      ],
+      "runNamespace": "main-diagnostics"
+    },
+    {
+      "project": "narrow-dark",
+      "journey": "timeline durable diagnostics and process restart",
+      "actualTestHead": "1fc9a6e19152f804403747a0895cb203506f2b4e",
+      "files": [
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-before-restart.aria.yml",
+          "originalSha256": "5bcc2ff5db57e91f21ddb982555cb969d805d10d3e44ff72d5f142417c980d8a",
+          "sharedSha256": "5bcc2ff5db57e91f21ddb982555cb969d805d10d3e44ff72d5f142417c980d8a",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-before-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-before-restart.png",
+          "originalSha256": "5a6c99f90fafdbdef411be3834079bf2ee43abcefef16a290dce05f02b21ff77",
+          "sharedSha256": "5a6c99f90fafdbdef411be3834079bf2ee43abcefef16a290dce05f02b21ff77",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-before-restart.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-consumed-action.aria.yml",
+          "originalSha256": "9c7357c1506a77cba87b4c7f465c2ab0a065b8a2567bcf4789a40e3e84c454f2",
+          "sharedSha256": "9c7357c1506a77cba87b4c7f465c2ab0a065b8a2567bcf4789a40e3e84c454f2",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-consumed-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-consumed-action.png",
+          "originalSha256": "60011f79c4c0ade604ba574694a3c5dd7d406b5dfa2191f67ebda6ed39a27099",
+          "sharedSha256": "60011f79c4c0ade604ba574694a3c5dd7d406b5dfa2191f67ebda6ed39a27099",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-consumed-action.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-consumed.aria.yml",
+          "originalSha256": "9c7357c1506a77cba87b4c7f465c2ab0a065b8a2567bcf4789a40e3e84c454f2",
+          "sharedSha256": "9c7357c1506a77cba87b4c7f465c2ab0a065b8a2567bcf4789a40e3e84c454f2",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-consumed.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-consumed.png",
+          "originalSha256": "d36189f0f0a29bd9b1b4df95268b145244bf4af842e703d40984f35ee505f689",
+          "sharedSha256": "d36189f0f0a29bd9b1b4df95268b145244bf4af842e703d40984f35ee505f689",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-consumed.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-restored.aria.yml",
+          "originalSha256": "5dfd2206f7054babbed09aec243aa32117bf631be69517411e8edc5211d4d13c",
+          "sharedSha256": "5dfd2206f7054babbed09aec243aa32117bf631be69517411e8edc5211d4d13c",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-restored.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-restored.png",
+          "originalSha256": "9dbf61ff108f8eb97bc30540d90c2d1ecf8cda6ab25e3b213cbceeff1755a64f",
+          "sharedSha256": "9dbf61ff108f8eb97bc30540d90c2d1ecf8cda6ab25e3b213cbceeff1755a64f",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-restored.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-retained-action.aria.yml",
+          "originalSha256": "40b70e2b20cd44ccc543084dd9e1b0fc40a488f58f99ae354bffa456db0b76ac",
+          "sharedSha256": "40b70e2b20cd44ccc543084dd9e1b0fc40a488f58f99ae354bffa456db0b76ac",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-retained-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-retained-action.png",
+          "originalSha256": "6eb1ffd25c194be8e10f3c0c1de1bb6788fb6928ba1ee4312b06154cf8710350",
+          "sharedSha256": "6eb1ffd25c194be8e10f3c0c1de1bb6788fb6928ba1ee4312b06154cf8710350",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-retained-action.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-retained-after-restart.aria.yml",
+          "originalSha256": "40b70e2b20cd44ccc543084dd9e1b0fc40a488f58f99ae354bffa456db0b76ac",
+          "sharedSha256": "40b70e2b20cd44ccc543084dd9e1b0fc40a488f58f99ae354bffa456db0b76ac",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-retained-after-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-retained-after-restart.png",
+          "originalSha256": "b72c70c731caa76a8518e389f5a6a426d8e3e8a12c56cdaa4b1eb5e82273b8cd",
+          "sharedSha256": "b72c70c731caa76a8518e389f5a6a426d8e3e8a12c56cdaa4b1eb5e82273b8cd",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-retained-after-restart.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-duplicate-delivery.aria.yml",
+          "originalSha256": "5bfce657273818f127eaa77415a54c530b87457af2e9685c537a636c46397fdb",
+          "sharedSha256": "5bfce657273818f127eaa77415a54c530b87457af2e9685c537a636c46397fdb",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-duplicate-delivery.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-duplicate-delivery.png",
+          "originalSha256": "5eb4765e497c8a6ef405afa21b6713a278482e6779985e3b42e41223a44c8ed9",
+          "sharedSha256": "5eb4765e497c8a6ef405afa21b6713a278482e6779985e3b42e41223a44c8ed9",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-duplicate-delivery.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-recovered.aria.yml",
+          "originalSha256": "a65aad0745bbdfb6bdf0f7b708ae8ee164c2cd12e7ecf4af69c6107396cacf87",
+          "sharedSha256": "a65aad0745bbdfb6bdf0f7b708ae8ee164c2cd12e7ecf4af69c6107396cacf87",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-recovered.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-recovered.png",
+          "originalSha256": "fd84586dc86dea8833ee2bb681664e9ced7da1f3adcc6f98d9ab34882c4e4427",
+          "sharedSha256": "fd84586dc86dea8833ee2bb681664e9ced7da1f3adcc6f98d9ab34882c4e4427",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-recovered.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-stale.aria.yml",
+          "originalSha256": "e966b0fd49e5f6816fb97a9732507b2ca6750792482e6027de746121c4e81606",
+          "sharedSha256": "e966b0fd49e5f6816fb97a9732507b2ca6750792482e6027de746121c4e81606",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-stale.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-stale.png",
+          "originalSha256": "ceb625db13512131e67f50f53dd3e4588ac35552b7751419ad3726bfad4e39ae",
+          "sharedSha256": "ceb625db13512131e67f50f53dd3e4588ac35552b7751419ad3726bfad4e39ae",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-stale.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry-explanation.aria.yml",
+          "originalSha256": "c6caf375ff324d702954c1fba76907ceafa01abe881b7c11bd5bd4b9b8a12b49",
+          "sharedSha256": "c6caf375ff324d702954c1fba76907ceafa01abe881b7c11bd5bd4b9b8a12b49",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry-explanation.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry-explanation.png",
+          "originalSha256": "66a46959930097517403916285e46176e5de3134cf8042dc19fcb10c2cc4503f",
+          "sharedSha256": "66a46959930097517403916285e46176e5de3134cf8042dc19fcb10c2cc4503f",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry-explanation.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry-journal.aria.yml",
+          "originalSha256": "b174235e3509d6d8ee91beefeaacc45ef164f2f30f5cc1ea545c3ba77045f711",
+          "sharedSha256": "b174235e3509d6d8ee91beefeaacc45ef164f2f30f5cc1ea545c3ba77045f711",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry-journal.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry-journal.png",
+          "originalSha256": "c1f86e354fd11ed6f026ec393e86eb8717d8a45c92e81b9c65ea1549cf38c503",
+          "sharedSha256": "c1f86e354fd11ed6f026ec393e86eb8717d8a45c92e81b9c65ea1549cf38c503",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry-journal.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry.aria.yml",
+          "originalSha256": "c6caf375ff324d702954c1fba76907ceafa01abe881b7c11bd5bd4b9b8a12b49",
+          "sharedSha256": "c6caf375ff324d702954c1fba76907ceafa01abe881b7c11bd5bd4b9b8a12b49",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry.png",
+          "originalSha256": "630638b3ec665925a862b7de99cabf37a6f7b77a2b0979988efaef14a446cb69",
+          "sharedSha256": "630638b3ec665925a862b7de99cabf37a6f7b77a2b0979988efaef14a446cb69",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-single-consumption-action.aria.yml",
+          "originalSha256": "cc818bdc56b30fbe66b7224b79a6c04207858885afcc41c96ee611cec1e08929",
+          "sharedSha256": "cc818bdc56b30fbe66b7224b79a6c04207858885afcc41c96ee611cec1e08929",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-single-consumption-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-single-consumption-action.png",
+          "originalSha256": "de2b99a673981eb8e641a888b8e17c4a39ed9c303f0689010f41e8ce26db1f03",
+          "sharedSha256": "de2b99a673981eb8e641a888b8e17c4a39ed9c303f0689010f41e8ce26db1f03",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-single-consumption-action.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-single-consumption.aria.yml",
+          "originalSha256": "cc818bdc56b30fbe66b7224b79a6c04207858885afcc41c96ee611cec1e08929",
+          "sharedSha256": "cc818bdc56b30fbe66b7224b79a6c04207858885afcc41c96ee611cec1e08929",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-single-consumption.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-single-consumption.png",
+          "originalSha256": "24ad14c435d746b98e06905e734a8c32247cf1a23ff265da0519ca64728ccc13",
+          "sharedSha256": "24ad14c435d746b98e06905e734a8c32247cf1a23ff265da0519ca64728ccc13",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-single-consumption.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/reference.aria.yml",
+          "originalSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+          "sharedSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/reference.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/reference.png",
+          "originalSha256": "6d3a9e22db2305089a85e202fb31a38d3680d73142c683fe499c236943ea3750",
+          "sharedSha256": "6d3a9e22db2305089a85e202fb31a38d3680d73142c683fe499c236943ea3750",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/reference.png",
+          "pixelWidth": 360,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/timeline-diagnostics-oracle.json",
+          "originalSha256": "ac72eafcdb45e00ef02d0824abd38161bacba2253faf5a2a46c9cc8d7705a91a",
+          "sharedSha256": "092d53eda69d76fe8a858088a293766d1f3568be44409228833d792b4d92da08",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/timeline-diagnostics-oracle.json"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/trace.zip",
+          "originalSha256": "44122dfd59580234a1273f5225c8f3d4094d51b453abe6bc4e7d31c7f3fa6455",
+          "sharedSha256": "8486326ee56a4906681d672be1a49afd75d7065d6cc66acdc16a59e800e7ada8",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/trace.zip"
+        }
+      ],
+      "runNamespace": "main-diagnostics"
+    },
+    {
+      "project": "narrow-light",
+      "journey": "timeline durable diagnostics and process restart",
+      "actualTestHead": "1fc9a6e19152f804403747a0895cb203506f2b4e",
+      "files": [
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-before-restart.aria.yml",
+          "originalSha256": "e263f920c4fb78f6632548066d179e36bd79df18509ffde9653b827791b785f3",
+          "sharedSha256": "e263f920c4fb78f6632548066d179e36bd79df18509ffde9653b827791b785f3",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-before-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-before-restart.png",
+          "originalSha256": "1712b427abfbe411eeb80919a8ceab2668ec4234d285371c0f5e9a85607ed209",
+          "sharedSha256": "1712b427abfbe411eeb80919a8ceab2668ec4234d285371c0f5e9a85607ed209",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-before-restart.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-consumed-action.aria.yml",
+          "originalSha256": "cd6a26e7daecc6ba7ed9fa6f71a3ad4a03a02706db53cb294d62e5a5bf547a3d",
+          "sharedSha256": "cd6a26e7daecc6ba7ed9fa6f71a3ad4a03a02706db53cb294d62e5a5bf547a3d",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-consumed-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-consumed-action.png",
+          "originalSha256": "7b92d1f720aa4c4a689bcb34d02433912df3462259a119b5a1a15f5e172b253f",
+          "sharedSha256": "7b92d1f720aa4c4a689bcb34d02433912df3462259a119b5a1a15f5e172b253f",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-consumed-action.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-consumed.aria.yml",
+          "originalSha256": "cd6a26e7daecc6ba7ed9fa6f71a3ad4a03a02706db53cb294d62e5a5bf547a3d",
+          "sharedSha256": "cd6a26e7daecc6ba7ed9fa6f71a3ad4a03a02706db53cb294d62e5a5bf547a3d",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-consumed.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-consumed.png",
+          "originalSha256": "78c7de7eb2e7024862d9463c861a6324f72bcc09867fcd0392ffd02051ad1358",
+          "sharedSha256": "78c7de7eb2e7024862d9463c861a6324f72bcc09867fcd0392ffd02051ad1358",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-consumed.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-restored.aria.yml",
+          "originalSha256": "f78671decfdee91bb9cad91ef3f8aaebed84784875c7ca2bac136cbaf34c307b",
+          "sharedSha256": "f78671decfdee91bb9cad91ef3f8aaebed84784875c7ca2bac136cbaf34c307b",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-restored.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-restored.png",
+          "originalSha256": "82c6b5c470e80083b9971eb57ba478ac1a357ef3d4e2d18e780b5bf9cf58ef55",
+          "sharedSha256": "82c6b5c470e80083b9971eb57ba478ac1a357ef3d4e2d18e780b5bf9cf58ef55",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-restored.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-retained-action.aria.yml",
+          "originalSha256": "d0c5cc8e04607cbb92b3adccb25b3f335a36638f4d765ee1b07e37b8d47057de",
+          "sharedSha256": "d0c5cc8e04607cbb92b3adccb25b3f335a36638f4d765ee1b07e37b8d47057de",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-retained-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-retained-action.png",
+          "originalSha256": "bd27c1aaa21543db5c541d577c4aa93f59bf81d82bacffcabc0dbcb88e90262d",
+          "sharedSha256": "bd27c1aaa21543db5c541d577c4aa93f59bf81d82bacffcabc0dbcb88e90262d",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-retained-action.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-retained-after-restart.aria.yml",
+          "originalSha256": "d0c5cc8e04607cbb92b3adccb25b3f335a36638f4d765ee1b07e37b8d47057de",
+          "sharedSha256": "d0c5cc8e04607cbb92b3adccb25b3f335a36638f4d765ee1b07e37b8d47057de",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-retained-after-restart.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-retained-after-restart.png",
+          "originalSha256": "5937bf5d9d15d7fb89231d75a0b2392c3091f528dbe5558c2852a53f476171ad",
+          "sharedSha256": "5937bf5d9d15d7fb89231d75a0b2392c3091f528dbe5558c2852a53f476171ad",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-retained-after-restart.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-duplicate-delivery.aria.yml",
+          "originalSha256": "165429d1c5954479ea7c05afc1308984a77dc30ea6055439ad45380bf17f22ad",
+          "sharedSha256": "165429d1c5954479ea7c05afc1308984a77dc30ea6055439ad45380bf17f22ad",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-duplicate-delivery.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-duplicate-delivery.png",
+          "originalSha256": "06f4ae6768450be08d34e8ccdfe94164bc27518ddc02e83b644538d959c94233",
+          "sharedSha256": "06f4ae6768450be08d34e8ccdfe94164bc27518ddc02e83b644538d959c94233",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-duplicate-delivery.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-recovered.aria.yml",
+          "originalSha256": "f103eec715b11c14f4f54b162fd456e066ef7cb96212c21169fffd1857a4a035",
+          "sharedSha256": "f103eec715b11c14f4f54b162fd456e066ef7cb96212c21169fffd1857a4a035",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-recovered.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-recovered.png",
+          "originalSha256": "592f64128982c9959a99996156e9206263067cd711968f4d524acf3aad826940",
+          "sharedSha256": "592f64128982c9959a99996156e9206263067cd711968f4d524acf3aad826940",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-recovered.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-stale.aria.yml",
+          "originalSha256": "d0f6ce29db9a77debf1ea8b83912ab3527674e67acbaf0b2b02a7040848a584d",
+          "sharedSha256": "d0f6ce29db9a77debf1ea8b83912ab3527674e67acbaf0b2b02a7040848a584d",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-stale.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-stale.png",
+          "originalSha256": "d949beca83339def2f70c9862671a4c35a99fab65ff22e5191ea885114be85dc",
+          "sharedSha256": "d949beca83339def2f70c9862671a4c35a99fab65ff22e5191ea885114be85dc",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-stale.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry-explanation.aria.yml",
+          "originalSha256": "8516bdb4615e0f628153b258aecd296d24705bcbe8c03c643c78330b1d3aee9c",
+          "sharedSha256": "8516bdb4615e0f628153b258aecd296d24705bcbe8c03c643c78330b1d3aee9c",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry-explanation.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry-explanation.png",
+          "originalSha256": "20378e008434c202c20331ae0427065e0b4f4fbd513bcc4e3273b09b6056675b",
+          "sharedSha256": "20378e008434c202c20331ae0427065e0b4f4fbd513bcc4e3273b09b6056675b",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry-explanation.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry-journal.aria.yml",
+          "originalSha256": "2d0708bac051772406af2eddca9a9a4315d69d17637a6ef137de9745d20686ef",
+          "sharedSha256": "2d0708bac051772406af2eddca9a9a4315d69d17637a6ef137de9745d20686ef",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry-journal.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry-journal.png",
+          "originalSha256": "e262550f77b3645fba02527ea578c1771d739264bb931742afac9508a07be6d5",
+          "sharedSha256": "e262550f77b3645fba02527ea578c1771d739264bb931742afac9508a07be6d5",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry-journal.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry.aria.yml",
+          "originalSha256": "8516bdb4615e0f628153b258aecd296d24705bcbe8c03c643c78330b1d3aee9c",
+          "sharedSha256": "8516bdb4615e0f628153b258aecd296d24705bcbe8c03c643c78330b1d3aee9c",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry.png",
+          "originalSha256": "4c3b7258ee8eec6937c81e97661388a5235a1d9912fea2669f74e5cdd178a667",
+          "sharedSha256": "4c3b7258ee8eec6937c81e97661388a5235a1d9912fea2669f74e5cdd178a667",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-single-consumption-action.aria.yml",
+          "originalSha256": "f2d576587db6788969c3cf79b26290c8bfe15e78195e4c72c5244daf32a1e9a7",
+          "sharedSha256": "f2d576587db6788969c3cf79b26290c8bfe15e78195e4c72c5244daf32a1e9a7",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-single-consumption-action.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-single-consumption-action.png",
+          "originalSha256": "9aedf1419cec0b02163677f54e2f1dc4850c3fe6dc3819257d27bdaad08cba2e",
+          "sharedSha256": "9aedf1419cec0b02163677f54e2f1dc4850c3fe6dc3819257d27bdaad08cba2e",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-single-consumption-action.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-single-consumption.aria.yml",
+          "originalSha256": "f2d576587db6788969c3cf79b26290c8bfe15e78195e4c72c5244daf32a1e9a7",
+          "sharedSha256": "f2d576587db6788969c3cf79b26290c8bfe15e78195e4c72c5244daf32a1e9a7",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-single-consumption.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-single-consumption.png",
+          "originalSha256": "a2149176b1be9473014a1ea69a6d7f18074dd3133a32d2bfbbd6e47c9acab341",
+          "sharedSha256": "a2149176b1be9473014a1ea69a6d7f18074dd3133a32d2bfbbd6e47c9acab341",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-single-consumption.png",
+          "pixelWidth": 320,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/reference.aria.yml",
+          "originalSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+          "sharedSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/reference.aria.yml"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/reference.png",
+          "originalSha256": "b5abef35b33817df9679c026ea926044001735e454ed15360203db514d182897",
+          "sharedSha256": "b5abef35b33817df9679c026ea926044001735e454ed15360203db514d182897",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/reference.png",
+          "pixelWidth": 360,
+          "pixelHeight": 900
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/timeline-diagnostics-oracle.json",
+          "originalSha256": "66954bd9d8634906301406f820c72962523d61dfd84663258529a696c22e8f6d",
+          "sharedSha256": "42fb1f61688f01af36ff3dd122d882984f20e11e58a78a4219ff7658773c3a12",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/timeline-diagnostics-oracle.json"
+        },
+        {
+          "path": "results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/trace.zip",
+          "originalSha256": "e7e124c28e55126900bbc74f181ece17a1f24403784b4e6a6c6cf29eb5343ab6",
+          "sharedSha256": "b43b9a1102d481b9b101a55ed81ea8c619f098de23b1f8a0be372ade442d0cf0",
+          "bundlePath": "main-diagnostics/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/trace.zip"
+        }
+      ],
+      "runNamespace": "main-diagnostics"
+    }
+  ],
+  "supplemental": {
+    "isolatedGallery": "Retained full reporter/gallery assets are additional isolated shared-component evidence, outside the90 composed pairs."
+  },
+  "originalFeatureArtifact": {
+    "commit": "5e918524717c90df141ce2cd0a856d8c8e0ee23f",
+    "scope": "Original54-case/420-pair feature corpus; original source labels and privacy/download acceptance unchanged",
+    "apiZipball": "https://api.github.com/repos/elsa-workflows/elsa-foundation/zipball/5e918524717c90df141ce2cd0a856d8c8e0ee23f",
+    "manifestSha256": "c0b4f73433ca462d38897558b145779b46a32726cf28837f07a8d4fb4dfa625e"
+  },
+  "source": {
+    "testedMain": "1fc9a6e19152f804403747a0895cb203506f2b4e",
+    "fixturePR": 5368,
+    "reviewedFixtureHead": "6935ecb36a0e40cc1e3e45be7b342efebecf8a9c",
+    "featureMerge": "905231c98a013140dbefa033e826046ae6e682e7"
+  },
+  "builderSha256": "cac9172c1cd1c732ba45835655e09019f02f7efbf8dc42ba269d6d97058e284f",
+  "codecSha256": "29611a1c2029a831e913a1249b93a76e5cd0303950afa3224147190a704b7752"
+}

@@ -1,0 +1,257 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - button "Collapse navigation" [expanded]:
+    - img
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+  - group "Environment and account":
+    - 'button "Select backend. Current: Default backend"':
+      - strong: Default backend
+      - text: localhost:58036
+    - 'button "Account: Administrator"': Administrator
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Timeline passive expiry desktop-dark bbc6dec1
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - radiogroup "Colour mode":
+    - radio "Light"
+    - radio "Dark" [checked]
+    - radio "Dim"
+  - button "Select theme":
+    - img
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Studio"
+  - tab "Workflow run · 01a202c8…": Workflow run 01a202c8…
+  - tab "Task · 568aa109…": Task 568aa109…
+  - tab "Workflow run · 01a202c8…": Workflow run 01a202c8…
+  - tab "Run · Timeline approval restart desktop-dark faf0e334 · Execution": Run · Timeline approval restart desktop-dark faf0e334 Execution
+  - tab "Run · Timeline passive expiry desktop-dark bbc6dec1 · Execution" [selected]: Run · Timeline passive expiry desktop-dark bbc6dec1 Execution
+- button "New tab"
+- button "All tabs (7)"
+- main:
+  - tabpanel "Run · Timeline passive expiry desktop-dark bbc6dec1 · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Timeline passive expiry desktop-dark bbc6dec1" [level=2]
+      - text: Running
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run End of available segment
+      - group "Playback controls":
+        - button "Previous"
+        - button "Replay"
+        - button "Next" [disabled]
+        - button "Refresh playback"
+      - status:
+        - strong: Step 2 of 2 · Event
+      - text: Activity position
+      - slider "Activity position": "1"
+      - group: Playback options
+    - heading "Timeline passive expiry desktop-dark bbc6dec1" [level=2]
+    - text: Running
+    - paragraph: Elapsed 52m 2s at last observation. Elapsed includes waiting. Active execution time is not recorded.
+    - heading "Waiting at last observation" [level=3]
+    - list:
+      - listitem:
+        - 'button "Event Event · execution 01a202c89c24749e830c58ba3ca81fdd Handle open for 52m 1s Eligibility: expired · handle expired"':
+          - strong: Event
+          - text: "Event · execution 01a202c89c24749e830c58ba3ca81fdd Handle open for 52m 1s Eligibility: expired · handle expired"
+    - paragraph: Waiting handles observed 11/22/2026, 12:15:52 PM · 2026-11-22T11:15:52.63335+00:00.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 11 shown · 19 loaded · 19 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "11:23:51 Run started Running Recorded position 1":
+            - time: 11:23:51
+            - strong: Run started
+            - text: "Running #1"
+        - listitem:
+          - button "11:23:51 Activity started Flowchart Running Recorded position 3":
+            - time: 11:23:51
+            - strong: Activity started
+            - text: "Flowchart Running #3"
+        - listitem:
+          - button "11:23:51 Activity callback started Flowchart Recorded position 5":
+            - time: 11:23:51
+            - strong: Activity callback started
+            - text: "Flowchart #5"
+        - listitem:
+          - button "11:23:51 Activity callback returned a result Flowchart Defer Recorded position 6":
+            - time: 11:23:51
+            - strong: Activity callback returned a result
+            - text: "Flowchart Defer #6"
+        - listitem:
+          - button "11:23:51 Continuation waiting Flowchart Recorded position 7":
+            - time: 11:23:51
+            - strong: Continuation waiting
+            - text: "Flowchart #7"
+        - listitem:
+          - button "11:23:51 Activity started Event Running Recorded position 9":
+            - time: 11:23:51
+            - strong: Activity started
+            - text: "Event Running #9"
+        - listitem:
+          - button "11:23:51 Activity callback started Event Recorded position 15":
+            - time: 11:23:51
+            - strong: Activity callback started
+            - text: "Event #15"
+        - listitem:
+          - button "11:23:51 Activity callback returned a result Event Suspend Recorded position 16":
+            - time: 11:23:51
+            - strong: Activity callback returned a result
+            - text: "Event Suspend #16"
+        - listitem:
+          - button "11:23:51 Continuation waiting Event Recorded position 17":
+            - time: 11:23:51
+            - strong: Continuation waiting
+            - text: "Event #17"
+        - listitem:
+          - button "11:23:51 Activity waiting Event Suspended Recorded position 18":
+            - time: 11:23:51
+            - strong: Activity waiting
+            - text: "Event Suspended #18"
+        - listitem:
+          - button "11:23:51 Bookmark created Event Recorded position 19":
+            - time: 11:23:51
+            - strong: Bookmark created
+            - text: "Event #19"
+    - separator "Resize run details panel"
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - region "Bookmark lifecycle":
+        - button "Back to activity inspection"
+        - button "Refresh bookmark observation"
+        - paragraph: Bookmark lifecycle
+        - heading "Event" [level=3]
+        - paragraph: "Active · current eligibility: Expired"
+        - term: Created
+        - definition:
+          - text: Nov 22, 2026, 11:23:51 AM GMT+1
+          - button "Copy created":
+            - img
+          - status
+        - term: Ended
+        - definition:
+          - text: No end transition recorded
+          - button "Copy ended":
+            - img
+          - status
+        - term: Recorded reason
+        - definition: Not recorded
+        - term: Handle lifetime
+        - definition:
+          - text: 52m 3s
+          - button "Copy handle lifetime":
+            - img
+          - status
+        - paragraph: Expiry makes this handle unmatchable. It does not wake, time out or cancel the activity.
+        - button "Inspect creation event →"
+        - button "Inspect last recorded transition →"
+        - group: Technical details
+        - text: Recorded bookmark events.
+        - list "Activity journal events":
+          - listitem:
+            - paragraph: Sun, Nov 22, 2026, GMT+1
+            - button "11:23:51 Bookmark created Execution 01a202c89c24749e830c58ba3ca81fdd":
+              - time: 11:23:51
+              - strong: Bookmark created
+              - text: Execution 01a202c89c24749e830c58ba3ca81fdd
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

@@ -1,0 +1,445 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Timeline duplicate narrow-390-dark 2f3c7f32
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: Administrator"'
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Studio"
+  - tab "Run · Timeline approval restart narrow-390-dark cf74e832 · Execution": Run · Timeline approval restart narrow-390-dark cf74e832
+  - tab "Restart approval narrow-390-dark 685d0add · User task": Restart approval narrow-390-dark 685d0add
+  - tab "Run · Timeline approval restart narrow-390-dark cf74e832 · Execution": Run · Timeline approval restart narrow-390-dark cf74e832
+  - tab "Run · Timeline approval restart narrow-390-dark cf74e832 · Execution": Run · Timeline approval restart narrow-390-dark cf74e832
+  - tab "Run · Timeline passive expiry narrow-390-dark 606aeba4 · Execution": Run · Timeline passive expiry narrow-390-dark 606aeba4
+  - tab "Run · Timeline passive expiry narrow-390-dark 606aeba4 · Execution": Run · Timeline passive expiry narrow-390-dark 606aeba4
+  - tab "Run · Timeline duplicate narrow-390-dark 2f3c7f32 · Execution": Run · Timeline duplicate narrow-390-dark 2f3c7f32
+  - tab "Run · Timeline duplicate narrow-390-dark 2f3c7f32 · Execution": Run · Timeline duplicate narrow-390-dark 2f3c7f32
+  - tab "Run · Timeline duplicate narrow-390-dark 2f3c7f32 · Execution" [selected]: Run · Timeline duplicate narrow-390-dark 2f3c7f32
+- button "New tab"
+- button "All tabs (11)"
+- main:
+  - tabpanel "Run · Timeline duplicate narrow-390-dark 2f3c7f32 · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Timeline duplicate narrow-390-dark 2f3c7f32" [level=2]
+      - text: Running
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run Paused
+      - group "Playback controls":
+        - button "Previous"
+        - button "Play"
+        - button "Next"
+        - button "Refresh playback"
+      - status:
+        - strong: Step 2 of 3 · Event
+      - text: Activity position
+      - slider "Activity position": "1"
+      - group: Playback options
+    - heading "Timeline duplicate narrow-390-dark 2f3c7f32" [level=2]
+    - text: Running
+    - paragraph: Elapsed 5s at last observation. Elapsed includes waiting. Active execution time is not recorded.
+    - heading "Waiting at last observation" [level=3]
+    - list:
+      - listitem:
+        - button "Event Event · execution 01a202fba9117519b0bd987b0fa0a420 Handle open for 4s":
+          - strong: Event
+          - text: Event · execution 01a202fba9117519b0bd987b0fa0a420 Handle open for 4s
+    - paragraph: Waiting handles observed 11/22/2026, 12:19:41 PM · 2026-11-22T11:19:41.557274+00:00.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · All events
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Showing last confirmed history
+      - status:
+        - text: Failed to fetch
+        - button "Retry history"
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 51 shown · 51 loaded · 51 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "12:19:36 Run started Running":
+            - time: 12:19:36
+            - strong: Run started
+            - text: Running
+        - listitem:
+          - button "12:19:36 Activity scheduled Flowchart Scheduled":
+            - time: 12:19:36
+            - strong: Activity scheduled
+            - text: Flowchart Scheduled
+        - listitem:
+          - button "12:19:36 Activity started Flowchart Running":
+            - time: 12:19:36
+            - strong: Activity started
+            - text: Flowchart Running
+        - listitem:
+          - button "12:19:36 Activity execution claimed Flowchart Running":
+            - time: 12:19:36
+            - strong: Activity execution claimed
+            - text: Flowchart Running
+        - listitem:
+          - button "12:19:36 Activity callback started Flowchart":
+            - time: 12:19:36
+            - strong: Activity callback started
+            - text: Flowchart
+        - listitem:
+          - button "12:19:36 Activity callback returned a result Flowchart Defer":
+            - time: 12:19:36
+            - strong: Activity callback returned a result
+            - text: Flowchart Defer
+        - listitem:
+          - button "12:19:36 Continuation waiting Flowchart":
+            - time: 12:19:36
+            - strong: Continuation waiting
+            - text: Flowchart
+        - listitem:
+          - button "12:19:36 Activity scheduled Event Scheduled":
+            - time: 12:19:36
+            - strong: Activity scheduled
+            - text: Event Scheduled
+        - listitem:
+          - button "12:19:36 Activity started Event Running":
+            - time: 12:19:36
+            - strong: Activity started
+            - text: Event Running
+        - listitem:
+          - button "12:19:36 Activity execution claimed Event Running":
+            - time: 12:19:36
+            - strong: Activity execution claimed
+            - text: Event Running
+        - listitem:
+          - button "12:19:36 Value observation recorded Event":
+            - time: 12:19:36
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:36 Value observation recorded Event":
+            - time: 12:19:36
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:36 Value observation recorded Event":
+            - time: 12:19:36
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:36 Value observation recorded Event":
+            - time: 12:19:36
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:36 Activity callback started Event":
+            - time: 12:19:36
+            - strong: Activity callback started
+            - text: Event
+        - listitem:
+          - button "12:19:36 Activity callback returned a result Event Suspend":
+            - time: 12:19:36
+            - strong: Activity callback returned a result
+            - text: Event Suspend
+        - listitem:
+          - button "12:19:36 Continuation waiting Event":
+            - time: 12:19:36
+            - strong: Continuation waiting
+            - text: Event
+        - listitem:
+          - button "12:19:36 Activity waiting Event Suspended":
+            - time: 12:19:36
+            - strong: Activity waiting
+            - text: Event Suspended
+        - listitem:
+          - button "12:19:36 Bookmark created Event":
+            - time: 12:19:36
+            - strong: Bookmark created
+            - text: Event
+        - listitem:
+          - button "12:19:36 Delivery received Recorded delivery observation":
+            - time: 12:19:36
+            - strong: Delivery received
+            - text: Recorded delivery observation
+        - listitem:
+          - button "12:19:36 Delivery received Recorded delivery observation":
+            - time: 12:19:36
+            - strong: Delivery received
+            - text: Recorded delivery observation
+        - listitem:
+          - button "12:19:36 Activity resumption claimed Event Running":
+            - time: 12:19:36
+            - strong: Activity resumption claimed
+            - text: Event Running
+        - listitem:
+          - button "12:19:36 Bookmark consumed Event Handle lifetime 0s":
+            - time: 12:19:36
+            - strong: Bookmark consumed
+            - text: Event Handle lifetime 0s
+        - listitem:
+          - button "12:19:36 Value observation recorded Event":
+            - time: 12:19:36
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:36 Value observation recorded Event":
+            - time: 12:19:36
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:36 Value observation recorded Event":
+            - time: 12:19:36
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:36 Value observation recorded Event":
+            - time: 12:19:36
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:36 Activity callback started Event":
+            - time: 12:19:36
+            - strong: Activity callback started
+            - text: Event
+        - listitem:
+          - button "12:19:36 Activity callback returned a result Event Complete":
+            - time: 12:19:36
+            - strong: Activity callback returned a result
+            - text: Event Complete
+        - listitem:
+          - button "12:19:36 Value observation recorded Event":
+            - time: 12:19:36
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:36 Value observation recorded Event":
+            - time: 12:19:36
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:36 Continuation completed Event":
+            - time: 12:19:36
+            - strong: Continuation completed
+            - text: Event
+        - listitem:
+          - button "12:19:36 Activity completed Event Completed":
+            - time: 12:19:36
+            - strong: Activity completed
+            - text: Event Completed
+        - listitem:
+          - button "12:19:36 Activity execution claimed Flowchart Running":
+            - time: 12:19:36
+            - strong: Activity execution claimed
+            - text: Flowchart Running
+        - listitem:
+          - button "12:19:36 Activity callback started Flowchart":
+            - time: 12:19:36
+            - strong: Activity callback started
+            - text: Flowchart
+        - listitem:
+          - button "12:19:36 Activity callback returned a result Flowchart Defer":
+            - time: 12:19:36
+            - strong: Activity callback returned a result
+            - text: Flowchart Defer
+        - listitem:
+          - button "12:19:36 Continuation waiting Flowchart":
+            - time: 12:19:36
+            - strong: Continuation waiting
+            - text: Flowchart
+        - listitem:
+          - button "12:19:36 Activity scheduled Event Scheduled":
+            - time: 12:19:36
+            - strong: Activity scheduled
+            - text: Event Scheduled
+        - listitem:
+          - button "12:19:37 Activity started Event Running":
+            - time: 12:19:37
+            - strong: Activity started
+            - text: Event Running
+        - listitem:
+          - button "12:19:37 Activity execution claimed Event Running":
+            - time: 12:19:37
+            - strong: Activity execution claimed
+            - text: Event Running
+        - listitem:
+          - button "12:19:37 Value observation recorded Event":
+            - time: 12:19:37
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:37 Value observation recorded Event":
+            - time: 12:19:37
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:37 Value observation recorded Event":
+            - time: 12:19:37
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:37 Value observation recorded Event":
+            - time: 12:19:37
+            - strong: Value observation recorded
+            - text: Event
+        - listitem:
+          - button "12:19:37 Activity callback started Event":
+            - time: 12:19:37
+            - strong: Activity callback started
+            - text: Event
+        - listitem:
+          - button "12:19:37 Activity callback returned a result Event Suspend":
+            - time: 12:19:37
+            - strong: Activity callback returned a result
+            - text: Event Suspend
+        - listitem:
+          - button "12:19:37 Continuation waiting Event":
+            - time: 12:19:37
+            - strong: Continuation waiting
+            - text: Event
+        - listitem:
+          - button "12:19:37 Activity waiting Event Suspended":
+            - time: 12:19:37
+            - strong: Activity waiting
+            - text: Event Suspended
+        - listitem:
+          - button "12:19:37 Bookmark created Event":
+            - time: 12:19:37
+            - strong: Bookmark created
+            - text: Event
+        - listitem:
+          - button "12:19:37 Delivery dispatched Event Dispatched Recorded delivery observation":
+            - time: 12:19:37
+            - strong: Delivery dispatched
+            - text: Event Dispatched Recorded delivery observation
+        - listitem:
+          - button "12:19:37 Duplicate delivery observed Event Duplicate Recorded delivery observation" [pressed]:
+            - time: 12:19:37
+            - strong: Duplicate delivery observed
+            - text: Event Duplicate Recorded delivery observation
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - region "History event details":
+        - button "Back to activity inspection"
+        - paragraph: Recorded event
+        - heading "Duplicate delivery observed" [level=3]
+        - paragraph: Recorded delivery observation
+        - term: Recorded position
+        - definition:
+          - text: "51"
+          - status
+        - term: Occurred
+        - definition:
+          - text: 11/22/2026, 12:19:37 PM · 2026-11-22T11:19:37.08437+00:00
+          - button "Copy occurred":
+            - img
+          - status
+        - term: Activity node
+        - definition:
+          - text: first
+          - button "Copy activity node":
+            - img
+          - status
+        - button "Inspect owning execution →"
+        - button "Inspect bookmark →"
+        - button "Inspect causal event →"
+        - group: Technical details
+        - group: Recorded metadata
+        - paragraph:
+          - button "Find causal successors in this run"
+        - paragraph:
+          - button "Focus this execution in timeline"
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

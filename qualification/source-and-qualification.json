@@ -1,0 +1,58 @@
+{
+  "pr": 4368,
+  "readinessPR": 5368,
+  "reviewedHead": "7c082ca2344bc30d705a76381bfb054f684d0bb0",
+  "featureResultingMain": "905231c98a013140dbefa033e826046ae6e682e7",
+  "reviewedFixtureHead": "6935ecb36a0e40cc1e3e45be7b342efebecf8a9c",
+  "resultingMain": "1fc9a6e19152f804403747a0895cb203506f2b4e",
+  "fixtureReviewedTreeIdentical": true,
+  "unchangedProductInputsSince905": true,
+  "integrationDeltaPaths": [
+    "Studio/tests/acceptance/timelineDiagnosticsJourney.ts",
+    "prototypes/kernel-model/sim/ParkKeptChecks.cs",
+    "prototypes/kernel-model/src/Kernel.Durable/FoundationParkDrain.cs",
+    "prototypes/kernel-model/src/Kernel.Durable/FoundationParkPages.cs",
+    "prototypes/kernel-model/src/Kernel.Durable/FoundationParkRecovery.cs",
+    "prototypes/kernel-model/src/Kernel.Durable/FoundationReferences.cs",
+    "prototypes/kernel-model/src/Kernel.Durable/InMemoryStore.cs",
+    "prototypes/kernel-model/src/Kernel.Durable/Store.cs",
+    "prototypes/kernel-model/src/Kernel.Durable/StoreBatchRules.cs",
+    "tools/ux-acceptance/run.py"
+  ],
+  "qualifiedOwningSource": "905231c98a013140dbefa033e826046ae6e682e7",
+  "ci": "Intentionally skipped under owner authorization; no CI pass claimed",
+  "heldAttempts": [
+    "905 diagnostics: intentionally stopped after2completeartifactsets+thirdstalled, no finalPWverdict",
+    "a7 readiness candidate: actual owner full-text failures then remainder intentionally stopped",
+    "cc98 readiness candidate: narrow lifecycle camera framing held; remainder intentionally stopped, no complete PW verdict",
+    "52175 readiness candidate: all6 functional cases passed with20 cleanly stopped groups, but8 actual320 lifecycle originals remained visually held; no stop signal was sent"
+  ],
+  "campaigns": [
+    {
+      "name": "critical",
+      "source": "905231c98a013140dbefa033e826046ae6e682e7",
+      "cases": 18,
+      "capturePairs": 162,
+      "oracles": 18,
+      "traces": 18,
+      "restartCount": 0,
+      "zeroExitGoneGroups": 2,
+      "fences": true,
+      "reportSha256": "c77a7c3f9c26637143b7853965a9e375696fa7337823386b04dce0bf1d03698f",
+      "observerSha256": "291d12443cc762011edffb361508b464ad81df82e500a06b780ae5603d1a6ea0"
+    },
+    {
+      "name": "diagnostics",
+      "source": "1fc9a6e19152f804403747a0895cb203506f2b4e",
+      "cases": 6,
+      "capturePairs": 90,
+      "oracles": 6,
+      "traces": 6,
+      "restartCount": 18,
+      "zeroExitGoneGroups": 20,
+      "fences": true,
+      "reportSha256": "3911c7c2e069ad42b0d662a08a215a8537b5ebad96067f5139fb1d68dbe83847",
+      "observerSha256": "9ee8ce400464d3fe1b1745c48ed83470a652d7be041ba320f981dd379b9882e2"
+    }
+  ]
+}
