@@ -193,7 +193,7 @@ internal static class ParkDrainCascadeChecks
         var ending = writes.Where(turn => turn.Instance == id && turn.Journal?.Contains("\"terminated\"", StringComparison.Ordinal) == true).ToArray();
         var completedCorrectly = complete is { Park: null, Row: { Status: InstanceStatus.Cancelled, ParkDiscard: null } } &&
             complete.EndedAt == now && complete.Row.State == parked.Row.State && Kept() == 0 &&
-            Row(descendant).Status == InstanceStatus.Cancelled && Notices() == 1 &&
+            Row(descendant).Status == InstanceStatus.Cancelled && Row(parent).Children is null && Notices() == 1 &&
             ending is [{ Sent: [var notice] }] && notice.Read<System.Text.Json.JsonElement>().GetProperty("Status").GetInt32() == (int)InstanceStatus.Cancelled &&
             store.Messages.Values.All(row => row.Message.Target.Id != id || row.Message.Kind != Kinds.Drain);
         check(completedCorrectly, $"{source}: takeover completes once as Cancelled, clears every kept key and emits the sole Cancelled notice" +

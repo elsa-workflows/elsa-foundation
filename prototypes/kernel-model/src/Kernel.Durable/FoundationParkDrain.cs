@@ -220,9 +220,10 @@ public sealed partial class InMemoryStore
     private static bool MatchesTerminateNotice(IReadOnlyList<Message> sent, InstanceRow row)
     {
         if (row.Parent is null) return sent.Count == 0;
+        var expected = CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision);
         if (sent is not [var notice] || notice.Kind != Kinds.ChildFinished || notice.Target.Id != row.Parent ||
             notice.TargetCreation != row.ParentCreation || notice.Sender != row.Id || notice.SenderCreation != row.Creation ||
-            notice.InboxKey != InboxKey.Issued(CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision)) ||
+            notice.Id != expected || notice.InboxKey != InboxKey.Issued(expected) ||
             notice.Payload is null)
             return false;
 
