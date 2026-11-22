@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-T003 technical readiness is qualified locally on6185 with the explicit research R11 source handoff; formal dependency publication/shared CI remains required for delivery. The current activity browser alone does not qualify. Use only owned disposable Workbench/Studio stores, ports and test identities. No existing demo/personal host, external model call, timestamp editing or substituted history response.
+The runtime-owned occurrence/history/provider/migration prerequisite is landed and qualified through native main54797294, with source-bound receipts in [delivery evidence](evidence.md). Use the current coherent Studio source and owned disposable Workbench/Studio stores. CI is skipped under the owner instruction; independent exact-source acceptance, actual immutable downloaded evidence and resulting-main verification remain required. The earlier6185 local-authoring handoff is historical and does not define the current delivery boundary.
 
 ## Historical local qualification
 
