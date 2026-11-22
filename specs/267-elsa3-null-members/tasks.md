@@ -153,8 +153,8 @@ conditional S-2 integration task remains explicitly NOT RUN. The fresh receipt i
   its implementation is available. Preserve its required-before-default, nullable-null and pins/hash contracts;
   unavailable S-2 integration remains explicitly NOT RUN and separately owned.
 
-T032 availability receipt: spec1232 remains the separately owned draft #3726 at `15799ee0ae`; no S-2 implementation
-was available for this check. It is not counted as a passed test or moved into S-0's scope. T031's formal review was
+T032 availability receipt: spec1232 is separately owned in #3726 at `15799ee0ae`, now agreed and ready but unmerged;
+no S-2 implementation was available for this check. It is not counted as a passed test or moved into S-0's scope. T031's formal review was
 requested after local convergence; coordinator acceptance/merge remains external to implementation.
 
 Dependencies: T023 gates production T025–T031. T024 is completed as proposal research and rechecked before coding.
