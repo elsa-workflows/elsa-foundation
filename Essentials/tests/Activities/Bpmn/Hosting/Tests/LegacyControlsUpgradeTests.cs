@@ -12,7 +12,7 @@ namespace Elsa.Activities.Bpmn.Hosting.Tests;
 
 public sealed class LegacyControlsUpgradeTests
 {
-    [Fact]
+    [Fact(Skip = "Compatibility is owed only from the first stable release: since S-1 (#4855) the frozen captures pin binding-pure-v1, refused by spec 1223 FR-031. Re-capture or retire: #4916.")]
     public async Task Actual_called_controls_and_compensation_recover_original_streams_and_continue_once()
     {
         var matrix = Environment.GetEnvironmentVariable("ELSA_BPMN_LEGACY_MATRIX_DIRECTORY");

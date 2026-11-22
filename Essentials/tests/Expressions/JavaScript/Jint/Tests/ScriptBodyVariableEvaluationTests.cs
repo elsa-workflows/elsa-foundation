@@ -56,7 +56,7 @@ public sealed class ScriptBodyVariableEvaluationTests
         var session = new FakeSession(Order);
 
         await Assert.ThrowsAsync<JavaScriptPrecisionException>(() =>
-            EvaluateAsync("variables.order.price = 1; variables.order = { id: variables.order.id }; return 1;", session, new ExecutionWarningCollector()));
+            EvaluateAsync("variables.order.price = 1; variables.order = { id: variables.order.id }; return 1;", session, new RecordingWarningSink()));
 
         Assert.Empty(session.Writes);
     }
@@ -67,7 +67,7 @@ public sealed class ScriptBodyVariableEvaluationTests
         var session = new FakeSession(Order);
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            EvaluateAsync("variables.order.self = variables.order; return 1;", session, new ExecutionWarningCollector()));
+            EvaluateAsync("variables.order.self = variables.order; return 1;", session, new RecordingWarningSink()));
 
         Assert.Empty(session.Writes);
     }
@@ -96,10 +96,10 @@ public sealed class ScriptBodyVariableEvaluationTests
         Assert.Empty(session.Writes);
     }
 
-    private static async Task<(FakeSession Session, ExecutionWarningCollector Warnings)> RunAsync(string source, bool protectedRead = false)
+    private static async Task<(FakeSession Session, RecordingWarningSink Warnings)> RunAsync(string source, bool protectedRead = false)
     {
         var session = new FakeSession(Order) { HasReadProtectedValue = protectedRead };
-        var warnings = new ExecutionWarningCollector();
+        var warnings = new RecordingWarningSink();
         await EvaluateAsync(source, session, warnings);
         return (session, warnings);
     }
