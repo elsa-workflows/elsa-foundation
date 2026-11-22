@@ -760,6 +760,18 @@ internal static class ParkKeptChecks
             !store.Messages.ContainsKey(nextControl.InboxKey),
             "a changed kept reason rolls back the recovery cursor, control and all page rows");
 
+        foreach (var trial in new[] { false, true })
+        {
+            var marked = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [advance],
+                trial ? [] : [nextControl.InboxKey], trial ? [nextControl.InboxKey] : []);
+            var refusedMark = await DefiniteRejection(() => store.CommitAsync(marked));
+            var intact = store.Instances[id] == opening && stale.ReleasedBy == release && arrived.Done &&
+                store.Messages.ContainsKey(control.InboxKey) && !store.Messages.ContainsKey(nextControl.InboxKey);
+            check(refusedMark && intact, trial ? "a recovery page cannot mark its new control on trial" :
+                "a recovery page cannot mark its new control seen before poll");
+            if (!intact) return;
+        }
+
         var written = await Commit(fence, advance);
         var polled = await store.PollAsync(fence.Partition, fence.Epoch, TimeSpan.Zero, 1024);
         var active = new ParkRelease(address.Creation, generation);
@@ -768,6 +780,7 @@ internal static class ParkKeptChecks
             stale is { Done: false, Held: false, Seen: 0, Trial: 0, Attempts: 0, KeptBy: null } && stale.ReleasedBy == active &&
             arrived is { Done: false, KeptBy: null, Trial: 0, Attempts: 0 } && arrived.ReleasedBy == active &&
             consumed is { Done: true, KeptBy: null } &&
+            polled.Messages.Any(row => row.Message.InboxKey == nextControl.InboxKey) &&
             polled.Messages.Any(row => row.Message.InboxKey == keys[^1] && row.ReleasedBy == active &&
                 row.PayloadLength == stale.PayloadLength && row.Seq == page[0].Cursor.Seq && row.Message.Payload == stale.Message.Payload),
             "a fenced page clears consumed work, resets restored poison counters and publishes the generation through poll");

@@ -37,6 +37,9 @@ public static class StoreBatchRules
                 throw new StoreException(Failure.Definite, "Held releases must name distinct, unconsumed rows at a checkpoint.");
             if (turn.Sent.Any(Kinds.IsUnissuedPrivate))
                 throw new StoreException(Failure.Definite, Kinds.UnissuedPrivateKind);
+            if ((batch.Seen.Count != 0 || batch.Trial.Count != 0) && turn.Sent.Any(message => ParkDrainEnvelope.IsInDomain(message) &&
+                    (batch.Seen.Contains(message.InboxKey) || batch.Trial.Contains(message.InboxKey))))
+                throw new StoreException(Failure.Definite, "A new Park control cannot also carry a poll or trial mark.");
             if (turn.Consumed.Concat(turn.Done).Any(key => key.Scope == ParkDrainEnvelope.Scope &&
                     !(consumedControls ??= []).Add(key)) ||
                 (turn.Held ?? []).Any(key => key.Scope == ParkDrainEnvelope.Scope))
