@@ -399,8 +399,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     if (ChangedFoundationParkInput(turn, previous, epochs) is { } changed)
                         Diverged($"kept input {changed.Cursor.Key} changed before its Park page cleared");
                     var source = turn.Row ?? previous;
-                    var foundation = inlineRoot is not null ||
-                        source is { } bound && _referenceBirths.ContainsKey(new(bound.Id, bound.Creation));
+                    var sourceTenant = inlineRoot?.Tenant ?? (source is null ? null :
+                        _referenceBirths.GetValueOrDefault(new(source.Id, source.Creation))?.Tenant);
+                    var foundation = sourceTenant is not null;
                     if (foundation && PrepareInitialParkExpiry(turn, previous, now) is { } expiry)
                     {
                         if (Messages.ContainsKey(expiry.InboxKey)) Diverged($"expiry {expiry.Id} exists already");
@@ -408,9 +409,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     foreach (var message in turn.Sent)
                     {
+                        if (sourceTenant is not null && message.ActorAuthored &&
+                            _referenceBirths.TryGetValue(new(message.Target.Id, message.TargetCreation ?? 0), out var destination) &&
+                            destination.Tenant != sourceTenant)
+                            throw new StoreException(Failure.Definite, "The actor reference was not found.");
                         if (message.FoundationPublish is not null)
-                            ValidateAuthoredPublication(turn, message, inlineRoot?.Tenant ??
-                                (source is null ? null : _referenceBirths.GetValueOrDefault(new(source.Id, source.Creation))?.Tenant), now);
+                            ValidateAuthoredPublication(turn, message, sourceTenant, now);
                         if ((foundation || message.BindFoundationChild) && !FoundationMetadataLimits.FitsComposed(message))
                             throw new StoreException(Failure.Definite, "The composed message exceeds the foundation row budget.");
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");

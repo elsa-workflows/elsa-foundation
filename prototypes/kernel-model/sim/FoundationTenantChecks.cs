@@ -103,6 +103,52 @@ internal static class FoundationTenantChecks
             History(second, rightActor) is ["beta/direct", "beta/early", "beta/live", "beta/effect"],
             "T13 each Worker job receives only its actor's arguments and settles into that exact actor");
 
+        var missingScope = false;
+        try { await ingress.SendAsync(null!, leftRef, "unbound", "note"); }
+        catch (ArgumentNullException error) when (error.ParamName == "scope") { missingScope = true; }
+        check(missingScope && store.Messages.Values.All(row => row.Message.Id != "unbound"),
+            "T11 the public ingress refuses an unbound send before admitting a message");
+
+        var rightBefore = store.ReadFoundationActor(second.Tenant, rightActor.Id).Actor!.Row;
+        var rightMessageKeys = store.Messages.Values.Where(row => row.Message.Target.Id == rightBefore.Id)
+            .Select(row => row.Message.InboxKey).ToHashSet();
+        var rightJournal = store.Journal.Values.Where(row => row.Instance == rightBefore.Id).ToArray();
+        var missingRoot = (await ingress.SendAsync(first, new Contract.Target.Start(spec), "missing-probe", Contract.Kinds.Start)).Actor!.Value;
+        await ingress.SendAsync(first, leftRef, "send-foreign", "send-target", rightActor.Id);
+        await ingress.SendAsync(first, new Contract.Target.Ref(missingRoot), "send-missing", "send-target", "unissued");
+        await Pump(successor);
+        var foreignFault = store.ReadFoundationActor(first.Tenant, leftActor.Id).Actor!.Row;
+        var missingFault = store.ReadFoundationActor(first.Tenant, missingRoot.Id).Actor!.Row;
+        check(foreignFault is { Status: InstanceStatus.Faulted, Fault: { } refusal } &&
+              refusal.Contains("The actor reference was not found.", StringComparison.Ordinal) &&
+              missingFault is { Status: InstanceStatus.Faulted } && missingFault.Fault == refusal &&
+              store.Journal.Values.Any(entry => entry.Instance == foreignFault.Id &&
+                  entry.Entries.Contains("parked", StringComparison.Ordinal)),
+            "T7 a turn's foreign exact reference follows the same not-found path as an unissued reference");
+
+        var root = left.Actor!.Value;
+        await ingress.SendAsync(first, new Contract.Target.Ref(root), "start-generated", "start-with-hint", rightActor.Id);
+        await Pump(successor);
+        var child = new Contract.ActorRef(History(first, root)!.Last());
+        var ownChild = await reads.GetAsync(first, child);
+        check(child != rightActor && ownChild is { Header.Tenant: "acme" } && ownChild.Header.Parent == root &&
+              (await reads.GetAsync(second, child)) is null,
+            "T7 a turn cannot choose another tenant's generated address for Start");
+
+        var delivered = new Message("cross-tenant-compose", new(rightBefore.Id), "note", "must not reach beta", foreignFault.Id,
+            TargetCreation: rightBefore.Creation, SenderCreation: foreignFault.Creation) { ActorAuthored = true }.AsIssued();
+        var batch = new TurnCommit(foreignFault.Id, null, null, [], [], [delivered], [], [], "must not commit");
+        var fence = store.Partitions[0];
+        var rejected = false;
+        try { await store.CommitAsync(new(0, fence.Epoch, fence.Position, Defaults.Lease, false, [batch], [], [])); }
+        catch (StoreException error) when (error.Failure == Failure.Definite) { rejected = true; }
+        check(rejected && !store.Messages.ContainsKey(delivered.InboxKey) &&
+              store.ReadFoundationActor(second.Tenant, rightActor.Id).Actor!.Row == rightBefore &&
+              store.Messages.Values.Where(row => row.Message.Target.Id == rightBefore.Id).Select(row => row.Message.InboxKey).ToHashSet().SetEquals(rightMessageKeys) &&
+              store.Journal.Values.Where(row => row.Instance == rightBefore.Id).SequenceEqual(rightJournal) &&
+              store.Journal.Values.All(row => row.Entries != "must not commit"),
+            "T7 the fenced store rejects a composed foreign-tenant send before it can change either tenant's rows");
+
         async Task<IScopeActivation> Owner(string node)
         {
             var worker = new Worker(node, 0, store, new ActorAdapter(store, probe),
@@ -146,6 +192,12 @@ internal static class FoundationTenantChecks
                         break;
                     case { Kind: "job" }:
                         turn.StartJob("effect", message.Payload);
+                        break;
+                    case { Kind: "send-target", Payload: { } target }:
+                        turn.Send(new Contract.ActorRef(target), "note", "cross-tenant attempt");
+                        break;
+                    case { Kind: "start-with-hint", Payload: { } hint }:
+                        history.Add(turn.Start(new(Type, hint)).Id);
                         break;
                     case { Kind: Contract.Kinds.JobFinished, Payload: { } result }:
                         if (Json.Read<Contract.JobFinished>(result) is { Error: null, Result: { } value })
