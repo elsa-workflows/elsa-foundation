@@ -1207,6 +1207,7 @@ internal static class ParkKeptChecks
         await CaptureParkedCompletion(timed: false, check, recover: true, pendingAtOpen: true);
         await CaptureParkedCompletion(timed: true, check, recover: true, endHoldingResult: true);
         await CaptureParkedCompletion(timed: false, check, recover: true, endBeforeResult: true);
+        await CaptureParkedCompletion(timed: false, check, recover: true, pendingAtOpen: true, endBeforeResult: true);
         await CheckRestartedJob(timed: false, check);
         await CheckRestartedJob(timed: true, check);
         await CheckRetryConsumedResult(retry: false, check);
@@ -1216,6 +1217,7 @@ internal static class ParkKeptChecks
         await CheckRetryConsumedTicket(check, timed: true);
         await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true);
         await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true, releaseTicketBeforeEnd: true);
+        await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true, restartAtOpen: true);
     }
 
     private static async Task CheckRestartedJob(bool timed, Action<bool, string> check)
@@ -1425,7 +1427,7 @@ internal static class ParkKeptChecks
     }
 
     private static async Task CheckRetryConsumedTicket(Action<bool, string> check, bool timed = false,
-        bool endBeforeTicket = false, bool releaseTicketBeforeEnd = false)
+        bool endBeforeTicket = false, bool releaseTicketBeforeEnd = false, bool restartAtOpen = false)
     {
         var now = 1_701_400_014_100L;
         var store = new InMemoryStore(1, () => now);
@@ -1490,7 +1492,8 @@ internal static class ParkKeptChecks
                     "the expired deadline sorts at the page boundary ahead of its kept consumed ticket");
         }
         await ingress.SendAsync(scope, target, "retry", Contract.Kinds.Recover,
-            Json.Write(new Contract.OperatorCommand(view!.Selection!, Contract.RecoverMode.RetryAll)));
+            Json.Write(new Contract.OperatorCommand(view!.Selection!,
+                restartAtOpen ? Contract.RecoverMode.Resume : Contract.RecoverMode.RetryAll)));
         await Pump(next);
         if (timed)
         {
@@ -1502,11 +1505,13 @@ internal static class ParkKeptChecks
             if (endBeforeTicket)
             {
                 pendingCallbacks!.RunAll();
+                var currentKey = restartAtOpen ? InboxKey.Ticket(row.Id, "background", row.Creation, 1) : key;
+                var disposition = restartAtOpen ? "Open-created" : releaseTicketBeforeEnd ? "released" : "kept";
                 check(releasedTicket == releaseTicketBeforeEnd && probe is { Entries: 0, Completions: 0 } &&
                     store.Instances[row.Id] is { Status: InstanceStatus.Finished, ParkRecovery: null, Jobs: null } &&
-                    store.Messages[key] is { Done: true, KeptBy: null } &&
+                    store.Messages.GetValueOrDefault(currentKey) is { Done: true, KeptBy: null } &&
                     store.Messages.Values.All(item => item.Message.Kind != Kinds.JobDeadline || item.Done),
-                    $"the terminal page clears the {(releaseTicketBeforeEnd ? "released" : "kept")} ticket, its pending deadline and job registration together");
+                    $"the terminal page clears the {disposition} ticket, its pending deadline and job registration together");
                 var terminal = await new ActorList(store, 10).GetAsync(scope, target.Actor);
                 await ingress.SendAsync(scope, target, "delete-after-kept-ticket", Contract.Kinds.Delete,
                     Json.Write(new Contract.OperatorCommand(terminal!.Selection!)));
@@ -1656,7 +1661,7 @@ internal static class ParkKeptChecks
                 actor.Completions == (endBeforeResult ? 0 : 1) &&
                 recovered is { Park: null, Row: { Status: InstanceStatus.Finished, Jobs: null, EndedDuringParkRecovery: true } } &&
                 result is { Done: true, Held: false, KeptBy: null },
-                endBeforeResult ? "the terminal page settles a still-kept result and its exact job registration together" :
+                endBeforeResult ? $"the terminal page settles a {(pendingAtOpen ? "pending untagged" : "still-kept")} result and its exact job registration together" :
                     "the terminal page settles a held authenticated result and its exact job registration together");
             if (recovered is null) return;
             var terminal = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;

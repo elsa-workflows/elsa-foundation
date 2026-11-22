@@ -71,7 +71,7 @@ public sealed partial class InMemoryStore
                 oldTimer ??= DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation, generation);
                 var oldDeadline = InboxKey.Issued(oldTimer);
 
-                var digest = Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(key)));
+                var digest = JobRestartDigest(key);
                 var payload = EncodeRecipe(recipe, nextGeneration, out var timerId);
                 if (!Charge(payload)) return null;
                 if (mode == ParkRecoveryMode.Resume && result is { KeptBy: ParkKeepReason.Consumed })
@@ -132,6 +132,8 @@ public sealed partial class InMemoryStore
     private static bool IsJobEnvelope(Message message, InstanceRow row, string kind, long generation) =>
         message.Kind == kind && message.JobGeneration == generation && message.Sender == row.Id && message.SenderCreation == row.Creation &&
         message.Target.Id == row.Id && message.TargetCreation == row.Creation;
+
+    private static string JobRestartDigest(string key) => Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(key)));
 
     private static Dictionary<string, long> ReadJobRestarts(string? value)
     {

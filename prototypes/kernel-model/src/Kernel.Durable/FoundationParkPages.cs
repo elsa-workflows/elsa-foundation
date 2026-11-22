@@ -85,6 +85,20 @@ public sealed partial class InMemoryStore
                 terminalInputs && current.Status == InstanceStatus.Running)
                 return null;
 
+            var jobs = recoveryGeneration is null || current.Jobs is null ? null : JobRegistry.Read(current.Jobs);
+            var currentJobs = jobs?.SelectMany(job => new[]
+                {
+                    InboxKey.Ticket(current.Id, job.Key, current.Creation, job.Generation),
+                    InboxKey.JobResult(current.Id, job.Key, current.Creation, job.Generation)
+                }).ToHashSet();
+            HashSet<InboxKey>? restartedTickets = null;
+            if (terminalInputs && jobs is not null && current.ParkRestartedJobs is not null)
+            {
+                var restarts = ReadJobRestarts(current.ParkRestartedJobs);
+                // New tickets written by Open have no release tag and have not entered the model.
+                restartedTickets = jobs.Where(job => restarts.GetValueOrDefault(JobRestartDigest(job.Key), -1) == job.Generation)
+                    .Select(job => InboxKey.Ticket(current.Id, job.Key, current.Creation, job.Generation)).ToHashSet();
+            }
             var page = new PriorityQueue<MessageRow, ParkPageCursor>(limit,
                 Comparer<ParkPageCursor>.Create(static (left, right) => right.CompareTo(left)));
             foreach (var (key, row) in Messages)
@@ -93,8 +107,10 @@ public sealed partial class InMemoryStore
                 var kept = row.Done && row.KeptBy is not null;
                 var stale = !row.Done && current.Status == InstanceStatus.Running && recoveryGeneration is { } active &&
                     row.ReleasedBy is { } release && release.Creation == address.Creation && release.Generation < active;
-                var settling = terminalInputs && !row.Done && row.ReleasedBy is { } tag && tag.Creation == address.Creation &&
-                    tag.Generation <= recoveryGeneration && (row.Message.Kind == Kinds.Job || !ParkRecoveryCredit.IsTicket(row.Message.Kind)) &&
+                var settling = terminalInputs && !row.Done && (restartedTickets?.Contains(key) == true ||
+                    row.Message is { Kind: Kinds.JobFinished, FoundationJobResult: true } && currentJobs?.Contains(key) == true ||
+                    row.ReleasedBy is { } tag && tag.Creation == address.Creation && tag.Generation <= recoveryGeneration) &&
+                    (row.Message.Kind == Kinds.Job || !ParkRecoveryCredit.IsTicket(row.Message.Kind)) &&
                     row.Message.Kind != Kinds.ChildFinished && !row.Message.IsControl;
                 if (terminalInputs ? !settling : !kept && !stale) continue;
 
@@ -104,12 +120,6 @@ public sealed partial class InMemoryStore
                 else page.Enqueue(row, cursor);
             }
 
-            var jobs = recoveryGeneration is null || current.Jobs is null ? null : JobRegistry.Read(current.Jobs);
-            var currentJobs = jobs?.SelectMany(job => new[]
-                {
-                    InboxKey.Ticket(current.Id, job.Key, current.Creation, job.Generation),
-                    InboxKey.JobResult(current.Id, job.Key, current.Creation, job.Generation)
-                }).ToHashSet();
             var deadlineJobs = !terminalInputs && current.ParkRecovery?.Mode == ParkRecoveryMode.RetryAll &&
                 current.Status == InstanceStatus.Running ? jobs?.ToDictionary(job => job.Key, job => job.Generation, StringComparer.Ordinal) : null;
             var result = new List<ParkPageRow>(page.Count);
