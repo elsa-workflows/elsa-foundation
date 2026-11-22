@@ -1121,6 +1121,15 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.activities.scripting": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.sequence": {
         "type": "Project",
         "dependencies": {
@@ -2353,6 +2362,7 @@
           "Elsa.Activities.Primitives": "[4.0.0-dev, )",
           "Elsa.Activities.Runtime": "[4.0.0-dev, )",
           "Elsa.Activities.Scheduling": "[4.0.0-dev, )",
+          "Elsa.Activities.Scripting": "[4.0.0-dev, )",
           "Elsa.Activities.Sequence": "[4.0.0-dev, )",
           "Elsa.Agent": "[4.0.0-dev, )",
           "Elsa.Agent.Anthropic": "[4.0.0-dev, )",
