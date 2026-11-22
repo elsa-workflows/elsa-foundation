@@ -381,12 +381,12 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             writer.WriteStartObject();
             writer.WriteString("name", inputName);
 
-                // Canonical structured JSON covers the complete binding, including destination type,
-                // policy, source reference and portable expression contracts. Explicit metadata keeps
-                // this independent of host serializer options and available without reflection.
-                writer.WritePropertyName("contract");
-                WriteCanonicalJson(writer, Elsa.Serialization.Core.JsonHashInput.SerializeToElement(binding));
-                        writer.WriteString("source", binding.Source.ToString());
+            // Canonical structured JSON covers the complete binding, including destination type,
+            // policy, source reference and portable expression contracts. Explicit metadata keeps
+            // this independent of host serializer options and available without reflection.
+            writer.WritePropertyName("contract");
+            WriteCanonicalJson(writer, Elsa.Serialization.Core.JsonHashInput.SerializeToElement(binding));
+            writer.WriteString("source", binding.Source.ToString());
             writer.WritePropertyName("payload");
             if (binding.Source == RuntimeInputBindingSource.Expression)
             {

@@ -85,9 +85,9 @@ public abstract class StatefulActivity<TResult, TState, TTrigger> :
         TTrigger trigger;
         try
         {
-            state = JsonValueConversion.Deserialize<TState>(request.StatePayload)
+            state = PersistableActivityValue.Materialize<TState>(request.StatePayload, "private state", request.Attempt.Warnings)
                 ?? throw new InvalidOperationException("The committed activity private state resolved to null.");
-            trigger = JsonValueConversion.Deserialize<TTrigger>(request.TriggerPayload)
+            trigger = PersistableActivityValue.Materialize<TTrigger>(request.TriggerPayload, "trigger", request.Attempt.Warnings)
                 ?? throw new InvalidOperationException("The validated activity trigger resolved to null.");
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
@@ -222,7 +222,7 @@ public sealed class ActivityStartContext<TTrigger>
 
         try
         {
-            var trigger = JsonValueConversion.Deserialize<TTrigger>(payload)
+            var trigger = PersistableActivityValue.Materialize<TTrigger>(payload, "trigger", attempt.Warnings)
                 ?? throw new JsonException("The targeted start trigger payload resolved to null.");
             PersistableActivityValue.ValidateType(typeof(TTrigger), "start trigger");
             return new ActivityStartContext<TTrigger>(attempt, true, trigger);
@@ -318,8 +318,8 @@ public sealed class ActivityResumeContext<TState, TTrigger>
         TargetOperationKey = attempt.TargetOperationKey;
         LogicalInvocationId = attempt.LogicalInvocationId;
         _variables = attempt.VariablesOrNull;
-        State = alreadyMaterialized ? state : PersistableActivityValue.SnapshotAndMaterialize(state, "private state");
-        Trigger = alreadyMaterialized ? trigger : PersistableActivityValue.SnapshotAndMaterialize(trigger, "trigger");
+        State = alreadyMaterialized ? state : PersistableActivityValue.SnapshotAndMaterialize(state, "private state", attempt.Warnings);
+        Trigger = alreadyMaterialized ? trigger : PersistableActivityValue.SnapshotAndMaterialize(trigger, "trigger", attempt.Warnings);
         RegistrationId = registrationId;
         DeliveryId = deliveryId;
     }
@@ -413,14 +413,18 @@ internal static class PersistableActivityValue
     public static ValueTypeDescriptor Descriptor(Type type, int schemaVersion = 1) =>
         new(TypeAliasConvention.CanonicalAlias(type), schemaVersion: schemaVersion);
 
-    public static T SnapshotAndMaterialize<T>(T value, string role) =>
-        Materialize<T>(Snapshot(value, role), role);
+    public static T SnapshotAndMaterialize<T>(T value, string role, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings = null) =>
+        Materialize<T>(Snapshot(value, role), role, warnings);
 
-    public static T Materialize<T>(JsonElement payload, string role)
+    public static T Materialize<T>(JsonElement payload, string role, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings = null)
     {
         try
         {
-            return JsonValueConversion.Deserialize<T>(payload)
+            return (T?)Elsa.Serialization.Core.JsonConversionContract.For(typeof(T)).Read(payload, typeof(T), diagnostic =>
+            {
+                var warning = Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, role);
+                warnings?.Report(warning);
+            })
                    ?? throw new ArgumentException($"The activity {role} must be a non-null persistable value.", "value");
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)

@@ -20,7 +20,7 @@ Link to this page from gates, specs and skills instead of restating the rule.
 
 `IPayloadSerializer` ([`JsonPayloadSerializer`](../Essentials/src/Serialization/SystemText/Services/JsonPayloadSerializer.cs))
 is the single, configured contract for domain payloads: it applies the agreed naming policy
-(camelCase, case-insensitive on read) and the registry of converters contributed at startup. When one
+(camelCase own member names, exact matching on read, verbatim dictionary keys) and the registry of converters contributed at startup. When one
 component serializes with it and another deserializes with raw `JsonSerializer` defaults, the round-trip
 silently breaks (e.g. casing mismatches). Routing every domain payload through the one contract keeps
 write and read symmetrical.
@@ -63,16 +63,42 @@ boundary or the use needs options the payload serializer can't provide:
 - **Custom `JsonConverter`s** — they participate in the `System.Text.Json` pipeline by definition.
 - **The Runtime EF Core persistence module**
   — it writes and reads its own runtime state rows entirely within the persistence layer; no other
-  component parses their payload JSON. It owns a frozen `JsonSerializerOptions` deliberately
-  independent of `IPayloadSerializer`: this is the *durability* format of suspended workflow state,
+  component parses their payload JSON. It owns a baseline-derived `JsonSerializerOptions` independent of the mutable `IPayloadSerializer` registry: this is the *durability* format of suspended workflow state,
   evolved only through EF Core migrations (plus a golden-fixture suite for the Distributed leaf's
   placement/transport payloads specifically). Adopting the mutable,
   startup-contributed converter registry of `IPayloadSerializer` would itself be an unstamped format
   change — the exact class of drift the module exists to eliminate.
-- **The reconciliation content hasher**
-  ([`DefaultActivityDefinitionHasher`](../Essentials/src/Activities/Design/Persistence/Core/Services/DefaultActivityDefinitionHasher.cs))
-  — it needs a canonical, sorted-key serialization that `IPayloadSerializer` does not produce, and only
-  the SHA-256 of that JSON is ever persisted (the JSON itself is never read back).
+- **JSON hashes** use `JsonHashInput`, whose fixed options and exact canonical form are independent of wire/store defaults.
+  See [ADR 0091](adr/0091-json-data-passes-through-unchanged-and-every-serializer-derives-from-one-baseline.md).
+
+## Baseline deviations
+
+Every ordinary option set derives from `JsonBaseline`. Scoped user conversion is selected by code on the type or
+input member through `JsonConversionContract`; it is not a baseline deviation or an executable stamp. See
+[spec 1207](../specs/1207-json-data-integrity-baseline/contracts/json-baseline.md) for its diagnostics and date rules.
+A carried `JsonElement` is written raw. Canonical bytes are used only for equality and hashes.
+
+The source and reflection architecture guards read this table. Each row identifies one file and a specific setting;
+a row for one owner cannot exempt another. New internal own-contract deviations need a reason here; API data changes
+follow ADR 0091's decision route. The separate `Baselines/json-optionless-calls.txt` is a shrinking legacy inventory
+for Elsa-owned contracts only. Workflow-data conversions never enter that list.
+
+| File | Setting | Reason | Approved by |
+|---|---|---|---|
+| `Essentials/src/Serialization/Core/JsonBaseline.cs` | `construction` | Defines the immutable shared baseline itself. | ADR 0091 decision 1 |
+| `Essentials/src/Serialization/Core/JsonHashInput.cs` | `construction, Encoder, converter:JsonStringEnumConverter` | Sole independent option set for all JSON hashes. Explicit settings and exact canonical form; never wire or stored data. | ADR 0091 hash amendment; spec 1207 Q11 |
+| `Essentials/src/Serialization/SystemText/Services/JsonPayloadSerializer.cs` | `modifier:SortObjectMembers, converter:DeterministicDictionaryConverterFactory` | Stable ordering for Elsa-owned contracts and maps; carried JSON stays raw. | ADR 0091 decision 7 |
+| `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimeArtifactJson.cs` | `modifier:CreateResolver, converter:JsonStringEnumConverter, converter:LosslessUtf16StringConverter` | Owned durable executable projection and lossless identity strings. | ADR 0091 decision 7 |
+| `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs` | `converter:JsonStringEnumConverter` | Owned durable bookmark state uses enum names. | ADR 0091 decision 7 |
+| `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerStateStore.cs` | `converter:JsonStringEnumConverter` | Owned durable scheduler state uses enum names. | ADR 0091 decision 7 |
+| `Essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsMySqlDbContext.cs` | `storage:json` | Provider normalizes secret column text; secrets are not workflow data. | ADR 0091 decision 7 |
+| `Essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsPostgreSqlDbContext.cs` | `storage:jsonb` | Provider normalizes secret column text; secrets are not workflow data. | ADR 0091 decision 7 |
+
+Before Elsa 4's first stable release, the approved S-9 migration regenerates changed stored fixtures, migrations and
+stored executables in place. It adds no old-hash verifier, format upcaster, family bump or runtime compatibility check.
+From the first stable release, `JsonHashInput` and every hashed contract freeze; a change needs an explicit decision
+covering identity, versioning, migration and verification. Runtime wire fixtures freeze at that release too. This
+pre-stable rule applies beside the Distributed gate below, rather than claiming that today's fixtures are immutable.
 
 ## Changing the format of saved runtime state
 

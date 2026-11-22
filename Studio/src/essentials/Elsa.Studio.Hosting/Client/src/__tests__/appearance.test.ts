@@ -27,12 +27,12 @@ const media = (matches: Record<string, boolean>) => (query: string) => ({ matche
 describe("appearance model", () => {
   it("defaults to the configured theme, system mode, theme navigation and a dark sidebar", () => {
     expect(readAppearancePreferences(memoryStorage())).toEqual(defaultAppearancePreferences);
-    expect(defaultAppearancePreferences).toEqual({ themeId: null, workspaceStyle: "linen", colorSchemeId: null, mode: "system", navigation: "theme", sidebarColor: "dark" });
+    expect(defaultAppearancePreferences).toEqual({ themeId: null, workspaceStyle: "linen", colorSchemeId: null, mode: "system", navigation: "theme", sidebarColor: "dark", timeZone: "browser" });
   });
 
   it("reads the existing storage keys so earlier choices survive", () => {
     const storage = memoryStorage({ "elsa-studio-theme": "drift", "elsa-studio-theme-mode": "dim", "elsa-studio-nav-mode": "top" });
-    expect(readAppearancePreferences(storage)).toEqual({ themeId: "drift", workspaceStyle: null, colorSchemeId: null, mode: "dim", navigation: "top", sidebarColor: "dark" });
+    expect(readAppearancePreferences(storage)).toEqual({ themeId: "drift", workspaceStyle: null, colorSchemeId: null, mode: "dim", navigation: "top", sidebarColor: "dark", timeZone: "browser" });
   });
 
   it("persists the sidebar color and falls back to dark for an unknown value", () => {
@@ -47,7 +47,7 @@ describe("appearance model", () => {
 
   it("ignores unknown stored values", () => {
     const storage = memoryStorage({ "elsa-studio-theme-mode": "sepia", "elsa-studio-nav-mode": "bottom" });
-    expect(readAppearancePreferences(storage)).toMatchObject({ mode: "system", navigation: "theme", sidebarColor: "dark" });
+    expect(readAppearancePreferences(storage)).toMatchObject({ mode: "system", navigation: "theme", sidebarColor: "dark", timeZone: "browser" });
   });
 
   it("writes only the given preferences and clears a null theme", () => {
@@ -60,7 +60,7 @@ describe("appearance model", () => {
   });
 
   it("reset removes every listed appearance and chrome key and returns the defaults", () => {
-    expect(appearanceResetStorageKeys).toHaveLength(11);
+    expect(appearanceResetStorageKeys).toHaveLength(12);
     expect([...appearanceResetStorageKeys]).toEqual([
       appearanceStorageKeys.themeId,
       appearanceStorageKeys.workspaceStyle,
@@ -68,6 +68,7 @@ describe("appearance model", () => {
       appearanceStorageKeys.mode,
       appearanceStorageKeys.navigation,
       appearanceStorageKeys.sidebarColor,
+      appearanceStorageKeys.timeZone,
       appearanceChromeStorageKeys.sidebarCollapsed,
       appearanceChromeStorageKeys.bottomPanelCollapsed,
       appearanceChromeStorageKeys.bottomPanelHeight,

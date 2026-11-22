@@ -83,12 +83,7 @@ internal partial class HumanReviewApiJsonContext : JsonSerializerContext
         return options;
     }
 
-    internal static HumanReviewApiJsonContext WireContext => Wire.Context;
 
-    private static class Wire
-    {
-        internal static readonly HumanReviewApiJsonContext Context = new(new JsonSerializerOptions(Default.Options));
-    }
 }
 
 /// <summary>Maps the API's known refusals to plain problems; anything else is an opaque server failure.</summary>

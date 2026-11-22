@@ -267,7 +267,12 @@ internal sealed class StepVariableSession : IStepVariableSession
         try
         {
             value = (T)Elsa.Serialization.Core.JsonConversionContract.For(typeof(T)).Read(inline, typeof(T),
-                diagnostic => _warnings?.Report(Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"variables.{variable.Name}")))!;
+                diagnostic =>
+                {
+                    var warning = Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"variables.{variable.Name}");
+                    var policy = envelope.Policy;
+                    _warnings?.Report(policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) ? warning.ProtectedForm! : warning);
+                })!;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {

@@ -18,7 +18,7 @@ namespace Elsa.Decisions.Api;
 /// <summary>Maps Decisions operations through the host's normal endpoint catalog and authorization policies.</summary>
 public static class DecisionsApi
 {
-    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options) { PropertyNameCaseInsensitive = true, MaxDepth = 64 };
+    private static JsonSerializerOptions Json => DecisionsJsonContext.WireContext.Options;
 
     public static void MapDecisionsApi(this IEndpointRouteBuilder endpoints)
     {

@@ -1,103 +1,81 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
 public sealed class JsonBaselineArchitectureTests
 {
-    // Written before the scanner: each independent bypass must be rejected without relying on the repository's current tree.
     [Theory]
     [InlineData("class C { object x = new JsonSerializerOptions(); }", "construction")]
     [InlineData("class C { JsonSerializerOptions x = new(); }", "construction")]
+    [InlineData("class C { JsonSerializerOptions Create() => new(); }", "construction")]
+    [InlineData("using Opt = System.Text.Json.JsonSerializerOptions; class C { object x = new Opt(); }", "construction")]
     [InlineData("class C { object x = JsonSerializerOptions.Web; }", "defaults")]
     [InlineData("class C { object x = JsonSerializerOptions.Default; }", "defaults")]
     [InlineData("[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)] class C {}", "PropertyNameCaseInsensitive")]
     [InlineData("class C { void M() { options.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase; } }", "DictionaryKeyPolicy")]
+    [InlineData("class C { void M() { options.Converters.Add(new LossyConverter()); } }", "converter:LossyConverter")]
+    [InlineData("class C { void M() { options.TypeInfoResolver.Modifiers.Add(ChangeData); } }", "modifier:ChangeData")]
     [InlineData("class C { void M() { JsonSerializer.Serialize(value); } }", "optionless")]
+    [InlineData("class C { void M() { JsonSerializer.Serialize(value, options: null); } }", "optionless")]
     [InlineData("class C { void M() { JsonSerializer.SerializeToElement(value, value.GetType()); } }", "optionless")]
+    [InlineData("class C { void M() { JsonSerializer.SerializeAsync(stream, value); } }", "optionless")]
+    [InlineData("class C { void M() { JsonSerializer.DeserializeAsync<T>(stream); } }", "optionless")]
     [InlineData("class C { void M() { payload.Deserialize<T>(); } }", "optionless")]
-    public void Every_unregistered_deviation_is_rejected(string source, string setting) =>
-        Assert.Contains(JsonBaselineSourceScan.Scan(source), x => x.Setting == setting);
-
-    [Theory]
-    [InlineData("new JsonSerializerOptions()", "construction")]
-    [InlineData("JsonSerializerOptions.Web", "defaults")]
-    public void A_reasoned_register_entry_accounts_for_its_specific_setting(string expression, string setting)
+    public void Every_unregistered_deviation_is_rejected(string source, string setting)
     {
-        var violations = JsonBaselineSourceScan.Scan($"class C {{ object x = {expression}; }}");
-        Assert.NotEmpty(violations);
-        Assert.Empty(violations.Where(x => x.Setting != setting));
+        var finding = Assert.Single(JsonBaselineSourceScan.Scan(source).Where(x => x.Setting == setting));
+        Assert.False(JsonBaselineSourceScan.IsAccounted("owner.cs", finding, new HashSet<string>(), []));
     }
 
     [Fact]
-    public void Legacy_accounting_never_admits_a_workflow_data_conversion()
+    public void A_reasoned_register_entry_accounts_only_for_its_file_and_specific_setting()
+    {
+        var finding = Assert.Single(JsonBaselineSourceScan.Scan("class C { object x = new JsonSerializerOptions(); }"));
+        var register = JsonBaselineSourceScan.ReadRegister("## Baseline deviations\n| File | Setting | Reason | Approved by |\n|---|---|---|---|\n| `owner.cs` | `construction` | Own format projection. | ADR 0091 |\n");
+        Assert.True(JsonBaselineSourceScan.IsAccounted("owner.cs", finding, new HashSet<string>(), register));
+        Assert.False(JsonBaselineSourceScan.IsAccounted("foreign.cs", finding, new HashSet<string>(), register));
+        Assert.False(JsonBaselineSourceScan.IsAccounted("owner.cs", finding with { Setting = "Encoder" }, new HashSet<string>(), register));
+    }
+
+    [Fact]
+    public void Legacy_accounting_never_admits_workflow_data_and_a_removed_migrated_entry_passes()
     {
         var call = Assert.Single(JsonBaselineSourceScan.Scan("class C { void M() { JsonSerializer.Serialize(value); } }"));
-        Assert.False(JsonBaselineSourceScan.IsAccounted(call, [call.Signature], [], workflowData: true));
-        Assert.True(JsonBaselineSourceScan.IsAccounted(call, [call.Signature], [], workflowData: false));
-        Assert.False(JsonBaselineSourceScan.IsAccounted(call, [], [], workflowData: false));
-        Assert.Empty(Array.Empty<JsonBaselineSourceScan.Finding>().Where(x => !JsonBaselineSourceScan.IsAccounted(x, [], [], false)));
+        var legacy = new HashSet<string> { JsonBaselineSourceScan.Identity("owner.cs", call), JsonBaselineSourceScan.Identity("StatefulActivity.cs", call) };
+        Assert.True(JsonBaselineSourceScan.IsAccounted("owner.cs", call, legacy, []));
+        Assert.False(JsonBaselineSourceScan.IsAccounted("foreign.cs", call, legacy, []));
+        Assert.False(JsonBaselineSourceScan.IsAccounted("StatefulActivity.cs", call, legacy, []));
+        Assert.False(JsonBaselineSourceScan.IsAccounted("owner.cs", call, new HashSet<string>(), []));
+        var migrated = JsonBaselineSourceScan.Scan("class C { void M() { JsonSerializer.Serialize(value, JsonBaseline.Options); } }");
+        Assert.Empty(migrated.Where(x => !JsonBaselineSourceScan.IsAccounted("owner.cs", x, new HashSet<string>(), [])));
     }
 
     [Fact]
-    public void Baseline_copies_explicit_type_info_and_protected_defaults_are_accepted()
+    public void Baseline_copies_explicit_type_info_protected_defaults_comments_and_strings_are_accepted()
     {
-        const string source = "class C { void M() { var options = JsonBaseline.CreateCopy(); options.PropertyNameCaseInsensitive = false; options.NumberHandling = JsonNumberHandling.Strict; JsonSerializer.Serialize(value, options); JsonSerializer.Serialize(value, Context.WireContext.Value); } }";
+        const string source = "class C { JsonSerializerOptions options = new(JsonBaseline.Options); void M() { options.PropertyNameCaseInsensitive = false; options.NumberHandling = JsonNumberHandling.Strict; JsonSerializer.Serialize(value, options); JsonSerializer.Serialize(value, Context.WireContext.Value); /* new JsonSerializerOptions() */ var text = \"JsonSerializer.Serialize(value)\"; } }";
         Assert.Empty(JsonBaselineSourceScan.Scan(source));
     }
-}
 
-internal static class JsonBaselineSourceScan
-{
-    internal sealed record Finding(string Setting, string Signature);
-
-    internal static bool IsAccounted(Finding finding, IReadOnlyCollection<string> legacy, IReadOnlyCollection<string> settings, bool workflowData) =>
-        finding.Setting == "optionless" ? !workflowData && legacy.Contains(finding.Signature) : settings.Contains(finding.Setting);
-
-    internal static IReadOnlyList<Finding> Scan(string source)
+    [Fact]
+    public void Every_production_root_uses_the_baseline_or_a_specific_recorded_deviation()
     {
-        var root = CSharpSyntaxTree.ParseText(source).GetRoot();
-        var findings = new List<Finding>();
-        foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
-            if (creation.Type.ToString().EndsWith("JsonSerializerOptions", StringComparison.Ordinal)) Add("construction", creation);
-        foreach (var creation in root.DescendantNodes().OfType<ImplicitObjectCreationExpressionSyntax>())
-            if (creation.Ancestors().OfType<VariableDeclarationSyntax>().FirstOrDefault()?.Type.ToString().EndsWith("JsonSerializerOptions", StringComparison.Ordinal) == true ||
-                creation.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault()?.Type.ToString().EndsWith("JsonSerializerOptions", StringComparison.Ordinal) == true)
-                Add("construction", creation);
-        foreach (var access in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
-            if (access.Expression.ToString().EndsWith("JsonSerializerOptions", StringComparison.Ordinal) && access.Name.Identifier.ValueText is "Web" or "Default") Add("defaults", access);
-        foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        var register = JsonBaselineSourceScan.ReadRegister(File.ReadAllText(Path.Join(RepoPaths.RepoRoot, "docs/serialization.md")));
+        var legacyPath = Path.Join(RepoPaths.RepoRoot, "Essentials/tests/Architecture/Tests/Baselines/json-optionless-calls.txt");
+        Assert.True(File.Exists(legacyPath), "Missing shrinking option-less own-contract inventory.");
+        var legacy = File.ReadAllLines(legacyPath).Where(line => line.Length > 0 && !line.StartsWith('#')).ToHashSet(StringComparer.Ordinal);
+        var paths = ModuleRoots.Resolve(RepoPaths.RepoRoot, [.. ModuleRoots.Production, "Studio/src", "Extensions/*/studio"])
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+            .Where(path => !RepoPaths.IsBuildOutput(path) && ModuleRoots.IsNotTestFile(path)).Distinct().ToArray();
+        Assert.NotEmpty(paths);
+        Assert.All(register, row => Assert.True(File.Exists(Path.Join(RepoPaths.RepoRoot, row.File)), $"Stale register path: {row.File}"));
+        var failures = new List<string>();
+        foreach (var path in paths)
         {
-            var name = assignment.Left is MemberAccessExpressionSyntax member ? member.Name.Identifier.ValueText : assignment.Left.ToString();
-            if (IsDeviation(name, assignment.Right.ToString())) Add(name, assignment);
+            var relative = Path.GetRelativePath(RepoPaths.RepoRoot, path).Replace('\\', '/');
+            foreach (var finding in JsonBaselineSourceScan.Scan(File.ReadAllText(path)))
+                if (!JsonBaselineSourceScan.IsAccounted(relative, finding, legacy, register)) failures.Add($"{relative}:{finding.Line} | {finding.Setting} | {finding.Signature}");
         }
-        foreach (var argument in root.DescendantNodes().OfType<AttributeArgumentSyntax>().Where(x => x.NameEquals is not null))
-            if (argument.Ancestors().OfType<AttributeSyntax>().First().Name.ToString().Contains("JsonSourceGenerationOptions", StringComparison.Ordinal) && IsDeviation(argument.NameEquals!.Name.Identifier.ValueText, argument.Expression.ToString())) Add(argument.NameEquals.Name.Identifier.ValueText, argument);
-        foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
-        {
-            if (call.Expression is not MemberAccessExpressionSyntax member) continue;
-            var name = member.Name.Identifier.ValueText;
-            var serializer = member.Expression.ToString().EndsWith("JsonSerializer", StringComparison.Ordinal);
-            var arguments = call.ArgumentList.Arguments;
-            if (serializer && name is "Serialize" or "SerializeToElement" or "SerializeToUtf8Bytes" or "Deserialize" &&
-                (arguments.Count == 1 || arguments.Count == 2 && (arguments[1].Expression is TypeOfExpressionSyntax || arguments[1].Expression.ToString().EndsWith(".GetType()", StringComparison.Ordinal)))) Add("optionless", call);
-            else if (!serializer && name == "Deserialize" && arguments.Count == 0) Add("optionless", call);
-        }
-        return findings;
-
-        void Add(string setting, Microsoft.CodeAnalysis.SyntaxNode node) => findings.Add(new(setting, node.WithoutTrivia().ToString().Replace("\r", "", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal)));
+        Assert.True(failures.Count == 0, "Unregistered JSON options or new/workflow-data option-less calls:\n" + string.Join('\n', failures));
     }
-
-    private static bool IsDeviation(string name, string value) => name switch
-    {
-        "DictionaryKeyPolicy" => value != "null",
-        "PropertyNameCaseInsensitive" => value != "false",
-        "PropertyNamingPolicy" => value is not ("JsonNamingPolicy.CamelCase" or "JsonKnownNamingPolicy.CamelCase"),
-        "NumberHandling" => value != "JsonNumberHandling.Strict",
-        "DefaultIgnoreCondition" => value != "JsonIgnoreCondition.Never",
-        "Encoder" => !value.EndsWith("JavaScriptEncoder.UnsafeRelaxedJsonEscaping", StringComparison.Ordinal),
-        _ => false
-    };
 }

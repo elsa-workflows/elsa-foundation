@@ -43,13 +43,7 @@ internal partial class EtlDesignJsonContext : JsonSerializerContext
         return options;
     }
 
-    internal static EtlDesignJsonContext WireContext => Wire.Context;
 
-    // Initialize after the generated context's own static defaults, irrespective of partial-file order.
-    private static class Wire
-    {
-        internal static readonly EtlDesignJsonContext Context = new(new JsonSerializerOptions(Default.Options));
-    }
 }
 
 /// <summary>Uses the bounded canonical v2 codec for API pipeline input and output.</summary>

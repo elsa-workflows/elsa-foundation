@@ -316,17 +316,17 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 resolutionContext,
                 cancellationToken,
                 conversion);
+            var expressionPolicy = evaluated.EffectivePolicy ?? binding.EffectivePolicy;
             var materialized = CoerceToType(
                 evaluated.Value,
                 type,
                 conversion,
-                diagnostic => resolutionContext.Warnings?.Report(ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{input.Key}")));
-            var expressionPolicy = evaluated.EffectivePolicy ?? binding.EffectivePolicy;
+                diagnostic => ReportConversion(diagnostic, input.Key, expressionPolicy, resolutionContext));
             var envelope = materialized is null
                 ? ValueEnvelope.Null(expressionType, expressionPolicy)
                 : ValueEnvelope.Inline(
                     expressionType,
-                    conversion.Write(materialized, type),
+                    evaluated.Value is JsonElement original ? original.Clone() : conversion.Write(materialized, type),
                     expressionPolicy);
             return await ApplyDestinationStorageAsync(
                 invocationId,
@@ -481,7 +481,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         try
         {
             _ = ConversionFor(node, binding.InputKey, type).Read(payload, type,
-                diagnostic => resolutionContext.Warnings?.Report(ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{binding.InputKey}")));
+                diagnostic => ReportConversion(diagnostic, binding.InputKey, value.Policy, resolutionContext));
         }
         catch (Exception exception) when (RuntimeReadSelectionException.IsFitFailure(exception))
         {
@@ -744,7 +744,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' is an expression binding without an expression payload.");
 
         if (string.Equals(expression.Language, WellKnownExpressionDescriptorTypes.Object, StringComparison.OrdinalIgnoreCase))
-            return new EvaluatedExpression(DeserializeObjectExpression(expression, type, nodeId, inputName, conversion, resolutionContext), null);
+            return new EvaluatedExpression(DeserializeObjectExpression(expression, nodeId, inputName), null);
 
         var evaluated = await _portableExpressionEvaluator.EvaluateAsync(
             expression,
@@ -757,13 +757,19 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         return new EvaluatedExpression(evaluated.Value, evaluated.EffectivePolicy);
     }
 
-    private static object? DeserializeObjectExpression(RuntimeExpressionBinding expression, Type type, string nodeId, string inputName, JsonConversionContract conversion, RuntimeInputBindingResolutionContext resolutionContext)
+    private static void ReportConversion(JsonConversionDiagnostic diagnostic, string inputName, ValueProtectionPolicy policy, RuntimeInputBindingResolutionContext context)
+    {
+        var warning = ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{inputName}");
+        context.Warnings?.Report(policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) ? warning.ProtectedForm! : warning);
+    }
+
+    private static object? DeserializeObjectExpression(RuntimeExpressionBinding expression, string nodeId, string inputName)
     {
         try
         {
             using var document = JsonDocument.Parse(expression.Expression);
-            return conversion.Read(document.RootElement, type,
-                diagnostic => resolutionContext.Warnings?.Report(ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{inputName}")));
+            // The typed copy is checked by CoerceToType; the input snapshot retains this original document.
+            return document.RootElement.Clone();
         }
         catch (JsonException exception)
         {

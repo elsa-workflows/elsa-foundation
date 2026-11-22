@@ -29,7 +29,7 @@ public static class StrictDateTimeConverters
     {
         var text = ReadText(ref reader, target);
         if (text is null || !HasOffset(text))
-            throw new JsonException($"json-datetime-offset-missing: {target.Name} requires Z or an explicit offset.");
+            throw new JsonConversionException("json-datetime-offset-missing", $"{target.Name} requires Z or an explicit offset.");
         if (!reader.TryGetDateTimeOffset(out var value))
             throw new JsonException($"Invalid ISO 8601 {target.Name}.");
         return value;
@@ -45,7 +45,7 @@ public static class StrictDateTimeConverters
         public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
         {
             if (value.Kind == DateTimeKind.Unspecified && !apiMode)
-                throw new JsonException("json-datetime-offset-missing: an Unspecified DateTime cannot establish an instant.");
+                throw new JsonConversionException("json-datetime-offset-missing", "An Unspecified DateTime cannot establish an instant; send Z or an explicit offset.");
             writer.WriteStringValue(value.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(value, DateTimeKind.Utc) : value.ToUniversalTime());
         }
     }

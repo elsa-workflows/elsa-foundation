@@ -21,10 +21,9 @@ internal static class WorkflowAuthoringRevision
         // Normalize through the same authored resource view and enum converters used by read/save endpoints.
         // This serialization is deliberately unrelated to outgoing activity-value serialization profiles.
         var json = JsonSerializer.SerializeToElement(view.ToState().ToStateView(), WorkflowsDesignJsonOptions.WireContext.WorkflowDefinitionStateView);
-        var bytes = CanonicalBytes(json);
-        var canonical = JsonSerializer.Deserialize(bytes, WorkflowsDesignJsonOptions.WireContext.WorkflowDefinitionStateView)
+        var snapshot = JsonSerializer.Deserialize(json, WorkflowsDesignJsonOptions.WireContext.WorkflowDefinitionStateView)
             ?? throw new JsonException("Invalid authored document.");
-        return (canonical.ToState(), Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
+        return (snapshot.ToState(), Elsa.Serialization.Core.JsonHashInput.Hash(json));
     }
 
     internal static string Digest(IEnumerable<string> parts)
@@ -36,39 +35,8 @@ internal static class WorkflowAuthoringRevision
             foreach (var part in parts) writer.WriteStringValue(part);
             writer.WriteEndArray();
         }
-        return Convert.ToHexString(SHA256.HashData(stream.ToArray())).ToLowerInvariant();
+        return Elsa.Serialization.Core.JsonHashInput.HashUtf8(stream.ToArray());
     }
 
-    internal static string JsonDigest(JsonElement json) => Convert.ToHexString(SHA256.HashData(CanonicalBytes(json))).ToLowerInvariant();
-
-    private static byte[] CanonicalBytes(JsonElement json)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream)) Write(writer, json);
-        return stream.ToArray();
-    }
-
-    private static void Write(Utf8JsonWriter writer, JsonElement json)
-    {
-        switch (json.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in json.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
-                {
-                    writer.WritePropertyName(property.Name);
-                    Write(writer, property.Value);
-                }
-                writer.WriteEndObject();
-                break;
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in json.EnumerateArray()) Write(writer, item);
-                writer.WriteEndArray();
-                break;
-            default:
-                json.WriteTo(writer);
-                break;
-        }
-    }
+    internal static string JsonDigest(JsonElement json) => Elsa.Serialization.Core.JsonHashInput.Hash(json);
 }

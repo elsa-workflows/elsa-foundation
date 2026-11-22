@@ -33,7 +33,7 @@ public static class UnmatchedMemberScanner
         if (value.ValueKind != JsonValueKind.Null && (temporalType == typeof(DateTime) || temporalType == typeof(DateTimeOffset)))
         {
             if (value.ValueKind != JsonValueKind.String) throw new JsonException($"{temporalType.Name} requires a JSON string.", path, null, null);
-            if (!StrictDateTimeConverters.HasOffset(value.GetString()!)) throw new JsonException($"json-datetime-offset-missing: {temporalType.Name} requires Z or an explicit offset.", path, null, null);
+            if (!StrictDateTimeConverters.HasOffset(value.GetString()!)) throw new JsonConversionException("json-datetime-offset-missing", $"{temporalType.Name} requires Z or an explicit offset.", path);
             if (!value.TryGetDateTimeOffset(out _)) throw new JsonException($"Invalid ISO 8601 {temporalType.Name}.", path, null, null);
         }
         if (type == typeof(JsonElement) || type == typeof(object) || typeof(System.Text.Json.Nodes.JsonNode).IsAssignableFrom(type)) return;
@@ -108,7 +108,7 @@ public static class UnmatchedMemberScanner
     private static void Unmatched(string path, Type type, JsonConversionContract contract, List<JsonConversionDiagnostic> result)
     {
         var diagnostic = new JsonConversionDiagnostic(contract.RefuseUnmatchedMembers ? "json-unmatched-member-refused" : "json-unmatched-member", path, type);
-        if (contract.RefuseUnmatchedMembers) throw new JsonException($"{diagnostic.Code}: {path} matches no member of {type.FullName}.", path, null, null);
+        if (contract.RefuseUnmatchedMembers) throw new JsonConversionException(diagnostic.Code, $"A JSON member matches no member of {type.FullName}.", path);
         result.Add(diagnostic);
     }
 }

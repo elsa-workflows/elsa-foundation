@@ -74,8 +74,9 @@ public sealed class RuntimeInputBindingCompiler(
 
     private JsonConversionContract ConversionFor(Type type, InputDefinition? input)
     {
-        var member = input is null ? null : ConversionActivityType?.GetProperties().FirstOrDefault(property =>
-            (property.GetCustomAttribute<ActivityInputAttribute>(inherit: true)?.Key ?? property.Name) == input.ReferenceKey);
+        var member = input is null ? null : ConversionActivityType?.GetProperties(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(property =>
+            property.GetCustomAttribute<ActivityInputAttribute>(inherit: true) is { } attribute &&
+            (attribute.Key ?? property.Name) == input.ReferenceKey);
         return JsonConversionContract.For(type, member);
     }
 
@@ -707,7 +708,10 @@ public sealed class RuntimeInputBindingCompiler(
 
     private static string? ReadVariableName(object? value)
     {
-        var element = value is JsonElement json ? json : JsonValueConversion.SerializeToElement(value);
+        var contract = ConversionFor(targetType, input);
+        var element = value is JsonElement json ? json
+            : targetType.IsInstanceOfType(value) ? contract.Write(value, targetType)
+            : JsonValueConversion.SerializeToElement(value);
         if (element.ValueKind != JsonValueKind.Object)
             return null;
         foreach (var member in new[] { "name", "Name" })
@@ -914,14 +918,15 @@ public sealed class RuntimeInputBindingCompiler(
             // fault: surface it as the structured VF-COER-001 diagnostic (with node id + reference key) so preflight
             // returns a validation result instead of letting the raw JsonException/FormatException escape as a 500 (#924).
             throw ValueConversionPublicationException.LiteralCoercionFailed(
-                $"VF-COER-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{DescribeAuthoredValue(value.Value)}' cannot be converted to alias '{inputDefinition.Type.ToDisplayString()}'.",
+                $"VF-COER-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value cannot be converted to alias '{inputDefinition.Type.ToDisplayString()}'.",
                 ToValueTypeDescriptor(inputDefinition),
                 InputBindingContext(nodeId, inputDefinition),
                 exception);
         }
 
         ValidateNull(inputDefinition, inputType, converted, nodeId);
-        var literal = ConversionFor(inputType, inputDefinition).Write(converted, inputType);
+        // Validate a typed copy; the executable carries the original data, including unmatched members and raw tokens.
+        var literal = value.Value is JsonElement original ? original.Clone() : ConversionFor(inputType, inputDefinition).Write(converted, inputType);
         var targetType = ToValueTypeDescriptor(inputDefinition);
         return new RuntimeInputBinding(
             inputKey: inputDefinition.ReferenceKey,
@@ -986,12 +991,15 @@ public sealed class RuntimeInputBindingCompiler(
     {
         var inputType = ResolveInputType(inputDefinition);
         object? converted;
+        JsonElement structured;
         try
         {
             var authored = value.Value is JsonElement jsonElement
                 ? jsonElement
-                : JsonValueConversion.SerializeToElement(value.Value);
-            var structured = authored.ValueKind == JsonValueKind.String
+                : value.Value is not null && inputType.IsInstanceOfType(value.Value)
+                    ? ConversionFor(inputType, inputDefinition).Write(value.Value, inputType)
+                    : JsonValueConversion.SerializeToElement(value.Value);
+            structured = authored.ValueKind == JsonValueKind.String
                 ? JsonValueConversion.Deserialize<JsonElement>(authored.GetString()!)
                 : authored;
             converted = ConversionFor(inputType, inputDefinition).Read(structured, inputType, diagnostic => ReportConversion(diagnostic, inputDefinition));
@@ -1008,7 +1016,7 @@ public sealed class RuntimeInputBindingCompiler(
         ValidateNull(inputDefinition, inputType, converted, nodeId);
         try
         {
-            var literal = ConversionFor(inputType, inputDefinition).Write(converted, inputType);
+            var literal = structured.Clone();
             var targetType = ToValueTypeDescriptor(inputDefinition);
             return new RuntimeInputBinding(
                 inputKey: inputDefinition.ReferenceKey,
@@ -1234,7 +1242,10 @@ public sealed class RuntimeInputBindingCompiler(
     {
         if (value is null)
             return null;
-        var element = value is JsonElement json ? json : JsonValueConversion.SerializeToElement(value);
+        var contract = ConversionFor(targetType, input);
+        var element = value is JsonElement json ? json
+            : targetType.IsInstanceOfType(value) ? contract.Write(value, targetType)
+            : JsonValueConversion.SerializeToElement(value);
         // Presence/admission policy stays with S-2. This boundary only changes typed conversion.
         if (element.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null) return null;
         return ConversionFor(targetType, input).Read(element, targetType, diagnostic => ReportConversion(diagnostic, input));

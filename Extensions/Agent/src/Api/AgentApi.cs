@@ -73,12 +73,7 @@ internal partial class AgentApiJsonContext : JsonSerializerContext
         return options;
     }
 
-    internal static AgentApiJsonContext WireContext => Wire.Context;
 
-    private static class Wire
-    {
-        internal static readonly AgentApiJsonContext Context = new(new JsonSerializerOptions(Default.Options));
-    }
 }
 
 /// <summary>Known refusals become plain problems; an unavailable connection never explains which check failed.</summary>

@@ -27,10 +27,5 @@ internal partial class EtlRuntimeApiJsonContext : JsonSerializerContext
         return options;
     }
 
-    internal static EtlRuntimeApiJsonContext WireContext => Wire.Context;
 
-    private static class Wire
-    {
-        internal static readonly EtlRuntimeApiJsonContext Context = new(new JsonSerializerOptions(Default.Options));
-    }
 }

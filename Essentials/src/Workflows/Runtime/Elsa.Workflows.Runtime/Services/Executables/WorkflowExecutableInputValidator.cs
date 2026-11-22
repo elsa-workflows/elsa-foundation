@@ -123,8 +123,8 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
                     return WorkflowExecutableInputValidation.Failure(
                     [
                         new WorkflowExecutableInputValidationFinding(
-                            exception.Message.Contains("json-datetime-offset-missing", StringComparison.Ordinal) ? "json-datetime-offset-missing" : WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
-                            $"Workflow input '{declaration.Name}' is incompatible with its declared type: {exception.Message}",
+                            exception is JsonConversionException refusal ? refusal.Code : WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
+                            $"Workflow input '{declaration.Name}' is incompatible with its declared type. Date-time values require Z or an explicit offset.",
                             declaration.Name) { JsonPath = "$[" + System.Text.Json.JsonSerializer.Serialize(declaration.Name, JsonBaseline.Options) + "]" + (exception.Path ?? "$").TrimStart('$') }
                     ]);
                 }

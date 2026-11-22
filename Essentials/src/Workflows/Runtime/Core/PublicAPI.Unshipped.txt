@@ -10858,3 +10858,7 @@ Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.Warnings.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.Warnings.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableHasher.ComputeHash(Elsa.Workflows.Runtime.Core.Models.ExecutableNode! rootActivity, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract! inputContract, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableDependency!>! dependencies, Elsa.Workflows.Runtime.Core.Models.PersistenceMode? persistenceMode = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeVariableDeclaration!>? workflowVariables = null, Elsa.Primitives.Models.IncidentStrategyReference? incidentStrategy = null) -> string!
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectedException.InputPath.get -> string?
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectedException.InputPath.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidationFinding.JsonPath.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidationFinding.JsonPath.init -> void

@@ -303,7 +303,7 @@ public sealed class EfWorkflowExecutionStateStore(
             {
                 var input = EfSchedulerWorkQueueStore.ReadChecked(row, scope);
                 if (input.CommandKind != WorkflowExecutionCommandKind.ExecuteModel) continue;
-                var command = input.Payload?.Deserialize<RuntimeModelExecutionCommand>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
+                var command = input.Payload?.Deserialize<RuntimeModelExecutionCommand>(Elsa.Serialization.Core.JsonBaseline.Options)
                     ?? throw new InvalidDataException("An accepted model input has no material pin.");
                 if (command.InputId != input.CommandId) throw new InvalidDataException("The model input identity differs from its retained queue command.");
                 if (seen.Add(command.Executable.ArtifactId)) ids.Add(command.Executable.ArtifactId);

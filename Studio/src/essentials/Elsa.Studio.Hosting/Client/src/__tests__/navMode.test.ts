@@ -9,7 +9,7 @@ import { read, ruleBody } from "./themeTestUtils";
 const stylesCss = read("../app/styles.css");
 const mobileShellCss = stylesCss.match(/@media \(max-width: 1024px\) \{([\s\S]*?)^\}/m)?.[1] ?? "";
 const phoneShellCss = stylesCss.match(/@media \(max-width: 640px\) \{([\s\S]*?)^\}/m)?.[1] ?? "";
-const layoutsCss = read("../app/themes/layouts.css").replace(/\/\*[\s\S]*?\*\//g, "");
+const layoutsCss = read("../app/themes/layouts.css").replace(/\r\n/g, "\n").replace(/\/\*[\s\S]*?\*\//g, "");
 // The desktop media block closes at the first column-zero brace; the status bar rules follow it.
 const desktopEnd = layoutsCss.indexOf("\n}\n");
 const desktopCss = layoutsCss.slice(0, desktopEnd);

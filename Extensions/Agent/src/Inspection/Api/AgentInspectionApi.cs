@@ -61,12 +61,7 @@ internal partial class AgentInspectionApiJsonContext : JsonSerializerContext
         return options;
     }
 
-    internal static AgentInspectionApiJsonContext WireContext => Wire.Context;
 
-    private static class Wire
-    {
-        internal static readonly AgentInspectionApiJsonContext Context = new(new JsonSerializerOptions(Default.Options));
-    }
 }
 
 /// <summary>
