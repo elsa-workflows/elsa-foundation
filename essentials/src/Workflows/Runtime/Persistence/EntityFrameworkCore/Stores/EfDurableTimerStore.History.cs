@@ -33,20 +33,23 @@ public sealed partial class EfDurableTimerStore
         var id = CompositeId(scope, timer.WorkflowExecutionId, timer.TimerId);
         var winner = await context.DurableTimers.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken); Check();
         if (winner is not null) return ReadChecked(winner, scope, timer.WorkflowExecutionId, timer.TimerId);
+        var retainedLegacyAdmission = false;
         if (timer.HistoryResponsibility is null)
         {
-            // A retained uncaptured native admission is immutable and cannot acquire a timer owner later.
-            // Preserve the legacy store's caller-owned tracker/transaction behavior for that proven case.
+            // Preserve the legacy caller's tracker/transaction behavior for a proven uncaptured
+            // admission, but serialize its actual save with native deletion as well.
             var original = await ReadNativeAsync(scope, timer.WorkflowExecutionId, cancellationToken); Check();
             var owner = EfTimerHistoryOwner.Read(await EfTimerHistoryOwner.ReadAsync(context, scope, timer.WorkflowExecutionId, false, cancellationToken), scope, timer.WorkflowExecutionId); Check();
-            if (owner is null && original is not null && !HasTimerChoice(original))
-                return await SaveCoreAsync(timer, cancellationToken);
+            retainedLegacyAdmission = owner is null && original is not null && !HasTimerChoice(original);
         }
         if (context.Database.CurrentTransaction is not null || Transaction.Current is not null)
         {
             // Lock the current ownership row even when the caller established an older consistent snapshot.
             // Conditional writes observe current committed authority under InnoDB repeatable read.
             await EfTimerHistoryOwner.LockAsync(context, scope, timer.WorkflowExecutionId, cancellationToken); Check();
+            if (retainedLegacyAdmission)
+                await EfTimerHistoryOwner.CoordinateFirstNativeAsync(context, scope, timer.WorkflowExecutionId, cancellationToken);
+            await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, timer.WorkflowExecutionId, cancellationToken); Check();
             var ownerId = EfTimerHistoryOwner.Id(scope, timer.WorkflowExecutionId);
             if (await context.ExecutionLivenessStates.Where(row => row.Id == ownerId && row.TimerHistoryOwnerJson != null)
                 .ExecuteUpdateAsync(update => update.SetProperty(row => row.Revision, row => row.Revision + 1), cancellationToken) != 0)
@@ -65,12 +68,15 @@ public sealed partial class EfDurableTimerStore
             if (owner is not null || HasTimerChoice(original)) throw SourceUnavailable("An original timer capture choice cannot use legacy transactional scheduling.");
             return await SaveCoreAsync(timer, cancellationToken);
         }
-        if (context.ChangeTracker.HasChanges()) throw new InvalidOperationException("Timer source admission requires a clean native context.");
+        if (context.ChangeTracker.HasChanges() && !retainedLegacyAdmission) throw new InvalidOperationException("Timer source admission requires a clean native context.");
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             await EfTimerHistoryOwner.LockAsync(context, scope, timer.WorkflowExecutionId, cancellationToken); Check();
-            var row = await EfTimerHistoryOwner.ReadAsync(context, scope, timer.WorkflowExecutionId, true, cancellationToken); Check();
+            if (retainedLegacyAdmission)
+                await EfTimerHistoryOwner.CoordinateFirstNativeAsync(context, scope, timer.WorkflowExecutionId, cancellationToken);
+            await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, timer.WorkflowExecutionId, cancellationToken); Check();
+            var row = await EfTimerHistoryOwner.ReadAsync(context, scope, timer.WorkflowExecutionId, timer.HistoryResponsibility is not null, cancellationToken); Check();
             var owner = EfTimerHistoryOwner.Read(row, scope, timer.WorkflowExecutionId);
             var native = await ReadNativeAsync(scope, timer.WorkflowExecutionId, cancellationToken); Check();
             winner = await context.DurableTimers.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken); Check();
@@ -109,7 +115,7 @@ public sealed partial class EfDurableTimerStore
             await transaction.CommitAsync(cancellationToken); Check(); return result;
         }
         catch (DbUpdateConcurrencyException error) { throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Timer source ownership changed before admission.", error); }
-        finally { context.ChangeTracker.Clear(); }
+        finally { if (!retainedLegacyAdmission) context.ChangeTracker.Clear(); }
     }
 
     private async ValueTask<WorkflowExecutionState?> ReadNativeAsync(string scope, string run, CancellationToken token)

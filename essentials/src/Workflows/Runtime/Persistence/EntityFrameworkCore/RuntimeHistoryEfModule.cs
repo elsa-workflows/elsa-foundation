@@ -38,7 +38,7 @@ internal static class RuntimeHistoryEfModule
                 var declared = (IReadOnlyProperty)property;
                 if (!HasOwnedConversion(declared.GetValueConverter(), member.Name) ||
                     !HasOwnedConversion(property.GetTypeMapping().Converter, member.Name) ||
-                    !HasDefaultComparer(property.GetValueComparer())) return false;
+                    !HasDefaultComparer(context, property)) return false;
             }
             if (entity.FindProperty("Revision")?.IsConcurrencyToken != true) return false;
             var indexes = entity.GetIndexes().ToArray();
@@ -60,10 +60,19 @@ internal static class RuntimeHistoryEfModule
     private static bool HasOwnedConversion(ValueConverter? converter, string member) => converter is null ||
         member == "ContentJson" && converter is EfPayloadValueConverter;
 
-    private static bool HasDefaultComparer(ValueComparer comparer) => comparer.IsDefault() ||
-        comparer.GetType().Assembly == typeof(ValueComparer).Assembly &&
-        comparer is IInfrastructure<ValueComparer> wrapper && Nullable.GetUnderlyingType(comparer.Type) == wrapper.Instance.Type &&
-        wrapper.Instance.IsDefault();
+    private static bool HasDefaultComparer(RuntimeDbContext context, IProperty property)
+    {
+        var comparer = property.GetValueComparer();
+        // SQL Server supplies this sealed-behavior first-party comparer for string keys.
+        // Qualify its exact library type only at that provider/key boundary; application
+        // comparers and subclasses must still refuse the history capability.
+        if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer" &&
+            property.IsPrimaryKey() && property.ClrType == typeof(string) &&
+            comparer.GetType() == typeof(CaseInsensitiveValueComparer)) return true;
+        return comparer.IsDefault() || comparer.GetType().Assembly == typeof(ValueComparer).Assembly &&
+            comparer is IInfrastructure<ValueComparer> wrapper && Nullable.GetUnderlyingType(comparer.Type) == wrapper.Instance.Type &&
+            wrapper.Instance.IsDefault();
+    }
 
     private static bool HasOwnedMemberAccess(IProperty property, PropertyInfo owned)
     {

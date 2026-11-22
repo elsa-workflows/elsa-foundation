@@ -237,6 +237,22 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Single(await f.Context.DurableTimers.AsNoTracking().ToArrayAsync());
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Native_deletion_prevents_late_uncaptured_timer_admission_even_without_a_prior_timer_owner(bool callerTransaction)
+    {
+        await using var f = await TimerHistoryFixture.Create();
+        var executions = new EfWorkflowExecutionStateStore(f.Context, f.Access, new NoopContinuationCodec());
+        Assert.True(await executions.DeleteAsync("workflow-a"));
+        Assert.Empty(await f.Context.WorkflowExecutionStates.AsNoTracking().ToArrayAsync());
+        Assert.Null((await f.Context.ExecutionLivenessStates.AsNoTracking().SingleAsync()).TimerHistoryOwnerJson);
+        await using var transaction = callerTransaction ? await f.Context.Database.BeginTransactionAsync() : null;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.Store.SaveAsync(HistoryTimer("late") with { HistoryResponsibility = null }).AsTask());
+        Assert.Empty(await f.Context.DurableTimers.AsNoTracking().ToArrayAsync());
+        Assert.Empty((await f.Store.ListPendingHistoryAsync(new())).Items);
+        if (transaction is not null) await transaction.RollbackAsync();
+    }
+
     private static DurableTimer HistoryTimer(string id = "timer")
     {
         var timer = new DurableTimer(id, "workflow-a", "Timer", "stimulus", OccurredAt.AddMinutes(1), OccurredAt,
