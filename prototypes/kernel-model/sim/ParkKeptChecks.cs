@@ -1702,6 +1702,7 @@ internal static class ParkKeptChecks
         await CheckRetryConsumedTicket(check, timed: true, missingDeadline: true);
         await CheckRetryConsumedTicket(check, timed: true, mode: Contract.RecoverMode.Retry, missingDeadline: true);
         await CheckRetryConsumedTicket(check, timed: true, mode: Contract.RecoverMode.Retry, missingDeadline: true, doneDeadlineMarker: true);
+        await CheckRetryConsumedTicket(check, timed: true, mode: Contract.RecoverMode.Retry, missingDeadline: true, alteredDeadlineLink: true);
     }
 
     private static async Task CheckRestartedJob(bool timed, Action<bool, string> check)
@@ -1915,7 +1916,8 @@ internal static class ParkKeptChecks
 
     private static async Task CheckRetryConsumedTicket(Action<bool, string> check, bool timed = false,
         bool endBeforeTicket = false, bool releaseTicketBeforeEnd = false, bool restartAtOpen = false,
-        Contract.RecoverMode mode = Contract.RecoverMode.RetryAll, bool missingDeadline = false, bool doneDeadlineMarker = false)
+        Contract.RecoverMode mode = Contract.RecoverMode.RetryAll, bool missingDeadline = false, bool doneDeadlineMarker = false,
+        bool alteredDeadlineLink = false)
     {
         var now = 1_701_400_014_100L;
         var store = new InMemoryStore(1, () => now);
@@ -1995,6 +1997,14 @@ internal static class ParkKeptChecks
             originalDeadline.Message = originalDeadline.Message with { Payload = null };
             store.Messages.Add(originalDeadline.Message.InboxKey, originalDeadline);
         }
+        var parked = store.Instances[row.Id];
+        var alteredDeadline = InboxKey.Issued(DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation + 1, 0));
+        if (alteredDeadlineLink)
+        {
+            var ticket = store.Messages[key];
+            var recipe = ticket.Message.Read<JobTicket>() with { Timer = alteredDeadline.Id };
+            ticket.Message = ticket.Message with { Payload = Json.Write(recipe) };
+        }
         var handles = mode == Contract.RecoverMode.Retry
             ? new[] { store.SealFoundationKeptHandle(scope.Tenant, target.Actor.Id, key)! }
             : null;
@@ -2002,6 +2012,13 @@ internal static class ParkKeptChecks
             Json.Write(new Contract.OperatorCommand(view!.Selection!,
                 restartAtOpen ? Contract.RecoverMode.Resume : mode, handles)));
         await Pump(next);
+        if (alteredDeadlineLink)
+        {
+            check(store.Instances[row.Id] == parked && !store.Messages.ContainsKey(alteredDeadline) &&
+                store.Messages[key] is { Done: true, KeptBy: ParkKeepReason.Consumed },
+                "a changed deadline link in a retained ticket cannot make Open mint a different creation's key");
+            return;
+        }
         if (timed)
         {
             for (var pass = 0; pass < 24; pass++)

@@ -92,7 +92,8 @@ public sealed partial class InMemoryStore
                 {
                     if (retriesTicket && existingTicket?.Deadline is { } deadline)
                     {
-                        if (existingTicket.Timer is null) return null;
+                        if (existingTicket.Timer is null || ticket?.JobTiming is not { } admitted ||
+                            admitted != (key, existingTicket.Timer, deadline)) return null;
                         var stored = Messages.GetValueOrDefault(oldDeadline);
                         if (stored is not null && (stored.Message.Kind != Kinds.JobDeadline || stored.Message.Due != deadline ||
                             stored.Message.Target.Id != row.Id || stored.Message.TargetCreation != row.Creation ||
