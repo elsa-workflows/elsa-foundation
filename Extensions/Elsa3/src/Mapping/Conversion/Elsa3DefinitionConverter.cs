@@ -208,7 +208,12 @@ internal sealed class Elsa3DefinitionConverter(
         var inventory = await memoryReferenceGraph.CollectAsync(
             plan.Definition.Root, node => ContractOf(plan, node), jsonPaths, cancellationToken, plan.SourceName);
         plan.Diagnostics.AddRange(valueFlowLowerer.Lower(
-            (node, names) => { if (plan.Find(node) is { } script) script.EffectiveScriptOutcomes = names; },
+            (node, names, invalidDone) =>
+            {
+                if (plan.Find(node) is not { } script) return;
+                script.EffectiveScriptOutcomes = names;
+                script.EffectiveScriptInvalidDoneSelection = invalidDone;
+            },
             plan.Definition,
             inventory,
             plan.Request.DiagnosticMetadata,

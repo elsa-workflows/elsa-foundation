@@ -366,6 +366,38 @@ public sealed class Elsa3NodeRewriteTests
     }
 
     [Theory]
+    [InlineData("MatchAny", true, false)]
+    [InlineData("MatchAny", false, true)]
+    [InlineData("MatchFirst", true, true)]
+    public async Task Nested_Done_is_refused_only_when_its_MatchAny_selection_can_be_invalid(string mode, bool secondCase, bool safe)
+    {
+        var nested = Activity("nested", "Elsa.Switch", ("mode", Literal(mode)));
+        nested.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement((secondCase ? new[] { "Done", "Other" } : ["Done"])
+            .Select(label => new { label, condition = new { expression = new { type = "Literal", value = "true" } } }).ToArray());
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", MatchAnyCase(nested))));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Message.Contains("Done", StringComparison.Ordinal));
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("setOutcomes(['Done','Other']);", false)]
+    [InlineData("const names=['Done','Other']; setOutcomes(names);", false)]
+    [InlineData("if (Math.random() > .5) setOutcome('Done'); else setOutcome('Other');", true)]
+    [InlineData("const name='Done'; setOutcome(name);", true)]
+    [InlineData("setOutcomes(['Done']);", true)]
+    [InlineData("setOutcomes(['Other']);", true)]
+    public async Task Script_Done_co_selection_is_distinct_from_valid_alternative_singletons(string script, bool safe)
+    {
+        var body = Activity("body", "Elsa.RunJavaScript", ("script", Literal(script)), ("possibleOutcomes", Literal("[\"Done\",\"Other\"]", "List<String>")));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", MatchAnyCase(body))));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Message.Contains("Done", StringComparison.Ordinal));
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
     public async Task Parallel_consumes_named_Break_but_cannot_repair_a_skipped_Sequence_successor(bool sequence, bool safe)

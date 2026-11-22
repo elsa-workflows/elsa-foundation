@@ -31,8 +31,10 @@ internal static class Elsa3SwitchSafety
                     && FindUnsafe(plan, body, localLoop: false, namedBreakConsumed: false) is { } unsafeNode)
                     plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Error(plan, unsafeNode,
                         Elsa3ActivityDiagnosticCodes.UnsupportedMode,
-                        $"Case '{slot.Label}' can expose an incompatible or unproven native Break outcome; Elsa 3 Switch would keep waiting for its other bodies.",
-                        "Restructure the case so no native Break outcome escapes it. Use a case-local supported loop for a genuine Break, and choose other names for script outcomes or nested case labels."));
+                        HasInvalidDoneSelection(unsafeNode)
+                            ? $"Case '{slot.Label}' contains an invalid or unproven selection combining Done with another label in the native outcome contract."
+                            : $"Case '{slot.Label}' can expose an incompatible or unproven native Break outcome; Elsa 3 Switch would keep waiting for its other bodies.",
+                        "Restructure the case so no incompatible control outcome escapes or changes its behavior. Use a case-local supported loop for a genuine Break, and rename Done/Break script outcomes or nested case labels where they have native control meaning."));
                 index++;
             }
         }
@@ -44,6 +46,9 @@ internal static class Elsa3SwitchSafety
         if (resolved is null) return node;
         var type = resolved.ActivityTypeKey;
         if (type == Break) return localLoop ? null : node;
+        // This is invalid before a parent can consume it, including beneath Parallel. Keep the check
+        // scoped to newly enabled case bodies; existing standalone outcome-only modes are unchanged.
+        if (HasInvalidDoneSelection(node)) return node;
 
         // Lowering records effective literal/computed selections separately from declared ports. Script-selected Break
         // is not a source BreakSignal, even inside a loop; merely consuming it would change that loop's behavior.
@@ -91,4 +96,9 @@ internal static class Elsa3SwitchSafety
         }
         return null;
     }
+
+    private static bool HasInvalidDoneSelection(Elsa3NodePlan node) =>
+        node.EffectiveScriptInvalidDoneSelection || node.Resolved?.ActivityTypeKey == Switch && node.StructureFields.GetValueOrDefault("mode") is "MatchAny"
+        && node.Slots.Count(slot => slot.SlotName == CaseSlot) > 1
+        && node.Slots.Any(slot => slot.SlotName == CaseSlot && slot.Label == "Done");
 }

@@ -131,7 +131,8 @@ public sealed class SwitchMatchAnyTests
         var run = await harness.RunAsync(Executable(SwitchModes.MatchAny, true, true, true,
             new Dictionary<string, ExecutableNode>
             {
-                ["a"] = WorkflowExecutionHarness.NewProbeNode("empty-selection", []),
+                ["a"] = new ExecutableNode("empty-selection", "empty-selection", typeof(EmptySelectionCaseActivity).FullName!, "1.0.0",
+                    "test/empty", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
                 ["c"] = WorkflowExecutionHarness.NewProbeNode("ordinary")
             }));
         run.AssertCompleted("empty-selection");
@@ -261,4 +262,10 @@ public sealed class SwitchMatchAnyTests
         SwitchActivity.ConditionInputKey(id), new ValueTypeDescriptor("Boolean"), ValueProtectionPolicy.InstanceInline,
         RuntimeInputBindingSource.Literal,
         literal: ValueEnvelope.Inline(new ValueTypeDescriptor("Boolean"), JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
+}
+
+public sealed class EmptySelectionCaseActivity : Elsa.Activities.Runtime.Core.Abstractions.Activity<ActivityUnit>
+{
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, OutcomeSelection.Empty));
 }

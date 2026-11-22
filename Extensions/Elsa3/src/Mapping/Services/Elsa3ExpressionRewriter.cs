@@ -525,7 +525,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             selection = $"__elsa3RouteOutcomes({PendingOutcomes})";
         }
 
-        return new(prelude, selection, new Elsa3ScriptOutcomeConversion(literals, catchAll), null);
+        return new(prelude, selection, new Elsa3ScriptOutcomeConversion(literals, catchAll)
+        {
+            HasInvalidLiteralSelection = analyzer.HasInvalidLiteralOutcomeSelection,
+            HasComputedSelectionSet = analyzer.HasComputedOutcomeSet
+        }, null);
     }
 
     /// <summary>
@@ -850,6 +854,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
         public bool CallsOutcomeSetter { get; private set; }
         public bool HasComputedOutcome { get; private set; }
+        public bool HasComputedOutcomeSet { get; private set; }
+        public bool HasInvalidLiteralOutcomeSelection { get; private set; }
         public List<string> OutcomeLiterals { get; } = [];
         public bool DeclaresComplete { get; private set; }
 
@@ -866,11 +872,14 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             if (name == "setOutcomes" && argument is ArrayExpression array &&
                 array.Elements.All(element => element is Literal { Value: string }))
             {
-                OutcomeLiterals.AddRange(array.Elements.Select(element => (string)((Literal)element!).Value!));
+                var names = array.Elements.Select(element => (string)((Literal)element!).Value!).Distinct(StringComparer.Ordinal).ToArray();
+                OutcomeLiterals.AddRange(names);
+                HasInvalidLiteralOutcomeSelection |= names.Contains("Done", StringComparer.Ordinal) && names.Any(value => value != "Done");
                 return;
             }
 
             HasComputedOutcome = true;
+            HasComputedOutcomeSet |= name == "setOutcomes";
         }
 
         private static readonly HashSet<string> SetterCalls = new(StringComparer.Ordinal)
@@ -2714,6 +2723,9 @@ public sealed record Elsa3ScriptOutcomeContext(IReadOnlyList<string>? PossibleOu
 /// </summary>
 public sealed record Elsa3ScriptOutcomeConversion(IReadOnlyList<string> LiteralOutcomes, string? CatchAll)
 {
+    // Scope-specific fidelity analysis uses groups, not the union of alternative singleton selections.
+    internal bool HasInvalidLiteralSelection { get; init; }
+    internal bool HasComputedSelectionSet { get; init; }
     /// <summary>The catch-all outcome's name, unless the node already uses it.</summary>
     public const string CatchAllOutcome = "Unlisted outcome";
 }
