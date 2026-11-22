@@ -251,7 +251,7 @@ export function WorkflowInstances({ context, navigate }: {
       const namesAbort = new AbortController();
       definitionNamesAbort.current = namesAbort;
       void loadDefinitionDisplayNames(context, [
-        ...nextPage.items.map(item => item.definitionId),
+        ...nextPage.items.filter(item => !hasUnattributedChildDefinition(item)).map(item => item.definitionId),
         ...(filters.definitionId ? [filters.definitionId] : [])
       ], namesAbort.signal).then(names => {
         if (requestId !== requestSequence.current) return;
@@ -572,11 +572,12 @@ export function WorkflowInstances({ context, navigate }: {
             {canDeleteRuns ? <span role="columnheader">Actions</span> : null}
           </div>
           {instances.map(instance => {
-            const workflowName = definitionNames.get(instance.definitionId) ?? instance.definitionId;
+            const unattributedChild = hasUnattributedChildDefinition(instance);
+            const workflowName = unattributedChild ? `Child run · ${instance.workflowExecutionId.slice(-8)}` : definitionNames.get(instance.definitionId) ?? instance.definitionId;
             const secondaryIdentifiers = [
               { label: "Executable ID", value: instance.artifactId },
-              { label: "Definition ID", value: instance.definitionId },
-              { label: "Definition version ID", value: instance.definitionVersionId }
+              { label: unattributedChild ? "Executable definition ID" : "Definition ID", value: instance.definitionId },
+              { label: unattributedChild ? "Executable definition version ID" : "Definition version ID", value: instance.definitionVersionId }
             ].filter(identifier => identifier.value);
             return (
             <div
